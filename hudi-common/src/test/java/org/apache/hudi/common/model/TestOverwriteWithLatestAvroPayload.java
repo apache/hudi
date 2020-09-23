@@ -22,6 +22,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -42,7 +43,7 @@ public class TestOverwriteWithLatestAvroPayload {
   public void setUp() throws Exception {
     schema = Schema.createRecord(Arrays.asList(
         new Schema.Field("id", Schema.create(Schema.Type.STRING), "", null),
-        new Schema.Field("partition", Schema.create(Schema.Type.STRING), "", null),
+        new Schema.Field("partition", Schema.create(Schema.Type.STRING), "", ""),
         new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
         new Schema.Field("_hoodie_is_deleted", Schema.create(Type.BOOLEAN), "", false)
     ));
@@ -58,9 +59,15 @@ public class TestOverwriteWithLatestAvroPayload {
 
     GenericRecord record2 = new GenericData.Record(schema);
     record2.put("id", "2");
-    record2.put("partition", "partition1");
+    record2.put("partition", "");
     record2.put("ts", 1L);
     record2.put("_hoodie_is_deleted", false);
+
+    GenericRecord record3 = new GenericData.Record(schema);
+    record3.put("id", "2");
+    record3.put("partition", "partition0");
+    record3.put("ts", 1L);
+    record3.put("_hoodie_is_deleted", false);
 
     OverwriteWithLatestAvroPayload payload1 = new OverwriteWithLatestAvroPayload(record1, 1);
     OverwriteWithLatestAvroPayload payload2 = new OverwriteWithLatestAvroPayload(record2, 2);
@@ -72,6 +79,9 @@ public class TestOverwriteWithLatestAvroPayload {
 
     assertEquals(payload1.combineAndGetUpdateValue(record2, schema).get(), record1);
     assertEquals(payload2.combineAndGetUpdateValue(record1, schema).get(), record2);
+
+    assertEquals(HoodieAvroUtils.bytesToAvro(payload1.preCombine(payload2, schema).recordBytes,schema),
+            record3);
   }
 
   @Test

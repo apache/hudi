@@ -33,10 +33,20 @@ public class UpsertDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends DeltaCommitActionExecutor<T> {
 
   private JavaRDD<HoodieRecord<T>> inputRecordsRDD;
+  private String schema;
 
   public UpsertDeltaCommitActionExecutor(JavaSparkContext jsc,
-      HoodieWriteConfig config, HoodieTable table,
-      String instantTime, JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
+                                         HoodieWriteConfig config, HoodieTable table,
+                                         String instantTime, JavaRDD<HoodieRecord<T>> inputRecordsRDD,
+                                         String schema) {
+    super(jsc, config, table, instantTime, WriteOperationType.UPSERT);
+    this.inputRecordsRDD = inputRecordsRDD;
+    this.schema = schema;
+  }
+
+  public UpsertDeltaCommitActionExecutor(JavaSparkContext jsc,
+                                         HoodieWriteConfig config, HoodieTable table,
+                                         String instantTime, JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
     super(jsc, config, table, instantTime, WriteOperationType.UPSERT);
     this.inputRecordsRDD = inputRecordsRDD;
   }
@@ -44,6 +54,7 @@ public class UpsertDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
   @Override
   public HoodieWriteMetadata execute() {
     return WriteHelper.write(instantTime, inputRecordsRDD, jsc, (HoodieTable<T>) table,
-        config.shouldCombineBeforeUpsert(), config.getUpsertShuffleParallelism(),this, true);
+            config.shouldCombineBeforeUpsert(), config.getUpsertShuffleParallelism(),
+            config.shouldCombineAllFieldsBeforeUpsert(),schema, this, true);
   }
 }

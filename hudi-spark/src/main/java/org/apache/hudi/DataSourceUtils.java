@@ -175,7 +175,7 @@ public class DataSourceUtils {
   }
 
   public static JavaRDD<WriteStatus> doWriteOperation(HoodieWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
-      String instantTime, WriteOperationType operation) throws HoodieException {
+      String instantTime, WriteOperationType operation, String schema) throws HoodieException {
     switch (operation) {
       case BULK_INSERT:
         Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner =
@@ -184,7 +184,7 @@ public class DataSourceUtils {
       case INSERT:
         return client.insert(hoodieRecords, instantTime);
       case UPSERT:
-        return client.upsert(hoodieRecords, instantTime);
+        return client.upsert(hoodieRecords, instantTime, schema);
       default:
         throw new HoodieException("Not a valid operation type for doWriteOperation: " + operation.toString());
     }

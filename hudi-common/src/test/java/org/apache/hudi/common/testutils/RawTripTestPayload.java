@@ -104,6 +104,11 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
   }
 
   @Override
+  public RawTripTestPayload preCombine(RawTripTestPayload another, Schema schema) throws IOException {
+    return another;
+  }
+
+  @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRec, Schema schema) throws IOException {
     return this.getInsertValue(schema);
   }

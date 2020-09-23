@@ -82,6 +82,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static final String DEFAULT_COMBINE_BEFORE_UPSERT = "true";
   public static final String COMBINE_BEFORE_DELETE_PROP = "hoodie.combine.before.delete";
   public static final String DEFAULT_COMBINE_BEFORE_DELETE = "true";
+  public static final String COMBINE_ALL_FIELDS_BEFORE_UPSERT_PROP = "hoodie.combine.all.fields.before.upsert";
+  public static final String DEFAULT_COMBINE_ALL_FIELDS_BEFORE_UPSERT = "false";
   public static final String WRITE_STATUS_STORAGE_LEVEL = "hoodie.write.status.storage.level";
   public static final String DEFAULT_WRITE_STATUS_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
   public static final String HOODIE_AUTO_COMMIT_PROP = "hoodie.auto.commit";
@@ -234,6 +236,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public boolean shouldCombineBeforeDelete() {
     return Boolean.parseBoolean(props.getProperty(COMBINE_BEFORE_DELETE_PROP));
+  }
+
+  public boolean shouldCombineAllFieldsBeforeUpsert() {
+    return Boolean.parseBoolean(props.getProperty(COMBINE_ALL_FIELDS_BEFORE_UPSERT_PROP));
   }
 
   public boolean shouldAllowMultiWriteOnSameInstant() {
@@ -987,6 +993,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           DEFAULT_COMBINE_BEFORE_UPSERT);
       setDefaultOnCondition(props, !props.containsKey(COMBINE_BEFORE_DELETE_PROP), COMBINE_BEFORE_DELETE_PROP,
           DEFAULT_COMBINE_BEFORE_DELETE);
+      setDefaultOnCondition(props, !props.containsKey(COMBINE_ALL_FIELDS_BEFORE_UPSERT_PROP),
+              COMBINE_ALL_FIELDS_BEFORE_UPSERT_PROP, DEFAULT_COMBINE_ALL_FIELDS_BEFORE_UPSERT);
       setDefaultOnCondition(props, !props.containsKey(ALLOW_MULTI_WRITE_ON_SAME_INSTANT),
           ALLOW_MULTI_WRITE_ON_SAME_INSTANT, DEFAULT_ALLOW_MULTI_WRITE_ON_SAME_INSTANT);
       setDefaultOnCondition(props, !props.containsKey(WRITE_STATUS_STORAGE_LEVEL), WRITE_STATUS_STORAGE_LEVEL,
