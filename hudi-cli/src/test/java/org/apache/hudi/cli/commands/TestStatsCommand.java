@@ -73,17 +73,19 @@ public class TestStatsCommand extends AbstractShellIntegrationTest {
    * Test case for command 'stats wa'.
    */
   @Test
-  public void testWriteAmplificationStats() {
+  public void testWriteAmplificationStats() throws Exception {
     // generate data and metadata
     Map<String, Integer[]> data = new LinkedHashMap<>();
     data.put("100", new Integer[] {15, 10});
     data.put("101", new Integer[] {20, 10});
     data.put("102", new Integer[] {15, 15});
 
-    data.forEach((key, value) -> {
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, key, jsc.hadoopConfiguration(),
-          Option.of(value[0]), Option.of(value[1]));
-    });
+    for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
+      String k = entry.getKey();
+      Integer[] v = entry.getValue();
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, k, jsc.hadoopConfiguration(),
+          Option.of(v[0]), Option.of(v[1]));
+    }
 
     CommandResult cr = getShell().executeCommand("stats wa");
     assertTrue(cr.isSuccess());
@@ -93,7 +95,7 @@ public class TestStatsCommand extends AbstractShellIntegrationTest {
     DecimalFormat df = new DecimalFormat("#.00");
     data.forEach((key, value) -> {
       // there are two partitions, so need to *2
-      rows.add(new Comparable[]{key, value[1] * 2, value[0] * 2, df.format((float) value[0] / value[1])});
+      rows.add(new Comparable[] {key, value[1] * 2, value[0] * 2, df.format((float) value[0] / value[1])});
     });
     int totalWrite = data.values().stream().map(integers -> integers[0] * 2).mapToInt(s -> s).sum();
     int totalUpdate = data.values().stream().map(integers -> integers[1] * 2).mapToInt(s -> s).sum();
