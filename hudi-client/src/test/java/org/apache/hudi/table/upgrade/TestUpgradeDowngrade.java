@@ -46,6 +46,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -82,6 +83,14 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     return Stream.of(data).map(Arguments::of);
   }
 
+  @BeforeEach
+  public void setUp() throws Exception {
+    initSparkContexts();
+    initDFS();
+    initTestDataGenerator();
+    initDFSMetaClient();
+  }
+
   @Test
   public void testLeftOverUpdatedPropFileCleanup() throws IOException {
     testUpgradeInternal(true, true, HoodieTableType.MERGE_ON_READ);
@@ -98,7 +107,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     Map<String, String> params = new HashMap<>();
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       params.put(HOODIE_TABLE_TYPE_PROP_NAME, HoodieTableType.MERGE_ON_READ.name());
-      metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ);
+      metaClient = HoodieTestUtils.init(dfs.getConf(), dfsBasePath, HoodieTableType.MERGE_ON_READ);
     }
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withRollbackUsingMarkers(false).withProps(params).build();
     HoodieWriteClient client = getHoodieWriteClient(cfg);
@@ -143,7 +152,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     // Check the entire dataset has all records only from 1st commit and 3rd commit since 2nd is expected to be rolledback.
     assertRows(inputRecords.getKey(), thirdBatch);
     if (induceResiduesFromPrevUpgrade) {
-      assertFalse(fs.exists(new Path(metaClient.getMetaPath(), UpgradeDowngrade.HOODIE_UPDATED_PROPERTY_FILE)));
+      assertFalse(dfs.exists(new Path(metaClient.getMetaPath(), UpgradeDowngrade.HOODIE_UPDATED_PROPERTY_FILE)));
     }
   }
 
@@ -332,7 +341,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     //just generate two partitions
     dataGen = new HoodieTestDataGenerator(new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH});
     //1. prepare data
-    HoodieTestDataGenerator.writePartitionMetadata(fs, new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH}, basePath);
+    HoodieTestDataGenerator.writePartitionMetadata(dfs, new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH}, dfsBasePath);
     /**
      * Write 1 (only inserts)
      */

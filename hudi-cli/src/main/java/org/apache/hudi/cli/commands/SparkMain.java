@@ -18,6 +18,7 @@
 
 package org.apache.hudi.cli.commands;
 
+import org.apache.hudi.cli.DeDupeType;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.cli.DedupeSparkJob;
 import org.apache.hudi.cli.utils.SparkUtil;
@@ -87,8 +88,8 @@ public class SparkMain {
         returnCode = rollback(jsc, args[3], args[4]);
         break;
       case DEDUPLICATE:
-        assert (args.length == 7);
-        returnCode = deduplicatePartitionPath(jsc, args[3], args[4], args[5], args[6]);
+        assert (args.length == 8);
+        returnCode = deduplicatePartitionPath(jsc, args[3], args[4], args[5], Boolean.parseBoolean(args[6]), args[7]);
         break;
       case ROLLBACK_TO_SAVEPOINT:
         assert (args.length == 5);
@@ -304,10 +305,10 @@ public class SparkMain {
   }
 
   private static int deduplicatePartitionPath(JavaSparkContext jsc, String duplicatedPartitionPath,
-      String repairedOutputPath, String basePath, String dryRun) {
+      String repairedOutputPath, String basePath, boolean dryRun, String dedupeType) {
     DedupeSparkJob job = new DedupeSparkJob(basePath, duplicatedPartitionPath, repairedOutputPath, new SQLContext(jsc),
-        FSUtils.getFs(basePath, jsc.hadoopConfiguration()));
-    job.fixDuplicates(Boolean.parseBoolean(dryRun));
+        FSUtils.getFs(basePath, jsc.hadoopConfiguration()), DeDupeType.withName(dedupeType));
+    job.fixDuplicates(dryRun);
     return 0;
   }
 

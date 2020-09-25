@@ -24,9 +24,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.MarkerFiles;
@@ -37,7 +35,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -50,6 +47,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_S
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackTestBase {
   @BeforeEach
@@ -66,24 +64,21 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
   }
 
   @Test
-  public void testCopyOnWriteRollbackActionExecutorForFileListingAsGenerateFile() throws IOException {
+  public void testCopyOnWriteRollbackActionExecutorForFileListingAsGenerateFile() throws Exception {
+    final String p1 = "2015/03/16";
+    final String p2 = "2015/03/17";
+    final String p3 = "2016/03/15";
     // Let's create some commit files and parquet files
-    String commitTime1 = "001";
-    String commitTime2 = "002";
-    new File(basePath + "/.hoodie").mkdirs();
-    HoodieTestDataGenerator.writePartitionMetadata(fs, new String[]{"2015/03/16", "2015/03/17", "2016/03/15"},
-        basePath);
-    HoodieTestUtils.createCommitFiles(basePath, commitTime1, commitTime2);
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient)
+        .withPartitionMetaFiles(p1, p2, p3)
+        .addCommit("001")
+        .withBaseFilesInPartition(p1, "id11")
+        .withBaseFilesInPartition(p2, "id12")
+        .withLogFile(p1, "id11", 3)
+        .addCommit("002")
+        .withBaseFilesInPartition(p1, "id21")
+        .withBaseFilesInPartition(p2, "id22");
 
-    // Make commit1
-    String file11 = HoodieTestUtils.createDataFile(basePath, "2015/03/16", commitTime1, "id11");
-    HoodieTestUtils.createNewLogFile(fs, basePath, "2015/03/16",
-        commitTime1, "id11", Option.of(3));
-    String file12 = HoodieTestUtils.createDataFile(basePath, "2015/03/17", commitTime1, "id12");
-
-    // Make commit2
-    String file21 = HoodieTestUtils.createDataFile(basePath, "2015/03/16", commitTime2, "id21");
-    String file22 = HoodieTestUtils.createDataFile(basePath, "2015/03/17", commitTime2, "id22");
     HoodieTable table = this.getHoodieTable(metaClient, getConfig());
     HoodieInstant needRollBackInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "002");
 
@@ -94,34 +89,40 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
 
     // assert hoodieRollbackStats
     assertEquals(hoodieRollbackStats.size(), 3);
-    hoodieRollbackStats.forEach(stat -> {
-      if (stat.getPartitionPath().equals("2015/03/16")) {
-        assertEquals(1, stat.getSuccessDeleteFiles().size());
-        assertEquals(0, stat.getFailedDeleteFiles().size());
-        assertEquals(Collections.EMPTY_MAP, stat.getCommandBlocksCount());
-        assertEquals("file:" + HoodieTestUtils.getDataFilePath(basePath, "2015/03/16", commitTime2, file21),
-            stat.getSuccessDeleteFiles().get(0));
-      } else if (stat.getPartitionPath().equals("2015/03/17")) {
-        assertEquals(1, stat.getSuccessDeleteFiles().size());
-        assertEquals(0, stat.getFailedDeleteFiles().size());
-        assertEquals(Collections.EMPTY_MAP, stat.getCommandBlocksCount());
-        assertEquals("file:" + HoodieTestUtils.getDataFilePath(basePath, "2015/03/17", commitTime2, file22),
-            stat.getSuccessDeleteFiles().get(0));
-      } else if (stat.getPartitionPath().equals("2016/03/15")) {
-        assertEquals(0, stat.getSuccessDeleteFiles().size());
-        assertEquals(0, stat.getFailedDeleteFiles().size());
-        assertEquals(Collections.EMPTY_MAP, stat.getCommandBlocksCount());
+    for (HoodieRollbackStat stat : hoodieRollbackStats) {
+      switch (stat.getPartitionPath()) {
+        case p1:
+          assertEquals(1, stat.getSuccessDeleteFiles().size());
+          assertEquals(0, stat.getFailedDeleteFiles().size());
+          assertEquals(Collections.EMPTY_MAP, stat.getCommandBlocksCount());
+          assertEquals(testTable.forCommit("002").getBaseFilePath(p1, "id21").toString(),
+              stat.getSuccessDeleteFiles().get(0));
+          break;
+        case p2:
+          assertEquals(1, stat.getSuccessDeleteFiles().size());
+          assertEquals(0, stat.getFailedDeleteFiles().size());
+          assertEquals(Collections.EMPTY_MAP, stat.getCommandBlocksCount());
+          assertEquals(testTable.forCommit("002").getBaseFilePath(p2, "id22").toString(),
+              stat.getSuccessDeleteFiles().get(0));
+          break;
+        case p3:
+          assertEquals(0, stat.getSuccessDeleteFiles().size());
+          assertEquals(0, stat.getFailedDeleteFiles().size());
+          assertEquals(Collections.EMPTY_MAP, stat.getCommandBlocksCount());
+          break;
+        default:
+          fail("Unexpected partition: " + stat.getPartitionPath());
       }
-    });
+    }
 
-    assertTrue(HoodieTestUtils.doesCommitExist(basePath, "001"));
-    assertTrue(HoodieTestUtils.doesInflightExist(basePath, "001"));
-    assertFalse(HoodieTestUtils.doesCommitExist(basePath, "002"));
-    assertFalse(HoodieTestUtils.doesInflightExist(basePath, "002"));
-    assertTrue(HoodieTestUtils.doesDataFileExist(basePath, "2015/03/16", commitTime1, file11)
-        && HoodieTestUtils.doesDataFileExist(basePath, "2015/03/17", commitTime1, file12));
-    assertFalse(HoodieTestUtils.doesDataFileExist(basePath, "2015/03/16", commitTime2, file21)
-        || HoodieTestUtils.doesDataFileExist(basePath, "2015/03/17", commitTime2, file22));
+    assertTrue(testTable.inflightCommitExists("001"));
+    assertTrue(testTable.commitExists("001"));
+    assertTrue(testTable.baseFileExists(p1, "001", "id11"));
+    assertTrue(testTable.baseFileExists(p2, "001", "id12"));
+    assertFalse(testTable.inflightCommitExists("002"));
+    assertFalse(testTable.commitExists("002"));
+    assertFalse(testTable.baseFileExists(p1, "002", "id21"));
+    assertFalse(testTable.baseFileExists(p2, "002", "id22"));
   }
 
   @ParameterizedTest

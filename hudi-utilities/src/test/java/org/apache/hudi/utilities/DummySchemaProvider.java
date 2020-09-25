@@ -16,25 +16,20 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.examples.common;
+package org.apache.hudi.utilities;
 
 import org.apache.avro.Schema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.spark.api.java.JavaSparkContext;
 
-
-/**
- * the example SchemaProvider of example json data from uber.
- */
-public class ExampleDataSchemaProvider extends SchemaProvider {
-
-  public ExampleDataSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
+public class DummySchemaProvider extends SchemaProvider {
+  public DummySchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
   }
 
   @Override
   public Schema getSourceSchema() {
-    return HoodieExampleDataGenerator.avroSchema;
+    return Schema.create(Schema.Type.NULL);
   }
 }
