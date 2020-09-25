@@ -198,8 +198,6 @@ public class DeltaSync implements Serializable {
     this.formatAdapter = new SourceFormatAdapter(
         UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics));
     this.conf = conf;
-
-
   }
 
   /**

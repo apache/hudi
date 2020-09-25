@@ -95,7 +95,7 @@ public class UtilHelpers {
       if (metrics == null) {
         return (Source) ReflectionUtils.loadClass(sourceClass,
                 new Class<?>[] {TypedProperties.class, JavaSparkContext.class, SparkSession.class,
-                    SchemaProvider.class, HoodieDeltaStreamerMetrics.class}, cfg, jssc, sparkSession, schemaProvider);
+                    SchemaProvider.class}, cfg, jssc, sparkSession, schemaProvider);
       }
       return (Source) ReflectionUtils.loadClass(sourceClass,
           new Class<?>[] {TypedProperties.class, JavaSparkContext.class, SparkSession.class,
