@@ -132,6 +132,13 @@ public class ITTestHoodieSanity extends ITTestBase {
     String hdfsPath = "/" + hiveTableName;
     String hdfsUrl = HDFS_BASE_URL + hdfsPath;
 
+    // Delete hdfs path if it exists
+    try {
+      executeCommandStringInDocker(ADHOC_1_CONTAINER, "hdfs dfs -rm -r " + hdfsUrl, true);
+    } catch (AssertionError ex) {
+      // Path not exists, pass
+    }
+
     // Drop Table if it exists
     try {
       dropHiveTables(hiveTableName, tableType);
