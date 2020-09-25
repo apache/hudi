@@ -519,15 +519,14 @@ public class HoodieMetadataImpl {
       if (metadataInstantMap.containsKey(instant.getTimestamp())) {
         // instant already synced to metadata table
         if (!instantsToSync.isEmpty()) {
+          // TODO: async clean and async compaction are not yet handled. They have a timestamp which is in the past
+          // (when the operation was scheduled) and even on completion they retain their old timestamp.
           LOG.warn("Found out-of-order already synced instant " + instant + ". Instants to sync=" + instantsToSync);
         }
       } else {
         instantsToSync.add(instant);
       }
     });
-
-    // TODO: async clean and async compaction are not handled here. They have a timestamp which is in the past
-    // (when the operation was scheduled) and even on completion they retain their old timestamp.
     return instantsToSync;
   }
 
@@ -923,10 +922,18 @@ public class HoodieMetadataImpl {
 
     final Timer.Context context = this.metrics.getMetadataCtx(SCAN_STR);
 
+    // Metadata is in sync till the latest completed instant on the dataset
+    HoodieTableMetaClient datasetMetaClient = new HoodieTableMetaClient(hadoopConf, datasetBasePath);
+    Option<HoodieInstant> datasetLatestInstant = datasetMetaClient.getActiveTimeline().filterCompletedInstants()
+        .lastInstant();
+    String latestInstantTime = datasetLatestInstant.isPresent() ? datasetLatestInstant.get().getTimestamp()
+        : SOLO_COMMIT_TIMESTAMP;
+
     // Find the latest file slice
     HoodieTimeline timeline = metaClient.reloadActiveTimeline();
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline());
-    List<FileSlice> latestSlices = fsView.getLatestFileSlices(METADATA_PARTITION_NAME).collect(Collectors.toList());
+    List<FileSlice> latestSlices = fsView.getLatestFileSlicesBeforeOrOn(METADATA_PARTITION_NAME, latestInstantTime, false)
+        .collect(Collectors.toList());
     ValidationUtils.checkArgument(latestSlices.size() == 1);
 
     // If the base file is present then create a reader
@@ -941,15 +948,21 @@ public class HoodieMetadataImpl {
     // Open the log record scanner using the log files from the latest file slice
     List<String> logFilePaths = latestSlices.get(0).getLogFiles().map(o -> o.getPath().toString())
         .collect(Collectors.toList());
-    Option<HoodieInstant> lastInstant = timeline.filterCompletedInstants().lastInstant();
-    String latestTimestamp = lastInstant.isPresent() ? lastInstant.get().getTimestamp() : "";
 
     logRecordScanner =
         new HoodieMetadataMergedLogRecordScanner(FSUtils.getFs(datasetBasePath, hadoopConf), metadataBasePath,
-            logFilePaths, schema, latestTimestamp, maxMemorySizeInBytes, bufferSize,
+            logFilePaths, schema, latestInstantTime, maxMemorySizeInBytes, bufferSize,
             config.getSpillableMapBasePath(), null);
 
-    LOG.info("Opened metadata log files from " + logFilePaths + " at instant " + lastInstant);
+    Option<HoodieInstant> lastInstant = timeline.filterCompletedInstants().lastInstant();
+    String latestMetaInstantTimestamp = lastInstant.isPresent() ? lastInstant.get().getTimestamp()
+        : SOLO_COMMIT_TIMESTAMP;
+    if (!HoodieTimeline.compareTimestamps(latestInstantTime, HoodieTimeline.EQUALS, latestMetaInstantTimestamp)) {
+      LOG.warn("Metadata has more recent instant " + latestMetaInstantTimestamp + " than dataset " + latestInstantTime);
+    }
+
+    LOG.info("Opened metadata log files from " + logFilePaths + " at instant " + latestInstantTime
+        + "(dataset instant=" + latestInstantTime + ", metadata instant=" + latestMetaInstantTimestamp + ")");
 
     ++numScans;
 

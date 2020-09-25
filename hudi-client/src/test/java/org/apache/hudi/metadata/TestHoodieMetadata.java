@@ -334,6 +334,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       client.rollback(newCommitTime);
       validateMetadata(client.getConfig());
     }
+
   }
 
   /**
@@ -518,6 +519,83 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
   }
 
   /**
+   * Test various error scenarios
+   */
+  @Test
+  public void testErrorCases() throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
+
+    // TESTCASE: If commit on the metadata table succeeds but fails on the dataset, then on next init the metadata table
+    // should be rolled back to last valid commit.
+    try (HoodieWriteClient client = new HoodieWriteClient<>(jsc, getWriteConfig(true, true), true)) {
+      String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      client.startCommitWithTime(newCommitTime);
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 10);
+      List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      validateMetadata(client.getConfig());
+
+      // There is no way to simulate failed commit on the main dataset, hence we simply delete the completed
+      // instant so that only the inflight is left over.
+      String commitInstantFileName = HoodieTimeline.makeCommitFileName(newCommitTime);
+      assertTrue(dfs.delete(new Path(basePath + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME,
+          commitInstantFileName), false));
+    }
+
+    // Simulates a new process which will re-initialize the metadata table
+    HoodieMetadata.remove(basePath);
+
+    try (HoodieWriteClient client = new HoodieWriteClient<>(jsc, getWriteConfig(true, true), true)) {
+      // At this point the metadata table should be empty as we have deleted the completed instant of the
+      // only commit on the table.
+      assertTrue(HoodieMetadata.getAllPartitionPaths(dfs, basePath, false).isEmpty());
+
+      // Start the next commit which will rollback the previous one and also should update the metadata table by
+      // updating it with HoodieRollbackMetadata.
+      String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      client.startCommitWithTime(newCommitTime);
+
+      // Dangling commit but metadata should be valid at this time
+      validateMetadata(client.getConfig());
+
+      // Next insert
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 5);
+      List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+
+      // Post rollback commit and metadata should be valid
+      validateMetadata(client.getConfig());
+    }
+
+  }
+
+
+/*
+
+    try (HoodieWriteClient client = new HoodieWriteClient<>(jsc, getWriteConfig(true, true))) {
+      // Write 1 (Bulk insert)
+      String newCommitTime = "001";
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
+      client.startCommitWithTime(newCommitTime);
+      List<WriteStatus> writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      validateMetadata(client.getConfig());
+
+      // Rollback of inserts
+      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      client.startCommitWithTime(newCommitTime);
+      records = dataGen.generateInserts(newCommitTime, 20);
+      writeStatuses = client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+      validateMetadata(client.getConfig());
+      client.rollback(newCommitTime);
+      validateMetadata(client.getConfig());
+
+
+  }
+*/
+
+
+  /**
    * Test various metrics published by metadata table.
    */
   @Test
@@ -542,6 +620,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
    * @throws IOException
    */
   private void validateMetadata(HoodieWriteConfig config) throws IOException {
+    long t1 = System.currentTimeMillis();
     // Validate write config for metadata table
     HoodieWriteConfig metadataWriteConfig = HoodieMetadata.getWriteConfig(basePath);
     assertFalse(metadataWriteConfig.useFileListingMetadata(), "No metadata table for metadata table");
@@ -638,6 +717,8 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       assertTrue(fsView.getAllFileSlices(partition).count() <= numFileVersions, "Should limit file slice to "
           + numFileVersions + " but was " + fsView.getAllFileSlices(partition).count());
     });
+
+    LOG.info("Validation time=" + (System.currentTimeMillis() - t1));
   }
 
   // TODO: this can be moved to TestHarness after merge from master
