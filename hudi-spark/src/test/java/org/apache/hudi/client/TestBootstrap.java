@@ -309,7 +309,7 @@ public class TestBootstrap extends HoodieClientTestBase {
   }
 
   @Test
-  public void testFullBoostrapOnlyCOW() throws Exception {
+  public void testFullBootstrapOnlyCOW() throws Exception {
     testBootstrapCommon(true, false, EffectiveMode.FULL_BOOTSTRAP_MODE);
   }
 
@@ -319,7 +319,7 @@ public class TestBootstrap extends HoodieClientTestBase {
   }
 
   @Test
-  public void testMetaAndFullBoostrapCOW() throws Exception {
+  public void testMetaAndFullBootstrapCOW() throws Exception {
     testBootstrapCommon(true, false, EffectiveMode.MIXED_BOOTSTRAP_MODE);
   }
 
