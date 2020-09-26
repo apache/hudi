@@ -57,7 +57,7 @@ public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
   /** Rate used for sampling records to determine avg record size in bytes. **/
   public static final int RECORD_SAMPLING_RATE = 64;
 
-  /** Maximum records that will be cached **/
+  /** Maximum records that will be cached. **/
   private static final int RECORD_CACHING_LIMIT = 128 * 1024;
 
   private static final Logger LOG = LogManager.getLogger(BoundedInMemoryQueue.class);
