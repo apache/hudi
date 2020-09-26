@@ -39,9 +39,9 @@ public abstract class AbstractAsyncService implements Serializable {
   private static final Logger LOG = LogManager.getLogger(AbstractAsyncService.class);
 
   // Flag to track if the service is started.
-  private boolean started;
+  private volatile boolean started;
   // Flag indicating shutdown is externally requested
-  private boolean shutdownRequested;
+  private volatile boolean shutdownRequested;
   // Flag indicating the service is shutdown
   private volatile boolean shutdown;
   // Executor Service for running delta-sync/compaction
@@ -164,5 +164,9 @@ public abstract class AbstractAsyncService implements Serializable {
 
   public boolean isRunInDaemonMode() {
     return runInDaemonMode;
+  }
+
+  public boolean isStarted() {
+    return started;
   }
 }
