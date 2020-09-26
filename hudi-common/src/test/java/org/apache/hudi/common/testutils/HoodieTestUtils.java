@@ -172,19 +172,6 @@ public class HoodieTestUtils {
     }
   }
 
-  /**
-   * @deprecated Use {@link HoodieTestTable} instead.
-   */
-  public static void createInflightCommitFiles(String basePath, String... instantTimes) throws IOException {
-
-    for (String instantTime : instantTimes) {
-      new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-          + HoodieTimeline.makeRequestedCommitFileName(instantTime)).createNewFile();
-      new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeInflightCommitFileName(
-          instantTime)).createNewFile();
-    }
-  }
-
   public static void createPendingCleanFiles(HoodieTableMetaClient metaClient, String... instantTimes) {
     for (String instantTime : instantTimes) {
       Arrays.asList(HoodieTimeline.makeRequestedCleanerFileName(instantTime),
@@ -255,22 +242,6 @@ public class HoodieTestUtils {
     HoodieInstant compactionInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instant);
     metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
         TimelineMetadataUtils.serializeCompactionPlan(plan));
-  }
-
-  /**
-   * @deprecated Use {@link HoodieTestTable} instead.
-   */
-  public static String getCommitFilePath(String basePath, String instantTime) {
-    return basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instantTime + HoodieTimeline.COMMIT_EXTENSION;
-  }
-
-  /**
-   * @deprecated Use {@link HoodieTestTable} instead.
-   */
-  public static boolean doesCommitExist(String basePath, String instantTime) {
-    return new File(
-        basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instantTime + HoodieTimeline.COMMIT_EXTENSION)
-            .exists();
   }
 
   public static void createCleanFiles(HoodieTableMetaClient metaClient, String basePath,

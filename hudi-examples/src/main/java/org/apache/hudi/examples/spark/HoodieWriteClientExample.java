@@ -51,8 +51,10 @@ import java.util.stream.Collectors;
  * Simple examples of #{@link HoodieWriteClient}.
  *
  * To run this example, you should
- *   1. For running in IDE, set VM options `-Dspark.master=local[2]`
- *   2. For running in shell, using `spark-submit`
+ * <pre>
+ *   1. For running in IDE, set VM options `-Dspark.master=local[2]`;
+ *   2. For running in shell, using `spark-submit`.
+ *</pre>
  *
  * Usage: HoodieWriteClientExample <tablePath> <tableName>
  * <tablePath> and <tableName> describe root path of hudi and table name
