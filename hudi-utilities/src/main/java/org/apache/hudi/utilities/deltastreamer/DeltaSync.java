@@ -194,8 +194,14 @@ public class DeltaSync implements Serializable {
 
     this.metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(this.schemaProvider));
 
-    this.formatAdapter = new SourceFormatAdapter(
-        UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics));
+    if ("org.apache.hudi.utilities.sources.JsonKafkaSource".equals(cfg.sourceClassName) ||
+          "org.apache.hudi.utilities.sources.AvroKafkaSource".equals(cfg.sourceClassName)) {
+      this.formatAdapter = new SourceFormatAdapter(
+           UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics));
+    } else {
+      this.formatAdapter = new SourceFormatAdapter(
+           UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, null));
+    }
     this.conf = conf;
   }
 
