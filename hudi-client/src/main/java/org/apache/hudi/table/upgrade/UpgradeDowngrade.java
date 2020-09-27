@@ -125,6 +125,14 @@ public class UpgradeDowngrade {
     metaClient.getTableConfig().setTableVersion(toVersion);
     createUpdatedFile(metaClient.getTableConfig().getProperties());
 
+    // because for different fs the fs.rename have different action,such as:
+    // a) for hdfs : if propsFilePath already exist,fs.rename will not replace propsFilePath, but just return false
+    // b) for localfs: if propsFilePath already exist,fs.rename will replace propsFilePath, and return ture
+    // c) for aliyun ossfs: if propsFilePath already exist,will throw FileAlreadyExistsException
+    // so we should delete the old propsFilePath. also upgrade and downgrade is Idempotent
+    if (fs.exists(propsFilePath)) {
+      fs.delete(propsFilePath, false);
+    }
     // Rename the .updated file to hoodie.properties. This is atomic in hdfs, but not in cloud stores.
     // But as long as this does not leave a partial hoodie.properties file, we are okay.
     fs.rename(updatedPropsFilePath, propsFilePath);

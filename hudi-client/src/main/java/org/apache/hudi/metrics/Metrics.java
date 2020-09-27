@@ -97,8 +97,7 @@ public class Metrics {
       guage.setValue(value);
     } catch (Exception e) {
       // Here we catch all exception, so the major upsert pipeline will not be affected if the
-      // metrics system
-      // has some issues.
+      // metrics system has some issues.
       LOG.error("Failed to send metrics: ", e);
     }
   }

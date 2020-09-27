@@ -126,12 +126,12 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       if (!isPartitionAvailableInStore(partition)) {
         if (bootstrapIndex.useIndex()) {
           try (BootstrapIndex.IndexReader reader = bootstrapIndex.createReader()) {
-            LOG.info("Boostrap Index available for partition " + partition);
+            LOG.info("Bootstrap Index available for partition " + partition);
             List<BootstrapFileMapping> sourceFileMappings =
                 reader.getSourceFileMappingForPartition(partition);
             addBootstrapBaseFileMapping(sourceFileMappings.stream()
                 .map(s -> new BootstrapBaseFileMapping(new HoodieFileGroupId(s.getPartitionPath(),
-                    s.getFileId()), s.getBoostrapFileStatus())));
+                    s.getFileId()), s.getBootstrapFileStatus())));
           }
         }
         storePartitionView(partition, value);
