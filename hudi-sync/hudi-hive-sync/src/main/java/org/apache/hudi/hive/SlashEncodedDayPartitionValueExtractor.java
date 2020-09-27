@@ -36,17 +36,6 @@ public class SlashEncodedDayPartitionValueExtractor implements PartitionValueExt
   private static final long serialVersionUID = 1L;
   private transient DateTimeFormatter dtfOut;
 
-  public SlashEncodedDayPartitionValueExtractor() {
-    this.dtfOut = DateTimeFormat.forPattern("yyyy-MM-dd");
-  }
-
-  private DateTimeFormatter getDtfOut() {
-    if (dtfOut == null) {
-      dtfOut = DateTimeFormat.forPattern("yyyy-MM-dd");
-    }
-    return dtfOut;
-  }
-
   @Override
   public List<String> extractPartitionValuesInPath(String partitionPath) {
 
@@ -72,6 +61,15 @@ public class SlashEncodedDayPartitionValueExtractor implements PartitionValueExt
 
     DateTime dateTime = new DateTime(year, mm, dd, hh, 0);
 
-    return Collections.singletonList(getDtfOut().print(dateTime));
+    return Collections.singletonList(getDtfOut(splits.length).print(dateTime));
+  }
+
+  private DateTimeFormatter getDtfOut(int length) {
+    if (length == 4) {
+      dtfOut = DateTimeFormat.forPattern("yyyy-MM-dd-HH");
+    } else {
+      dtfOut = DateTimeFormat.forPattern("yyyy-MM-dd");
+    }
+    return dtfOut;
   }
 }
