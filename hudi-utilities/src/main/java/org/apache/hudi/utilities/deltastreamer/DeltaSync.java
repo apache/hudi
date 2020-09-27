@@ -195,7 +195,7 @@ public class DeltaSync implements Serializable {
     this.metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(this.schemaProvider));
 
     this.formatAdapter = new SourceFormatAdapter(
-          UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics));
+         UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics));
     this.conf = conf;
   }
 
