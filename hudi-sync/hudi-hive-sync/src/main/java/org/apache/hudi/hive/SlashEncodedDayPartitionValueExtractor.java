@@ -45,7 +45,7 @@ public class SlashEncodedDayPartitionValueExtractor implements PartitionValueExt
     int hh = 0;
     // partition path is expected to be in this format yyyy/mm/dd
     String[] splits = partitionPath.split("/");
-    if (splits.length != 3 || splits.length != 4) {
+    if (splits.length != 3 && splits.length != 4) {
       throw new IllegalArgumentException("Partition path " + partitionPath + " is not in the form yyyy/mm/dd or yyyy/mm/dd/HH");
     }
     // Get the partition part and remove the / as well at the end
