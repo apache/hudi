@@ -50,7 +50,9 @@ import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.sources.AvroKafkaSource;
 import org.apache.hudi.utilities.sources.InputBatch;
+import org.apache.hudi.utilities.sources.JsonKafkaSource;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import com.codahale.metrics.Timer;
@@ -194,8 +196,8 @@ public class DeltaSync implements Serializable {
 
     this.metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(this.schemaProvider));
 
-    if ("org.apache.hudi.utilities.sources.JsonKafkaSource".equals(cfg.sourceClassName)
-            || "org.apache.hudi.utilities.sources.AvroKafkaSource".equals(cfg.sourceClassName)) {
+    if (JsonKafkaSource.class.getName().equals(cfg.sourceClassName)
+            || AvroKafkaSource.class.getName().equals(cfg.sourceClassName)) {
       this.formatAdapter = new SourceFormatAdapter(
            UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics));
     } else {
