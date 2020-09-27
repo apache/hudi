@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
@@ -27,11 +28,13 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
+import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieInsertException;
-import org.apache.hudi.io.storage.HoodieStorageWriter;
-import org.apache.hudi.io.storage.HoodieStorageWriterFactory;
+import org.apache.hudi.io.storage.HoodieFileWriter;
+import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.generic.GenericRecord;
@@ -42,22 +45,31 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.Map;
 
 public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWriteHandle<T> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieCreateHandle.class);
 
-  private final HoodieStorageWriter<IndexedRecord> storageWriter;
+  private final HoodieFileWriter<IndexedRecord> fileWriter;
   private final Path path;
   private long recordsWritten = 0;
   private long insertRecordsWritten = 0;
   private long recordsDeleted = 0;
-  private Iterator<HoodieRecord<T>> recordIterator;
+  private Map<String, HoodieRecord<T>> recordMap;
   private boolean useWriterSchema = false;
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
-      String partitionPath, String fileId, SparkTaskContextSupplier sparkTaskContextSupplier) {
-    super(config, instantTime, partitionPath, fileId, hoodieTable, sparkTaskContextSupplier);
+                            String partitionPath, String fileId, SparkTaskContextSupplier sparkTaskContextSupplier) {
+    this(config, instantTime, hoodieTable, partitionPath, fileId, getWriterSchemaIncludingAndExcludingMetadataPair(config),
+        sparkTaskContextSupplier);
+  }
+
+  public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
+                            String partitionPath, String fileId, Pair<Schema, Schema> writerSchemaIncludingAndExcludingMetadataPair,
+                            SparkTaskContextSupplier sparkTaskContextSupplier) {
+    super(config, instantTime, partitionPath, fileId, hoodieTable, writerSchemaIncludingAndExcludingMetadataPair,
+            sparkTaskContextSupplier);
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
 
@@ -67,9 +79,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
           new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
       partitionMetadata.trySave(getPartitionId());
-      createMarkerFile(partitionPath);
-      this.storageWriter =
-          HoodieStorageWriterFactory.getStorageWriter(instantTime, path, hoodieTable, config, writerSchema, this.sparkTaskContextSupplier);
+      createMarkerFile(partitionPath, FSUtils.makeDataFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
+      this.fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, writerSchemaWithMetafields, this.sparkTaskContextSupplier);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
     }
@@ -80,15 +91,16 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
    * Called by the compactor code path.
    */
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T> hoodieTable,
-      String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordIterator, SparkTaskContextSupplier sparkTaskContextSupplier) {
+      String partitionPath, String fileId, Map<String, HoodieRecord<T>> recordMap,
+      SparkTaskContextSupplier sparkTaskContextSupplier) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, sparkTaskContextSupplier);
-    this.recordIterator = recordIterator;
+    this.recordMap = recordMap;
     this.useWriterSchema = true;
   }
 
   @Override
   public boolean canWrite(HoodieRecord record) {
-    return storageWriter.canWrite() && record.getPartitionPath().equals(writeStatus.getPartitionPath());
+    return fileWriter.canWrite() && record.getPartitionPath().equals(writeStatus.getPartitionPath());
   }
 
   /**
@@ -101,7 +113,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
       if (avroRecord.isPresent()) {
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
         IndexedRecord recordWithMetadataInSchema = rewriteRecord((GenericRecord) avroRecord.get());
-        storageWriter.writeAvroWithMetadata(recordWithMetadataInSchema, record);
+        fileWriter.writeAvroWithMetadata(recordWithMetadataInSchema, record);
         // update the new location of record, so we know where to find it next
         record.unseal();
         record.setNewLocation(new HoodieRecordLocation(instantTime, writeStatus.getFileId()));
@@ -128,13 +140,21 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
    * Writes all records passed.
    */
   public void write() {
+    Iterator<String> keyIterator;
+    if (hoodieTable.requireSortedRecords()) {
+      // Sorting the keys limits the amount of extra memory required for writing sorted records
+      keyIterator = recordMap.keySet().stream().sorted().iterator();
+    } else {
+      keyIterator = recordMap.keySet().stream().iterator();
+    }
     try {
-      while (recordIterator.hasNext()) {
-        HoodieRecord<T> record = recordIterator.next();
+      while (keyIterator.hasNext()) {
+        final String key = keyIterator.next();
+        HoodieRecord<T> record = recordMap.get(key);
         if (useWriterSchema) {
-          write(record, record.getData().getInsertValue(writerSchema));
+          write(record, record.getData().getInsertValue(writerSchemaWithMetafields));
         } else {
-          write(record, record.getData().getInsertValue(originalSchema));
+          write(record, record.getData().getInsertValue(writerSchema));
         }
       }
     } catch (IOException io) {
@@ -147,6 +167,11 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
     return writeStatus;
   }
 
+  @Override
+  public IOType getIOType() {
+    return IOType.CREATE;
+  }
+
   /**
    * Performs actions to durably, persist the current changes and returns a WriteStatus object.
    */
@@ -156,7 +181,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieWri
         .info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
     try {
 
-      storageWriter.close();
+      fileWriter.close();
 
       HoodieWriteStat stat = new HoodieWriteStat();
       stat.setPartitionPath(writeStatus.getPartitionPath());

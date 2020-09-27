@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -54,9 +55,6 @@ public class KafkaOffsetGen {
      */
     public static HashMap<TopicPartition, Long> strToOffsets(String checkpointStr) {
       HashMap<TopicPartition, Long> offsetMap = new HashMap<>();
-      if (checkpointStr.length() == 0) {
-        return offsetMap;
-      }
       String[] splits = checkpointStr.split(",");
       String topic = splits[0];
       for (int i = 1; i < splits.length; i++) {
@@ -174,6 +172,9 @@ public class KafkaOffsetGen {
     Map<TopicPartition, Long> fromOffsets;
     Map<TopicPartition, Long> toOffsets;
     try (KafkaConsumer consumer = new KafkaConsumer(kafkaParams)) {
+      if (!checkTopicExists(consumer)) {
+        throw new HoodieException("Kafka topic:" + topicName + " does not exist");
+      }
       List<PartitionInfo> partitionInfoList;
       partitionInfoList = consumer.partitionsFor(topicName);
       Set<TopicPartition> topicPartitions = partitionInfoList.stream()
@@ -204,9 +205,19 @@ public class KafkaOffsetGen {
     // Come up with final set of OffsetRanges to read (account for new partitions, limit number of events)
     long maxEventsToReadFromKafka = props.getLong(Config.MAX_EVENTS_FROM_KAFKA_SOURCE_PROP,
         Config.maxEventsFromKafkaSource);
-    maxEventsToReadFromKafka = (maxEventsToReadFromKafka == Long.MAX_VALUE || maxEventsToReadFromKafka == Integer.MAX_VALUE)
-        ? Config.maxEventsFromKafkaSource : maxEventsToReadFromKafka;
-    long numEvents = sourceLimit == Long.MAX_VALUE ? maxEventsToReadFromKafka : sourceLimit;
+
+    long numEvents;
+    if (sourceLimit == Long.MAX_VALUE) {
+      numEvents = maxEventsToReadFromKafka;
+      LOG.info("SourceLimit not configured, set numEvents to default value : " + maxEventsToReadFromKafka);
+    } else {
+      numEvents = sourceLimit;
+    }
+
+    if (numEvents < toOffsets.size()) {
+      throw new HoodieException("sourceLimit should not be less than the number of kafka partitions");
+    }
+
     return CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents);
   }
 
@@ -220,6 +231,16 @@ public class KafkaOffsetGen {
     boolean checkpointOffsetReseter = checkpointOffsets.entrySet().stream()
             .anyMatch(offset -> offset.getValue() < earliestOffsets.get(offset.getKey()));
     return checkpointOffsetReseter ? earliestOffsets : checkpointOffsets;
+  }
+
+  /**
+   * Check if topic exists.
+   * @param consumer kafka consumer
+   * @return
+   */
+  public boolean checkTopicExists(KafkaConsumer consumer)  {
+    Map<String, List<PartitionInfo>> result = consumer.listTopics();
+    return result.containsKey(topicName);
   }
 
   public String getTopicName() {

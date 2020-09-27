@@ -175,6 +175,7 @@ public class HoodieSnapshotExporter {
         ? defaultPartitioner
         : ReflectionUtils.loadClass(cfg.outputPartitioner);
 
+    jsc.setJobGroup(this.getClass().getSimpleName(), "Exporting as non-HUDI dataset");
     final BaseFileOnlyView fsView = getBaseFileOnlyView(jsc, cfg);
     Iterator<String> exportingFilePaths = jsc
         .parallelize(partitions, partitions.size())
@@ -193,6 +194,7 @@ public class HoodieSnapshotExporter {
   private void exportAsHudi(JavaSparkContext jsc, Config cfg, List<String> partitions, String latestCommitTimestamp) throws IOException {
     final BaseFileOnlyView fsView = getBaseFileOnlyView(jsc, cfg);
     final SerializableConfiguration serConf = new SerializableConfiguration(jsc.hadoopConfiguration());
+    jsc.setJobGroup(this.getClass().getSimpleName(), "Exporting as HUDI dataset");
     jsc.parallelize(partitions, partitions.size()).flatMap(partition -> {
       // Only take latest version files <= latestCommit.
       List<Tuple2<String, String>> filePaths = new ArrayList<>();

@@ -18,15 +18,17 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
-import com.codahale.metrics.Gauge;
 import com.codahale.metrics.MetricRegistry;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.Closeable;
+import java.util.Map;
 
 /**
  * This is the main class of the metrics system.
@@ -51,6 +53,7 @@ public class Metrics {
 
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       try {
+        registerHoodieCommonMetrics();
         reporter.report();
         if (getReporter() != null) {
           getReporter().close();
@@ -59,6 +62,10 @@ public class Metrics {
         LOG.warn("Error while closing reporter", e);
       }
     }));
+  }
+
+  private void registerHoodieCommonMetrics() {
+    registerGauges(Registry.getAllMetrics(true, true), Option.empty());
   }
 
   public static Metrics getInstance() {
@@ -78,14 +85,19 @@ public class Metrics {
     initialized = true;
   }
 
+  public static void registerGauges(Map<String, Long> metricsMap, Option<String> prefix) {
+    String metricPrefix = prefix.isPresent() ? prefix.get() + "." : "";
+    metricsMap.forEach((k, v) -> registerGauge(metricPrefix + k, v));
+  }
+
   public static void registerGauge(String metricName, final long value) {
     try {
       MetricRegistry registry = Metrics.getInstance().getRegistry();
-      registry.<Gauge<Long>>register(metricName, () -> value);
+      HoodieGauge guage = (HoodieGauge) registry.gauge(metricName, () -> new HoodieGauge<>(value));
+      guage.setValue(value);
     } catch (Exception e) {
       // Here we catch all exception, so the major upsert pipeline will not be affected if the
-      // metrics system
-      // has some issues.
+      // metrics system has some issues.
       LOG.error("Failed to send metrics: ", e);
     }
   }

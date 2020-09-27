@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -26,21 +25,25 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -49,7 +52,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test Cases for rollback of snapshots and commits.
  */
-public class TestClientRollback extends TestHoodieClientBase {
+public class TestClientRollback extends HoodieClientTestBase {
 
   /**
    * Test case for rollback-savepoint interaction.
@@ -159,37 +162,46 @@ public class TestClientRollback extends TestHoodieClientBase {
   @Test
   public void testRollbackCommit() throws Exception {
     // Let's create some commit files and parquet files
-    String commitTime1 = "20160501010101";
-    String commitTime2 = "20160502020601";
-    String commitTime3 = "20160506030611";
-    new File(basePath + "/.hoodie").mkdirs();
-    HoodieTestDataGenerator.writePartitionMetadata(fs, new String[] {"2016/05/01", "2016/05/02", "2016/05/06"},
-        basePath);
-
-    // Only first two have commit files
-    HoodieTestUtils.createCommitFiles(basePath, commitTime1, commitTime2);
-    // Third one has a .inflight intermediate commit file
-    HoodieTestUtils.createInflightCommitFiles(basePath, commitTime3);
-
-    // Make commit1
-    String file11 = HoodieTestUtils.createDataFile(basePath, "2016/05/01", commitTime1, "id11");
-    String file12 = HoodieTestUtils.createDataFile(basePath, "2016/05/02", commitTime1, "id12");
-    String file13 = HoodieTestUtils.createDataFile(basePath, "2016/05/06", commitTime1, "id13");
-
-    // Make commit2
-    String file21 = HoodieTestUtils.createDataFile(basePath, "2016/05/01", commitTime2, "id21");
-    String file22 = HoodieTestUtils.createDataFile(basePath, "2016/05/02", commitTime2, "id22");
-    String file23 = HoodieTestUtils.createDataFile(basePath, "2016/05/06", commitTime2, "id23");
-
-    // Make commit3
-    String file31 = HoodieTestUtils.createDataFile(basePath, "2016/05/01", commitTime3, "id31");
-    String file32 = HoodieTestUtils.createDataFile(basePath, "2016/05/02", commitTime3, "id32");
-    String file33 = HoodieTestUtils.createDataFile(basePath, "2016/05/06", commitTime3, "id33");
+    final String p1 = "2016/05/01";
+    final String p2 = "2016/05/02";
+    final String p3 = "2016/05/06";
+    final String commitTime1 = "20160501010101";
+    final String commitTime2 = "20160502020601";
+    final String commitTime3 = "20160506030611";
+    Map<String, String> partitionAndFileId1 = new HashMap<String, String>() {
+      {
+        put(p1, "id11");
+        put(p2, "id12");
+        put(p3, "id13");
+      }
+    };
+    Map<String, String> partitionAndFileId2 = new HashMap<String, String>() {
+      {
+        put(p1, "id21");
+        put(p2, "id22");
+        put(p3, "id23");
+      }
+    };
+    Map<String, String> partitionAndFileId3 = new HashMap<String, String>() {
+      {
+        put(p1, "id31");
+        put(p2, "id32");
+        put(p3, "id33");
+      }
+    };
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient)
+        .withPartitionMetaFiles(p1, p2, p3)
+        .addCommit(commitTime1)
+        .withBaseFilesInPartitions(partitionAndFileId1)
+        .addCommit(commitTime2)
+        .withBaseFilesInPartitions(partitionAndFileId2)
+        .addInflightCommit(commitTime3)
+        .withBaseFilesInPartitions(partitionAndFileId3);
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
-    try (HoodieWriteClient client = getHoodieWriteClient(config, false);) {
+    try (HoodieWriteClient client = getHoodieWriteClient(config, false)) {
 
       // Rollback commit 1 (this should fail, since commit2 is still around)
       assertThrows(HoodieRollbackException.class, () -> {
@@ -198,45 +210,40 @@ public class TestClientRollback extends TestHoodieClientBase {
 
       // Rollback commit3
       client.rollback(commitTime3);
-      assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime3));
-      assertFalse(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime3, file31)
-          || HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime3, file32)
-          || HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime3, file33));
+      assertFalse(testTable.inflightCommitExists(commitTime3));
+      assertFalse(testTable.baseFilesExist(partitionAndFileId3, commitTime3));
+      assertTrue(testTable.baseFilesExist(partitionAndFileId2, commitTime2));
+      assertTrue(testTable.baseFilesExist(partitionAndFileId1, commitTime1));
 
       // simulate partial failure, where .inflight was not deleted, but data files were.
-      HoodieTestUtils.createInflightCommitFiles(basePath, commitTime3);
+      testTable.addInflightCommit(commitTime3);
       client.rollback(commitTime3);
-      assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime3));
+      assertFalse(testTable.inflightCommitExists(commitTime3));
+      assertTrue(testTable.baseFilesExist(partitionAndFileId2, commitTime2));
+      assertTrue(testTable.baseFilesExist(partitionAndFileId1, commitTime1));
 
       // Rollback commit2
       client.rollback(commitTime2);
-      assertFalse(HoodieTestUtils.doesCommitExist(basePath, commitTime2));
-      assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime2));
-      assertFalse(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime2, file21)
-          || HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime2, file22)
-          || HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime2, file23));
+      assertFalse(testTable.commitExists(commitTime2));
+      assertFalse(testTable.inflightCommitExists(commitTime2));
+      assertFalse(testTable.baseFilesExist(partitionAndFileId2, commitTime2));
+      assertTrue(testTable.baseFilesExist(partitionAndFileId1, commitTime1));
 
       // simulate partial failure, where only .commit => .inflight renaming succeeded, leaving a
       // .inflight commit and a bunch of data files around.
-      HoodieTestUtils.createInflightCommitFiles(basePath, commitTime2);
-      file21 = HoodieTestUtils.createDataFile(basePath, "2016/05/01", commitTime2, "id21");
-      file22 = HoodieTestUtils.createDataFile(basePath, "2016/05/02", commitTime2, "id22");
-      file23 = HoodieTestUtils.createDataFile(basePath, "2016/05/06", commitTime2, "id23");
+      testTable.addInflightCommit(commitTime2).withBaseFilesInPartitions(partitionAndFileId2);
 
       client.rollback(commitTime2);
-      assertFalse(HoodieTestUtils.doesCommitExist(basePath, commitTime2));
-      assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime2));
-      assertFalse(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime2, file21)
-          || HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime2, file22)
-          || HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime2, file23));
+      assertFalse(testTable.commitExists(commitTime2));
+      assertFalse(testTable.inflightCommitExists(commitTime2));
+      assertFalse(testTable.baseFilesExist(partitionAndFileId2, commitTime2));
+      assertTrue(testTable.baseFilesExist(partitionAndFileId1, commitTime1));
 
       // Let's rollback commit1, Check results
       client.rollback(commitTime1);
-      assertFalse(HoodieTestUtils.doesCommitExist(basePath, commitTime1));
-      assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime1));
-      assertFalse(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime1, file11)
-          || HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime1, file12)
-          || HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime1, file13));
+      assertFalse(testTable.commitExists(commitTime1));
+      assertFalse(testTable.inflightCommitExists(commitTime1));
+      assertFalse(testTable.baseFilesExist(partitionAndFileId1, commitTime1));
     }
   }
 
@@ -246,71 +253,68 @@ public class TestClientRollback extends TestHoodieClientBase {
   @Test
   public void testAutoRollbackInflightCommit() throws Exception {
     // Let's create some commit files and parquet files
-    String commitTime1 = "20160501010101";
-    String commitTime2 = "20160502020601";
-    String commitTime3 = "20160506030611";
-    String commitTime4 = "20160506030621";
-    String commitTime5 = "20160506030631";
-    new File(basePath + "/.hoodie").mkdirs();
-    HoodieTestDataGenerator.writePartitionMetadata(fs, new String[] {"2016/05/01", "2016/05/02", "2016/05/06"},
-        basePath);
-
-    // One good commit
-    HoodieTestUtils.createCommitFiles(basePath, commitTime1);
-    // Two inflight commits
-    HoodieTestUtils.createInflightCommitFiles(basePath, commitTime2, commitTime3);
-
-    // Make commit1
-    String file11 = HoodieTestUtils.createDataFile(basePath, "2016/05/01", commitTime1, "id11");
-    String file12 = HoodieTestUtils.createDataFile(basePath, "2016/05/02", commitTime1, "id12");
-    String file13 = HoodieTestUtils.createDataFile(basePath, "2016/05/06", commitTime1, "id13");
-
-    // Make commit2
-    String file21 = HoodieTestUtils.createDataFile(basePath, "2016/05/01", commitTime2, "id21");
-    String file22 = HoodieTestUtils.createDataFile(basePath, "2016/05/02", commitTime2, "id22");
-    String file23 = HoodieTestUtils.createDataFile(basePath, "2016/05/06", commitTime2, "id23");
-
-    // Make commit3
-    String file31 = HoodieTestUtils.createDataFile(basePath, "2016/05/01", commitTime3, "id31");
-    String file32 = HoodieTestUtils.createDataFile(basePath, "2016/05/02", commitTime3, "id32");
-    String file33 = HoodieTestUtils.createDataFile(basePath, "2016/05/06", commitTime3, "id33");
+    final String p1 = "2016/05/01";
+    final String p2 = "2016/05/02";
+    final String p3 = "2016/05/06";
+    final String commitTime1 = "20160501010101";
+    final String commitTime2 = "20160502020601";
+    final String commitTime3 = "20160506030611";
+    Map<String, String> partitionAndFileId1 = new HashMap<String, String>() {
+      {
+        put(p1, "id11");
+        put(p2, "id12");
+        put(p3, "id13");
+      }
+    };
+    Map<String, String> partitionAndFileId2 = new HashMap<String, String>() {
+      {
+        put(p1, "id21");
+        put(p2, "id22");
+        put(p3, "id23");
+      }
+    };
+    Map<String, String> partitionAndFileId3 = new HashMap<String, String>() {
+      {
+        put(p1, "id31");
+        put(p2, "id32");
+        put(p3, "id33");
+      }
+    };
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient)
+        .withPartitionMetaFiles(p1, p2, p3)
+        .addCommit(commitTime1)
+        .withBaseFilesInPartitions(partitionAndFileId1)
+        .addInflightCommit(commitTime2)
+        .withBaseFilesInPartitions(partitionAndFileId2)
+        .addInflightCommit(commitTime3)
+        .withBaseFilesInPartitions(partitionAndFileId3);
 
     // Turn auto rollback off
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
-    try (HoodieWriteClient client = getHoodieWriteClient(config, false);) {
+    final String commitTime4 = "20160506030621";
+    try (HoodieWriteClient client = getHoodieWriteClient(config, false)) {
       client.startCommitWithTime(commitTime4);
       // Check results, nothing changed
-      assertTrue(HoodieTestUtils.doesCommitExist(basePath, commitTime1));
-      assertTrue(HoodieTestUtils.doesInflightExist(basePath, commitTime2));
-      assertTrue(HoodieTestUtils.doesInflightExist(basePath, commitTime3));
-      assertTrue(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime3, file31)
-          && HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime3, file32)
-          && HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime3, file33));
-      assertTrue(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime2, file21)
-          && HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime2, file22)
-          && HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime2, file23));
-      assertTrue(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime1, file11)
-          && HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime1, file12)
-          && HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime1, file13));
+      assertTrue(testTable.commitExists(commitTime1));
+      assertTrue(testTable.inflightCommitExists(commitTime2));
+      assertTrue(testTable.inflightCommitExists(commitTime3));
+      assertTrue(testTable.baseFilesExist(partitionAndFileId1, commitTime1));
+      assertTrue(testTable.baseFilesExist(partitionAndFileId2, commitTime2));
+      assertTrue(testTable.baseFilesExist(partitionAndFileId3, commitTime3));
     }
 
     // Turn auto rollback on
+    final String commitTime5 = "20160506030631";
     try (HoodieWriteClient client = getHoodieWriteClient(config, true)) {
       client.startCommitWithTime(commitTime5);
-      assertTrue(HoodieTestUtils.doesCommitExist(basePath, commitTime1));
-      assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime2));
-      assertFalse(HoodieTestUtils.doesInflightExist(basePath, commitTime3));
-      assertFalse(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime3, file31)
-          || HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime3, file32)
-          || HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime3, file33));
-      assertFalse(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime2, file21)
-          || HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime2, file22)
-          || HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime2, file23));
-      assertTrue(HoodieTestUtils.doesDataFileExist(basePath, "2016/05/01", commitTime1, file11)
-          && HoodieTestUtils.doesDataFileExist(basePath, "2016/05/02", commitTime1, file12)
-          && HoodieTestUtils.doesDataFileExist(basePath, "2016/05/06", commitTime1, file13));
+      assertTrue(testTable.commitExists(commitTime1));
+      assertFalse(testTable.inflightCommitExists(commitTime2));
+      assertFalse(testTable.inflightCommitExists(commitTime3));
+      assertTrue(testTable.baseFilesExist(partitionAndFileId1, commitTime1));
+      assertFalse(testTable.baseFilesExist(partitionAndFileId2, commitTime2));
+      assertFalse(testTable.baseFilesExist(partitionAndFileId3, commitTime3));
     }
   }
 }

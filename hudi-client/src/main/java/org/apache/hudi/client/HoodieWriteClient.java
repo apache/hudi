@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client;
 
-import com.codahale.metrics.Timer;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -48,10 +47,13 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
-import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
+import org.apache.hudi.table.MarkerFiles;
+import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.table.action.savepoint.SavepointHelpers;
+
+import com.codahale.metrics.Timer;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
@@ -79,6 +81,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   private final boolean rollbackPending;
   private final transient HoodieMetrics metrics;
   private transient Timer.Context compactionTimer;
+  private transient AsyncCleanerService asyncCleanerService;
 
   /**
    * Create a write client, without cleaning up failed/inflight commits.
@@ -94,28 +97,28 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * Create a write client, with new hudi index.
    *
    * @param jsc Java Spark Context
-   * @param clientConfig instance of HoodieWriteConfig
+   * @param writeConfig instance of HoodieWriteConfig
    * @param rollbackPending whether need to cleanup pending commits
    */
-  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackPending) {
-    this(jsc, clientConfig, rollbackPending, HoodieIndex.createIndex(clientConfig));
+  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig writeConfig, boolean rollbackPending) {
+    this(jsc, writeConfig, rollbackPending, HoodieIndex.createIndex(writeConfig));
   }
 
-  HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackPending, HoodieIndex index) {
-    this(jsc, clientConfig, rollbackPending, index, Option.empty());
+  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig writeConfig, boolean rollbackPending, HoodieIndex index) {
+    this(jsc, writeConfig, rollbackPending, index, Option.empty());
   }
 
   /**
    *  Create a write client, allows to specify all parameters.
    *
    * @param jsc Java Spark Context
-   * @param clientConfig instance of HoodieWriteConfig
+   * @param writeConfig instance of HoodieWriteConfig
    * @param rollbackPending whether need to cleanup pending commits
    * @param timelineService Timeline Service that runs as part of write client.
    */
-  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig clientConfig, boolean rollbackPending,
+  public HoodieWriteClient(JavaSparkContext jsc, HoodieWriteConfig writeConfig, boolean rollbackPending,
       HoodieIndex index, Option<EmbeddedTimelineService> timelineService) {
-    super(jsc, index, clientConfig, timelineService);
+    super(jsc, index, writeConfig, timelineService);
     this.metrics = new HoodieMetrics(config, config.getTableName());
     this.rollbackPending = rollbackPending;
   }
@@ -147,6 +150,35 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   /**
+   * Main API to run bootstrap to hudi.
+   */
+  public void bootstrap(Option<Map<String, String>> extraMetadata) {
+    if (rollbackPending) {
+      rollBackInflightBootstrap();
+    }
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS);
+    table.bootstrap(jsc, extraMetadata);
+  }
+
+  /**
+   * Main API to rollback pending bootstrap.
+   */
+  protected void rollBackInflightBootstrap() {
+    LOG.info("Rolling back pending bootstrap if present");
+    HoodieTable<T> table = HoodieTable.create(config, hadoopConf);
+    HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompaction();
+    Option<String> instant = Option.fromJavaOptional(
+        inflightTimeline.getReverseOrderedInstants().map(HoodieInstant::getTimestamp).findFirst());
+    if (instant.isPresent() && HoodieTimeline.compareTimestamps(instant.get(), HoodieTimeline.LESSER_THAN_OR_EQUALS,
+        HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS)) {
+      LOG.info("Found pending bootstrap instants. Rolling them back");
+      table.rollbackBootstrap(jsc, HoodieActiveTimeline.createNewInstantTime());
+      LOG.info("Finished rolling back pending bootstrap");
+    }
+
+  }
+
+  /**
    * Upsert a batch of new records into Hoodie table at the supplied instantTime.
    *
    * @param records JavaRDD of hoodieRecords to upsert
@@ -154,9 +186,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> upsert(JavaRDD<HoodieRecord<T>> records, final String instantTime) {
-    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT);
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT, instantTime);
     table.validateUpsertSchema();
     setOperationType(WriteOperationType.UPSERT);
+    this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
     HoodieWriteMetadata result = table.upsert(jsc, instantTime, records);
     if (result.getIndexLookupDuration().isPresent()) {
       metrics.updateIndexMetrics(LOOKUP_STR, result.getIndexLookupDuration().get().toMillis());
@@ -174,9 +207,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String instantTime) {
-    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT_PREPPED);
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.UPSERT_PREPPED, instantTime);
     table.validateUpsertSchema();
     setOperationType(WriteOperationType.UPSERT_PREPPED);
+    this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
     HoodieWriteMetadata result = table.upsertPrepped(jsc,instantTime, preppedRecords);
     return postWrite(result, instantTime, table);
   }
@@ -192,9 +226,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> insert(JavaRDD<HoodieRecord<T>> records, final String instantTime) {
-    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.INSERT);
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.INSERT, instantTime);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.INSERT);
+    this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
     HoodieWriteMetadata result = table.insert(jsc,instantTime, records);
     return postWrite(result, instantTime, table);
   }
@@ -211,9 +246,10 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> insertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String instantTime) {
-    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.INSERT_PREPPED);
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.INSERT_PREPPED, instantTime);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.INSERT_PREPPED);
+    this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
     HoodieWriteMetadata result = table.insertPrepped(jsc,instantTime, preppedRecords);
     return postWrite(result, instantTime, table);
   }
@@ -240,20 +276,21 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * This implementation uses sortBy (which does range partitioning based on reservoir sampling) and attempts to control
    * the numbers of files with less memory compared to the {@link HoodieWriteClient#insert(JavaRDD, String)}. Optionally
    * it allows users to specify their own partitioner. If specified then it will be used for repartitioning records. See
-   * {@link UserDefinedBulkInsertPartitioner}.
+   * {@link BulkInsertPartitioner}.
    *
    * @param records HoodieRecords to insert
    * @param instantTime Instant time of the commit
-   * @param bulkInsertPartitioner If specified then it will be used to partition input records before they are inserted
+   * @param userDefinedBulkInsertPartitioner If specified then it will be used to partition input records before they are inserted
    * into hoodie.
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> bulkInsert(JavaRDD<HoodieRecord<T>> records, final String instantTime,
-      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
-    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT);
+                                         Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT, instantTime);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.BULK_INSERT);
-    HoodieWriteMetadata result = table.bulkInsert(jsc,instantTime, records, bulkInsertPartitioner);
+    this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
+    HoodieWriteMetadata result = table.bulkInsert(jsc,instantTime, records, userDefinedBulkInsertPartitioner);
     return postWrite(result, instantTime, table);
   }
 
@@ -265,7 +302,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * This implementation uses sortBy (which does range partitioning based on reservoir sampling) and attempts to control
    * the numbers of files with less memory compared to the {@link HoodieWriteClient#insert(JavaRDD, String)}. Optionally
    * it allows users to specify their own partitioner. If specified then it will be used for repartitioning records. See
-   * {@link UserDefinedBulkInsertPartitioner}.
+   * {@link BulkInsertPartitioner}.
    *
    * @param preppedRecords HoodieRecords to insert
    * @param instantTime Instant time of the commit
@@ -274,10 +311,11 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> bulkInsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, final String instantTime,
-      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
-    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT_PREPPED);
+                                                       Option<BulkInsertPartitioner> bulkInsertPartitioner) {
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.BULK_INSERT_PREPPED, instantTime);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.BULK_INSERT_PREPPED);
+    this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
     HoodieWriteMetadata result = table.bulkInsertPrepped(jsc,instantTime, preppedRecords, bulkInsertPartitioner);
     return postWrite(result, instantTime, table);
   }
@@ -291,7 +329,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
    */
   public JavaRDD<WriteStatus> delete(JavaRDD<HoodieKey> keys, final String instantTime) {
-    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.DELETE);
+    HoodieTable<T> table = getTableAndInitCtx(WriteOperationType.DELETE, instantTime);
     setOperationType(WriteOperationType.DELETE);
     HoodieWriteMetadata result = table.delete(jsc,instantTime, keys);
     return postWrite(result, instantTime, table);
@@ -315,7 +353,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
             result.getWriteStats().get().size());
       }
 
-      postCommit(result.getCommitMetadata().get(), instantTime, Option.empty());
+      postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime, Option.empty());
 
       emitCommitMetrics(instantTime, result.getCommitMetadata().get(),
           hoodieTable.getMetaClient().getCommitActionType());
@@ -324,28 +362,52 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   }
 
   @Override
-  protected void postCommit(HoodieCommitMetadata metadata, String instantTime,
-      Option<Map<String, String>> extraMetadata) {
+  protected void postCommit(HoodieTable<?> table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata) {
     try {
+
+      // Delete the marker directory for the instant.
+      new MarkerFiles(table, instantTime).quietDeleteMarkerDir(jsc, config.getMarkersDeleteParallelism());
+
       // Do an inline compaction if enabled
       if (config.isInlineCompaction()) {
+        runAnyPendingCompactions(table);
         metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "true");
         inlineCompact(extraMetadata);
       } else {
         metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "false");
       }
       // We cannot have unbounded commit files. Archive commits if we have to archive
-      HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, createMetaClient(true));
-      archiveLog.archiveIfRequired(hadoopConf);
-      if (config.isAutoClean()) {
-        // Call clean to cleanup if there is anything to cleanup after the commit,
-        LOG.info("Auto cleaning is enabled. Running cleaner now");
-        clean(instantTime);
-      } else {
-        LOG.info("Auto cleaning is not enabled. Not running cleaner now");
-      }
+      HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, hadoopConf);
+      archiveLog.archiveIfRequired(jsc);
+      autoCleanOnCommit(instantTime);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
+  }
+
+  private void runAnyPendingCompactions(HoodieTable<?> table) {
+    table.getActiveTimeline().getCommitsAndCompactionTimeline().filterPendingCompactionTimeline().getInstants()
+        .forEach(instant -> {
+          LOG.info("Running previously failed inflight compaction at instant " + instant);
+          compact(instant.getTimestamp(), true);
+        });
+  }
+
+  /**
+   * Handle auto clean during commit.
+   * @param instantTime
+   */
+  private void autoCleanOnCommit(String instantTime) {
+    if (config.isAutoClean()) {
+      // Call clean to cleanup if there is anything to cleanup after the commit,
+      if (config.isAsyncClean()) {
+        LOG.info("Cleaner has been spawned already. Waiting for it to finish");
+        AsyncCleanerService.waitForCompletion(asyncCleanerService);
+        LOG.info("Cleaner has finished");
+      } else {
+        LOG.info("Auto cleaning is enabled. Running cleaner now");
+        clean(instantTime);
+      }
     }
   }
 
@@ -476,7 +538,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
    */
   @Override
   public void close() {
-    // Stop timeline-server if running
+    AsyncCleanerService.forceShutdown(asyncCleanerService);
+    asyncCleanerService = null;
     super.close();
   }
 
@@ -489,12 +552,12 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     LOG.info("Cleaner started");
     final Timer.Context context = metrics.getCleanCtx();
     HoodieCleanMetadata metadata = HoodieTable.create(config, hadoopConf).clean(jsc, cleanInstantTime);
-    if (context != null) {
+    if (context != null && metadata != null) {
       long durationMs = metrics.getDurationInMs(context.stop());
       metrics.updateCleanMetrics(durationMs, metadata.getTotalFilesDeleted());
       LOG.info("Cleaned " + metadata.getTotalFilesDeleted() + " files"
           + " Earliest Retained Instant :" + metadata.getEarliestCommitToRetain()
-          + " cleanerElaspsedMs" + durationMs);
+          + " cleanerElapsedMs" + durationMs);
     }
     return metadata;
   }
@@ -637,7 +700,13 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     List<String> commits = inflightTimeline.getReverseOrderedInstants().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
     for (String commit : commits) {
-      rollback(commit);
+      if (HoodieTimeline.compareTimestamps(commit, HoodieTimeline.LESSER_THAN_OR_EQUALS,
+          HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS)) {
+        rollBackInflightBootstrap();
+        break;
+      } else {
+        rollback(commit);
+      }
     }
   }
 

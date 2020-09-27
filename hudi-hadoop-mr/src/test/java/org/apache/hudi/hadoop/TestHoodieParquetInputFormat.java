@@ -21,6 +21,7 @@ package org.apache.hudi.hadoop;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
+import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileStatus;
@@ -40,6 +42,7 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapreduce.Job;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -50,6 +53,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -58,6 +62,8 @@ public class TestHoodieParquetInputFormat {
 
   private HoodieParquetInputFormat inputFormat;
   private JobConf jobConf;
+  private final HoodieFileFormat baseFileFormat = HoodieFileFormat.PARQUET;
+  private final String baseFileExtension = baseFileFormat.getFileExtension();
 
   public static void ensureFilesInCommit(String msg, FileStatus[] files, String commit, int expected) {
     int count = 0;
@@ -103,7 +109,7 @@ public class TestHoodieParquetInputFormat {
     timeline.setInstants(instants);
 
     // Verify getCommitsTimelineBeforePendingCompaction does not return instants after first compaction instant
-    HoodieTimeline filteredTimeline = new HoodieParquetInputFormat().filterInstantsTimeline(timeline);
+    HoodieTimeline filteredTimeline = inputFormat.filterInstantsTimeline(timeline);
     assertTrue(filteredTimeline.containsInstant(t1));
     assertTrue(filteredTimeline.containsInstant(t2));
     assertFalse(filteredTimeline.containsInstant(t3));
@@ -116,7 +122,7 @@ public class TestHoodieParquetInputFormat {
     instants.remove(t3);
     timeline = new HoodieActiveTimeline(metaClient);
     timeline.setInstants(instants);
-    filteredTimeline = new HoodieParquetInputFormat().filterInstantsTimeline(timeline);
+    filteredTimeline = inputFormat.filterInstantsTimeline(timeline);
 
     // verify all remaining instants are returned.
     assertTrue(filteredTimeline.containsInstant(t1));
@@ -130,7 +136,7 @@ public class TestHoodieParquetInputFormat {
     instants.remove(t5);
     timeline = new HoodieActiveTimeline(metaClient);
     timeline.setInstants(instants);
-    filteredTimeline = new HoodieParquetInputFormat().filterInstantsTimeline(timeline);
+    filteredTimeline = inputFormat.filterInstantsTimeline(timeline);
 
     // verify all remaining instants are returned.
     assertTrue(filteredTimeline.containsInstant(t1));
@@ -144,7 +150,7 @@ public class TestHoodieParquetInputFormat {
   @Test
   public void testInputFormatLoad() throws IOException {
     // initial commit
-    File partitionDir = InputFormatTestUtil.prepareTable(basePath, 10, "100");
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
     InputFormatTestUtil.commit(basePath, "100");
 
     // Add the paths
@@ -160,7 +166,7 @@ public class TestHoodieParquetInputFormat {
   @Test
   public void testInputFormatUpdates() throws IOException {
     // initial commit
-    File partitionDir = InputFormatTestUtil.prepareTable(basePath, 10, "100");
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
     InputFormatTestUtil.commit(basePath, "100");
 
     // Add the paths
@@ -170,7 +176,7 @@ public class TestHoodieParquetInputFormat {
     assertEquals(10, files.length);
 
     // update files
-    InputFormatTestUtil.simulateUpdates(partitionDir, "100", 5, "200", true);
+    InputFormatTestUtil.simulateUpdates(partitionDir, baseFileExtension, "100", 5, "200", true);
     // Before the commit
     files = inputFormat.listStatus(jobConf);
     assertEquals(10, files.length);
@@ -185,9 +191,42 @@ public class TestHoodieParquetInputFormat {
   }
 
   @Test
+  public void testInputFormatWithCompaction() throws IOException {
+    // initial commit
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
+    InputFormatTestUtil.commit(basePath, "100");
+
+    // Add the paths
+    FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
+
+    InputSplit[] inputSplits = inputFormat.getSplits(jobConf, 10);
+    assertEquals(10, inputSplits.length);
+
+    FileStatus[] files = inputFormat.listStatus(jobConf);
+    assertEquals(10, files.length);
+
+    // simulate compaction requested
+    createCompactionFile(basePath, "125");
+
+    // add inserts after compaction timestamp
+    InputFormatTestUtil.simulateInserts(partitionDir, baseFileExtension, "fileId2", 5, "200");
+    InputFormatTestUtil.commit(basePath, "200");
+
+    // verify snapshot reads show all new inserts even though there is pending compaction
+    files = inputFormat.listStatus(jobConf);
+    assertEquals(15, files.length);
+
+    // verify that incremental reads do NOT show inserts after compaction timestamp
+    InputFormatTestUtil.setupIncremental(jobConf, "100", 10);
+    files = inputFormat.listStatus(jobConf);
+    assertEquals(0, files.length,
+        "We should exclude commit 200 when there is a pending compaction at 150");
+  }
+
+  @Test
   public void testIncrementalSimple() throws IOException {
     // initial commit
-    File partitionDir = InputFormatTestUtil.prepareTable(basePath, 10, "100");
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
     createCommitFile(basePath, "100", "2016/05/01");
 
     // Add the paths
@@ -232,25 +271,25 @@ public class TestHoodieParquetInputFormat {
   @Test
   public void testIncrementalWithMultipleCommits() throws IOException {
     // initial commit
-    File partitionDir = InputFormatTestUtil.prepareTable(basePath, 10, "100");
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
     createCommitFile(basePath, "100", "2016/05/01");
 
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
     // update files
-    InputFormatTestUtil.simulateUpdates(partitionDir, "100", 5, "200", false);
+    InputFormatTestUtil.simulateUpdates(partitionDir, baseFileExtension, "100", 5, "200", false);
     createCommitFile(basePath, "200", "2016/05/01");
 
-    InputFormatTestUtil.simulateUpdates(partitionDir, "100", 4, "300", false);
+    InputFormatTestUtil.simulateUpdates(partitionDir, baseFileExtension, "100", 4, "300", false);
     createCommitFile(basePath, "300", "2016/05/01");
 
-    InputFormatTestUtil.simulateUpdates(partitionDir, "100", 3, "400", false);
+    InputFormatTestUtil.simulateUpdates(partitionDir, baseFileExtension, "100", 3, "400", false);
     createCommitFile(basePath, "400", "2016/05/01");
 
-    InputFormatTestUtil.simulateUpdates(partitionDir, "100", 2, "500", false);
+    InputFormatTestUtil.simulateUpdates(partitionDir, baseFileExtension, "100", 2, "500", false);
     createCommitFile(basePath, "500", "2016/05/01");
 
-    InputFormatTestUtil.simulateUpdates(partitionDir, "100", 1, "600", false);
+    InputFormatTestUtil.simulateUpdates(partitionDir, baseFileExtension, "100", 1, "600", false);
     createCommitFile(basePath, "600", "2016/05/01");
 
     InputFormatTestUtil.setupIncremental(jobConf, "100", 1);
@@ -267,7 +306,7 @@ public class TestHoodieParquetInputFormat {
     ensureFilesInCommit("Pulling 3 commits from 100, should get us the 1 files from 300 commit", files, "300", 1);
     ensureFilesInCommit("Pulling 3 commits from 100, should get us the 1 files from 200 commit", files, "200", 1);
 
-    InputFormatTestUtil.setupIncremental(jobConf, "100", HoodieHiveUtil.MAX_COMMIT_ALL);
+    InputFormatTestUtil.setupIncremental(jobConf, "100", HoodieHiveUtils.MAX_COMMIT_ALL);
     files = inputFormat.listStatus(jobConf);
 
     assertEquals(5, files.length,
@@ -279,10 +318,11 @@ public class TestHoodieParquetInputFormat {
     ensureFilesInCommit("Pulling all commits from 100, should get us the 1 files from 200 commit", files, "200", 1);
   }
 
-  // TODO enable this after enabling predicate pushdown
+  @Disabled("enable this after enabling predicate pushdown")
+  @Test
   public void testPredicatePushDown() throws IOException {
     // initial commit
-    Schema schema = InputFormatTestUtil.readSchema("/sample1.avsc");
+    Schema schema = getSchemaFromResource(getClass(), "/sample1.avsc");
     String commit1 = "20160628071126";
     File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, 10, commit1);
     InputFormatTestUtil.commit(basePath, commit1);
@@ -310,15 +350,17 @@ public class TestHoodieParquetInputFormat {
 
   @Test
   public void testGetIncrementalTableNames() throws IOException {
-    String[] expectedincrTables = {"db1.raw_trips", "db2.model_trips"};
+    String[] expectedincrTables = {"db1.raw_trips", "db2.model_trips", "db3.model_trips"};
     JobConf conf = new JobConf();
-    String incrementalMode1 = String.format(HoodieHiveUtil.HOODIE_CONSUME_MODE_PATTERN, expectedincrTables[0]);
-    conf.set(incrementalMode1, HoodieHiveUtil.INCREMENTAL_SCAN_MODE);
-    String incrementalMode2 = String.format(HoodieHiveUtil.HOODIE_CONSUME_MODE_PATTERN, expectedincrTables[1]);
-    conf.set(incrementalMode2,HoodieHiveUtil.INCREMENTAL_SCAN_MODE);
-    String defaultmode = String.format(HoodieHiveUtil.HOODIE_CONSUME_MODE_PATTERN, "db3.first_trips");
-    conf.set(defaultmode, HoodieHiveUtil.DEFAULT_SCAN_MODE);
-    List<String> actualincrTables = HoodieHiveUtil.getIncrementalTableNames(Job.getInstance(conf));
+    String incrementalMode1 = String.format(HoodieHiveUtils.HOODIE_CONSUME_MODE_PATTERN, expectedincrTables[0]);
+    conf.set(incrementalMode1, HoodieHiveUtils.INCREMENTAL_SCAN_MODE);
+    String incrementalMode2 = String.format(HoodieHiveUtils.HOODIE_CONSUME_MODE_PATTERN, expectedincrTables[1]);
+    conf.set(incrementalMode2,HoodieHiveUtils.INCREMENTAL_SCAN_MODE);
+    String incrementalMode3 = String.format(HoodieHiveUtils.HOODIE_CONSUME_MODE_PATTERN, "db3.model_trips");
+    conf.set(incrementalMode3, HoodieHiveUtils.INCREMENTAL_SCAN_MODE.toLowerCase());
+    String defaultmode = String.format(HoodieHiveUtils.HOODIE_CONSUME_MODE_PATTERN, "db3.first_trips");
+    conf.set(defaultmode, HoodieHiveUtils.DEFAULT_SCAN_MODE);
+    List<String> actualincrTables = HoodieHiveUtils.getIncrementalTableNames(Job.getInstance(conf));
     for (String expectedincrTable : expectedincrTables) {
       assertTrue(actualincrTables.contains(expectedincrTable));
     }
@@ -328,14 +370,14 @@ public class TestHoodieParquetInputFormat {
   @Test
   public void testIncrementalWithPendingCompaction() throws IOException {
     // initial commit
-    File partitionDir = InputFormatTestUtil.prepareTable(basePath, 10, "100");
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
     createCommitFile(basePath, "100", "2016/05/01");
 
     // simulate compaction requested at 300
     File compactionFile = createCompactionFile(basePath, "300");
 
     // write inserts into new bucket
-    InputFormatTestUtil.simulateInserts(partitionDir, "fileId2", 10, "400");
+    InputFormatTestUtil.simulateInserts(partitionDir, baseFileExtension, "fileId2", 10, "400");
     createCommitFile(basePath, "400", "2016/05/01");
 
     // Add the paths

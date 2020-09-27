@@ -51,8 +51,10 @@ import java.util.stream.Collectors;
  * Simple examples of #{@link HoodieWriteClient}.
  *
  * To run this example, you should
- *   1. For running in IDE, set VM options `-Dspark.master=local[2]`
- *   2. For running in shell, using `spark-submit`
+ * <pre>
+ *   1. For running in IDE, set VM options `-Dspark.master=local[2]`;
+ *   2. For running in shell, using `spark-submit`.
+ *</pre>
  *
  * Usage: HoodieWriteClientExample <tablePath> <tableName>
  * <tablePath> and <tableName> describe root path of hudi and table name
@@ -88,7 +90,8 @@ public class HoodieWriteClientExample {
 
       // Create the write client to write some records in
       HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
-              .withSchema(HoodieExampleDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable(tableName)
+              .withSchema(HoodieExampleDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
+              .withDeleteParallelism(2).forTable(tableName)
               .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
               .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(20, 30).build()).build();
       HoodieWriteClient<HoodieAvroPayload> client = new HoodieWriteClient<>(jsc, cfg);

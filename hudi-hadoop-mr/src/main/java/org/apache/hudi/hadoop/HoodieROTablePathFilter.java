@@ -18,6 +18,9 @@
 
 package org.apache.hudi.hadoop;
 
+import java.util.Map;
+import java.util.Set;
+import org.apache.hadoop.conf.Configurable;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -25,6 +28,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -49,7 +53,7 @@ import java.util.stream.Collectors;
  * hadoopConf.setClass("mapreduce.input.pathFilter.class", org.apache.hudi.hadoop .HoodieROTablePathFilter.class,
  * org.apache.hadoop.fs.PathFilter.class)
  */
-public class HoodieROTablePathFilter implements PathFilter, Serializable {
+public class HoodieROTablePathFilter implements Configurable, PathFilter, Serializable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieROTablePathFilter.class);
@@ -58,12 +62,17 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
    * Its quite common, to have all files from a given partition path be passed into accept(), cache the check for hoodie
    * metadata for known partition paths and the latest versions of files.
    */
-  private HashMap<String, HashSet<Path>> hoodiePathCache;
+  private Map<String, HashSet<Path>> hoodiePathCache;
 
   /**
    * Paths that are known to be non-hoodie tables.
    */
-  private HashSet<String> nonHoodiePathCache;
+  private Set<String> nonHoodiePathCache;
+
+  /**
+   * Table Meta Client Cache.
+   */
+  Map<String, HoodieTableMetaClient> metaClientCache;
 
   /**
    * Hadoop configurations for the FileSystem.
@@ -80,6 +89,7 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
     this.hoodiePathCache = new HashMap<>();
     this.nonHoodiePathCache = new HashSet<>();
     this.conf = new SerializableConfiguration(conf);
+    this.metaClientCache = new HashMap<>();
   }
 
   /**
@@ -140,14 +150,19 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
       if (HoodiePartitionMetadata.hasPartitionMetadata(fs, folder)) {
         HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, folder);
         metadata.readFromFS();
-        baseDir = HoodieHiveUtil.getNthParent(folder, metadata.getPartitionDepth());
+        baseDir = HoodieHiveUtils.getNthParent(folder, metadata.getPartitionDepth());
       } else {
         baseDir = safeGetParentsParent(folder);
       }
 
       if (baseDir != null) {
         try {
-          HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), baseDir.toString());
+          HoodieTableMetaClient metaClient = metaClientCache.get(baseDir.toString());
+          if (null == metaClient) {
+            metaClient = new HoodieTableMetaClient(fs.getConf(), baseDir.toString(), true);
+            metaClientCache.put(baseDir.toString(), metaClient);
+          }
+
           HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
               metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), fs.listStatus(folder));
           List<HoodieBaseFile> latestFiles = fsView.getLatestBaseFiles().collect(Collectors.toList());
@@ -188,5 +203,15 @@ public class HoodieROTablePathFilter implements PathFilter, Serializable {
       LOG.error(msg, e);
       throw new HoodieException(msg, e);
     }
+  }
+
+  @Override
+  public void setConf(Configuration conf) {
+    this.conf = new SerializableConfiguration(conf);
+  }
+
+  @Override
+  public Configuration getConf() {
+    return conf.get();
   }
 }

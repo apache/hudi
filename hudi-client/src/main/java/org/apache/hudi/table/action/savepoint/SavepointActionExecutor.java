@@ -87,6 +87,7 @@ public class SavepointActionExecutor extends BaseActionExecutor<HoodieSavepointM
       ValidationUtils.checkArgument(HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.GREATER_THAN_OR_EQUALS, lastCommitRetained),
           "Could not savepoint commit " + instantTime + " as this is beyond the lookup window " + lastCommitRetained);
 
+      jsc.setJobGroup(this.getClass().getSimpleName(), "Collecting latest files for savepoint " + instantTime);
       Map<String, List<String>> latestFilesMap = jsc.parallelize(FSUtils.getAllPartitionPaths(table.getMetaClient().getFs(),
           table.getMetaClient().getBasePath(), config.shouldAssumeDatePartitioning()))
           .mapToPair(partitionPath -> {

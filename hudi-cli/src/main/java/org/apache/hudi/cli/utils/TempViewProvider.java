@@ -18,12 +18,17 @@
 
 package org.apache.hudi.cli.utils;
 
+import java.io.Closeable;
 import java.util.List;
 
-public interface TempViewProvider {
+public interface TempViewProvider extends Closeable {
   void createOrReplace(String tableName, List<String> headers, List<List<Comparable>> rows);
 
   void runQuery(String sqlText);
 
+  void showAllViews();
+
   void deleteTable(String tableName);
+
+  void close();
 }

@@ -19,8 +19,8 @@
 package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.deltastreamer.HoodieMultiTableDeltaStreamer;
 import org.apache.hudi.utilities.deltastreamer.TableExecutionContext;

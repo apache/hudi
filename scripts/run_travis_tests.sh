@@ -17,24 +17,26 @@
 # limitations under the License.
 
 mode=$1
+modules=$2
 sparkVersion=2.4.4
 hadoopVersion=2.7
 
-if [ "$mode" = "unit" ];
-then
+if [ "$mode" = "unit" ]; then
+  mvn clean install -DskipTests -q
   echo "Running Unit Tests"
-  mvn test -DskipITs=true -B
-elif [ "$mode" = "integration" ];
-then
+  mvn test -Punit-tests -pl "$modules" -B
+elif [ "$mode" = "functional" ]; then
+  echo "Running Functional Tests"
+  mvn test -Pfunctional-tests -B
+elif [ "$mode" = "integration" ]; then
   echo "Downloading Apache Spark-${sparkVersion}-bin-hadoop${hadoopVersion}"
   wget http://archive.apache.org/dist/spark/spark-${sparkVersion}/spark-${sparkVersion}-bin-hadoop${hadoopVersion}.tgz -O /tmp/spark-${sparkVersion}.tgz
   tar -xvf /tmp/spark-${sparkVersion}.tgz
   export SPARK_HOME=$PWD/spark-${sparkVersion}-bin-hadoop${hadoopVersion}
   mkdir /tmp/spark-events/
   echo "Running Integration Tests"
-  mvn verify -DskipUTs=true -B
+  mvn verify -Pintegration-tests -B
 else
   echo "Unknown mode $mode"
-  exit 1;
+  exit 1
 fi
-

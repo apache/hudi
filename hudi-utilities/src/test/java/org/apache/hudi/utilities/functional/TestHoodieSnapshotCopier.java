@@ -18,19 +18,17 @@
 
 package org.apache.hudi.utilities.functional;
 
-import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.testutils.FunctionalTestHarness;
 import org.apache.hudi.utilities.HoodieSnapshotCopier;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.JavaSparkContext;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -40,29 +38,25 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestHoodieSnapshotCopier extends HoodieCommonTestHarness {
+@Tag("functional")
+public class TestHoodieSnapshotCopier extends FunctionalTestHarness {
 
   private static final String TEST_WRITE_TOKEN = "1-0-1";
 
-  private String rootPath = null;
-  private String basePath = null;
-  private String outputPath = null;
-  private FileSystem fs = null;
-  private JavaSparkContext jsc = null;
+  private String basePath;
+  private String outputPath;
+  private FileSystem fs;
 
   @BeforeEach
   public void init() throws IOException {
     // Prepare directories
-    rootPath = "file://" + tempDir.toString();
+    String rootPath = "file://" + tempDir.toString();
     basePath = rootPath + "/" + HoodieTestUtils.RAW_TRIPS_TEST_NAME;
     outputPath = rootPath + "/output";
 
     final Configuration hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
     fs = FSUtils.getFs(basePath, hadoopConf);
     HoodieTestUtils.init(hadoopConf, basePath);
-    // Start a local Spark job
-    SparkConf conf = new SparkConf().setAppName("snapshot-test-job").setMaster("local[2]");
-    jsc = new JavaSparkContext(conf);
   }
 
   @Test
@@ -73,7 +67,7 @@ public class TestHoodieSnapshotCopier extends HoodieCommonTestHarness {
 
     // Do the snapshot
     HoodieSnapshotCopier copier = new HoodieSnapshotCopier();
-    copier.snapshot(jsc, basePath, outputPath, true);
+    copier.snapshot(jsc(), basePath, outputPath, true);
 
     // Nothing changed; we just bail out
     assertEquals(fs.listStatus(new Path(basePath)).length, 1);
@@ -126,7 +120,7 @@ public class TestHoodieSnapshotCopier extends HoodieCommonTestHarness {
 
     // Do a snapshot copy
     HoodieSnapshotCopier copier = new HoodieSnapshotCopier();
-    copier.snapshot(jsc, basePath, outputPath, false);
+    copier.snapshot(jsc(), basePath, outputPath, false);
 
     // Check results
     assertTrue(fs.exists(new Path(outputPath + "/2016/05/01/" + file11.getName())));
@@ -146,15 +140,5 @@ public class TestHoodieSnapshotCopier extends HoodieCommonTestHarness {
     assertTrue(fs.exists(new Path(outputPath + "/.hoodie/hoodie.properties")));
 
     assertTrue(fs.exists(new Path(outputPath + "/_SUCCESS")));
-  }
-
-  @AfterEach
-  public void cleanup() {
-    if (rootPath != null) {
-      new File(rootPath).delete();
-    }
-    if (jsc != null) {
-      jsc.stop();
-    }
   }
 }

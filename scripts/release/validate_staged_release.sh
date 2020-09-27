@@ -30,11 +30,12 @@ if [[ `basename $CURR_DIR` != "scripts" ]] ; then
 fi
 
 REDIRECT=' > /dev/null 2>&1'
-if [[ $# -lt 2 ]]; then
+if [[ $# -lt 1 ]]; then
     echo "This script will validate source release candidate published in dist for apache hudi"
-    echo "There are two params required:"
+    echo "You can set 3 args to this script: release version is mandatory, while rest two are optional. Default release_type is \"dev\". Or you can set to \"release\""
     echo "--release=\${CURRENT_RELEASE_VERSION}"
     echo "--rc_num=\${RC_NUM}"
+    echo "--release_type=release"
     exit
 else
     for param in "$@"
@@ -44,7 +45,10 @@ else
 	fi
 	if [[ $param =~ --rc_num\=([0-9]*) ]]; then
                 RC_NUM=${BASH_REMATCH[1]}
-	fi
+        fi	
+        if [[ $param =~ --release_type\="release" ]]; then
+                RELEASE_TYPE="release"
+        fi
 	if [[ $param =~ --verbose ]]; then
                REDIRECT=""
         fi
@@ -57,6 +61,13 @@ else
     SHASUM="sha512sum"
 fi
 
+if [ -z ${RC_NUM+x} ]; then
+   RC_NUM=-1
+fi
+
+if [ -z ${RELEASE_TYPE+x} ]; then
+   RELEASE_TYPE=dev
+fi
 
 # Get to a scratch dir
 RELEASE_TOOL_DIR=`pwd`
@@ -68,20 +79,31 @@ pushd $WORK_DIR
 # Checkout dist repo
 LOCAL_SVN_DIR=local_svn_dir
 ROOT_SVN_URL=https://dist.apache.org/repos/dist/
-DEV_REPO=dev
+REPO_TYPE=${RELEASE_TYPE}
 #RELEASE_REPO=release
 HUDI_REPO=hudi
+
+if [ $RC_NUM == -1 ]; then
+    ARTIFACT_SUFFIX=${RELEASE_VERSION}
+else
+    ARTIFACT_SUFFIX=${RELEASE_VERSION}-rc${RC_NUM}
+fi
+
 
 rm -rf $LOCAL_SVN_DIR
 mkdir $LOCAL_SVN_DIR
 cd $LOCAL_SVN_DIR
-(bash -c "svn co ${ROOT_SVN_URL}/${DEV_REPO}/${HUDI_REPO} $REDIRECT") || (echo -e "\t\t Unable to checkout  ${ROOT_SVN_URL}/${DEV_REPO}/${HUDI_REPO} . Please run with --verbose to get details\n" && exit -1)
 
-cd ${HUDI_REPO}/hudi-${RELEASE_VERSION}-rc${RC_NUM}
-$SHASUM hudi-${RELEASE_VERSION}-rc${RC_NUM}.src.tgz > got.sha512
+echo "Downloading from svn co ${ROOT_SVN_URL}/${REPO_TYPE}/${HUDI_REPO}"
+
+(bash -c "svn co ${ROOT_SVN_URL}/${REPO_TYPE}/${HUDI_REPO} $REDIRECT") || (echo -e "\t\t Unable to checkout  ${ROOT_SVN_URL}/${REPO_TYPE}/${HUDI_REPO} to $REDIRECT. Please run with --verbose to get details\n" && exit -1)
+
+echo "Validating hudi-${ARTIFACT_SUFFIX} with release type \"${REPO_TYPE}\""
+cd ${HUDI_REPO}/hudi-${ARTIFACT_SUFFIX}
+$SHASUM hudi-${ARTIFACT_SUFFIX}.src.tgz > got.sha512
 
 echo "Checking Checksum of Source Release"
-diff -u hudi-${RELEASE_VERSION}-rc${RC_NUM}.src.tgz.sha512 got.sha512
+diff -u hudi-${ARTIFACT_SUFFIX}.src.tgz.sha512 got.sha512
 echo -e "\t\tChecksum Check of Source Release - [OK]\n"
 
 # Download KEYS file
@@ -89,19 +111,19 @@ curl https://dist.apache.org/repos/dist/release/hudi/KEYS > ../KEYS
 
 # GPG Check
 echo "Checking Signature"
-(bash -c "gpg --import ../KEYS $REDIRECT" && bash -c "gpg --verify hudi-${RELEASE_VERSION}-rc${RC_NUM}.src.tgz.asc hudi-${RELEASE_VERSION}-rc${RC_NUM}.src.tgz $REDIRECT" && echo -e "\t\tSignature Check - [OK]\n") || (echo -e "\t\tSignature Check - [FAILED] - Run with --verbose to get details\n" && exit -1)
+(bash -c "gpg --import ../KEYS $REDIRECT" && bash -c "gpg --verify hudi-${ARTIFACT_SUFFIX}.src.tgz.asc hudi-${ARTIFACT_SUFFIX}.src.tgz $REDIRECT" && echo -e "\t\tSignature Check - [OK]\n") || (echo -e "\t\tSignature Check - [FAILED] - Run with --verbose to get details\n" && exit -1)
 
 # Untar 
-(bash -c "tar -zxf hudi-${RELEASE_VERSION}-rc${RC_NUM}.src.tgz $REDIRECT") || (echo -e "\t\t Unable to untar hudi-${RELEASE_VERSION}-rc${RC_NUM}.src.tgz . Please run with --verbose to get details\n" && exit -1)
-cd hudi-${RELEASE_VERSION}-rc${RC_NUM}
+(bash -c "tar -zxf hudi-${ARTIFACT_SUFFIX}.src.tgz $REDIRECT") || (echo -e "\t\t Unable to untar hudi-${ARTIFACT_SUFFIX}.src.tgz . Please run with --verbose to get details\n" && exit -1)
+cd hudi-${ARTIFACT_SUFFIX}
 
 ### BEGIN: Binary Files Check
 echo "Checking for binary files in source release"
-numBinaryFiles=`find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -va 'text/' | grep -va 'application/xml' | grep -va 'application/json' | wc -l | sed -e s'/ //g'`
+numBinaryFiles=`find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -va 'application/json' | grep -va 'text/' | grep -va 'application/xml' | grep -va 'application/json' | wc -l | sed -e s'/ //g'`
 
 if [ "$numBinaryFiles" -gt "0" ]; then
   echo -e "There were non-text files in source release. Please check below\n"
-  find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -va 'text/' |  grep -va 'application/xml'
+  find . -iname '*' | xargs -I {} file -I {} | grep -va directory | grep -va 'application/json' | grep -va 'text/' |  grep -va 'application/xml'
   exit -1
 fi
 echo -e "\t\tNo Binary Files in Source Release? - [OK]\n"
@@ -110,8 +132,8 @@ echo -e "\t\tNo Binary Files in Source Release? - [OK]\n"
 ### Checking for DISCLAIMER
 echo "Checking for DISCLAIMER"
 disclaimerFile="./DISCLAIMER"
-if [ ! -f "$disclaimerFile" ]; then
-  echo "DISCLAIMER file missing"
+if [ -f "$disclaimerFile" ]; then
+  echo "DISCLAIMER file should not be present "
   exit -1
 fi
 echo -e "\t\tDISCLAIMER file exists ? [OK]\n"
@@ -134,7 +156,7 @@ echo -e "\t\tNotice file exists ? [OK]\n"
 
 ### Licensing Check
 echo "Performing custom Licensing Check "
-numfilesWithNoLicense=`find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.data' | grep -v DISCLAIMER | grep -v KEYS | grep -v '.mailmap' | grep -v '.sqltemplate' | grep -v 'ObjectSizeCalculator.java' | grep -v 'AvroConversionHelper.scala' | xargs grep -L "Licensed to the Apache Software Foundation (ASF)" | wc -l`
+numfilesWithNoLicense=`find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.data'|grep -v '.commit' | grep -v DISCLAIMER | grep -v KEYS | grep -v '.mailmap' | grep -v '.sqltemplate' | grep -v 'ObjectSizeCalculator.java' | grep -v 'AvroConversionHelper.scala' | xargs grep -L "Licensed to the Apache Software Foundation (ASF)" | wc -l`
 if [ "$numfilesWithNoLicense" -gt  "0" ]; then
   echo "There were some source files that did not have Apache License"
   find . -iname '*' -type f | grep -v NOTICE | grep -v LICENSE | grep -v '.json' | grep -v '.data' | grep -v DISCLAIMER | grep -v '.sqltemplate' | grep -v KEYS | grep -v '.mailmap' | grep -v 'ObjectSizeCalculator.java' | grep -v 'AvroConversionHelper.scala' | xargs grep -L "Licensed to the Apache Software Foundation (ASF)"

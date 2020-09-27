@@ -166,6 +166,7 @@ public class HDFSParquetImporter implements Serializable {
     AvroReadSupport.setAvroReadSchema(jsc.hadoopConfiguration(), (new Schema.Parser().parse(schemaStr)));
     ParquetInputFormat.setReadSupportClass(job, (AvroReadSupport.class));
 
+    jsc.setJobGroup(this.getClass().getSimpleName(), "Build records for import");
     return jsc.newAPIHadoopFile(cfg.srcPath, ParquetInputFormat.class, Void.class, GenericRecord.class,
             job.getConfiguration())
         // To reduce large number of tasks.
@@ -277,7 +278,8 @@ public class HDFSParquetImporter implements Serializable {
         + "hoodie client for importing")
     public String propsFilePath = null;
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
-        + "(using the CLI parameter \"--propsFilePath\") can also be passed command line using this parameter")
+        + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
+            splitter = IdentitySplitter.class)
     public List<String> configs = new ArrayList<>();
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;

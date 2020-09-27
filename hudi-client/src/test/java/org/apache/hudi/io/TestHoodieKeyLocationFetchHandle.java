@@ -18,20 +18,13 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.common.HoodieClientTestHarness;
-import org.apache.hudi.common.HoodieClientTestUtils;
-import org.apache.hudi.common.HoodieTestDataGenerator;
-import org.apache.hudi.common.TestRawTripPayload;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -39,6 +32,9 @@ import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieWriteableTestTable;
+import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.AfterEach;
@@ -46,19 +42,19 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 import scala.Tuple2;
 
 import static java.util.stream.Collectors.toList;
-import static org.apache.hudi.common.HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
+import static org.apache.hudi.common.testutils.Transformations.recordsToPartitionRecordsMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -82,26 +78,19 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
 
   @AfterEach
   public void tearDown() throws IOException {
-    cleanupSparkContexts();
-    cleanupFileSystem();
-    cleanupMetaClient();
+    cleanupResources();
   }
 
   @Test
   public void testFetchHandle() throws Exception {
-
-    String commitTime = "000";
-    List<HoodieRecord> records = dataGen.generateInserts(commitTime, 100);
-    Map<String, List<HoodieRecord>> recordsPerPartiton = getRecordsPerPartition(records);
-
-    Map<Tuple2<String, String>, List<Tuple2<HoodieKey, HoodieRecordLocation>>> expectedList = writeToParquetAndGetExpectedRecordLocations(recordsPerPartiton);
-
-    metaClient = HoodieTableMetaClient.reload(metaClient);
+    List<HoodieRecord> records = dataGen.generateInserts(makeNewCommitTime(), 100);
+    Map<String, List<HoodieRecord>> partitionRecordsMap = recordsToPartitionRecordsMap(records);
     HoodieTable hoodieTable = HoodieTable.create(metaClient, config, jsc.hadoopConfiguration());
+    HoodieWriteableTestTable testTable = HoodieWriteableTestTable.of(hoodieTable, AVRO_SCHEMA_WITH_METADATA_FIELDS);
+    Map<Tuple2<String, String>, List<Tuple2<HoodieKey, HoodieRecordLocation>>> expectedList =
+        writeToParquetAndGetExpectedRecordLocations(partitionRecordsMap, testTable);
 
-    Files.createDirectories(Paths.get(basePath, ".hoodie"));
-
-    List<Tuple2<String, HoodieBaseFile>> partitionPathFileIdPairs = loadAllFilesForPartitions(new ArrayList<>(recordsPerPartiton.keySet()), jsc, hoodieTable);
+    List<Tuple2<String, HoodieBaseFile>> partitionPathFileIdPairs = loadAllFilesForPartitions(new ArrayList<>(partitionRecordsMap.keySet()), jsc, hoodieTable);
 
     for (Tuple2<String, HoodieBaseFile> entry : partitionPathFileIdPairs) {
       HoodieKeyLocationFetchHandle fetcherHandle = new HoodieKeyLocationFetchHandle(config, hoodieTable, Pair.of(entry._1, entry._2));
@@ -112,21 +101,10 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
     }
   }
 
-  private Map<String, List<HoodieRecord>> getRecordsPerPartition(List<HoodieRecord> records) {
-    Map<String, List<HoodieRecord>> recordsPerPartiton = new HashMap<>();
-    for (HoodieRecord record : records) {
-      if (!recordsPerPartiton.containsKey(record.getPartitionPath())) {
-        recordsPerPartiton.put(record.getPartitionPath(), new ArrayList<>());
-      }
-      recordsPerPartiton.get(record.getPartitionPath()).add(record);
-    }
-    return recordsPerPartiton;
-  }
-
   private Map<Tuple2<String, String>, List<Tuple2<HoodieKey, HoodieRecordLocation>>> writeToParquetAndGetExpectedRecordLocations(
-      Map<String, List<HoodieRecord>> recordsPerPartiton) throws Exception {
+      Map<String, List<HoodieRecord>> partitionRecordsMap, HoodieWriteableTestTable testTable) throws Exception {
     Map<Tuple2<String, String>, List<Tuple2<HoodieKey, HoodieRecordLocation>>> expectedList = new HashMap<>();
-    for (Map.Entry<String, List<HoodieRecord>> entry : recordsPerPartiton.entrySet()) {
+    for (Map.Entry<String, List<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
       int totalRecordsPerPartition = entry.getValue().size();
       int totalSlices = 1;
       if (totalRecordsPerPartition > 5) {
@@ -150,7 +128,9 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
       }
 
       for (List<HoodieRecord> recordsPerSlice : recordsForFileSlices) {
-        Tuple2<String, String> fileIdInstantTimePair = writeToParquet(entry.getKey(), recordsPerSlice);
+        String instantTime = makeNewCommitTime();
+        String fileId = testTable.addCommit(instantTime).withInserts(entry.getKey(), recordsPerSlice.toArray(new HoodieRecord[0]));
+        Tuple2<String, String> fileIdInstantTimePair = new Tuple2<>(fileId, instantTime);
         List<Tuple2<HoodieKey, HoodieRecordLocation>> expectedEntries = new ArrayList<>();
         for (HoodieRecord record : recordsPerSlice) {
           expectedEntries.add(new Tuple2<>(record.getKey(), new HoodieRecordLocation(fileIdInstantTimePair._2, fileIdInstantTimePair._1)));
@@ -161,50 +141,24 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
     return expectedList;
   }
 
-  protected List<Tuple2<String, HoodieBaseFile>> loadAllFilesForPartitions(List<String> partitions, final JavaSparkContext jsc,
-                                                                           final HoodieTable hoodieTable) {
-
+  private static List<Tuple2<String, HoodieBaseFile>> loadAllFilesForPartitions(List<String> partitions, JavaSparkContext jsc,
+      HoodieTable hoodieTable) {
     // Obtain the latest data files from all the partitions.
     List<Pair<String, HoodieBaseFile>> partitionPathFileIDList = HoodieIndexUtils.getLatestBaseFilesForAllPartitions(partitions, jsc, hoodieTable);
     return partitionPathFileIDList.stream()
         .map(pf -> new Tuple2<>(pf.getKey(), pf.getValue())).collect(toList());
   }
 
-  /**
-   * Get Config builder with default configs set.
-   *
-   * @return Config Builder
-   */
-  public HoodieWriteConfig.Builder getConfigBuilder() {
-    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
-  }
-
-  /**
-   * Get Config builder with default configs set.
-   *
-   * @return Config Builder
-   */
-  private HoodieWriteConfig.Builder getConfigBuilder(String schemaStr) {
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
-        .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2)
-        .withWriteStatusClass(TestRawTripPayload.MetadataMergeWriteStatus.class)
+  private HoodieWriteConfig.Builder getConfigBuilder() {
+    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
+        .withWriteStatusClass(MetadataMergeWriteStatus.class)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024).build())
-        .withStorageConfig(HoodieStorageConfig.newBuilder().limitFileSize(1024 * 1024).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024).parquetMaxFileSize(1024 * 1024).build())
         .forTable("test-trip-table")
         .withIndexConfig(HoodieIndexConfig.newBuilder().build())
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
-  }
-
-  private Tuple2<String, String> writeToParquet(String partitionPath, List<HoodieRecord> records) throws Exception {
-    Thread.sleep(100);
-    String instantTime = HoodieTestUtils.makeNewCommitTime();
-    String fileId = UUID.randomUUID().toString();
-    String filename = FSUtils.makeDataFileName(instantTime, "1-0-1", fileId);
-    HoodieTestUtils.createCommitFiles(basePath, instantTime);
-    HoodieClientTestUtils.writeParquetFile(basePath, partitionPath, filename, records, AVRO_SCHEMA_WITH_METADATA_FIELDS, null,
-        true);
-    return new Tuple2<>(fileId, instantTime);
   }
 }

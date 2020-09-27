@@ -18,14 +18,12 @@
 
 package org.apache.hudi.utilities.functional;
 
-import org.apache.hudi.client.HoodieReadClient;
-import org.apache.hudi.client.HoodieWriteClient;
-import org.apache.hudi.common.HoodieClientTestUtils;
-import org.apache.hudi.common.HoodieTestDataGenerator;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
+import org.apache.hudi.testutils.FunctionalTestHarness;
+import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.utilities.HDFSParquetImporter;
 
 import org.apache.avro.generic.GenericRecord;
@@ -33,19 +31,14 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SQLContext;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -64,30 +57,8 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestHDFSParquetImporter implements Serializable {
-
-  private static String dfsBasePath;
-  private static HdfsTestService hdfsTestService;
-  private static MiniDFSCluster dfsCluster;
-  private static DistributedFileSystem dfs;
-
-  @BeforeAll
-  public static void initClass() throws Exception {
-    hdfsTestService = new HdfsTestService();
-    dfsCluster = hdfsTestService.start(true);
-
-    // Create a temp folder as the base path
-    dfs = dfsCluster.getFileSystem();
-    dfsBasePath = dfs.getWorkingDirectory().toString();
-    dfs.mkdirs(new Path(dfsBasePath));
-  }
-
-  @AfterAll
-  public static void cleanupClass() {
-    if (hdfsTestService != null) {
-      hdfsTestService.stop();
-    }
-  }
+@Tag("functional")
+public class TestHDFSParquetImporter extends FunctionalTestHarness implements Serializable {
 
   private String basePath;
   private transient Path hoodieFolder;
@@ -96,7 +67,7 @@ public class TestHDFSParquetImporter implements Serializable {
 
   @BeforeEach
   public void init() throws IOException, ParseException {
-    basePath = (new Path(dfsBasePath, Thread.currentThread().getStackTrace()[1].getMethodName())).toString();
+    basePath = (new Path(dfsBasePath(), Thread.currentThread().getStackTrace()[1].getMethodName())).toString();
 
     // Hoodie root folder.
     hoodieFolder = new Path(basePath, "testTarget");
@@ -108,7 +79,7 @@ public class TestHDFSParquetImporter implements Serializable {
 
   @AfterEach
   public void clean() throws IOException {
-    dfs.delete(new Path(basePath), true);
+    dfs().delete(new Path(basePath), true);
   }
 
   /**
@@ -116,57 +87,54 @@ public class TestHDFSParquetImporter implements Serializable {
    */
   @Test
   public void testImportWithRetries() throws Exception {
-    try (JavaSparkContext jsc = getJavaSparkContext()) {
-      // Create schema file.
-      String schemaFile = new Path(basePath, "file.schema").toString();
+    // Create schema file.
+    String schemaFile = new Path(basePath, "file.schema").toString();
 
-      HDFSParquetImporter.Config cfg = getHDFSParquetImporterConfig(srcFolder.toString(), hoodieFolder.toString(),
-          "testTable", "COPY_ON_WRITE", "_row_key", "timestamp", 1, schemaFile);
-      AtomicInteger retry = new AtomicInteger(3);
-      AtomicInteger fileCreated = new AtomicInteger(0);
-      HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg) {
-        @Override
-        protected int dataImport(JavaSparkContext jsc) throws IOException {
-          int ret = super.dataImport(jsc);
-          if (retry.decrementAndGet() == 0) {
-            fileCreated.incrementAndGet();
-            createSchemaFile(schemaFile);
-          }
-
-          return ret;
+    HDFSParquetImporter.Config cfg = getHDFSParquetImporterConfig(srcFolder.toString(), hoodieFolder.toString(),
+        "testTable", "COPY_ON_WRITE", "_row_key", "timestamp", 1, schemaFile);
+    AtomicInteger retry = new AtomicInteger(3);
+    AtomicInteger fileCreated = new AtomicInteger(0);
+    HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg) {
+      @Override
+      protected int dataImport(JavaSparkContext jsc) throws IOException {
+        int ret = super.dataImport(jsc);
+        if (retry.decrementAndGet() == 0) {
+          fileCreated.incrementAndGet();
+          createSchemaFile(schemaFile);
         }
-      };
-      // Schema file is not created so this operation should fail.
-      assertEquals(0, dataImporter.dataImport(jsc, retry.get()));
-      assertEquals(-1, retry.get());
-      assertEquals(1, fileCreated.get());
 
-      // Check if
-      // 1. .commit file is present
-      // 2. number of records in each partition == 24
-      // 3. total number of partitions == 4;
-      boolean isCommitFilePresent = false;
-      Map<String, Long> recordCounts = new HashMap<String, Long>();
-      RemoteIterator<LocatedFileStatus> hoodieFiles = dfs.listFiles(hoodieFolder, true);
-      while (hoodieFiles.hasNext()) {
-        LocatedFileStatus f = hoodieFiles.next();
-        isCommitFilePresent = isCommitFilePresent || f.getPath().toString().endsWith(HoodieTimeline.COMMIT_EXTENSION);
+        return ret;
+      }
+    };
+    // Schema file is not created so this operation should fail.
+    assertEquals(0, dataImporter.dataImport(jsc(), retry.get()));
+    assertEquals(-1, retry.get());
+    assertEquals(1, fileCreated.get());
 
-        if (f.getPath().toString().endsWith("parquet")) {
-          SQLContext sc = new SQLContext(jsc);
-          String partitionPath = f.getPath().getParent().toString();
-          long count = sc.read().parquet(f.getPath().toString()).count();
-          if (!recordCounts.containsKey(partitionPath)) {
-            recordCounts.put(partitionPath, 0L);
-          }
-          recordCounts.put(partitionPath, recordCounts.get(partitionPath) + count);
+    // Check if
+    // 1. .commit file is present
+    // 2. number of records in each partition == 24
+    // 3. total number of partitions == 4;
+    boolean isCommitFilePresent = false;
+    Map<String, Long> recordCounts = new HashMap<String, Long>();
+    RemoteIterator<LocatedFileStatus> hoodieFiles = dfs().listFiles(hoodieFolder, true);
+    while (hoodieFiles.hasNext()) {
+      LocatedFileStatus f = hoodieFiles.next();
+      isCommitFilePresent = isCommitFilePresent || f.getPath().toString().endsWith(HoodieTimeline.COMMIT_EXTENSION);
+
+      if (f.getPath().toString().endsWith("parquet")) {
+        String partitionPath = f.getPath().getParent().toString();
+        long count = sqlContext().read().parquet(f.getPath().toString()).count();
+        if (!recordCounts.containsKey(partitionPath)) {
+          recordCounts.put(partitionPath, 0L);
         }
+        recordCounts.put(partitionPath, recordCounts.get(partitionPath) + count);
       }
-      assertTrue(isCommitFilePresent, "commit file is missing");
-      assertEquals(4, recordCounts.size(), "partition is missing");
-      for (Entry<String, Long> e : recordCounts.entrySet()) {
-        assertEquals(24, e.getValue().longValue(), "missing records");
-      }
+    }
+    assertTrue(isCommitFilePresent, "commit file is missing");
+    assertEquals(4, recordCounts.size(), "partition is missing");
+    for (Entry<String, Long> e : recordCounts.entrySet()) {
+      assertEquals(24, e.getValue().longValue(), "missing records");
     }
   }
 
@@ -187,30 +155,27 @@ public class TestHDFSParquetImporter implements Serializable {
    */
   @Test
   public void testImportWithInsert() throws IOException, ParseException {
-    try (JavaSparkContext jsc = getJavaSparkContext()) {
-      insert(jsc);
-      SQLContext sqlContext = new SQLContext(jsc);
-      Dataset<Row> ds = HoodieClientTestUtils.read(jsc, basePath + "/testTarget", sqlContext, dfs, basePath + "/testTarget/*/*/*/*");
+    insert(jsc());
+    Dataset<Row> ds = HoodieClientTestUtils.read(jsc(), basePath + "/testTarget", sqlContext(), dfs(), basePath + "/testTarget/*/*/*/*");
 
-      List<Row> readData = ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon").collectAsList();
-      List<HoodieTripModel> result = readData.stream().map(row ->
-          new HoodieTripModel(row.getDouble(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
-              row.getDouble(5), row.getDouble(6), row.getDouble(7)))
-          .collect(Collectors.toList());
+    List<Row> readData = ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon").collectAsList();
+    List<HoodieTripModel> result = readData.stream().map(row ->
+        new HoodieTripModel(row.getLong(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
+            row.getDouble(5), row.getDouble(6), row.getDouble(7)))
+        .collect(Collectors.toList());
 
-      List<HoodieTripModel> expected = insertData.stream().map(g ->
-          new HoodieTripModel(Double.parseDouble(g.get("timestamp").toString()),
-              g.get("_row_key").toString(),
-              g.get("rider").toString(),
-              g.get("driver").toString(),
-              Double.parseDouble(g.get("begin_lat").toString()),
-              Double.parseDouble(g.get("begin_lon").toString()),
-              Double.parseDouble(g.get("end_lat").toString()),
-              Double.parseDouble(g.get("end_lon").toString())))
-          .collect(Collectors.toList());
+    List<HoodieTripModel> expected = insertData.stream().map(g ->
+        new HoodieTripModel(Long.parseLong(g.get("timestamp").toString()),
+            g.get("_row_key").toString(),
+            g.get("rider").toString(),
+            g.get("driver").toString(),
+            Double.parseDouble(g.get("begin_lat").toString()),
+            Double.parseDouble(g.get("begin_lon").toString()),
+            Double.parseDouble(g.get("end_lat").toString()),
+            Double.parseDouble(g.get("end_lon").toString())))
+        .collect(Collectors.toList());
 
-      assertTrue(result.containsAll(expected) && expected.containsAll(result) && result.size() == expected.size());
-    }
+    assertTrue(result.containsAll(expected) && expected.containsAll(result) && result.size() == expected.size());
   }
 
   /**
@@ -218,50 +183,47 @@ public class TestHDFSParquetImporter implements Serializable {
    */
   @Test
   public void testImportWithUpsert() throws IOException, ParseException {
-    try (JavaSparkContext jsc = getJavaSparkContext()) {
-      insert(jsc);
+    insert(jsc());
 
-      // Create schema file.
-      String schemaFile = new Path(basePath, "file.schema").toString();
+    // Create schema file.
+    String schemaFile = new Path(basePath, "file.schema").toString();
 
-      Path upsertFolder = new Path(basePath, "testUpsertSrc");
-      List<GenericRecord> upsertData = createUpsertRecords(upsertFolder);
+    Path upsertFolder = new Path(basePath, "testUpsertSrc");
+    List<GenericRecord> upsertData = createUpsertRecords(upsertFolder);
 
-      HDFSParquetImporter.Config cfg = getHDFSParquetImporterConfig(upsertFolder.toString(), hoodieFolder.toString(),
-          "testTable", "COPY_ON_WRITE", "_row_key", "timestamp", 1, schemaFile);
-      cfg.command = "upsert";
-      HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg);
+    HDFSParquetImporter.Config cfg = getHDFSParquetImporterConfig(upsertFolder.toString(), hoodieFolder.toString(),
+        "testTable", "COPY_ON_WRITE", "_row_key", "timestamp", 1, schemaFile);
+    cfg.command = "upsert";
+    HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg);
 
-      dataImporter.dataImport(jsc, 0);
+    dataImporter.dataImport(jsc(), 0);
 
-      // construct result, remove top 10 and add upsert data.
-      List<GenericRecord> expectData = insertData.subList(11, 96);
-      expectData.addAll(upsertData);
+    // construct result, remove top 10 and add upsert data.
+    List<GenericRecord> expectData = insertData.subList(11, 96);
+    expectData.addAll(upsertData);
 
-      // read latest data
-      SQLContext sqlContext = new SQLContext(jsc);
-      Dataset<Row> ds = HoodieClientTestUtils.read(jsc, basePath + "/testTarget", sqlContext, dfs, basePath + "/testTarget/*/*/*/*");
+    // read latest data
+    Dataset<Row> ds = HoodieClientTestUtils.read(jsc(), basePath + "/testTarget", sqlContext(), dfs(), basePath + "/testTarget/*/*/*/*");
 
-      List<Row> readData = ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon").collectAsList();
-      List<HoodieTripModel> result = readData.stream().map(row ->
-          new HoodieTripModel(row.getDouble(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
-              row.getDouble(5), row.getDouble(6), row.getDouble(7)))
-          .collect(Collectors.toList());
+    List<Row> readData = ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon").collectAsList();
+    List<HoodieTripModel> result = readData.stream().map(row ->
+        new HoodieTripModel(row.getLong(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
+            row.getDouble(5), row.getDouble(6), row.getDouble(7)))
+        .collect(Collectors.toList());
 
-      // get expected result.
-      List<HoodieTripModel> expected = expectData.stream().map(g ->
-          new HoodieTripModel(Double.parseDouble(g.get("timestamp").toString()),
-              g.get("_row_key").toString(),
-              g.get("rider").toString(),
-              g.get("driver").toString(),
-              Double.parseDouble(g.get("begin_lat").toString()),
-              Double.parseDouble(g.get("begin_lon").toString()),
-              Double.parseDouble(g.get("end_lat").toString()),
-              Double.parseDouble(g.get("end_lon").toString())))
-          .collect(Collectors.toList());
+    // get expected result.
+    List<HoodieTripModel> expected = expectData.stream().map(g ->
+        new HoodieTripModel(Long.parseLong(g.get("timestamp").toString()),
+            g.get("_row_key").toString(),
+            g.get("rider").toString(),
+            g.get("driver").toString(),
+            Double.parseDouble(g.get("begin_lat").toString()),
+            Double.parseDouble(g.get("begin_lon").toString()),
+            Double.parseDouble(g.get("end_lat").toString()),
+            Double.parseDouble(g.get("end_lon").toString())))
+        .collect(Collectors.toList());
 
-      assertTrue(result.containsAll(expected) && expected.containsAll(result) && result.size() == expected.size());
-    }
+    assertTrue(result.containsAll(expected) && expected.containsAll(result) && result.size() == expected.size());
   }
 
   public List<GenericRecord> createInsertRecords(Path srcFolder) throws ParseException, IOException {
@@ -305,7 +267,7 @@ public class TestHDFSParquetImporter implements Serializable {
   }
 
   private void createSchemaFile(String schemaFile) throws IOException {
-    FSDataOutputStream schemaFileOS = dfs.create(new Path(schemaFile));
+    FSDataOutputStream schemaFileOS = dfs().create(new Path(schemaFile));
     schemaFileOS.write(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA.getBytes());
     schemaFileOS.close();
   }
@@ -315,22 +277,19 @@ public class TestHDFSParquetImporter implements Serializable {
    */
   @Test
   public void testSchemaFile() throws Exception {
-    try (JavaSparkContext jsc = getJavaSparkContext()) {
-      // Hoodie root folder
-      Path hoodieFolder = new Path(basePath, "testTarget");
-      Path srcFolder = new Path(basePath.toString(), "srcTest");
-      Path schemaFile = new Path(basePath.toString(), "missingFile.schema");
-      HDFSParquetImporter.Config cfg = getHDFSParquetImporterConfig(srcFolder.toString(), hoodieFolder.toString(),
-          "testTable", "COPY_ON_WRITE", "_row_key", "timestamp", 1, schemaFile.toString());
-      HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg);
-      // Should fail - return : -1.
-      assertEquals(-1, dataImporter.dataImport(jsc, 0));
+    // Hoodie root folder
+    Path hoodieFolder = new Path(basePath, "testTarget");
+    Path srcFolder = new Path(basePath.toString(), "srcTest");
+    Path schemaFile = new Path(basePath.toString(), "missingFile.schema");
+    HDFSParquetImporter.Config cfg = getHDFSParquetImporterConfig(srcFolder.toString(), hoodieFolder.toString(),
+        "testTable", "COPY_ON_WRITE", "_row_key", "timestamp", 1, schemaFile.toString());
+    HDFSParquetImporter dataImporter = new HDFSParquetImporter(cfg);
+    // Should fail - return : -1.
+    assertEquals(-1, dataImporter.dataImport(jsc(), 0));
 
-      dfs.create(schemaFile).write("Random invalid schema data".getBytes());
-      // Should fail - return : -1.
-      assertEquals(-1, dataImporter.dataImport(jsc, 0));
-
-    }
+    dfs().create(schemaFile).write("Random invalid schema data".getBytes());
+    // Should fail - return : -1.
+    assertEquals(-1, dataImporter.dataImport(jsc(), 0));
   }
 
   /**
@@ -338,27 +297,24 @@ public class TestHDFSParquetImporter implements Serializable {
    */
   @Test
   public void testRowAndPartitionKey() throws Exception {
-    try (JavaSparkContext jsc = getJavaSparkContext()) {
-      // Create schema file.
-      Path schemaFile = new Path(basePath.toString(), "missingFile.schema");
-      createSchemaFile(schemaFile.toString());
+    // Create schema file.
+    Path schemaFile = new Path(basePath.toString(), "missingFile.schema");
+    createSchemaFile(schemaFile.toString());
 
-      HDFSParquetImporter dataImporter;
-      HDFSParquetImporter.Config cfg;
+    HDFSParquetImporter dataImporter;
+    HDFSParquetImporter.Config cfg;
 
-      // Check for invalid row key.
-      cfg = getHDFSParquetImporterConfig(srcFolder.toString(), hoodieFolder.toString(), "testTable", "COPY_ON_WRITE",
-          "invalidRowKey", "timestamp", 1, schemaFile.toString());
-      dataImporter = new HDFSParquetImporter(cfg);
-      assertEquals(-1, dataImporter.dataImport(jsc, 0));
+    // Check for invalid row key.
+    cfg = getHDFSParquetImporterConfig(srcFolder.toString(), hoodieFolder.toString(), "testTable", "COPY_ON_WRITE",
+        "invalidRowKey", "timestamp", 1, schemaFile.toString());
+    dataImporter = new HDFSParquetImporter(cfg);
+    assertEquals(-1, dataImporter.dataImport(jsc(), 0));
 
-      // Check for invalid partition key.
-      cfg = getHDFSParquetImporterConfig(srcFolder.toString(), hoodieFolder.toString(), "testTable", "COPY_ON_WRITE",
-          "_row_key", "invalidTimeStamp", 1, schemaFile.toString());
-      dataImporter = new HDFSParquetImporter(cfg);
-      assertEquals(-1, dataImporter.dataImport(jsc, 0));
-
-    }
+    // Check for invalid partition key.
+    cfg = getHDFSParquetImporterConfig(srcFolder.toString(), hoodieFolder.toString(), "testTable", "COPY_ON_WRITE",
+        "_row_key", "invalidTimeStamp", 1, schemaFile.toString());
+    dataImporter = new HDFSParquetImporter(cfg);
+    assertEquals(-1, dataImporter.dataImport(jsc(), 0));
   }
 
   public HDFSParquetImporter.Config getHDFSParquetImporterConfig(String srcPath, String targetPath, String tableName,
@@ -375,18 +331,12 @@ public class TestHDFSParquetImporter implements Serializable {
     return cfg;
   }
 
-  private JavaSparkContext getJavaSparkContext() {
-    // Initialize a local spark env
-    SparkConf sparkConf = new SparkConf().setAppName("TestConversionCommand").setMaster("local[1]");
-    sparkConf = HoodieWriteClient.registerClasses(sparkConf);
-    return new JavaSparkContext(HoodieReadClient.addHoodieSupport(sparkConf));
-  }
-
   /**
    * Class used for compare result and expected.
    */
   public static class HoodieTripModel {
-    double timestamp;
+
+    long timestamp;
     String rowKey;
     String rider;
     String driver;
@@ -395,7 +345,7 @@ public class TestHDFSParquetImporter implements Serializable {
     double endLat;
     double endLon;
 
-    public HoodieTripModel(double timestamp, String rowKey, String rider, String driver, double beginLat,
+    public HoodieTripModel(long timestamp, String rowKey, String rider, String driver, double beginLat,
         double beginLon, double endLat, double endLon) {
       this.timestamp = timestamp;
       this.rowKey = rowKey;

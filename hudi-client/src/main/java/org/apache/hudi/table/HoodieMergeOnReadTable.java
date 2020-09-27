@@ -28,10 +28,14 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.bootstrap.BootstrapDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.compact.RunCompactionActionExecutor;
 import org.apache.hudi.table.action.deltacommit.BulkInsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.BulkInsertPreppedDeltaCommitActionExecutor;
@@ -43,8 +47,6 @@ import org.apache.hudi.table.action.deltacommit.UpsertPreppedDeltaCommitActionEx
 import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.restore.MergeOnReadRestoreActionExecutor;
 import org.apache.hudi.table.action.rollback.MergeOnReadRollbackActionExecutor;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
@@ -69,8 +71,6 @@ import java.util.Map;
  */
 public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends HoodieCopyOnWriteTable<T> {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieMergeOnReadTable.class);
-
   HoodieMergeOnReadTable(HoodieWriteConfig config, Configuration hadoopConf, HoodieTableMetaClient metaClient) {
     super(config, hadoopConf, metaClient);
   }
@@ -87,9 +87,9 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
 
   @Override
   public HoodieWriteMetadata bulkInsert(JavaSparkContext jsc, String instantTime, JavaRDD<HoodieRecord<T>> records,
-      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
-    return new BulkInsertDeltaCommitActionExecutor<>(jsc, config,
-        this, instantTime, records, bulkInsertPartitioner).execute();
+      Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
+    return new BulkInsertDeltaCommitActionExecutor(jsc, config,
+        this, instantTime, records, userDefinedBulkInsertPartitioner).execute();
   }
 
   @Override
@@ -111,9 +111,9 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
 
   @Override
   public HoodieWriteMetadata bulkInsertPrepped(JavaSparkContext jsc, String instantTime,
-      JavaRDD<HoodieRecord<T>> preppedRecords,  Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
-    return new BulkInsertPreppedDeltaCommitActionExecutor<>(jsc, config,
-        this, instantTime, preppedRecords, bulkInsertPartitioner).execute();
+      JavaRDD<HoodieRecord<T>> preppedRecords,  Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
+    return new BulkInsertPreppedDeltaCommitActionExecutor(jsc, config,
+        this, instantTime, preppedRecords, userDefinedBulkInsertPartitioner).execute();
   }
 
   @Override
@@ -130,6 +130,16 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
+  public HoodieBootstrapWriteMetadata bootstrap(JavaSparkContext jsc, Option<Map<String, String>> extraMetadata) {
+    return new BootstrapDeltaCommitActionExecutor(jsc, config, this, extraMetadata).execute();
+  }
+
+  @Override
+  public void rollbackBootstrap(JavaSparkContext jsc, String instantTime) {
+    new MergeOnReadRestoreActionExecutor(jsc, config, this, instantTime, HoodieTimeline.INIT_INSTANT_TS).execute();
+  }
+
+  @Override
   public HoodieRollbackMetadata rollback(JavaSparkContext jsc,
                                          String rollbackInstantTime,
                                          HoodieInstant commitInstant,
@@ -137,6 +147,7 @@ public class HoodieMergeOnReadTable<T extends HoodieRecordPayload> extends Hoodi
     return new MergeOnReadRollbackActionExecutor(jsc, config, this, rollbackInstantTime, commitInstant, deleteInstants).execute();
   }
 
+  @Override
   public HoodieRestoreMetadata restore(JavaSparkContext jsc, String restoreInstantTime, String instantToRestore) {
     return new MergeOnReadRestoreActionExecutor(jsc, config, this, restoreInstantTime, instantToRestore).execute();
   }

@@ -18,28 +18,23 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.exception.HoodieKeyException;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.spark.sql.Row;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 /**
- * Key generator for deletes using global indices. Global index deletes do not require partition value
- * so this key generator avoids using partition value for generating HoodieKey.
+ * Key generator for deletes using global indices. Global index deletes do not require partition value so this key generator
+ * avoids using partition value for generating HoodieKey.
  */
-public class GlobalDeleteKeyGenerator extends KeyGenerator {
+public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
 
   private static final String EMPTY_PARTITION = "";
-  private static final String NULL_RECORDKEY_PLACEHOLDER = "__null__";
-  private static final String EMPTY_RECORDKEY_PLACEHOLDER = "__empty__";
-
-  protected final List<String> recordKeyFields;
 
   public GlobalDeleteKeyGenerator(TypedProperties config) {
     super(config);
@@ -47,30 +42,28 @@ public class GlobalDeleteKeyGenerator extends KeyGenerator {
   }
 
   @Override
-  public HoodieKey getKey(GenericRecord record) {
-    if (recordKeyFields == null) {
-      throw new HoodieKeyException("Unable to find field names for record key or partition path in cfg");
-    }
+  public String getRecordKey(GenericRecord record) {
+    return KeyGenUtils.getRecordKey(record, getRecordKeyFields());
+  }
 
-    boolean keyIsNullEmpty = true;
-    StringBuilder recordKey = new StringBuilder();
-    for (String recordKeyField : recordKeyFields) {
-      String recordKeyValue = DataSourceUtils.getNestedFieldValAsString(record, recordKeyField, true);
-      if (recordKeyValue == null) {
-        recordKey.append(recordKeyField + ":" + NULL_RECORDKEY_PLACEHOLDER + ",");
-      } else if (recordKeyValue.isEmpty()) {
-        recordKey.append(recordKeyField + ":" + EMPTY_RECORDKEY_PLACEHOLDER + ",");
-      } else {
-        recordKey.append(recordKeyField + ":" + recordKeyValue + ",");
-        keyIsNullEmpty = false;
-      }
-    }
-    recordKey.deleteCharAt(recordKey.length() - 1);
-    if (keyIsNullEmpty) {
-      throw new HoodieKeyException("recordKey values: \"" + recordKey + "\" for fields: "
-          + recordKeyFields.toString() + " cannot be entirely null or empty.");
-    }
+  @Override
+  public String getPartitionPath(GenericRecord record) {
+    return EMPTY_PARTITION;
+  }
 
-    return new HoodieKey(recordKey.toString(), EMPTY_PARTITION);
+  @Override
+  public List<String> getPartitionPathFields() {
+    return new ArrayList<>();
+  }
+
+  @Override
+  public String getRecordKey(Row row) {
+    buildFieldPositionMapIfNeeded(row.schema());
+    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeyPositions, true);
+  }
+
+  @Override
+  public String getPartitionPath(Row row) {
+    return EMPTY_PARTITION;
   }
 }

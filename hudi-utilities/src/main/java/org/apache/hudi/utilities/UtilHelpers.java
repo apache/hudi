@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -25,6 +26,7 @@ import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -33,8 +35,14 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
+import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
+import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
+import org.apache.hudi.utilities.schema.SchemaPostProcessor;
+import org.apache.hudi.utilities.schema.SchemaPostProcessor.Config;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
 import org.apache.hudi.utilities.sources.Source;
+import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
@@ -60,7 +68,6 @@ import org.apache.spark.sql.types.StructType;
 
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.StringReader;
 import java.nio.ByteBuffer;
 import java.sql.Connection;
@@ -97,13 +104,20 @@ public class UtilHelpers {
   }
 
   public static SchemaProvider createSchemaProvider(String schemaProviderClass, TypedProperties cfg,
-                                                    JavaSparkContext jssc) throws IOException {
+      JavaSparkContext jssc) throws IOException {
     try {
-      return schemaProviderClass == null ? null
+      return StringUtils.isNullOrEmpty(schemaProviderClass) ? null
           : (SchemaProvider) ReflectionUtils.loadClass(schemaProviderClass, cfg, jssc);
     } catch (Throwable e) {
       throw new IOException("Could not load schema provider class " + schemaProviderClass, e);
     }
+  }
+
+  public static SchemaPostProcessor createSchemaPostProcessor(
+      String schemaPostProcessorClass, TypedProperties cfg, JavaSparkContext jssc) {
+    return schemaPostProcessorClass == null
+        ? null
+        : (SchemaPostProcessor) ReflectionUtils.loadClass(schemaPostProcessorClass, cfg, jssc);
   }
 
   public static Option<Transformer> createTransformer(List<String> classNames) throws IOException {
@@ -245,6 +259,7 @@ public class UtilHelpers {
         HoodieWriteConfig.newBuilder().withPath(basePath)
             .withParallelism(parallelism, parallelism)
             .withBulkInsertParallelism(parallelism)
+            .withDeleteParallelism(parallelism)
             .withSchema(schemaStr).combineInput(true, true).withCompactionConfig(compactionConfig)
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
             .withProps(properties).build();
@@ -265,12 +280,6 @@ public class UtilHelpers {
     }
     LOG.error(String.format("Import failed with %d errors.", errors.value()));
     return -1;
-  }
-
-  public static TypedProperties readConfig(InputStream in) throws IOException {
-    TypedProperties defaults = new TypedProperties();
-    defaults.load(in);
-    return defaults;
   }
 
   /**
@@ -354,5 +363,52 @@ public class UtilHelpers {
     } else {
       throw new HoodieException(String.format("%s table does not exists!", table));
     }
+  }
+
+  public static DFSPathSelector createSourceSelector(TypedProperties props,
+      Configuration conf) throws IOException {
+    String sourceSelectorClass =
+        props.getString(DFSPathSelector.Config.SOURCE_INPUT_SELECTOR, DFSPathSelector.class.getName());
+    try {
+      DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(sourceSelectorClass,
+          new Class<?>[]{TypedProperties.class, Configuration.class},
+          props, conf);
+
+      LOG.info("Using path selector " + selector.getClass().getName());
+      return selector;
+    } catch (Throwable e) {
+      throw new IOException("Could not load source selector class " + sourceSelectorClass, e);
+    }
+  }
+
+  public static SchemaProvider getOriginalSchemaProvider(SchemaProvider schemaProvider) {
+    SchemaProvider originalProvider = schemaProvider;
+    if (schemaProvider instanceof SchemaProviderWithPostProcessor) {
+      originalProvider = ((SchemaProviderWithPostProcessor) schemaProvider).getOriginalSchemaProvider();
+    } else if (schemaProvider instanceof DelegatingSchemaProvider) {
+      originalProvider = ((DelegatingSchemaProvider) schemaProvider).getSourceSchemaProvider();
+    }
+    return originalProvider;
+  }
+
+  public static SchemaProviderWithPostProcessor wrapSchemaProviderWithPostProcessor(SchemaProvider provider,
+      TypedProperties cfg, JavaSparkContext jssc) {
+
+    if (provider == null) {
+      return null;
+    }
+
+    if (provider instanceof  SchemaProviderWithPostProcessor) {
+      return (SchemaProviderWithPostProcessor)provider;
+    }
+    String schemaPostProcessorClass = cfg.getString(Config.SCHEMA_POST_PROCESSOR_PROP, null);
+    return new SchemaProviderWithPostProcessor(provider,
+        Option.ofNullable(createSchemaPostProcessor(schemaPostProcessorClass, cfg, jssc)));
+  }
+
+  public static SchemaProvider createRowBasedSchemaProvider(StructType structType,
+      TypedProperties cfg, JavaSparkContext jssc) {
+    SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
+    return wrapSchemaProviderWithPostProcessor(rowSchemaProvider, cfg, jssc);
   }
 }

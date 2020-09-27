@@ -40,6 +40,8 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
 
   public static final String CLEANER_POLICY_PROP = "hoodie.cleaner.policy";
   public static final String AUTO_CLEAN_PROP = "hoodie.clean.automatic";
+  public static final String ASYNC_CLEAN_PROP = "hoodie.clean.async";
+
   // Turn on inline compaction - after fw delta commits a inline compaction will be run
   public static final String INLINE_COMPACT_PROP = "hoodie.compact.inline";
   // Run a compaction every N delta commits
@@ -50,10 +52,18 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   public static final String MAX_COMMITS_TO_KEEP_PROP = "hoodie.keep.max.commits";
   public static final String MIN_COMMITS_TO_KEEP_PROP = "hoodie.keep.min.commits";
   public static final String COMMITS_ARCHIVAL_BATCH_SIZE_PROP = "hoodie.commits.archival.batch";
+  // Set true to clean bootstrap source files when necessary
+  public static final String CLEANER_BOOTSTRAP_BASE_FILE_ENABLED = "hoodie.cleaner.delete.bootstrap.base.file";
   // Upsert uses this file size to compact new data onto existing files..
   public static final String PARQUET_SMALL_FILE_LIMIT_BYTES = "hoodie.parquet.small.file.limit";
   // By default, treat any file <= 100MB as a small file.
   public static final String DEFAULT_PARQUET_SMALL_FILE_LIMIT_BYTES = String.valueOf(104857600);
+  // Hudi will use the previous commit to calculate the estimated record size by totalBytesWritten/totalRecordsWritten.
+  // If the previous commit is too small to make an accurate estimation, Hudi will search commits in the reverse order,
+  // until find a commit has totalBytesWritten larger than (PARQUET_SMALL_FILE_LIMIT_BYTES * RECORD_SIZE_ESTIMATION_THRESHOLD)
+  public static final String RECORD_SIZE_ESTIMATION_THRESHOLD_PROP = "hoodie.record.size.estimation.threshold";
+  public static final String DEFAULT_RECORD_SIZE_ESTIMATION_THRESHOLD = "1.0";
+
   /**
    * Configs related to specific table types.
    */
@@ -95,14 +105,16 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   public static final String DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED = "false";
   private static final String DEFAULT_CLEANER_POLICY = HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name();
   private static final String DEFAULT_AUTO_CLEAN = "true";
+  private static final String DEFAULT_ASYNC_CLEAN = "false";
   private static final String DEFAULT_INLINE_COMPACT = "false";
   private static final String DEFAULT_INCREMENTAL_CLEANER = "true";
-  private static final String DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS = "1";
+  private static final String DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS = "5";
   private static final String DEFAULT_CLEANER_FILE_VERSIONS_RETAINED = "3";
   private static final String DEFAULT_CLEANER_COMMITS_RETAINED = "10";
   private static final String DEFAULT_MAX_COMMITS_TO_KEEP = "30";
   private static final String DEFAULT_MIN_COMMITS_TO_KEEP = "20";
   private static final String DEFAULT_COMMITS_ARCHIVAL_BATCH_SIZE = String.valueOf(10);
+  private static final String DEFAULT_CLEANER_BOOTSTRAP_BASE_FILE_ENABLED = "false";
   public static final String TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP =
       "hoodie.compaction.daybased.target.partitions";
   // 500GB of target IO per compaction (both read and write)
@@ -134,6 +146,11 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
 
     public Builder withAutoClean(Boolean autoClean) {
       props.setProperty(AUTO_CLEAN_PROP, String.valueOf(autoClean));
+      return this;
+    }
+
+    public Builder withAsyncClean(Boolean asyncClean) {
+      props.setProperty(ASYNC_CLEAN_PROP, String.valueOf(asyncClean));
       return this;
     }
 
@@ -170,6 +187,11 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
 
     public Builder compactionSmallFileSize(long smallFileLimitBytes) {
       props.setProperty(PARQUET_SMALL_FILE_LIMIT_BYTES, String.valueOf(smallFileLimitBytes));
+      return this;
+    }
+
+    public Builder compactionRecordSizeEstimateThreshold(double threshold) {
+      props.setProperty(RECORD_SIZE_ESTIMATION_THRESHOLD_PROP, String.valueOf(threshold));
       return this;
     }
 
@@ -233,9 +255,16 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withCleanBootstrapBaseFileEnabled(Boolean cleanBootstrapSourceFileEnabled) {
+      props.setProperty(CLEANER_BOOTSTRAP_BASE_FILE_ENABLED, String.valueOf(cleanBootstrapSourceFileEnabled));
+      return this;
+    }
+
     public HoodieCompactionConfig build() {
       HoodieCompactionConfig config = new HoodieCompactionConfig(props);
       setDefaultOnCondition(props, !props.containsKey(AUTO_CLEAN_PROP), AUTO_CLEAN_PROP, DEFAULT_AUTO_CLEAN);
+      setDefaultOnCondition(props, !props.containsKey(ASYNC_CLEAN_PROP), ASYNC_CLEAN_PROP,
+              DEFAULT_ASYNC_CLEAN);
       setDefaultOnCondition(props, !props.containsKey(CLEANER_INCREMENTAL_MODE), CLEANER_INCREMENTAL_MODE,
           DEFAULT_INCREMENTAL_CLEANER);
       setDefaultOnCondition(props, !props.containsKey(INLINE_COMPACT_PROP), INLINE_COMPACT_PROP,
@@ -254,6 +283,8 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
           DEFAULT_MIN_COMMITS_TO_KEEP);
       setDefaultOnCondition(props, !props.containsKey(PARQUET_SMALL_FILE_LIMIT_BYTES), PARQUET_SMALL_FILE_LIMIT_BYTES,
           DEFAULT_PARQUET_SMALL_FILE_LIMIT_BYTES);
+      setDefaultOnCondition(props, !props.containsKey(RECORD_SIZE_ESTIMATION_THRESHOLD_PROP), RECORD_SIZE_ESTIMATION_THRESHOLD_PROP,
+          DEFAULT_RECORD_SIZE_ESTIMATION_THRESHOLD);
       setDefaultOnCondition(props, !props.containsKey(COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE),
           COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE, DEFAULT_COPY_ON_WRITE_TABLE_INSERT_SPLIT_SIZE);
       setDefaultOnCondition(props, !props.containsKey(COPY_ON_WRITE_TABLE_AUTO_SPLIT_INSERTS),
@@ -275,6 +306,8 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
           TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP, DEFAULT_TARGET_PARTITIONS_PER_DAYBASED_COMPACTION);
       setDefaultOnCondition(props, !props.containsKey(COMMITS_ARCHIVAL_BATCH_SIZE_PROP),
           COMMITS_ARCHIVAL_BATCH_SIZE_PROP, DEFAULT_COMMITS_ARCHIVAL_BATCH_SIZE);
+      setDefaultOnCondition(props, !props.containsKey(CLEANER_BOOTSTRAP_BASE_FILE_ENABLED),
+          CLEANER_BOOTSTRAP_BASE_FILE_ENABLED, DEFAULT_CLEANER_BOOTSTRAP_BASE_FILE_ENABLED);
 
       HoodieCleaningPolicy.valueOf(props.getProperty(CLEANER_POLICY_PROP));
 

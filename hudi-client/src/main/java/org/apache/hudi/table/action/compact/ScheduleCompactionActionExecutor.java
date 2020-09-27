@@ -56,22 +56,23 @@ public class ScheduleCompactionActionExecutor extends BaseActionExecutor<Option<
 
   private HoodieCompactionPlan scheduleCompaction() {
     LOG.info("Checking if compaction needs to be run on " + config.getBasePath());
-    Option<HoodieInstant> lastCompaction = table.getActiveTimeline().getCommitTimeline().filterCompletedInstants().lastInstant();
-    String deltaCommitsSinceTs = "0";
+    Option<HoodieInstant> lastCompaction = table.getActiveTimeline().getCommitTimeline()
+        .filterCompletedInstants().lastInstant();
+    String lastCompactionTs = "0";
     if (lastCompaction.isPresent()) {
-      deltaCommitsSinceTs = lastCompaction.get().getTimestamp();
+      lastCompactionTs = lastCompaction.get().getTimestamp();
     }
 
     int deltaCommitsSinceLastCompaction = table.getActiveTimeline().getDeltaCommitTimeline()
-        .findInstantsAfter(deltaCommitsSinceTs, Integer.MAX_VALUE).countInstants();
+        .findInstantsAfter(lastCompactionTs, Integer.MAX_VALUE).countInstants();
     if (config.getInlineCompactDeltaCommitMax() > deltaCommitsSinceLastCompaction) {
-      LOG.info("Not running compaction as only " + deltaCommitsSinceLastCompaction
-          + " delta commits was found since last compaction " + deltaCommitsSinceTs + ". Waiting for "
+      LOG.info("Not scheduling compaction as only " + deltaCommitsSinceLastCompaction
+          + " delta commits was found since last compaction " + lastCompactionTs + ". Waiting for "
           + config.getInlineCompactDeltaCommitMax());
       return new HoodieCompactionPlan();
     }
 
-    LOG.info("Compacting merge on read table " + config.getBasePath());
+    LOG.info("Generating compaction plan for merge on read table " + config.getBasePath());
     HoodieMergeOnReadTableCompactor compactor = new HoodieMergeOnReadTableCompactor();
     try {
       return compactor.generateCompactionPlan(jsc, table, config, instantTime,

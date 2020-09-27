@@ -18,12 +18,12 @@
 
 package org.apache.hudi.cli.commands;
 
-import org.apache.hudi.cli.AbstractShellIntegrationTest;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
-import org.apache.hudi.cli.common.HoodieTestCommitMetadataGenerator;
-import org.apache.hudi.cli.common.HoodieTestCommitUtilities;
+import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
+import org.apache.hudi.cli.testutils.HoodieTestCommitUtilities;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -54,7 +54,7 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
   private String tablePath;
 
   @BeforeEach
-  public void init() throws IOException {
+  public void init() throws Exception {
     initDFS();
     jsc.hadoopConfiguration().addResource(dfs.getConf());
     HoodieCLI.conf = dfs.getConf();
@@ -62,6 +62,7 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     // Create table and connect
     String tableName = "test_table";
     tablePath = basePath + File.separator + tableName;
+
     new TableCommand().createTable(
         tablePath, tableName,
         "COPY_ON_WRITE", "", 1, "org.apache.hudi.common.model.HoodieAvroPayload");
@@ -91,8 +92,8 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
 
     // archive
-    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, metaClient);
-    archiveLog.archiveIfRequired(hadoopConf);
+    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, hadoopConf);
+    archiveLog.archiveIfRequired(jsc);
   }
 
   @AfterEach
@@ -146,14 +147,16 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
 
     String expectedResult = HoodiePrintHelper.print(
         header, new HashMap<>(), "", false, -1, false, rows);
-    assertEquals(expectedResult, cr.getResult().toString());
+    expectedResult = removeNonWordAndStripSpace(expectedResult);
+    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(expectedResult, got);
   }
 
   /**
    * Test for command: show archived commits.
    */
   @Test
-  public void testShowCommits() throws IOException {
+  public void testShowCommits() throws Exception {
     CommandResult cr = getShell().executeCommand("show archived commits");
     assertTrue(cr.isSuccess());
     final List<Comparable[]> rows = new ArrayList<>();
@@ -169,7 +172,9 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     }
     rows.add(new Comparable[] {"103", "commit"});
     String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, 10, false, rows);
-    assertEquals(expected, cr.getResult().toString());
+    expected = removeNonWordAndStripSpace(expected);
+    String got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(expected, got);
 
     // Test with Metadata and no limit
     cr = getShell().executeCommand("show archived commits --skipMetadata false --limit -1");
@@ -189,6 +194,8 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     }
     header = header.addTableHeaderField("CommitDetails");
     expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
-    assertEquals(expected, cr.getResult().toString());
+    expected = removeNonWordAndStripSpace(expected);
+    got = removeNonWordAndStripSpace(cr.getResult().toString());
+    assertEquals(expected, got);
   }
 }

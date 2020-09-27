@@ -33,10 +33,10 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.action.compact.OperationResult;
+import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -55,7 +55,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestCompactionAdminClient extends TestHoodieClientBase {
+public class TestCompactionAdminClient extends HoodieClientTestBase {
 
   private static final Logger LOG = LogManager.getLogger(TestCompactionAdminClient.class);
 
@@ -68,13 +68,6 @@ public class TestCompactionAdminClient extends TestHoodieClientBase {
     initSparkContexts();
     metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath, MERGE_ON_READ);
     client = new CompactionAdminClient(jsc, basePath);
-  }
-
-  @AfterEach
-  public void tearDown() {
-    client.close();
-    metaClient = null;
-    cleanupSparkContexts();
   }
 
   @Test

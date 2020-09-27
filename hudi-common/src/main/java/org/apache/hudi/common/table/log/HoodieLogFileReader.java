@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieCorruptBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
@@ -179,6 +180,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
     // 8. Read log block length, if present. This acts as a reverse pointer when traversing a
     // log file in reverse
+    @SuppressWarnings("unused")
     long logBlockLength = 0;
     if (nextBlockVersion.hasLogBlockLength()) {
       logBlockLength = inputStream.readLong();
@@ -193,9 +195,12 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         if (nextBlockVersion.getVersion() == HoodieLogFormatVersion.DEFAULT_VERSION) {
           return HoodieAvroDataBlock.getBlock(content, readerSchema);
         } else {
-          return HoodieAvroDataBlock.getBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
+          return new HoodieAvroDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
               contentPosition, contentLength, blockEndPos, readerSchema, header, footer);
         }
+      case HFILE_DATA_BLOCK:
+        return new HoodieHFileDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
+              contentPosition, contentLength, blockEndPos, readerSchema, header, footer);
       case DELETE_BLOCK:
         return HoodieDeleteBlock.getBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
             contentPosition, contentLength, blockEndPos, header, footer);

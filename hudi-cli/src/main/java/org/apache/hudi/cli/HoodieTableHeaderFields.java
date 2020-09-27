@@ -31,6 +31,7 @@ public class HoodieTableHeaderFields {
   public static final String HEADER_CLEAN_TIME = "CleanTime";
   public static final String HEADER_EARLIEST_COMMAND_RETAINED = "EarliestCommandRetained";
   public static final String HEADER_CLEANING_POLICY = "Cleaning policy";
+  public static final String HEADER_FILE_SIZE = "File Size";
 
   public static final String HEADER_TOTAL_FILES_DELETED = "Total Files Deleted";
   public static final String HEADER_TOTAL_FILES_SUCCESSFULLY_DELETED = "Total Files Successfully Deleted";
@@ -58,7 +59,7 @@ public class HoodieTableHeaderFields {
   public static final String HEADER_DELTA_SIZE = "Delta Size";
   public static final String HEADER_DELTA_FILES = "Delta Files";
   public static final String HEADER_TOTAL_DELTA_SIZE = "Total " + HEADER_DELTA_SIZE;
-  public static final String HEADER_TOTAL_DELTA_FILE_SIZE = "Total Delta File Size";
+  public static final String HEADER_TOTAL_DELTA_FILE_SIZE = "Total Delta " + HEADER_FILE_SIZE;
   public static final String HEADER_NUM_DELTA_FILES = "Num " + HEADER_DELTA_FILES;
 
   /**
@@ -78,7 +79,7 @@ public class HoodieTableHeaderFields {
    * Fields of Repair.
    */
   public static final String HEADER_METADATA_PRESENT = "Metadata Present?";
-  public static final String HEADER_REPAIR_ACTION = "Action";
+  public static final String HEADER_ACTION = "Action";
   public static final String HEADER_HOODIE_PROPERTY = "Property";
   public static final String HEADER_OLD_VALUE = "Old Value";
   public static final String HEADER_NEW_VALUE = "New Value";
@@ -113,4 +114,30 @@ public class HoodieTableHeaderFields {
   public static final String HEADER_HISTOGRAM_NUM_FILES = "NumFiles";
   public static final String HEADER_HISTOGRAM_STD_DEV = "StdDev";
 
+  /**
+   * Fields of Commit.
+   */
+  public static final String HEADER_TOTAL_BYTES_WRITTEN = "Total Bytes Written";
+  public static final String HEADER_TOTAL_FILES_ADDED = "Total Files Added";
+  public static final String HEADER_TOTAL_FILES_UPDATED = "Total Files Updated";
+  public static final String HEADER_TOTAL_PARTITIONS_WRITTEN = "Total Partitions Written";
+  public static final String HEADER_TOTAL_RECORDS_WRITTEN = "Total Records Written";
+  public static final String HEADER_TOTAL_UPDATE_RECORDS_WRITTEN = "Total Update Records Written";
+  public static final String HEADER_TOTAL_RECORDS_INSERTED = "Total Records Inserted";
+  public static final String HEADER_TOTAL_RECORDS_UPDATED = "Total Records Updated";
+  public static final String HEADER_TOTAL_ERRORS = "Total Errors";
+
+  /**
+   * Fields of commit metadata.
+   */
+  public static final String HEADER_PREVIOUS_COMMIT = "Previous Commit";
+  public static final String HEADER_NUM_WRITES = "Num Writes";
+  public static final String HEADER_NUM_INSERTS = "Num Inserts";
+  public static final String HEADER_NUM_DELETES = "Num Deletes";
+  public static final String HEADER_NUM_UPDATE_WRITES = "Num Update Writes";
+  public static final String HEADER_TOTAL_LOG_BLOCKS = "Total Log Blocks";
+  public static final String HEADER_TOTAL_CORRUPT_LOG_BLOCKS = "Total Corrupt LogBlocks";
+  public static final String HEADER_TOTAL_ROLLBACK_BLOCKS = "Total Rollback Blocks";
+  public static final String HEADER_TOTAL_LOG_RECORDS = "Total Log Records";
+  public static final String HEADER_TOTAL_UPDATED_RECORDS_COMPACTED = "Total Updated Records Compacted";
 }

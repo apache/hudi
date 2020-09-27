@@ -18,14 +18,12 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.fs.Path;
+import java.io.IOException;
 
 /**
  * Extract range information for a given file slice.
@@ -37,8 +35,7 @@ public class HoodieRangeInfoHandle<T extends HoodieRecordPayload> extends Hoodie
     super(config, null, hoodieTable, partitionPathFilePair);
   }
 
-  public String[] getMinMaxKeys() {
-    HoodieBaseFile dataFile = getLatestDataFile();
-    return ParquetUtils.readMinMaxRecordKeys(hoodieTable.getHadoopConf(), new Path(dataFile.getPath()));
+  public String[] getMinMaxKeys() throws IOException {
+    return createNewFileReader().readMinMaxRecordKeys();
   }
 }

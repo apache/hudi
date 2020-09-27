@@ -26,10 +26,10 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.execution.BulkInsertMapFunction;
+import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerFactory;
+import org.apache.hudi.execution.bulkinsert.BulkInsertMapFunction;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.UserDefinedBulkInsertPartitioner;
-
+import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.spark.api.java.JavaRDD;
 
@@ -39,11 +39,10 @@ import java.util.stream.IntStream;
 
 public class BulkInsertHelper<T extends HoodieRecordPayload<T>> {
 
-  public static <T extends HoodieRecordPayload<T>> HoodieWriteMetadata bulkInsert(
-      JavaRDD<HoodieRecord<T>> inputRecords, String instantTime,
-      HoodieTable<T> table, HoodieWriteConfig config,
-      CommitActionExecutor<T> executor, boolean performDedupe,
-      Option<UserDefinedBulkInsertPartitioner> bulkInsertPartitioner) {
+  public static <T extends HoodieRecordPayload<T>> HoodieWriteMetadata bulkInsert(JavaRDD<HoodieRecord<T>> inputRecords, String instantTime,
+                                                                                  HoodieTable<T> table, HoodieWriteConfig config,
+                                                                                  CommitActionExecutor<T> executor, boolean performDedupe,
+                                                                                  Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner) {
     HoodieWriteMetadata result = new HoodieWriteMetadata();
 
     // De-dupe/merge if needed
@@ -51,22 +50,15 @@ public class BulkInsertHelper<T extends HoodieRecordPayload<T>> {
 
     if (performDedupe) {
       dedupedRecords = WriteHelper.combineOnCondition(config.shouldCombineBeforeInsert(), inputRecords,
-          config.getInsertShuffleParallelism(), ((HoodieTable<T>)table));
+          config.getBulkInsertShuffleParallelism(), ((HoodieTable<T>)table));
     }
 
     final JavaRDD<HoodieRecord<T>> repartitionedRecords;
     final int parallelism = config.getBulkInsertShuffleParallelism();
-    if (bulkInsertPartitioner.isPresent()) {
-      repartitionedRecords = bulkInsertPartitioner.get().repartitionRecords(dedupedRecords, parallelism);
-    } else {
-      // Now, sort the records and line them up nicely for loading.
-      repartitionedRecords = dedupedRecords.sortBy(record -> {
-        // Let's use "partitionPath + key" as the sort key. Spark, will ensure
-        // the records split evenly across RDD partitions, such that small partitions fit
-        // into 1 RDD partition, while big ones spread evenly across multiple RDD partitions
-        return String.format("%s+%s", record.getPartitionPath(), record.getRecordKey());
-      }, true, parallelism);
-    }
+    BulkInsertPartitioner partitioner = userDefinedBulkInsertPartitioner.isPresent()
+        ? userDefinedBulkInsertPartitioner.get()
+        : BulkInsertInternalPartitionerFactory.get(config.getBulkInsertSortMode());
+    repartitionedRecords = partitioner.repartitionRecords(dedupedRecords, parallelism);
 
     // generate new file ID prefixes for each output partition
     final List<String> fileIDPrefixes =
@@ -77,7 +69,8 @@ public class BulkInsertHelper<T extends HoodieRecordPayload<T>> {
         config.shouldAllowMultiWriteOnSameInstant());
 
     JavaRDD<WriteStatus> writeStatusRDD = repartitionedRecords
-        .mapPartitionsWithIndex(new BulkInsertMapFunction<T>(instantTime, config, table, fileIDPrefixes), true)
+        .mapPartitionsWithIndex(new BulkInsertMapFunction<>(instantTime,
+            partitioner.arePartitionRecordsSorted(), config, table, fileIDPrefixes), true)
         .flatMap(List::iterator);
 
     executor.updateIndexAndCommitIfNeeded(writeStatusRDD, result);

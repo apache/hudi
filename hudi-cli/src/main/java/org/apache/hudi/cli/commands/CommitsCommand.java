@@ -20,6 +20,7 @@ package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
+import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.utils.CommitUtil;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
@@ -84,19 +85,19 @@ public class CommitsCommand implements CommandMarker {
     }
 
     final Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
-    fieldNameToConverterMap.put("Total Bytes Written", entry -> {
+    fieldNameToConverterMap.put(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN, entry -> {
       return NumericUtils.humanReadableByteCount((Double.valueOf(entry.toString())));
     });
 
     final TableHeader header = new TableHeader()
-            .addTableHeaderField("CommitTime")
-            .addTableHeaderField("Total Bytes Written")
-            .addTableHeaderField("Total Files Added")
-            .addTableHeaderField("Total Files Updated")
-            .addTableHeaderField("Total Partitions Written")
-            .addTableHeaderField("Total Records Written")
-            .addTableHeaderField("Total Update Records Written")
-            .addTableHeaderField("Total Errors");
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_COMMIT_TIME)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FILES_ADDED)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FILES_UPDATED)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_PARTITIONS_WRITTEN)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_RECORDS_WRITTEN)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_UPDATE_RECORDS_WRITTEN)
+            .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_ERRORS);
 
     return HoodiePrintHelper.print(header, fieldNameToConverterMap, sortByField, descending,
             limit, headerOnly, rows, tempTableName);
@@ -136,17 +137,26 @@ public class CommitsCommand implements CommandMarker {
     }
 
     final Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
-    fieldNameToConverterMap.put("Total Bytes Written", entry -> {
+    fieldNameToConverterMap.put(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN, entry -> {
       return NumericUtils.humanReadableByteCount((Double.valueOf(entry.toString())));
     });
 
-    TableHeader header = new TableHeader().addTableHeaderField("Action").addTableHeaderField("Instant")
-            .addTableHeaderField("Partition").addTableHeaderField("File Id").addTableHeaderField("Prev Instant")
-            .addTableHeaderField("Num Writes").addTableHeaderField("Num Inserts").addTableHeaderField("Num Deletes")
-            .addTableHeaderField("Num Update Writes").addTableHeaderField("Total Write Errors")
-            .addTableHeaderField("Total Log Blocks").addTableHeaderField("Total Corrupt LogBlocks")
-            .addTableHeaderField("Total Rollback Blocks").addTableHeaderField("Total Log Records")
-            .addTableHeaderField("Total Updated Records Compacted").addTableHeaderField("Total Write Bytes");
+    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_ACTION)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_FILE_ID)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_PREVIOUS_COMMIT)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_NUM_WRITES)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_NUM_INSERTS)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_NUM_DELETES)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_NUM_UPDATE_WRITES)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_ERRORS)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_LOG_BLOCKS)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_CORRUPT_LOG_BLOCKS)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_ROLLBACK_BLOCKS)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_LOG_RECORDS)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_UPDATED_RECORDS_COMPACTED)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN);
 
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending,
             limit, headerOnly, rows, tempTableName);
@@ -214,15 +224,12 @@ public class CommitsCommand implements CommandMarker {
     }
   }
 
-  @CliCommand(value = "commits refresh", help = "Refresh the commits")
-  public String refreshCommits() throws IOException {
-    HoodieCLI.refreshTableMetadata();
-    return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " refreshed.";
-  }
-
   @CliCommand(value = "commit rollback", help = "Rollback a commit")
   public String rollbackCommit(@CliOption(key = {"commit"}, help = "Commit to rollback") final String instantTime,
-      @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath)
+      @CliOption(key = {"sparkProperties"}, help = "Spark Properties File Path") final String sparkPropertiesPath,
+      @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "", help = "Spark Master") String master,
+      @CliOption(key = "sparkMemory", unspecifiedDefaultValue = "4G",
+         help = "Spark executor memory") final String sparkMemory)
       throws Exception {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline completedTimeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
@@ -232,13 +239,13 @@ public class CommitsCommand implements CommandMarker {
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkMain.SparkCommand.ROLLBACK.toString(), instantTime,
+    sparkLauncher.addAppArgs(SparkMain.SparkCommand.ROLLBACK.toString(), master, sparkMemory, instantTime,
         HoodieCLI.getTableMetaClient().getBasePath());
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
     // Refresh the current
-    refreshCommits();
+    HoodieCLI.refreshTableMetadata();
     if (exitCode != 0) {
       return "Commit " + instantTime + " failed to roll back";
     }
@@ -292,12 +299,16 @@ public class CommitsCommand implements CommandMarker {
     }
 
     Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
-    fieldNameToConverterMap.put("Total Bytes Written", entry -> NumericUtils.humanReadableByteCount((Long.parseLong(entry.toString()))));
+    fieldNameToConverterMap.put(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN, entry ->
+        NumericUtils.humanReadableByteCount((Long.parseLong(entry.toString()))));
 
-    TableHeader header = new TableHeader().addTableHeaderField("Partition Path")
-        .addTableHeaderField("Total Files Added").addTableHeaderField("Total Files Updated")
-        .addTableHeaderField("Total Records Inserted").addTableHeaderField("Total Records Updated")
-        .addTableHeaderField("Total Bytes Written").addTableHeaderField("Total Errors");
+    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION_PATH)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FILES_ADDED)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FILES_UPDATED)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_RECORDS_INSERTED)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_RECORDS_UPDATED)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_ERRORS);
 
     return HoodiePrintHelper.print(header, fieldNameToConverterMap, sortByField, descending,
         limit, headerOnly, rows, exportTableName);
@@ -334,27 +345,30 @@ public class CommitsCommand implements CommandMarker {
       }
     }
 
-    TableHeader header = new TableHeader().addTableHeaderField("Partition Path").addTableHeaderField("File ID")
-        .addTableHeaderField("Previous Commit").addTableHeaderField("Total Records Updated")
-        .addTableHeaderField("Total Records Written").addTableHeaderField("Total Bytes Written")
-        .addTableHeaderField("Total Errors").addTableHeaderField("File Size");
+    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION_PATH)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_FILE_ID)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_PREVIOUS_COMMIT)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_RECORDS_UPDATED)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_RECORDS_WRITTEN)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_ERRORS)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_FILE_SIZE);
 
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending,
         limit, headerOnly, rows, exportTableName);
   }
 
   @CliCommand(value = "commits compare", help = "Compare commits with another Hoodie table")
-  public String compareCommits(@CliOption(key = {"path"}, help = "Path of the table to compare to") final String path)
-      throws Exception {
+  public String compareCommits(@CliOption(key = {"path"}, help = "Path of the table to compare to") final String path) {
 
     HoodieTableMetaClient source = HoodieCLI.getTableMetaClient();
     HoodieTableMetaClient target = new HoodieTableMetaClient(HoodieCLI.conf, path);
     HoodieTimeline targetTimeline = target.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     HoodieTimeline sourceTimeline = source.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     String targetLatestCommit =
-        targetTimeline.getInstants().iterator().hasNext() ? "0" : targetTimeline.lastInstant().get().getTimestamp();
+        targetTimeline.getInstants().iterator().hasNext() ? targetTimeline.lastInstant().get().getTimestamp() : "0";
     String sourceLatestCommit =
-        sourceTimeline.getInstants().iterator().hasNext() ? "0" : sourceTimeline.lastInstant().get().getTimestamp();
+        sourceTimeline.getInstants().iterator().hasNext() ? sourceTimeline.lastInstant().get().getTimestamp() : "0";
 
     if (sourceLatestCommit != null
         && HoodieTimeline.compareTimestamps(targetLatestCommit, HoodieTimeline.GREATER_THAN, sourceLatestCommit)) {

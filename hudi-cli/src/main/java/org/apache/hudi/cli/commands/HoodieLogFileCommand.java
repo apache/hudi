@@ -22,6 +22,7 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -30,8 +31,8 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCorruptBlock;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
@@ -53,7 +54,6 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -82,7 +82,7 @@ public class HoodieLogFileCommand implements CommandMarker {
       throws IOException {
 
     FileSystem fs = HoodieCLI.getTableMetaClient().getFs();
-    List<String> logFilePaths = Arrays.stream(fs.globStatus(new Path(logFilePathPattern)))
+    List<String> logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(logFilePathPattern)).stream()
         .map(status -> status.getPath().toString()).collect(Collectors.toList());
     Map<String, List<Tuple3<HoodieLogBlockType, Tuple2<Map<HeaderMetadataType, String>, Map<HeaderMetadataType, String>>, Integer>>> commitCountAndMetadata =
         new HashMap<>();
@@ -118,8 +118,8 @@ public class HoodieLogFileCommand implements CommandMarker {
             dummyInstantTimeCount++;
             instantTime = "dummy_instant_time_" + dummyInstantTimeCount;
           }
-          if (n instanceof HoodieAvroDataBlock) {
-            recordCount = ((HoodieAvroDataBlock) n).getRecords().size();
+          if (n instanceof HoodieDataBlock) {
+            recordCount = ((HoodieDataBlock) n).getRecords().size();
           }
         }
         if (commitCountAndMetadata.containsKey(instantTime)) {
@@ -175,7 +175,7 @@ public class HoodieLogFileCommand implements CommandMarker {
 
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     FileSystem fs = client.getFs();
-    List<String> logFilePaths = Arrays.stream(fs.globStatus(new Path(logFilePathPattern)))
+    List<String> logFilePaths = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(logFilePathPattern)).stream()
         .map(status -> status.getPath().toString()).sorted(Comparator.reverseOrder())
         .collect(Collectors.toList());
 
@@ -215,8 +215,8 @@ public class HoodieLogFileCommand implements CommandMarker {
         // read the avro blocks
         while (reader.hasNext()) {
           HoodieLogBlock n = reader.next();
-          if (n instanceof HoodieAvroDataBlock) {
-            HoodieAvroDataBlock blk = (HoodieAvroDataBlock) n;
+          if (n instanceof HoodieDataBlock) {
+            HoodieDataBlock blk = (HoodieDataBlock) n;
             List<IndexedRecord> records = blk.getRecords();
             for (IndexedRecord record : records) {
               if (allRecords.size() < limit) {

@@ -88,8 +88,7 @@ public class TableCommand implements CommandMarker {
       @CliOption(key = {"archiveLogFolder"}, help = "Folder Name for storing archived timeline") String archiveFolder,
       @CliOption(key = {"layoutVersion"}, help = "Specific Layout Version to use") Integer layoutVersion,
       @CliOption(key = {"payloadClass"}, unspecifiedDefaultValue = "org.apache.hudi.common.model.HoodieAvroPayload",
-          help = "Payload Class") final String payloadClass)
-      throws IOException {
+          help = "Payload Class") final String payloadClass) throws IOException {
 
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
@@ -130,5 +129,15 @@ public class TableCommand implements CommandMarker {
       rows.add(new Comparable[] {e.getKey(), e.getValue()});
     });
     return HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
+  }
+
+  /**
+   * Refresh table metadata.
+   */
+  @CliCommand(value = {"refresh", "metadata refresh", "commits refresh", "cleans refresh", "savepoints refresh"},
+      help = "Refresh table metadata")
+  public String refreshMetadata() {
+    HoodieCLI.refreshTableMetadata();
+    return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " refreshed.";
   }
 }

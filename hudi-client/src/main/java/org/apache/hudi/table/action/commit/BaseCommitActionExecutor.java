@@ -22,6 +22,7 @@ import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.SparkConfigUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -38,43 +39,43 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.BaseActionExecutor;
-
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.storage.StorageLevel;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 import scala.Tuple2;
 
-public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
-    extends BaseActionExecutor<HoodieWriteMetadata> {
+public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>, R>
+    extends BaseActionExecutor<R> {
 
   private static final Logger LOG = LogManager.getLogger(BaseCommitActionExecutor.class);
 
+  protected final Option<Map<String, String>> extraMetadata;
   private final WriteOperationType operationType;
   protected final SparkTaskContextSupplier sparkTaskContextSupplier = new SparkTaskContextSupplier();
 
   public BaseCommitActionExecutor(JavaSparkContext jsc, HoodieWriteConfig config,
-      HoodieTable table, String instantTime, WriteOperationType operationType) {
-    this(jsc, config, table, instantTime, operationType, null);
-  }
-
-  public BaseCommitActionExecutor(JavaSparkContext jsc, HoodieWriteConfig config,
       HoodieTable table, String instantTime, WriteOperationType operationType,
-      JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
+      Option<Map<String, String>> extraMetadata) {
     super(jsc, config, table, instantTime);
     this.operationType = operationType;
+    this.extraMetadata = extraMetadata;
   }
 
   public HoodieWriteMetadata execute(JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
@@ -121,6 +122,12 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
       HoodieCommitMetadata metadata = new HoodieCommitMetadata();
       profile.getPartitionPaths().forEach(path -> {
         WorkloadStat partitionStat = profile.getWorkloadStat(path.toString());
+        HoodieWriteStat insertStat = new HoodieWriteStat();
+        insertStat.setNumInserts(partitionStat.getNumInserts());
+        insertStat.setFileId("");
+        insertStat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
+        metadata.addWriteStat(path.toString(), insertStat);
+
         partitionStat.getUpdateLocationToCount().forEach((key, value) -> {
           HoodieWriteStat writeStat = new HoodieWriteStat();
           writeStat.setFileId(key);
@@ -152,9 +159,26 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
   }
 
   private JavaRDD<HoodieRecord<T>> partition(JavaRDD<HoodieRecord<T>> dedupedRecords, Partitioner partitioner) {
-    return dedupedRecords.mapToPair(
-        record -> new Tuple2<>(new Tuple2<>(record.getKey(), Option.ofNullable(record.getCurrentLocation())), record))
-        .partitionBy(partitioner).map(Tuple2::_2);
+    JavaPairRDD<Tuple2, HoodieRecord<T>> mappedRDD = dedupedRecords.mapToPair(
+        record -> new Tuple2<>(new Tuple2<>(record.getKey(), Option.ofNullable(record.getCurrentLocation())), record));
+
+    JavaPairRDD<Tuple2, HoodieRecord<T>> partitionedRDD;
+    if (table.requireSortedRecords()) {
+      // Partition and sort within each partition as a single step. This is faster than partitioning first and then
+      // applying a sort.
+      Comparator<Tuple2> comparator = (Comparator<Tuple2> & Serializable)(t1, t2) -> {
+        HoodieKey key1 = (HoodieKey) t1._1;
+        HoodieKey key2 = (HoodieKey) t2._1;
+        return key1.getRecordKey().compareTo(key2.getRecordKey());
+      };
+
+      partitionedRDD = mappedRDD.repartitionAndSortWithinPartitions(partitioner, comparator);
+    } else {
+      // Partition only
+      partitionedRDD = mappedRDD.partitionBy(partitioner);
+    }
+
+    return partitionedRDD.map(Tuple2::_2);
   }
 
   protected void updateIndexAndCommitIfNeeded(JavaRDD<WriteStatus> writeStatusRDD, HoodieWriteMetadata result) {
@@ -173,13 +197,17 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
   protected void commitOnAutoCommit(HoodieWriteMetadata result) {
     if (config.shouldAutoCommit()) {
       LOG.info("Auto commit enabled: Committing " + instantTime);
-      commit(Option.empty(), result);
+      commit(extraMetadata, result);
     } else {
       LOG.info("Auto commit disabled for " + instantTime);
     }
   }
 
-  private void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata result) {
+  protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata result) {
+    commit(extraMetadata, result, result.getWriteStatuses().map(WriteStatus::getStat).collect());
+  }
+
+  protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata result, List<HoodieWriteStat> stats) {
     String actionType = table.getMetaClient().getCommitActionType();
     LOG.info("Committing " + instantTime + ", action Type " + actionType);
     // Create a Hoodie table which encapsulated the commits and files visible
@@ -189,10 +217,8 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
 
     result.setCommitted(true);
-    List<HoodieWriteStat> stats = result.getWriteStatuses().map(WriteStatus::getStat).collect();
+    stats.forEach(stat -> metadata.addWriteStat(stat.getPartitionPath(), stat));
     result.setWriteStats(stats);
-
-    updateMetadataAndRollingStats(metadata, stats);
 
     // Finalize write
     finalizeWrite(instantTime, stats, result);
@@ -201,7 +227,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
     if (extraMetadata.isPresent()) {
       extraMetadata.get().forEach(metadata::addMetadata);
     }
-    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, config.getSchema());
+    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, getSchemaToStoreInCommit());
     metadata.setOperationType(operationType);
 
     try {
@@ -230,16 +256,11 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>>
     }
   }
 
-  private void updateMetadataAndRollingStats(HoodieCommitMetadata metadata, List<HoodieWriteStat> writeStats) {
-    // 1. Look up the previous compaction/commit and get the HoodieCommitMetadata from there.
-    // 2. Now, first read the existing rolling stats and merge with the result of current metadata.
-
-    // Need to do this on every commit (delta or commit) to support COW and MOR.
-    for (HoodieWriteStat stat : writeStats) {
-      String partitionPath = stat.getPartitionPath();
-      // TODO: why is stat.getPartitionPath() null at times here.
-      metadata.addWriteStat(partitionPath, stat);
-    }
+  /**
+   * By default, return the writer schema in Write Config for storing in commit.
+   */
+  protected String getSchemaToStoreInCommit() {
+    return config.getSchema();
   }
 
   protected boolean isWorkloadProfileNeeded() {

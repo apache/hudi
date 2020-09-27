@@ -19,6 +19,8 @@ package org.apache.hudi
 
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
+import org.apache.hudi.common.model.WriteOperationType
+import org.apache.hudi.hive.HiveSyncTool
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
 import org.apache.hudi.keygen.SimpleKeyGenerator
 import org.apache.log4j.LogManager
@@ -49,6 +51,16 @@ object DataSourceReadOptions {
   val QUERY_TYPE_READ_OPTIMIZED_OPT_VAL = "read_optimized"
   val QUERY_TYPE_INCREMENTAL_OPT_VAL = "incremental"
   val DEFAULT_QUERY_TYPE_OPT_VAL: String = QUERY_TYPE_SNAPSHOT_OPT_VAL
+
+  /**
+   * For Snapshot query on merge on read table. Use this key to define the payload class.
+   */
+  val REALTIME_MERGE_OPT_KEY = "hoodie.datasource.merge.type"
+  val REALTIME_SKIP_MERGE_OPT_VAL = "skip_merge"
+  val REALTIME_PAYLOAD_COMBINE_OPT_VAL = "payload_combine"
+  val DEFAULT_REALTIME_MERGE_OPT_VAL = REALTIME_PAYLOAD_COMBINE_OPT_VAL
+
+  val READ_PATHS_OPT_KEY = "hoodie.datasource.read.paths"
 
   @Deprecated
   val VIEW_TYPE_OPT_KEY = "hoodie.datasource.view.type"
@@ -125,10 +137,11 @@ object DataSourceWriteOptions {
     * Default: upsert()
     */
   val OPERATION_OPT_KEY = "hoodie.datasource.write.operation"
-  val BULK_INSERT_OPERATION_OPT_VAL = "bulk_insert"
-  val INSERT_OPERATION_OPT_VAL = "insert"
-  val UPSERT_OPERATION_OPT_VAL = "upsert"
-  val DELETE_OPERATION_OPT_VAL = "delete"
+  val BULK_INSERT_OPERATION_OPT_VAL = WriteOperationType.BULK_INSERT.value
+  val INSERT_OPERATION_OPT_VAL = WriteOperationType.INSERT.value
+  val UPSERT_OPERATION_OPT_VAL = WriteOperationType.UPSERT.value
+  val DELETE_OPERATION_OPT_VAL = WriteOperationType.DELETE.value
+  val BOOTSTRAP_OPERATION_OPT_VAL = WriteOperationType.BOOTSTRAP.value
   val DEFAULT_OPERATION_OPT_VAL = UPSERT_OPERATION_OPT_VAL
 
   /**
@@ -207,13 +220,21 @@ object DataSourceWriteOptions {
     */
   val HIVE_STYLE_PARTITIONING_OPT_KEY = "hoodie.datasource.write.hive_style_partitioning"
   val DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL = "false"
-
+  val URL_ENCODE_PARTITIONING_OPT_KEY = "hoodie.datasource.write.partitionpath.urlencode"
+  val DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL = "false"
   /**
     * Key generator class, that implements will extract the key out of incoming record
     *
     */
   val KEYGENERATOR_CLASS_OPT_KEY = "hoodie.datasource.write.keygenerator.class"
   val DEFAULT_KEYGENERATOR_CLASS_OPT_VAL = classOf[SimpleKeyGenerator].getName
+
+  /**
+   * When set to true, will perform write operations directly using the spark native `Row` representation.
+   * By default, false (will be enabled as default in a future release)
+   */
+  val ENABLE_ROW_WRITER_OPT_KEY = "hoodie.datasource.write.row.writer.enable"
+  val DEFAULT_ENABLE_ROW_WRITER_OPT_VAL = "false"
 
   /**
     * Option keys beginning with this prefix, are automatically added to the commit/deltacommit metadata.
@@ -250,13 +271,17 @@ object DataSourceWriteOptions {
     */
   val STREAMING_IGNORE_FAILED_BATCH_OPT_KEY = "hoodie.datasource.write.streaming.ignore.failed.batch"
   val DEFAULT_STREAMING_IGNORE_FAILED_BATCH_OPT_VAL = "true"
+  val META_SYNC_CLIENT_TOOL_CLASS = "hoodie.meta.sync.client.tool.class"
+  val DEFAULT_META_SYNC_CLIENT_TOOL_CLASS = classOf[HiveSyncTool].getName
 
   // HIVE SYNC SPECIFIC CONFIGS
   //NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
   // unexpected issues with config getting reset
   val HIVE_SYNC_ENABLED_OPT_KEY = "hoodie.datasource.hive_sync.enable"
+  val META_SYNC_ENABLED_OPT_KEY = "hoodie.datasource.meta.sync.enable"
   val HIVE_DATABASE_OPT_KEY = "hoodie.datasource.hive_sync.database"
   val HIVE_TABLE_OPT_KEY = "hoodie.datasource.hive_sync.table"
+  val HIVE_BASE_FILE_FORMAT_OPT_KEY = "hoodie.datasource.hive_sync.base_file_format"
   val HIVE_USER_OPT_KEY = "hoodie.datasource.hive_sync.username"
   val HIVE_PASS_OPT_KEY = "hoodie.datasource.hive_sync.password"
   val HIVE_URL_OPT_KEY = "hoodie.datasource.hive_sync.jdbcurl"
@@ -265,11 +290,14 @@ object DataSourceWriteOptions {
   val HIVE_ASSUME_DATE_PARTITION_OPT_KEY = "hoodie.datasource.hive_sync.assume_date_partitioning"
   val HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY = "hoodie.datasource.hive_sync.use_pre_apache_input_format"
   val HIVE_USE_JDBC_OPT_KEY = "hoodie.datasource.hive_sync.use_jdbc"
+  val HIVE_SKIP_RO_SUFFIX = "hoodie.datasource.hive_sync.skip_ro_suffix"
 
   // DEFAULT FOR HIVE SPECIFIC CONFIGS
   val DEFAULT_HIVE_SYNC_ENABLED_OPT_VAL = "false"
+  val DEFAULT_META_SYNC_ENABLED_OPT_VAL = "false"
   val DEFAULT_HIVE_DATABASE_OPT_VAL = "default"
   val DEFAULT_HIVE_TABLE_OPT_VAL = "unknown"
+  val DEFAULT_HIVE_BASE_FILE_FORMAT_OPT_VAL = "PARQUET"
   val DEFAULT_HIVE_USER_OPT_VAL = "hive"
   val DEFAULT_HIVE_PASS_OPT_VAL = "hive"
   val DEFAULT_HIVE_URL_OPT_VAL = "jdbc:hive2://localhost:10000"
@@ -278,4 +306,9 @@ object DataSourceWriteOptions {
   val DEFAULT_HIVE_ASSUME_DATE_PARTITION_OPT_VAL = "false"
   val DEFAULT_USE_PRE_APACHE_INPUT_FORMAT_OPT_VAL = "false"
   val DEFAULT_HIVE_USE_JDBC_OPT_VAL = "true"
+  val DEFAULT_HIVE_SKIP_RO_SUFFIX_VAL = "false"
+
+  // Async Compaction - Enabled by default for MOR
+  val ASYNC_COMPACT_ENABLE_OPT_KEY = "hoodie.datasource.compaction.async.enable"
+  val DEFAULT_ASYNC_COMPACT_ENABLE_OPT_VAL = "true"
 }
