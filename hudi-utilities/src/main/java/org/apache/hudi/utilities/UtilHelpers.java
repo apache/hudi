@@ -42,6 +42,8 @@ import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor.Config;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
+import org.apache.hudi.utilities.sources.AvroKafkaSource;
+import org.apache.hudi.utilities.sources.JsonKafkaSource;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
@@ -97,14 +99,15 @@ public class UtilHelpers {
                                     SparkSession sparkSession, SchemaProvider schemaProvider, HoodieDeltaStreamerMetrics metrics) throws IOException {
 
     try {
-      if (metrics == null) {
+      if (JsonKafkaSource.class.getName().equals(sourceClass)
+              || AvroKafkaSource.class.getName().equals(sourceClass)) {
         return (Source) ReflectionUtils.loadClass(sourceClass,
-                new Class<?>[] {TypedProperties.class, JavaSparkContext.class, SparkSession.class,
-                    SchemaProvider.class}, cfg, jssc, sparkSession, schemaProvider);
+                new Class<?>[]{TypedProperties.class, JavaSparkContext.class, SparkSession.class,
+                    SchemaProvider.class, HoodieDeltaStreamerMetrics.class}, cfg, jssc, sparkSession, schemaProvider, metrics);
       }
       return (Source) ReflectionUtils.loadClass(sourceClass,
-          new Class<?>[] {TypedProperties.class, JavaSparkContext.class, SparkSession.class,
-              SchemaProvider.class, HoodieDeltaStreamerMetrics.class}, cfg, jssc, sparkSession, schemaProvider, metrics);
+              new Class<?>[] {TypedProperties.class, JavaSparkContext.class, SparkSession.class,
+                  SchemaProvider.class}, cfg, jssc, sparkSession, schemaProvider);
     } catch (Throwable e) {
       throw new IOException("Could not load source class " + sourceClass, e);
     }
