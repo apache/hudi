@@ -35,7 +35,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Executor which orchestrates concurrent producers and consumers communicating through a bounded in-memory queue. This
@@ -105,7 +104,7 @@ public class BoundedInMemoryExecutor<I, O, E> {
         }
         return true;
       });
-    }).collect(Collectors.toList());
+    });
     return completionService;
   }
 
