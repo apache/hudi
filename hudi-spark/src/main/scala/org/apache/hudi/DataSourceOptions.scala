@@ -109,6 +109,15 @@ object DataSourceReadOptions {
   val END_INSTANTTIME_OPT_KEY = "hoodie.datasource.read.end.instanttime"
 
   /**
+    * If use the end instant schema when incrementally fetched data to.
+    *
+    * Default: false (use latest instant schema)
+    *
+    */
+  val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY = "hoodie.datasource.read.schema.use.end.instanttime"
+  val DEFAULT_INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_VAL = "false"
+
+  /**
     * For use-cases like DeltaStreamer which reads from Hoodie Incremental table and applies opaque map functions,
     * filters appearing late in the sequence of transformations cannot be automatically pushed down.
     * This option allows setting filters directly on Hoodie Source
