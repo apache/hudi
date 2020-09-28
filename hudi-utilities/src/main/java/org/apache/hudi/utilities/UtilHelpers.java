@@ -107,8 +107,8 @@ public class UtilHelpers {
       }
 
       return (Source) ReflectionUtils.loadClass(sourceClass,
-              new Class<?>[] {TypedProperties.class, JavaSparkContext.class, SparkSession.class, SchemaProvider.class}, cfg,
-              jssc, sparkSession, schemaProvider);
+          new Class<?>[] {TypedProperties.class, JavaSparkContext.class, SparkSession.class, SchemaProvider.class}, cfg,
+          jssc, sparkSession, schemaProvider);
     } catch (Throwable e) {
       throw new IOException("Could not load source class " + sourceClass, e);
     }
