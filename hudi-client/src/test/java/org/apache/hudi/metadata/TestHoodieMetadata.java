@@ -519,7 +519,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
   }
 
   /**
-   * Test various error scenarios
+   * Test various error scenarios.
    */
   @Test
   public void testErrorCases() throws Exception {
@@ -570,32 +570,6 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
     }
 
   }
-
-
-/*
-
-    try (HoodieWriteClient client = new HoodieWriteClient<>(jsc, getWriteConfig(true, true))) {
-      // Write 1 (Bulk insert)
-      String newCommitTime = "001";
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
-      client.startCommitWithTime(newCommitTime);
-      List<WriteStatus> writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
-      validateMetadata(client.getConfig());
-
-      // Rollback of inserts
-      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
-      client.startCommitWithTime(newCommitTime);
-      records = dataGen.generateInserts(newCommitTime, 20);
-      writeStatuses = client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
-      assertNoWriteErrors(writeStatuses);
-      validateMetadata(client.getConfig());
-      client.rollback(newCommitTime);
-      validateMetadata(client.getConfig());
-
-
-  }
-*/
-
 
   /**
    * Test various metrics published by metadata table.
