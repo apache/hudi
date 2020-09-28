@@ -949,17 +949,19 @@ public class HoodieMetadataImpl {
     List<String> logFilePaths = latestSlices.get(0).getLogFiles().map(o -> o.getPath().toString())
         .collect(Collectors.toList());
 
-    logRecordScanner =
-        new HoodieMetadataMergedLogRecordScanner(FSUtils.getFs(datasetBasePath, hadoopConf), metadataBasePath,
-            logFilePaths, schema, latestInstantTime, maxMemorySizeInBytes, bufferSize,
-            config.getSpillableMapBasePath(), null);
-
     Option<HoodieInstant> lastInstant = timeline.filterCompletedInstants().lastInstant();
     String latestMetaInstantTimestamp = lastInstant.isPresent() ? lastInstant.get().getTimestamp()
         : SOLO_COMMIT_TIMESTAMP;
     if (!HoodieTimeline.compareTimestamps(latestInstantTime, HoodieTimeline.EQUALS, latestMetaInstantTimestamp)) {
+      // TODO: This can be false positive if the metadata table had a compaction or clean
       LOG.warn("Metadata has more recent instant " + latestMetaInstantTimestamp + " than dataset " + latestInstantTime);
     }
+
+    // TODO: The below code may open the metadata to include incomplete instants on the dataset
+    logRecordScanner =
+        new HoodieMetadataMergedLogRecordScanner(FSUtils.getFs(datasetBasePath, hadoopConf), metadataBasePath,
+            logFilePaths, schema, latestMetaInstantTimestamp, maxMemorySizeInBytes, bufferSize,
+            config.getSpillableMapBasePath(), null);
 
     LOG.info("Opened metadata log files from " + logFilePaths + " at instant " + latestInstantTime
         + "(dataset instant=" + latestInstantTime + ", metadata instant=" + latestMetaInstantTimestamp + ")");

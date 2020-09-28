@@ -535,6 +535,12 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       assertNoWriteErrors(writeStatuses);
       validateMetadata(client.getConfig());
 
+      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      client.startCommitWithTime(newCommitTime);
+      records = dataGen.generateInserts(newCommitTime, 5);
+      writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
+
       // There is no way to simulate failed commit on the main dataset, hence we simply delete the completed
       // instant so that only the inflight is left over.
       String commitInstantFileName = HoodieTimeline.makeCommitFileName(newCommitTime);
@@ -546,10 +552,6 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
     HoodieMetadata.remove(basePath);
 
     try (HoodieWriteClient client = new HoodieWriteClient<>(jsc, getWriteConfig(true, true), true)) {
-      // At this point the metadata table should be empty as we have deleted the completed instant of the
-      // only commit on the table.
-      assertTrue(HoodieMetadata.getAllPartitionPaths(dfs, basePath, false).isEmpty());
-
       // Start the next commit which will rollback the previous one and also should update the metadata table by
       // updating it with HoodieRollbackMetadata.
       String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
