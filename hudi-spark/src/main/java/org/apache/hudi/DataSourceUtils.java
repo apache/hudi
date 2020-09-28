@@ -256,6 +256,8 @@ public class DataSourceUtils {
         DataSourceWriteOptions.DEFAULT_HIVE_USE_JDBC_OPT_VAL()));
     hiveSyncConfig.skipROSuffix = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX(),
         DataSourceWriteOptions.DEFAULT_HIVE_SKIP_RO_SUFFIX_VAL()));
+    hiveSyncConfig.supportTimestamp = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SUPPORT_TIMESTAMP(),
+        DataSourceWriteOptions.DEFAULT_HIVE_SUPPORT_TIMESTAMP()));
     return hiveSyncConfig;
   }
 }
