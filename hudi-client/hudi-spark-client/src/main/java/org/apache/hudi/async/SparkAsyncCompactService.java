@@ -16,16 +16,21 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.function;
+package org.apache.hudi.async;
 
-import java.io.Serializable;
+import org.apache.hudi.client.AbstractCompactor;
+import org.apache.hudi.client.AbstractHoodieWriteClient;
+import org.apache.hudi.client.HoodieSparkCompactor;
+import org.apache.hudi.client.common.HoodieEngineContext;
 
-/**
- * A wrapped {@link java.util.function.Consumer} which can be serialized.
- *
- * @param <I> input type
- */
-@FunctionalInterface
-public interface SerializableConsumer<I> extends Serializable {
-  void accept(I t) throws Exception;
+public class SparkAsyncCompactService extends AsyncCompactService {
+
+  public SparkAsyncCompactService(HoodieEngineContext context, AbstractHoodieWriteClient client) {
+    super(context, client);
+  }
+
+  @Override
+  protected AbstractCompactor createCompactor(AbstractHoodieWriteClient client) {
+    return new HoodieSparkCompactor(client);
+  }
 }

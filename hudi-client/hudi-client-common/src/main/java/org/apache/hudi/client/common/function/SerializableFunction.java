@@ -16,25 +16,17 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.async;
+package org.apache.hudi.client.common.function;
 
-import org.apache.hudi.client.AbstractCompactor;
-import org.apache.hudi.client.AbstractHoodieWriteClient;
-import org.apache.hudi.client.HoodieSparkCompactor;
-import org.apache.hudi.common.HoodieEngineContext;
+import java.io.Serializable;
 
-public class HoodieSparkAsyncCompactService extends AsyncCompactService {
-
-  public HoodieSparkAsyncCompactService(HoodieEngineContext context, AbstractHoodieWriteClient client) {
-    super(context, client);
-  }
-
-  public HoodieSparkAsyncCompactService(HoodieEngineContext context, AbstractHoodieWriteClient client, boolean runInDaemonMode) {
-    super(context, client, runInDaemonMode);
-  }
-
-  @Override
-  protected AbstractCompactor createCompactor(AbstractHoodieWriteClient client) {
-    return new HoodieSparkCompactor(client);
-  }
+/**
+ * A wrapped {@link java.util.function.Function} which can be serialized.
+ *
+ * @param <I> input data type
+ * @param <O> output data type
+ */
+@FunctionalInterface
+public interface SerializableFunction<I, O> extends Serializable {
+  O apply(I v1) throws Exception;
 }

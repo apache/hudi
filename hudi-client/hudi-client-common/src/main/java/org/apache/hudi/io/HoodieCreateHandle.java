@@ -20,7 +20,7 @@ package org.apache.hudi.io;
 
 import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.TaskContextSupplier;
+import org.apache.hudi.client.common.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;

@@ -19,7 +19,7 @@
 package org.apache.hudi.table.action.rollback;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.HoodieEngineContext;
+import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;

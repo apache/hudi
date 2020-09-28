@@ -16,13 +16,13 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common;
+package org.apache.hudi.client.common;
 
-import org.apache.hudi.client.TaskContextSupplier;
 import org.apache.hudi.common.config.SerializableConfiguration;
-import org.apache.hudi.common.function.SerializableConsumer;
-import org.apache.hudi.common.function.SerializableFunction;
-import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.client.common.function.SerializableConsumer;
+import org.apache.hudi.client.common.function.SerializableFunction;
+import org.apache.hudi.client.common.function.SerializablePairFunction;
+import org.apache.hudi.common.util.Option;
 
 import java.util.List;
 import java.util.Map;
@@ -33,6 +33,7 @@ import java.util.stream.Stream;
  * engine implementation if needed.
  */
 public abstract class HoodieEngineContext {
+
   /**
    * A wrapped hadoop configuration which can be serialized.
    */
@@ -61,7 +62,10 @@ public abstract class HoodieEngineContext {
 
   public abstract <I, K, V> Map<K, V> mapToPair(List<I> data, SerializablePairFunction<I, K, V> func, Integer parallelism);
 
-  public abstract void setLocalProperty(String key, String value);
+  public abstract void setProperty(EngineProperty key, String value);
 
-  public abstract void setJobGroup(String groupId, String description);
+  public abstract Option<String> getProperty(EngineProperty key);
+
+  public abstract void setJobStatus(String activeModule, String activityDescription);
+
 }

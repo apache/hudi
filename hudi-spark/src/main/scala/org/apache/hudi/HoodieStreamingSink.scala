@@ -21,7 +21,7 @@ import java.util.function.{Function, Supplier}
 
 import org.apache.hudi.async.{AsyncCompactService, SparkStreamingAsyncCompactService}
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.HoodieSparkEngineContext
+import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.HoodieRecordPayload
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State

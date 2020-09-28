@@ -21,7 +21,7 @@ package org.apache.hudi.internal;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;

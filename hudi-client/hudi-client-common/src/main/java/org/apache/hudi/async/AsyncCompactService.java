@@ -19,7 +19,8 @@ package org.apache.hudi.async;
 
 import org.apache.hudi.client.AbstractCompactor;
 import org.apache.hudi.client.AbstractHoodieWriteClient;
-import org.apache.hudi.common.HoodieEngineContext;
+import org.apache.hudi.client.common.EngineProperty;
+import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
@@ -129,8 +130,8 @@ public abstract class AsyncCompactService extends AbstractAsyncService {
     return Pair.of(CompletableFuture.allOf(IntStream.range(0, maxConcurrentCompaction).mapToObj(i -> CompletableFuture.supplyAsync(() -> {
       try {
         // Set Compactor Pool Name for allowing users to prioritize compaction
-        LOG.info("Setting Spark Pool name for compaction to " + COMPACT_POOL_NAME);
-        context.setLocalProperty("spark.scheduler.pool", COMPACT_POOL_NAME);
+        LOG.info("Setting pool name for compaction to " + COMPACT_POOL_NAME);
+        context.setProperty(EngineProperty.COMPACTION_POOL_NAME, COMPACT_POOL_NAME);
 
         while (!isShutdownRequested()) {
           final HoodieInstant instant = fetchNextCompactionInstant();

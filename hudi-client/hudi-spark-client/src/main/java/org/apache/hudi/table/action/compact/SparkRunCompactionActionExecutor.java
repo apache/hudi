@@ -20,8 +20,8 @@ package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.utils.SparkConfigUtils;
-import org.apache.hudi.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.utils.SparkMemoryUtils;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -75,7 +75,7 @@ public class SparkRunCompactionActionExecutor<T extends HoodieRecordPayload> ext
       HoodieSparkMergeOnReadTableCompactor compactor = new HoodieSparkMergeOnReadTableCompactor();
       JavaRDD<WriteStatus> statuses = compactor.compact(context, compactionPlan, table, config, instantTime);
 
-      statuses.persist(SparkConfigUtils.getWriteStatusStorageLevel(config.getProps()));
+      statuses.persist(SparkMemoryUtils.getWriteStatusStorageLevel(config.getProps()));
       List<HoodieWriteStat> updateStatusMap = statuses.map(WriteStatus::getStat).collect();
       HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);
       for (HoodieWriteStat stat : updateStatusMap) {

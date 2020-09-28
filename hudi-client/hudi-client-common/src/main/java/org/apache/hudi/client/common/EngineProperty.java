@@ -16,17 +16,18 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.function;
-
-import java.io.Serializable;
+package org.apache.hudi.client.common;
 
 /**
- * A wrapped {@link java.util.function.Function} which can be serialized.
- *
- * @param <I> input data type
- * @param <O> output data type
+ * Properties specific to each engine, that can be set/obtained from.
  */
-@FunctionalInterface
-public interface SerializableFunction<I, O> extends Serializable {
-  O apply(I v1) throws Exception;
+public enum EngineProperty {
+  // hostname to bind embedded timeline server to
+  EMBEDDED_SERVER_HOST,
+  // Pool/queue to use to run compaction.
+  COMPACTION_POOL_NAME,
+  // Amount of total memory available to each engine executor
+  TOTAL_MEMORY_AVAILABLE,
+  // Fraction of that memory, that is already in use by the engine
+  MEMORY_FRACTION_IN_USE,
 }

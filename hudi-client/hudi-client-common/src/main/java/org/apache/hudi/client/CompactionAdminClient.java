@@ -22,7 +22,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.common.HoodieEngineContext;
+import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
@@ -85,7 +85,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
     if (plan.getOperations() != null) {
       List<CompactionOperation> ops = plan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());
-      context.setJobGroup(this.getClass().getSimpleName(), "Validate compaction operations");
+      context.setJobStatus(this.getClass().getSimpleName(), "Validate compaction operations");
       return context.map(ops, op -> {
         try {
           return validateCompactionOperation(metaClient, compactionInstant, op, Option.of(fsView));
@@ -351,7 +351,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
     } else {
       LOG.info("The following compaction renaming operations needs to be performed to un-schedule");
       if (!dryRun) {
-        context.setJobGroup(this.getClass().getSimpleName(), "Execute unschedule operations");
+        context.setJobStatus(this.getClass().getSimpleName(), "Execute unschedule operations");
         return context.map(renameActions, lfPair -> {
           try {
             LOG.info("RENAME " + lfPair.getLeft().getPath() + " => " + lfPair.getRight().getPath());
@@ -394,7 +394,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
           "Number of Compaction Operations :" + plan.getOperations().size() + " for instant :" + compactionInstant);
       List<CompactionOperation> ops = plan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());
-      context.setJobGroup(this.getClass().getSimpleName(), "Generate compaction unscheduling operations");
+      context.setJobStatus(this.getClass().getSimpleName(), "Generate compaction unscheduling operations");
       return context.flatMap(ops, op -> {
         try {
           return getRenamingActionsForUnschedulingCompactionOperation(metaClient, compactionInstant, op,

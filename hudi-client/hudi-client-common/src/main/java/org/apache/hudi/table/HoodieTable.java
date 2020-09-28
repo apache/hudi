@@ -28,8 +28,8 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
-import org.apache.hudi.client.TaskContextSupplier;
-import org.apache.hudi.common.HoodieEngineContext;
+import org.apache.hudi.client.common.TaskContextSupplier;
+import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
@@ -461,7 +461,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O, P> imp
         }
 
         // Now delete partially written files
-        context.setJobGroup(this.getClass().getSimpleName(), "Delete all partially written files");
+        context.setJobStatus(this.getClass().getSimpleName(), "Delete all partially written files");
         deleteInvalidFilesByPartitions(context, invalidPathsByPartition);
 
         // Now ensure the deleted files disappear
@@ -484,7 +484,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O, P> imp
    */
   private void waitForAllFiles(HoodieEngineContext context, Map<String, List<Pair<String, String>>> groupByPartition, FileVisibility visibility) {
     // This will either ensure all files to be deleted are present.
-    context.setJobGroup(this.getClass().getSimpleName(), "Wait for all files to appear/disappear");
+    context.setJobStatus(this.getClass().getSimpleName(), "Wait for all files to appear/disappear");
     boolean checkPassed =
         context.map(new ArrayList<>(groupByPartition.entrySet()), partitionWithFileList -> waitForCondition(partitionWithFileList.getKey(),
             partitionWithFileList.getValue().stream(), visibility), config.getFinalizeWriteParallelism())

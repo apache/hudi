@@ -1105,11 +1105,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @Test
   public void testMetadataStatsOnCommit() throws Exception {
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
-
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
-
-    String instantTime = "000";
-    client.startCommitWithTime(instantTime);
 
     String instantTime0 = "000";
     client.startCommitWithTime(instantTime0);

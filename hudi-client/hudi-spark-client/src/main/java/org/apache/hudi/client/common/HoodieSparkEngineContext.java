@@ -16,13 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common;
+package org.apache.hudi.client.common;
 
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.config.SerializableConfiguration;
-import org.apache.hudi.common.function.SerializableConsumer;
-import org.apache.hudi.common.function.SerializableFunction;
-import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.client.common.function.SerializableConsumer;
+import org.apache.hudi.client.common.function.SerializableFunction;
+import org.apache.hudi.client.common.function.SerializablePairFunction;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
+
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 
@@ -35,8 +38,8 @@ import java.util.stream.Stream;
  * A Spark engine implementation of HoodieEngineContext.
  */
 public class HoodieSparkEngineContext extends HoodieEngineContext {
-  private JavaSparkContext javaSparkContext;
 
+  private final JavaSparkContext javaSparkContext;
   private SQLContext sqlContext;
 
   public HoodieSparkEngineContext(JavaSparkContext jsc) {
@@ -86,12 +89,24 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   }
 
   @Override
-  public void setLocalProperty(String key, String value) {
-    javaSparkContext.setLocalProperty(key, value);
+  public void setProperty(EngineProperty key, String value) {
+    if (key == EngineProperty.COMPACTION_POOL_NAME) {
+      javaSparkContext.setLocalProperty("spark.scheduler.pool", value);
+    } else {
+      throw new HoodieException("Unknown engine property :" + key);
+    }
   }
 
   @Override
-  public void setJobGroup(String groupId, String description) {
-    javaSparkContext.setJobGroup(groupId, description);
+  public Option<String> getProperty(EngineProperty key) {
+    if (key == EngineProperty.EMBEDDED_SERVER_HOST) {
+      return Option.ofNullable(javaSparkContext.getConf().get("spark.driver.host", null));
+    }
+    throw new HoodieException("Unknown engine property :" + key);
+  }
+
+  @Override
+  public void setJobStatus(String activeModule, String activityDescription) {
+    javaSparkContext.setJobGroup(activeModule, activityDescription);
   }
 }

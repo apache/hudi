@@ -19,7 +19,7 @@
 package org.apache.hudi.execution;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.TaskContextSupplier;
+import org.apache.hudi.client.common.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;

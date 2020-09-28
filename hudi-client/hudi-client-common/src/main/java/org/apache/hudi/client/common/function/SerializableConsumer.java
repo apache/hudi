@@ -16,22 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.upgrade;
+package org.apache.hudi.client.common.function;
 
-import org.apache.hudi.client.common.HoodieEngineContext;
-import org.apache.hudi.config.HoodieWriteConfig;
+import java.io.Serializable;
 
 /**
- * Interface to assist in downgrading Hoodie table.
+ * A wrapped {@link java.util.function.Consumer} which can be serialized.
+ *
+ * @param <I> input type
  */
-public interface DowngradeHandler {
-
-  /**
-   * to be invoked to downgrade hoodie table from one version to a lower version.
-   *
-   * @param config instance of {@link HoodieWriteConfig} to be used.
-   * @param context instance of {@link HoodieEngineContext} to be used.
-   * @param instantTime current instant time that should not touched.
-   */
-  void downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime);
+@FunctionalInterface
+public interface SerializableConsumer<I> extends Serializable {
+  void accept(I t) throws Exception;
 }

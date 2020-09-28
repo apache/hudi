@@ -19,8 +19,8 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.TaskContextSupplier;
-import org.apache.hudi.common.HoodieEngineContext;
+import org.apache.hudi.client.common.TaskContextSupplier;
+import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;

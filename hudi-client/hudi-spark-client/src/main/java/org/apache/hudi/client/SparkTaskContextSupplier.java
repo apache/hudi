@@ -18,7 +18,14 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.client.common.EngineProperty;
+import org.apache.hudi.client.common.TaskContextSupplier;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
+
+import org.apache.spark.SparkEnv;
 import org.apache.spark.TaskContext;
+import org.apache.spark.util.Utils;
 
 import java.io.Serializable;
 import java.util.function.Supplier;
@@ -41,5 +48,37 @@ public class SparkTaskContextSupplier extends TaskContextSupplier implements Ser
   @Override
   public Supplier<Long> getAttemptIdSupplier() {
     return () -> TaskContext.get().taskAttemptId();
+  }
+
+  @Override
+  public Option<String> getProperty(EngineProperty prop) {
+    if (prop == EngineProperty.TOTAL_MEMORY_AVAILABLE) {
+      // This is hard-coded in spark code {@link
+      // https://github.com/apache/spark/blob/576c43fb4226e4efa12189b41c3bc862019862c6/core/src/main/scala/org/apache/
+      // spark/SparkContext.scala#L471} so have to re-define this here
+      final String DEFAULT_SPARK_EXECUTOR_MEMORY_MB = "1024"; // in MB
+      final String SPARK_EXECUTOR_MEMORY_PROP = "spark.executor.memory";
+      if (SparkEnv.get() != null) {
+        // 1 GB is the default conf used by Spark, look at SparkContext.scala
+        return Option.ofNullable(String.valueOf(Utils.memoryStringToMb(SparkEnv.get().conf()
+            .get(SPARK_EXECUTOR_MEMORY_PROP, DEFAULT_SPARK_EXECUTOR_MEMORY_MB)) * 1024 * 1024L));
+      }
+      return Option.empty();
+    } else if (prop == EngineProperty.MEMORY_FRACTION_IN_USE) {
+      // This is hard-coded in spark code {@link
+      // https://github.com/apache/spark/blob/576c43fb4226e4efa12189b41c3bc862019862c6/core/src/main/scala/org/apache/
+      // spark/memory/UnifiedMemoryManager.scala#L231} so have to re-define this here
+      final String DEFAULT_SPARK_EXECUTOR_MEMORY_FRACTION = "0.6";
+      final String SPARK_EXECUTOR_MEMORY_FRACTION_PROP = "spark.memory.fraction";
+      if (SparkEnv.get() != null) {
+        // 0.6 is the default value used by Spark,
+        // look at {@link
+        // https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/SparkConf.scala#L507}
+        return Option.ofNullable(SparkEnv.get().conf()
+            .get(SPARK_EXECUTOR_MEMORY_FRACTION_PROP, DEFAULT_SPARK_EXECUTOR_MEMORY_FRACTION));
+      }
+      return Option.empty();
+    }
+    throw new HoodieException("Unknown engine property :" + prop);
   }
 }

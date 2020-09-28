@@ -19,13 +19,16 @@
 package org.apache.hudi.client;
 
 import org.apache.hadoop.conf.Configuration;
+
+import org.apache.hudi.client.common.EngineProperty;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
-import org.apache.hudi.client.utils.ClientUtils;
-import org.apache.hudi.common.HoodieEngineContext;
+import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
@@ -99,7 +102,11 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
       if (!timelineServer.isPresent()) {
         // Run Embedded Timeline Server
         LOG.info("Starting Timeline service !!");
-        timelineServer = Option.of(new EmbeddedTimelineService(context, config.getEmbeddedServerHost(),
+        Option<String> hostAddr = context.getProperty(EngineProperty.EMBEDDED_SERVER_HOST);
+        if (!hostAddr.isPresent()) {
+          throw new HoodieException("Unable to find host address to bind timeline server to.");
+        }
+        timelineServer = Option.of(new EmbeddedTimelineService(context, hostAddr.get(),
             config.getClientSpecifiedViewStorageConfig()));
         try {
           timelineServer.get().startServer();
@@ -122,6 +129,8 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
   }
 
   protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
-    return ClientUtils.createMetaClient(hadoopConf, config, loadActiveTimelineOnLoad);
+    return new HoodieTableMetaClient(hadoopConf, config.getBasePath(), loadActiveTimelineOnLoad,
+        config.getConsistencyGuardConfig(),
+        Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())));
   }
 }

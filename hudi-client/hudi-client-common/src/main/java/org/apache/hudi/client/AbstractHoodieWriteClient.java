@@ -28,7 +28,7 @@ import org.apache.hudi.callback.HoodieWriteCommitCallback;
 import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.callback.util.HoodieCommitCallbackFactory;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
-import org.apache.hudi.common.HoodieEngineContext;
+import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -41,6 +41,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -51,6 +52,8 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.HoodieTimelineArchiveLog;
+import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.savepoint.SavepointHelpers;
 import org.apache.log4j.LogManager;
@@ -76,6 +79,7 @@ import java.util.stream.Collectors;
  * @param <P> Type of record position [Key, Option[partitionPath, fileID]] in hoodie table
  */
 public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I, K, O, P> extends AbstractHoodieClient {
+
   protected static final String LOOKUP_STR = "lookup";
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(AbstractHoodieWriteClient.class);
@@ -83,21 +87,13 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   protected final transient HoodieMetrics metrics;
   private final transient HoodieIndex<T, I, K, O, P> index;
 
-  protected transient Timer.Context writeContext = null;
+  protected transient Timer.Context writeTimer = null;
+  protected transient Timer.Context compactionTimer;
+
   private transient WriteOperationType operationType;
   private transient HoodieWriteCommitCallback commitCallback;
-
   protected final boolean rollbackPending;
-  protected transient Timer.Context compactionTimer;
   protected transient AsyncCleanerService asyncCleanerService;
-
-  public void setOperationType(WriteOperationType operationType) {
-    this.operationType = operationType;
-  }
-
-  public WriteOperationType getOperationType() {
-    return this.operationType;
-  }
 
   /**
    * Create a write client, without cleaning up failed/inflight commits.
@@ -137,6 +133,14 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   }
 
   protected abstract HoodieIndex<T, I, K, O, P> createIndex(HoodieWriteConfig writeConfig);
+
+  public void setOperationType(WriteOperationType operationType) {
+    this.operationType = operationType;
+  }
+
+  public WriteOperationType getOperationType() {
+    return this.operationType;
+  }
 
   /**
    * Commit changes performed at the given instantTime marker.
@@ -200,11 +204,11 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   void emitCommitMetrics(String instantTime, HoodieCommitMetadata metadata, String actionType) {
     try {
 
-      if (writeContext != null) {
-        long durationInMs = metrics.getDurationInMs(writeContext.stop());
+      if (writeTimer != null) {
+        long durationInMs = metrics.getDurationInMs(writeTimer.stop());
         metrics.updateCommitMetrics(HoodieActiveTimeline.COMMIT_FORMATTER.parse(instantTime).getTime(), durationInMs,
             metadata, actionType);
-        writeContext = null;
+        writeTimer = null;
       }
     } catch (ParseException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime
@@ -372,7 +376,28 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * @param instantTime   Instant Time
    * @param extraMetadata Additional Metadata passed by user
    */
-  protected abstract void postCommit(HoodieTable<T, I, K, O, P> table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata);
+  protected void postCommit(HoodieTable<T, I, K, O, P> table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata) {
+    try {
+
+      // Delete the marker directory for the instant.
+      new MarkerFiles(table, instantTime).quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+
+      // Do an inline compaction if enabled
+      if (config.isInlineCompaction()) {
+        runAnyPendingCompactions(table);
+        metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "true");
+        inlineCompact(extraMetadata);
+      } else {
+        metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "false");
+      }
+      // We cannot have unbounded commit files. Archive commits if we have to archive
+      HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);
+      archiveLog.archiveIfRequired(context);
+      autoCleanOnCommit(instantTime);
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
+  }
 
   protected void runAnyPendingCompactions(HoodieTable<T, I, K, O, P> table) {
     table.getActiveTimeline().getCommitsAndCompactionTimeline().filterPendingCompactionTimeline().getInstants()
@@ -648,8 +673,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   /**
    * Commit Compaction and track metrics.
    */
-  protected abstract void completeCompaction(HoodieCommitMetadata metadata, O writeStatuses, HoodieTable<T, I, K, O, P> table,
-                                             String compactionCommitTime);
+  protected abstract void completeCompaction(HoodieCommitMetadata metadata, O writeStatuses,
+                                             HoodieTable<T, I, K, O, P> table, String compactionCommitTime);
 
 
   /**
@@ -769,14 +794,14 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
 
   @Override
   public void close() {
+    // release AsyncCleanerService
+    AsyncCleanerService.forceShutdown(asyncCleanerService);
+    asyncCleanerService = null;
+
     // Stop timeline-server if running
     super.close();
     // Calling this here releases any resources used by your index, so make sure to finish any related operations
     // before this point
     this.index.close();
-
-    // release AsyncCleanerService
-    AsyncCleanerService.forceShutdown(asyncCleanerService);
-    asyncCleanerService = null;
   }
 }

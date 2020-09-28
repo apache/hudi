@@ -18,7 +18,7 @@
 
 package org.apache.hudi.index;
 
-import org.apache.hudi.common.HoodieEngineContext;
+import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -48,7 +48,7 @@ public class HoodieIndexUtils {
   public static List<Pair<String, HoodieBaseFile>> getLatestBaseFilesForAllPartitions(final List<String> partitions,
                                                                                       final HoodieEngineContext context,
                                                                                       final HoodieTable hoodieTable) {
-    context.setJobGroup(HoodieIndexUtils.class.getSimpleName(), "Load latest base files from all partitions");
+    context.setJobStatus(HoodieIndexUtils.class.getSimpleName(), "Load latest base files from all partitions");
     return context.flatMap(partitions, partitionPath -> {
       Option<HoodieInstant> latestCommitTime = hoodieTable.getMetaClient().getCommitsTimeline()
           .filterCompletedInstants().lastInstant();

@@ -16,11 +16,12 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.util;
+package org.apache.hudi.io;
 
-import org.apache.hudi.client.utils.SparkConfigUtils;
+import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -30,9 +31,11 @@ import static org.apache.hudi.config.HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_
 import static org.apache.hudi.config.HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_MERGE_PROP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestSparkConfigUtils {
+public class TestSparkIOUtils {
   @TempDir
   public java.nio.file.Path basePath;
+
+  private final SparkTaskContextSupplier contextSupplier = new SparkTaskContextSupplier();
 
   @Test
   public void testMaxMemoryPerPartitionMergeWithMaxSizeDefined() {
@@ -44,8 +47,8 @@ public class TestSparkConfigUtils {
     HoodieMemoryConfig memoryConfig = HoodieMemoryConfig.newBuilder().withMaxMemoryMaxSize(mergeMaxSize, compactionMaxSize).build();
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(path).withMemoryConfig(memoryConfig).build();
 
-    assertEquals(mergeMaxSize, SparkConfigUtils.getMaxMemoryPerPartitionMerge(config.getProps()));
-    assertEquals(compactionMaxSize, SparkConfigUtils.getMaxMemoryPerCompaction(config.getProps()));
+    assertEquals(mergeMaxSize, IOUtils.getMaxMemoryPerPartitionMerge(contextSupplier, config.getProps()));
+    assertEquals(compactionMaxSize, IOUtils.getMaxMemoryPerCompaction(contextSupplier, config.getProps()));
   }
 
   @Test
@@ -55,12 +58,12 @@ public class TestSparkConfigUtils {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(path).build();
 
     String compactionFraction = config.getProps().getProperty(MAX_MEMORY_FRACTION_FOR_COMPACTION_PROP, DEFAULT_MAX_MEMORY_FRACTION_FOR_COMPACTION);
-    long compactionMaxSize = SparkConfigUtils.getMaxMemoryAllowedForMerge(compactionFraction);
+    long compactionMaxSize = IOUtils.getMaxMemoryAllowedForMerge(contextSupplier, compactionFraction);
 
     String mergeFraction = config.getProps().getProperty(MAX_MEMORY_FRACTION_FOR_MERGE_PROP, DEFAULT_MAX_MEMORY_FRACTION_FOR_MERGE);
-    long mergeMaxSize = SparkConfigUtils.getMaxMemoryAllowedForMerge(mergeFraction);
+    long mergeMaxSize = IOUtils.getMaxMemoryAllowedForMerge(contextSupplier, mergeFraction);
 
-    assertEquals(mergeMaxSize, SparkConfigUtils.getMaxMemoryPerPartitionMerge(config.getProps()));
-    assertEquals(compactionMaxSize, SparkConfigUtils.getMaxMemoryPerCompaction(config.getProps()));
+    assertEquals(mergeMaxSize, IOUtils.getMaxMemoryPerPartitionMerge(contextSupplier, config.getProps()));
+    assertEquals(compactionMaxSize, IOUtils.getMaxMemoryPerCompaction(contextSupplier, config.getProps()));
   }
 }

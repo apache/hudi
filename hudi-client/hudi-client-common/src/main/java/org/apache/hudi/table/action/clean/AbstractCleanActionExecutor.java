@@ -25,7 +25,7 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.common.HoodieCleanStat;
-import org.apache.hudi.common.HoodieEngineContext;
+import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -79,7 +79,7 @@ public abstract class AbstractCleanActionExecutor<T extends HoodieRecordPayload,
       int cleanerParallelism = Math.min(partitionsToClean.size(), config.getCleanerParallelism());
       LOG.info("Using cleanerParallelism: " + cleanerParallelism);
 
-      context.setJobGroup(this.getClass().getSimpleName(), "Generates list of file slices to be cleaned");
+      context.setJobStatus(this.getClass().getSimpleName(), "Generates list of file slices to be cleaned");
 
       Map<String, List<HoodieCleanFileInfo>> cleanOps = context
           .map(partitionsToClean, partitionPathToClean -> Pair.of(partitionPathToClean, planner.getDeletePaths(partitionPathToClean)), cleanerParallelism)

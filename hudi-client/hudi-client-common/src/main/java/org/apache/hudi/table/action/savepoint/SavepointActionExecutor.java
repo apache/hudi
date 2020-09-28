@@ -20,7 +20,7 @@ package org.apache.hudi.table.action.savepoint;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
-import org.apache.hudi.common.HoodieEngineContext;
+import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -88,7 +88,7 @@ public class SavepointActionExecutor<T extends HoodieRecordPayload, I, K, O, P> 
       ValidationUtils.checkArgument(HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.GREATER_THAN_OR_EQUALS, lastCommitRetained),
           "Could not savepoint commit " + instantTime + " as this is beyond the lookup window " + lastCommitRetained);
 
-      context.setJobGroup(this.getClass().getSimpleName(), "Collecting latest files for savepoint " + instantTime);
+      context.setJobStatus(this.getClass().getSimpleName(), "Collecting latest files for savepoint " + instantTime);
       Map<String, List<String>> latestFilesMap = context.mapToPair(FSUtils.getAllPartitionPaths(table.getMetaClient().getFs(),
           table.getMetaClient().getBasePath(), config.shouldAssumeDatePartitioning()), partitionPath -> {
             // Scan all partitions files with this commit time

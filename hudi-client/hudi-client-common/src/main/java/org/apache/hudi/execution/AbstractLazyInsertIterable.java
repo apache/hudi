@@ -20,7 +20,7 @@ package org.apache.hudi.execution;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.LazyIterableIterator;
-import org.apache.hudi.client.TaskContextSupplier;
+import org.apache.hudi.client.common.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
@@ -49,15 +49,6 @@ public abstract class AbstractLazyInsertIterable<T extends HoodieRecordPayload>
   protected final String idPrefix;
   protected TaskContextSupplier taskContextSupplier;
   protected WriteHandleFactory writeHandleFactory;
-
-  public AbstractLazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr,
-                                    HoodieWriteConfig config,
-                                    String instantTime,
-                                    HoodieTable hoodieTable,
-                                    String idPrefix,
-                                    TaskContextSupplier taskContextSupplier) {
-    this(sortedRecordItr, true, config, instantTime, hoodieTable, idPrefix, taskContextSupplier);
-  }
 
   public AbstractLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
                                     boolean areRecordsSorted,

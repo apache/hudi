@@ -16,19 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client;
+package org.apache.hudi.client.common.function;
+
+import scala.Tuple2;
 
 import java.io.Serializable;
-import java.util.function.Supplier;
 
 /**
- * Base task context supplier.
+ * A function that returns key-value pairs (Tuple2&lt;K, V&gt;).
  */
-public abstract class TaskContextSupplier implements Serializable {
-
-  public abstract Supplier<Integer> getPartitionIdSupplier();
-
-  public abstract Supplier<Integer> getStageIdSupplier();
-
-  public abstract Supplier<Long> getAttemptIdSupplier();
+@FunctionalInterface
+public interface SerializablePairFunction<I, K, V> extends Serializable {
+  Tuple2<K, V> call(I t) throws Exception;
 }

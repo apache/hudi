@@ -20,7 +20,7 @@ package org.apache.hudi.execution;
 
 import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.TaskContextSupplier;
+import org.apache.hudi.client.common.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
@@ -33,15 +33,6 @@ import java.util.Iterator;
 import java.util.List;
 
 public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends AbstractLazyInsertIterable<T> {
-
-  public SparkLazyInsertIterable(Iterator<HoodieRecord<T>> sortedRecordItr,
-                                 HoodieWriteConfig config,
-                                 String instantTime,
-                                 HoodieTable hoodieTable,
-                                 String idPrefix,
-                                 TaskContextSupplier taskContextSupplier) {
-    super(sortedRecordItr, config, instantTime, hoodieTable, idPrefix, taskContextSupplier);
-  }
 
   public SparkLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
                                  boolean areRecordsSorted,

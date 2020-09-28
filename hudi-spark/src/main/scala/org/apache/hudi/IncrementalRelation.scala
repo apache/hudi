@@ -30,7 +30,7 @@ import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hadoop.fs.GlobPattern
-import org.apache.hudi.common.HoodieSparkEngineContext
+import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
