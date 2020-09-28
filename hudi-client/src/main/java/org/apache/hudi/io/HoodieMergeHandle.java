@@ -197,7 +197,6 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       } else {
         recordsDeleted++;
       }
-
       writeStatus.markSuccess(hoodieRecord, recordMetadata);
       // deflate record payload after recording success. This will help users access payload as a
       // part of marking
@@ -253,6 +252,10 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieWrit
       } catch (IOException e) {
         LOG.error("Failed to merge old record into new file for key " + key + " from old file " + getOldFilePath()
             + " to new file " + newFilePath, e);
+        throw new HoodieUpsertException(errMsg, e);
+      } catch (RuntimeException e) {
+        LOG.error("Summary is " + e.getMessage() + ", detail is schema mismatch when rewriting old record " + oldRecord + " from file " + getOldFilePath()
+            + " to file " + newFilePath + " with writerSchema " + writerSchemaWithMetafields.toString(true));
         throw new HoodieUpsertException(errMsg, e);
       }
       recordsWritten++;
