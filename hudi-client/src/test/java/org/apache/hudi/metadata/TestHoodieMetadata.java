@@ -458,7 +458,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
    */
   @Test
   public void testArchivingAndCompaction() throws Exception {
-    init(HoodieTableType.MERGE_ON_READ);
+    init(HoodieTableType.COPY_ON_WRITE);
 
     final int maxDeltaCommitsBeforeCompaction = 6;
     HoodieWriteConfig config = getWriteConfigBuilder(true, true, false)

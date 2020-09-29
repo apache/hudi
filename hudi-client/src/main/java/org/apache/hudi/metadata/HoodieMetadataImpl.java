@@ -173,6 +173,7 @@ public class HoodieMetadataImpl {
     if (readOnly) {
       this.config = null;
       metaClient = new HoodieTableMetaClient(hadoopConf, metadataBasePath);
+      this.metrics = new HoodieMetrics(HoodieWriteConfig.newBuilder().withPath(datasetBasePath).build(), "");
     } else {
       this.config = createMetadataWriteConfig(writeConfig, schemaStr);
       this.metrics = new HoodieMetrics(this.config, this.config.getTableName());
@@ -476,7 +477,7 @@ public class HoodieMetadataImpl {
    * @param datasetMetaClient {@code HoodieTableMetaClient} for the dataset
    */
   public List<HoodieInstant> findInstantsToSync(HoodieTableMetaClient datasetMetaClient) {
-    HoodieTimeline metaTimeline = metaClient.reloadActiveTimeline();
+    HoodieActiveTimeline metaTimeline = metaClient.reloadActiveTimeline();
 
     // All instants since the last time metadata table was compacted are candidates for sync
     Option<String> compactionTimestamp = getLatestCompactionTimestamp();
@@ -485,16 +486,14 @@ public class HoodieMetadataImpl {
     // the metadata table was created. We should not sync any instants before that creation time.
     Option<HoodieInstant> oldestMetaInstant = Option.empty();
     if (!compactionTimestamp.isPresent()) {
-      oldestMetaInstant = Option.fromJavaOptional(metaTimeline.getInstants()
-          .filter(i -> i.isCompleted() && i.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION))
-          .findFirst());
+      oldestMetaInstant = metaTimeline.getDeltaCommitTimeline().filterCompletedInstants().firstInstant();
       if (oldestMetaInstant.isPresent()) {
         // TODO: Ensure this is the instant at which we created the metadata table
       }
     }
 
     String metaSyncTimestamp = compactionTimestamp.isPresent() ? compactionTimestamp.get()
-        : oldestMetaInstant.isPresent() ? oldestMetaInstant.get().getTimestamp() : "";
+        : oldestMetaInstant.isPresent() ? oldestMetaInstant.get().getTimestamp() : SOLO_COMMIT_TIMESTAMP;
 
     // Metadata table is updated when an instant is completed except for the following:
     //  CLEAN: metadata table is updated during inflight. So for CLEAN we accept inflight actions.
@@ -507,11 +506,8 @@ public class HoodieMetadataImpl {
 
     // Each operation on dataset leads to a delta-commit on the metadata MOR table. So find only delta-commit
     // instants in metadata table which are after the last compaction.
-    Map<String, HoodieInstant> metadataInstantMap = metaTimeline.getInstants()
-        .filter(i -> i.isCompleted() && i.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)
-            && (metaSyncTimestamp.isEmpty() || HoodieTimeline.compareTimestamps(i.getTimestamp(),
-                HoodieTimeline.GREATER_THAN_OR_EQUALS,
-                metaSyncTimestamp)))
+    Map<String, HoodieInstant> metadataInstantMap = metaTimeline.getDeltaCommitTimeline().filterCompletedInstants()
+        .findInstantsAfterOrEquals(metaSyncTimestamp, Integer.MAX_VALUE).getInstants()
         .collect(Collectors.toMap(HoodieInstant::getTimestamp, Function.identity()));
 
     List<HoodieInstant> instantsToSync = new LinkedList<>();
@@ -932,8 +928,7 @@ public class HoodieMetadataImpl {
     // Find the latest file slice
     HoodieTimeline timeline = metaClient.reloadActiveTimeline();
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline());
-    List<FileSlice> latestSlices = fsView.getLatestFileSlicesBeforeOrOn(METADATA_PARTITION_NAME, latestInstantTime, false)
-        .collect(Collectors.toList());
+    List<FileSlice> latestSlices = fsView.getLatestFileSlices(METADATA_PARTITION_NAME).collect(Collectors.toList());
     ValidationUtils.checkArgument(latestSlices.size() == 1);
 
     // If the base file is present then create a reader

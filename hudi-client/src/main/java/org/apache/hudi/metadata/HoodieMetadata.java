@@ -222,7 +222,7 @@ public class HoodieMetadata {
         return instances.get(basePath).getAllPartitionPaths();
       }
     } catch (Exception e) {
-      LOG.error("Failed to retrive all partition paths from metadata: " + e);
+      LOG.error("Failed to retrive all partition paths from metadata: " + e.getMessage(), e);
     }
 
     return FSUtils.getAllPartitionPaths(fs, basePath, assumeDatePartitioning);
@@ -246,7 +246,7 @@ public class HoodieMetadata {
         return instances.get(basePath).getAllFilesInPartition(partitionPath);
       }
     } catch (Exception e) {
-      LOG.error("Failed to retrive partition file listing from metadata: " + e);
+      LOG.error("Failed to retrive partition file listing from metadata: " + e.getMessage(), e);
     }
 
     return FSUtils.getFs(partitionPath.toString(), hadoopConf).listStatus(partitionPath);
