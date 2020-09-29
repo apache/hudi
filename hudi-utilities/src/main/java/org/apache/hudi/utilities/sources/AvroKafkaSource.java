@@ -49,7 +49,7 @@ public class AvroKafkaSource extends AvroSource {
   private final HoodieDeltaStreamerMetrics metrics;
 
   public AvroKafkaSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
-      SchemaProvider schemaProvider,  HoodieDeltaStreamerMetrics metrics) {
+      SchemaProvider schemaProvider, HoodieDeltaStreamerMetrics metrics) {
     super(props, sparkContext, sparkSession, schemaProvider);
     this.metrics = metrics;
     props.put("key.deserializer", StringDeserializer.class);
