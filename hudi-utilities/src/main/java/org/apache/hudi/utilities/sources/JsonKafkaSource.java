@@ -47,7 +47,7 @@ public class JsonKafkaSource extends JsonSource {
   private final HoodieDeltaStreamerMetrics metrics;
 
   public JsonKafkaSource(TypedProperties properties, JavaSparkContext sparkContext, SparkSession sparkSession,
-      SchemaProvider schemaProvider, HoodieDeltaStreamerMetrics metrics) {
+                         SchemaProvider schemaProvider, HoodieDeltaStreamerMetrics metrics) {
     super(properties, sparkContext, sparkSession, schemaProvider);
     this.metrics = metrics;
     properties.put("key.deserializer", StringDeserializer.class);

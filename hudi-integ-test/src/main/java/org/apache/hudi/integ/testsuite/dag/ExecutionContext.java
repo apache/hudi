@@ -30,25 +30,27 @@ import org.apache.spark.api.java.JavaSparkContext;
  */
 public class ExecutionContext implements Serializable {
 
-  private HoodieTestSuiteWriter hoodieTestSuiteWriter;
-  private DeltaGenerator deltaGenerator;
+  private WriterContext writerContext;
   private transient JavaSparkContext jsc;
 
-  public ExecutionContext(JavaSparkContext jsc, HoodieTestSuiteWriter hoodieTestSuiteWriter, DeltaGenerator deltaGenerator) {
-    this.hoodieTestSuiteWriter = hoodieTestSuiteWriter;
-    this.deltaGenerator = deltaGenerator;
+  public ExecutionContext(JavaSparkContext jsc, WriterContext writerContext) {
+    this.writerContext = writerContext;
     this.jsc = jsc;
   }
 
   public HoodieTestSuiteWriter getHoodieTestSuiteWriter() {
-    return hoodieTestSuiteWriter;
+    return writerContext.getHoodieTestSuiteWriter();
   }
 
   public DeltaGenerator getDeltaGenerator() {
-    return deltaGenerator;
+    return writerContext.getDeltaGenerator();
   }
 
   public JavaSparkContext getJsc() {
     return jsc;
+  }
+
+  public WriterContext getWriterContext() {
+    return writerContext;
   }
 }

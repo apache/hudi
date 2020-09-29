@@ -36,7 +36,14 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
+import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
+import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
+import org.apache.hudi.utilities.schema.SchemaPostProcessor;
+import org.apache.hudi.utilities.schema.SchemaPostProcessor.Config;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
+import org.apache.hudi.utilities.sources.AvroKafkaSource;
+import org.apache.hudi.utilities.sources.JsonKafkaSource;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
@@ -90,23 +97,38 @@ public class UtilHelpers {
 
   public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
                                     SparkSession sparkSession, SchemaProvider schemaProvider, HoodieDeltaStreamerMetrics metrics) throws IOException {
+
     try {
+      if (JsonKafkaSource.class.getName().equals(sourceClass)
+              || AvroKafkaSource.class.getName().equals(sourceClass)) {
+        return (Source) ReflectionUtils.loadClass(sourceClass,
+                new Class<?>[]{TypedProperties.class, JavaSparkContext.class, SparkSession.class, SchemaProvider.class, HoodieDeltaStreamerMetrics.class}, cfg,
+                jssc, sparkSession, schemaProvider, metrics);
+      }
+
       return (Source) ReflectionUtils.loadClass(sourceClass,
-              new Class<?>[] {TypedProperties.class, JavaSparkContext.class, SparkSession.class,
-                      SchemaProvider.class, HoodieDeltaStreamerMetrics.class}, cfg, jssc, sparkSession, schemaProvider, metrics);
+          new Class<?>[] {TypedProperties.class, JavaSparkContext.class, SparkSession.class, SchemaProvider.class}, cfg,
+          jssc, sparkSession, schemaProvider);
     } catch (Throwable e) {
       throw new IOException("Could not load source class " + sourceClass, e);
     }
   }
 
   public static SchemaProvider createSchemaProvider(String schemaProviderClass, TypedProperties cfg,
-                                                    JavaSparkContext jssc) throws IOException {
+      JavaSparkContext jssc) throws IOException {
     try {
       return StringUtils.isNullOrEmpty(schemaProviderClass) ? null
           : (SchemaProvider) ReflectionUtils.loadClass(schemaProviderClass, cfg, jssc);
     } catch (Throwable e) {
       throw new IOException("Could not load schema provider class " + schemaProviderClass, e);
     }
+  }
+
+  public static SchemaPostProcessor createSchemaPostProcessor(
+      String schemaPostProcessorClass, TypedProperties cfg, JavaSparkContext jssc) {
+    return schemaPostProcessorClass == null
+        ? null
+        : (SchemaPostProcessor) ReflectionUtils.loadClass(schemaPostProcessorClass, cfg, jssc);
   }
 
   public static Option<Transformer> createTransformer(List<String> classNames) throws IOException {
@@ -368,5 +390,36 @@ public class UtilHelpers {
     } catch (Throwable e) {
       throw new IOException("Could not load source selector class " + sourceSelectorClass, e);
     }
+  }
+
+  public static SchemaProvider getOriginalSchemaProvider(SchemaProvider schemaProvider) {
+    SchemaProvider originalProvider = schemaProvider;
+    if (schemaProvider instanceof SchemaProviderWithPostProcessor) {
+      originalProvider = ((SchemaProviderWithPostProcessor) schemaProvider).getOriginalSchemaProvider();
+    } else if (schemaProvider instanceof DelegatingSchemaProvider) {
+      originalProvider = ((DelegatingSchemaProvider) schemaProvider).getSourceSchemaProvider();
+    }
+    return originalProvider;
+  }
+
+  public static SchemaProviderWithPostProcessor wrapSchemaProviderWithPostProcessor(SchemaProvider provider,
+      TypedProperties cfg, JavaSparkContext jssc) {
+
+    if (provider == null) {
+      return null;
+    }
+
+    if (provider instanceof  SchemaProviderWithPostProcessor) {
+      return (SchemaProviderWithPostProcessor)provider;
+    }
+    String schemaPostProcessorClass = cfg.getString(Config.SCHEMA_POST_PROCESSOR_PROP, null);
+    return new SchemaProviderWithPostProcessor(provider,
+        Option.ofNullable(createSchemaPostProcessor(schemaPostProcessorClass, cfg, jssc)));
+  }
+
+  public static SchemaProvider createRowBasedSchemaProvider(StructType structType,
+      TypedProperties cfg, JavaSparkContext jssc) {
+    SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
+    return wrapSchemaProviderWithPostProcessor(rowSchemaProvider, cfg, jssc);
   }
 }

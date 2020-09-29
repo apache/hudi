@@ -39,7 +39,6 @@ public class HiveSyncNode extends DagNode<Boolean> {
     log.info("Executing hive sync node");
     this.hiveServiceProvider.startLocalHiveServiceIfNeeded(executionContext.getHoodieTestSuiteWriter().getConfiguration());
     this.hiveServiceProvider.syncToLocalHiveIfNeeded(executionContext.getHoodieTestSuiteWriter());
-    executionContext.getHoodieTestSuiteWriter().getDeltaStreamerWrapper().getDeltaSyncService().getDeltaSync().syncHive();
     this.hiveServiceProvider.stopLocalHiveServiceIfNeeded();
   }
 

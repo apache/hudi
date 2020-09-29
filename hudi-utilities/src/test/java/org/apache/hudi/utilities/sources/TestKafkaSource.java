@@ -47,6 +47,7 @@ import java.util.HashMap;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.mock;
 
 /**
  * Tests against {@link AvroKafkaSource}.
@@ -57,7 +58,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
 
   private FilebasedSchemaProvider schemaProvider;
   private KafkaTestUtils testUtils;
-  private HoodieDeltaStreamerMetrics metrics;
+  private HoodieDeltaStreamerMetrics metrics = mock(HoodieDeltaStreamerMetrics.class);
 
   @BeforeAll
   public static void initClass() throws Exception {
@@ -72,7 +73,6 @@ public class TestKafkaSource extends UtilitiesTestBase {
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
-    metrics = null;
     schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS(), jsc);
     testUtils = new KafkaTestUtils();
     testUtils.setup();

@@ -79,8 +79,15 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
    * @param genericRecord instance of {@link GenericRecord} of interest.
    * @returns {@code true} if record represents a delete record. {@code false} otherwise.
    */
-  private boolean isDeleteRecord(GenericRecord genericRecord) {
+  protected boolean isDeleteRecord(GenericRecord genericRecord) {
     Object deleteMarker = genericRecord.get("_hoodie_is_deleted");
     return (deleteMarker instanceof Boolean && (boolean) deleteMarker);
+  }
+
+  /**
+   * Return true if value equals defaultValue otherwise false.
+   */
+  public Boolean overwriteField(Object value, Object defaultValue) {
+    return defaultValue == null ? value == null : defaultValue.toString().equals(value.toString());
   }
 }
