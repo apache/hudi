@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
@@ -242,9 +243,12 @@ public abstract class AbstractHoodieLogRecordScanner {
       }
       // Done
       progress = 1.0f;
+    } catch (IOException e) {
+      LOG.error("Got IOException when reading log file", e);
+      throw new HoodieIOException("IOException when reading log file ", e);
     } catch (Exception e) {
       LOG.error("Got exception when reading log file", e);
-      throw new HoodieIOException("IOException when reading log file ");
+      throw new HoodieException("Exception when reading log file ", e);
     } finally {
       try {
         if (null != logFormatReaderWrapper) {
