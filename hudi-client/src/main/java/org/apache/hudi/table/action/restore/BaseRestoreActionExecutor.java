@@ -76,7 +76,7 @@ public abstract class BaseRestoreActionExecutor extends BaseActionExecutor<Hoodi
 
     try {
       return finishRestore(instantToMetadata,
-          instantsToRollback.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()),
+          instantsToRollback,
           restoreTimer.endTimer()
       );
     } catch (IOException io) {
@@ -87,7 +87,7 @@ public abstract class BaseRestoreActionExecutor extends BaseActionExecutor<Hoodi
   protected abstract HoodieRollbackMetadata rollbackInstant(HoodieInstant rollbackInstant);
 
   private HoodieRestoreMetadata finishRestore(Map<String, List<HoodieRollbackMetadata>> instantToMetadata,
-                                              List<String> instantsRolledBack,
+                                              List<HoodieInstant> instantsRolledBack,
                                               long durationInMs) throws IOException {
 
     HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.convertRestoreMetadata(

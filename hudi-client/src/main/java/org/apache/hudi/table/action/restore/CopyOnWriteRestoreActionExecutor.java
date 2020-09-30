@@ -50,7 +50,8 @@ public class CopyOnWriteRestoreActionExecutor extends BaseRestoreActionExecutor 
         true,
         true,
         false);
-    if (!instantToRollback.getAction().equals(HoodieTimeline.COMMIT_ACTION)) {
+    if (!instantToRollback.getAction().equals(HoodieTimeline.COMMIT_ACTION)
+        && !instantToRollback.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
       throw new HoodieRollbackException("Unsupported action in rollback instant:" + instantToRollback);
     }
     return rollbackActionExecutor.execute();

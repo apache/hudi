@@ -289,6 +289,14 @@ public class FileSystemViewHandler {
           .refreshTable(ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());
       writeValueAsString(ctx, success);
     }, false));
+
+    app.get(RemoteHoodieTableFileSystemView.ALL_REPLACED_FILEGROUPS_BEFORE_OR_ON, new ViewHandler(ctx -> {
+      List<FileGroupDTO> dtos = sliceHandler.getReplacedFileGroupsBeforeOrOn(
+          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
+          ctx.queryParam(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM,""),
+          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
+      writeValueAsString(ctx, dtos);
+    }, true));
   }
 
   private static boolean isRefreshCheckDisabledInQuery(Context ctxt) {
