@@ -129,7 +129,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // Create the table
     HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(),
         HoodieTableType.MERGE_ON_READ, metaClient.getTableConfig().getTableName(),
-        metaClient.getArchivePath(), metaClient.getTableConfig().getPayloadClass(), VERSION_1);
+        metaClient.getArchivePath(), metaClient.getTableConfig().getPayloadClass(), VERSION_1, null);
 
     HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA);
     HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);
@@ -274,7 +274,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // Create the table
     HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(),
         HoodieTableType.COPY_ON_WRITE, metaClient.getTableConfig().getTableName(),
-        metaClient.getArchivePath(), metaClient.getTableConfig().getPayloadClass(), VERSION_1);
+        metaClient.getArchivePath(), metaClient.getTableConfig().getPayloadClass(), VERSION_1, null);
 
     HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA);
     HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);

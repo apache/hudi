@@ -83,10 +83,6 @@ public class HoodieWriteClientExample {
       // initialize the table, if not done already
       Path path = new Path(tablePath);
       FileSystem fs = FSUtils.getFs(tablePath, jsc.hadoopConfiguration());
-      if (!fs.exists(path)) {
-        HoodieTableMetaClient.initTableType(jsc.hadoopConfiguration(), tablePath, HoodieTableType.valueOf(tableType),
-                tableName, HoodieAvroPayload.class.getName());
-      }
 
       // Create the write client to write some records in
       HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
@@ -94,6 +90,10 @@ public class HoodieWriteClientExample {
               .withDeleteParallelism(2).forTable(tableName)
               .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
               .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(20, 30).build()).build();
+      if (!fs.exists(path)) {
+        HoodieTableMetaClient.initTableType(jsc.hadoopConfiguration(), tablePath, HoodieTableType.valueOf(tableType),
+            tableName, HoodieAvroPayload.class.getName(), cfg.getIndexType().name());
+      }
       HoodieWriteClient<HoodieAvroPayload> client = new HoodieWriteClient<>(jsc, cfg);
 
       // inserts

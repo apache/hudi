@@ -81,7 +81,7 @@ public class TestHoodieSnapshotExporter extends FunctionalTestHarness {
     dfs().mkdirs(new Path(sourcePath));
     HoodieTableMetaClient
         .initTableType(jsc().hadoopConfiguration(), sourcePath, HoodieTableType.COPY_ON_WRITE, TABLE_NAME,
-            HoodieAvroPayload.class.getName());
+            HoodieAvroPayload.class.getName(), null);
 
     // Prepare data as source Hudi dataset
     HoodieWriteConfig cfg = getHoodieWriteConfig(sourcePath);

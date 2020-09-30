@@ -94,7 +94,7 @@ public class HoodieTestSuiteJob {
 
     if (!fs.exists(new Path(cfg.targetBasePath))) {
       HoodieTableMetaClient.initTableType(jsc.hadoopConfiguration(), cfg.targetBasePath,
-          HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived");
+          HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", null);
     }
   }
 

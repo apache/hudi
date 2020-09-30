@@ -328,38 +328,38 @@ public class HoodieTableMetaClient implements Serializable {
   public static HoodieTableMetaClient initTableTypeWithBootstrap(Configuration hadoopConf, String basePath, HoodieTableType tableType,
                                                                  String tableName, String archiveLogFolder, String payloadClassName,
                                                                  String baseFileFormat, String bootstrapIndexClass,
-                                                                 String bootstrapBasePath) throws IOException {
+                                                                 String bootstrapBasePath, String indexType) throws IOException {
     return initTableType(hadoopConf, basePath, tableType, tableName,
-        archiveLogFolder, payloadClassName, null, baseFileFormat, bootstrapIndexClass, bootstrapBasePath);
+        archiveLogFolder, payloadClassName, null, baseFileFormat, bootstrapIndexClass, bootstrapBasePath, indexType);
   }
 
   public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, HoodieTableType tableType,
                                                     String tableName, String archiveLogFolder, String payloadClassName,
-                                                    String baseFileFormat) throws IOException {
+                                                    String baseFileFormat, String indexType) throws IOException {
     return initTableType(hadoopConf, basePath, tableType, tableName,
-        archiveLogFolder, payloadClassName, null, baseFileFormat, null, null);
+        archiveLogFolder, payloadClassName, null, baseFileFormat, null, null, indexType);
   }
 
   /**
    * Used primarily by tests, examples.
    */
   public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, HoodieTableType tableType,
-                                                    String tableName, String payloadClassName) throws IOException {
+                                                    String tableName, String payloadClassName, String indexType) throws IOException {
     return initTableType(hadoopConf, basePath, tableType, tableName, null, payloadClassName,
-        null, null, null, null);
+        null, null, null, null, indexType);
   }
 
   public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, HoodieTableType tableType,
                                                     String tableName, String archiveLogFolder, String payloadClassName,
-                                                    Integer timelineLayoutVersion) throws IOException {
+                                                    Integer timelineLayoutVersion, String indexType) throws IOException {
     return initTableType(hadoopConf, basePath, tableType, tableName, archiveLogFolder, payloadClassName,
-        timelineLayoutVersion, null, null, null);
+        timelineLayoutVersion, null, null, null, indexType);
   }
 
   private static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, HoodieTableType tableType,
                                                      String tableName, String archiveLogFolder, String payloadClassName,
                                                      Integer timelineLayoutVersion, String baseFileFormat,
-                                                     String bootstrapIndexClass, String bootstrapBasePath) throws IOException {
+                                                     String bootstrapIndexClass, String bootstrapBasePath, String indexType) throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tableName);
     properties.setProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
@@ -388,6 +388,9 @@ public class HoodieTableMetaClient implements Serializable {
       properties.put(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH, bootstrapBasePath);
     }
 
+    if (null != indexType) {
+      properties.put("hoodie.index.type", indexType);
+    }
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
   }
 

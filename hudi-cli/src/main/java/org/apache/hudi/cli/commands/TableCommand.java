@@ -108,7 +108,7 @@ public class TableCommand implements CommandMarker {
 
     final HoodieTableType tableType = HoodieTableType.valueOf(tableTypeStr);
     HoodieTableMetaClient.initTableType(HoodieCLI.conf, path, tableType, name, archiveFolder,
-        payloadClass, layoutVersion);
+        payloadClass, layoutVersion, null);
 
     // Now connect to ensure loading works
     return connect(path, layoutVersion, false, 0, 0, 0);

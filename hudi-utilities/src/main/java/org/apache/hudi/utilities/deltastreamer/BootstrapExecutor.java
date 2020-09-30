@@ -172,7 +172,7 @@ public class BootstrapExecutor  implements Serializable {
 
     HoodieTableMetaClient.initTableTypeWithBootstrap(new Configuration(jssc.hadoopConfiguration()),
         cfg.targetBasePath, HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName,
-        cfg.baseFileFormat, cfg.bootstrapIndexClass, bootstrapBasePath);
+        cfg.baseFileFormat, cfg.bootstrapIndexClass, bootstrapBasePath, bootstrapConfig.getIndexType().name());
   }
 
   public HoodieWriteConfig getBootstrapConfig() {

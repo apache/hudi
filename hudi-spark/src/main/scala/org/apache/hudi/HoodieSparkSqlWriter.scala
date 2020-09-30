@@ -37,9 +37,10 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieBootstrapConfig.{BOOTSTRAP_BASE_PATH_PROP, BOOTSTRAP_INDEX_CLASS_PROP, DEFAULT_BOOTSTRAP_INDEX_CLASS}
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
+import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.internal.HoodieDataSourceInternalWriter
 import org.apache.hudi.sync.common.AbstractSyncTool
 import org.apache.log4j.LogManager
@@ -112,9 +113,11 @@ private[hudi] object HoodieSparkSqlWriter {
       if (!tableExists) {
         val archiveLogFolder = parameters.getOrElse(
           HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, "archived")
+        val indexType = parameters.getOrElse(
+          HoodieIndexConfig.INDEX_TYPE_PROP, HoodieIndexConfig.DEFAULT_INDEX_TYPE)
         val tableMetaClient = HoodieTableMetaClient.initTableType(sparkContext.hadoopConfiguration, path.get,
           HoodieTableType.valueOf(tableType), tblName, archiveLogFolder, parameters(PAYLOAD_CLASS_OPT_KEY),
-          null.asInstanceOf[String])
+          null.asInstanceOf[String], indexType)
         tableConfig = tableMetaClient.getTableConfig
       }
 
@@ -216,7 +219,6 @@ private[hudi] object HoodieSparkSqlWriter {
                 parameters: Map[String, String],
                 df: DataFrame,
                 hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty): Boolean = {
-
     val sparkContext = sqlContext.sparkContext
     val path = parameters.getOrElse("path", throw new HoodieException("'path' must be set."))
     val tableName = parameters.getOrElse(HoodieWriteConfig.TABLE_NAME,
@@ -251,9 +253,11 @@ private[hudi] object HoodieSparkSqlWriter {
     if (!tableExists) {
       val archiveLogFolder = parameters.getOrElse(
         HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, "archived")
+      val indexType = parameters.getOrElse(
+        HoodieIndexConfig.INDEX_TYPE_PROP, HoodieIndexConfig.DEFAULT_INDEX_TYPE)
       HoodieTableMetaClient.initTableTypeWithBootstrap(sparkContext.hadoopConfiguration, path,
         HoodieTableType.valueOf(tableType), tableName, archiveLogFolder, parameters(PAYLOAD_CLASS_OPT_KEY),
-        null, bootstrapIndexClass, bootstrapBasePath)
+        null, bootstrapIndexClass, bootstrapBasePath, indexType)
     }
 
     val jsc = new JavaSparkContext(sqlContext.sparkContext)

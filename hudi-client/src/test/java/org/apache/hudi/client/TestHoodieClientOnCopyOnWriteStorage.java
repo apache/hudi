@@ -311,7 +311,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         VERSION_0).build();
     HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(), metaClient.getTableType(),
         metaClient.getTableConfig().getTableName(), metaClient.getArchivePath(),
-        metaClient.getTableConfig().getPayloadClass(), VERSION_0);
+        metaClient.getTableConfig().getPayloadClass(), VERSION_0, hoodieWriteConfig.getIndexType().toString());
     HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);
 
     // Write 1 (only inserts)
@@ -491,7 +491,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             .build()).withTimelineLayoutVersion(VERSION_0).build();
     HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(),
         metaClient.getTableType(), metaClient.getTableConfig().getTableName(), metaClient.getArchivePath(),
-        metaClient.getTableConfig().getPayloadClass(), VERSION_0);
+        metaClient.getTableConfig().getPayloadClass(), VERSION_0, config.getIndexType().toString());
     HoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);
 
     // Write 1
