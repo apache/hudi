@@ -1,0 +1,11 @@
+schema:
+  version: 1
+---
+owner:
+  name: "HUDI"
+  managerEmail: nagarwal@uber.com
+
+reviewers:
+  groups:
+    - hadoop-platform
+
