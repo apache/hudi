@@ -367,11 +367,15 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
 
     // Let's tag
     SparkHoodieBloomIndex bloomIndex = new SparkHoodieBloomIndex(config);
-    JavaPairRDD<HoodieKey, Option<Pair<String, String>>> taggedRecordRDD =
-        bloomIndex.fetchRecordLocation(keysRDD, context, hoodieTable);
+    JavaRDD<HoodieRecord> taggedRecords = bloomIndex.tagLocation(keysRDD.map(k -> new HoodieRecord(k, null)), context, hoodieTable);
+    JavaPairRDD<HoodieKey, Option<Pair<String, String>>> recordLocationsRDD = taggedRecords
+        .mapToPair(hr -> new Tuple2<>(hr.getKey(), hr.isCurrentLocationKnown()
+            ? Option.of(Pair.of(hr.getPartitionPath(), hr.getCurrentLocation().getFileId()))
+            : Option.empty())
+        );
 
     // Should not find any files
-    for (Tuple2<HoodieKey, Option<Pair<String, String>>> record : taggedRecordRDD.collect()) {
+    for (Tuple2<HoodieKey, Option<Pair<String, String>>> record : recordLocationsRDD.collect()) {
       assertTrue(!record._2.isPresent());
     }
 
@@ -383,10 +387,15 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     // We do the tag again
     metaClient = HoodieTableMetaClient.reload(metaClient);
     hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    taggedRecordRDD = bloomIndex.fetchRecordLocation(keysRDD, context, hoodieTable);
+    taggedRecords = bloomIndex.tagLocation(keysRDD.map(k -> new HoodieRecord(k, null)), context, hoodieTable);
+    recordLocationsRDD = taggedRecords
+        .mapToPair(hr -> new Tuple2<>(hr.getKey(), hr.isCurrentLocationKnown()
+            ? Option.of(Pair.of(hr.getPartitionPath(), hr.getCurrentLocation().getFileId()))
+            : Option.empty())
+        );
 
     // Check results
-    for (Tuple2<HoodieKey, Option<Pair<String, String>>> record : taggedRecordRDD.collect()) {
+    for (Tuple2<HoodieKey, Option<Pair<String, String>>> record : recordLocationsRDD.collect()) {
       if (record._1.getRecordKey().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")) {
         assertTrue(record._2.isPresent());
         assertEquals(fileId1, record._2.get().getRight());

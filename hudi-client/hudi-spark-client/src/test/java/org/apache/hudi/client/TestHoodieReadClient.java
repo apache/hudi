@@ -126,7 +126,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
 
       // check path exists for written keys
       JavaPairRDD<HoodieKey, Option<String>> keyToPathPair =
-              anotherReadClient.checkExists(recordsRDD.map(r -> r.getKey()));
+              anotherReadClient.checkExists(recordsRDD.map(HoodieRecord::getKey));
       JavaRDD<HoodieKey> keysWithPaths = keyToPathPair.filter(keyPath -> keyPath._2.isPresent())
               .map(keyPath -> keyPath._1);
       assertEquals(75, keysWithPaths.count());

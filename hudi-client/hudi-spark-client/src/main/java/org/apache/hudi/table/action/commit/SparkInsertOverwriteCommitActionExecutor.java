@@ -38,16 +38,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class InsertOverwriteCommitActionExecutor<T extends HoodieRecordPayload<T>>
+public class SparkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends AbstractSparkCommitActionExecutor<T> {
 
-  private static final Logger LOG = LogManager.getLogger(InsertOverwriteCommitActionExecutor.class);
+  private static final Logger LOG = LogManager.getLogger(SparkInsertOverwriteCommitActionExecutor.class);
 
   private final JavaRDD<HoodieRecord<T>> inputRecordsRDD;
 
-  public InsertOverwriteCommitActionExecutor(HoodieEngineContext context,
-                                             HoodieWriteConfig config, HoodieTable table,
-                                             String instantTime, JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
+  public SparkInsertOverwriteCommitActionExecutor(HoodieEngineContext context,
+                                                  HoodieWriteConfig config, HoodieTable table,
+                                                  String instantTime, JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
     super(context, config, table, instantTime, WriteOperationType.INSERT_OVERWRITE);
     this.inputRecordsRDD = inputRecordsRDD;
   }

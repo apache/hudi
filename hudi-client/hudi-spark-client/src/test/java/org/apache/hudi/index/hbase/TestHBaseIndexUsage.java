@@ -25,7 +25,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
@@ -36,10 +35,6 @@ public class TestHBaseIndexUsage {
   public void testFeatureSupport() {
     HoodieWriteConfig config = mock(HoodieWriteConfig.class);
     SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
-
     assertTrue(index.canIndexLogFiles());
-    assertThrows(UnsupportedOperationException.class, () -> {
-      index.fetchRecordLocation(null, null, null);
-    }, "HBaseIndex should not support fetchRecordLocation");
   }
 }

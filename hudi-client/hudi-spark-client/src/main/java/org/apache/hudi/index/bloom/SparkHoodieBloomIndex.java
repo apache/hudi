@@ -21,7 +21,6 @@ package org.apache.hudi.index.bloom;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.SparkMemoryUtils;
 import org.apache.hudi.client.common.HoodieEngineContext;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -40,7 +39,6 @@ import org.apache.log4j.Logger;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.storage.StorageLevel;
 
 import java.util.ArrayList;
@@ -202,11 +200,9 @@ public class SparkHoodieBloomIndex<T extends HoodieRecordPayload> extends SparkH
         .collect(toList());
 
     if (config.getBloomIndexPruneByRanges()) {
-      JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
       // also obtain file ranges, if range pruning is enabled
-      jsc.setJobDescription("Obtain key ranges for file slices (range pruning=on)");
-
-      return jsc.parallelize(partitionPathFileIDList, Math.max(partitionPathFileIDList.size(), 1)).mapToPair(pf -> {
+      context.setJobStatus(this.getClass().getName(), "Obtain key ranges for file slices (range pruning=on)");
+      return context.map(partitionPathFileIDList, pf -> {
         try {
           HoodieRangeInfoHandle rangeInfoHandle = new HoodieRangeInfoHandle(config, hoodieTable, pf);
           String[] minMaxKeys = rangeInfoHandle.getMinMaxKeys();
@@ -215,7 +211,7 @@ public class SparkHoodieBloomIndex<T extends HoodieRecordPayload> extends SparkH
           LOG.warn("Unable to find range metadata in file :" + pf);
           return new Tuple2<>(pf.getKey(), new BloomIndexFileInfo(pf.getValue()));
         }
-      }).collect();
+      }, Math.max(partitionPathFileIDList.size(), 1));
     } else {
       return partitionPathFileIDList.stream()
           .map(pf -> new Tuple2<>(pf.getKey(), new BloomIndexFileInfo(pf.getValue()))).collect(toList());

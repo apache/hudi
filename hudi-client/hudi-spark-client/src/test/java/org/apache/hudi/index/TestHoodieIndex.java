@@ -132,7 +132,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     javaRDD.foreach(entry -> assertEquals(recordKeyToPartitionPathMap.get(entry.getRecordKey()), entry.getPartitionPath(), "PartitionPath mismatch"));
 
     JavaRDD<HoodieKey> hoodieKeyJavaRDD = writeRecords.map(entry -> entry.getKey());
-    JavaPairRDD<HoodieKey, Option<Pair<String, String>>> recordLocations = (JavaPairRDD<HoodieKey, Option<Pair<String, String>>>) index.fetchRecordLocation(hoodieKeyJavaRDD, context, hoodieTable);
+    JavaPairRDD<HoodieKey, Option<Pair<String, String>>> recordLocations = getRecordLocations(hoodieKeyJavaRDD, hoodieTable);
     List<HoodieKey> hoodieKeys = hoodieKeyJavaRDD.collect();
     assertEquals(totalRecords, recordLocations.collect().size());
     assertEquals(totalRecords, recordLocations.map(record -> record._1).distinct().count());
@@ -182,7 +182,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     javaRDD.foreach(entry -> assertEquals(recordKeyToPartitionPathMap.get(entry.getRecordKey()), entry.getPartitionPath(), "PartitionPath mismatch"));
 
     JavaRDD<HoodieKey> hoodieKeyJavaRDD = writeRecords.map(entry -> entry.getKey());
-    JavaPairRDD<HoodieKey, Option<Pair<String, String>>> recordLocations = (JavaPairRDD<HoodieKey, Option<Pair<String, String>>>) index.fetchRecordLocation(hoodieKeyJavaRDD, context, hoodieTable);
+    JavaPairRDD<HoodieKey, Option<Pair<String, String>>> recordLocations = getRecordLocations(hoodieKeyJavaRDD, hoodieTable);
     List<HoodieKey> hoodieKeys = hoodieKeyJavaRDD.collect();
     assertEquals(totalRecords, recordLocations.collect().size());
     assertEquals(totalRecords, recordLocations.map(record -> record._1).distinct().count());
@@ -222,7 +222,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     hoodieRecords.forEach(entry -> recordKeyToPartitionPathMap.put(entry.getRecordKey(), entry.getPartitionPath()));
 
     JavaRDD<HoodieKey> hoodieKeyJavaRDD = writeRecords.map(entry -> entry.getKey());
-    JavaPairRDD<HoodieKey, Option<Pair<String, String>>> recordLocations = (JavaPairRDD<HoodieKey, Option<Pair<String, String>>>) index.fetchRecordLocation(hoodieKeyJavaRDD, context, hoodieTable);
+    JavaPairRDD<HoodieKey, Option<Pair<String, String>>> recordLocations = getRecordLocations(hoodieKeyJavaRDD, hoodieTable);
     List<HoodieKey> hoodieKeys = hoodieKeyJavaRDD.collect();
     assertEquals(totalRecords, recordLocations.collect().size());
     assertEquals(totalRecords, recordLocations.map(record -> record._1).distinct().count());
@@ -306,10 +306,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
       }
     }
 
-    JavaPairRDD<HoodieKey, Option<Pair<String, String>>> recordLocations =
-        (JavaPairRDD<HoodieKey, Option<Pair<String, String>>>) index
-            .fetchRecordLocation(recordRDD.map(entry -> entry.getKey()), context, hoodieTable);
-
+    JavaPairRDD<HoodieKey, Option<Pair<String, String>>> recordLocations = getRecordLocations(recordRDD.map(HoodieRecord::getKey), hoodieTable);
     for (Tuple2<HoodieKey, Option<Pair<String, String>>> entry : recordLocations.collect()) {
       if (entry._1.getRecordKey().equals(rowKey1)) {
         assertTrue(entry._2.isPresent(), "Row1 should have been present ");
@@ -425,4 +422,12 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
             .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
   }
 
+  private JavaPairRDD<HoodieKey, Option<Pair<String, String>>> getRecordLocations(JavaRDD<HoodieKey> keyRDD, HoodieTable hoodieTable) {
+    JavaRDD<HoodieRecord> recordRDD = (JavaRDD<HoodieRecord>) index.tagLocation(
+        keyRDD.map(k -> new HoodieRecord(k, new EmptyHoodieRecordPayload())), context, hoodieTable);
+    return recordRDD.mapToPair(hr -> new Tuple2<>(hr.getKey(), hr.isCurrentLocationKnown()
+        ? Option.of(Pair.of(hr.getPartitionPath(), hr.getCurrentLocation().getFileId()))
+        : Option.empty())
+    );
+  }
 }

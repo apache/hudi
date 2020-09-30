@@ -75,7 +75,7 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O, P> imp
                                    HoodieTable<T, I, K, O, P> hoodieTable) throws HoodieIndexException;
 
   /**
-   * Rollback the efffects of the commit made at instantTime.
+   * Rollback the effects of the commit made at instantTime.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public abstract boolean rollbackCommit(String instantTime);

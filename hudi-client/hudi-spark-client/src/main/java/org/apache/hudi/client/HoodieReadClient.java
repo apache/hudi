@@ -136,8 +136,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
    */
   public Dataset<Row> readROView(JavaRDD<HoodieKey> hoodieKeys, int parallelism) {
     assertSqlContext();
-    JavaPairRDD<HoodieKey, Option<Pair<String, String>>> lookupResultRDD =
-        index.fetchRecordLocation(hoodieKeys, context, hoodieTable);
+    JavaPairRDD<HoodieKey, Option<Pair<String, String>>> lookupResultRDD = checkExists(hoodieKeys);
     JavaPairRDD<HoodieKey, Option<String>> keyToFileRDD =
         lookupResultRDD.mapToPair(r -> new Tuple2<>(r._1, convertToDataFilePath(r._2)));
     List<String> paths = keyToFileRDD.filter(keyFileTuple -> keyFileTuple._2().isPresent())
@@ -164,7 +163,11 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
    * component (without scheme) of the URI underlying file
    */
   public JavaPairRDD<HoodieKey, Option<Pair<String, String>>> checkExists(JavaRDD<HoodieKey> hoodieKeys) {
-    return index.fetchRecordLocation(hoodieKeys, context, hoodieTable);
+    return index.tagLocation(hoodieKeys.map(k -> new HoodieRecord<>(k, null)), context, hoodieTable)
+        .mapToPair(hr -> new Tuple2<>(hr.getKey(), hr.isCurrentLocationKnown()
+            ? Option.of(Pair.of(hr.getPartitionPath(), hr.getCurrentLocation().getFileId()))
+            : Option.empty())
+        );
   }
 
   /**

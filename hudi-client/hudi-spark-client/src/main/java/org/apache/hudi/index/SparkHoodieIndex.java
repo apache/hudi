@@ -18,6 +18,8 @@
 
 package org.apache.hudi.index;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
@@ -72,16 +74,19 @@ public abstract class SparkHoodieIndex<T extends HoodieRecordPayload> extends Ho
   }
 
   @Override
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public abstract JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD,
                                                       HoodieEngineContext context,
                                                       HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> hoodieTable) throws HoodieIndexException;
 
   @Override
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public abstract JavaPairRDD<HoodieKey, Option<Pair<String, String>>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
                                                                                            HoodieEngineContext context,
                                                                                            HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> hoodieTable);
 
   @Override
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public abstract JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> records,
                                                        HoodieEngineContext context,
                                                        HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> hoodieTable) throws HoodieIndexException;

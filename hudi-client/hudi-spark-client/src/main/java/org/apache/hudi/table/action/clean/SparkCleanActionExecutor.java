@@ -50,7 +50,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @SuppressWarnings("checkstyle:LineLength")
-public class SparkCleanActionExecutor<T extends HoodieRecordPayload> extends AbstractCleanActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> {
+public class SparkCleanActionExecutor<T extends HoodieRecordPayload> extends
+    BaseCleanActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> {
 
   private static final Logger LOG = LogManager.getLogger(SparkCleanActionExecutor.class);
 
@@ -99,7 +100,7 @@ public class SparkCleanActionExecutor<T extends HoodieRecordPayload> extends Abs
         config.getCleanerParallelism());
     LOG.info("Using cleanerParallelism: " + cleanerParallelism);
 
-    jsc.setJobGroup(this.getClass().getSimpleName(), "Perform cleaning of partitions");
+    context.setJobStatus(this.getClass().getSimpleName(), "Perform cleaning of partitions");
     List<Tuple2<String, PartitionCleanStat>> partitionCleanStats = jsc
         .parallelize(cleanerPlan.getFilePathsToBeDeletedPerPartition().entrySet().stream()
             .flatMap(x -> x.getValue().stream().map(y -> new Tuple2<>(x.getKey(),

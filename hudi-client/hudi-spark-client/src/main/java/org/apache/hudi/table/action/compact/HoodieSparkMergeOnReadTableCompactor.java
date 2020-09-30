@@ -58,7 +58,6 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.util.AccumulatorV2;
 import org.apache.spark.util.LongAccumulator;
 
@@ -103,7 +102,7 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
         .map(CompactionOperation::convertFromAvroRecordInstance).collect(toList());
     LOG.info("Compactor compacting " + operations + " files");
 
-    jsc.setJobGroup(this.getClass().getSimpleName(), "Compacting file slices");
+    context.setJobStatus(this.getClass().getSimpleName(), "Compacting file slices");
     return jsc.parallelize(operations, operations.size())
         .map(s -> compact(table, metaClient, config, s, compactionInstantTime)).flatMap(List::iterator);
   }
@@ -171,8 +170,9 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
   }
 
   @Override
-  public HoodieCompactionPlan generateCompactionPlan(HoodieEngineContext context, HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> hoodieTable,
-      HoodieWriteConfig config, String compactionCommitTime, Set<HoodieFileGroupId> fgIdsInPendingCompactions)
+  public HoodieCompactionPlan generateCompactionPlan(HoodieEngineContext context,
+                                                     HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> hoodieTable,
+                                                     HoodieWriteConfig config, String compactionCommitTime, Set<HoodieFileGroupId> fgIdsInPendingCompactions)
       throws IOException {
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     totalLogFiles = new LongAccumulator();
@@ -201,23 +201,27 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
 
     SliceView fileSystemView = hoodieTable.getSliceView();
     LOG.info("Compaction looking for files to compact in " + partitionPaths + " partitions");
-    jsc.setJobGroup(this.getClass().getSimpleName(), "Looking for files to compact");
-    List<HoodieCompactionOperation> operations = jsc.parallelize(partitionPaths, partitionPaths.size())
-        .flatMap((FlatMapFunction<String, CompactionOperation>) partitionPath -> fileSystemView
-            .getLatestFileSlices(partitionPath)
-            .filter(slice -> !fgIdsInPendingCompactions.contains(slice.getFileGroupId())).map(s -> {
-              List<HoodieLogFile> logFiles =
-                  s.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
-              totalLogFiles.add((long) logFiles.size());
-              totalFileSlices.add(1L);
-              // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
-              // for spark Map operations and collecting them finally in Avro generated classes for storing
-              // into meta files.
-              Option<HoodieBaseFile> dataFile = s.getBaseFile();
-              return new CompactionOperation(dataFile, partitionPath, logFiles,
-                  config.getCompactionStrategy().captureMetrics(config, dataFile, partitionPath, logFiles));
-            }).filter(c -> !c.getDeltaFileNames().isEmpty()).collect(toList()).iterator())
-        .collect().stream().map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
+    context.setJobStatus(this.getClass().getSimpleName(), "Looking for files to compact");
+
+    List<HoodieCompactionOperation> operations = context.flatMap(partitionPaths, partitionPath -> {
+      return fileSystemView
+          .getLatestFileSlices(partitionPath)
+          .filter(slice -> !fgIdsInPendingCompactions.contains(slice.getFileGroupId()))
+          .map(s -> {
+            List<HoodieLogFile> logFiles =
+                s.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
+            totalLogFiles.add((long) logFiles.size());
+            totalFileSlices.add(1L);
+            // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
+            // for spark Map operations and collecting them finally in Avro generated classes for storing
+            // into meta files.
+            Option<HoodieBaseFile> dataFile = s.getBaseFile();
+            return new CompactionOperation(dataFile, partitionPath, logFiles,
+                config.getCompactionStrategy().captureMetrics(config, dataFile, partitionPath, logFiles));
+          })
+          .filter(c -> !c.getDeltaFileNames().isEmpty());
+    }, partitionPaths.size()).stream().map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
+
     LOG.info("Total of " + operations.size() + " compactions are retrieved");
     LOG.info("Total number of latest files slices " + totalFileSlices.value());
     LOG.info("Total number of log files " + totalLogFiles.value());

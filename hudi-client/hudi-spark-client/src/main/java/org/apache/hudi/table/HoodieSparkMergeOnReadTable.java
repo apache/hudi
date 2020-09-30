@@ -47,7 +47,7 @@ import org.apache.hudi.table.action.deltacommit.SparkInsertDeltaCommitActionExec
 import org.apache.hudi.table.action.deltacommit.SparkInsertPreppedDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.SparkUpsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.SparkUpsertPreppedDeltaCommitActionExecutor;
-import org.apache.hudi.table.action.compact.AbstractScheduleCompactionActionExecutor;
+import org.apache.hudi.table.action.compact.BaseScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.restore.SparkMergeOnReadRestoreActionExecutor;
 import org.apache.hudi.table.action.rollback.SparkMergeOnReadRollbackActionExecutor;
 import org.apache.spark.api.java.JavaRDD;
@@ -120,7 +120,7 @@ public class HoodieSparkMergeOnReadTable<T extends HoodieRecordPayload> extends 
 
   @Override
   public Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
-    AbstractScheduleCompactionActionExecutor scheduleCompactionExecutor = new SparkScheduleCompactionActionExecutor(
+    BaseScheduleCompactionActionExecutor scheduleCompactionExecutor = new SparkScheduleCompactionActionExecutor(
         context, config, this, instantTime, extraMetadata);
     return scheduleCompactionExecutor.execute();
   }

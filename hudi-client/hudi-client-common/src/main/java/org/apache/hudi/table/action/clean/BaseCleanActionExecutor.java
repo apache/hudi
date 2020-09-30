@@ -50,12 +50,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public abstract class AbstractCleanActionExecutor<T extends HoodieRecordPayload, I, K, O, P> extends BaseActionExecutor<T, I, K, O, P, HoodieCleanMetadata> {
+public abstract class BaseCleanActionExecutor<T extends HoodieRecordPayload, I, K, O, P> extends BaseActionExecutor<T, I, K, O, P, HoodieCleanMetadata> {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LogManager.getLogger(AbstractCleanActionExecutor.class);
+  private static final Logger LOG = LogManager.getLogger(BaseCleanActionExecutor.class);
 
-  public AbstractCleanActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O, P> table, String instantTime) {
+  public BaseCleanActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O, P> table, String instantTime) {
     super(context, config, table, instantTime);
   }
 

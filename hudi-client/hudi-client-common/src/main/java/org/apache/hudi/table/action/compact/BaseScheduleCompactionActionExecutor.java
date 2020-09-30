@@ -36,15 +36,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public abstract class AbstractScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, K, O, P> extends BaseActionExecutor<T, I, K, O, P, Option<HoodieCompactionPlan>> {
+public abstract class BaseScheduleCompactionActionExecutor<T extends HoodieRecordPayload, I, K, O, P> extends BaseActionExecutor<T, I, K, O, P, Option<HoodieCompactionPlan>> {
 
   private final Option<Map<String, String>> extraMetadata;
 
-  public AbstractScheduleCompactionActionExecutor(HoodieEngineContext context,
-                                                  HoodieWriteConfig config,
-                                                  HoodieTable<T, I, K, O, P> table,
-                                                  String instantTime,
-                                                  Option<Map<String, String>> extraMetadata) {
+  public BaseScheduleCompactionActionExecutor(HoodieEngineContext context,
+                                              HoodieWriteConfig config,
+                                              HoodieTable<T, I, K, O, P> table,
+                                              String instantTime,
+                                              Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime);
     this.extraMetadata = extraMetadata;
   }

@@ -41,7 +41,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @SuppressWarnings("checkstyle:LineLength")
-public class SparkScheduleCompactionActionExecutor<T extends HoodieRecordPayload> extends AbstractScheduleCompactionActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> {
+public class SparkScheduleCompactionActionExecutor<T extends HoodieRecordPayload> extends
+    BaseScheduleCompactionActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> {
 
   private static final Logger LOG = LogManager.getLogger(SparkScheduleCompactionActionExecutor.class);
 
