@@ -158,9 +158,6 @@ public class HoodieMetadataImpl {
     this.metadataBasePath = metadataBasePath;
     this.readOnly = readOnly;
 
-    this.tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
-    this.validateLookups = writeConfig.getFileListingMetadataVerify();
-
     // Load the schema
     String schemaStr;
     try {
@@ -171,10 +168,14 @@ public class HoodieMetadataImpl {
     }
 
     if (readOnly) {
-      this.config = null;
+      this.config = HoodieWriteConfig.newBuilder().withPath(datasetBasePath).build();
       metaClient = new HoodieTableMetaClient(hadoopConf, metadataBasePath);
-      this.metrics = new HoodieMetrics(HoodieWriteConfig.newBuilder().withPath(datasetBasePath).build(), "");
+      this.metrics = new HoodieMetrics(this.config, this.config.getTableName());
+      this.tableName = null;
     } else {
+      this.tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
+      this.validateLookups = writeConfig.getFileListingMetadataVerify();
+
       this.config = createMetadataWriteConfig(writeConfig, schemaStr);
       this.metrics = new HoodieMetrics(this.config, this.config.getTableName());
 
