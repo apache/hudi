@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.timeline;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
@@ -46,6 +47,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class TimelineMetadataUtils {
 
@@ -53,14 +55,16 @@ public class TimelineMetadataUtils {
 
   public static HoodieRestoreMetadata convertRestoreMetadata(String startRestoreTime,
                                                              long durationInMs,
-                                                             List<String> commits,
+                                                             List<HoodieInstant> instants,
                                                              Map<String, List<HoodieRollbackMetadata>> instantToRollbackMetadata) {
-    return new HoodieRestoreMetadata(startRestoreTime, durationInMs, commits,
-        Collections.unmodifiableMap(instantToRollbackMetadata), DEFAULT_VERSION);
+    return new HoodieRestoreMetadata(startRestoreTime, durationInMs,
+        instants.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()),
+        Collections.unmodifiableMap(instantToRollbackMetadata), DEFAULT_VERSION,
+        instants.stream().map(instant -> new HoodieInstantInfo(instant.getTimestamp(), instant.getAction())).collect(Collectors.toList()));
   }
 
   public static HoodieRollbackMetadata convertRollbackMetadata(String startRollbackTime, Option<Long> durationInMs,
-      List<String> commits, List<HoodieRollbackStat> rollbackStats) {
+      List<HoodieInstant> instants, List<HoodieRollbackStat> rollbackStats) {
     Map<String, HoodieRollbackPartitionMetadata> partitionMetadataBuilder = new HashMap<>();
     int totalDeleted = 0;
     for (HoodieRollbackStat stat : rollbackStats) {
@@ -70,8 +74,10 @@ public class TimelineMetadataUtils {
       totalDeleted += stat.getSuccessDeleteFiles().size();
     }
 
-    return new HoodieRollbackMetadata(startRollbackTime, durationInMs.orElseGet(() -> -1L), totalDeleted, commits,
-      Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION);
+    return new HoodieRollbackMetadata(startRollbackTime, durationInMs.orElseGet(() -> -1L), totalDeleted,
+      instants.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()),
+      Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION,
+      instants.stream().map(instant -> new HoodieInstantInfo(instant.getTimestamp(), instant.getAction())).collect(Collectors.toList()));
   }
 
   public static HoodieSavepointMetadata convertSavepointMetadata(String user, String comment,
