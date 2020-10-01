@@ -19,26 +19,25 @@
 package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.spark.api.java.JavaPairRDD;
+
 import org.apache.spark.api.java.JavaRDD;
 
 import java.util.List;
 
 @SuppressWarnings("checkstyle:LineLength")
-public class SparkCopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload> extends AbstractCopyOnWriteRollbackActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> {
+public class SparkCopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload> extends
+    AbstractCopyOnWriteRollbackActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
   public SparkCopyOnWriteRollbackActionExecutor(HoodieSparkEngineContext context,
                                                 HoodieWriteConfig config,
-                                                HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> table,
+                                                HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                                 String instantTime,
                                                 HoodieInstant commitInstant,
                                                 boolean deleteInstants) {
@@ -47,7 +46,7 @@ public class SparkCopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayloa
 
   public SparkCopyOnWriteRollbackActionExecutor(HoodieSparkEngineContext context,
                                                 HoodieWriteConfig config,
-                                                HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> table,
+                                                HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                                 String instantTime,
                                                 HoodieInstant commitInstant,
                                                 boolean deleteInstants,

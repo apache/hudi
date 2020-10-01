@@ -20,8 +20,8 @@ package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.utils.SparkMemoryUtils;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.utils.SparkMemoryUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -32,24 +32,24 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.spark.api.java.JavaPairRDD;
+
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
 import java.util.List;
 
 @SuppressWarnings("checkstyle:LineLength")
-public class SparkRunCompactionActionExecutor<T extends HoodieRecordPayload> extends BaseActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>, HoodieWriteMetadata<JavaRDD<WriteStatus>>> {
+public class SparkRunCompactionActionExecutor<T extends HoodieRecordPayload> extends
+    BaseActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, HoodieWriteMetadata<JavaRDD<WriteStatus>>> {
 
   public SparkRunCompactionActionExecutor(HoodieSparkEngineContext context,
                                           HoodieWriteConfig config,
-                                          HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> table,
+                                          HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                           String instantTime) {
     super(context, config, table, instantTime);
   }

@@ -55,7 +55,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.util.AccumulatorV2;
@@ -79,7 +78,7 @@ import static java.util.stream.Collectors.toList;
  *
  */
 @SuppressWarnings("checkstyle:LineLength")
-public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload> implements HoodieCompactor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> {
+public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload> implements HoodieCompactor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieSparkMergeOnReadTableCompactor.class);
   // Accumulator to keep track of total log files for a table
@@ -171,7 +170,7 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
 
   @Override
   public HoodieCompactionPlan generateCompactionPlan(HoodieEngineContext context,
-                                                     HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> hoodieTable,
+                                                     HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable,
                                                      HoodieWriteConfig config, String compactionCommitTime, Set<HoodieFileGroupId> fgIdsInPendingCompactions)
       throws IOException {
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);

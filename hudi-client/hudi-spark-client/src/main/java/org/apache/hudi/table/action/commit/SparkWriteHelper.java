@@ -22,11 +22,10 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.spark.api.java.JavaPairRDD;
+
 import org.apache.spark.api.java.JavaRDD;
+
 import scala.Tuple2;
 
 /**
@@ -35,7 +34,7 @@ import scala.Tuple2;
  * @param <T>
  */
 public class SparkWriteHelper<T extends HoodieRecordPayload,R> extends AbstractWriteHelper<T, JavaRDD<HoodieRecord<T>>,
-    JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>,R> {
+    JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> {
   private SparkWriteHelper() {
   }
 
@@ -49,12 +48,7 @@ public class SparkWriteHelper<T extends HoodieRecordPayload,R> extends AbstractW
 
   @Override
   public JavaRDD<HoodieRecord<T>> deduplicateRecords(JavaRDD<HoodieRecord<T>> records,
-                                                     HoodieIndex<T, JavaRDD<HoodieRecord<T>>,
-                                                         JavaRDD<HoodieKey>,
-                                                         JavaRDD<WriteStatus>,
-                                                         JavaPairRDD<HoodieKey,
-                                                             Option<Pair<String, String>>>>
-                                                         index,
+                                                     HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> index,
                                                      int parallelism) {
     boolean isIndexingGlobal = index.isGlobal();
     return records.mapToPair(record -> {

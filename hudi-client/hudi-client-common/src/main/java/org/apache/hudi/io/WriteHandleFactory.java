@@ -23,10 +23,10 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-public abstract class WriteHandleFactory<T extends HoodieRecordPayload, I, K, O, P> {
+public abstract class WriteHandleFactory<T extends HoodieRecordPayload, I, K, O> {
   private int numFilesWritten = 0;
 
-  public abstract HoodieWriteHandle<T, I, K, O, P> create(HoodieWriteConfig config, String commitTime, HoodieTable<T, I, K, O, P> hoodieTable,
+  public abstract HoodieWriteHandle<T, I, K, O> create(HoodieWriteConfig config, String commitTime, HoodieTable<T, I, K, O> hoodieTable,
       String partitionPath, String fileIdPrefix, TaskContextSupplier taskContextSupplier);
 
   protected String getNextFileId(String idPfx) {

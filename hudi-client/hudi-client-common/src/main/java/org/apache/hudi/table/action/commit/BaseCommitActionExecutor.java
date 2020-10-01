@@ -50,8 +50,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I, K, O, P, R>
-    extends BaseActionExecutor<T, I, K, O, P, R> {
+public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I, K, O, R>
+    extends BaseActionExecutor<T, I, K, O, R> {
 
   private static final Logger LOG = LogManager.getLogger(BaseCommitActionExecutor.class);
 
@@ -60,7 +60,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
   protected final TaskContextSupplier taskContextSupplier;
 
   public BaseCommitActionExecutor(HoodieEngineContext context, HoodieWriteConfig config,
-                                  HoodieTable<T, I, K, O, P> table, String instantTime, WriteOperationType operationType,
+                                  HoodieTable<T, I, K, O> table, String instantTime, WriteOperationType operationType,
                                   Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime);
     this.operationType = operationType;

@@ -27,13 +27,12 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
@@ -42,13 +41,13 @@ import java.util.stream.Collectors;
 
 @SuppressWarnings("checkstyle:LineLength")
 public class SparkScheduleCompactionActionExecutor<T extends HoodieRecordPayload> extends
-    BaseScheduleCompactionActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> {
+    BaseScheduleCompactionActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private static final Logger LOG = LogManager.getLogger(SparkScheduleCompactionActionExecutor.class);
 
   public SparkScheduleCompactionActionExecutor(HoodieEngineContext context,
                                                HoodieWriteConfig config,
-                                               HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> table,
+                                               HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                                String instantTime,
                                                Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime, extraMetadata);

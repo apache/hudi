@@ -27,10 +27,8 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.spark.api.java.JavaPairRDD;
+
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
@@ -41,8 +39,8 @@ import java.util.List;
  *
  * @param <T>
  */
-public class SparkCompactHelpers<T extends HoodieRecordPayload> extends AbstractCompactHelpers<T, JavaRDD<HoodieRecord<T>>,
-    JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> {
+public class SparkCompactHelpers<T extends HoodieRecordPayload> extends
+    AbstractCompactHelpers<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private SparkCompactHelpers() {
   }
@@ -56,8 +54,7 @@ public class SparkCompactHelpers<T extends HoodieRecordPayload> extends Abstract
   }
 
   @Override
-  public HoodieCommitMetadata createCompactionMetadata(HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>,
-        JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> table,
+  public HoodieCommitMetadata createCompactionMetadata(HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                                        String compactionInstantTime,
                                                        JavaRDD<WriteStatus> writeStatuses,
                                                        String schema) throws IOException {

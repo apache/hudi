@@ -42,7 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I, K, O, P> extends BaseActionExecutor<T, I, K, O, P, HoodieRestoreMetadata> {
+public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieRestoreMetadata> {
 
   private static final Logger LOG = LogManager.getLogger(BaseRestoreActionExecutor.class);
 
@@ -50,7 +50,7 @@ public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I
 
   public BaseRestoreActionExecutor(HoodieEngineContext context,
                                    HoodieWriteConfig config,
-                                   HoodieTable<T, I, K, O, P> table,
+                                   HoodieTable<T, I, K, O> table,
                                    String instantTime,
                                    String restoreInstantTime) {
     super(context, config, table, instantTime);

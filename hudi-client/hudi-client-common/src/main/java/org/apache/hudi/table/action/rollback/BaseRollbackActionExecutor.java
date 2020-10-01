@@ -48,7 +48,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, I, K, O, P> extends BaseActionExecutor<T, I, K, O, P, HoodieRollbackMetadata> {
+public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieRollbackMetadata> {
 
   private static final Logger LOG = LogManager.getLogger(BaseRollbackActionExecutor.class);
 
@@ -64,7 +64,7 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
 
   public BaseRollbackActionExecutor(HoodieEngineContext context,
       HoodieWriteConfig config,
-      HoodieTable<T, I, K, O, P> table,
+      HoodieTable<T, I, K, O> table,
       String instantTime,
       HoodieInstant instantToRollback,
       boolean deleteInstants) {
@@ -74,7 +74,7 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
 
   public BaseRollbackActionExecutor(HoodieEngineContext context,
       HoodieWriteConfig config,
-      HoodieTable<T, I, K, O, P> table,
+      HoodieTable<T, I, K, O> table,
       String instantTime,
       HoodieInstant instantToRollback,
       boolean deleteInstants,

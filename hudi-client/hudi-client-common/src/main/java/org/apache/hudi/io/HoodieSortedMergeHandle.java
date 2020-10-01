@@ -41,11 +41,11 @@ import java.util.Queue;
  * The implementation performs a merge-sort by comparing the key of the record being written to the list of
  * keys in newRecordKeys (sorted in-memory).
  */
-public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O, P> extends HoodieMergeHandle<T, I, K, O, P> {
+public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
 
   private Queue<String> newRecordKeysSorted = new PriorityQueue<>();
 
-  public HoodieSortedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O, P> hoodieTable,
+  public HoodieSortedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
        Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier);
     newRecordKeysSorted.addAll(keyToNewRecords.keySet());
@@ -54,7 +54,7 @@ public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O, P> 
   /**
    * Called by compactor code path.
    */
-  public HoodieSortedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O, P> hoodieTable,
+  public HoodieSortedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
       Map<String, HoodieRecord<T>> keyToNewRecordsOrig, String partitionPath, String fileId,
       HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, keyToNewRecordsOrig, partitionPath, fileId, dataFileToBeMerged,

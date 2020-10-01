@@ -47,7 +47,7 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.Map;
 
-public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O, P> extends HoodieWriteHandle<T, I, K, O, P> {
+public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieCreateHandle.class);
 
@@ -59,13 +59,13 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O, P> exten
   private Map<String, HoodieRecord<T>> recordMap;
   private boolean useWriterSchema = false;
 
-  public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O, P> hoodieTable,
+  public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, getWriterSchemaIncludingAndExcludingMetadataPair(config),
         taskContextSupplier);
   }
 
-  public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O, P> hoodieTable,
+  public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, Pair<Schema, Schema> writerSchemaIncludingAndExcludingMetadataPair,
                             TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, writerSchemaIncludingAndExcludingMetadataPair,
@@ -90,7 +90,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O, P> exten
   /**
    * Called by the compactor code path.
    */
-  public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O, P> hoodieTable,
+  public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
       String partitionPath, String fileId, Map<String, HoodieRecord<T>> recordMap,
       TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier);

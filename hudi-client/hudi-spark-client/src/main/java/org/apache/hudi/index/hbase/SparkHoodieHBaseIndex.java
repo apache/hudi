@@ -19,9 +19,9 @@
 package org.apache.hudi.index.hbase;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.utils.SparkMemoryUtils;
 import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.utils.SparkMemoryUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -30,7 +30,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieDependentSystemUnavailableException;
@@ -124,12 +123,6 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
       LOG.warn("error while instantiating HBaseIndexQPSResourceAllocator", e);
     }
     return new DefaultHBaseQPSResourceAllocator(config);
-  }
-
-  @Override
-  public JavaPairRDD<HoodieKey, Option<Pair<String, String>>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
-      HoodieEngineContext context, HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> hoodieTable) {
-    throw new UnsupportedOperationException("HBase index does not implement check exist");
   }
 
   private Connection getHBaseConnection() {
@@ -259,7 +252,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
   @Override
   public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD,
                                               HoodieEngineContext context,
-      HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> hoodieTable) {
+                                              HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) {
     return recordRDD.mapPartitionsWithIndex(locationTagFunction(hoodieTable.getMetaClient()), true);
   }
 
@@ -343,7 +336,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
 
   @Override
   public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD, HoodieEngineContext context,
-      HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> hoodieTable) {
+                                             HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) {
     final HBaseIndexQPSResourceAllocator hBaseIndexQPSResourceAllocator = createQPSResourceAllocator(this.config);
     setPutBatchSize(writeStatusRDD, hBaseIndexQPSResourceAllocator, context);
     LOG.info("multiPutBatchSize: before hbase puts" + multiPutBatchSize);

@@ -37,10 +37,9 @@ import java.nio.charset.StandardCharsets;
  * @param <I> Type of inputs
  * @param <K> Type of keys
  * @param <O> Type of outputs
- * @param <P> Type of record position [Key, Option[partitionPath, fileID]] in hoodie table
  */
-public abstract class AbstractCompactHelpers<T extends HoodieRecordPayload, I, K, O, P> {
-  public abstract HoodieCommitMetadata createCompactionMetadata(HoodieTable<T, I, K, O, P> table,
+public abstract class AbstractCompactHelpers<T extends HoodieRecordPayload, I, K, O> {
+  public abstract HoodieCommitMetadata createCompactionMetadata(HoodieTable<T, I, K, O> table,
                                                                 String compactionInstantTime,
                                                                 O writeStatuses,
                                                                 String schema) throws IOException;

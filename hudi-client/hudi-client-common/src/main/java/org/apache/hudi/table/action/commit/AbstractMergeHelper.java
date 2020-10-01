@@ -47,7 +47,7 @@ import java.util.Iterator;
 /**
  * Helper to read records from previous version of parquet and run Merge.
  */
-public abstract class AbstractMergeHelper<T extends HoodieRecordPayload, I, K, O, P> {
+public abstract class AbstractMergeHelper<T extends HoodieRecordPayload, I, K, O> {
 
   /**
    * Read records from previous version of base file and merge.
@@ -55,7 +55,7 @@ public abstract class AbstractMergeHelper<T extends HoodieRecordPayload, I, K, O
    * @param upsertHandle Merge Handle
    * @throws IOException in case of error
    */
-  public abstract void runMerge(HoodieTable<T, I, K, O, P> table, HoodieMergeHandle<T, I, K, O, P> upsertHandle) throws IOException;
+  public abstract void runMerge(HoodieTable<T, I, K, O> table, HoodieMergeHandle<T, I, K, O> upsertHandle) throws IOException;
 
   protected GenericRecord transformRecordBasedOnNewSchema(GenericDatumReader<GenericRecord> gReader, GenericDatumWriter<GenericRecord> gWriter,
                                                                ThreadLocal<BinaryEncoder> encoderCache, ThreadLocal<BinaryDecoder> decoderCache,
@@ -89,7 +89,7 @@ public abstract class AbstractMergeHelper<T extends HoodieRecordPayload, I, K, O
    * for indexing, writing and other functionality.
    *
    */
-  protected Iterator<GenericRecord> getMergingIterator(HoodieTable<T, I, K, O, P> table, HoodieMergeHandle<T, I, K, O, P> mergeHandle,
+  protected Iterator<GenericRecord> getMergingIterator(HoodieTable<T, I, K, O> table, HoodieMergeHandle<T, I, K, O> mergeHandle,
                                                                                                HoodieBaseFile baseFile, HoodieFileReader<GenericRecord> reader,
                                                                                                Schema readSchema, boolean externalSchemaTransformation) throws IOException {
     Path externalFilePath = new Path(baseFile.getBootstrapBaseFile().get().getPath());

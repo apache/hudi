@@ -38,10 +38,9 @@ import java.io.Serializable;
  * @param <I> Type of inputs
  * @param <K> Type of keys
  * @param <O> Type of outputs
- * @param <P> Type of record position [Key, Option[partitionPath, fileID]] in hoodie table
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
-public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O, P> implements Serializable {
+public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implements Serializable {
 
   protected final HoodieWriteConfig config;
 
@@ -50,20 +49,12 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O, P> imp
   }
 
   /**
-   * Checks if the given [Keys] exists in the hoodie table and returns [Key, Option[partitionPath, fileID]] If the
-   * optional is empty, then the key is not found.
-   */
-  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
-  public abstract P fetchRecordLocation(
-      K hoodieKeys, final HoodieEngineContext context, HoodieTable<T, I, K, O, P> hoodieTable);
-
-  /**
    * Looks up the index and tags each incoming record with a location of a file that contains the row (if it is actually
    * present).
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public abstract I tagLocation(I records, HoodieEngineContext context,
-                                HoodieTable<T, I, K, O, P> hoodieTable) throws HoodieIndexException;
+                                HoodieTable<T, I, K, O> hoodieTable) throws HoodieIndexException;
 
   /**
    * Extracts the location of written records, and updates the index.
@@ -72,7 +63,7 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O, P> imp
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public abstract O updateLocation(O writeStatusRDD, HoodieEngineContext context,
-                                   HoodieTable<T, I, K, O, P> hoodieTable) throws HoodieIndexException;
+                                   HoodieTable<T, I, K, O> hoodieTable) throws HoodieIndexException;
 
   /**
    * Rollback the effects of the commit made at instantTime.

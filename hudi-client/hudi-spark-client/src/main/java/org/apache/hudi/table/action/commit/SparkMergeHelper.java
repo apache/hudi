@@ -18,20 +18,11 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericDatumReader;
-import org.apache.avro.generic.GenericDatumWriter;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.io.BinaryDecoder;
-import org.apache.avro.io.BinaryEncoder;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.SparkBoundedInMemoryExecutor;
@@ -39,14 +30,21 @@ import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.spark.api.java.JavaPairRDD;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericDatumWriter;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.io.BinaryDecoder;
+import org.apache.avro.io.BinaryEncoder;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
 import java.util.Iterator;
 
 public class SparkMergeHelper<T extends HoodieRecordPayload> extends AbstractMergeHelper<T, JavaRDD<HoodieRecord<T>>,
-    JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> {
+    JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private static class MergeHelperHolder {
     private static final SparkMergeHelper SPARK_MERGE_HELPER = new SparkMergeHelper();
@@ -57,11 +55,11 @@ public class SparkMergeHelper<T extends HoodieRecordPayload> extends AbstractMer
   }
 
   @Override
-  public void runMerge(HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> table,
-                       HoodieMergeHandle<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> upsertHandle) throws IOException {
+  public void runMerge(HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
+                       HoodieMergeHandle<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> upsertHandle) throws IOException {
     final boolean externalSchemaTransformation = table.getConfig().shouldUseExternalSchemaTransformation();
     Configuration cfgForHoodieFile = new Configuration(table.getHadoopConf());
-    HoodieMergeHandle<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> mergeHandle = upsertHandle;
+    HoodieMergeHandle<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> mergeHandle = upsertHandle;
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
 
     final GenericDatumWriter<GenericRecord> gWriter;

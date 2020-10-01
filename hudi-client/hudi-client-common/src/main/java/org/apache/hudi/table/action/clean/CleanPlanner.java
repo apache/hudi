@@ -63,7 +63,7 @@ import java.util.stream.Stream;
  * <p>
  * 2) It bounds the growth of the files in the file system
  */
-public class CleanPlanner<T extends HoodieRecordPayload, I, K, O, P> implements Serializable {
+public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(CleanPlanner.class);
 
@@ -74,10 +74,10 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O, P> implements 
   private final SyncableFileSystemView fileSystemView;
   private final HoodieTimeline commitTimeline;
   private final Map<HoodieFileGroupId, CompactionOperation> fgIdToPendingCompactionOperations;
-  private HoodieTable<T, I, K, O, P> hoodieTable;
+  private HoodieTable<T, I, K, O> hoodieTable;
   private HoodieWriteConfig config;
 
-  public CleanPlanner(HoodieTable<T, I, K, O, P> hoodieTable, HoodieWriteConfig config) {
+  public CleanPlanner(HoodieTable<T, I, K, O> hoodieTable, HoodieWriteConfig config) {
     this.hoodieTable = hoodieTable;
     this.fileSystemView = hoodieTable.getHoodieView();
     this.commitTimeline = hoodieTable.getCompletedCommitTimeline();

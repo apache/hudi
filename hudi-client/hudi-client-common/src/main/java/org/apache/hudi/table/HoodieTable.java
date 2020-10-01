@@ -82,15 +82,14 @@ import java.util.stream.Stream;
  * @param <I> Type of inputs
  * @param <K> Type of keys
  * @param <O> Type of outputs
- * @param <P> Type of record position [Key, Option[partitionPath, fileID]] in hoodie table
  */
-public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O, P> implements Serializable {
+public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTable.class);
 
   protected final HoodieWriteConfig config;
   protected final HoodieTableMetaClient metaClient;
-  protected final HoodieIndex<T, I, K, O, P> index;
+  protected final HoodieIndex<T, I, K, O> index;
 
   private SerializableConfiguration hadoopConfiguration;
   private transient FileSystemViewManager viewManager;
@@ -107,7 +106,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O, P> imp
     this.taskContextSupplier = context.getTaskContextSupplier();
   }
 
-  protected abstract HoodieIndex<T, I, K, O, P> getIndex(HoodieWriteConfig config);
+  protected abstract HoodieIndex<T, I, K, O> getIndex(HoodieWriteConfig config);
 
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
@@ -302,7 +301,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O, P> imp
   /**
    * Return the index.
    */
-  public HoodieIndex<T, I, K, O, P> getIndex() {
+  public HoodieIndex<T, I, K, O> getIndex() {
     return index;
   }
 

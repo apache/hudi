@@ -18,11 +18,9 @@
 
 package org.apache.hudi.client;
 
-import com.codahale.metrics.Timer;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -35,7 +33,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.index.HoodieIndex;
@@ -46,10 +43,12 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.SparkCompactHelpers;
 import org.apache.hudi.table.upgrade.SparkUpgradeDowngrade;
+
+import com.codahale.metrics.Timer;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
@@ -59,7 +58,7 @@ import java.util.Map;
 
 @SuppressWarnings("checkstyle:LineLength")
 public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
-    AbstractHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> {
+    AbstractHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private static final Logger LOG = LogManager.getLogger(SparkRDDWriteClient.class);
 
@@ -71,7 +70,8 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     super(context, writeConfig, rollbackPending);
   }
 
-  public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig, boolean rollbackPending, Option<EmbeddedTimelineService> timelineService) {
+  public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig, boolean rollbackPending,
+                             Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, rollbackPending, timelineService);
   }
 
@@ -87,7 +87,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> createIndex(HoodieWriteConfig writeConfig) {
+  protected HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> createIndex(HoodieWriteConfig writeConfig) {
     return SparkHoodieIndex.createIndex(config);
   }
 
@@ -102,8 +102,8 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> createTable(HoodieWriteConfig config,
-                                                                                                                                                                 Configuration hadoopConf) {
+  protected HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> createTable(HoodieWriteConfig config,
+                                                                                                           Configuration hadoopConf) {
     return HoodieSparkTable.create(config, context);
   }
 
@@ -130,7 +130,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   public JavaRDD<WriteStatus> upsert(JavaRDD<HoodieRecord<T>> records, String instantTime) {
-    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> table =
+    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table =
         getTableAndInitCtx(WriteOperationType.UPSERT, instantTime);
     table.validateUpsertSchema();
     setOperationType(WriteOperationType.UPSERT);
@@ -144,7 +144,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime) {
-    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> table =
+    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table =
         getTableAndInitCtx(WriteOperationType.UPSERT_PREPPED, instantTime);
     table.validateUpsertSchema();
     setOperationType(WriteOperationType.UPSERT_PREPPED);
@@ -155,7 +155,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   public JavaRDD<WriteStatus> insert(JavaRDD<HoodieRecord<T>> records, String instantTime) {
-    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> table =
+    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table =
         getTableAndInitCtx(WriteOperationType.INSERT, instantTime);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.INSERT);
@@ -166,7 +166,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   public JavaRDD<WriteStatus> insertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime) {
-    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> table =
+    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table =
         getTableAndInitCtx(WriteOperationType.INSERT_PREPPED, instantTime);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.INSERT_PREPPED);
@@ -198,7 +198,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   public JavaRDD<WriteStatus> bulkInsert(JavaRDD<HoodieRecord<T>> records, String instantTime, Option<BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>>> userDefinedBulkInsertPartitioner) {
-    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> table =
+    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table =
         getTableAndInitCtx(WriteOperationType.BULK_INSERT, instantTime);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.BULK_INSERT);
@@ -209,7 +209,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   public JavaRDD<WriteStatus> bulkInsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime, Option<BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>>> bulkInsertPartitioner) {
-    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> table =
+    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table =
         getTableAndInitCtx(WriteOperationType.BULK_INSERT_PREPPED, instantTime);
     table.validateInsertSchema();
     setOperationType(WriteOperationType.BULK_INSERT_PREPPED);
@@ -220,7 +220,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   public JavaRDD<WriteStatus> delete(JavaRDD<HoodieKey> keys, String instantTime) {
-    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> table = getTableAndInitCtx(WriteOperationType.DELETE, instantTime);
+    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table = getTableAndInitCtx(WriteOperationType.DELETE, instantTime);
     setOperationType(WriteOperationType.DELETE);
     HoodieWriteMetadata<JavaRDD<WriteStatus>> result = table.delete(context,instantTime, keys);
     return postWrite(result, instantTime, table);
@@ -229,7 +229,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   @Override
   protected JavaRDD<WriteStatus> postWrite(HoodieWriteMetadata<JavaRDD<WriteStatus>> result,
                                            String instantTime,
-                                           HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> hoodieTable) {
+                                           HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) {
     if (result.getIndexLookupDuration().isPresent()) {
       metrics.updateIndexMetrics(getOperationType().name(), result.getIndexUpdateDuration().get().toMillis());
     }
@@ -257,7 +257,9 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected void completeCompaction(HoodieCommitMetadata metadata, JavaRDD<WriteStatus> writeStatuses, HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> table, String compactionCommitTime) {
+  protected void completeCompaction(HoodieCommitMetadata metadata, JavaRDD<WriteStatus> writeStatuses,
+                                    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
+                                    String compactionCommitTime) {
     List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
     finalizeWrite(table, compactionCommitTime, writeStats);
     LOG.info("Committing Compaction " + compactionCommitTime + ". Finished with result " + metadata);
@@ -295,13 +297,13 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  protected HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> getTableAndInitCtx(WriteOperationType operationType, String instantTime) {
+  protected HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> getTableAndInitCtx(WriteOperationType operationType, String instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     new SparkUpgradeDowngrade(metaClient, config, context).run(metaClient, HoodieTableVersion.current(), config, context, instantTime);
     return getTableAndInitCtx(metaClient, operationType);
   }
 
-  private HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> getTableAndInitCtx(HoodieTableMetaClient metaClient, WriteOperationType operationType) {
+  private HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> getTableAndInitCtx(HoodieTableMetaClient metaClient, WriteOperationType operationType) {
     if (operationType == WriteOperationType.DELETE) {
       setWriteSchemaForDeletes(metaClient);
     }

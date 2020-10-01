@@ -38,11 +38,11 @@ import scala.Tuple2;
  *
  * @param <T>
  */
-public class HoodieKeyLocationFetchHandle<T extends HoodieRecordPayload, I, K, O, P> extends HoodieReadHandle<T, I, K, O, P> {
+public class HoodieKeyLocationFetchHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieReadHandle<T, I, K, O> {
 
   private final Pair<String, HoodieBaseFile> partitionPathBaseFilePair;
 
-  public HoodieKeyLocationFetchHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O, P> hoodieTable,
+  public HoodieKeyLocationFetchHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
                                       Pair<String, HoodieBaseFile> partitionPathBaseFilePair) {
     super(config, null, hoodieTable, Pair.of(partitionPathBaseFilePair.getLeft(), partitionPathBaseFilePair.getRight().getFileId()));
     this.partitionPathBaseFilePair = partitionPathBaseFilePair;

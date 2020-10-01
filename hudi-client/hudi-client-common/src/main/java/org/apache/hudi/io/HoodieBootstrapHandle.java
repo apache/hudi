@@ -33,9 +33,9 @@ import org.apache.hudi.table.HoodieTable;
  *    writing more than 1 skeleton file for the same bootstrap file.
  * @param <T> HoodieRecordPayload
  */
-public class HoodieBootstrapHandle<T extends HoodieRecordPayload, I, K, O, P> extends HoodieCreateHandle<T, I, K, O, P> {
+public class HoodieBootstrapHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieCreateHandle<T, I, K, O> {
 
-  public HoodieBootstrapHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T, I, K, O, P> hoodieTable,
+  public HoodieBootstrapHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T, I, K, O> hoodieTable,
       String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
     super(config, commitTime, hoodieTable, partitionPath, fileId,
         Pair.of(HoodieAvroUtils.RECORD_KEY_SCHEMA,

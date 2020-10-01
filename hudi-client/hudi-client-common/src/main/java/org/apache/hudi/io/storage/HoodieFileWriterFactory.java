@@ -39,8 +39,8 @@ import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 
 public class HoodieFileWriterFactory {
 
-  public static <T extends HoodieRecordPayload, R extends IndexedRecord, I, K, O, P> HoodieFileWriter<R> getFileWriter(
-      String instantTime, Path path, HoodieTable<T, I, K, O, P> hoodieTable, HoodieWriteConfig config, Schema schema,
+  public static <T extends HoodieRecordPayload, R extends IndexedRecord, I, K, O> HoodieFileWriter<R> getFileWriter(
+      String instantTime, Path path, HoodieTable<T, I, K, O> hoodieTable, HoodieWriteConfig config, Schema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
     final String extension = FSUtils.getFileExtension(path.getName());
     if (PARQUET.getFileExtension().equals(extension)) {

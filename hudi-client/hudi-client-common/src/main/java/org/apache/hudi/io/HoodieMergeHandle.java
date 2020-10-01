@@ -53,7 +53,7 @@ import java.util.Map;
 import java.util.Set;
 
 @SuppressWarnings("Duplicates")
-public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O, P> extends HoodieWriteHandle<T, I, K, O, P> {
+public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieMergeHandle.class);
 
@@ -70,7 +70,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O, P> extend
   protected boolean useWriterSchema;
   private HoodieBaseFile baseFileToMerge;
 
-  public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O, P> hoodieTable,
+  public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                            TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
@@ -81,7 +81,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O, P> extend
   /**
    * Called by compactor code path.
    */
-  public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O, P> hoodieTable,
+  public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
                            HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);

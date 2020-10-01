@@ -32,13 +32,13 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-public abstract class AbstractMergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload, I, K, O, P> extends BaseRollbackActionExecutor<T, I, K, O, P> {
+public abstract class AbstractMergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseRollbackActionExecutor<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(AbstractMergeOnReadRollbackActionExecutor.class);
 
   public AbstractMergeOnReadRollbackActionExecutor(HoodieEngineContext context,
                                                    HoodieWriteConfig config,
-                                                   HoodieTable<T, I, K, O, P> table,
+                                                   HoodieTable<T, I, K, O> table,
                                                    String instantTime,
                                                    HoodieInstant commitInstant,
                                                    boolean deleteInstants) {
@@ -47,7 +47,7 @@ public abstract class AbstractMergeOnReadRollbackActionExecutor<T extends Hoodie
 
   public AbstractMergeOnReadRollbackActionExecutor(HoodieEngineContext context,
                                                    HoodieWriteConfig config,
-                                                   HoodieTable<T, I, K, O, P> table,
+                                                   HoodieTable<T, I, K, O> table,
                                                    String instantTime,
                                                    HoodieInstant commitInstant,
                                                    boolean deleteInstants,

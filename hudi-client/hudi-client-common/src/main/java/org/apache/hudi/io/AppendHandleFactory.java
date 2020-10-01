@@ -23,11 +23,11 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-public class AppendHandleFactory<T extends HoodieRecordPayload, I, K, O, P> extends WriteHandleFactory<T, I, K, O, P> {
+public class AppendHandleFactory<T extends HoodieRecordPayload, I, K, O> extends WriteHandleFactory<T, I, K, O> {
 
   @Override
-  public HoodieAppendHandle<T, I, K, O, P> create(final HoodieWriteConfig hoodieConfig, final String commitTime,
-                                     final HoodieTable<T, I, K, O, P> hoodieTable, final String partitionPath,
+  public HoodieAppendHandle<T, I, K, O> create(final HoodieWriteConfig hoodieConfig, final String commitTime,
+                                     final HoodieTable<T, I, K, O> hoodieTable, final String partitionPath,
                                      final String fileIdPrefix, final TaskContextSupplier sparkTaskContextSupplier) {
 
     return new HoodieAppendHandle(hoodieConfig, commitTime, hoodieTable, partitionPath,

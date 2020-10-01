@@ -29,8 +29,8 @@ import org.apache.hudi.client.bootstrap.FullRecordBootstrapDataProvider;
 import org.apache.hudi.client.bootstrap.HoodieSparkBootstrapSchemaProvider;
 import org.apache.hudi.client.bootstrap.selector.BootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.translator.BootstrapPartitionPathTranslator;
-import org.apache.hudi.client.utils.SparkMemoryUtils;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.utils.SparkMemoryUtils;
 import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.config.TypedProperties;
@@ -65,6 +65,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.AbstractSparkCommitActionExecutor;
 import org.apache.hudi.table.action.commit.BaseCommitActionExecutor;
+import org.apache.hudi.table.action.commit.SparkBulkInsertCommitActionExecutor;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -72,7 +73,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.table.action.commit.SparkBulkInsertCommitActionExecutor;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroParquetReader;
@@ -83,7 +83,6 @@ import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
-import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
@@ -98,7 +97,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>>
-    extends BaseCommitActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>, HoodieBootstrapWriteMetadata> {
+    extends BaseCommitActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, HoodieBootstrapWriteMetadata> {
 
   private static final Logger LOG = LogManager.getLogger(SparkBootstrapCommitActionExecutor.class);
   protected String bootstrapSchema = null;
@@ -106,7 +105,7 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
 
   public SparkBootstrapCommitActionExecutor(HoodieSparkEngineContext context,
                                             HoodieWriteConfig config,
-                                            HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> table,
+                                            HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,
                                             Option<Map<String, String>> extraMetadata) {
     super(context, new HoodieWriteConfig.Builder().withProps(config.getProps())
         .withAutoCommit(true).withWriteStatusClass(BootstrapWriteStatus.class)

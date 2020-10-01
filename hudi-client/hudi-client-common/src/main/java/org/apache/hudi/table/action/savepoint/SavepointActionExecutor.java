@@ -44,7 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class SavepointActionExecutor<T extends HoodieRecordPayload, I, K, O, P> extends BaseActionExecutor<T, I, K, O, P, HoodieSavepointMetadata> {
+public class SavepointActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieSavepointMetadata> {
 
   private static final Logger LOG = LogManager.getLogger(SavepointActionExecutor.class);
 
@@ -53,7 +53,7 @@ public class SavepointActionExecutor<T extends HoodieRecordPayload, I, K, O, P> 
 
   public SavepointActionExecutor(HoodieEngineContext context,
                                  HoodieWriteConfig config,
-                                 HoodieTable<T, I, K, O, P> table,
+                                 HoodieTable<T, I, K, O> table,
                                  String instantTime,
                                  String user,
                                  String comment) {

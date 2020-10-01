@@ -60,7 +60,7 @@ public class SparkHoodieGlobalSimpleIndex<T extends HoodieRecordPayload> extends
 
   @Override
   public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD, HoodieEngineContext context,
-                                              HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> hoodieTable) {
+                                              HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) {
     return tagLocationInternal(recordRDD, context, hoodieTable);
   }
 
@@ -74,7 +74,7 @@ public class SparkHoodieGlobalSimpleIndex<T extends HoodieRecordPayload> extends
    */
   @Override
   protected JavaRDD<HoodieRecord<T>> tagLocationInternal(JavaRDD<HoodieRecord<T>> inputRecordRDD, HoodieEngineContext context,
-                                                         HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> hoodieTable) {
+                                                         HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) {
 
     JavaPairRDD<String, HoodieRecord<T>> keyedInputRecordRDD = inputRecordRDD.mapToPair(entry -> new Tuple2<>(entry.getRecordKey(), entry));
     JavaPairRDD<HoodieKey, HoodieRecordLocation> allRecordLocationsInTable = fetchAllRecordLocations(context, hoodieTable,
@@ -91,7 +91,7 @@ public class SparkHoodieGlobalSimpleIndex<T extends HoodieRecordPayload> extends
    * @return {@link JavaPairRDD} of {@link HoodieKey} and {@link HoodieRecordLocation}
    */
   protected JavaPairRDD<HoodieKey, HoodieRecordLocation> fetchAllRecordLocations(HoodieEngineContext context,
-                                                                                 HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> hoodieTable,
+                                                                                 HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable,
                                                                                  int parallelism) {
     List<Pair<String, HoodieBaseFile>> latestBaseFiles = getAllBaseFilesInTable(context, hoodieTable);
     return fetchRecordLocations(context, hoodieTable, parallelism, latestBaseFiles);
@@ -101,7 +101,7 @@ public class SparkHoodieGlobalSimpleIndex<T extends HoodieRecordPayload> extends
    * Load all files for all partitions as <Partition, filename> pair RDD.
    */
   protected List<Pair<String, HoodieBaseFile>> getAllBaseFilesInTable(final HoodieEngineContext context,
-                                                                      final HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> hoodieTable) {
+                                                                      final HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     try {
       List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(metaClient.getFs(), metaClient.getBasePath(), config.shouldAssumeDatePartitioning());
@@ -151,21 +151,6 @@ public class SparkHoodieGlobalSimpleIndex<T extends HoodieRecordPayload> extends
           }
           return taggedRecords.iterator();
         });
-  }
-
-  /**
-   * Returns an RDD mapping each HoodieKey with a partitionPath/fileID which contains it. Option.Empty if the key is not.
-   * found.
-   *
-   * @param hoodieKeys  keys to lookup
-   * @param context     HoodieEngineContext
-   * @param hoodieTable hoodie table object
-   */
-  @Override
-  public JavaPairRDD<HoodieKey, Option<Pair<String, String>>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
-                                                                                  HoodieEngineContext context,
-                                                                                  HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> hoodieTable) {
-    return fetchRecordLocationInternal(hoodieKeys, context, hoodieTable, config.getGlobalSimpleIndexParallelism());
   }
 
   @Override

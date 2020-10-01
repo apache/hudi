@@ -42,7 +42,7 @@ import java.util.Set;
 /**
  * Takes a bunch of keys and returns ones that are present in the file group.
  */
-public class HoodieKeyLookupHandle<T extends HoodieRecordPayload, I, K, O, P> extends HoodieReadHandle<T, I, K, O, P> {
+public class HoodieKeyLookupHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieReadHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieKeyLookupHandle.class);
 
@@ -54,7 +54,7 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload, I, K, O, P> ex
 
   private long totalKeysChecked;
 
-  public HoodieKeyLookupHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O, P> hoodieTable,
+  public HoodieKeyLookupHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
                                Pair<String, String> partitionPathFilePair) {
     super(config, null, hoodieTable, partitionPathFilePair);
     this.tableType = hoodieTable.getMetaClient().getTableType();

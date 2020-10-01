@@ -65,7 +65,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * IO Operation to append data onto an existing file.
  */
-public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O, P> extends HoodieWriteHandle<T, I, K, O, P> {
+public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieAppendHandle.class);
   // This acts as the sequenceID for records written
@@ -104,7 +104,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O, P> exten
 
   private SizeEstimator<HoodieRecord> sizeEstimator;
 
-  public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O, P> hoodieTable,
+  public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr, TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
     writeStatus.setStat(new HoodieDeltaWriteStat());
@@ -113,7 +113,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O, P> exten
     sizeEstimator = new DefaultSizeEstimator();
   }
 
-  public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O, P> hoodieTable,
+  public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier sparkTaskContextSupplier) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, null, sparkTaskContextSupplier);
   }

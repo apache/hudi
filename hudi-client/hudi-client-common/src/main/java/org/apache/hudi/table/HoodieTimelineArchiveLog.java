@@ -76,7 +76,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_O
 /**
  * Archiver to bound the growth of files under .hoodie meta path.
  */
-public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O, P> {
+public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTimelineArchiveLog.class);
 
@@ -85,10 +85,10 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O, P> {
   private Writer writer;
   private final int maxInstantsToKeep;
   private final int minInstantsToKeep;
-  private final HoodieTable<T, I, K, O, P> table;
+  private final HoodieTable<T, I, K, O> table;
   private final HoodieTableMetaClient metaClient;
 
-  public HoodieTimelineArchiveLog(HoodieWriteConfig config, HoodieTable<T, I, K, O, P> table) {
+  public HoodieTimelineArchiveLog(HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     this.config = config;
     this.table = table;
     this.metaClient = table.getMetaClient();

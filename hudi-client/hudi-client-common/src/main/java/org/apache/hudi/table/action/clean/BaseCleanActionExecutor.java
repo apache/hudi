@@ -50,12 +50,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public abstract class BaseCleanActionExecutor<T extends HoodieRecordPayload, I, K, O, P> extends BaseActionExecutor<T, I, K, O, P, HoodieCleanMetadata> {
+public abstract class BaseCleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieCleanMetadata> {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(BaseCleanActionExecutor.class);
 
-  public BaseCleanActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O, P> table, String instantTime) {
+  public BaseCleanActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
     super(context, config, table, instantTime);
   }
 
@@ -67,7 +67,7 @@ public abstract class BaseCleanActionExecutor<T extends HoodieRecordPayload, I, 
    */
   HoodieCleanerPlan requestClean(HoodieEngineContext context) {
     try {
-      CleanPlanner<T, I, K, O, P> planner = new CleanPlanner<>(table, config);
+      CleanPlanner<T, I, K, O> planner = new CleanPlanner<>(table, config);
       Option<HoodieInstant> earliestInstant = planner.getEarliestCommitToRetain();
       List<String> partitionsToClean = planner.getPartitionPathsToClean(earliestInstant);
 
@@ -148,7 +148,7 @@ public abstract class BaseCleanActionExecutor<T extends HoodieRecordPayload, I, 
   /**
    * Executes the Cleaner plan stored in the instant metadata.
    */
-  void runPendingClean(HoodieTable<T, I, K, O, P> table, HoodieInstant cleanInstant) {
+  void runPendingClean(HoodieTable<T, I, K, O> table, HoodieInstant cleanInstant) {
     try {
       HoodieCleanerPlan cleanerPlan = CleanerUtils.getCleanerPlan(table.getMetaClient(), cleanInstant);
       runClean(table, cleanInstant, cleanerPlan);
@@ -157,7 +157,7 @@ public abstract class BaseCleanActionExecutor<T extends HoodieRecordPayload, I, 
     }
   }
 
-  private HoodieCleanMetadata runClean(HoodieTable<T, I, K, O, P> table, HoodieInstant cleanInstant, HoodieCleanerPlan cleanerPlan) {
+  private HoodieCleanMetadata runClean(HoodieTable<T, I, K, O> table, HoodieInstant cleanInstant, HoodieCleanerPlan cleanerPlan) {
     ValidationUtils.checkArgument(cleanInstant.getState().equals(HoodieInstant.State.REQUESTED)
         || cleanInstant.getState().equals(HoodieInstant.State.INFLIGHT));
 

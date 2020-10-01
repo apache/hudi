@@ -49,7 +49,7 @@ import java.io.IOException;
 /**
  * Base class for all write operations logically performed at the file group level.
  */
-public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O, P> extends HoodieIOHandle<T, I, K, O, P> {
+public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieIOHandle<T, I, K, O> {
 
   private static final Logger LOG = LogManager.getLogger(HoodieWriteHandle.class);
 
@@ -63,13 +63,13 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O, 
   protected final TaskContextSupplier taskContextSupplier;
 
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
-                           String fileId, HoodieTable<T, I, K, O, P> hoodieTable, TaskContextSupplier taskContextSupplier) {
+                           String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, partitionPath, fileId, hoodieTable,
         getWriterSchemaIncludingAndExcludingMetadataPair(config), taskContextSupplier);
   }
 
   protected HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath, String fileId,
-                              HoodieTable<T, I, K, O, P> hoodieTable, Pair<Schema, Schema> writerSchemaIncludingAndExcludingMetadataPair,
+                              HoodieTable<T, I, K, O> hoodieTable, Pair<Schema, Schema> writerSchemaIncludingAndExcludingMetadataPair,
                               TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable);
     this.partitionPath = partitionPath;
@@ -190,7 +190,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O, 
     return taskContextSupplier.getAttemptIdSupplier().get();
   }
 
-  protected HoodieFileWriter createNewFileWriter(String instantTime, Path path, HoodieTable<T, I, K, O, P> hoodieTable,
+  protected HoodieFileWriter createNewFileWriter(String instantTime, Path path, HoodieTable<T, I, K, O> hoodieTable,
       HoodieWriteConfig config, Schema schema, TaskContextSupplier taskContextSupplier) throws IOException {
     return HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, schema, taskContextSupplier);
   }

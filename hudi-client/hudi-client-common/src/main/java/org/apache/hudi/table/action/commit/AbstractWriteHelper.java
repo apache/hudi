@@ -29,15 +29,15 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import java.time.Duration;
 import java.time.Instant;
 
-public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O, P, R> {
+public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O, R> {
 
   public HoodieWriteMetadata<O> write(String instantTime,
                                       I inputRecordsRDD,
                                       HoodieEngineContext context,
-                                      HoodieTable<T, I, K, O, P> table,
+                                      HoodieTable<T, I, K, O> table,
                                       boolean shouldCombine,
                                       int shuffleParallelism,
-                                      BaseCommitActionExecutor<T, I, K, O, P, R> executor,
+                                      BaseCommitActionExecutor<T, I, K, O, R> executor,
                                       boolean performTagging) {
     try {
       // De-dupe/merge if needed
@@ -64,13 +64,13 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
   }
 
   private I tag(
-      I dedupedRecords, HoodieEngineContext context, HoodieTable<T, I, K, O, P> table) {
+      I dedupedRecords, HoodieEngineContext context, HoodieTable<T, I, K, O> table) {
     // perform index loop up to get existing location of records
     return table.getIndex().tagLocation(dedupedRecords, context, table);
   }
 
   public I combineOnCondition(
-      boolean condition, I records, int parallelism, HoodieTable<T, I, K, O, P> table) {
+      boolean condition, I records, int parallelism, HoodieTable<T, I, K, O> table) {
     return condition ? deduplicateRecords(records, table, parallelism) : records;
   }
 
@@ -82,10 +82,10 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
    * @return RDD of HoodieRecord already be deduplicated
    */
   public I deduplicateRecords(
-      I records, HoodieTable<T, I, K, O, P> table, int parallelism) {
+      I records, HoodieTable<T, I, K, O> table, int parallelism) {
     return deduplicateRecords(records, table.getIndex(), parallelism);
   }
 
   public abstract I deduplicateRecords(
-      I records, HoodieIndex<T, I, K, O, P> index, int parallelism);
+      I records, HoodieIndex<T, I, K, O> index, int parallelism);
 }

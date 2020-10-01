@@ -24,14 +24,14 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FileSystem;
 
-public abstract class HoodieIOHandle<T extends HoodieRecordPayload, I, K, O, P> {
+public abstract class HoodieIOHandle<T extends HoodieRecordPayload, I, K, O> {
 
   protected final String instantTime;
   protected final HoodieWriteConfig config;
   protected final FileSystem fs;
-  protected final HoodieTable<T, I, K, O, P> hoodieTable;
+  protected final HoodieTable<T, I, K, O> hoodieTable;
 
-  HoodieIOHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O, P> hoodieTable) {
+  HoodieIOHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable) {
     this.instantTime = instantTime;
     this.config = config;
     this.hoodieTable = hoodieTable;

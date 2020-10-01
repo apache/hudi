@@ -27,13 +27,13 @@ import java.io.Serializable;
 /**
  * Run one round of compaction.
  */
-public abstract class AbstractCompactor<T extends HoodieRecordPayload, I, K, O, P> implements Serializable {
+public abstract class AbstractCompactor<T extends HoodieRecordPayload, I, K, O> implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  protected transient AbstractHoodieWriteClient<T, I, K, O, P> compactionClient;
+  protected transient AbstractHoodieWriteClient<T, I, K, O> compactionClient;
 
-  public AbstractCompactor(AbstractHoodieWriteClient<T, I, K, O, P> compactionClient) {
+  public AbstractCompactor(AbstractHoodieWriteClient<T, I, K, O> compactionClient) {
     this.compactionClient = compactionClient;
   }
 

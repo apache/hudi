@@ -41,11 +41,11 @@ import java.util.Map;
 /**
  * Performs rollback using marker files generated during the write..
  */
-public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecordPayload, I, K, O, P> implements BaseRollbackActionExecutor.RollbackStrategy {
+public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecordPayload, I, K, O> implements BaseRollbackActionExecutor.RollbackStrategy {
 
   private static final Logger LOG = LogManager.getLogger(AbstractMarkerBasedRollbackStrategy.class);
 
-  protected final HoodieTable<T, I, K, O, P> table;
+  protected final HoodieTable<T, I, K, O> table;
 
   protected final transient HoodieEngineContext context;
 
@@ -55,7 +55,7 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
 
   private final String instantTime;
 
-  public AbstractMarkerBasedRollbackStrategy(HoodieTable<T, I, K, O, P> table, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
+  public AbstractMarkerBasedRollbackStrategy(HoodieTable<T, I, K, O> table, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
     this.table = table;
     this.context = context;
     this.basePath = table.getMetaClient().getBasePath();

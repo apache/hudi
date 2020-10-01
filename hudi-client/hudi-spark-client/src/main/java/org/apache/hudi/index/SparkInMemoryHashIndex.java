@@ -25,12 +25,10 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.spark.api.java.JavaPairRDD;
+
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.Function2;
 
 import java.util.ArrayList;
@@ -59,38 +57,29 @@ public class SparkInMemoryHashIndex<T extends HoodieRecordPayload> extends Spark
   }
 
   @Override
-  public JavaPairRDD<HoodieKey, Option<Pair<String, String>>> fetchRecordLocation(JavaRDD<HoodieKey> hoodieKeys,
-                                                                                  HoodieEngineContext context, HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> hoodieTable) {
-    throw new UnsupportedOperationException("InMemory index does not implement check exist yet");
-  }
-
-  @Override
   public JavaRDD<HoodieRecord<T>> tagLocation(JavaRDD<HoodieRecord<T>> recordRDD, HoodieEngineContext context,
-                                              HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> hoodieTable) {
+                                              HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) {
     return recordRDD.mapPartitionsWithIndex(this.new LocationTagFunction(), true);
   }
 
   @Override
   public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD,
                                              HoodieEngineContext context,
-                                             HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>> hoodieTable) {
-    return writeStatusRDD.map(new Function<WriteStatus, WriteStatus>() {
-      @Override
-      public WriteStatus call(WriteStatus writeStatus) {
-        for (HoodieRecord record : writeStatus.getWrittenRecords()) {
-          if (!writeStatus.isErrored(record.getKey())) {
-            HoodieKey key = record.getKey();
-            Option<HoodieRecordLocation> newLocation = record.getNewLocation();
-            if (newLocation.isPresent()) {
-              recordLocationMap.put(key, newLocation.get());
-            } else {
-              // Delete existing index for a deleted record
-              recordLocationMap.remove(key);
-            }
+                                             HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) {
+    return writeStatusRDD.map(writeStatus -> {
+      for (HoodieRecord record : writeStatus.getWrittenRecords()) {
+        if (!writeStatus.isErrored(record.getKey())) {
+          HoodieKey key = record.getKey();
+          Option<HoodieRecordLocation> newLocation = record.getNewLocation();
+          if (newLocation.isPresent()) {
+            recordLocationMap.put(key, newLocation.get());
+          } else {
+            // Delete existing index for a deleted record
+            recordLocationMap.remove(key);
           }
         }
-        return writeStatus;
       }
+      return writeStatus;
     });
   }
 

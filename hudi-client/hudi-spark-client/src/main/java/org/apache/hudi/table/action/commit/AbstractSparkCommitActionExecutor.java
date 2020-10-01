@@ -66,8 +66,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-public abstract class AbstractSparkCommitActionExecutor<T extends HoodieRecordPayload> extends BaseCommitActionExecutor<T,
-    JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, JavaPairRDD<HoodieKey, Option<Pair<String, String>>>, HoodieWriteMetadata> {
+public abstract class AbstractSparkCommitActionExecutor<T extends HoodieRecordPayload> extends
+    BaseCommitActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, HoodieWriteMetadata> {
 
   private static final Logger LOG = LogManager.getLogger(AbstractSparkCommitActionExecutor.class);
 

@@ -34,11 +34,11 @@ import org.apache.hadoop.fs.Path;
 /**
  * Base class for read operations done logically on the file group.
  */
-public abstract class HoodieReadHandle<T extends HoodieRecordPayload, I, K, O, P> extends HoodieIOHandle<T, I, K, O, P> {
+public abstract class HoodieReadHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieIOHandle<T, I, K, O> {
 
   protected final Pair<String, String> partitionPathFilePair;
 
-  public HoodieReadHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O, P> hoodieTable,
+  public HoodieReadHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
       Pair<String, String> partitionPathFilePair) {
     super(config, instantTime, hoodieTable);
     this.partitionPathFilePair = partitionPathFilePair;

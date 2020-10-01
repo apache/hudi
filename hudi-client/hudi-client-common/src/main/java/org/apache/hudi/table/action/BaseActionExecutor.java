@@ -26,18 +26,18 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-public abstract class BaseActionExecutor<T extends HoodieRecordPayload, I, K, O, P, R> implements Serializable {
+public abstract class BaseActionExecutor<T extends HoodieRecordPayload, I, K, O, R> implements Serializable {
 
   protected final transient HoodieEngineContext context;
   protected final transient Configuration hadoopConf;
 
   protected final HoodieWriteConfig config;
 
-  protected final HoodieTable<T, I, K, O, P> table;
+  protected final HoodieTable<T, I, K, O> table;
 
   protected final String instantTime;
 
-  public BaseActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O, P> table, String instantTime) {
+  public BaseActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
     this.context = context;
     this.hadoopConf = context.getHadoopConf().get();
     this.config = config;

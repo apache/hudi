@@ -29,7 +29,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
  *
  * @param <T>
  */
-public abstract class AbstractDeleteHelper<T extends HoodieRecordPayload, I, K, O, P, R> {
+public abstract class AbstractDeleteHelper<T extends HoodieRecordPayload, I, K, O, R> {
 
   /**
    * Deduplicate Hoodie records, using the given deduplication function.
@@ -39,10 +39,10 @@ public abstract class AbstractDeleteHelper<T extends HoodieRecordPayload, I, K, 
    * @param parallelism parallelism or partitions to be used while reducing/deduplicating
    * @return HoodieKey already be deduplicated
    */
-  public abstract K deduplicateKeys(K keys, HoodieTable<T, I, K, O, P> table, int parallelism);
+  public abstract K deduplicateKeys(K keys, HoodieTable<T, I, K, O> table, int parallelism);
 
   public abstract HoodieWriteMetadata<O> execute(String instantTime,
                                                  K keys, HoodieEngineContext context,
-                                                 HoodieWriteConfig config, HoodieTable<T, I, K, O, P> table,
-                                                 BaseCommitActionExecutor<T, I, K, O, P, R> deleteExecutor);
+                                                 HoodieWriteConfig config, HoodieTable<T, I, K, O> table,
+                                                 BaseCommitActionExecutor<T, I, K, O, R> deleteExecutor);
 }

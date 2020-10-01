@@ -25,10 +25,10 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
-public abstract class AbstractBulkInsertHelper<T extends HoodieRecordPayload, I, K, O, P, R> {
+public abstract class AbstractBulkInsertHelper<T extends HoodieRecordPayload, I, K, O, R> {
 
   public abstract HoodieWriteMetadata<O> bulkInsert(I inputRecords, String instantTime,
-                                                    HoodieTable<T, I, K, O, P> table, HoodieWriteConfig config,
-                                                    BaseCommitActionExecutor<T, I, K, O, P, R> executor, boolean performDedupe,
+                                                    HoodieTable<T, I, K, O> table, HoodieWriteConfig config,
+                                                    BaseCommitActionExecutor<T, I, K, O, R> executor, boolean performDedupe,
                                                     Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner);
 }
