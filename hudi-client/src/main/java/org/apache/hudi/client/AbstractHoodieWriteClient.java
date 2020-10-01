@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
@@ -40,7 +41,6 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -49,6 +49,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -91,40 +92,46 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
   }
 
   /**
+   *
    * Commit changes performed at the given instantTime marker.
    */
   public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses,
-      Option<Map<String, String>> extraMetadata) {
-    List<HoodieWriteStat> stats = writeStatuses.map(WriteStatus::getStat).collect();
-    return commitStats(instantTime, stats, extraMetadata);
-  }
-
-  public boolean commitStats(String instantTime, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata) {
-    LOG.info("Committing " + instantTime);
+                        Option<Map<String, String>> extraMetadata) {
     HoodieTableMetaClient metaClient = createMetaClient(false);
     String actionType = metaClient.getCommitActionType();
+    return commit(instantTime, writeStatuses, extraMetadata, actionType, Collections.emptyMap());
+  }
+
+  /**
+   * Complete changes performed at the given instantTime marker with specified action.
+   */
+  public boolean commit(String instantTime, JavaRDD<WriteStatus> writeStatuses,
+      Option<Map<String, String>> extraMetadata, String commitActionType, Map<String, List<String>> partitionToReplacedFileIds) {
+    List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
+    return commitStats(instantTime, writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds);
+  }
+
+  public boolean commitStats(String instantTime, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata,
+                             String commitActionType) {
+    return commitStats(instantTime, stats, extraMetadata, commitActionType, Collections.emptyMap());
+  }
+
+  public boolean commitStats(String instantTime, List<HoodieWriteStat> stats, Option<Map<String, String>> extraMetadata,
+                             String commitActionType, Map<String, List<String>> partitionToReplaceFileIds) {
+    LOG.info("Committing " + instantTime + " action " + commitActionType);
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable<T> table = HoodieTable.create(config, hadoopConf);
 
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
-    stats.forEach(stat -> metadata.addWriteStat(stat.getPartitionPath(), stat));
-
+    HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds, extraMetadata, operationType, config.getSchema(), commitActionType);
     // Finalize write
     finalizeWrite(table, instantTime, stats);
 
-    // add in extra metadata
-    if (extraMetadata.isPresent()) {
-      extraMetadata.get().forEach(metadata::addMetadata);
-    }
-    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, config.getSchema());
-    metadata.setOperationType(operationType);
-
     try {
-      activeTimeline.saveAsComplete(new HoodieInstant(true, actionType, instantTime),
+      activeTimeline.saveAsComplete(new HoodieInstant(true, commitActionType, instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
       postCommit(table, metadata, instantTime, extraMetadata);
-      emitCommitMetrics(instantTime, metadata, actionType);
+      emitCommitMetrics(instantTime, metadata, commitActionType);
       LOG.info("Committed " + instantTime);
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,

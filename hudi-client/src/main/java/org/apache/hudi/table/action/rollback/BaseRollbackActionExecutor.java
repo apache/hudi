@@ -109,7 +109,7 @@ public abstract class BaseRollbackActionExecutor extends BaseActionExecutor<Hood
     HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.convertRollbackMetadata(
         instantTime,
         Option.of(rollbackTimer.endTimer()),
-        Collections.singletonList(instantToRollback.getTimestamp()),
+        Collections.singletonList(instantToRollback),
         stats);
     if (!skipTimelinePublish) {
       finishRollback(rollbackMetadata);

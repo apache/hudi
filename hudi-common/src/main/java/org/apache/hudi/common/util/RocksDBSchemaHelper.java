@@ -47,17 +47,19 @@ public class RocksDBSchemaHelper {
   private final String colFamilyForPendingCompaction;
   private final String colFamilyForBootstrapBaseFile;
   private final String colFamilyForStoredPartitions;
+  private final String colFamilyForReplacedFileGroups;
 
   public RocksDBSchemaHelper(HoodieTableMetaClient metaClient) {
     this.colFamilyForBootstrapBaseFile = "hudi_bootstrap_basefile_" + metaClient.getBasePath().replace("/", "_");
     this.colFamilyForPendingCompaction = "hudi_pending_compaction_" + metaClient.getBasePath().replace("/", "_");
     this.colFamilyForStoredPartitions = "hudi_partitions_" + metaClient.getBasePath().replace("/", "_");
     this.colFamilyForView = "hudi_view_" + metaClient.getBasePath().replace("/", "_");
+    this.colFamilyForReplacedFileGroups = "hudi_replaced_fg" + metaClient.getBasePath().replace("/", "_");
   }
 
   public List<String> getAllColumnFamilies() {
     return Arrays.asList(getColFamilyForView(), getColFamilyForPendingCompaction(), getColFamilyForBootstrapBaseFile(),
-        getColFamilyForStoredPartitions());
+        getColFamilyForStoredPartitions(), getColFamilyForReplacedFileGroups());
   }
 
   public String getKeyForPartitionLookup(String partition) {
@@ -69,6 +71,10 @@ public class RocksDBSchemaHelper {
   }
 
   public String getKeyForBootstrapBaseFile(HoodieFileGroupId fgId) {
+    return getPartitionFileIdBasedLookup(fgId);
+  }
+
+  public String getKeyForReplacedFileGroup(HoodieFileGroupId fgId) {
     return getPartitionFileIdBasedLookup(fgId);
   }
 
@@ -124,5 +130,9 @@ public class RocksDBSchemaHelper {
 
   public String getColFamilyForStoredPartitions() {
     return colFamilyForStoredPartitions;
+  }
+
+  public String getColFamilyForReplacedFileGroups() {
+    return colFamilyForReplacedFileGroups;
   }
 }

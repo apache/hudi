@@ -36,29 +36,29 @@ usage() {
 }
 
 get_spark_command() {
-if [ -z "$scala" ]
-then
-  scala="2.11"
-else
-  scala=$scala
-fi
-echo "spark-submit --packages org.apache.spark:spark-avro_${scala}:2.4.4 \
---master $0 \
---deploy-mode $1 \
---properties-file $2 \
---class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
-`ls target/hudi-integ-test-*-SNAPSHOT.jar` \
---source-class $3 \
---source-ordering-field $4 \
---input-base-path $5 \
---target-base-path $6 \
---target-table $7 \
---props $8 \
---storage-type $9 \
---payload-class "${10}" \
---workload-yaml-path "${11}" \
---input-file-size "${12}" \
---<use-deltastreamer>"
+  if [ -z "$scala" ]
+  then
+    scala="2.11"
+  else
+    scala=$scala
+  fi
+  echo "spark-submit --packages org.apache.spark:spark-avro_${scala}:2.4.4 \
+          --master $0 \
+          --deploy-mode $1 \
+          --properties-file $2 \
+          --class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
+          `ls target/hudi-integ-test-*-SNAPSHOT.jar` \
+          --source-class $3 \
+          --source-ordering-field $4 \
+          --input-base-path $5 \
+          --target-base-path $6 \
+          --target-table $7 \
+          --props $8 \
+          --storage-type $9 \
+          --payload-class "${10}" \
+          --workload-yaml-path "${11}" \
+          --input-file-size "${12}" \
+          --<use-deltastreamer>"
 }
 
 case "$1" in

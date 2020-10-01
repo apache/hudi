@@ -559,13 +559,13 @@ public class TestCleaner extends HoodieClientTestBase {
         : cleanStat.getSuccessDeleteBootstrapBaseFiles().size()), "Must clean at least 1 file");
     if (enableBootstrapSourceClean) {
       HoodieFileStatus fstatus =
-          bootstrapMapping.get(p0).get(0).getBoostrapFileStatus();
+          bootstrapMapping.get(p0).get(0).getBootstrapFileStatus();
       // This ensures full path is recorded in metadata.
       assertTrue(cleanStat.getSuccessDeleteBootstrapBaseFiles().contains(fstatus.getPath().getUri()),
           "Successful delete files were " + cleanStat.getSuccessDeleteBootstrapBaseFiles()
               + " but did not contain " + fstatus.getPath().getUri());
       assertFalse(Files.exists(Paths.get(bootstrapMapping.get(
-          p0).get(0).getBoostrapFileStatus().getPath().getUri())));
+          p0).get(0).getBootstrapFileStatus().getPath().getUri())));
     }
     cleanStat = getCleanStat(hoodieCleanStatsTwo, p1);
     String file2P0C1 = partitionAndFileId002.get(p0);
@@ -579,13 +579,13 @@ public class TestCleaner extends HoodieClientTestBase {
         : cleanStat.getSuccessDeleteBootstrapBaseFiles().size()), "Must clean at least 1 file");
     if (enableBootstrapSourceClean) {
       HoodieFileStatus fstatus =
-          bootstrapMapping.get(p1).get(0).getBoostrapFileStatus();
+          bootstrapMapping.get(p1).get(0).getBootstrapFileStatus();
       // This ensures full path is recorded in metadata.
       assertTrue(cleanStat.getSuccessDeleteBootstrapBaseFiles().contains(fstatus.getPath().getUri()),
           "Successful delete files were " + cleanStat.getSuccessDeleteBootstrapBaseFiles()
               + " but did not contain " + fstatus.getPath().getUri());
       assertFalse(Files.exists(Paths.get(bootstrapMapping.get(
-          p1).get(0).getBoostrapFileStatus().getPath().getUri())));
+          p1).get(0).getBootstrapFileStatus().getPath().getUri())));
     }
 
     // make next commit, with 2 updates to existing files, and 1 insert
@@ -928,7 +928,7 @@ public class TestCleaner extends HoodieClientTestBase {
     assertTrue(testTable.baseFileExists(p0, "00000000000004", file4P0C3));
     if (enableBootstrapSourceClean) {
       assertFalse(Files.exists(Paths.get(bootstrapMapping.get(
-          p0).get(0).getBoostrapFileStatus().getPath().getUri())));
+          p0).get(0).getBootstrapFileStatus().getPath().getUri())));
     }
 
     // No cleaning on partially written file, with no commit.
@@ -968,7 +968,7 @@ public class TestCleaner extends HoodieClientTestBase {
 
     for (Map.Entry<String, List<BootstrapFileMapping>> entry : bootstrapMapping.entrySet()) {
       new File(sourcePath.toString() + "/" + entry.getKey()).mkdirs();
-      assertTrue(new File(entry.getValue().get(0).getBoostrapFileStatus().getPath().getUri()).createNewFile());
+      assertTrue(new File(entry.getValue().get(0).getBootstrapFileStatus().getPath().getUri()).createNewFile());
     }
     return bootstrapMapping;
   }

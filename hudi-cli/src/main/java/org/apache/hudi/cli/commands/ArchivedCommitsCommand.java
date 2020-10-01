@@ -25,6 +25,7 @@ import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -63,7 +64,7 @@ public class ArchivedCommitsCommand implements CommandMarker {
       throws IOException {
     System.out.println("===============> Showing only " + limit + " archived commits <===============");
     String basePath = HoodieCLI.getTableMetaClient().getBasePath();
-    Path archivePath = new Path(basePath + "/.hoodie/.commits_.archive*");
+    Path archivePath = new Path(HoodieCLI.getTableMetaClient().getArchivePath() + "/.commits_.archive*");
     if (folder != null && !folder.isEmpty()) {
       archivePath = new Path(basePath + "/.hoodie/" + folder);
     }
@@ -138,9 +139,11 @@ public class ArchivedCommitsCommand implements CommandMarker {
       throws IOException {
 
     System.out.println("===============> Showing only " + limit + " archived commits <===============");
-    String basePath = HoodieCLI.getTableMetaClient().getBasePath();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    String basePath = metaClient.getBasePath();
+    Path archivePath = new Path(metaClient.getArchivePath() + "/.commits_.archive*");
     FileStatus[] fsStatuses =
-        FSUtils.getFs(basePath, HoodieCLI.conf).globStatus(new Path(basePath + "/.hoodie/.commits_.archive*"));
+        FSUtils.getFs(basePath, HoodieCLI.conf).globStatus(archivePath);
     List<Comparable[]> allCommits = new ArrayList<>();
     for (FileStatus fs : fsStatuses) {
       // read the archived file
