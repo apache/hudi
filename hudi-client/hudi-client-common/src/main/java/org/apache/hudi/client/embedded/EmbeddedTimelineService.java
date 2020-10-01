@@ -72,7 +72,7 @@ public class EmbeddedTimelineService {
   }
 
   private void setHostAddr(String embeddedTimelineServiceHostAddr) {
-    if (hostAddr != null) {
+    if (embeddedTimelineServiceHostAddr != null) {
       LOG.info("Overriding hostIp to (" + embeddedTimelineServiceHostAddr + ") found in spark-conf. It was " + this.hostAddr);
       this.hostAddr = embeddedTimelineServiceHostAddr;
     } else {
