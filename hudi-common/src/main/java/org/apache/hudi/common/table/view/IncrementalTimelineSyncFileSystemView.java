@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -28,7 +30,10 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineDiffHelper;
@@ -39,15 +44,13 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -129,6 +132,8 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
               addPendingCompactionInstant(timeline, instant);
             } else if (instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION)) {
               addRollbackInstant(timeline, instant);
+            } else if (instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+              addReplaceInstant(timeline, instant);
             }
           } catch (IOException ioe) {
             throw new HoodieException(ioe);
@@ -191,7 +196,14 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
     LOG.info("Syncing committed instant (" + instant + ")");
     HoodieCommitMetadata commitMetadata =
         HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-    commitMetadata.getPartitionToWriteStats().entrySet().stream().forEach(entry -> {
+    updatePartitionWriteFileGroups(commitMetadata.getPartitionToWriteStats(), timeline, instant);
+    LOG.info("Done Syncing committed instant (" + instant + ")");
+  }
+
+  private void updatePartitionWriteFileGroups(Map<String, List<HoodieWriteStat>> partitionToWriteStats,
+                                              HoodieTimeline timeline,
+                                              HoodieInstant instant) {
+    partitionToWriteStats.entrySet().stream().forEach(entry -> {
       String partition = entry.getKey();
       if (isPartitionAvailableInStore(partition)) {
         LOG.info("Syncing partition (" + partition + ") of instant (" + instant + ")");
@@ -231,6 +243,13 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
       removeFileSlicesForPartition(timeline, instant, e.getKey(),
           e.getValue().stream().map(x -> x.getValue()).collect(Collectors.toList()));
     });
+
+    if (metadata.getRestoreInstantInfo() != null) {
+      Set<String> rolledbackInstants = metadata.getRestoreInstantInfo().stream()
+          .filter(instantInfo -> HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instantInfo.getAction()))
+          .map(instantInfo -> instantInfo.getCommitTime()).collect(Collectors.toSet());
+      removeReplacedFileIdsAtInstants(rolledbackInstants);
+    }
     LOG.info("Done Syncing restore instant (" + instant + ")");
   }
 
@@ -249,6 +268,28 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
       removeFileSlicesForPartition(timeline, instant, e.getKey(), e.getValue().getSuccessDeleteFiles());
     });
     LOG.info("Done Syncing rollback instant (" + instant + ")");
+  }
+
+  /**
+   * Add newly found REPLACE instant.
+   *
+   * @param timeline Hoodie Timeline
+   * @param instant REPLACE Instant
+   */
+  private void addReplaceInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
+    LOG.info("Syncing replace instant (" + instant + ")");
+    HoodieReplaceCommitMetadata replaceMetadata =
+        HoodieReplaceCommitMetadata.fromBytes(timeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+    updatePartitionWriteFileGroups(replaceMetadata.getPartitionToWriteStats(), timeline, instant);
+    replaceMetadata.getPartitionToReplaceFileIds().entrySet().stream().forEach(entry -> {
+      String partition = entry.getKey();
+      Map<HoodieFileGroupId, HoodieInstant> replacedFileIds = entry.getValue().stream()
+          .collect(Collectors.toMap(replaceStat -> new HoodieFileGroupId(partition, replaceStat), replaceStat -> instant));
+
+      LOG.info("For partition (" + partition + ") of instant (" + instant + "), excluding " + replacedFileIds.size() + " file groups");
+      addReplacedFileGroups(replacedFileIds);
+    });
+    LOG.info("Done Syncing REPLACE instant (" + instant + ")");
   }
 
   /**

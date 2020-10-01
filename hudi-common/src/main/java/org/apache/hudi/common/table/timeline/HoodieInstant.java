@@ -166,6 +166,10 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     } else if (HoodieTimeline.RESTORE_ACTION.equals(action)) {
       return isInflight() ? HoodieTimeline.makeInflightRestoreFileName(timestamp)
           : HoodieTimeline.makeRestoreFileName(timestamp);
+    } else if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(action)) {
+      return isInflight() ? HoodieTimeline.makeInflightReplaceFileName(timestamp)
+          : isRequested() ? HoodieTimeline.makeRequestedReplaceFileName(timestamp)
+          : HoodieTimeline.makeReplaceFileName(timestamp);
     }
     throw new IllegalArgumentException("Cannot get file name for unknown action " + action);
   }

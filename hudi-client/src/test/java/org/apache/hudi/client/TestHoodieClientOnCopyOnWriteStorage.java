@@ -18,6 +18,9 @@
 
 package org.apache.hudi.client;
 
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -54,10 +57,6 @@ import org.apache.hudi.table.action.commit.WriteHelper;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.HoodieWriteableTestTable;
-
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -886,6 +885,87 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // delete another batch. previous delete commit should have persisted the schema. If not,
     // this will throw exception
     testDeletes(client, updateBatch3.getRight(), 10, file1, "007", 140, keysSoFar);
+  }
+
+  /**
+   * Test scenario of writing more file groups than existing number of file groups in partition.
+   */
+  @Test
+  public void testInsertOverwritePartitionHandlingWithMoreRecords() throws Exception {
+    verifyInsertOverwritePartitionHandling(1000, 3000);
+  }
+
+  /**
+   * Test scenario of writing fewer file groups than existing number of file groups in partition.
+   */
+  @Test
+  public void testInsertOverwritePartitionHandlingWithFewerRecords() throws Exception {
+    verifyInsertOverwritePartitionHandling(3000, 1000);
+  }
+
+  /**
+   * Test scenario of writing similar number file groups in partition.
+   */
+  @Test
+  public void testInsertOverwritePartitionHandlinWithSimilarNumberOfRecords() throws Exception {
+    verifyInsertOverwritePartitionHandling(3000, 3000);
+  }
+
+  /**
+   *  1) Do write1 (upsert) with 'batch1RecordsCount' number of records.
+   *  2) Do write2 (insert overwrite) with 'batch2RecordsCount' number of records.
+   *
+   *  Verify that all records in step1 are overwritten
+   */
+  private void verifyInsertOverwritePartitionHandling(int batch1RecordsCount, int batch2RecordsCount) throws Exception {
+    final String testPartitionPath = "americas";
+    HoodieWriteConfig config = getSmallInsertWriteConfig(2000, false);
+    HoodieWriteClient client = getHoodieWriteClient(config, false);
+    dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
+
+    // Do Inserts
+    String commitTime1 = "001";
+    client.startCommitWithTime(commitTime1);
+    List<HoodieRecord> inserts1 = dataGen.generateInserts(commitTime1, batch1RecordsCount);
+    JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 2);
+    List<WriteStatus> statuses = client.upsert(insertRecordsRDD1, commitTime1).collect();
+    assertNoWriteErrors(statuses);
+    Set<String> batch1Buckets = statuses.stream().map(s -> s.getFileId()).collect(Collectors.toSet());
+    verifyRecordsWritten(commitTime1, inserts1, statuses);
+
+    // Do Insert Overwrite
+    String commitTime2 = "002";
+    client.startCommitWithTime(commitTime2, HoodieTimeline.REPLACE_COMMIT_ACTION);
+    List<HoodieRecord> inserts2 = dataGen.generateInserts(commitTime2, batch2RecordsCount);
+    List<HoodieRecord> insertsAndUpdates2 = new ArrayList<>();
+    insertsAndUpdates2.addAll(inserts2);
+    JavaRDD<HoodieRecord> insertAndUpdatesRDD2 = jsc.parallelize(insertsAndUpdates2, 2);
+    HoodieWriteResult writeResult = client.insertOverwrite(insertAndUpdatesRDD2, commitTime2);
+    statuses = writeResult.getWriteStatuses().collect();
+    assertNoWriteErrors(statuses);
+
+    assertEquals(batch1Buckets, new HashSet<>(writeResult.getPartitionToReplaceFileIds().get(testPartitionPath)));
+    verifyRecordsWritten(commitTime2, inserts2, statuses);
+  }
+
+  /**
+   * Verify data in parquet files matches expected records and commit time.
+   */
+  private void verifyRecordsWritten(String commitTime, List<HoodieRecord> expectedRecords, List<WriteStatus> allStatus) {
+    List<GenericRecord> records = new ArrayList<>();
+    for (WriteStatus status : allStatus) {
+      Path filePath = new Path(basePath, status.getStat().getPath());
+      records.addAll(ParquetUtils.readAvroRecords(jsc.hadoopConfiguration(), filePath));
+    }
+
+    Set<String> expectedKeys = recordsToRecordKeySet(expectedRecords);
+    assertEquals(records.size(), expectedKeys.size());
+    for (GenericRecord record : records) {
+      String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+      assertEquals(commitTime,
+          record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString());
+      assertTrue(expectedKeys.contains(recordKey));
+    }
   }
 
   private Pair<Set<String>, List<HoodieRecord>> testUpdates(String instantTime, HoodieWriteClient client,

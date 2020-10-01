@@ -18,15 +18,16 @@
 
 package org.apache.hudi.table.action;
 
-import java.util.List;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
-
 import org.apache.spark.api.java.JavaRDD;
 
 import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Contains metadata, write-statuses and latency times corresponding to a commit/delta-commit action.
@@ -42,6 +43,7 @@ public class HoodieWriteMetadata {
   private Option<List<HoodieWriteStat>> writeStats = Option.empty();
   private Option<Duration> indexUpdateDuration = Option.empty();
   private Option<Duration> finalizeDuration = Option.empty();
+  private Option<Map<String, List<String>>> partitionToReplaceFileIds = Option.empty();
 
   public HoodieWriteMetadata() {
   }
@@ -100,5 +102,13 @@ public class HoodieWriteMetadata {
 
   public void setIndexLookupDuration(Duration indexLookupDuration) {
     this.indexLookupDuration = Option.ofNullable(indexLookupDuration);
+  }
+
+  public Map<String, List<String>> getPartitionToReplaceFileIds() {
+    return partitionToReplaceFileIds.orElse(Collections.emptyMap());
+  }
+
+  public void setPartitionToReplaceFileIds(Map<String, List<String>> partitionToReplaceFileIds) {
+    this.partitionToReplaceFileIds = Option.ofNullable(partitionToReplaceFileIds);
   }
 }
