@@ -84,9 +84,8 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   }
 
   @Override
-  public HoodieWriteMetadata upsert(JavaSparkContext jsc, String instantTime, JavaRDD<HoodieRecord<T>> records,
-                                    String schema) {
-    return new UpsertCommitActionExecutor<>(jsc, config, this, instantTime, records, schema).execute();
+  public HoodieWriteMetadata upsert(JavaSparkContext jsc, String instantTime, JavaRDD<HoodieRecord<T>> records) {
+    return new UpsertCommitActionExecutor<>(jsc, config, this, instantTime, records).execute();
   }
 
   @Override
