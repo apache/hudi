@@ -18,8 +18,10 @@
 
 package org.apache.hudi.async;
 
-import org.apache.hudi.client.HoodieWriteClient;
-import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.hudi.client.AbstractCompactor;
+import org.apache.hudi.client.AbstractHoodieWriteClient;
+import org.apache.hudi.client.HoodieSparkCompactor;
+import org.apache.hudi.client.common.HoodieEngineContext;
 
 /**
  * Async Compaction Service used by Structured Streaming. Here, async compaction is run in daemon mode to prevent
@@ -29,7 +31,12 @@ public class SparkStreamingAsyncCompactService extends AsyncCompactService {
 
   private static final long serialVersionUID = 1L;
 
-  public SparkStreamingAsyncCompactService(JavaSparkContext jssc, HoodieWriteClient client) {
-    super(jssc, client, true);
+  public SparkStreamingAsyncCompactService(HoodieEngineContext context, AbstractHoodieWriteClient client) {
+    super(context, client, true);
+  }
+
+  @Override
+  protected AbstractCompactor createCompactor(AbstractHoodieWriteClient client) {
+    return new HoodieSparkCompactor(client);
   }
 }

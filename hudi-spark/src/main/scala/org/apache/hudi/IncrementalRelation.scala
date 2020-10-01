@@ -17,7 +17,6 @@
 
 package org.apache.hudi
 
-
 import com.google.common.collect.Lists
 import org.apache.avro.Schema
 import org.apache.hadoop.fs.GlobPattern
@@ -30,10 +29,11 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.table.HoodieTable
-
 import org.apache.hadoop.fs.GlobPattern
+import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.table.HoodieSparkTable
 import org.apache.log4j.LogManager
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
@@ -64,8 +64,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
     throw new HoodieException("Incremental view not implemented yet, for merge-on-read tables")
   }
   // TODO : Figure out a valid HoodieWriteConfig
-  private val hoodieTable = HoodieTable.create(metaClient, HoodieWriteConfig.newBuilder().withPath(basePath).build(),
-    sqlContext.sparkContext.hadoopConfiguration)
+  private val hoodieTable = HoodieSparkTable.create(HoodieWriteConfig.newBuilder().withPath(basePath).build(),
+    new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
+    metaClient)
   private val commitTimeline = hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants()
   if (commitTimeline.empty()) {
     throw new HoodieException("No instants to incrementally pull")
