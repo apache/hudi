@@ -52,6 +52,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
   private val log = LogManager.getLogger(getClass)
   private var tableExists: Boolean = false
+  private var asyncCompactionTriggerFnDefined: Boolean = false
 
   def write(sqlContext: SQLContext,
             mode: SaveMode,
@@ -67,6 +68,7 @@ private[hudi] object HoodieSparkSqlWriter {
     val sparkContext = sqlContext.sparkContext
     val path = parameters.get("path")
     val tblNameOp = parameters.get(HoodieWriteConfig.TABLE_NAME)
+    asyncCompactionTriggerFnDefined = asyncCompactionTriggerFn.isDefined
     if (path.isEmpty || tblNameOp.isEmpty) {
       throw new HoodieException(s"'${HoodieWriteConfig.TABLE_NAME}', 'path' must be set.")
     }
@@ -147,8 +149,7 @@ private[hudi] object HoodieSparkSqlWriter {
             tblName, mapAsJavaMap(parameters)
           )).asInstanceOf[HoodieWriteClient[HoodieRecordPayload[Nothing]]]
 
-          if (asyncCompactionTriggerFn.isDefined &&
-            isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
+          if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
             asyncCompactionTriggerFn.get.apply(client)
           }
 
@@ -164,7 +165,8 @@ private[hudi] object HoodieSparkSqlWriter {
             (true, common.util.Option.empty())
           }
           client.startCommitWithTime(instantTime)
-          val writeStatuses = DataSourceUtils.doWriteOperation(client, hoodieRecords, instantTime, operation)
+          val writeStatuses = DataSourceUtils.doWriteOperation(client, hoodieRecords, instantTime, operation
+            , schema.toString())
           (writeStatuses, client)
         } else {
           val structName = s"${tblName}_record"
@@ -187,8 +189,7 @@ private[hudi] object HoodieSparkSqlWriter {
             Schema.create(Schema.Type.NULL).toString, path.get, tblName,
             mapAsJavaMap(parameters))).asInstanceOf[HoodieWriteClient[HoodieRecordPayload[Nothing]]]
 
-          if (asyncCompactionTriggerFn.isDefined &&
-            isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
+          if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
             asyncCompactionTriggerFn.get.apply(client)
           }
 
@@ -441,7 +442,7 @@ private[hudi] object HoodieSparkSqlWriter {
                                        tableConfig: HoodieTableConfig,
                                        parameters: Map[String, String], configuration: Configuration) : Boolean = {
     log.info(s"Config.isInlineCompaction ? ${client.getConfig.isInlineCompaction}")
-    if (!client.getConfig.isInlineCompaction
+    if (asyncCompactionTriggerFnDefined && !client.getConfig.isInlineCompaction
       && parameters.get(ASYNC_COMPACT_ENABLE_OPT_KEY).exists(r => r.toBoolean)) {
       tableConfig.getTableType == HoodieTableType.MERGE_ON_READ
     } else {
