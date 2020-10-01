@@ -25,7 +25,7 @@ For example, using HMAC keys and service name `myCOS`:
 ```xml
   <property>
       <name>fs.defaultFS</name>
-      <value>cos://<my_bucket>.myCOS</value>
+      <value>cos://myBucket.myCOS</value>
   </property>
 
   <property>
