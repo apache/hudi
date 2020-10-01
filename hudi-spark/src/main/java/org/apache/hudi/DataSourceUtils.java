@@ -50,6 +50,8 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import scala.Some;
+import scala.Some$;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -175,7 +177,7 @@ public class DataSourceUtils {
   }
 
   public static JavaRDD<WriteStatus> doWriteOperation(HoodieWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
-      String instantTime, WriteOperationType operation, String schema) throws HoodieException {
+      String instantTime, WriteOperationType operation) throws HoodieException {
     switch (operation) {
       case BULK_INSERT:
         Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner =
@@ -184,7 +186,7 @@ public class DataSourceUtils {
       case INSERT:
         return client.insert(hoodieRecords, instantTime);
       case UPSERT:
-        return client.upsert(hoodieRecords, instantTime, schema);
+        return client.upsert(hoodieRecords, instantTime);
       default:
         throw new HoodieException("Not a valid operation type for doWriteOperation: " + operation.toString());
     }

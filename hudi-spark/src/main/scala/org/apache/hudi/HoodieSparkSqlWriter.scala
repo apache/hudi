@@ -164,8 +164,7 @@ private[hudi] object HoodieSparkSqlWriter {
             (true, common.util.Option.empty())
           }
           client.startCommitWithTime(instantTime)
-          val writeStatuses = DataSourceUtils.doWriteOperation(client, hoodieRecords, instantTime, operation
-            , schema.toString())
+          val writeStatuses = DataSourceUtils.doWriteOperation(client, hoodieRecords, instantTime, operation)
           (writeStatuses, client)
         } else {
           val structName = s"${tblName}_record"

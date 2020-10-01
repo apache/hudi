@@ -22,6 +22,7 @@ import org.apache.avro.Schema;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
@@ -46,11 +47,11 @@ public class WriteHelper<T extends HoodieRecordPayload<T>> {
   }
 
   public static <T extends HoodieRecordPayload<T>> HoodieWriteMetadata write(String instantTime,
-                                                                            JavaRDD<HoodieRecord<T>> inputRecordsRDD, JavaSparkContext jsc,
-                                                                            HoodieTable<T> table, boolean shouldCombine,
-                                                                            int shuffleParallelism,boolean precombineAgg,
-                                                                            String schema, CommitActionExecutor<T> executor,
-                                                                            boolean performTagging) {
+                                                                             JavaRDD<HoodieRecord<T>> inputRecordsRDD, JavaSparkContext jsc,
+                                                                             HoodieTable<T> table, boolean shouldCombine,
+                                                                             int shuffleParallelism, boolean precombineAgg,
+                                                                             Option<String> schema, CommitActionExecutor<T> executor,
+                                                                             boolean performTagging) {
     try {
       // De-dupe/merge if needed
       JavaRDD<HoodieRecord<T>> dedupedRecords =
@@ -84,7 +85,7 @@ public class WriteHelper<T extends HoodieRecordPayload<T>> {
 
   public static <T extends HoodieRecordPayload<T>> JavaRDD<HoodieRecord<T>> combineOnCondition(
           boolean condition, JavaRDD<HoodieRecord<T>> records, int parallelism, HoodieTable<T> table,
-          boolean precombineAgg, String schema) {
+          boolean precombineAgg, Option<String> schema) {
     return condition ? deduplicateRecords(records, table, parallelism, precombineAgg, schema) : records;
   }
 
@@ -97,13 +98,13 @@ public class WriteHelper<T extends HoodieRecordPayload<T>> {
    */
   public static <T extends HoodieRecordPayload<T>> JavaRDD<HoodieRecord<T>> deduplicateRecords(
           JavaRDD<HoodieRecord<T>> records, HoodieTable<T> table, int parallelism, boolean precombineAgg,
-          String schema) {
+          Option<String> schema) {
     return deduplicateRecords(records, table.getIndex(), parallelism, precombineAgg, schema);
   }
 
   public static <T extends HoodieRecordPayload<T>> JavaRDD<HoodieRecord<T>> deduplicateRecords(
           JavaRDD<HoodieRecord<T>> records, HoodieIndex<T> index, int parallelism, boolean precombineAgg,
-          String schema) {
+          Option<String> schema) {
     boolean isIndexingGlobal = index.isGlobal();
     return records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
@@ -112,7 +113,7 @@ public class WriteHelper<T extends HoodieRecordPayload<T>> {
       return new Tuple2<>(key, record);
     }).reduceByKey((rec1, rec2) -> {
       @SuppressWarnings("unchecked")
-      T reducedData = precombineAgg && schema != null ? (T) rec1.getData().preCombine(rec2.getData(),new Schema.Parser().parse(schema))
+      T reducedData = precombineAgg && !schema.get().isEmpty() ? (T) rec1.getData().preCombine(rec2.getData(),new Schema.Parser().parse(schema.get()))
               : (T) rec1.getData().preCombine(rec2.getData());
       // we cannot allow the user to change the key or partitionPath, since that will affect
       // everything
