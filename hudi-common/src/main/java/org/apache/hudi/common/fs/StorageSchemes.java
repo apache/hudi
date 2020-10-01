@@ -52,7 +52,7 @@ public enum StorageSchemes {
   COSN("cosn", false),
   // Databricks file system
   DBFS("dbfs", false),
-  // IBM COS
+  // IBM Cloud Object Storage
   COS("cos", false);
 
   private String scheme;
