@@ -113,8 +113,8 @@ public class WriteHelper<T extends HoodieRecordPayload<T>> {
       return new Tuple2<>(key, record);
     }).reduceByKey((rec1, rec2) -> {
       @SuppressWarnings("unchecked")
-      T reducedData = precombineAgg && !schema.get().isEmpty() ? (T) rec1.getData().preCombine(rec2.getData(),new Schema.Parser().parse(schema.get()))
-              : (T) rec1.getData().preCombine(rec2.getData());
+      T reducedData = precombineAgg && !schema.get().isEmpty() ? (T) rec1.getData().preCombine(rec2.getData(),
+              new Schema.Parser().parse(schema.get())) : (T) rec1.getData().preCombine(rec2.getData());
       // we cannot allow the user to change the key or partitionPath, since that will affect
       // everything
       // so pick it from one of the records.
