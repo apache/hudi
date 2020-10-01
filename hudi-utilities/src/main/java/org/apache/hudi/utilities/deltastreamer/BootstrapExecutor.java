@@ -20,7 +20,8 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -137,7 +138,7 @@ public class BootstrapExecutor  implements Serializable {
    */
   public void execute() throws IOException {
     initializeTable();
-    HoodieWriteClient bootstrapClient = new HoodieWriteClient(jssc, bootstrapConfig, true);
+    SparkRDDWriteClient bootstrapClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jssc), bootstrapConfig, true);
 
     try {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
