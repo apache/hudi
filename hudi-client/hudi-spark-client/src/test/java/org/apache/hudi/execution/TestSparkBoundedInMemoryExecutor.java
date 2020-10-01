@@ -35,7 +35,7 @@ import java.util.List;
 
 import scala.Tuple2;
 
-import static org.apache.hudi.execution.AbstractLazyInsertIterable.getTransformFunction;
+import static org.apache.hudi.execution.HoodieLazyInsertIterable.getTransformFunction;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.mock;
@@ -62,13 +62,13 @@ public class TestSparkBoundedInMemoryExecutor extends HoodieClientTestHarness {
 
     HoodieWriteConfig hoodieWriteConfig = mock(HoodieWriteConfig.class);
     when(hoodieWriteConfig.getWriteBufferLimitBytes()).thenReturn(1024);
-    BoundedInMemoryQueueConsumer<AbstractLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
-        new BoundedInMemoryQueueConsumer<AbstractLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
+    BoundedInMemoryQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
+        new BoundedInMemoryQueueConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
           private int count = 0;
 
           @Override
-          protected void consumeOneRecord(AbstractLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
+          protected void consumeOneRecord(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
             count++;
           }
 

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.async.AbstractAsyncService;
+import org.apache.hudi.async.HoodieAsyncService;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
@@ -31,7 +31,7 @@ import java.util.concurrent.Executors;
 /**
  * Clean service running concurrently with write operation.
  */
-class AsyncCleanerService extends AbstractAsyncService {
+class AsyncCleanerService extends HoodieAsyncService {
 
   private static final Logger LOG = LogManager.getLogger(AsyncCleanerService.class);
 

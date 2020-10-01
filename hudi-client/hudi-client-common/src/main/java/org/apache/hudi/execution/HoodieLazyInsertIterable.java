@@ -39,7 +39,7 @@ import java.util.function.Function;
 /**
  * Lazy Iterable, that writes a stream of HoodieRecords sorted by the partitionPath, into new files.
  */
-public abstract class AbstractLazyInsertIterable<T extends HoodieRecordPayload>
+public abstract class HoodieLazyInsertIterable<T extends HoodieRecordPayload>
     extends LazyIterableIterator<HoodieRecord<T>, List<WriteStatus>> {
 
   protected final HoodieWriteConfig hoodieConfig;
@@ -50,21 +50,21 @@ public abstract class AbstractLazyInsertIterable<T extends HoodieRecordPayload>
   protected TaskContextSupplier taskContextSupplier;
   protected WriteHandleFactory writeHandleFactory;
 
-  public AbstractLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
-                                    boolean areRecordsSorted,
-                                    HoodieWriteConfig config,
-                                    String instantTime,
-                                    HoodieTable hoodieTable,
-                                    String idPrefix,
-                                    TaskContextSupplier taskContextSupplier) {
+  public HoodieLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
+                                  boolean areRecordsSorted,
+                                  HoodieWriteConfig config,
+                                  String instantTime,
+                                  HoodieTable hoodieTable,
+                                  String idPrefix,
+                                  TaskContextSupplier taskContextSupplier) {
     this(recordItr, areRecordsSorted, config, instantTime, hoodieTable, idPrefix, taskContextSupplier,
         new CreateHandleFactory<>());
   }
 
-  public AbstractLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr, boolean areRecordsSorted,
-                                    HoodieWriteConfig config, String instantTime, HoodieTable hoodieTable,
-                                    String idPrefix, TaskContextSupplier taskContextSupplier,
-                                    WriteHandleFactory writeHandleFactory) {
+  public HoodieLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr, boolean areRecordsSorted,
+                                  HoodieWriteConfig config, String instantTime, HoodieTable hoodieTable,
+                                  String idPrefix, TaskContextSupplier taskContextSupplier,
+                                  WriteHandleFactory writeHandleFactory) {
     super(recordItr);
     this.areRecordsSorted = areRecordsSorted;
     this.hoodieConfig = config;

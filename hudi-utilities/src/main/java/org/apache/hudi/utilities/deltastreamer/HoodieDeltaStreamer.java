@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.async.AbstractAsyncService;
+import org.apache.hudi.async.HoodieAsyncService;
 import org.apache.hudi.async.AsyncCompactService;
 import org.apache.hudi.async.SparkAsyncCompactService;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -472,7 +472,7 @@ public class HoodieDeltaStreamer implements Serializable {
   /**
    * Syncs data either in single-run or in continuous mode.
    */
-  public static class DeltaSyncService extends AbstractAsyncService {
+  public static class DeltaSyncService extends HoodieAsyncService {
 
     private static final long serialVersionUID = 1L;
     /**

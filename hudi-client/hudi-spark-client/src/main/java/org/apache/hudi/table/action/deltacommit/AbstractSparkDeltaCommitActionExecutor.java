@@ -32,7 +32,7 @@ import org.apache.hudi.io.AppendHandleFactory;
 import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
-import org.apache.hudi.table.action.commit.AbstractSparkCommitActionExecutor;
+import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -44,7 +44,7 @@ import java.util.Iterator;
 import java.util.List;
 
 public abstract class AbstractSparkDeltaCommitActionExecutor<T extends HoodieRecordPayload<T>>
-    extends AbstractSparkCommitActionExecutor<T> {
+    extends BaseSparkCommitActionExecutor<T> {
   private static final Logger LOG = LogManager.getLogger(AbstractSparkDeltaCommitActionExecutor.class);
 
   // UpsertPartitioner for MergeOnRead table type

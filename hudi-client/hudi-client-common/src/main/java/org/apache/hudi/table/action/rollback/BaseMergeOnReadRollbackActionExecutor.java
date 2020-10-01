@@ -32,27 +32,27 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-public abstract class AbstractMergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseRollbackActionExecutor<T, I, K, O> {
+public abstract class BaseMergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseRollbackActionExecutor<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(AbstractMergeOnReadRollbackActionExecutor.class);
+  private static final Logger LOG = LogManager.getLogger(BaseMergeOnReadRollbackActionExecutor.class);
 
-  public AbstractMergeOnReadRollbackActionExecutor(HoodieEngineContext context,
-                                                   HoodieWriteConfig config,
-                                                   HoodieTable<T, I, K, O> table,
-                                                   String instantTime,
-                                                   HoodieInstant commitInstant,
-                                                   boolean deleteInstants) {
+  public BaseMergeOnReadRollbackActionExecutor(HoodieEngineContext context,
+                                               HoodieWriteConfig config,
+                                               HoodieTable<T, I, K, O> table,
+                                               String instantTime,
+                                               HoodieInstant commitInstant,
+                                               boolean deleteInstants) {
     super(context, config, table, instantTime, commitInstant, deleteInstants);
   }
 
-  public AbstractMergeOnReadRollbackActionExecutor(HoodieEngineContext context,
-                                                   HoodieWriteConfig config,
-                                                   HoodieTable<T, I, K, O> table,
-                                                   String instantTime,
-                                                   HoodieInstant commitInstant,
-                                                   boolean deleteInstants,
-                                                   boolean skipTimelinePublish,
-                                                   boolean useMarkerBasedStrategy) {
+  public BaseMergeOnReadRollbackActionExecutor(HoodieEngineContext context,
+                                               HoodieWriteConfig config,
+                                               HoodieTable<T, I, K, O> table,
+                                               String instantTime,
+                                               HoodieInstant commitInstant,
+                                               boolean deleteInstants,
+                                               boolean skipTimelinePublish,
+                                               boolean useMarkerBasedStrategy) {
     super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, useMarkerBasedStrategy);
   }
 

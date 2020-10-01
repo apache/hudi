@@ -27,7 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.commit.AbstractSparkCommitActionExecutor;
+import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
 import org.apache.hudi.table.action.deltacommit.SparkBulkInsertDeltaCommitActionExecutor;
 import org.apache.spark.api.java.JavaRDD;
 
@@ -41,7 +41,7 @@ public class SparkBootstrapDeltaCommitActionExecutor<T extends HoodieRecordPaylo
   }
 
   @Override
-  protected AbstractSparkCommitActionExecutor<T> getBulkInsertActionExecutor(JavaRDD<HoodieRecord> inputRecordsRDD) {
+  protected BaseSparkCommitActionExecutor<T> getBulkInsertActionExecutor(JavaRDD<HoodieRecord> inputRecordsRDD) {
     return new SparkBulkInsertDeltaCommitActionExecutor((HoodieSparkEngineContext) context, new HoodieWriteConfig.Builder().withProps(config.getProps())
         .withSchema(bootstrapSchema).build(), table, HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
         inputRecordsRDD, extraMetadata);

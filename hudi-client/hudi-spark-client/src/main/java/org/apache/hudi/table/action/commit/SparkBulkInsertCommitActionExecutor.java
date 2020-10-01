@@ -34,7 +34,7 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.spark.api.java.JavaRDD;
 
-public class SparkBulkInsertCommitActionExecutor<T extends HoodieRecordPayload<T>> extends AbstractSparkCommitActionExecutor<T> {
+public class SparkBulkInsertCommitActionExecutor<T extends HoodieRecordPayload<T>> extends BaseSparkCommitActionExecutor<T> {
 
   private final JavaRDD<HoodieRecord<T>> inputRecordsRDD;
   private final Option<BulkInsertPartitioner<T>> bulkInsertPartitioner;

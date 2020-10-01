@@ -21,7 +21,7 @@ package org.apache.hudi.table.action.bootstrap;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.bootstrap.AbstractBootstrapSchemaProvider;
+import org.apache.hudi.client.bootstrap.HoodieBootstrapSchemaProvider;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.bootstrap.BootstrapRecordPayload;
 import org.apache.hudi.client.bootstrap.BootstrapWriteStatus;
@@ -63,7 +63,7 @@ import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.commit.AbstractSparkCommitActionExecutor;
+import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
 import org.apache.hudi.table.action.commit.BaseCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkBulkInsertCommitActionExecutor;
 
@@ -281,7 +281,7 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
     return Option.of(getBulkInsertActionExecutor(inputRecordsRDD).execute());
   }
 
-  protected AbstractSparkCommitActionExecutor<T> getBulkInsertActionExecutor(JavaRDD<HoodieRecord> inputRecordsRDD) {
+  protected BaseSparkCommitActionExecutor<T> getBulkInsertActionExecutor(JavaRDD<HoodieRecord> inputRecordsRDD) {
     return new SparkBulkInsertCommitActionExecutor((HoodieSparkEngineContext) context, new HoodieWriteConfig.Builder().withProps(config.getProps())
         .withSchema(bootstrapSchema).build(), table, HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
         inputRecordsRDD, extraMetadata);
@@ -347,7 +347,7 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
             table.getMetaClient(), bootstrapSourceFileSystem, config.getBootstrapSourceBasePath(), context);
 
     LOG.info("Fetching Bootstrap Schema !!");
-    AbstractBootstrapSchemaProvider sourceSchemaProvider = new HoodieSparkBootstrapSchemaProvider(config);
+    HoodieBootstrapSchemaProvider sourceSchemaProvider = new HoodieSparkBootstrapSchemaProvider(config);
     bootstrapSchema = sourceSchemaProvider.getBootstrapSchema(context, folders).toString();
     LOG.info("Bootstrap Schema :" + bootstrapSchema);
 

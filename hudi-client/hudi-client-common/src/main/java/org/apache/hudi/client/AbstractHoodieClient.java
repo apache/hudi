@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
@@ -103,10 +102,7 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
         // Run Embedded Timeline Server
         LOG.info("Starting Timeline service !!");
         Option<String> hostAddr = context.getProperty(EngineProperty.EMBEDDED_SERVER_HOST);
-        if (!hostAddr.isPresent()) {
-          throw new HoodieException("Unable to find host address to bind timeline server to.");
-        }
-        timelineServer = Option.of(new EmbeddedTimelineService(context, hostAddr.get(),
+        timelineServer = Option.of(new EmbeddedTimelineService(context, hostAddr.orElse(null),
             config.getClientSpecifiedViewStorageConfig()));
         try {
           timelineServer.get().startServer();

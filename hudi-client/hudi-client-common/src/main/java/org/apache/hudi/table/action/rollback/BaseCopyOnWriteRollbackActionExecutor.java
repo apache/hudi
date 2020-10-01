@@ -33,27 +33,27 @@ import org.apache.log4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 
-public abstract class AbstractCopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseRollbackActionExecutor<T, I, K, O> {
+public abstract class BaseCopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseRollbackActionExecutor<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(AbstractCopyOnWriteRollbackActionExecutor.class);
+  private static final Logger LOG = LogManager.getLogger(BaseCopyOnWriteRollbackActionExecutor.class);
 
-  public AbstractCopyOnWriteRollbackActionExecutor(HoodieEngineContext context,
-                                                   HoodieWriteConfig config,
-                                                   HoodieTable<T, I, K, O> table,
-                                                   String instantTime,
-                                                   HoodieInstant commitInstant,
-                                                   boolean deleteInstants) {
+  public BaseCopyOnWriteRollbackActionExecutor(HoodieEngineContext context,
+                                               HoodieWriteConfig config,
+                                               HoodieTable<T, I, K, O> table,
+                                               String instantTime,
+                                               HoodieInstant commitInstant,
+                                               boolean deleteInstants) {
     super(context, config, table, instantTime, commitInstant, deleteInstants);
   }
 
-  public AbstractCopyOnWriteRollbackActionExecutor(HoodieEngineContext context,
-                                                   HoodieWriteConfig config,
-                                                   HoodieTable<T, I, K, O> table,
-                                                   String instantTime,
-                                                   HoodieInstant commitInstant,
-                                                   boolean deleteInstants,
-                                                   boolean skipTimelinePublish,
-                                                   boolean useMarkerBasedStrategy) {
+  public BaseCopyOnWriteRollbackActionExecutor(HoodieEngineContext context,
+                                               HoodieWriteConfig config,
+                                               HoodieTable<T, I, K, O> table,
+                                               String instantTime,
+                                               HoodieInstant commitInstant,
+                                               boolean deleteInstants,
+                                               boolean skipTimelinePublish,
+                                               boolean useMarkerBasedStrategy) {
     super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, useMarkerBasedStrategy);
   }
 

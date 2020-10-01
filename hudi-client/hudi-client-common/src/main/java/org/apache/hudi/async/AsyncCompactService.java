@@ -41,7 +41,7 @@ import java.util.stream.IntStream;
 /**
  * Async Compactor Service that runs in separate thread. Currently, only one compactor is allowed to run at any time.
  */
-public abstract class AsyncCompactService extends AbstractAsyncService {
+public abstract class AsyncCompactService extends HoodieAsyncService {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(AsyncCompactService.class);

@@ -66,7 +66,7 @@ public class TestDeleteHelper {
 
   @Mock private SparkHoodieBloomIndex index;
   @Mock private HoodieTable<EmptyHoodieRecordPayload,JavaRDD<HoodieRecord>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table;
-  @Mock private AbstractSparkCommitActionExecutor<EmptyHoodieRecordPayload> executor;
+  @Mock private BaseSparkCommitActionExecutor<EmptyHoodieRecordPayload> executor;
   @Mock private HoodieWriteMetadata metadata;
   @Mock private JavaPairRDD keyPairs;
   @Mock private JavaSparkContext jsc;

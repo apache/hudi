@@ -37,7 +37,8 @@ import java.io.IOException;
 import java.util.List;
 
 @SuppressWarnings("checkstyle:LineLength")
-public class SparkMergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload> extends AbstractMergeOnReadRollbackActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
+public class SparkMergeOnReadRollbackActionExecutor<T extends HoodieRecordPayload> extends
+    BaseMergeOnReadRollbackActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
   public SparkMergeOnReadRollbackActionExecutor(HoodieEngineContext context,
                                                 HoodieWriteConfig config,
                                                 HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,

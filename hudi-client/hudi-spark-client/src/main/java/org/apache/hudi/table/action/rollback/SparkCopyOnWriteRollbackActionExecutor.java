@@ -34,7 +34,7 @@ import java.util.List;
 
 @SuppressWarnings("checkstyle:LineLength")
 public class SparkCopyOnWriteRollbackActionExecutor<T extends HoodieRecordPayload> extends
-    AbstractCopyOnWriteRollbackActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
+    BaseCopyOnWriteRollbackActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
   public SparkCopyOnWriteRollbackActionExecutor(HoodieSparkEngineContext context,
                                                 HoodieWriteConfig config,
                                                 HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table,

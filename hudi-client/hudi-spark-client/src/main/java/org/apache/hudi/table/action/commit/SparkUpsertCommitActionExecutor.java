@@ -30,7 +30,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.spark.api.java.JavaRDD;
 
 public class SparkUpsertCommitActionExecutor<T extends HoodieRecordPayload<T>>
-    extends AbstractSparkCommitActionExecutor<T> {
+    extends BaseSparkCommitActionExecutor<T> {
 
   private JavaRDD<HoodieRecord<T>> inputRecordsRDD;
 

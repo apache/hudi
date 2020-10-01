@@ -39,7 +39,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 public class SparkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayload<T>>
-    extends AbstractSparkCommitActionExecutor<T> {
+    extends BaseSparkCommitActionExecutor<T> {
 
   private static final Logger LOG = LogManager.getLogger(SparkInsertOverwriteCommitActionExecutor.class);
 

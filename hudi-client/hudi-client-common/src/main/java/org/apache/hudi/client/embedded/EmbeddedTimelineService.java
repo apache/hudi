@@ -47,9 +47,6 @@ public class EmbeddedTimelineService {
 
   public EmbeddedTimelineService(HoodieEngineContext context, String embeddedTimelineServiceHostAddr, FileSystemViewStorageConfig config) {
     setHostAddr(embeddedTimelineServiceHostAddr);
-    if (hostAddr == null) {
-      this.hostAddr = NetworkUtils.getHostname();
-    }
     this.config = config;
     this.hadoopConf = context.getHadoopConf();
     this.viewManager = createViewManager();
@@ -80,6 +77,7 @@ public class EmbeddedTimelineService {
       this.hostAddr = embeddedTimelineServiceHostAddr;
     } else {
       LOG.warn("Unable to find driver bind address from spark config");
+      this.hostAddr = NetworkUtils.getHostname();
     }
   }
 

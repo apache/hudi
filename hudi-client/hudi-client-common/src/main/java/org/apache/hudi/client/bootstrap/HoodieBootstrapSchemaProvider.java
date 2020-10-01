@@ -31,11 +31,11 @@ import java.util.List;
 /**
  * Bootstrap Schema Provider. Schema provided in config is used. If not available, use schema from Parquet
  */
-public abstract class AbstractBootstrapSchemaProvider {
+public abstract class HoodieBootstrapSchemaProvider {
 
   protected final HoodieWriteConfig writeConfig;
 
-  public AbstractBootstrapSchemaProvider(HoodieWriteConfig writeConfig) {
+  public HoodieBootstrapSchemaProvider(HoodieWriteConfig writeConfig) {
     this.writeConfig = writeConfig;
   }
 

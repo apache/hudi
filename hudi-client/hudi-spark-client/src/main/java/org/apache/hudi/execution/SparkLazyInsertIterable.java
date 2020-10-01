@@ -32,7 +32,7 @@ import org.apache.hudi.table.HoodieTable;
 import java.util.Iterator;
 import java.util.List;
 
-public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends AbstractLazyInsertIterable<T> {
+public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends HoodieLazyInsertIterable<T> {
 
   public SparkLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
                                  boolean areRecordsSorted,

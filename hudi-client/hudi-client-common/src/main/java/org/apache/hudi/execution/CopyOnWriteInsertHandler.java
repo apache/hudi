@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.execution.AbstractLazyInsertIterable.HoodieInsertValueGenResult;
+import org.apache.hudi.execution.HoodieLazyInsertIterable.HoodieInsertValueGenResult;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;

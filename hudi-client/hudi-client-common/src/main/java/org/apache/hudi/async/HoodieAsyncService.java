@@ -34,9 +34,9 @@ import java.util.function.Function;
 /**
  * Base Class for running clean/delta-sync/compaction in separate thread and controlling their life-cycle.
  */
-public abstract class AbstractAsyncService implements Serializable {
+public abstract class HoodieAsyncService implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(AbstractAsyncService.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieAsyncService.class);
 
   // Flag to track if the service is started.
   private boolean started;
@@ -51,11 +51,11 @@ public abstract class AbstractAsyncService implements Serializable {
   // Run in daemon mode
   private final boolean runInDaemonMode;
 
-  protected AbstractAsyncService() {
+  protected HoodieAsyncService() {
     this(false);
   }
 
-  protected AbstractAsyncService(boolean runInDaemonMode) {
+  protected HoodieAsyncService(boolean runInDaemonMode) {
     shutdownRequested = false;
     this.runInDaemonMode = runInDaemonMode;
   }

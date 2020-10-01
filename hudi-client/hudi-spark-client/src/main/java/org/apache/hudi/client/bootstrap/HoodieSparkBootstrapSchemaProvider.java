@@ -37,7 +37,7 @@ import org.apache.spark.sql.types.StructType;
 import java.util.List;
 import java.util.Objects;
 
-public class HoodieSparkBootstrapSchemaProvider extends AbstractBootstrapSchemaProvider {
+public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaProvider {
   public HoodieSparkBootstrapSchemaProvider(HoodieWriteConfig writeConfig) {
     super(writeConfig);
   }
