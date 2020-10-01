@@ -16,6 +16,7 @@ There are several ways to get in touch with the Hudi community.
 | For reporting bugs or issues or discover known issues | Please use [ASF Hudi JIRA](https://issues.apache.org/jira/projects/HUDI/summary). See [#here](#accounts) for access |
 | For quick pings & 1-1 chats | Join our [slack group](https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE). In case this does not work, please leave a comment on this [github issue](https://github.com/apache/hudi/issues/143) |
 | For proposing large features, changes | Start a RFC. Instructions [here](https://cwiki.apache.org/confluence/display/HUDI/RFC+Process).
+| Join weekly sync-up meeting | Follow instructions [here](https://cwiki.apache.org/confluence/display/HUDI/Apache+Hudi+Community+Weekly+Sync). |
  See [#here](#accounts) for wiki access |
 | For stream of commits, pull requests etc | Commits Mailing list ([Subscribe](mailto:commits-subscribe@hudi.apache.org), [Unsubscribe](mailto:commits-unsubscribe@hudi.apache.org), [Archives](https://lists.apache.org/list.html?commits@hudi.apache.org)) |
 
