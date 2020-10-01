@@ -213,6 +213,12 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   public abstract HoodieWriteMetadata bulkInsertPrepped(JavaSparkContext jsc, String instantTime,
       JavaRDD<HoodieRecord<T>> preppedRecords,  Option<BulkInsertPartitioner> bulkInsertPartitioner);
 
+  /**
+   * Logically delete all existing records and Insert a batch of new records into Hoodie table at the supplied instantTime.
+   */
+  public abstract HoodieWriteMetadata insertOverwrite(JavaSparkContext jsc, String instantTime,
+                                                      JavaRDD<HoodieRecord<T>> records);
+
   public HoodieWriteConfig getConfig() {
     return config;
   }

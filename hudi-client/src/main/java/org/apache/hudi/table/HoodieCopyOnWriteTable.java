@@ -46,6 +46,7 @@ import org.apache.hudi.table.action.commit.BulkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.BulkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.DeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.InsertCommitActionExecutor;
+import org.apache.hudi.table.action.commit.InsertOverwriteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.InsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.MergeHelper;
 import org.apache.hudi.table.action.commit.UpsertCommitActionExecutor;
@@ -122,6 +123,12 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
       JavaRDD<HoodieRecord<T>> preppedRecords,  Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     return new BulkInsertPreppedCommitActionExecutor(jsc, config,
         this, instantTime, preppedRecords, userDefinedBulkInsertPartitioner).execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata insertOverwrite(JavaSparkContext jsc, String instantTime,
+                                                      JavaRDD<HoodieRecord<T>> records) {
+    return new InsertOverwriteCommitActionExecutor<>(jsc, config, this, instantTime, records).execute();
   }
 
   @Override

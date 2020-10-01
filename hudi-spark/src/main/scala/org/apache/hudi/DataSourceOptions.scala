@@ -142,6 +142,7 @@ object DataSourceWriteOptions {
   val UPSERT_OPERATION_OPT_VAL = WriteOperationType.UPSERT.value
   val DELETE_OPERATION_OPT_VAL = WriteOperationType.DELETE.value
   val BOOTSTRAP_OPERATION_OPT_VAL = WriteOperationType.BOOTSTRAP.value
+  val INSERT_OVERWRITE_OPERATION_OPT_VAL = WriteOperationType.INSERT_OVERWRITE.value
   val DEFAULT_OPERATION_OPT_VAL = UPSERT_OPERATION_OPT_VAL
 
   /**
@@ -290,6 +291,7 @@ object DataSourceWriteOptions {
   val HIVE_ASSUME_DATE_PARTITION_OPT_KEY = "hoodie.datasource.hive_sync.assume_date_partitioning"
   val HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY = "hoodie.datasource.hive_sync.use_pre_apache_input_format"
   val HIVE_USE_JDBC_OPT_KEY = "hoodie.datasource.hive_sync.use_jdbc"
+  val HIVE_AUTO_CREATE_DATABASE_OPT_KEY = "hoodie.datasource.hive_sync.auto_create_database"
   val HIVE_SKIP_RO_SUFFIX = "hoodie.datasource.hive_sync.skip_ro_suffix"
 
   // DEFAULT FOR HIVE SPECIFIC CONFIGS
@@ -306,6 +308,7 @@ object DataSourceWriteOptions {
   val DEFAULT_HIVE_ASSUME_DATE_PARTITION_OPT_VAL = "false"
   val DEFAULT_USE_PRE_APACHE_INPUT_FORMAT_OPT_VAL = "false"
   val DEFAULT_HIVE_USE_JDBC_OPT_VAL = "true"
+  val DEFAULT_HIVE_AUTO_CREATE_DATABASE_OPT_KEY = "true"
   val DEFAULT_HIVE_SKIP_RO_SUFFIX_VAL = "false"
 
   // Async Compaction - Enabled by default for MOR

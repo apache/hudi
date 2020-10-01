@@ -18,6 +18,21 @@
 
 package org.apache.hudi.common.testutils;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+import com.esotericsoftware.kryo.serializers.JavaSerializer;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
+import org.apache.hadoop.util.StringUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
@@ -51,22 +66,6 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
-
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
-import com.esotericsoftware.kryo.serializers.JavaSerializer;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.hadoop.util.StringUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -172,19 +171,6 @@ public class HoodieTestUtils {
     }
   }
 
-  /**
-   * @deprecated Use {@link HoodieTestTable} instead.
-   */
-  public static void createInflightCommitFiles(String basePath, String... instantTimes) throws IOException {
-
-    for (String instantTime : instantTimes) {
-      new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-          + HoodieTimeline.makeRequestedCommitFileName(instantTime)).createNewFile();
-      new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeInflightCommitFileName(
-          instantTime)).createNewFile();
-    }
-  }
-
   public static void createPendingCleanFiles(HoodieTableMetaClient metaClient, String... instantTimes) {
     for (String instantTime : instantTimes) {
       Arrays.asList(HoodieTimeline.makeRequestedCleanerFileName(instantTime),
@@ -255,22 +241,6 @@ public class HoodieTestUtils {
     HoodieInstant compactionInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instant);
     metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
         TimelineMetadataUtils.serializeCompactionPlan(plan));
-  }
-
-  /**
-   * @deprecated Use {@link HoodieTestTable} instead.
-   */
-  public static String getCommitFilePath(String basePath, String instantTime) {
-    return basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instantTime + HoodieTimeline.COMMIT_EXTENSION;
-  }
-
-  /**
-   * @deprecated Use {@link HoodieTestTable} instead.
-   */
-  public static boolean doesCommitExist(String basePath, String instantTime) {
-    return new File(
-        basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + instantTime + HoodieTimeline.COMMIT_EXTENSION)
-            .exists();
   }
 
   public static void createCleanFiles(HoodieTableMetaClient metaClient, String basePath,

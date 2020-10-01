@@ -19,9 +19,11 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -29,10 +31,9 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.hadoop.fs.FileSystem;
-
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -76,6 +77,15 @@ public class FileCreateUtils {
     }
   }
 
+  private static void createMetaFile(String basePath, String instantTime, String suffix, byte[] content) throws IOException {
+    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    Files.createDirectories(parentPath);
+    Path metaFilePath = parentPath.resolve(instantTime + suffix);
+    if (Files.notExists(metaFilePath)) {
+      Files.write(metaFilePath, content);
+    }
+  }
+
   public static void createCommit(String basePath, String instantTime) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
   }
@@ -98,6 +108,18 @@ public class FileCreateUtils {
 
   public static void createInflightDeltaCommit(String basePath, String instantTime) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_DELTA_COMMIT_EXTENSION);
+  }
+
+  public static void createReplaceCommit(String basePath, String instantTime, HoodieReplaceCommitMetadata metadata) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION, metadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+  }
+
+  public static void createRequestedReplaceCommit(String basePath, String instantTime) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION);
+  }
+
+  public static void createInflightReplaceCommit(String basePath, String instantTime) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION);
   }
 
   private static void createAuxiliaryMetaFile(String basePath, String instantTime, String suffix) throws IOException {
