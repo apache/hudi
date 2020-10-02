@@ -24,10 +24,10 @@
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
-  <artifactId>hudi-spark-client</artifactId>
+  <artifactId>hudi-client-spark</artifactId>
   <version>${parent.version}</version>
 
-  <name>hudi-spark-client</name>
+  <name>hudi-client-spark</name>
   <packaging>jar</packaging>
 
   <dependencies>

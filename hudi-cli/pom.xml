@@ -155,7 +155,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark-client</artifactId>
+      <artifactId>hudi-client-spark</artifactId>
       <version>${project.version}</version>
       <scope>test</scope>
       <type>test-jar</type>

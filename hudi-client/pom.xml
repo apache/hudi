@@ -32,6 +32,6 @@
 
   <modules>
     <module>hudi-client-common</module>
-    <module>hudi-spark-client</module>
+    <module>hudi-client-spark</module>
   </modules>
 </project>

@@ -66,7 +66,7 @@
                   <include>com.yammer.metrics:metrics-core</include>
                   <include>org.apache.hudi:hudi-common</include>
                   <include>org.apache.hudi:hudi-client-common</include>
-                  <include>org.apache.hudi:hudi-spark-client</include>
+                  <include>org.apache.hudi:hudi-client-spark</include>
                   <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-hive-sync</include>
                   <include>org.apache.hudi:hudi-sync-common</include>
@@ -215,7 +215,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark-client</artifactId>
+      <artifactId>hudi-client-spark</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
