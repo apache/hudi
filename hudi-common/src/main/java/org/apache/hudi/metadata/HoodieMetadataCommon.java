@@ -40,4 +40,7 @@ public class HoodieMetadataCommon {
   // Key for the record which saves list of all partitions
   protected static final String RECORDKEY_PARTITION_LIST = "__all_partitions__";
 
+  // The partition name used for non-partitioned tables
+  protected static final String NON_PARTITIONED_NAME = ".";
+
 }

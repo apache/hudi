@@ -568,7 +568,24 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       // Post rollback commit and metadata should be valid
       validateMetadata(client.getConfig());
     }
+  }
 
+  /**
+   * Test non-partitioned datasets.
+   */
+  @Test
+  public void testNonPartitioned() throws Exception {
+    init();
+
+    HoodieTestDataGenerator nonPartitionedGenerator = new HoodieTestDataGenerator(new String[] {""});
+    try (HoodieWriteClient client = new HoodieWriteClient<>(jsc, getWriteConfig(true, true))) {
+      // Write 1 (Bulk insert)
+      String newCommitTime = "001";
+      List<HoodieRecord> records = nonPartitionedGenerator.generateInserts(newCommitTime, 10);
+      client.startCommitWithTime(newCommitTime);
+      List<WriteStatus> writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      validateMetadata(client.getConfig());
+    }
   }
 
   /**
@@ -587,6 +604,10 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       List<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
       validateMetadata(client.getConfig());
+
+      // The empty partition is saved with a special name
+      List<String> metadataPartitions = HoodieMetadata.getAllPartitionPaths(dfs, basePath, false);
+      assertTrue(metadataPartitions.contains(HoodieMetadataCommon.NON_PARTITIONED_NAME), "Must contain empty partition");
     }
   }
 
@@ -621,9 +642,15 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
     TableFileSystemView tableView = table.getHoodieView();
     fsPartitions.forEach(partition -> {
       try {
-        FileStatus[] fsStatuses = FSUtils.getAllDataFilesInPartition(dfs, new Path(basePath, partition));
-        FileStatus[] metaStatuses = HoodieMetadata.getAllFilesInPartition(hadoopConf, basePath,
-            new Path(basePath, partition));
+        Path partitionPath;
+        if (partition.equals("")) {
+          // Should be the non-partitioned case
+          partitionPath = new Path(basePath);
+        } else {
+          partitionPath = new Path(basePath, partition);
+        }
+        FileStatus[] fsStatuses = FSUtils.getAllDataFilesInPartition(dfs, partitionPath);
+        FileStatus[] metaStatuses = HoodieMetadata.getAllFilesInPartition(hadoopConf, basePath, partitionPath);
         List<String> fsFileNames = Arrays.stream(fsStatuses)
             .map(s -> s.getPath().getName()).collect(Collectors.toList());
         List<String> metadataFilenames = Arrays.stream(metaStatuses)
@@ -634,7 +661,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
         // File sizes should be valid
         Arrays.stream(metaStatuses).forEach(s -> assertTrue(s.getLen() > 0));
 
-        if (fsFileNames.size() != metadataFilenames.size()) {
+        if ((fsFileNames.size() != metadataFilenames.size()) || (!fsFileNames.equals(metadataFilenames))) {
           LOG.info("*** File system listing = " + Arrays.toString(fsFileNames.toArray()));
           LOG.info("*** Metadata listing = " + Arrays.toString(metadataFilenames.toArray()));
         }
