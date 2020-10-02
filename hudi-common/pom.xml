@@ -84,6 +84,7 @@
             <import>${basedir}/src/main/avro/HoodieBootstrapSourceFilePartitionInfo.avsc</import>
             <import>${basedir}/src/main/avro/HoodieBootstrapIndexInfo.avsc</import>
             <import>${basedir}/src/main/avro/HoodieBootstrapMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieMetadata.avsc</import>
           </imports>
         </configuration>
       </plugin>

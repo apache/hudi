@@ -40,6 +40,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.HoodieWriteClient;
@@ -66,7 +67,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
-import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -93,20 +93,8 @@ import scala.Tuple2;
  * called Metadata Table. This table is created by listing files and partitions (first time) and kept in sync
  * using the instants on the main dataset.
  */
-public class HoodieMetadataImpl {
+public class HoodieMetadataImpl extends HoodieMetadataCommon {
   private static final Logger LOG = LogManager.getLogger(HoodieMetadataImpl.class);
-
-  // Table name suffix
-  private static final String METADATA_TABLE_NAME_SUFFIX = "_metadata";
-  // Timestamp for a commit when the base dataset had not had any commits yet.
-  private static final String SOLO_COMMIT_TIMESTAMP = "00000000000000";
-
-  // Name of partition which saves file listings
-  public static final String METADATA_PARTITION_NAME = "metadata_partition";
-  // List of all partitions
-  public static final String[] METADATA_ALL_PARTITIONS = {METADATA_PARTITION_NAME};
-  // Key for the record which saves list of all partitions
-  static final String RECORDKEY_PARTITION_LIST = "__all_partitions__";
 
   // Metric names
   private static final String INITIALIZE_STR = "initialize";
@@ -159,13 +147,7 @@ public class HoodieMetadataImpl {
     this.readOnly = readOnly;
 
     // Load the schema
-    String schemaStr;
-    try {
-      schemaStr = FileIOUtils.readAsUTFString(getClass().getResourceAsStream("/metadataSchema.txt"));
-      this.schema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(schemaStr));
-    } catch (IOException e) {
-      throw new HoodieMetadataException("Failed to read metadata schema", e);
-    }
+    this.schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
 
     if (readOnly) {
       this.config = HoodieWriteConfig.newBuilder().withPath(datasetBasePath).build();
@@ -176,7 +158,7 @@ public class HoodieMetadataImpl {
       this.tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
       this.validateLookups = writeConfig.getFileListingMetadataVerify();
 
-      this.config = createMetadataWriteConfig(writeConfig, schemaStr);
+      this.config = createMetadataWriteConfig(writeConfig);
       this.metrics = new HoodieMetrics(this.config, this.config.getTableName());
 
       // Inline compaction and auto clean is required as we dont expose this table outside
@@ -196,7 +178,7 @@ public class HoodieMetadataImpl {
    * @param writeConfig {@code HoodieWriteConfig} of the main dataset writer
    * @param schemaStr Metadata Table schema
    */
-  private HoodieWriteConfig createMetadataWriteConfig(HoodieWriteConfig writeConfig, String schemaStr) throws IOException {
+  private HoodieWriteConfig createMetadataWriteConfig(HoodieWriteConfig writeConfig) throws IOException {
     // Create the write config for the metadata table by borrowing options from the main write config.
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
         .withTimelineLayoutVersion(writeConfig.getTimelineLayoutVersion())
@@ -213,7 +195,7 @@ public class HoodieMetadataImpl {
         .withEmbeddedTimelineServerEnabled(false)
         .withAssumeDatePartitioning(false)
         .withPath(metadataBasePath)
-        .withSchema(schemaStr)
+        .withSchema(HoodieMetadataRecord.getClassSchema().toString())
         .forTable(tableName)
         .withParallelism(1, 1).withDeleteParallelism(1).withRollbackParallelism(1).withFinalizeWriteParallelism(1)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexClass(HoodieMetadataIndex.class.getName()).build())
