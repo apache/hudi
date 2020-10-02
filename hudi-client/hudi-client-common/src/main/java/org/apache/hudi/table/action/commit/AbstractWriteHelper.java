@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
@@ -83,9 +84,9 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
    */
   public I deduplicateRecords(
       I records, HoodieTable<T, I, K, O> table, int parallelism) {
-    return deduplicateRecords(records, table.getIndex(), parallelism);
+    return deduplicateRecords(records, table.getIndex(), table.getConfig(), parallelism);
   }
 
   public abstract I deduplicateRecords(
-      I records, HoodieIndex<T, I, K, O> index, int parallelism);
+      I records, HoodieIndex<T, I, K, O> index, HoodieWriteConfig writeConfig, int parallelism);
 }

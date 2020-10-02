@@ -236,17 +236,23 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     JavaRDD<HoodieRecord<RawTripTestPayload>> records =
         jsc.parallelize(Arrays.asList(recordOne, recordTwo, recordThree), 1);
 
+    String schemaStr = "{\"namespace\": \"org.apache.hudi.avro.model\", \"type\": \"record\", " +
+        "\"name\": \"HoodieInstantInfo\", \"fields\": [{\"name\": \"commitTime\", \"type\": \"string\"}]}";
     // Global dedup should be done based on recordKey only
     HoodieIndex index = mock(HoodieIndex.class);
     when(index.isGlobal()).thenReturn(true);
-    List<HoodieRecord<RawTripTestPayload>> dedupedRecs = SparkWriteHelper.newInstance().deduplicateRecords(records, index, 1).collect();
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    when(writeConfig.getSchema()).thenReturn(schemaStr);
+    List<HoodieRecord<RawTripTestPayload>> dedupedRecs = SparkWriteHelper.newInstance().deduplicateRecords(records, index, writeConfig, 1).collect();
     assertEquals(1, dedupedRecs.size());
     assertNodupesWithinPartition(dedupedRecs);
 
     // non-Global dedup should be done based on both recordKey and partitionPath
     index = mock(HoodieIndex.class);
     when(index.isGlobal()).thenReturn(false);
-    dedupedRecs = SparkWriteHelper.newInstance().deduplicateRecords(records, index, 1).collect();
+    writeConfig = mock(HoodieWriteConfig.class);
+    when(writeConfig.getSchema()).thenReturn(schemaStr);
+    dedupedRecs = SparkWriteHelper.newInstance().deduplicateRecords(records, index, writeConfig, 1).collect();
     assertEquals(2, dedupedRecs.size());
     assertNodupesWithinPartition(dedupedRecs);
 
