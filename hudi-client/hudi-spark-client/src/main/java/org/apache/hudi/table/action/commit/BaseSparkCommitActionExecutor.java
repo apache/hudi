@@ -119,7 +119,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     WorkloadProfile profile = null;
     if (isWorkloadProfileNeeded()) {
       context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile");
-      profile = new WorkloadProfile(buildProfile(inputRecordsRDD));
+      profile = new WorkloadProfile(buildProfile(inputRecordsRDD), operationType);
       LOG.info("Workload profile :" + profile);
       saveWorkloadProfileMetadataToInflight(profile, instantTime);
     }

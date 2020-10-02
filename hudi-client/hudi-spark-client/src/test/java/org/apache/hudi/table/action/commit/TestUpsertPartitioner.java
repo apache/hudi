@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -37,8 +38,6 @@ import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.avro.Schema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -90,12 +89,31 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     List<HoodieRecord> records = new ArrayList<>();
     records.addAll(insertRecords);
     records.addAll(updateRecords);
-    WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(records)));
+    WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(records)), WriteOperationType.UPSERT);
     UpsertPartitioner partitioner = new UpsertPartitioner(profile, context, table, config);
     assertEquals(0, partitioner.getPartition(
         new Tuple2<>(updateRecords.get(0).getKey(), Option.ofNullable(updateRecords.get(0).getCurrentLocation()))),
         "Update record should have gone to the 1 update partition");
     return partitioner;
+  }
+
+  private UpsertPartitioner getInsertPartitioner(int smallFileSize, int numInserts, int fileSize, String testPartitionPath,
+      boolean autoSplitInserts) throws Exception {
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder()
+            .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(smallFileSize)
+                    .insertSplitSize(100).autoTuneInsertSplits(autoSplitInserts).build())
+            .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1000 * 1024).parquetMaxFileSize(1000 * 1024).build())
+            .build();
+
+    FileCreateUtils.createCommit(basePath, "001");
+    FileCreateUtils.createBaseFile(basePath, testPartitionPath, "001", "file1", fileSize);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {testPartitionPath});
+    List<HoodieRecord> insertRecords = dataGenerator.generateInserts("001", numInserts);
+    WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(insertRecords)), WriteOperationType.INSERT);
+    return new UpsertPartitioner(profile, context, table, config);
   }
 
   private static List<HoodieInstant> setupHoodieInstants() {
@@ -282,8 +300,8 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
         "Bucket 2 is INSERT");
     assertEquals(3, insertBuckets.size(), "Total of 3 insert buckets");
 
-    Double[] weights = { 0.5, 0.25, 0.25};
-    Double[] cumulativeWeights = { 0.5, 0.75, 1.0};
+    Double[] weights = {0.5, 0.25, 0.25};
+    Double[] cumulativeWeights = {0.5, 0.75, 1.0};
     assertInsertBuckets(weights, cumulativeWeights, insertBuckets);
 
     // Now with insert split size auto tuned
@@ -303,6 +321,49 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
 
     weights = new Double[] { 0.08, 0.42, 0.42, 0.08};
     cumulativeWeights = new Double[] { 0.08, 0.5, 0.92, 1.0};
+    /*=======
+    weights = new Double[] {0.08, 0.31, 0.31, 0.31};
+    cumulativeWeights = new Double[] {0.08, 0.39, 0.69, 1.0}; */
+    assertInsertBuckets(weights, cumulativeWeights, insertBuckets);
+  }
+
+  @Test
+  public void testInsertPartitionerWithSmallInsertHandling() throws Exception {
+    final String testPartitionPath = "2016/09/26";
+    // Inserts  .. Check updates go together & inserts subsplit, after expanding smallest file
+    UpsertPartitioner partitioner = getInsertPartitioner(1000 * 1024, 400, 800 * 1024, testPartitionPath, false);
+    List<InsertBucketCumulativeWeightPair> insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
+
+    assertEquals(3, partitioner.numPartitions(), "Should have 3 partitions");
+    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(0).bucketType,
+        "Bucket 0 is INSERT");
+    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(1).bucketType,
+        "Bucket 1 is INSERT");
+    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(2).bucketType,
+        "Bucket 2 is INSERT");
+    assertEquals(3, insertBuckets.size(), "Total of 3 insert buckets");
+
+    Double[] weights = {0.5, 0.25, 0.25};
+    Double[] cumulativeWeights = {0.5, 0.75, 1.0};
+    assertInsertBuckets(weights, cumulativeWeights, insertBuckets);
+
+    // Now with insert split size auto tuned
+    partitioner = getInsertPartitioner(1000 * 1024, 2400, 800 * 1024, testPartitionPath, true);
+    insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
+
+    assertEquals(4, partitioner.numPartitions(), "Should have 4 partitions");
+    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(0).bucketType,
+        "Bucket 0 is INSERT");
+    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(1).bucketType,
+        "Bucket 1 is INSERT");
+    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(2).bucketType,
+        "Bucket 2 is INSERT");
+    assertEquals(BucketType.INSERT, partitioner.getBucketInfo(3).bucketType,
+        "Bucket 3 is INSERT");
+    assertEquals(4, insertBuckets.size(), "Total of 4 insert buckets");
+
+    weights = new Double[] {0.08, 0.31, 0.31, 0.31};
+    cumulativeWeights = new Double[] {0.08, 0.39, 0.69, 1.0};
     assertInsertBuckets(weights, cumulativeWeights, insertBuckets);
   }
 
