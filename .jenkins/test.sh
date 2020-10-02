@@ -11,11 +11,11 @@ export HUDI_QUIETER_LOGGING=1
 mvn clean compile test-compile install -DskipTests -DskipITs
 
 # Run unit tests in parallel
-mvn test -Punit-tests -pl !hudi-client -B >log1.txt 2>&1 &
+mvn test -Punit-tests -Dcheckstyle.skip=true -pl !hudi-client -B >log1.txt 2>&1 &
 PIDS[0]=$!
-mvn test -Punit-tests -pl hudi-client -B >log2.txt 2>&1 &
+mvn test -Punit-tests -Dcheckstyle.skip=true -pl hudi-client -B >log2.txt 2>&1 &
 PIDS[1]=$!
-mvn test -Pfunctional-tests -B >log3.txt 2>&1 &
+mvn test -Pfunctional-tests -Dcheckstyle.skip=true -B >log3.txt 2>&1 &
 PIDS[2]=$!
 
 # Wait for completion
