@@ -318,6 +318,22 @@ public class HiveSchemaUtil {
   }
 
   /**
+   * Remove partition type if any from partition columns e.g. part:Simple -> part
+   */
+  public static List<String> removePartitionKeyType(List<String> partitionFields) {
+    List<String> res = new ArrayList<>();
+    for (String field: partitionFields) {
+      if (field.indexOf(':') > -1) {
+        res.add(field.split(":")[0]);
+      } else {
+        res.add(field);
+      }
+    }
+    return res;
+  }
+
+
+  /**
    * Create a 'Map' schema from Parquet map field.
    */
   private static String createHiveMap(String keyType, String valueType) {
@@ -384,10 +400,11 @@ public class HiveSchemaUtil {
   public static String generateCreateDDL(String tableName, MessageType storageSchema, HiveSyncConfig config, String inputFormatClass,
       String outputFormatClass, String serdeClass) throws IOException {
     Map<String, String> hiveSchema = convertParquetSchemaToHiveSchema(storageSchema);
-    String columns = generateSchemaString(storageSchema, config.partitionFields);
+    List<String> partitionCols = removePartitionKeyType(config.partitionFields);
+    String columns = generateSchemaString(storageSchema, partitionCols);
 
     List<String> partitionFields = new ArrayList<>();
-    for (String partitionKey : config.partitionFields) {
+    for (String partitionKey : partitionCols) {
       String partitionKeyWithTicks = tickSurround(partitionKey);
       partitionFields.add(new StringBuilder().append(partitionKeyWithTicks).append(" ")
           .append(getPartitionKeyType(hiveSchema, partitionKeyWithTicks)).toString());
@@ -398,7 +415,7 @@ public class HiveSchemaUtil {
     sb.append(HIVE_ESCAPE_CHARACTER).append(config.databaseName).append(HIVE_ESCAPE_CHARACTER)
             .append(".").append(HIVE_ESCAPE_CHARACTER).append(tableName).append(HIVE_ESCAPE_CHARACTER);
     sb.append("( ").append(columns).append(")");
-    if (!config.partitionFields.isEmpty()) {
+    if (!partitionCols.isEmpty()) {
       sb.append(" PARTITIONED BY (").append(partitionsStr).append(")");
     }
     sb.append(" ROW FORMAT SERDE '").append(serdeClass).append("'");

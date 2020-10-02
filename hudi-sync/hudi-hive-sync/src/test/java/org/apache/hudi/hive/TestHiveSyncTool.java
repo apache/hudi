@@ -54,6 +54,17 @@ public class TestHiveSyncTool {
     return Stream.of(false, true);
   }
 
+  private static Stream<Object[]> useJdbcAndPartitionKeys() {
+    final List<String> partitionKeys = Arrays.asList("year", "month", "day");
+    final List<String> partitionKeysWithType = Arrays.asList("year:SIMPLE", "month:SIMPLE", "day:SIMPLE");
+    return Stream.of(
+      new Object[] { true, partitionKeys},
+      new Object[] { true, partitionKeysWithType},
+      new Object[] { false, partitionKeys},
+      new Object[] { false, partitionKeysWithType}
+    );
+  }
+
   private static Iterable<Object[]> useJdbcAndSchemaFromCommitMetadata() {
     return Arrays.asList(new Object[][] { { true, true }, { true, false }, { false, true }, { false, false } });
   }
@@ -428,8 +439,8 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
-  @MethodSource("useJdbc")
-  public void testMultiPartitionKeySync(boolean useJdbc) throws Exception {
+  @MethodSource("useJdbcAndPartitionKeys")
+  public void testMultiPartitionKeySync(boolean useJdbc, List<String> partitionKeys) throws Exception {
     HiveTestUtil.hiveSyncConfig.useJdbc = useJdbc;
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, true);
@@ -437,7 +448,7 @@ public class TestHiveSyncTool {
     HiveSyncConfig hiveSyncConfig = HiveSyncConfig.copy(HiveTestUtil.hiveSyncConfig);
     hiveSyncConfig.partitionValueExtractorClass = MultiPartKeysValueExtractor.class.getCanonicalName();
     hiveSyncConfig.tableName = "multi_part_key";
-    hiveSyncConfig.partitionFields = Arrays.asList("year", "month", "day");
+    hiveSyncConfig.partitionFields = partitionKeys;
     HiveTestUtil.getCreatedTablesSet().add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName);
 
     HoodieHiveClient hiveClient = new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);

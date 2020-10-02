@@ -82,12 +82,15 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   private Connection connection;
   private HoodieTimeline activeTimeline;
   private HiveConf configuration;
+  private List<String> partitionCols;
 
   public HoodieHiveClient(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
     super(cfg.basePath, cfg.assumeDatePartitioning, fs);
     this.syncConfig = cfg;
     this.fs = fs;
 
+    // remove partition field if any
+    partitionCols = HiveSchemaUtil.removePartitionKeyType(cfg.partitionFields);
     this.configuration = configuration;
     // Support both JDBC and metastore based implementations for backwards compatiblity. Future users should
     // disable jdbc and depend on metastore client for all hive registrations
@@ -168,12 +171,12 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
    */
   private String getPartitionClause(String partition) {
     List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
-    ValidationUtils.checkArgument(syncConfig.partitionFields.size() == partitionValues.size(),
-        "Partition key parts " + syncConfig.partitionFields + " does not match with partition values " + partitionValues
+    ValidationUtils.checkArgument(partitionCols.size() == partitionValues.size(),
+        "Partition key parts " + partitionCols + " does not match with partition values " + partitionValues
             + ". Check partition strategy. ");
     List<String> partBuilder = new ArrayList<>();
-    for (int i = 0; i < syncConfig.partitionFields.size(); i++) {
-      partBuilder.add("`" + syncConfig.partitionFields.get(i) + "`='" + partitionValues.get(i) + "'");
+    for (int i = 0; i < partitionCols.size(); i++) {
+      partBuilder.add("`" + partitionCols.get(i) + "`='" + partitionValues.get(i) + "'");
     }
     return String.join(",", partBuilder);
   }
@@ -239,9 +242,9 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
 
   void updateTableDefinition(String tableName, MessageType newSchema) {
     try {
-      String newSchemaStr = HiveSchemaUtil.generateSchemaString(newSchema, syncConfig.partitionFields);
+      String newSchemaStr = HiveSchemaUtil.generateSchemaString(newSchema, partitionCols);
       // Cascade clause should not be present for non-partitioned tables
-      String cascadeClause = syncConfig.partitionFields.size() > 0 ? " cascade" : "";
+      String cascadeClause = partitionCols.size() > 0 ? " cascade" : "";
       StringBuilder sqlBuilder = new StringBuilder("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)
               .append(syncConfig.databaseName).append(HIVE_ESCAPE_CHARACTER).append(".")
               .append(HIVE_ESCAPE_CHARACTER).append(tableName)
