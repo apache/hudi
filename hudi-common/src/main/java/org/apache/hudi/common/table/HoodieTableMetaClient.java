@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -527,14 +528,7 @@ public class HoodieTableMetaClient implements Serializable {
    * Gets the commit action type.
    */
   public String getCommitActionType() {
-    switch (this.getTableType()) {
-      case COPY_ON_WRITE:
-        return HoodieActiveTimeline.COMMIT_ACTION;
-      case MERGE_ON_READ:
-        return HoodieActiveTimeline.DELTA_COMMIT_ACTION;
-      default:
-        throw new HoodieException("Could not commit on unknown table type " + this.getTableType());
-    }
+    return CommitUtils.getCommitActionType(this.getTableType());
   }
 
   /**

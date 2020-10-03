@@ -43,9 +43,12 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
       "hoodie.filesystem.view.spillable.compaction.mem.fraction";
   public static final String FILESYSTEM_VIEW_BOOTSTRAP_BASE_FILE_FRACTION =
       "hoodie.filesystem.view.spillable.bootstrap.base.file.mem.fraction";
+  public static final String FILESYSTEM_VIEW_REPLACED_MEM_FRACTION =
+      "hoodie.filesystem.view.spillable.replaced.mem.fraction";
   private static final String ROCKSDB_BASE_PATH_PROP = "hoodie.filesystem.view.rocksdb.base.path";
   public static final String FILESTYSTEM_REMOTE_TIMELINE_CLIENT_TIMEOUT_SECS =
       "hoodie.filesystem.view.remote.timeout.secs";
+
 
   public static final FileSystemViewStorageType DEFAULT_VIEW_STORAGE_TYPE = FileSystemViewStorageType.MEMORY;
   public static final FileSystemViewStorageType DEFAULT_SECONDARY_VIEW_STORAGE_TYPE = FileSystemViewStorageType.MEMORY;
@@ -58,6 +61,7 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
   public static final String DEFAULT_VIEW_SPILLABLE_DIR = "/tmp/view_map/";
   private static final Double DEFAULT_MEM_FRACTION_FOR_PENDING_COMPACTION = 0.01;
   private static final Double DEFAULT_MEM_FRACTION_FOR_EXTERNAL_DATA_FILE = 0.05;
+  private static final Double DEFAULT_MEM_FRACTION_FOR_REPLACED_FILEGROUPS = 0.01;
   private static final Long DEFAULT_MAX_MEMORY_FOR_VIEW = 100 * 1024 * 1024L; // 100 MB
 
   /**
@@ -114,6 +118,12 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
         new Double(totalMemory * Double.parseDouble(props.getProperty(FILESYSTEM_VIEW_BOOTSTRAP_BASE_FILE_FRACTION)))
             .longValue();
     return reservedForExternalDataFile;
+  }
+
+  public long getMaxMemoryForReplacedFileGroups() {
+    long totalMemory = Long.parseLong(props.getProperty(FILESYSTEM_VIEW_SPILLABLE_MEM));
+    return new Double(totalMemory * Double.parseDouble(props.getProperty(FILESYSTEM_VIEW_REPLACED_MEM_FRACTION)))
+        .longValue();
   }
 
   public String getBaseStoreDir() {
@@ -233,6 +243,8 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
           FILESYSTEM_VIEW_PENDING_COMPACTION_MEM_FRACTION, DEFAULT_MEM_FRACTION_FOR_PENDING_COMPACTION.toString());
       setDefaultOnCondition(props, !props.containsKey(FILESYSTEM_VIEW_BOOTSTRAP_BASE_FILE_FRACTION),
           FILESYSTEM_VIEW_BOOTSTRAP_BASE_FILE_FRACTION, DEFAULT_MEM_FRACTION_FOR_EXTERNAL_DATA_FILE.toString());
+      setDefaultOnCondition(props, !props.containsKey(FILESYSTEM_VIEW_REPLACED_MEM_FRACTION),
+          FILESYSTEM_VIEW_REPLACED_MEM_FRACTION, DEFAULT_MEM_FRACTION_FOR_REPLACED_FILEGROUPS.toString());
 
       setDefaultOnCondition(props, !props.containsKey(ROCKSDB_BASE_PATH_PROP), ROCKSDB_BASE_PATH_PROP,
           DEFAULT_ROCKSDB_BASE_PATH);

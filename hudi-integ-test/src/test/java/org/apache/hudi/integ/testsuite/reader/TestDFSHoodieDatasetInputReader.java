@@ -26,8 +26,9 @@ import java.util.List;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -70,7 +71,7 @@ public class TestDFSHoodieDatasetInputReader extends UtilitiesTestBase {
   public void testSimpleHoodieDatasetReader() throws Exception {
 
     HoodieWriteConfig config = makeHoodieClientConfig();
-    HoodieWriteClient client = new HoodieWriteClient(jsc, config);
+    SparkRDDWriteClient client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), config);
     String commitTime = client.startCommit();
     HoodieTestDataGenerator generator = new HoodieTestDataGenerator();
     // Insert 100 records across 3 partitions
