@@ -73,6 +73,10 @@ public class QuickstartUtils {
       this(DEFAULT_PARTITION_PATHS, new HashMap<>());
     }
 
+    public DataGenerator(String[] partitionPaths) {
+      this(partitionPaths, new HashMap<>());
+    }
+
     private DataGenerator(String[] partitionPaths, Map<Integer, HoodieKey> keyPartitionMap) {
       this.partitionPaths = Arrays.copyOf(partitionPaths, partitionPaths.length);
       this.existingKeys = keyPartitionMap;
