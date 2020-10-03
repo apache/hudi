@@ -22,7 +22,7 @@ import java.util.{Date, UUID}
 
 import org.apache.commons.io.FileUtils
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.client.HoodieWriteClient
+import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordPayload}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.HoodieWriteConfig
@@ -250,7 +250,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
             schema.toString,
             path.toAbsolutePath.toString,
             hoodieFooTableName,
-            mapAsJavaMap(fooTableParams)).asInstanceOf[HoodieWriteClient[HoodieRecordPayload[Nothing]]])
+            mapAsJavaMap(fooTableParams)).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]])
 
           // write to Hudi
           HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, df, Option.empty,
