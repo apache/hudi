@@ -48,7 +48,6 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
 
   private static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
   private static final String SPLIT_REGEX = ":";
-  private final TypedProperties props;
 
   /**
    * Used as a part of config in CustomKeyGenerator.java.
@@ -59,7 +58,6 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
 
   public CustomKeyGenerator(TypedProperties props) {
     super(props);
-    this.props = props;
     this.recordKeyFields = Arrays.stream(props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()).split(",")).map(String::trim).collect(Collectors.toList());
     this.partitionPathFields = Arrays.stream(props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()).split(",")).map(String::trim).collect(Collectors.toList());
   }
@@ -97,17 +95,17 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
       switch (keyType) {
         case SIMPLE:
           if (record.isPresent()) {
-            partitionPath.append(new SimpleKeyGenerator(props, partitionPathField).getPartitionPath(record.get()));
+            partitionPath.append(new SimpleKeyGenerator(config, partitionPathField).getPartitionPath(record.get()));
           } else {
-            partitionPath.append(new SimpleKeyGenerator(props, partitionPathField).getPartitionPath(row.get()));
+            partitionPath.append(new SimpleKeyGenerator(config, partitionPathField).getPartitionPath(row.get()));
           }
           break;
         case TIMESTAMP:
           try {
             if (record.isPresent()) {
-              partitionPath.append(new TimestampBasedKeyGenerator(props, partitionPathField).getPartitionPath(record.get()));
+              partitionPath.append(new TimestampBasedKeyGenerator(config, partitionPathField).getPartitionPath(record.get()));
             } else {
-              partitionPath.append(new TimestampBasedKeyGenerator(props, partitionPathField).getPartitionPath(row.get()));
+              partitionPath.append(new TimestampBasedKeyGenerator(config, partitionPathField).getPartitionPath(row.get()));
             }
           } catch (IOException ioe) {
             throw new HoodieDeltaStreamerException("Unable to initialise TimestampBasedKeyGenerator class");
@@ -127,16 +125,16 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
   public String getRecordKey(GenericRecord record) {
     validateRecordKeyFields();
     return getRecordKeyFields().size() == 1
-        ? new SimpleKeyGenerator(props).getRecordKey(record)
-        : new ComplexKeyGenerator(props).getRecordKey(record);
+        ? new SimpleKeyGenerator(config).getRecordKey(record)
+        : new ComplexKeyGenerator(config).getRecordKey(record);
   }
 
   @Override
   public String getRecordKey(Row row) {
     validateRecordKeyFields();
     return getRecordKeyFields().size() == 1
-        ? new SimpleKeyGenerator(props).getRecordKey(row)
-        : new ComplexKeyGenerator(props).getRecordKey(row);
+        ? new SimpleKeyGenerator(config).getRecordKey(row)
+        : new ComplexKeyGenerator(config).getRecordKey(row);
   }
 
   private void validateRecordKeyFields() {
