@@ -39,17 +39,19 @@ public class EmbeddedTimelineService {
   private static final Logger LOG = LogManager.getLogger(EmbeddedTimelineService.class);
 
   private int serverPort;
+  private int preferredPort;
   private String hostAddr;
   private final SerializableConfiguration hadoopConf;
   private final FileSystemViewStorageConfig config;
   private transient FileSystemViewManager viewManager;
   private transient TimelineService server;
 
-  public EmbeddedTimelineService(HoodieEngineContext context, String embeddedTimelineServiceHostAddr, FileSystemViewStorageConfig config) {
+  public EmbeddedTimelineService(HoodieEngineContext context, String embeddedTimelineServiceHostAddr, int embeddedTimelineServerPort, FileSystemViewStorageConfig config) {
     setHostAddr(embeddedTimelineServiceHostAddr);
     this.config = config;
     this.hadoopConf = context.getHadoopConf();
     this.viewManager = createViewManager();
+    this.preferredPort = embeddedTimelineServerPort;
   }
 
   private FileSystemViewManager createViewManager() {
@@ -66,7 +68,7 @@ public class EmbeddedTimelineService {
   }
 
   public void startServer() throws IOException {
-    server = new TimelineService(0, viewManager, hadoopConf.newCopy());
+    server = new TimelineService(preferredPort, viewManager, hadoopConf.newCopy());
     serverPort = server.startService();
     LOG.info("Started embedded timeline server at " + hostAddr + ":" + serverPort);
   }
