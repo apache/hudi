@@ -25,8 +25,13 @@ import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.config.HoodieStorageConfig;
@@ -36,6 +41,7 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -43,8 +49,14 @@ import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
+import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
 
@@ -94,6 +106,10 @@ public class HoodieWriteableTestTable extends HoodieTestTable {
   }
 
   public String withInserts(String partition, HoodieRecord... records) throws Exception {
+    return withInserts(partition, Arrays.asList(records));
+  }
+
+  public String withInserts(String partition, List<HoodieRecord> records) throws Exception {
     String fileId = UUID.randomUUID().toString();
     withInserts(partition, fileId, records);
     return fileId;
@@ -104,6 +120,10 @@ public class HoodieWriteableTestTable extends HoodieTestTable {
   }
 
   public HoodieWriteableTestTable withInserts(String partition, String fileId, HoodieRecord... records) throws Exception {
+    return withInserts(partition, fileId, Arrays.asList(records));
+  }
+
+  public HoodieWriteableTestTable withInserts(String partition, String fileId, List<HoodieRecord> records) throws Exception {
     FileCreateUtils.createPartitionMetaFile(basePath, partition);
     String fileName = baseFileName(currentInstantTime, fileId);
 
@@ -127,5 +147,38 @@ public class HoodieWriteableTestTable extends HoodieTestTable {
     }
 
     return this;
+  }
+
+  public HoodieWriteableTestTable withLogAppends(HoodieRecord... records) throws Exception {
+    return withLogAppends(Arrays.asList(records));
+  }
+
+  public HoodieWriteableTestTable withLogAppends(List<HoodieRecord> records) throws Exception {
+    for (List<HoodieRecord> groupedRecords: records.stream()
+        .collect(Collectors.groupingBy(HoodieRecord::getCurrentLocation)).values()) {
+      appendRecordsToLogFile(groupedRecords);
+    }
+    return this;
+  }
+
+  private void appendRecordsToLogFile(List<HoodieRecord> groupedRecords) throws Exception {
+    String partitionPath = groupedRecords.get(0).getPartitionPath();
+    HoodieRecordLocation location = groupedRecords.get(0).getCurrentLocation();
+    try (HoodieLogFormat.Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(basePath, partitionPath))
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(location.getFileId())
+        .overBaseCommit(location.getInstantTime()).withFs(fs).build()) {
+      Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
+      header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, location.getInstantTime());
+      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
+      logWriter.appendBlock(new HoodieAvroDataBlock(groupedRecords.stream().map(r -> {
+        try {
+          GenericRecord val = (GenericRecord) r.getData().getInsertValue(schema).get();
+          HoodieAvroUtils.addHoodieKeyToRecord(val, r.getRecordKey(), r.getPartitionPath(), "");
+          return (IndexedRecord) val;
+        } catch (IOException e) {
+          return null;
+        }
+      }).collect(Collectors.toList()), header));
+    }
   }
 }

@@ -982,7 +982,7 @@ public class TestCleaner extends HoodieClientTestBase {
     HoodieTestTable testTable = HoodieTestTable.of(metaClient)
         .addRequestedCommit("000")
         .withMarkerFiles("default", 10, IOType.MERGE);
-    final int numTempFilesBefore = testTable.listAllFilesInTempFolder().size();
+    final int numTempFilesBefore = testTable.listAllFilesInTempFolder().length;
     assertEquals(10, numTempFilesBefore, "Some marker files are created.");
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
@@ -992,7 +992,7 @@ public class TestCleaner extends HoodieClientTestBase {
         new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "000"), Option.empty());
     metaClient.reloadActiveTimeline();
     table.rollback(context, "001", new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "000"), true);
-    final int numTempFilesAfter = testTable.listAllFilesInTempFolder().size();
+    final int numTempFilesAfter = testTable.listAllFilesInTempFolder().length;
     assertEquals(0, numTempFilesAfter, "All temp files are deleted.");
   }
 
