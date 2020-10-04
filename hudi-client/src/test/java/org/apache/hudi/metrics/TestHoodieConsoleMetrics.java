@@ -19,6 +19,7 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -36,6 +37,11 @@ public class TestHoodieConsoleMetrics {
     when(config.isMetricsOn()).thenReturn(true);
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.CONSOLE);
     new HoodieMetrics(config, "raw_table");
+  }
+
+  @AfterEach
+  public void stop() {
+    Metrics.shutdown();
   }
 
   @Test
