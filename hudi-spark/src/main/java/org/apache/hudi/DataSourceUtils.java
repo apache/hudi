@@ -142,6 +142,19 @@ public class DataSourceUtils {
     }
   }
 
+  /**
+   * Create a payload class via reflection, do not ordering/precombine value.
+   */
+  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record)
+      throws IOException {
+    try {
+      return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
+          new Class<?>[] {Option.class}, Option.of(record));
+    } catch (Throwable e) {
+      throw new IOException("Could not create payload for class: " + payloadClass, e);
+    }
+  }
+
   public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
     checkPropNames.forEach(prop -> {
       if (!props.containsKey(prop)) {
@@ -211,6 +224,12 @@ public class DataSourceUtils {
   public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
       String payloadClass) throws IOException {
     HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal);
+    return new HoodieRecord<>(hKey, payload);
+  }
+
+  public static HoodieRecord createHoodieRecord(GenericRecord gr, HoodieKey hKey,
+                                                String payloadClass) throws IOException {
+    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr);
     return new HoodieRecord<>(hKey, payload);
   }
 
