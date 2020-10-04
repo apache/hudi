@@ -175,6 +175,10 @@
                   <pattern>org.apache.htrace.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
                 </relocation>
+                <relocation>
+                  <pattern>org.eclipse.jetty.</pattern>
+                  <shadedPattern>org.apache.hudi.org.eclipse.jetty.</shadedPattern>
+                </relocation>
               </relocations>
               <filters>
                 <filter>
