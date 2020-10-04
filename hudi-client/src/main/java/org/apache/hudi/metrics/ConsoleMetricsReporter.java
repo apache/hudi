@@ -68,5 +68,8 @@ public class ConsoleMetricsReporter extends MetricsReporter {
 
   @Override
   public void stop() {
+    if (consoleReporter != null) {
+      consoleReporter.stop();
+    }
   }
 }

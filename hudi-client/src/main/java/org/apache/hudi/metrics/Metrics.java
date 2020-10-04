@@ -52,16 +52,20 @@ public class Metrics {
     reporter.start();
 
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-      try {
-        registerHoodieCommonMetrics();
-        reporter.report();
-        if (getReporter() != null) {
-          getReporter().close();
-        }
-      } catch (Exception e) {
-        LOG.warn("Error while closing reporter", e);
-      }
+      reportAndCloseReporter();
     }));
+  }
+
+  private void reportAndCloseReporter() {
+    try {
+      registerHoodieCommonMetrics();
+      reporter.report();
+      if (getReporter() != null) {
+        getReporter().close();
+      }
+    } catch (Exception e) {
+      LOG.warn("Error while closing reporter", e);
+    }
   }
 
   private void registerHoodieCommonMetrics() {
@@ -83,6 +87,14 @@ public class Metrics {
       throw new HoodieException(e);
     }
     initialized = true;
+  }
+
+  public static synchronized void shutdown() {
+    if (!initialized) {
+      return;
+    }
+    metrics.reportAndCloseReporter();
+    initialized = false;
   }
 
   public static void registerGauges(Map<String, Long> metricsMap, Option<String> prefix) {
