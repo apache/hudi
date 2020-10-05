@@ -242,20 +242,14 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     if (copyOldRecord) {
       // this should work as it is, since this is an existing record
       String errMsg = "Failed to merge old record into new file for key " + key + " from old file " + getOldFilePath()
-          + " to new file " + newFilePath;
+          + " to new file " + newFilePath + " with writerSchema " + writerSchemaWithMetafields.toString(true);
       try {
         fileWriter.writeAvro(key, oldRecord);
       } catch (ClassCastException e) {
-        LOG.error("Schema mismatch when rewriting old record " + oldRecord + " from file " + getOldFilePath()
-            + " to file " + newFilePath + " with writerSchema " + writerSchemaWithMetafields.toString(true));
+        LOG.debug("Old record is " + oldRecord);
         throw new HoodieUpsertException(errMsg, e);
-      } catch (IOException e) {
-        LOG.error("Failed to merge old record into new file for key " + key + " from old file " + getOldFilePath()
-            + " to new file " + newFilePath, e);
-        throw new HoodieUpsertException(errMsg, e);
-      } catch (RuntimeException e) {
-        LOG.error("Summary is " + e.getMessage() + ", detail is schema mismatch when rewriting old record " + oldRecord + " from file " + getOldFilePath()
-            + " to file " + newFilePath + " with writerSchema " + writerSchemaWithMetafields.toString(true));
+      } catch (IOException | RuntimeException e) {
+        LOG.debug("Old record is " + oldRecord);
         throw new HoodieUpsertException(errMsg, e);
       }
       recordsWritten++;

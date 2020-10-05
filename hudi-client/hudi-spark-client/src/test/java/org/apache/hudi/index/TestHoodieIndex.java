@@ -69,7 +69,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestHoodieIndex extends HoodieClientTestHarness {
 
-  private static final Schema SCHEMA = getSchemaFromResource(TestHoodieIndex.class, "/exampleSchema.txt", true);
+  private static final Schema SCHEMA = getSchemaFromResource(TestHoodieIndex.class, "/exampleSchema.avsc", true);
   private final Random random = new Random();
   private IndexType indexType;
   private HoodieIndex index;

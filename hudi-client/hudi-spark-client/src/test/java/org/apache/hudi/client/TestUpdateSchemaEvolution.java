@@ -35,7 +35,6 @@ import org.apache.hudi.testutils.HoodieClientTestHarness;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.io.InvalidRecordException;
@@ -43,6 +42,7 @@ import org.apache.parquet.io.ParquetDecodingException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -72,8 +72,8 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
   }
 
   private WriteStatus prepareFirstRecordCommit(List<String> recordsStrs) throws IOException {
-    // Create a bunch of records with a old version of schema
-    final HoodieWriteConfig config = makeHoodieClientConfig("/exampleSchema.txt");
+    // Create a bunch of records with an old version of schema
+    final HoodieWriteConfig config = makeHoodieClientConfig("/exampleSchema.avsc");
     final HoodieSparkTable table = HoodieSparkTable.create(config, context);
     final List<WriteStatus> statuses = jsc.parallelize(Arrays.asList(1)).map(x -> {
       List<HoodieRecord> insertRecords = new ArrayList<>();
@@ -95,7 +95,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
     return statuses.get(0);
   }
 
-  private List<String> generateMultiRecordsForExampleSchema() {
+  private List<String> generateMultipleRecordsForExampleSchema() {
     List<String> recordsStrs = new ArrayList<>();
     String recordStr1 = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
         + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
@@ -117,186 +117,112 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
     return recordsStrs;
   }
 
-  @Test
-  public void testSchemaEvolutionOnUpdateSuccessWithAddColumnHaveDefault() throws Exception {
-    final WriteStatus insertResult = prepareFirstRecordCommit(generateMultiRecordsForExampleSchema());
-    String fileId = insertResult.getFileId();
-
-    // Now try an update with an evolved schema
-    // Evolved schema does not have guarantee on preserving the original field ordering
-    final HoodieWriteConfig config = makeHoodieClientConfig("/exampleEvolvedSchema.txt");
-    final HoodieSparkTable table = HoodieSparkTable.create(config, context);
+  private void assertSchemaEvolutionOnUpdateResult(WriteStatus insertResult, HoodieSparkTable updateTable,
+                                                   List<HoodieRecord> updateRecords, String assertMsg, boolean isAssertThrow, Class expectedExceptionType) {
     jsc.parallelize(Arrays.asList(1)).map(x -> {
-      // New content with values for the newly added field
-      String recordStr = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
-          + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12,\"added_field\":1}";
-      List<HoodieRecord> updateRecords = new ArrayList<>();
-      RawTripTestPayload rowChange = new RawTripTestPayload(recordStr);
-      HoodieRecord record =
-          new HoodieRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange);
-      record.unseal();
-      record.setCurrentLocation(new HoodieRecordLocation("101", fileId));
-      record.seal();
-      updateRecords.add(record);
-      assertDoesNotThrow(() -> {
-        HoodieMergeHandle mergeHandle = new HoodieMergeHandle(config, "101", table,
-            updateRecords.iterator(), record.getPartitionPath(), fileId, supplier);
-        Configuration conf = new Configuration();
-        AvroReadSupport.setAvroReadSchema(conf, mergeHandle.getWriterSchemaWithMetafields());
-        List<GenericRecord> oldRecords = ParquetUtils.readAvroRecords(conf,
-            new Path(config.getBasePath() + "/" + insertResult.getStat().getPath()));
+      Executable executable = () -> {
+        HoodieMergeHandle mergeHandle = new HoodieMergeHandle(updateTable.getConfig(), "101", updateTable,
+            updateRecords.iterator(), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier);
+        AvroReadSupport.setAvroReadSchema(updateTable.getHadoopConf(), mergeHandle.getWriterSchemaWithMetafields());
+        List<GenericRecord> oldRecords = ParquetUtils.readAvroRecords(updateTable.getHadoopConf(),
+            new Path(updateTable.getConfig().getBasePath() + "/" + insertResult.getStat().getPath()));
         for (GenericRecord rec : oldRecords) {
           mergeHandle.write(rec);
         }
         mergeHandle.close();
-      }, "UpdateFunction could not read records written with exampleSchema.txt using the "
-          + "exampleEvolvedSchema.txt");
+      };
+      if (isAssertThrow) {
+        assertThrows(expectedExceptionType, executable, assertMsg);
+      } else {
+        assertDoesNotThrow(executable, assertMsg);
+      }
       return 1;
     }).collect();
   }
 
-  @Test
-  public void testSchemaEvolutionOnUpdateSuccessWithChangeColumnOrder() throws Exception {
-    final WriteStatus insertResult = prepareFirstRecordCommit(generateMultiRecordsForExampleSchema());
-    String fileId = insertResult.getFileId();
+  private List<HoodieRecord> buildUpdateRecords(String recordStr, String insertFileId) throws IOException {
+    List<HoodieRecord> updateRecords = new ArrayList<>();
+    RawTripTestPayload rowChange = new RawTripTestPayload(recordStr);
+    HoodieRecord record =
+        new HoodieRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange);
+    record.setCurrentLocation(new HoodieRecordLocation("101", insertFileId));
+    record.seal();
+    updateRecords.add(record);
+    return updateRecords;
+  }
 
+  @Test
+  public void testSchemaEvolutionOnUpdateSuccessWithAddColumnHaveDefault() throws Exception {
+    final WriteStatus insertResult = prepareFirstRecordCommit(generateMultipleRecordsForExampleSchema());
     // Now try an update with an evolved schema
     // Evolved schema does not have guarantee on preserving the original field ordering
-    final HoodieWriteConfig config = makeHoodieClientConfig("/exampleEvolvedSchemaChangeOrder.txt");
+    final HoodieWriteConfig config = makeHoodieClientConfig("/exampleEvolvedSchema.avsc");
     final HoodieSparkTable table = HoodieSparkTable.create(config, context);
-    jsc.parallelize(Arrays.asList(1)).map(x -> {
-      // New content with values for the newly added field
-      String recordStr = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
-          + "\"time\":\"2016-01-31T03:16:41.415Z\",\"added_field\":1},\"number\":12";
-      List<HoodieRecord> updateRecords = new ArrayList<>();
-      RawTripTestPayload rowChange = new RawTripTestPayload(recordStr);
-      HoodieRecord record =
-          new HoodieRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange);
-      record.unseal();
-      record.setCurrentLocation(new HoodieRecordLocation("101", fileId));
-      record.seal();
-      updateRecords.add(record);
-      assertDoesNotThrow(() -> {
-        HoodieMergeHandle mergeHandle = new HoodieMergeHandle(config, "101", table,
-            updateRecords.iterator(), record.getPartitionPath(), fileId, supplier);
-        Configuration conf = new Configuration();
-        AvroReadSupport.setAvroReadSchema(conf, mergeHandle.getWriterSchemaWithMetafields());
-        List<GenericRecord> oldRecords = ParquetUtils.readAvroRecords(conf,
-            new Path(config.getBasePath() + "/" + insertResult.getStat().getPath()));
-        for (GenericRecord rec : oldRecords) {
-          mergeHandle.write(rec);
-        }
-        mergeHandle.close();
-      }, "UpdateFunction could not read records written with exampleSchema.txt using the "
-          + "exampleEvolvedSchemaChangeOrder.txt as column order change");
-      return 1;
-    }).collect();
+    // New content with values for the newly added field
+    String recordStr = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12,\"added_field\":1}";
+    List<HoodieRecord> updateRecords = buildUpdateRecords(recordStr, insertResult.getFileId());
+    String assertMsg = "UpdateFunction could not read records written with exampleSchema.avsc using the "
+        + "exampleEvolvedSchema.avsc";
+    assertSchemaEvolutionOnUpdateResult(insertResult, table, updateRecords, assertMsg, false, null);
+  }
+
+  @Test
+  public void testSchemaEvolutionOnUpdateSuccessWithChangeColumnOrder() throws Exception {
+    final WriteStatus insertResult = prepareFirstRecordCommit(generateMultipleRecordsForExampleSchema());
+    // Now try an update with an evolved schema
+    // Evolved schema does not have guarantee on preserving the original field ordering
+    final HoodieWriteConfig config = makeHoodieClientConfig("/exampleEvolvedSchemaChangeOrder.avsc");
+    final HoodieSparkTable table = HoodieSparkTable.create(config, context);
+    String recordStr = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"added_field\":1},\"number\":12";
+    List<HoodieRecord> updateRecords = buildUpdateRecords(recordStr, insertResult.getFileId());
+    String assertMsg = "UpdateFunction could not read records written with exampleSchema.avsc using the "
+        + "exampleEvolvedSchemaChangeOrder.avsc as column order change";
+    assertSchemaEvolutionOnUpdateResult(insertResult, table, updateRecords, assertMsg, false, null);
   }
 
   @Test
   public void testSchemaEvolutionOnUpdateMisMatchWithDeleteColumn() throws Exception {
     final WriteStatus insertResult = prepareFirstRecordCommit(generateOneRecordForExampleSchema());
-    String fileId = insertResult.getFileId();
-
     // Now try an update with an evolved schema
     // Evolved schema does not have guarantee on preserving the original field ordering
-    final HoodieWriteConfig config = makeHoodieClientConfig("/exampleEvolvedSchemaDeleteColumn.txt");
+    final HoodieWriteConfig config = makeHoodieClientConfig("/exampleEvolvedSchemaDeleteColumn.avsc");
     final HoodieSparkTable table = HoodieSparkTable.create(config, context);
-    jsc.parallelize(Arrays.asList(1)).map(x -> {
-      // New content with values for the newly added field
-      String recordStr = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
-          + "\"time\":\"2016-01-31T03:16:41.415Z\"}";
-      List<HoodieRecord> updateRecords = new ArrayList<>();
-      RawTripTestPayload rowChange = new RawTripTestPayload(recordStr);
-      HoodieRecord record =
-          new HoodieRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange);
-      record.unseal();
-      record.setCurrentLocation(new HoodieRecordLocation("101", fileId));
-      record.seal();
-      updateRecords.add(record);
-      HoodieMergeHandle mergeHandle = new HoodieMergeHandle(config, "101", table,
-          updateRecords.iterator(), record.getPartitionPath(), fileId, supplier);
-      Configuration conf = new Configuration();
-      AvroReadSupport.setAvroReadSchema(conf, mergeHandle.getWriterSchemaWithMetafields());
-      assertThrows(InvalidRecordException.class, () -> {
-        List<GenericRecord> oldRecords = ParquetUtils.readAvroRecords(conf,
-            new Path(config.getBasePath() + "/" + insertResult.getStat().getPath()));
-      }, "UpdateFunction when delete column ,Parquet/Avro schema mismatch: Avro field 'xxx' not found");
-      mergeHandle.close();
-      return 1;
-    }).collect();
+    String recordStr = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\"}";
+    List<HoodieRecord> updateRecords = buildUpdateRecords(recordStr, insertResult.getFileId());
+    String assertMsg = "UpdateFunction when delete column, Parquet/Avro schema mismatch: Avro field 'xxx' not found";
+    assertSchemaEvolutionOnUpdateResult(insertResult, table, updateRecords, assertMsg, true, InvalidRecordException.class);
   }
 
   @Test
   public void testSchemaEvolutionOnUpdateMisMatchWithAddColumnNotHaveDefault() throws Exception {
     final WriteStatus insertResult = prepareFirstRecordCommit(generateOneRecordForExampleSchema());
-    String fileId = insertResult.getFileId();
-
     // Now try an update with an evolved schema
     // Evolved schema does not have guarantee on preserving the original field ordering
-    final HoodieWriteConfig config = makeHoodieClientConfig("/exampleEvolvedSchemaColumnRequire.txt");
+    final HoodieWriteConfig config = makeHoodieClientConfig("/exampleEvolvedSchemaColumnRequire.avsc");
     final HoodieSparkTable table = HoodieSparkTable.create(config, context);
-    jsc.parallelize(Arrays.asList(1)).map(x -> {
-      // New content with values for the newly added field
-      String recordStr = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
-          + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12,\"added_field\":1}";
-      List<HoodieRecord> updateRecords = new ArrayList<>();
-      RawTripTestPayload rowChange = new RawTripTestPayload(recordStr);
-      HoodieRecord record =
-          new HoodieRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange);
-      record.unseal();
-      record.setCurrentLocation(new HoodieRecordLocation("101", fileId));
-      record.seal();
-      updateRecords.add(record);
-      assertThrows(HoodieUpsertException.class, () -> {
-        HoodieMergeHandle mergeHandle = new HoodieMergeHandle(config, "101", table,
-            updateRecords.iterator(), record.getPartitionPath(), fileId, supplier);
-        Configuration conf = new Configuration();
-        AvroReadSupport.setAvroReadSchema(conf, mergeHandle.getWriterSchemaWithMetafields());
-        List<GenericRecord> oldRecords = ParquetUtils.readAvroRecords(conf,
-            new Path(config.getBasePath() + "/" + insertResult.getStat().getPath()));
-        for (GenericRecord rec : oldRecords) {
-          mergeHandle.write(rec);
-        }
-        mergeHandle.close();
-      }, "UpdateFunction could not read records written with exampleSchema.txt using the "
-          + "exampleEvolvedSchemaColumnRequire.txt ,because oldrecords do not have required column added_field");
-      return 1;
-    }).collect();
+    String recordStr = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12,\"added_field\":1}";
+    List<HoodieRecord> updateRecords = buildUpdateRecords(recordStr, insertResult.getFileId());
+    String assertMsg = "UpdateFunction could not read records written with exampleSchema.avsc using the "
+        + "exampleEvolvedSchemaColumnRequire.avsc, because old records do not have required column added_field";
+    assertSchemaEvolutionOnUpdateResult(insertResult, table, updateRecords, assertMsg, true, HoodieUpsertException.class);
   }
 
   @Test
   public void testSchemaEvolutionOnUpdateMisMatchWithChangeColumnType() throws Exception {
     final WriteStatus insertResult = prepareFirstRecordCommit(generateOneRecordForExampleSchema());
-    String fileId = insertResult.getFileId();
-
     // Now try an update with an evolved schema
     // Evolved schema does not have guarantee on preserving the original field ordering
-    final HoodieWriteConfig config = makeHoodieClientConfig("/exampleEvolvedSchemaColumnType.txt");
+    final HoodieWriteConfig config = makeHoodieClientConfig("/exampleEvolvedSchemaColumnType.avsc");
     final HoodieSparkTable table = HoodieSparkTable.create(config, context);
-    jsc.parallelize(Arrays.asList(1)).map(x -> {
-      // New content with values for the newly added field
-      String recordStr = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
-          + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":\"12\"}";
-      List<HoodieRecord> updateRecords = new ArrayList<>();
-      RawTripTestPayload rowChange = new RawTripTestPayload(recordStr);
-      HoodieRecord record =
-          new HoodieRecord(new HoodieKey(rowChange.getRowKey(), rowChange.getPartitionPath()), rowChange);
-      record.unseal();
-      record.setCurrentLocation(new HoodieRecordLocation("101", fileId));
-      record.seal();
-      updateRecords.add(record);
-      HoodieMergeHandle mergeHandle = new HoodieMergeHandle(config, "101", table,
-          updateRecords.iterator(), record.getPartitionPath(), fileId, supplier);
-      Configuration conf = new Configuration();
-      AvroReadSupport.setAvroReadSchema(conf, mergeHandle.getWriterSchemaWithMetafields());
-      assertThrows(ParquetDecodingException.class, () -> {
-        List<GenericRecord> oldRecords = ParquetUtils.readAvroRecords(conf,
-            new Path(config.getBasePath() + "/" + insertResult.getStat().getPath()));
-      }, "UpdateFunction when change column type ,org.apache.parquet.avro.AvroConverters$FieldUTF8Converter");
-      mergeHandle.close();
-      return 1;
-    }).collect();
+    String recordStr = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
+        + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":\"12\"}";
+    List<HoodieRecord> updateRecords = buildUpdateRecords(recordStr, insertResult.getFileId());
+    String assertMsg = "UpdateFunction when change column type, org.apache.parquet.avro.AvroConverters$FieldUTF8Converter";
+    assertSchemaEvolutionOnUpdateResult(insertResult, table, updateRecords, assertMsg, true, ParquetDecodingException.class);
   }
 
   private HoodieWriteConfig makeHoodieClientConfig(String name) {
