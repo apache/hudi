@@ -103,7 +103,7 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
         LOG.info("Starting Timeline service !!");
         Option<String> hostAddr = context.getProperty(EngineProperty.EMBEDDED_SERVER_HOST);
         timelineServer = Option.of(new EmbeddedTimelineService(context, hostAddr.orElse(null),
-            config.getClientSpecifiedViewStorageConfig()));
+            config.getEmbeddedTimelineServerPort(), config.getClientSpecifiedViewStorageConfig()));
         try {
           timelineServer.get().startServer();
           // Allow executor to find this newly instantiated timeline service
