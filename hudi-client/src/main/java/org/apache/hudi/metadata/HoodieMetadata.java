@@ -32,6 +32,7 @@ import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -64,6 +65,12 @@ public class HoodieMetadata {
   // A base directory where the metadata tables should be saved outside the dataset directory.
   private static String metadataBaseDirectory;
 
+  // The metrics registry which is used to publish metadata metrics
+  private static Registry metricsRegistry = Registry.getRegistry(HoodieMetadata.class.getSimpleName());
+
+  // Metric names
+  private static final String ERRORS_STR = "errors";
+
   /**
    * Initialize the Metadata Table.
    *  - If the table does not exist it is created for the first time.
@@ -80,13 +87,14 @@ public class HoodieMetadata {
       }
       if (writeConfig.useFileListingMetadata()) {
         instances.put(basePath, new HoodieMetadataImpl(jsc, jsc.hadoopConfiguration(), basePath,
-            getMetadataTableBasePath(basePath), writeConfig, false));
+            getMetadataTableBasePath(basePath), writeConfig, false, metricsRegistry));
       } else {
         if (!isMetadataTable(writeConfig.getBasePath())) {
           LOG.info("Metadata table is disabled in write config.");
         }
       }
     } catch (IOException e) {
+      metricsRegistry.increment(ERRORS_STR);
       throw new HoodieMetadataException("Failed to initialize metadata table", e);
     }
   }
@@ -106,10 +114,11 @@ public class HoodieMetadata {
         LOG.warn("Duplicate initialization of metadata for basePath " + basePath);
       }
       instances.put(basePath, new HoodieMetadataImpl(null, hadoopConf, basePath, getMetadataTableBasePath(basePath),
-          null, true));
+          null, true, metricsRegistry));
     } catch (TableNotFoundException e) {
       LOG.warn("Metadata table was not found at path " + getMetadataTableBasePath(basePath));
     } catch (IOException e) {
+      metricsRegistry.increment(ERRORS_STR);
       throw new HoodieMetadataException("Failed to initialize metadata table", e);
     }
   }

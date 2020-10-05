@@ -36,6 +36,7 @@ import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.ClientUtils;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
@@ -607,6 +608,11 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       List<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
       validateMetadata(client.getConfig());
+
+      Registry metricsRegistry = Registry.getRegistry(HoodieMetadata.class.getSimpleName());
+      assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataImpl.INITIALIZE_STR + ".count"));
+      assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataImpl.INITIALIZE_STR + ".duration"));
+      assertTrue(metricsRegistry.getAllCounts().get(HoodieMetadataImpl.INITIALIZE_STR + ".count") == 1L);
     }
   }
 

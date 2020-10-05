@@ -49,6 +49,7 @@ import org.apache.hudi.client.utils.ClientUtils;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -99,14 +100,14 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
   private static final Logger LOG = LogManager.getLogger(HoodieMetadataImpl.class);
 
   // Metric names
-  private static final String INITIALIZE_STR = "initialize";
-  private static final String SYNC_STR = "sync";
-  private static final String LOOKUP_PARTITIONS_STR = "lookup_partitions";
-  private static final String LOOKUP_FILES_STR = "lookup_files";
-  private static final String VALIDATE_PARTITIONS_STR = "validate_partitions";
-  private static final String VALIDATE_FILES_STR = "validate_files";
-  private static final String VALIDATE_ERRORS_STR = "validate_errors";
-  private static final String SCAN_STR = "scan";
+  public static final String INITIALIZE_STR = "initialize";
+  public static final String SYNC_STR = "sync";
+  public static final String LOOKUP_PARTITIONS_STR = "lookup_partitions";
+  public static final String LOOKUP_FILES_STR = "lookup_files";
+  public static final String VALIDATE_PARTITIONS_STR = "validate_partitions";
+  public static final String VALIDATE_FILES_STR = "validate_files";
+  public static final String VALIDATE_ERRORS_STR = "validate_errors";
+  public static final String SCAN_STR = "scan";
 
   // Stats names
   private static final String STAT_TOTAL_BASE_FILE_SIZE = "totalBaseFileSizeInBytes";
@@ -129,24 +130,25 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
   private HoodieTableMetaClient metaClient;
   private HoodieMetrics metrics;
   private boolean validateLookups = false;
-  private int numLookupsAllPartitions = 0;
-  private int numLookupsFilesInPartition = 0;
-  private int numScans = 0;
-  private int numValidationErrors = 0;
+
   // In read only mode, no changes are made to the metadata table
   private boolean readOnly = true;
+
+  //The metrics registry which is used to publish metadata metrics
+  private final Registry metricsRegistry;
 
   // Readers for the base and log file which store the metadata
   private HoodieFileReader<GenericRecord> basefileReader;
   private HoodieMetadataMergedLogRecordScanner logRecordScanner;
 
   HoodieMetadataImpl(JavaSparkContext jsc, Configuration hadoopConf, String datasetBasePath, String metadataBasePath,
-                         HoodieWriteConfig writeConfig, boolean readOnly) throws IOException {
+                         HoodieWriteConfig writeConfig, boolean readOnly, Registry metricsRegistry) throws IOException {
     this.jsc = jsc;
     this.hadoopConf = hadoopConf;
     this.datasetBasePath = datasetBasePath;
     this.metadataBasePath = metadataBasePath;
     this.readOnly = readOnly;
+    this.metricsRegistry = metricsRegistry;
 
     // Load the schema
     this.schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
@@ -293,16 +295,14 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
       long durationInMs = metrics.getDurationInMs(context.stop());
       // Time to initilize and sync
       if (exists) {
-        metrics.updateMetadataMetrics(INITIALIZE_STR, 0, 0);
-        metrics.updateMetadataMetrics(SYNC_STR, durationInMs, 1);
+        updateMetrics(SYNC_STR, durationInMs);
       } else {
-        metrics.updateMetadataMetrics(INITIALIZE_STR, durationInMs, 1);
-        metrics.updateMetadataMetrics(SYNC_STR, 0, 0);
+        updateMetrics(INITIALIZE_STR, durationInMs);
       }
 
       // Total size of the metadata and count of base/log files
       Map<String, String> stats = getStats(false);
-      metrics.updateMetadataSizeMetrics(Long.valueOf(stats.get(STAT_TOTAL_BASE_FILE_SIZE)),
+      updateMetrics(Long.valueOf(stats.get(STAT_TOTAL_BASE_FILE_SIZE)),
           Long.valueOf(stats.get(STAT_TOTAL_LOG_FILE_SIZE)), Integer.valueOf(stats.get(STAT_COUNT_BASE_FILES)),
           Integer.valueOf(stats.get(STAT_COUNT_LOG_FILES)));
     }
@@ -840,13 +840,16 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
       }
     }
 
-    ++numLookupsAllPartitions;
-
     long validateTime = 0;
     if (validateLookups) {
       // Validate the Metadata Table data by listing the partitions from the file system
       final Timer.Context contextValidate = this.metrics.getMetadataCtx(VALIDATE_PARTITIONS_STR);
       List<String> actualPartitions  = FSUtils.getAllPartitionPaths(metaClient.getFs(), datasetBasePath, false);
+
+      if (contextValidate != null) {
+        validateTime = metrics.getDurationInMs(contextValidate.stop());
+        updateMetrics(VALIDATE_PARTITIONS_STR, validateTime);
+      }
 
       Collections.sort(actualPartitions);
       Collections.sort(partitions);
@@ -855,22 +858,16 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
         LOG.error("Partitions from metadata: " + Arrays.toString(partitions.toArray()));
         LOG.error("Partitions from file system: " + Arrays.toString(actualPartitions.toArray()));
 
-        ++numValidationErrors;
-        metrics.updateMetadataMetrics(VALIDATE_ERRORS_STR, 0, numValidationErrors);
+        updateMetrics(VALIDATE_ERRORS_STR, validateTime);
       }
 
       // Return the direct listing as it should be correct
       partitions = actualPartitions;
-
-      if (contextValidate != null) {
-        validateTime = metrics.getDurationInMs(contextValidate.stop());
-        metrics.updateMetadataMetrics(VALIDATE_PARTITIONS_STR, validateTime, numLookupsAllPartitions);
-      }
     }
 
     if (context != null) {
       long durationInMs = metrics.getDurationInMs(context.stop()) - validateTime;
-      metrics.updateMetadataMetrics(LOOKUP_PARTITIONS_STR, durationInMs, numLookupsAllPartitions);
+      updateMetrics(LOOKUP_PARTITIONS_STR, durationInMs);
     }
 
     return partitions;
@@ -899,17 +896,19 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
       statuses = hoodieRecord.get().getData().getFileStatuses(partitionPath);
     }
 
-    ++numLookupsFilesInPartition;
-
     long validateTime = 0;
     if (validateLookups) {
       // Validate the Metadata Table data by listing the partitions from the file system
       final Timer.Context contextValidate = this.metrics.getMetadataCtx(VALIDATE_FILES_STR);
-      validateTime = System.currentTimeMillis();
+
       // Compare the statuses from metadata to those from listing directly from the file system.
       // Ignore partition metadata file
       FileStatus[] directStatuses = metaClient.getFs().listStatus(partitionPath,
           p -> !p.getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
+      if (contextValidate != null) {
+        validateTime = metrics.getDurationInMs(contextValidate.stop());
+      }
+
       List<String> directFilenames = Arrays.stream(directStatuses)
           .map(s -> s.getPath().getName()).collect(Collectors.toList());
       List<String> metadataFilenames = Arrays.stream(statuses)
@@ -922,22 +921,18 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
         LOG.error("File list from metadata: " + Arrays.toString(metadataFilenames.toArray()));
         LOG.error("File list from direct listing: " + Arrays.toString(directFilenames.toArray()));
 
-        ++numValidationErrors;
-        metrics.updateMetadataMetrics(VALIDATE_ERRORS_STR, 0, numValidationErrors);
+        updateMetrics(VALIDATE_ERRORS_STR, validateTime);
       }
 
       // Return the direct listing as it should be correct
       statuses = directStatuses;
 
-      if (contextValidate != null) {
-        validateTime = metrics.getDurationInMs(contextValidate.stop());
-        metrics.updateMetadataMetrics(VALIDATE_FILES_STR, validateTime, numLookupsFilesInPartition);
-      }
+      updateMetrics(VALIDATE_FILES_STR, validateTime);
     }
 
     if (context != null) {
       long durationInMs = metrics.getDurationInMs(context.stop()) - validateTime;
-      metrics.updateMetadataMetrics(LOOKUP_FILES_STR, durationInMs, numLookupsFilesInPartition);
+      updateMetrics(LOOKUP_FILES_STR, durationInMs);
     }
 
     return statuses;
@@ -997,11 +992,9 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
     LOG.info("Opened metadata log files from " + logFilePaths + " at instant " + latestInstantTime
         + "(dataset instant=" + latestInstantTime + ", metadata instant=" + latestMetaInstantTimestamp + ")");
 
-    ++numScans;
-
     if (context != null) {
       long durationInMs = metrics.getDurationInMs(context.stop());
-      metrics.updateMetadataMetrics(SCAN_STR, durationInMs, numScans);
+      updateMetrics(SCAN_STR, durationInMs);
     }
   }
 
@@ -1099,5 +1092,32 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
     }
 
     return stats;
+  }
+
+  public void updateMetrics(String action, long durationInMs) {
+    String countKey = action + ".count";
+    String durationKey = action + ".duration";
+
+    // Update average for duration and total for count
+    long existingCount = metricsRegistry.getAllCounts().getOrDefault(countKey, 0L);
+    long existingDuration = metricsRegistry.getAllCounts().getOrDefault(durationKey, 0L);
+    long avgDuration = (long)Math.ceil((existingDuration * existingCount + durationInMs) / (existingCount + 1));
+
+    metricsRegistry.add(countKey, 1);
+    metricsRegistry.add(durationKey, avgDuration - existingDuration);
+
+    LOG.info(String.format("Updating metadata metrics (%s=%dms, %s=%d)", durationKey, avgDuration, countKey,
+        existingCount + 1));
+  }
+
+  public void updateMetrics(long totalBaseFileSizeInBytes, long totalLogFileSizeInBytes, int baseFileCount,
+                            int logFileCount) {
+    LOG.info(String.format("Updating metadata size metrics (basefile.size=%d, logfile.size=%d, basefile.count=%d, "
+        + "logfile.count=%d)", totalBaseFileSizeInBytes, totalLogFileSizeInBytes, baseFileCount, logFileCount));
+
+    metricsRegistry.add("basefile.size", totalBaseFileSizeInBytes);
+    metricsRegistry.add("logfile.size", totalLogFileSizeInBytes);
+    metricsRegistry.add("basefile.count", baseFileCount);
+    metricsRegistry.add("logfile.count", logFileCount);
   }
 }
