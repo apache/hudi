@@ -274,7 +274,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
     // Evolved schema does not have guarantee on preserving the original field ordering
     final HoodieWriteConfig config = makeHoodieClientConfig("/exampleEvolvedSchemaColumnType.txt");
     final HoodieSparkTable table = HoodieSparkTable.create(config, context);
-    jsc.parallelize(Arrays.asList(1)).map(x -> {
+    jsc.parallelize(Arrays.asList(1)).foreach(x -> {
       // New content with values for the newly added field
       String recordStr = "{\"_row_key\":\"8eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
           + "\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":\"12\"}";
