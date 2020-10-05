@@ -40,7 +40,7 @@ import java.util.Objects;
  */
 public class SparkUtil {
 
-  private static final String DEFAULT_SPARK_MASTER = "yarn-client";
+  private static final String DEFAULT_SPARK_MASTER = "yarn";
 
   /**
    * TODO: Need to fix a bunch of hardcoded stuff here eg: history server, spark distro.
