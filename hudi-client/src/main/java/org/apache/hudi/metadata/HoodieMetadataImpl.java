@@ -753,7 +753,6 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
    */
   private synchronized void commit(JavaRDD<HoodieRecord> recordRDD, String instantTime) {
     ValidationUtils.checkState(!readOnly, "Metadata table cannot be committed in readonly mode");
-    ValidationUtils.checkArgument(!recordRDD.isEmpty());
 
     // Close all readers
     if (basefileReader != null) {

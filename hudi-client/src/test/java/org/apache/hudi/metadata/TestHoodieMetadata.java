@@ -585,6 +585,9 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       client.startCommitWithTime(newCommitTime);
       List<WriteStatus> writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
       validateMetadata(client.getConfig());
+
+      List<String> metadataPartitions = HoodieMetadata.getAllPartitionPaths(dfs, basePath, false);
+      assertTrue(metadataPartitions.contains(""), "Must contain empty partition");
     }
   }
 
@@ -604,10 +607,6 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       List<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
       validateMetadata(client.getConfig());
-
-      // The empty partition is saved with a special name
-      List<String> metadataPartitions = HoodieMetadata.getAllPartitionPaths(dfs, basePath, false);
-      assertTrue(metadataPartitions.contains(HoodieMetadataCommon.NON_PARTITIONED_NAME), "Must contain empty partition");
     }
   }
 
