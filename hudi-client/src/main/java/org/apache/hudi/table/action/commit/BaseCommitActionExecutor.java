@@ -221,14 +221,14 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>,
     // Finalize write
     finalizeWrite(instantTime, writeStats, result);
 
-    // Update Metadata Table
-    HoodieMetadata.update(config, metadata, instantTime);
-
     try {
       LOG.info("Committing " + instantTime + ", action Type " + getCommitActionType());
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       HoodieCommitMetadata metadata = CommitUtils.buildMetadata(writeStats, result.getPartitionToReplaceFileIds(),
           extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());
+
+      // Update Metadata Table
+      HoodieMetadata.update(config, metadata, instantTime);
 
       activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
