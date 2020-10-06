@@ -56,12 +56,14 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Random;
 import java.util.UUID;
 
 import scala.Tuple2;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
+import static org.apache.hudi.config.HoodieIndexConfig.INDEX_TYPE_PROP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -77,7 +79,14 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
 
   private void setUp(IndexType indexType) throws Exception {
     this.indexType = indexType;
-    initResources();
+    initPath();
+    initSparkContexts();
+    initTestDataGenerator();
+    initFileSystem();
+    Properties properties = new Properties();
+    properties.setProperty(INDEX_TYPE_PROP, indexType.name());
+    initMetaClient(properties);
+
     config = getConfigBuilder()
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType)
             .build()).withAutoCommit(false).build();

@@ -30,11 +30,15 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.Serializable;
+
+import static org.apache.hudi.config.HoodieIndexConfig.INDEX_TYPE_PROP;
 
 /**
  * Abstract class taking care of holding common member variables (FileSystem, SparkContext, HoodieConfigs) Also, manages
@@ -124,9 +128,30 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
     return config;
   }
 
+  private void checkIndexTypeCompatible(String writeIndexType, String persistIndexType) {
+    if (writeIndexType.equals(persistIndexType)) {
+      return;
+    } else {
+      if ((persistIndexType.equals(HoodieIndex.IndexType.GLOBAL_BLOOM.name())
+          && (writeIndexType.equals(HoodieIndex.IndexType.BLOOM.name()) || writeIndexType.equals(HoodieIndex.IndexType.SIMPLE.name())))
+          || writeIndexType.equals(HoodieIndex.IndexType.INMEMORY.name())) {
+        return;
+      } else {
+        throw new HoodieException("The new write indextype " + writeIndexType
+            + " is not compatible with persistIndexType " + persistIndexType);
+      }
+    }
+  }
+
   protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
-    return new HoodieTableMetaClient(hadoopConf, config.getBasePath(), loadActiveTimelineOnLoad,
-        config.getConsistencyGuardConfig(),
+    HoodieTableMetaClient hoodieTableMetaClient = new HoodieTableMetaClient(hadoopConf, config.getBasePath(),
+        loadActiveTimelineOnLoad, config.getConsistencyGuardConfig(),
         Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())));
+    String persistIndexType = hoodieTableMetaClient.getTableConfig().getProperties().getProperty(INDEX_TYPE_PROP);
+    // just check compatible for persistIndexType already exist. if persistIndexType not exist , it will persist when upgrade
+    if (persistIndexType != null) {
+      checkIndexTypeCompatible(this.config.getIndexType().name(), persistIndexType);
+    }
+    return hoodieTableMetaClient;
   }
 }

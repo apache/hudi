@@ -56,6 +56,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -206,6 +207,16 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
    * @throws IOException
    */
   protected void initMetaClient() throws IOException {
+    initMetaClient(new Properties());
+  }
+
+  /**
+   * Initializes an instance of {@link HoodieTableMetaClient} with a special table type specified by
+   * {@code getTableType()}, and other properties such as indextype in properties.
+   *
+   * @throws IOException
+   */
+  protected void initMetaClient(Properties properties) throws IOException {
     if (basePath == null) {
       throw new IllegalStateException("The base path has not been initialized.");
     }
@@ -213,8 +224,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     if (jsc == null) {
       throw new IllegalStateException("The Spark context has not been initialized.");
     }
-
-    metaClient = HoodieTestUtils.init(context.getHadoopConf().get(), basePath, getTableType());
+    metaClient = HoodieTestUtils.init(context.getHadoopConf().get(), basePath, getTableType(), properties);
   }
 
   /**
