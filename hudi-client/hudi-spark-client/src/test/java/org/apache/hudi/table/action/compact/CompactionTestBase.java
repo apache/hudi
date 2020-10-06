@@ -55,6 +55,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
@@ -198,6 +199,31 @@ public class CompactionTestBase extends HoodieClientTestBase {
         HoodieClientTestUtils.countRecordsSince(jsc, basePath, sqlContext, timeline, "000"),
         "Must contain expected records");
 
+  }
+
+  protected void executeCompactionWithReplacedFiles(String compactionInstantTime, SparkRDDWriteClient client, HoodieTable table,
+                                   HoodieWriteConfig cfg, String[] partitions, Set<HoodieFileGroupId> replacedFileIds) throws IOException {
+
+    client.compact(compactionInstantTime);
+    List<FileSlice> fileSliceList = getCurrentLatestFileSlices(table);
+    assertTrue(fileSliceList.stream().findAny().isPresent(), "Ensure latest file-slices are not empty");
+    assertFalse(fileSliceList.stream()
+            .anyMatch(fs -> replacedFileIds.contains(fs.getFileGroupId())),
+        "Compacted files should not show up in latest slices");
+
+    // verify that there is a commit
+    table = getHoodieTable(new HoodieTableMetaClient(hadoopConf, cfg.getBasePath(), true), cfg);
+    HoodieTimeline timeline = table.getMetaClient().getCommitTimeline().filterCompletedInstants();
+    // verify compaction commit is visible in timeline
+    assertTrue(timeline.filterCompletedInstants().getInstants()
+        .filter(instant -> compactionInstantTime.equals(instant.getTimestamp())).findFirst().isPresent());
+    for (String partition: partitions) {
+      table.getSliceView().getLatestFileSlicesBeforeOrOn(partition, compactionInstantTime, true).forEach(fs -> {
+        // verify that all log files are merged
+        assertEquals(0, fs.getLogFiles().count());
+        assertTrue(fs.getBaseFile().isPresent());
+      });
+    }
   }
 
   protected List<WriteStatus> createNextDeltaCommit(String instantTime, List<HoodieRecord> records, SparkRDDWriteClient client,
