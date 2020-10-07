@@ -16,31 +16,29 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client;
+package org.apache.hudi.utilities.schema;
 
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-
-import java.io.IOException;
 import java.io.Serializable;
+import java.util.HashSet;
+import org.apache.avro.Schema;
+import org.apache.avro.SchemaNormalization;
+
+import java.util.Set;
 
 /**
- * Run one round of compaction.
+ * Tracks already processed schemas.
  */
-public abstract class AbstractCompactor<T extends HoodieRecordPayload, I, K, O> implements Serializable {
+public class SchemaSet implements Serializable {
 
-  private static final long serialVersionUID = 1L;
+  private final Set<Long> processedSchema = new HashSet<>();
 
-  protected transient AbstractHoodieWriteClient<T, I, K, O> compactionClient;
-
-  public AbstractCompactor(AbstractHoodieWriteClient<T, I, K, O> compactionClient) {
-    this.compactionClient = compactionClient;
+  public boolean isSchemaPresent(Schema schema) {
+    long schemaKey = SchemaNormalization.parsingFingerprint64(schema);
+    return processedSchema.contains(schemaKey);
   }
 
-  public abstract void compact(HoodieInstant instant) throws IOException;
-
-  public void updateWriteClient(AbstractHoodieWriteClient<T, I, K, O> writeClient) {
-    this.compactionClient = writeClient;
+  public void addSchema(Schema schema) {
+    long schemaKey = SchemaNormalization.parsingFingerprint64(schema);
+    processedSchema.add(schemaKey);
   }
-
 }
