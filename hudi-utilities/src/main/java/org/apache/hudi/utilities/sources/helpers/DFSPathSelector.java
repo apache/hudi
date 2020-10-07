@@ -78,6 +78,7 @@ public class DFSPathSelector {
       while (fitr.hasNext()) {
         LocatedFileStatus fileStatus = fitr.next();
         if (fileStatus.isDirectory()
+            || fileStatus.getLen() == 0
             || IGNORE_FILEPREFIX_LIST.stream().anyMatch(pfx -> fileStatus.getPath().getName().startsWith(pfx))) {
           continue;
         }

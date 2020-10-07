@@ -219,7 +219,7 @@ public class DeltaSync implements Serializable {
    *
    * @throws IOException in case of any IOException
    */
-  private void refreshTimeline() throws IOException {
+  public void refreshTimeline() throws IOException {
     if (fs.exists(new Path(cfg.targetBasePath))) {
       HoodieTableMetaClient meta = new HoodieTableMetaClient(new Configuration(fs.getConf()), cfg.targetBasePath,
           cfg.payloadClassName);
