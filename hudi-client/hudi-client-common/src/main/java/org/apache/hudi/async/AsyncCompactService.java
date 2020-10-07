@@ -161,4 +161,8 @@ public abstract class AsyncCompactService extends HoodieAsyncService {
   protected boolean shouldStopCompactor() {
     return false;
   }
+
+  public synchronized void updateWriteClient(AbstractHoodieWriteClient writeClient) {
+    this.compactor.updateWriteClient(writeClient);
+  }
 }
