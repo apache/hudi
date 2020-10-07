@@ -27,19 +27,18 @@ import org.apache.hudi.integ.testsuite.generator.DeltaGenerator;
 import org.apache.spark.api.java.JavaRDD;
 
 /**
- * Represents an upsert node in the DAG of operations for a workflow.
+ * Delete node to assist in issuing deletes.
  */
-public class UpsertNode extends InsertNode {
+public class DeleteNode extends InsertNode {
 
-  public UpsertNode(Config config) {
+  public DeleteNode(Config config) {
     super(config);
   }
 
   @Override
   protected void generate(DeltaGenerator deltaGenerator) throws Exception {
     if (!config.isDisableGenerate()) {
-      log.info("Generating input data {}", this.getName());
-      deltaGenerator.writeRecords(deltaGenerator.generateUpdates(config)).count();
+      deltaGenerator.writeRecords(deltaGenerator.generateDeletes(config)).count();
     }
   }
 
@@ -47,10 +46,9 @@ public class UpsertNode extends InsertNode {
   protected JavaRDD<WriteStatus> ingest(HoodieTestSuiteWriter hoodieTestSuiteWriter, Option<String> commitTime)
       throws Exception {
     if (!config.isDisableIngest()) {
-      log.info("Upserting input data {}", this.getName());
+      log.info("Deleting input data {}", this.getName());
       this.result = hoodieTestSuiteWriter.upsert(commitTime);
     }
     return this.result;
   }
-
 }

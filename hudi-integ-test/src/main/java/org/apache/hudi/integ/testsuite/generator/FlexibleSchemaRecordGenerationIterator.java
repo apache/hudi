@@ -18,17 +18,16 @@
 
 package org.apache.hudi.integ.testsuite.generator;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-
 /**
- * A GenericRecordGeneratorIterator for the custom schema of the workload. Implements {@link Iterator} to allow for
- * iteration semantics.
+ * A GenericRecordGeneratorIterator for the custom schema of the workload. Implements {@link Iterator} to allow for iteration semantics.
  */
 public class FlexibleSchemaRecordGenerationIterator implements Iterator<GenericRecord> {
 
@@ -67,7 +66,7 @@ public class FlexibleSchemaRecordGenerationIterator implements Iterator<GenericR
       lastRecord = record;
       return record;
     } else {
-      return this.generator.randomize(lastRecord, this.partitionPathFieldNames);
+      return this.generator.randomize(lastRecord, partitionPathFieldNames);
     }
   }
 }

@@ -18,17 +18,19 @@
 
 package org.apache.hudi.integ.testsuite.configuration;
 
+import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.integ.testsuite.reader.DeltaInputType;
+import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.hadoop.conf.Configuration;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hudi.common.config.SerializableConfiguration;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.integ.testsuite.reader.DeltaInputType;
-import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
 
 /**
  * Configuration to hold the delta output type and delta input format.
@@ -59,8 +61,7 @@ public class DeltaConfig implements Serializable {
   }
 
   /**
-   * Represents any kind of workload operation for new data. Each workload also contains a set of Option sequence of
-   * actions that can be executed in parallel.
+   * Represents any kind of workload operation for new data. Each workload also contains a set of Option sequence of actions that can be executed in parallel.
    */
   public static class Config {
 
@@ -73,10 +74,12 @@ public class DeltaConfig implements Serializable {
     public static final String HIVE_PROPERTIES = "hive_props";
     private static String NUM_RECORDS_INSERT = "num_records_insert";
     private static String NUM_RECORDS_UPSERT = "num_records_upsert";
+    private static String NUM_RECORDS_DELETE = "num_records_delete";
     private static String REPEAT_COUNT = "repeat_count";
     private static String RECORD_SIZE = "record_size";
     private static String NUM_PARTITIONS_INSERT = "num_partitions_insert";
     private static String NUM_PARTITIONS_UPSERT = "num_partitions_upsert";
+    private static String NUM_PARTITIONS_DELETE = "num_partitions_delete";
     private static String NUM_FILES_UPSERT = "num_files_upsert";
     private static String FRACTION_UPSERT_PER_FILE = "fraction_upsert_per_file";
     private static String DISABLE_GENERATE = "disable_generate";
@@ -103,6 +106,10 @@ public class DeltaConfig implements Serializable {
       return Long.valueOf(configsMap.getOrDefault(NUM_RECORDS_UPSERT, 0).toString());
     }
 
+    public long getNumRecordsDelete() {
+      return Long.valueOf(configsMap.getOrDefault(NUM_RECORDS_DELETE, 0).toString());
+    }
+
     public int getRecordSize() {
       return Integer.valueOf(configsMap.getOrDefault(RECORD_SIZE, 1024).toString());
     }
@@ -121,6 +128,10 @@ public class DeltaConfig implements Serializable {
 
     public int getStartPartition() {
       return Integer.valueOf(configsMap.getOrDefault(START_PARTITION, 0).toString());
+    }
+
+    public int getNumDeletePartitions() {
+      return Integer.valueOf(configsMap.getOrDefault(NUM_PARTITIONS_DELETE, 1).toString());
     }
 
     public int getNumUpsertFiles() {
@@ -192,6 +203,11 @@ public class DeltaConfig implements Serializable {
         return this;
       }
 
+      public Builder withNumRecordsToDelete(long numRecordsDelete) {
+        this.configsMap.put(NUM_RECORDS_DELETE, numRecordsDelete);
+        return this;
+      }
+
       public Builder withNumInsertPartitions(int numInsertPartitions) {
         this.configsMap.put(NUM_PARTITIONS_INSERT, numInsertPartitions);
         return this;
@@ -199,6 +215,11 @@ public class DeltaConfig implements Serializable {
 
       public Builder withNumUpsertPartitions(int numUpsertPartitions) {
         this.configsMap.put(NUM_PARTITIONS_UPSERT, numUpsertPartitions);
+        return this;
+      }
+
+      public Builder withNumDeletePartitions(int numDeletePartitions) {
+        this.configsMap.put(NUM_PARTITIONS_DELETE, numDeletePartitions);
         return this;
       }
 
