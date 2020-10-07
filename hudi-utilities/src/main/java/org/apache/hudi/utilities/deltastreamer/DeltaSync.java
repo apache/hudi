@@ -24,6 +24,8 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -51,6 +53,7 @@ import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.schema.SchemaSet;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.transform.Transformer;
 
@@ -167,6 +170,17 @@ public class DeltaSync implements Serializable {
   private transient Option<HoodieTimeline> commitTimelineOpt;
 
   /**
+   * Tracks whether new schema is being seen and creates client accordingly.
+   */
+  private final SchemaSet processedSchema;
+
+  /**
+   * DeltaSync will explicitly manage embedded timeline server so that they can be reused across Write Client
+   * instantiations.
+   */
+  private transient Option<EmbeddedTimelineService> embeddedTimelineService = Option.empty();
+
+  /**
    * Write Client.
    */
   private transient SparkRDDWriteClient writeClient;
@@ -184,6 +198,7 @@ public class DeltaSync implements Serializable {
     this.onInitializingHoodieWriteClient = onInitializingHoodieWriteClient;
     this.props = props;
     this.userProvidedSchemaProvider = schemaProvider;
+    this.processedSchema = new SchemaSet();
 
     refreshTimeline();
     // Register User Provided schema first
@@ -244,6 +259,18 @@ public class DeltaSync implements Serializable {
         this.schemaProvider = srcRecordsWithCkpt.getKey();
         // Setup HoodieWriteClient and compaction now that we decided on schema
         setupWriteClient();
+      } else {
+        Schema newSourceSchema = srcRecordsWithCkpt.getKey().getSourceSchema();
+        Schema newTargetSchema = srcRecordsWithCkpt.getKey().getTargetSchema();
+        if (!(processedSchema.isSchemaPresent(newSourceSchema))
+            || !(processedSchema.isSchemaPresent(newTargetSchema))) {
+          LOG.info("Seeing new schema. Source :" + newSourceSchema.toString(true)
+              + ", Target :" + newTargetSchema.toString(true));
+          // We need to recreate write client with new schema and register them.
+          reInitWriteClient(newSourceSchema, newTargetSchema);
+          processedSchema.addSchema(newSourceSchema);
+          processedSchema.addSchema(newTargetSchema);
+        }
       }
 
       result = writeToSink(srcRecordsWithCkpt.getRight().getRight(),
@@ -541,14 +568,32 @@ public class DeltaSync implements Serializable {
    * SchemaProvider creation is a precursor to HoodieWriteClient and AsyncCompactor creation. This method takes care of
    * this constraint.
    */
-  private void setupWriteClient() {
-    LOG.info("Setting up Hoodie Write Client");
-    if ((null != schemaProvider) && (null == writeClient)) {
-      registerAvroSchemas(schemaProvider);
-      HoodieWriteConfig hoodieCfg = getHoodieClientConfig(schemaProvider);
-      writeClient = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), hoodieCfg, true);
-      onInitializingHoodieWriteClient.apply(writeClient);
+  public void setupWriteClient() throws IOException {
+    if ((null != schemaProvider)) {
+      Schema sourceSchema = schemaProvider.getSourceSchema();
+      Schema targetSchema = schemaProvider.getTargetSchema();
+      reInitWriteClient(sourceSchema, targetSchema);
     }
+  }
+
+  private void reInitWriteClient(Schema sourceSchema, Schema targetSchema) throws IOException {
+    LOG.info("Setting up new Hoodie Write Client");
+    registerAvroSchemas(sourceSchema, targetSchema);
+    HoodieWriteConfig hoodieCfg = getHoodieClientConfig(targetSchema);
+    if (hoodieCfg.isEmbeddedTimelineServerEnabled()) {
+      if (!embeddedTimelineService.isPresent()) {
+        embeddedTimelineService = EmbeddedTimelineServerHelper.createEmbeddedTimelineService(new HoodieSparkEngineContext(jssc), hoodieCfg);
+      } else {
+        EmbeddedTimelineServerHelper.updateWriteConfigWithTimelineServer(embeddedTimelineService.get(), hoodieCfg);
+      }
+    }
+
+    if (null != writeClient) {
+      // Close Write client.
+      writeClient.close();
+    }
+    writeClient = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), hoodieCfg, true, embeddedTimelineService);
+    onInitializingHoodieWriteClient.apply(writeClient);
   }
 
   /**
@@ -557,6 +602,15 @@ public class DeltaSync implements Serializable {
    * @param schemaProvider Schema Provider
    */
   private HoodieWriteConfig getHoodieClientConfig(SchemaProvider schemaProvider) {
+    return getHoodieClientConfig(schemaProvider != null ? schemaProvider.getTargetSchema() : null);
+  }
+
+  /**
+   * Helper to construct Write Client config.
+   *
+   * @param schema Schema
+   */
+  private HoodieWriteConfig getHoodieClientConfig(Schema schema) {
     final boolean combineBeforeUpsert = true;
     final boolean autoCommit = false;
     HoodieWriteConfig.Builder builder =
@@ -567,8 +621,8 @@ public class DeltaSync implements Serializable {
             .forTable(cfg.targetTableName)
             .withAutoCommit(autoCommit).withProps(props);
 
-    if (null != schemaProvider && null != schemaProvider.getTargetSchema()) {
-      builder = builder.withSchema(schemaProvider.getTargetSchema().toString());
+    if (null != schema) {
+      builder = builder.withSchema(schema.toString());
     }
     HoodieWriteConfig config = builder.build();
 
@@ -596,12 +650,24 @@ public class DeltaSync implements Serializable {
    * @param schemaProvider Schema Provider
    */
   private void registerAvroSchemas(SchemaProvider schemaProvider) {
-    // register the schemas, so that shuffle does not serialize the full schemas
     if (null != schemaProvider) {
+      registerAvroSchemas(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema());
+    }
+  }
+
+  /**
+   * Register Avro Schemas.
+   *
+   * @param sourceSchema Source Schema
+   * @param targetSchema Target Schema
+   */
+  private void registerAvroSchemas(Schema sourceSchema, Schema targetSchema) {
+    // register the schemas, so that shuffle does not serialize the full schemas
+    if (null != sourceSchema) {
       List<Schema> schemas = new ArrayList<>();
-      schemas.add(schemaProvider.getSourceSchema());
-      if (schemaProvider.getTargetSchema() != null) {
-        schemas.add(schemaProvider.getTargetSchema());
+      schemas.add(sourceSchema);
+      if (targetSchema != null) {
+        schemas.add(targetSchema);
       }
 
       LOG.info("Registering Schema :" + schemas);
@@ -616,6 +682,11 @@ public class DeltaSync implements Serializable {
     if (null != writeClient) {
       writeClient.close();
       writeClient = null;
+    }
+
+    LOG.info("Shutting down embedded timeline server");
+    if (embeddedTimelineService.isPresent()) {
+      embeddedTimelineService.get().stop();
     }
   }
 
