@@ -41,10 +41,11 @@ public class Metrics {
   private static Metrics metrics = null;
   private final MetricRegistry registry;
   private MetricsReporter reporter;
+  private final String commonMetricPrefix;
 
   private Metrics(HoodieWriteConfig metricConfig) {
     registry = new MetricRegistry();
-
+    commonMetricPrefix = metricConfig.getTableName();
     reporter = MetricsReporterFactory.createReporter(metricConfig, registry);
     if (reporter == null) {
       throw new RuntimeException("Cannot initialize Reporter.");
@@ -68,8 +69,20 @@ public class Metrics {
     }
   }
 
+  private void reportAndFlushMetrics() {
+    try {
+      LOG.info("Reporting and flushing all metrics");
+
+      this.registerHoodieCommonMetrics();
+      this.reporter.report();
+      this.registry.getNames().forEach(name -> this.registry.remove(name));
+    } catch (Exception e) {
+      Metrics.LOG.error((Object)"Error while reporting and flushing metrics", (Throwable)e);
+    }
+  }
+
   private void registerHoodieCommonMetrics() {
-    registerGauges(Registry.getAllMetrics(true, true), Option.empty());
+    registerGauges(Registry.getAllMetrics(true, true), Option.of(commonMetricPrefix));
   }
 
   public static Metrics getInstance() {
@@ -95,6 +108,14 @@ public class Metrics {
     }
     metrics.reportAndCloseReporter();
     initialized = false;
+  }
+
+  public static synchronized void flush() {
+    if (!Metrics.initialized) {
+      return;
+    }
+
+    metrics.reportAndFlushMetrics();
   }
 
   public static void registerGauges(Map<String, Long> metricsMap, Option<String> prefix) {
