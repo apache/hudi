@@ -119,6 +119,8 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
 
 15. ["PrestoDB and Apache Hudi"](https://youtu.be/nA3rwOdmm3A) - By Bhavani Sudha Saktheeswaran and Brandon Scheller, Aug 2020, PrestoDB Community Meetup.
 
+16. ["Panel Discussion on Presto Ecosystem"](https://www.youtube.com/watch?v=lsFSM2Z4kPs) - By Vinoth Chandar, Sep 2020, PrestoCon ["panel"](https://prestocon2020.sched.com/event/dgyw).
+
 ## Articles
 
 1. ["The Case for incremental processing on Hadoop"](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop) - O'reilly Ideas article by Vinoth Chandar
@@ -128,7 +130,7 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
 5. ["Apache Hudi grows cloud data lake maturity"](https://searchdatamanagement.techtarget.com/news/252484740/Apache-Hudi-grows-cloud-data-lake-maturity)
 6. ["Building a Large-scale Transactional Data Lake at Uber Using Apache Hudi"](https://eng.uber.com/apache-hudi-graduation/) - Uber eng blog by Nishith Agarwal
 7. ["Hudi On Hops"](https://www.diva-portal.org/smash/get/diva2:1413103/FULLTEXT01.pdf) - By NETSANET GEBRETSADKAN KIDANE
-8. ["PrestoDB and Apachi Hudi](https://prestodb.io/blog/2020/08/04/prestodb-and-hudi) - PrestoDB - Hudi integration blog by Bhavani Sudha Saktheeswaran and Brandon Scheller 
+8. ["PrestoDB and Apache Hudi](https://prestodb.io/blog/2020/08/04/prestodb-and-hudi) - PrestoDB - Hudi integration blog by Bhavani Sudha Saktheeswaran and Brandon Scheller 
 
 ## Powered by
 

@@ -60,6 +60,14 @@ Hudi在Yotpo有不少用途。首先，在他们的[开源ETL框架](https://git
 
 12. ["Building a near real-time, high-performance data warehouse based on Apache Hudi and Apache Kylin"](https://drive.google.com/open?id=1Pk_WdFxfEZxMMfAOn0R8-m3ALkcN6G9e) - By ShaoFeng Shi March 2020, Apache Hudi & Apache Kylin Online Meetup, China
 
+13. ["Building large scale, transactional data lakes using Apache Hudi"](https://berlinbuzzwords.de/session/building-large-scale-transactional-data-lakes-using-apache-hudi) - By Nishith Agarwal, June 2020, Berlin Buzzwords 2020.
+
+14. ["Apache Hudi - Design/Code Walkthrough Session for Contributors"](https://www.youtube.com/watch?v=N2eDfU_rQ_U) - By Vinoth Chandar, July 2020, Hudi community.
+
+15. ["PrestoDB and Apache Hudi"](https://youtu.be/nA3rwOdmm3A) - By Bhavani Sudha Saktheeswaran and Brandon Scheller, Aug 2020, PrestoDB Community Meetup.
+
+16. ["Panel Discussion on Presto Ecosystem"](https://www.youtube.com/watch?v=lsFSM2Z4kPs) - By Vinoth Chandar, Sep 2020, PrestoCon ["panel"](https://prestocon2020.sched.com/event/dgyw).
+
 ## 文章
 
 1. ["The Case for incremental processing on Hadoop"](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop) - O'reilly Ideas article by Vinoth Chandar
