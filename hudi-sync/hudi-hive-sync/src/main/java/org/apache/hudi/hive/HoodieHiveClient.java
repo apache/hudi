@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Partition;
@@ -42,7 +43,6 @@ import org.apache.hive.jdbc.HiveDriver;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.schema.MessageType;
 import org.apache.thrift.TException;
 
 import java.io.IOException;
@@ -237,7 +237,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     return client.listPartitions(syncConfig.databaseName, tableName, (short) -1);
   }
 
-  void updateTableDefinition(String tableName, MessageType newSchema) {
+  void updateTableDefinition(String tableName, Schema newSchema) {
     try {
       String newSchemaStr = HiveSchemaUtil.generateSchemaString(newSchema, syncConfig.partitionFields);
       // Cascade clause should not be present for non-partitioned tables
@@ -255,7 +255,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   }
 
   @Override
-  public void createTable(String tableName, MessageType storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass) {
+  public void createTable(String tableName, Schema storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass) {
     try {
       String createSQLQuery =
           HiveSchemaUtil.generateCreateDDL(tableName, storageSchema, syncConfig, inputFormatClass, outputFormatClass, serdeClass);

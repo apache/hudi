@@ -18,18 +18,18 @@
 
 package org.apache.hudi.hive.util;
 
+import org.apache.avro.LogicalType;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
+import org.apache.hudi.common.util.collection.ImmutablePair;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.SchemaDifference;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.schema.DecimalMetadata;
-import org.apache.parquet.schema.GroupType;
-import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.OriginalType;
-import org.apache.parquet.schema.PrimitiveType;
-import org.apache.parquet.schema.Type;
+import org.mortbay.log.Log;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -50,11 +50,11 @@ public class HiveSchemaUtil {
   /**
    * Get the schema difference between the storage schema and hive table schema.
    */
-  public static SchemaDifference getSchemaDifference(MessageType storageSchema, Map<String, String> tableSchema,
+  public static SchemaDifference getSchemaDifference(Schema storageSchema, Map<String, String> tableSchema,
       List<String> partitionKeys) {
     Map<String, String> newTableSchema;
     try {
-      newTableSchema = convertParquetSchemaToHiveSchema(storageSchema);
+      newTableSchema = convertAvroSchemaToHiveSchema(storageSchema);
     } catch (IOException e) {
       throw new HoodieHiveSyncException("Failed to convert parquet schema to hive schema", e);
     }
@@ -132,18 +132,13 @@ public class HiveSchemaUtil {
    * @param messageType : Parquet Schema
    * @return : Hive Table schema read from parquet file MAP[String,String]
    */
-  public static Map<String, String> convertParquetSchemaToHiveSchema(MessageType messageType) throws IOException {
+  public static Map<String, String> convertAvroSchemaToHiveSchema(Schema avroSchema) throws IOException {
     Map<String, String> schema = new LinkedHashMap<>();
-    List<Type> parquetFields = messageType.getFields();
-    for (Type parquetType : parquetFields) {
+    List<Schema.Field> schemaFields = avroSchema.getFields();
+    for (Schema.Field schemaField : schemaFields) {
       StringBuilder result = new StringBuilder();
-      String key = parquetType.getName();
-      if (parquetType.isRepetition(Type.Repetition.REPEATED)) {
-        result.append(createHiveArray(parquetType, ""));
-      } else {
-        result.append(convertField(parquetType));
-      }
-
+      String key = schemaField.name();
+      result.append(convertFieldFromAvro(schemaField.schema()));
       schema.put(hiveCompatibleFieldName(key, false), result.toString());
     }
     return schema;
@@ -155,113 +150,75 @@ public class HiveSchemaUtil {
    * @param parquetType : Single paruet field
    * @return : Equivalent sHive schema
    */
-  private static String convertField(final Type parquetType) {
+  private static String convertFieldFromAvro(final Schema schema) {
     StringBuilder field = new StringBuilder();
-    if (parquetType.isPrimitive()) {
-      final PrimitiveType.PrimitiveTypeName parquetPrimitiveTypeName =
-          parquetType.asPrimitiveType().getPrimitiveTypeName();
-      final OriginalType originalType = parquetType.getOriginalType();
-      if (originalType == OriginalType.DECIMAL) {
-        final DecimalMetadata decimalMetadata = parquetType.asPrimitiveType().getDecimalMetadata();
-        return field.append("DECIMAL(").append(decimalMetadata.getPrecision()).append(" , ")
-            .append(decimalMetadata.getScale()).append(")").toString();
-      } else if (originalType == OriginalType.DATE) {
+    Schema.Type type = schema.getType();
+    LogicalType logicalType = schema.getLogicalType();
+    if (logicalType != null) {
+      if (logicalType instanceof LogicalTypes.Decimal) {
+        return field.append("DECIMAL(").append(((LogicalTypes.Decimal) logicalType).getPrecision()).append(" , ")
+            .append(((LogicalTypes.Decimal) logicalType).getScale()).append(")").toString();
+      } else if (logicalType instanceof LogicalTypes.Date) {
         return field.append("DATE").toString();
-      }
-      // TODO - fix the method naming here
-      return parquetPrimitiveTypeName.convert(new PrimitiveType.PrimitiveTypeNameConverter<String, RuntimeException>() {
-        @Override
-        public String convertBOOLEAN(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return "boolean";
-        }
-
-        @Override
-        public String convertINT32(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return "int";
-        }
-
-        @Override
-        public String convertINT64(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return "bigint";
-        }
-
-        @Override
-        public String convertINT96(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return "timestamp-millis";
-        }
-
-        @Override
-        public String convertFLOAT(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return "float";
-        }
-
-        @Override
-        public String convertDOUBLE(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return "double";
-        }
-
-        @Override
-        public String convertFIXED_LEN_BYTE_ARRAY(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          return "binary";
-        }
-
-        @Override
-        public String convertBINARY(PrimitiveType.PrimitiveTypeName primitiveTypeName) {
-          if (originalType == OriginalType.UTF8 || originalType == OriginalType.ENUM) {
-            return "string";
-          } else {
-            return "binary";
-          }
-        }
-      });
-    } else {
-      GroupType parquetGroupType = parquetType.asGroupType();
-      OriginalType originalType = parquetGroupType.getOriginalType();
-      if (originalType != null) {
-        switch (originalType) {
-          case LIST:
-            if (parquetGroupType.getFieldCount() != 1) {
-              throw new UnsupportedOperationException("Invalid list type " + parquetGroupType);
-            }
-            Type elementType = parquetGroupType.getType(0);
-            if (!elementType.isRepetition(Type.Repetition.REPEATED)) {
-              throw new UnsupportedOperationException("Invalid list type " + parquetGroupType);
-            }
-            return createHiveArray(elementType, parquetGroupType.getName());
-          case MAP:
-            if (parquetGroupType.getFieldCount() != 1 || parquetGroupType.getType(0).isPrimitive()) {
-              throw new UnsupportedOperationException("Invalid map type " + parquetGroupType);
-            }
-            GroupType mapKeyValType = parquetGroupType.getType(0).asGroupType();
-            if (!mapKeyValType.isRepetition(Type.Repetition.REPEATED)
-                || !mapKeyValType.getOriginalType().equals(OriginalType.MAP_KEY_VALUE)
-                || mapKeyValType.getFieldCount() != 2) {
-              throw new UnsupportedOperationException("Invalid map type " + parquetGroupType);
-            }
-            Type keyType = mapKeyValType.getType(0);
-            if (!keyType.isPrimitive()
-                || !keyType.asPrimitiveType().getPrimitiveTypeName().equals(PrimitiveType.PrimitiveTypeName.BINARY)
-                || !keyType.getOriginalType().equals(OriginalType.UTF8)) {
-              throw new UnsupportedOperationException("Map key type must be binary (UTF8): " + keyType);
-            }
-            Type valueType = mapKeyValType.getType(1);
-            return createHiveMap(convertField(keyType), convertField(valueType));
-          case ENUM:
-          case UTF8:
-            return "string";
-          case MAP_KEY_VALUE:
-            // MAP_KEY_VALUE was supposed to be used to annotate key and
-            // value group levels in a
-            // MAP. However, that is always implied by the structure of
-            // MAP. Hence, PARQUET-113
-            // dropped the requirement for having MAP_KEY_VALUE.
-          default:
-            throw new UnsupportedOperationException("Cannot convert Parquet type " + parquetType);
-        }
       } else {
-        // if no original type then it's a record
-        return createHiveStruct(parquetGroupType.getFields());
+        Log.info("not handle the type transform");
       }
+    }
+    if (type.equals(Schema.Type.BOOLEAN)) {
+      return field.append("boolean").toString();
+    } else if (type.equals(Schema.Type.INT)) {
+      return field.append("int").toString();
+    } else if (type.equals(Schema.Type.LONG)) {
+      return field.append("bigint").toString();
+    } else if (type.equals(Schema.Type.FLOAT)) {
+      return field.append("float").toString();
+    } else if (type.equals(Schema.Type.DOUBLE)) {
+      return field.append("double").toString();
+    } else if (type.equals(Schema.Type.BYTES)) {
+      return field.append("binary").toString();
+    } else if (type.equals(Schema.Type.STRING)) {
+      return field.append("string").toString();
+    } else if (type.equals(Schema.Type.RECORD)) {
+      List<Pair<String, Schema>> noNullSchemaFields = new ArrayList<>();
+      for (Schema.Field fieldItem : schema.getFields()) {
+        if (fieldItem.schema().getType().equals(Schema.Type.NULL)) {
+          continue; // Avro nulls are not encoded, unless they are null unions
+        }
+        noNullSchemaFields.add(new ImmutablePair<String, Schema>(fieldItem.name(), fieldItem.schema()));
+      }
+      return createHiveStructFromAvro(noNullSchemaFields);
+    } else if (type.equals(Schema.Type.ENUM)) {
+      return field.append("string").toString();
+    } else if (type.equals(Schema.Type.ARRAY)) {
+      Schema elementType = schema.getElementType();
+      String schemaName = schema.getName();
+      return createHiveArrayFromAvro(schemaName, elementType);
+    } else if (type.equals(Schema.Type.MAP)) {
+      String keyType = "string";
+      String valType = convertFieldFromAvro(schema.getValueType());
+      return createHiveMap(keyType, valType);
+    } else if (type.equals(Schema.Type.FIXED)) {
+      return field.append("binary").toString();
+    } else if (type.equals(Schema.Type.UNION)) {
+      List<Pair<String, Schema>> noNullSchemaFields = new ArrayList<>();
+      int index = 0;
+      for (Schema childSchema : schema.getTypes()) {
+        if (!childSchema.getType().equals(Schema.Type.NULL)) {
+          noNullSchemaFields.add(new ImmutablePair("member" + index++, childSchema));
+        }
+      }
+      // If we only get a null and one other type then its a simple optional field
+      // otherwise construct a union container
+      switch (noNullSchemaFields.size()) {
+        case 0:
+          throw new UnsupportedOperationException("Cannot convert Avro union of only nulls");
+        case 1:
+          return convertFieldFromAvro(noNullSchemaFields.get(0).getRight());
+        default: // complex union type
+          return createHiveStructFromAvro(noNullSchemaFields);
+      }
+    } else {
+      throw new UnsupportedOperationException("Cannot convert Avro type " + type);
     }
   }
 
@@ -271,14 +228,14 @@ public class HiveSchemaUtil {
    * @param parquetFields : list of parquet fields
    * @return : Equivalent 'struct' Hive schema
    */
-  private static String createHiveStruct(List<Type> parquetFields) {
+  private static String createHiveStructFromAvro(List<Pair<String, Schema>> fields) {
     StringBuilder struct = new StringBuilder();
     struct.append("STRUCT< ");
-    for (Type field : parquetFields) {
+    for (Pair<String, Schema> field : fields) {
       // TODO: struct field name is only translated to support special char($)
       // We will need to extend it to other collection type
-      struct.append(hiveCompatibleFieldName(field.getName(), true)).append(" : ");
-      struct.append(convertField(field)).append(", ");
+      struct.append(hiveCompatibleFieldName(field.getLeft(), true)).append(" : ");
+      struct.append(convertFieldFromAvro(field.getRight())).append(", ");
     }
     struct.delete(struct.length() - 2, struct.length()); // Remove the last
     // ", "
@@ -327,20 +284,14 @@ public class HiveSchemaUtil {
   /**
    * Create an Array Hive schema from equivalent parquet list type.
    */
-  private static String createHiveArray(Type elementType, String elementName) {
+  private static String createHiveArrayFromAvro(String schemaName, Schema elementType) {
     StringBuilder array = new StringBuilder();
     array.append("ARRAY< ");
-    if (elementType.isPrimitive()) {
-      array.append(convertField(elementType));
+    if (elementType.getType().equals(Schema.Type.RECORD) && (elementType.getFields().size() == 1
+        && !elementType.getName().equals("array") && !elementType.getName().endsWith("_tuple"))) {
+      array.append(convertFieldFromAvro(elementType.getFields().get(0).schema()));
     } else {
-      final GroupType groupType = elementType.asGroupType();
-      final List<Type> groupFields = groupType.getFields();
-      if (groupFields.size() > 1 || (groupFields.size() == 1
-          && (elementType.getName().equals("array") || elementType.getName().equals(elementName + "_tuple")))) {
-        array.append(convertField(elementType));
-      } else {
-        array.append(convertField(groupType.getFields().get(0)));
-      }
+      array.append(convertFieldFromAvro(elementType));
     }
     array.append(">");
     return array.toString();
@@ -363,12 +314,12 @@ public class HiveSchemaUtil {
     }
   }
 
-  public static String generateSchemaString(MessageType storageSchema) throws IOException {
+  public static String generateSchemaString(Schema storageSchema) throws IOException {
     return generateSchemaString(storageSchema, new ArrayList<>());
   }
 
-  public static String generateSchemaString(MessageType storageSchema, List<String> colsToSkip) throws IOException {
-    Map<String, String> hiveSchema = convertParquetSchemaToHiveSchema(storageSchema);
+  public static String generateSchemaString(Schema storageSchema, List<String> colsToSkip) throws IOException {
+    Map<String, String> hiveSchema = convertAvroSchemaToHiveSchema(storageSchema);
     StringBuilder columns = new StringBuilder();
     for (Map.Entry<String, String> hiveSchemaEntry : hiveSchema.entrySet()) {
       if (!colsToSkip.contains(removeSurroundingTick(hiveSchemaEntry.getKey()))) {
@@ -381,9 +332,9 @@ public class HiveSchemaUtil {
     return columns.toString();
   }
 
-  public static String generateCreateDDL(String tableName, MessageType storageSchema, HiveSyncConfig config, String inputFormatClass,
-      String outputFormatClass, String serdeClass) throws IOException {
-    Map<String, String> hiveSchema = convertParquetSchemaToHiveSchema(storageSchema);
+  public static String generateCreateDDL(String tableName, Schema storageSchema, HiveSyncConfig config, String inputFormatClass,
+                                         String outputFormatClass, String serdeClass) throws IOException {
+    Map<String, String> hiveSchema = convertAvroSchemaToHiveSchema(storageSchema);
     String columns = generateSchemaString(storageSchema, config.partitionFields);
 
     List<String> partitionFields = new ArrayList<>();

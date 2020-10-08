@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sync.common;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.fs.FSUtils;
@@ -55,7 +56,7 @@ public abstract class AbstractSyncHoodieClient {
     this.fs = fs;
   }
 
-  public abstract void createTable(String tableName, MessageType storageSchema,
+  public abstract void createTable(String tableName, Schema storageSchema,
                                    String inputFormatClass, String outputFormatClass, String serdeClass);
 
   public abstract boolean doesTableExist(String tableName);
@@ -107,9 +108,9 @@ public abstract class AbstractSyncHoodieClient {
    *
    * @return Parquet schema for this table
    */
-  public MessageType getDataSchema() {
+  public Schema getDataSchema() {
     try {
-      return new TableSchemaResolver(metaClient).getTableParquetSchema();
+      return new TableSchemaResolver(metaClient).getTableAvroSchema();
     } catch (Exception e) {
       throw new HoodieSyncException("Failed to read data schema", e);
     }

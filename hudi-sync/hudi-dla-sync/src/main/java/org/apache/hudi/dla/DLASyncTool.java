@@ -19,6 +19,7 @@
 package org.apache.hudi.dla;
 
 import com.beust.jcommander.JCommander;
+import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
@@ -36,7 +37,6 @@ import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.schema.MessageType;
 
 import java.util.List;
 import java.util.Map;
@@ -112,7 +112,7 @@ public class DLASyncTool extends AbstractSyncTool {
     // Check if the necessary table exists
     boolean tableExists = hoodieDLAClient.doesTableExist(tableName);
     // Get the parquet schema for this table looking at the latest commit
-    MessageType schema = hoodieDLAClient.getDataSchema();
+    Schema schema = hoodieDLAClient.getDataSchema();
     // Sync schema if needed
     syncSchema(tableName, tableExists, useRealtimeInputFormat, schema);
 
@@ -140,7 +140,7 @@ public class DLASyncTool extends AbstractSyncTool {
    * @param tableExists - does table exist
    * @param schema - extracted schema
    */
-  private void syncSchema(String tableName, boolean tableExists, boolean useRealTimeInputFormat, MessageType schema) {
+  private void syncSchema(String tableName, boolean tableExists, boolean useRealTimeInputFormat, Schema schema) {
     // Check and sync schema
     if (!tableExists) {
       LOG.info("DLA table " + tableName + " is not found. Creating it");

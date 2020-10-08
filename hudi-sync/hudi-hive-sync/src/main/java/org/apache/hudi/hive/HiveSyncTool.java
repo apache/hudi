@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.Option;
@@ -35,7 +36,6 @@ import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.schema.MessageType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -131,7 +131,7 @@ public class HiveSyncTool extends AbstractSyncTool {
     }
 
     // Get the parquet schema for this table looking at the latest commit
-    MessageType schema = hoodieHiveClient.getDataSchema();
+    Schema schema = hoodieHiveClient.getDataSchema();
     // Sync schema if needed
     syncSchema(tableName, tableExists, useRealtimeInputFormat, schema);
 
@@ -158,7 +158,7 @@ public class HiveSyncTool extends AbstractSyncTool {
    * @param tableExists - does table exist
    * @param schema - extracted schema
    */
-  private void syncSchema(String tableName, boolean tableExists, boolean useRealTimeInputFormat, MessageType schema) {
+  private void syncSchema(String tableName, boolean tableExists, boolean useRealTimeInputFormat, Schema schema) {
     // Check and sync schema
     if (!tableExists) {
       LOG.info("Hive table " + tableName + " is not found. Creating it");

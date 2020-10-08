@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
@@ -27,6 +29,7 @@ import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
 
 import org.apache.hadoop.hive.metastore.api.Partition;
+import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
@@ -84,31 +87,32 @@ public class TestHiveSyncTool {
     MessageType schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup()
         .optional(PrimitiveType.PrimitiveTypeName.INT32).named("element").named("list").named("int_list")
         .named("ArrayOfInts");
-
-    String schemaString = HiveSchemaUtil.generateSchemaString(schema);
+    AvroSchemaConverter avroSchemaConverter = new AvroSchemaConverter(new Configuration());
+    Schema avroSchema =  avroSchemaConverter.convert(schema);
+    String schemaString = HiveSchemaUtil.generateSchemaString(avroSchema);
     assertEquals("`int_list` ARRAY< int>", schemaString);
 
     // A array of arrays
     schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup().requiredGroup()
         .as(OriginalType.LIST).repeatedGroup().required(PrimitiveType.PrimitiveTypeName.INT32).named("element")
-        .named("list").named("element").named("list").named("int_list_list").named("ArrayOfArrayOfInts");
-
-    schemaString = HiveSchemaUtil.generateSchemaString(schema);
+        .named("list2").named("element").named("list").named("int_list_list").named("ArrayOfArrayOfInts");
+    avroSchema =  avroSchemaConverter.convert(schema);
+    schemaString = HiveSchemaUtil.generateSchemaString(avroSchema);
     assertEquals("`int_list_list` ARRAY< ARRAY< int>>", schemaString);
 
     // A list of integers
     schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeated(PrimitiveType.PrimitiveTypeName.INT32)
         .named("element").named("int_list").named("ArrayOfInts");
-
-    schemaString = HiveSchemaUtil.generateSchemaString(schema);
+    avroSchema =  avroSchemaConverter.convert(schema);
+    schemaString = HiveSchemaUtil.generateSchemaString(avroSchema);
     assertEquals("`int_list` ARRAY< int>", schemaString);
 
     // A list of structs with two fields
     schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup()
         .required(PrimitiveType.PrimitiveTypeName.BINARY).named("str").required(PrimitiveType.PrimitiveTypeName.INT32)
         .named("num").named("element").named("tuple_list").named("ArrayOfTuples");
-
-    schemaString = HiveSchemaUtil.generateSchemaString(schema);
+    avroSchema =  avroSchemaConverter.convert(schema);
+    schemaString = HiveSchemaUtil.generateSchemaString(avroSchema);
     assertEquals("`tuple_list` ARRAY< STRUCT< `str` : binary, `num` : int>>", schemaString);
 
     // A list of structs with a single field
@@ -117,8 +121,8 @@ public class TestHiveSyncTool {
     schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup()
         .required(PrimitiveType.PrimitiveTypeName.BINARY).named("str").named("array").named("one_tuple_list")
         .named("ArrayOfOneTuples");
-
-    schemaString = HiveSchemaUtil.generateSchemaString(schema);
+    avroSchema =  avroSchemaConverter.convert(schema);
+    schemaString = HiveSchemaUtil.generateSchemaString(avroSchema);
     assertEquals("`one_tuple_list` ARRAY< STRUCT< `str` : binary>>", schemaString);
 
     // A list of structs with a single field
@@ -127,8 +131,8 @@ public class TestHiveSyncTool {
     schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup()
         .required(PrimitiveType.PrimitiveTypeName.BINARY).named("str").named("one_tuple_list_tuple")
         .named("one_tuple_list").named("ArrayOfOneTuples2");
-
-    schemaString = HiveSchemaUtil.generateSchemaString(schema);
+    avroSchema =  avroSchemaConverter.convert(schema);
+    schemaString = HiveSchemaUtil.generateSchemaString(avroSchema);
     assertEquals("`one_tuple_list` ARRAY< STRUCT< `str` : binary>>", schemaString);
 
     // A list of structs with a single field
@@ -137,8 +141,8 @@ public class TestHiveSyncTool {
     schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup()
         .required(PrimitiveType.PrimitiveTypeName.BINARY).named("str").named("one_tuple_list").named("one_tuple_list")
         .named("ArrayOfOneTuples3");
-
-    schemaString = HiveSchemaUtil.generateSchemaString(schema);
+    avroSchema =  avroSchemaConverter.convert(schema);
+    schemaString = HiveSchemaUtil.generateSchemaString(avroSchema);
     assertEquals("`one_tuple_list` ARRAY< binary>", schemaString);
 
     // A list of maps
@@ -146,8 +150,8 @@ public class TestHiveSyncTool {
         .repeatedGroup().as(OriginalType.MAP_KEY_VALUE).required(PrimitiveType.PrimitiveTypeName.BINARY)
         .as(OriginalType.UTF8).named("string_key").required(PrimitiveType.PrimitiveTypeName.INT32).named("int_value")
         .named("key_value").named("array").named("map_list").named("ArrayOfMaps");
-
-    schemaString = HiveSchemaUtil.generateSchemaString(schema);
+    avroSchema =  avroSchemaConverter.convert(schema);
+    schemaString = HiveSchemaUtil.generateSchemaString(avroSchema);
     assertEquals("`map_list` ARRAY< MAP< string, int>>", schemaString);
   }
 
@@ -167,7 +171,7 @@ public class TestHiveSyncTool {
     assertTrue(hiveClient.doesTableExist(HiveTestUtil.hiveSyncConfig.tableName),
         "Table " + HiveTestUtil.hiveSyncConfig.tableName + " should exist after sync completes");
     assertEquals(hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName).size(),
-        hiveClient.getDataSchema().getColumns().size() + 1,
+        hiveClient.getDataSchema().getFields().size() + 1,
         "Hive Schema should match the table schema + partition field");
     assertEquals(5, hiveClient.scanTablePartitions(HiveTestUtil.hiveSyncConfig.tableName).size(),
         "Table partitions should match the number of partitions we wrote");
@@ -449,7 +453,7 @@ public class TestHiveSyncTool {
     assertTrue(hiveClient.doesTableExist(hiveSyncConfig.tableName),
         "Table " + hiveSyncConfig.tableName + " should exist after sync completes");
     assertEquals(hiveClient.getTableSchema(hiveSyncConfig.tableName).size(),
-        hiveClient.getDataSchema().getColumns().size() + 3,
+        hiveClient.getDataSchema().getFields().size() + 3,
         "Hive Schema should match the table schema + partition fields");
     assertEquals(5, hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size(),
         "Table partitions should match the number of partitions we wrote");
@@ -480,7 +484,7 @@ public class TestHiveSyncTool {
     assertTrue(hiveClient.doesTableExist(hiveSyncConfig.tableName),
             "Table " + hiveSyncConfig.tableName + " should exist after sync completes");
     assertEquals(hiveClient.getTableSchema(hiveSyncConfig.tableName).size(),
-            hiveClient.getDataSchema().getColumns().size(),
+            hiveClient.getDataSchema().getFields().size(),
             "Hive Schema should match the table schema，ignoring the partition fields");
     assertEquals(0, hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size(),
             "Table should not have partitions because of the NonPartitionedExtractor");
@@ -510,7 +514,7 @@ public class TestHiveSyncTool {
     assertEquals(hiveClientRT.getTableSchema(snapshotTableName).size(),
         SchemaTestUtil.getSimpleSchema().getFields().size() + HiveTestUtil.hiveSyncConfig.partitionFields.size()
             + HoodieRecord.HOODIE_META_COLUMNS.size(),
-        "Hive Schema should match the table schema + partition field");
+        "Hive Schema should matcHoodieDLAClient.javah the table schema + partition field");
     assertEquals(5, hiveClientRT.scanTablePartitions(snapshotTableName).size(), "Table partitions should match the number of partitions we wrote");
 
     // Now lets create more partitions and these are the only ones which needs to be synced

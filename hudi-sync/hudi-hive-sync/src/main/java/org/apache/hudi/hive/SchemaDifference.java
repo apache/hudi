@@ -18,7 +18,7 @@
 
 package org.apache.hudi.hive;
 
-import org.apache.parquet.schema.MessageType;
+import org.apache.avro.Schema;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -34,13 +34,13 @@ import java.util.StringJoiner;
  */
 public class SchemaDifference {
 
-  private final MessageType storageSchema;
+  private final Schema storageSchema;
   private final Map<String, String> tableSchema;
   private final List<String> deleteColumns;
   private final Map<String, String> updateColumnTypes;
   private final Map<String, String> addColumnTypes;
 
-  private SchemaDifference(MessageType storageSchema, Map<String, String> tableSchema, List<String> deleteColumns,
+  private SchemaDifference(Schema storageSchema, Map<String, String> tableSchema, List<String> deleteColumns,
       Map<String, String> updateColumnTypes, Map<String, String> addColumnTypes) {
     this.storageSchema = storageSchema;
     this.tableSchema = tableSchema;
@@ -61,7 +61,7 @@ public class SchemaDifference {
     return addColumnTypes;
   }
 
-  public static Builder newBuilder(MessageType storageSchema, Map<String, String> tableSchema) {
+  public static Builder newBuilder(Schema storageSchema, Map<String, String> tableSchema) {
     return new Builder(storageSchema, tableSchema);
   }
 
@@ -82,13 +82,13 @@ public class SchemaDifference {
 
   public static class Builder {
 
-    private final MessageType storageSchema;
+    private final Schema storageSchema;
     private final Map<String, String> tableSchema;
     private List<String> deleteColumns;
     private Map<String, String> updateColumnTypes;
     private Map<String, String> addColumnTypes;
 
-    public Builder(MessageType storageSchema, Map<String, String> tableSchema) {
+    public Builder(Schema storageSchema, Map<String, String> tableSchema) {
       this.storageSchema = storageSchema;
       this.tableSchema = tableSchema;
       deleteColumns = new ArrayList<>();

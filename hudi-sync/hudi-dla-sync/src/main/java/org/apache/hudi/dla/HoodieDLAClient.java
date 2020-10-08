@@ -18,6 +18,7 @@
 
 package org.apache.hudi.dla;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.fs.FSUtils;
@@ -33,7 +34,6 @@ import org.apache.hudi.hive.util.HiveSchemaUtil;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
 import java.sql.Connection;
@@ -100,7 +100,7 @@ public class HoodieDLAClient extends AbstractSyncHoodieClient {
   }
 
   @Override
-  public void createTable(String tableName, MessageType storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass) {
+  public void createTable(String tableName, Schema storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass) {
     try {
       String createSQLQuery = HiveSchemaUtil.generateCreateDDL(tableName, storageSchema, toHiveSyncConfig(), inputFormatClass, outputFormatClass, serdeClass);
       LOG.info("Creating table with " + createSQLQuery);
