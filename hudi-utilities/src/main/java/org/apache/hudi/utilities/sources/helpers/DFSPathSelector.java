@@ -31,16 +31,15 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -63,7 +62,7 @@ public class DFSPathSelector {
   protected final TypedProperties props;
 
   public DFSPathSelector(TypedProperties props, Configuration hadoopConf) {
-    DataSourceUtils.checkRequiredProperties(props, Arrays.asList(Config.ROOT_INPUT_PATH_PROP));
+    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.ROOT_INPUT_PATH_PROP));
     this.props = props;
     this.fs = FSUtils.getFs(props.getString(Config.ROOT_INPUT_PATH_PROP), hadoopConf);
   }
@@ -101,18 +100,8 @@ public class DFSPathSelector {
     try {
       // obtain all eligible files under root folder.
       log.info("Root path => " + props.getString(Config.ROOT_INPUT_PATH_PROP) + " source limit => " + sourceLimit);
-      List<FileStatus> eligibleFiles = new ArrayList<>();
-      RemoteIterator<LocatedFileStatus> fitr =
-          fs.listFiles(new Path(props.getString(Config.ROOT_INPUT_PATH_PROP)), true);
-      while (fitr.hasNext()) {
-        LocatedFileStatus fileStatus = fitr.next();
-        if (fileStatus.isDirectory()
-            || fileStatus.getLen() == 0
-            || IGNORE_FILEPREFIX_LIST.stream().anyMatch(pfx -> fileStatus.getPath().getName().startsWith(pfx))) {
-          continue;
-        }
-        eligibleFiles.add(fileStatus);
-      }
+      long lastCheckpointTime = lastCheckpointStr.map(Long::parseLong).orElse(Long.MIN_VALUE);
+      List<FileStatus> eligibleFiles = listEligibleFiles(fs, new Path(props.getString(Config.ROOT_INPUT_PATH_PROP)), lastCheckpointTime);
       // sort them by modification time.
       eligibleFiles.sort(Comparator.comparingLong(FileStatus::getModificationTime));
       // Filter based on checkpoint & input size, if needed
@@ -120,11 +109,6 @@ public class DFSPathSelector {
       long maxModificationTime = Long.MIN_VALUE;
       List<FileStatus> filteredFiles = new ArrayList<>();
       for (FileStatus f : eligibleFiles) {
-        if (lastCheckpointStr.isPresent() && f.getModificationTime() <= Long.valueOf(lastCheckpointStr.get()).longValue()) {
-          // skip processed files
-          continue;
-        }
-
         if (currentBytes + f.getLen() >= sourceLimit) {
           // we have enough data, we are done
           break;
@@ -136,7 +120,7 @@ public class DFSPathSelector {
       }
 
       // no data to read
-      if (filteredFiles.size() == 0) {
+      if (filteredFiles.isEmpty()) {
         return new ImmutablePair<>(Option.empty(), lastCheckpointStr.orElseGet(() -> String.valueOf(Long.MIN_VALUE)));
       }
 
@@ -147,5 +131,26 @@ public class DFSPathSelector {
     } catch (IOException ioe) {
       throw new HoodieIOException("Unable to read from source from checkpoint: " + lastCheckpointStr, ioe);
     }
+  }
+
+  /**
+   * List files recursively, filter out illegible files/directories while doing so.
+   */
+  private List<FileStatus> listEligibleFiles(FileSystem fs, Path path, long lastCheckpointTime) throws IOException {
+    // skip files/dirs whose names start with (_, ., etc)
+    FileStatus[] statuses = fs.listStatus(path, file ->
+      IGNORE_FILEPREFIX_LIST.stream().noneMatch(pfx -> file.getName().startsWith(pfx)));
+    List<FileStatus> res = new ArrayList<>();
+    for (FileStatus status: statuses) {
+      if (status.isDirectory()) {
+        // avoid infinite loop
+        if (!status.isSymlink()) {
+          res.addAll(listEligibleFiles(fs, status.getPath(), lastCheckpointTime));
+        }
+      } else if (status.getModificationTime() > lastCheckpointTime && status.getLen() > 0) {
+        res.add(status);
+      }
+    }
+    return res;
   }
 }
