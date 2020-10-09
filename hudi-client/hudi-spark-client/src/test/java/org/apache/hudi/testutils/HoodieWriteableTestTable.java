@@ -45,6 +45,8 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -61,6 +63,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
 
 public class HoodieWriteableTestTable extends HoodieTestTable {
+  private static final Logger LOG = LogManager.getLogger(HoodieWriteableTestTable.class);
 
   private final Schema schema;
   private final BloomFilter filter;
@@ -101,15 +104,15 @@ public class HoodieWriteableTestTable extends HoodieTestTable {
     return (HoodieWriteableTestTable) super.forCommit(instantTime);
   }
 
-  public String withInserts(String partition) throws Exception {
-    return withInserts(partition, new HoodieRecord[0]);
+  public String getFileIdWithInserts(String partition) throws Exception {
+    return getFileIdWithInserts(partition, new HoodieRecord[0]);
   }
 
-  public String withInserts(String partition, HoodieRecord... records) throws Exception {
-    return withInserts(partition, Arrays.asList(records));
+  public String getFileIdWithInserts(String partition, HoodieRecord... records) throws Exception {
+    return getFileIdWithInserts(partition, Arrays.asList(records));
   }
 
-  public String withInserts(String partition, List<HoodieRecord> records) throws Exception {
+  public String getFileIdWithInserts(String partition, List<HoodieRecord> records) throws Exception {
     String fileId = UUID.randomUUID().toString();
     withInserts(partition, fileId, records);
     return fileId;
@@ -176,6 +179,7 @@ public class HoodieWriteableTestTable extends HoodieTestTable {
           HoodieAvroUtils.addHoodieKeyToRecord(val, r.getRecordKey(), r.getPartitionPath(), "");
           return (IndexedRecord) val;
         } catch (IOException e) {
+          LOG.warn("Failed to convert record " + r.toString(), e);
           return null;
         }
       }).collect(Collectors.toList()), header));
