@@ -29,36 +29,38 @@ import java.util.List;
  * HDFS Path contain hive partition values for the keys it is partitioned on. This mapping is not straight forward and
  * requires a pluggable implementation to extract the partition value from HDFS path.
  * <p>
- * This implementation extracts datestr=yyyy-mm-dd from path of type /yyyy/mm/dd
+ * This implementation extracts datestr=yyyy-mm-dd-HH from path of type /yyyy/mm/dd/HH
  */
-public class SlashEncodedDayPartitionValueExtractor implements PartitionValueExtractor {
+public class SlashEncodedHourPartitionValueExtractor implements PartitionValueExtractor {
 
   private static final long serialVersionUID = 1L;
   private transient DateTimeFormatter dtfOut;
 
-  public SlashEncodedDayPartitionValueExtractor() {
-    this.dtfOut = DateTimeFormat.forPattern("yyyy-MM-dd");
+  public SlashEncodedHourPartitionValueExtractor() {
+    this.dtfOut = DateTimeFormat.forPattern("yyyy-MM-dd-HH");
   }
 
   private DateTimeFormatter getDtfOut() {
     if (dtfOut == null) {
-      dtfOut = DateTimeFormat.forPattern("yyyy-MM-dd");
+      dtfOut = DateTimeFormat.forPattern("yyyy-MM-dd-HH");
     }
     return dtfOut;
   }
 
   @Override
   public List<String> extractPartitionValuesInPath(String partitionPath) {
-    // partition path is expected to be in this format yyyy/mm/dd
+    // partition path is expected to be in this format yyyy/mm/dd/HH
     String[] splits = partitionPath.split("/");
-    if (splits.length != 3) {
-      throw new IllegalArgumentException("Partition path " + partitionPath + " is not in the form yyyy/mm/dd ");
+    if (splits.length != 4) {
+      throw new IllegalArgumentException("Partition path " + partitionPath + " is not in the form  yyyy/mm/dd/HH");
     }
     // Get the partition part and remove the / as well at the end
     int year = Integer.parseInt(splits[0].contains("=") ? splits[0].split("=")[1] : splits[0]);
     int mm = Integer.parseInt(splits[1].contains("=") ? splits[1].split("=")[1] : splits[1]);
     int dd = Integer.parseInt(splits[2].contains("=") ? splits[2].split("=")[1] : splits[2]);
-    DateTime dateTime = new DateTime(year, mm, dd, 0, 0);
+    int hh = Integer.parseInt(splits[3].contains("=") ? splits[3].split("=")[1] : splits[3]);
+
+    DateTime dateTime = new DateTime(year, mm, dd, hh, 0);
 
     return Collections.singletonList(getDtfOut().print(dateTime));
   }
