@@ -62,7 +62,7 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implem
    * TODO(vc): We may need to propagate the record as well in a WriteStatus class
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
-  public abstract O updateLocation(O writeStatusRDD, HoodieEngineContext context,
+  public abstract O updateLocation(O writeStatuses, HoodieEngineContext context,
                                    HoodieTable<T, I, K, O> hoodieTable) throws HoodieIndexException;
 
   /**
