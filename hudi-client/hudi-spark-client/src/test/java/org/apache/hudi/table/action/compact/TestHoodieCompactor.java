@@ -44,6 +44,7 @@ import org.apache.hudi.index.bloom.SparkHoodieBloomIndex;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieWriteableTestTable;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
@@ -154,8 +155,8 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
       updatedRecords = ((JavaRDD<HoodieRecord>)index.tagLocation(updatedRecordsRDD, context, table)).collect();
 
       // Write them to corresponding avro logfiles. Also, set the state transition properly.
-      HoodieTestUtils.writeRecordsToLogFiles(fs, metaClient.getBasePath(),
-          HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS, updatedRecords);
+      HoodieWriteableTestTable.of(table, HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS)
+          .withLogAppends(updatedRecords);
       metaClient.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(State.REQUESTED,
           HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
       writeClient.commit(newCommitTime, jsc.emptyRDD(), Option.empty());
