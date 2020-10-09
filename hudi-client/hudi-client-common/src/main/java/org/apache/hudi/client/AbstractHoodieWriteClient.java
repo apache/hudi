@@ -268,7 +268,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    *
    * @param preppedRecords Prepared HoodieRecords to upsert
    * @param instantTime Instant time of the commit
-   * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
+   * @return Collection of WriteStatus to inspect errors and counts
    */
   public abstract O upsertPreppedRecords(I preppedRecords, final String instantTime);
 
@@ -280,7 +280,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    *
    * @param records HoodieRecords to insert
    * @param instantTime Instant time of the commit
-   * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
+   * @return Collection of WriteStatus to inspect errors and counts
    */
   public abstract O insert(I records, final String instantTime);
 
@@ -293,7 +293,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    *
    * @param preppedRecords HoodieRecords to insert
    * @param instantTime Instant time of the commit
-   * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
+   * @return Collection of WriteStatus to inspect errors and counts
    */
   public abstract O insertPreppedRecords(I preppedRecords, final String instantTime);
 
@@ -306,7 +306,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    *
    * @param records HoodieRecords to insert
    * @param instantTime Instant time of the commit
-   * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
+   * @return Collection of WriteStatus to inspect errors and counts
    */
   public abstract O bulkInsert(I records, final String instantTime);
 
@@ -323,7 +323,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * @param instantTime Instant time of the commit
    * @param userDefinedBulkInsertPartitioner If specified then it will be used to partition input records before they are inserted
    * into hoodie.
-   * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
+   * @return Collection of WriteStatus to inspect errors and counts
    */
   public abstract O bulkInsert(I records, final String instantTime,
                                Option<BulkInsertPartitioner<I>> userDefinedBulkInsertPartitioner);
@@ -343,7 +343,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * @param instantTime Instant time of the commit
    * @param bulkInsertPartitioner If specified then it will be used to partition input records before they are inserted
    * into hoodie.
-   * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
+   * @return Collection of WriteStatus to inspect errors and counts
    */
   public abstract O bulkInsertPreppedRecords(I preppedRecords, final String instantTime,
                                              Option<BulkInsertPartitioner<I>> bulkInsertPartitioner);
@@ -354,7 +354,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    *
    * @param keys {@link List} of {@link HoodieKey}s to be deleted
    * @param instantTime Commit time handle
-   * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
+   * @return Collection of WriteStatus to inspect errors and counts
    */
   public abstract O delete(K keys, final String instantTime);
 
@@ -653,7 +653,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * Performs Compaction for the workload stored in instant-time.
    *
    * @param compactionInstantTime Compaction Instant Time
-   * @return RDD of WriteStatus to inspect errors and counts
+   * @return Collection of WriteStatus to inspect errors and counts
    */
   public O compact(String compactionInstantTime) {
     return compact(compactionInstantTime, config.shouldAutoCommit());
@@ -663,7 +663,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * Commit a compaction operation. Allow passing additional meta-data to be stored in commit instant file.
    *
    * @param compactionInstantTime Compaction Instant Time
-   * @param writeStatuses RDD of WriteStatus to inspect errors and counts
+   * @param writeStatuses Collection of WriteStatus to inspect errors and counts
    * @param extraMetadata Extra Metadata to be stored
    */
   public abstract void commitCompaction(String compactionInstantTime, O writeStatuses,
@@ -710,7 +710,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * Ensures compaction instant is in expected state and performs Compaction for the workload stored in instant-time.
    *
    * @param compactionInstantTime Compaction Instant Time
-   * @return RDD of Write Status
+   * @return Collection of Write Status
    */
   protected abstract O compact(String compactionInstantTime, boolean shouldComplete);
 
