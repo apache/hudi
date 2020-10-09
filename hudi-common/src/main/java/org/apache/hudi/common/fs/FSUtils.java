@@ -203,7 +203,7 @@ public class FSUtils {
   public static List<String> getAllFoldersWithPartitionMetaFile(FileSystem fs, String basePathStr) throws IOException {
     // If the basePathStr is a folder within the .hoodie directory then we are listing partitions within an
     // internal table.
-    final boolean isInternalTable = basePathStr.contains(HoodieTableMetaClient.METAFOLDER_NAME);
+    final boolean isMetadataTable = basePathStr.contains(HoodieTableMetaClient.METAFOLDER_NAME);
     final Path basePath = new Path(basePathStr);
     final List<String> partitions = new ArrayList<>();
     processFiles(fs, basePathStr, (locatedFileStatus) -> {
@@ -212,7 +212,7 @@ public class FSUtils {
         partitions.add(getRelativePartitionPath(basePath, filePath.getParent()));
       }
       return true;
-    }, !isInternalTable);
+    }, !isMetadataTable);
     return partitions;
   }
 

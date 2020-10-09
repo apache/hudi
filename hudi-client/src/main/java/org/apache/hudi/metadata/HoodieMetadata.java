@@ -240,7 +240,7 @@ public class HoodieMetadata {
   /**
    * Return the list of files in a partition.
    *
-   * If the Metadata Table is enabled, the listing is retrived from the stored metadata. Otherwise, the list of
+   * If the Metadata Table is enabled, the listing is retrieved from the stored metadata. Otherwise, the list of
    * partitions is retrieved directly from the underlying {@code FileSystem}.
    *
    * On any errors retrieving the listing from the metadata, defaults to using the file system listings.

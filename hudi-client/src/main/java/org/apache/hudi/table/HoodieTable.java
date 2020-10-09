@@ -257,7 +257,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * Get complete view of the file system for this table with ability to force sync.
    */
   public SyncableFileSystemView getHoodieView() {
-    return getViewManager().getFileSystemView(metaClient);
+    return getFileSystemViewInternal(metaClient.getActiveTimeline().filterCompletedAndCompactionInstants());
   }
 
   private SyncableFileSystemView getFileSystemViewInternal(HoodieTimeline timeline) {

@@ -22,20 +22,14 @@ import java.io.IOException;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 /**
  * {@code HoodieTableFileSystemView} implementation that retrieved partition listings from the Metadata Table.
  */
 public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
-
-  private static final Logger LOG = LogManager.getLogger(HoodieMetadataFileSystemView.class);
-
   public HoodieMetadataFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
       boolean enableIncrementalTimelineSync) {
     super(metaClient, visibleActiveTimeline, enableIncrementalTimelineSync);
@@ -49,12 +43,9 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
    */
   @Override
   protected FileStatus[] listPartition(Path partitionPath) throws IOException {
-    String basePathStr = metaClient.getBasePath();
-    String partitionName = FSUtils.getRelativePartitionPath(new Path(basePathStr), partitionPath);
-    FileStatus[] statuses = HoodieMetadata.getAllFilesInPartition(metaClient.getHadoopConf(), basePathStr,
+    FileStatus[] statuses = HoodieMetadata.getAllFilesInPartition(metaClient.getHadoopConf(), metaClient.getBasePath(),
         partitionPath);
 
-    LOG.info("Listed partition from metadata: partition=" + partitionName + ", #files=" + statuses.length);
     return statuses;
   }
 }

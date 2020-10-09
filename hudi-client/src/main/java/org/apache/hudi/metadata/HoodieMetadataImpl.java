@@ -770,6 +770,17 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
         }
       });
     }
+
+    // Update total size of the metadata and count of base/log files
+    Map<String, String> stats;
+    try {
+      stats = getStats(false);
+      updateMetrics(Long.valueOf(stats.get(STAT_TOTAL_BASE_FILE_SIZE)),
+          Long.valueOf(stats.get(STAT_TOTAL_LOG_FILE_SIZE)), Integer.valueOf(stats.get(STAT_COUNT_BASE_FILES)),
+          Integer.valueOf(stats.get(STAT_COUNT_LOG_FILES)));
+    } catch (IOException e) {
+      LOG.error("Could not publish metadata size metrics", e);
+    }
   }
 
   /**
@@ -823,8 +834,11 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
    */
   List<String> getAllPartitionPaths() throws IOException {
     final Timer.Context context = this.metrics.getMetadataCtx(LOOKUP_PARTITIONS_STR);
-
     Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getMergedRecordByKey(HoodieMetadataImpl.RECORDKEY_PARTITION_LIST);
+    if (context != null) {
+      updateMetrics(LOOKUP_PARTITIONS_STR, metrics.getDurationInMs(context.stop()));
+    }
+
     List<String> partitions = Collections.emptyList();
     if (hoodieRecord.isPresent()) {
       if (!hoodieRecord.get().getData().getDeletions().isEmpty()) {
@@ -840,15 +854,12 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
       }
     }
 
-    long validateTime = 0;
     if (validateLookups) {
       // Validate the Metadata Table data by listing the partitions from the file system
       final Timer.Context contextValidate = this.metrics.getMetadataCtx(VALIDATE_PARTITIONS_STR);
       List<String> actualPartitions  = FSUtils.getAllPartitionPaths(metaClient.getFs(), datasetBasePath, false);
-
       if (contextValidate != null) {
-        validateTime = metrics.getDurationInMs(contextValidate.stop());
-        updateMetrics(VALIDATE_PARTITIONS_STR, validateTime);
+        updateMetrics(VALIDATE_PARTITIONS_STR, metrics.getDurationInMs(contextValidate.stop()));
       }
 
       Collections.sort(actualPartitions);
@@ -858,18 +869,14 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
         LOG.error("Partitions from metadata: " + Arrays.toString(partitions.toArray()));
         LOG.error("Partitions from file system: " + Arrays.toString(actualPartitions.toArray()));
 
-        updateMetrics(VALIDATE_ERRORS_STR, validateTime);
+        updateMetrics(VALIDATE_ERRORS_STR, 0);
       }
 
       // Return the direct listing as it should be correct
       partitions = actualPartitions;
     }
 
-    if (context != null) {
-      long durationInMs = metrics.getDurationInMs(context.stop()) - validateTime;
-      updateMetrics(LOOKUP_PARTITIONS_STR, durationInMs);
-    }
-
+    LOG.info("Listed partitions from metadata: #partitions=" + partitions.size());
     return partitions;
   }
 
@@ -879,14 +886,17 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
    * @param partitionPath The absolute path of the partition
    */
   FileStatus[] getAllFilesInPartition(Path partitionPath) throws IOException {
-    final Timer.Context context = this.metrics.getMetadataCtx(LOOKUP_FILES_STR);
-
     String partitionName = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), partitionPath);
     if (partitionName.equals("")) {
       partitionName = NON_PARTITIONED_NAME;
     }
 
+    final Timer.Context context = this.metrics.getMetadataCtx(LOOKUP_FILES_STR);
     Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getMergedRecordByKey(partitionName);
+    if (context != null) {
+      updateMetrics(LOOKUP_FILES_STR, metrics.getDurationInMs(context.stop()));
+    }
+
     FileStatus[] statuses = {};
     if (hoodieRecord.isPresent()) {
       if (!hoodieRecord.get().getData().getDeletions().isEmpty()) {
@@ -896,7 +906,6 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
       statuses = hoodieRecord.get().getData().getFileStatuses(partitionPath);
     }
 
-    long validateTime = 0;
     if (validateLookups) {
       // Validate the Metadata Table data by listing the partitions from the file system
       final Timer.Context contextValidate = this.metrics.getMetadataCtx(VALIDATE_FILES_STR);
@@ -906,7 +915,7 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
       FileStatus[] directStatuses = metaClient.getFs().listStatus(partitionPath,
           p -> !p.getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
       if (contextValidate != null) {
-        validateTime = metrics.getDurationInMs(contextValidate.stop());
+        updateMetrics(VALIDATE_FILES_STR, metrics.getDurationInMs(contextValidate.stop()));
       }
 
       List<String> directFilenames = Arrays.stream(directStatuses)
@@ -921,20 +930,14 @@ public class HoodieMetadataImpl extends HoodieMetadataCommon {
         LOG.error("File list from metadata: " + Arrays.toString(metadataFilenames.toArray()));
         LOG.error("File list from direct listing: " + Arrays.toString(directFilenames.toArray()));
 
-        updateMetrics(VALIDATE_ERRORS_STR, validateTime);
+        updateMetrics(VALIDATE_ERRORS_STR, 0);
       }
 
       // Return the direct listing as it should be correct
       statuses = directStatuses;
-
-      updateMetrics(VALIDATE_FILES_STR, validateTime);
     }
 
-    if (context != null) {
-      long durationInMs = metrics.getDurationInMs(context.stop()) - validateTime;
-      updateMetrics(LOOKUP_FILES_STR, durationInMs);
-    }
-
+    LOG.info("Listed file in partition from metadata: partition=" + partitionName + ", #files=" + statuses.length);
     return statuses;
   }
 
