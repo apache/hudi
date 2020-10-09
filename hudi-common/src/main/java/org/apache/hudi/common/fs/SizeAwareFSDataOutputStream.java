@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -41,6 +42,8 @@ public class SizeAwareFSDataOutputStream extends FSDataOutputStream {
   private final Path path;
   // Consistency guard
   private final ConsistencyGuard consistencyGuard;
+  // Registry or read and write metrics
+  Registry metricsRegistry;
 
   public SizeAwareFSDataOutputStream(Path path, FSDataOutputStream out, ConsistencyGuard consistencyGuard,
       Runnable closeCallback) throws IOException {
@@ -52,14 +55,22 @@ public class SizeAwareFSDataOutputStream extends FSDataOutputStream {
 
   @Override
   public synchronized void write(byte[] b, int off, int len) throws IOException {
-    bytesWritten.addAndGet(len);
-    super.write(b, off, len);
+    HoodieWrapperFileSystem.executeFuncWithTimeAndByteMetrics(HoodieWrapperFileSystem.MetricName.write.name(), path,
+        len, () -> {
+            bytesWritten.addAndGet(len);
+            super.write(b, off, len);
+            return null;
+        });
   }
 
   @Override
   public void write(byte[] b) throws IOException {
-    bytesWritten.addAndGet(b.length);
-    super.write(b);
+    HoodieWrapperFileSystem.executeFuncWithTimeAndByteMetrics(HoodieWrapperFileSystem.MetricName.write.name(), path,
+        b.length, () -> {
+            bytesWritten.addAndGet(b.length);
+            super.write(b);
+            return null;
+        });
   }
 
   @Override
@@ -77,4 +88,7 @@ public class SizeAwareFSDataOutputStream extends FSDataOutputStream {
     return bytesWritten.get();
   }
 
+  public void setMetricRegistry(Registry metricsRegistry) {
+    this.metricsRegistry = metricsRegistry;
+  }
 }
