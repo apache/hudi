@@ -29,16 +29,15 @@ import java.io.IOException;
 
 /**
  * Default payload used for delta streamer.
- * <p>
- * 1. preCombine - Picks the latest delta record for a key, based on an ordering field 2.
- * combineAndGetUpdateValue/getInsertValue - Simply overwrites storage with latest delta record
+ *
+ * <ol>
+ * <li> preCombine - Picks the latest delta record for a key, based on an ordering field;
+ * <li> combineAndGetUpdateValue/getInsertValue - Simply overwrites storage with latest delta record
+ * </ol>
  */
 public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
     implements HoodieRecordPayload<OverwriteWithLatestAvroPayload> {
 
-  /**
-   *
-   */
   public OverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
   }
