@@ -55,7 +55,6 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   private val log = LogManager.getLogger(classOf[IncrementalRelation])
 
-
   val skeletonSchema: StructType = HoodieSparkUtils.getMetaSchema
   private val metaClient = new HoodieTableMetaClient(sqlContext.sparkContext.hadoopConfiguration, basePath, true)
 
@@ -76,6 +75,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
       s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY}")
   }
 
+  val useEndInstantSchema = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY,
+    DataSourceReadOptions.DEFAULT_INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_VAL).toBoolean
+
   private val lastInstant = commitTimeline.lastInstant().get()
 
   private val commitsToReturn = commitTimeline.findInstantsInRange(
@@ -83,11 +85,16 @@ class IncrementalRelation(val sqlContext: SQLContext,
     optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY, lastInstant.getTimestamp))
     .getInstants.iterator().toList
 
-  // use schema from a file produced in the latest instant
-  val latestSchema: StructType = {
+  // use schema from a file produced in the end/latest instant
+  val usedSchema: StructType = {
     log.info("Inferring schema..")
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val tableSchema = schemaResolver.getTableAvroSchemaWithoutMetadataFields
+    val tableSchema = if (useEndInstantSchema) {
+      if (commitsToReturn.isEmpty)  schemaResolver.getTableAvroSchemaWithoutMetadataFields() else
+        schemaResolver.getTableAvroSchemaWithoutMetadataFields(commitsToReturn.last)
+    } else {
+      schemaResolver.getTableAvroSchemaWithoutMetadataFields()
+    }
     val dataSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
     StructType(skeletonSchema.fields ++ dataSchema.fields)
   }
@@ -104,7 +111,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
     }
   }
 
-  override def schema: StructType = latestSchema
+  override def schema: StructType = usedSchema
 
   override def buildScan(): RDD[Row] = {
     val regularFileIdToFullPath = mutable.HashMap[String, String]()
@@ -148,12 +155,12 @@ class IncrementalRelation(val sqlContext: SQLContext,
     } else {
       log.info("Additional Filters to be applied to incremental source are :" + filters)
 
-      var df: DataFrame = sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], latestSchema)
+      var df: DataFrame = sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], usedSchema)
 
       if (metaBootstrapFileIdToFullPath.nonEmpty) {
         df = sqlContext.sparkSession.read
                .format("hudi")
-               .schema(latestSchema)
+               .schema(usedSchema)
                .option(DataSourceReadOptions.READ_PATHS_OPT_KEY, filteredMetaBootstrapFullPaths.mkString(","))
                .load()
       }
@@ -161,7 +168,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
       if (regularFileIdToFullPath.nonEmpty)
       {
         df = df.union(sqlContext.read.options(sOpts)
-                        .schema(latestSchema)
+                        .schema(usedSchema)
                         .parquet(filteredRegularFullPaths.toList: _*)
                         .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
                           commitsToReturn.head.getTimestamp))
