@@ -19,9 +19,6 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.avro.Conversions;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.generic.GenericFixed;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.fs.FSUtils;
@@ -37,9 +34,12 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
+import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -157,6 +157,10 @@ public class HoodieTestDataGenerator {
     numKeysBySchema = new HashMap<>();
   }
 
+  /**
+   * @implNote {@link HoodieTestDataGenerator} is supposed to just generate records with schemas. Leave HoodieTable files (metafile, basefile, logfile, etc) to {@link HoodieTestTable}.
+   * @deprecated Use {@link HoodieTestTable#withPartitionMetaFiles(java.lang.String...)} instead.
+   */
   public static void writePartitionMetadata(FileSystem fs, String[] partitionPaths, String basePath) {
     for (String partitionPath : partitionPaths) {
       new HoodiePartitionMetadata(fs, "000", new Path(basePath), new Path(basePath, partitionPath)).trySave(0);
@@ -326,30 +330,42 @@ public class HoodieTestDataGenerator {
   }
 
   public static void createCommitFile(String basePath, String instantTime, Configuration configuration) {
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    createCommitFile(basePath, instantTime, configuration, commitMetadata);
+  }
+
+  public static void createCommitFile(String basePath, String instantTime, Configuration configuration, HoodieCommitMetadata commitMetadata) {
     Arrays.asList(HoodieTimeline.makeCommitFileName(instantTime), HoodieTimeline.makeInflightCommitFileName(instantTime),
         HoodieTimeline.makeRequestedCommitFileName(instantTime))
-        .forEach(f -> {
-          Path commitFile = new Path(
-              basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
-          FSDataOutputStream os = null;
-          try {
-            FileSystem fs = FSUtils.getFs(basePath, configuration);
-            os = fs.create(commitFile, true);
-            HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
-            // Write empty commit metadata
-            os.writeBytes(new String(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-          } catch (IOException ioe) {
-            throw new HoodieIOException(ioe.getMessage(), ioe);
-          } finally {
-            if (null != os) {
-              try {
-                os.close();
-              } catch (IOException e) {
-                throw new HoodieIOException(e.getMessage(), e);
-              }
-            }
-          }
-        });
+        .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
+  }
+
+  private static void createMetadataFile(String f, String basePath, Configuration configuration, HoodieCommitMetadata commitMetadata) {
+    Path commitFile = new Path(
+        basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
+    FSDataOutputStream os = null;
+    try {
+      FileSystem fs = FSUtils.getFs(basePath, configuration);
+      os = fs.create(commitFile, true);
+      // Write empty commit metadata
+      os.writeBytes(new String(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
+    } finally {
+      if (null != os) {
+        try {
+          os.close();
+        } catch (IOException e) {
+          throw new HoodieIOException(e.getMessage(), e);
+        }
+      }
+    }
+  }
+
+  public static void createReplaceFile(String basePath, String instantTime, Configuration configuration, HoodieCommitMetadata commitMetadata) {
+    Arrays.asList(HoodieTimeline.makeReplaceFileName(instantTime), HoodieTimeline.makeInflightReplaceFileName(instantTime),
+        HoodieTimeline.makeRequestedReplaceFileName(instantTime))
+        .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
   }
 
   public static void createEmptyCleanRequestedFile(String basePath, String instantTime, Configuration configuration)
@@ -378,9 +394,9 @@ public class HoodieTestDataGenerator {
         new Path(basePath + "/" + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + "/" + instant.getFileName());
     FileSystem fs = FSUtils.getFs(basePath, configuration);
     try (FSDataOutputStream os = fs.create(commitFile, true)) {
-      HoodieCompactionPlan workload = new HoodieCompactionPlan();
+      HoodieCompactionPlan workload = HoodieCompactionPlan.newBuilder().setVersion(1).build();
       // Write empty commit metadata
-      os.writeBytes(new String(TimelineMetadataUtils.serializeCompactionPlan(workload).get(), StandardCharsets.UTF_8));
+      os.write(TimelineMetadataUtils.serializeCompactionPlan(workload).get());
     }
   }
 

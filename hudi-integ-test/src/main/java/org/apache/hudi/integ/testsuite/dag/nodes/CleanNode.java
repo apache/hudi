@@ -18,6 +18,7 @@
 
 package org.apache.hudi.integ.testsuite.dag.nodes;
 
+import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 
 /**
@@ -26,7 +27,8 @@ import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
  */
 public class CleanNode extends DagNode<Boolean> {
 
-  public CleanNode() {
+  public CleanNode(Config config) {
+    this.config = config;
   }
 
   @Override

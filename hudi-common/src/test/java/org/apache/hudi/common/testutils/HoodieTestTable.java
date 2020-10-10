@@ -19,6 +19,10 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -40,19 +44,26 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static java.time.temporal.ChronoUnit.SECONDS;
 import static org.apache.hudi.common.table.timeline.HoodieActiveTimeline.COMMIT_FORMATTER;
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createCleanFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createDeltaCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightCleanFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightCompaction;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightDeltaCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightReplaceCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createMarkerFile;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createReplaceCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCleanFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCompaction;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedDeltaCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedReplaceCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
 
 public class HoodieTestTable {
@@ -145,6 +156,32 @@ public class HoodieTestTable {
     return this;
   }
 
+  public HoodieTestTable addReplaceCommit(String instantTime, HoodieReplaceCommitMetadata metadata) throws Exception {
+    createRequestedReplaceCommit(basePath, instantTime);
+    createInflightReplaceCommit(basePath, instantTime);
+    createReplaceCommit(basePath, instantTime, metadata);
+    currentInstantTime = instantTime;
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    return this;
+  }
+
+  public HoodieTestTable addInflightClean(String instantTime, HoodieCleanerPlan cleanerPlan) throws IOException {
+    createRequestedCleanFile(basePath, instantTime, cleanerPlan);
+    createInflightCleanFile(basePath, instantTime, cleanerPlan);
+    currentInstantTime = instantTime;
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    return this;
+  }
+
+  public HoodieTestTable addClean(String instantTime, HoodieCleanerPlan cleanerPlan, HoodieCleanMetadata metadata) throws IOException {
+    createRequestedCleanFile(basePath, instantTime, cleanerPlan);
+    createInflightCleanFile(basePath, instantTime, cleanerPlan);
+    createCleanFile(basePath, instantTime, metadata);
+    currentInstantTime = instantTime;
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    return this;
+  }
+
   public HoodieTestTable addRequestedCompaction(String instantTime) throws IOException {
     createRequestedCompaction(basePath, instantTime);
     currentInstantTime = instantTime;
@@ -218,6 +255,13 @@ public class HoodieTestTable {
     return partitionFileIdMap;
   }
 
+  public HoodieTestTable withBaseFilesInPartitions(Map<String, String> partitionAndFileId) throws Exception {
+    for (Map.Entry<String, String> pair : partitionAndFileId.entrySet()) {
+      withBaseFilesInPartition(pair.getKey(), pair.getValue());
+    }
+    return this;
+  }
+
   public HoodieTestTable withBaseFilesInPartition(String partition, String... fileIds) throws Exception {
     for (String f : fileIds) {
       FileCreateUtils.createBaseFile(basePath, partition, currentInstantTime, f);
@@ -248,6 +292,30 @@ public class HoodieTestTable {
     return this;
   }
 
+  public boolean inflightCommitsExist(String... instantTime) {
+    return Arrays.stream(instantTime).allMatch(this::inflightCommitExists);
+  }
+
+  public boolean inflightCommitExists(String instantTime) {
+    try {
+      return fs.exists(getInflightCommitFilePath(instantTime));
+    } catch (IOException e) {
+      throw new HoodieTestTableException(e);
+    }
+  }
+
+  public boolean commitsExist(String... instantTime) {
+    return Arrays.stream(instantTime).allMatch(this::commitExists);
+  }
+
+  public boolean commitExists(String instantTime) {
+    try {
+      return fs.exists(getCommitFilePath(instantTime));
+    } catch (IOException e) {
+      throw new HoodieTestTableException(e);
+    }
+  }
+
   public boolean baseFilesExist(Map<String, String> partitionAndFileId, String instantTime) {
     return partitionAndFileId.entrySet().stream().allMatch(entry -> {
       String partition = entry.getKey();
@@ -268,16 +336,16 @@ public class HoodieTestTable {
     }
   }
 
-  public Path getPartitionPath(String partition) {
-    return new Path(Paths.get(basePath, partition).toUri());
+  public boolean logFilesExist(String partition, String instantTime, String fileId, int... versions) {
+    return Arrays.stream(versions).allMatch(v -> logFileExists(partition, instantTime, fileId, v));
   }
 
-  public String getBaseFileNameById(String fileId) {
-    return baseFileName(currentInstantTime, fileId);
-  }
-
-  public Path getBaseFilePath(String partition, String fileId) {
-    return new Path(Paths.get(basePath, partition, getBaseFileNameById(fileId)).toUri());
+  public boolean logFileExists(String partition, String instantTime, String fileId, int version) {
+    try {
+      return fs.exists(new Path(Paths.get(basePath, partition, logFileName(instantTime, fileId, version)).toString()));
+    } catch (IOException e) {
+      throw new HoodieTestTableException(e);
+    }
   }
 
   public Path getInflightCommitFilePath(String instantTime) {
@@ -292,24 +360,48 @@ public class HoodieTestTable {
     return new Path(Paths.get(basePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME, instantTime + HoodieTimeline.REQUESTED_COMPACTION_EXTENSION).toUri());
   }
 
-  public boolean logFilesExist(String partition, String instantTime, String fileId, int... versions) {
-    return Arrays.stream(versions).allMatch(v -> logFileExists(partition, instantTime, fileId, v));
+  public Path getPartitionPath(String partition) {
+    return new Path(Paths.get(basePath, partition).toUri());
   }
 
-  public boolean logFileExists(String partition, String instantTime, String fileId, int version) {
-    try {
-      return fs.exists(new Path(Paths.get(basePath, partition, logFileName(instantTime, fileId, version)).toString()));
-    } catch (IOException e) {
-      throw new HoodieTestTableException(e);
-    }
+  public Path getBaseFilePath(String partition, String fileId) {
+    return new Path(Paths.get(basePath, partition, getBaseFileNameById(fileId)).toUri());
   }
 
-  public List<FileStatus> listAllFiles(String partitionPath) throws IOException {
-    return FileSystemTestUtils.listRecursive(fs, new Path(Paths.get(basePath, partitionPath).toString()));
+  public String getBaseFileNameById(String fileId) {
+    return baseFileName(currentInstantTime, fileId);
   }
 
-  public List<FileStatus> listAllFilesInTempFolder() throws IOException {
-    return FileSystemTestUtils.listRecursive(fs, new Path(Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME).toString()));
+  public FileStatus[] listAllBaseFiles() throws IOException {
+    return listAllBaseFiles(HoodieFileFormat.PARQUET.getFileExtension());
+  }
+
+  public FileStatus[] listAllBaseFiles(String fileExtension) throws IOException {
+    return FileSystemTestUtils.listRecursive(fs, new Path(basePath)).stream()
+        .filter(status -> status.getPath().getName().endsWith(fileExtension))
+        .toArray(FileStatus[]::new);
+  }
+
+  public FileStatus[] listAllLogFiles() throws IOException {
+    return listAllLogFiles(HoodieFileFormat.HOODIE_LOG.getFileExtension());
+  }
+
+  public FileStatus[] listAllLogFiles(String fileExtension) throws IOException {
+    return FileSystemTestUtils.listRecursive(fs, new Path(basePath)).stream()
+        .filter(status -> status.getPath().getName().contains(fileExtension))
+        .toArray(FileStatus[]::new);
+  }
+
+  public FileStatus[] listAllBaseAndLogFiles() throws IOException {
+    return Stream.concat(Stream.of(listAllBaseFiles()), Stream.of(listAllLogFiles())).toArray(FileStatus[]::new);
+  }
+
+  public FileStatus[] listAllFilesInPartition(String partitionPath) throws IOException {
+    return FileSystemTestUtils.listRecursive(fs, new Path(Paths.get(basePath, partitionPath).toString())).toArray(new FileStatus[0]);
+  }
+
+  public FileStatus[] listAllFilesInTempFolder() throws IOException {
+    return FileSystemTestUtils.listRecursive(fs, new Path(Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME).toString())).toArray(new FileStatus[0]);
   }
 
   public static class HoodieTestTableException extends RuntimeException {
