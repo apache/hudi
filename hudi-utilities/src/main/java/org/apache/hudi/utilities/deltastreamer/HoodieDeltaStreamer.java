@@ -624,21 +624,26 @@ public class HoodieDeltaStreamer implements Serializable {
      */
     protected Boolean onInitializingWriteClient(SparkRDDWriteClient writeClient) {
       if (cfg.isAsyncCompactionEnabled()) {
-        asyncCompactService = new SparkAsyncCompactService(new HoodieSparkEngineContext(jssc), writeClient);
-        // Enqueue existing pending compactions first
-        HoodieTableMetaClient meta =
-            new HoodieTableMetaClient(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath, true);
-        List<HoodieInstant> pending = CompactionUtils.getPendingCompactionInstantTimes(meta);
-        pending.forEach(hoodieInstant -> asyncCompactService.enqueuePendingCompaction(hoodieInstant));
-        asyncCompactService.start((error) -> {
-          // Shutdown DeltaSync
-          shutdown(false);
-          return true;
-        });
-        try {
-          asyncCompactService.waitTillPendingCompactionsReducesTo(cfg.maxPendingCompactions);
-        } catch (InterruptedException ie) {
-          throw new HoodieException(ie);
+        if (null != asyncCompactService) {
+          // Update the write client used by Async Compactor.
+          asyncCompactService.updateWriteClient(writeClient);
+        } else {
+          asyncCompactService = new SparkAsyncCompactService(new HoodieSparkEngineContext(jssc), writeClient);
+          // Enqueue existing pending compactions first
+          HoodieTableMetaClient meta =
+              new HoodieTableMetaClient(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath, true);
+          List<HoodieInstant> pending = CompactionUtils.getPendingCompactionInstantTimes(meta);
+          pending.forEach(hoodieInstant -> asyncCompactService.enqueuePendingCompaction(hoodieInstant));
+          asyncCompactService.start((error) -> {
+            // Shutdown DeltaSync
+            shutdown(false);
+            return true;
+          });
+          try {
+            asyncCompactService.waitTillPendingCompactionsReducesTo(cfg.maxPendingCompactions);
+          } catch (InterruptedException ie) {
+            throw new HoodieException(ie);
+          }
         }
       }
       return true;

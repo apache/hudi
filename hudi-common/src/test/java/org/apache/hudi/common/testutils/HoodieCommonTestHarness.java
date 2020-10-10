@@ -23,8 +23,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
-
 import org.apache.hudi.exception.HoodieIOException;
+
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -88,7 +88,7 @@ public class HoodieCommonTestHarness {
     try {
       return new HoodieTableFileSystemView(metaClient,
               metaClient.getActiveTimeline(),
-              HoodieTestUtils.listAllDataFilesAndLogFilesInPath(metaClient.getFs(), metaClient.getBasePath())
+              HoodieTestTable.of(metaClient).listAllBaseAndLogFiles()
       );
     } catch (IOException ioe) {
       throw new HoodieIOException("Error getting file system view", ioe);

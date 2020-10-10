@@ -16,17 +16,29 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.model;
+package org.apache.hudi.utilities.schema;
+
+import java.io.Serializable;
+import java.util.HashSet;
+import org.apache.avro.Schema;
+import org.apache.avro.SchemaNormalization;
+
+import java.util.Set;
 
 /**
- * Type of the Hoodie Table.
- *
- * Currently, 2 types are supported.
- * <ul>
- * <li> COPY_ON_WRITE - Performs upserts by versioning entire files, with later versions containing newer value of a record.
- * <li> MERGE_ON_READ - Speeds up upserts, by delaying merge until enough work piles up.
- * </ul>
+ * Tracks already processed schemas.
  */
-public enum HoodieTableType {
-  COPY_ON_WRITE, MERGE_ON_READ
+public class SchemaSet implements Serializable {
+
+  private final Set<Long> processedSchema = new HashSet<>();
+
+  public boolean isSchemaPresent(Schema schema) {
+    long schemaKey = SchemaNormalization.parsingFingerprint64(schema);
+    return processedSchema.contains(schemaKey);
+  }
+
+  public void addSchema(Schema schema) {
+    long schemaKey = SchemaNormalization.parsingFingerprint64(schema);
+    processedSchema.add(schemaKey);
+  }
 }

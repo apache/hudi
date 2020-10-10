@@ -18,74 +18,43 @@
 
 package org.apache.hudi.common.testutils;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
-import com.esotericsoftware.kryo.serializers.JavaSerializer;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.hadoop.util.StringUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.model.HoodieActionInstant;
-import org.apache.hudi.avro.model.HoodieCleanMetadata;
-import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
-import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
-import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
-import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieIOException;
+
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+import com.esotericsoftware.kryo.serializers.JavaSerializer;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.util.StringUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
-import java.util.Random;
 import java.util.UUID;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * A utility class for testing.
@@ -96,7 +65,6 @@ public class HoodieTestUtils {
   public static final String DEFAULT_WRITE_TOKEN = "1-0-1";
   public static final int DEFAULT_LOG_VERSION = 1;
   public static final String[] DEFAULT_PARTITION_PATHS = {"2016/03/15", "2015/03/16", "2015/03/17"};
-  private static Random rand = new Random(46474747);
 
   public static Configuration getDefaultHadoopConf() {
     return new Configuration();
@@ -171,35 +139,6 @@ public class HoodieTestUtils {
     }
   }
 
-  public static void createPendingCleanFiles(HoodieTableMetaClient metaClient, String... instantTimes) {
-    for (String instantTime : instantTimes) {
-      Arrays.asList(HoodieTimeline.makeRequestedCleanerFileName(instantTime),
-          HoodieTimeline.makeInflightCleanerFileName(instantTime))
-          .forEach(f -> {
-            FSDataOutputStream os = null;
-            try {
-              Path commitFile = new Path(Paths
-                  .get(metaClient.getBasePath(), HoodieTableMetaClient.METAFOLDER_NAME, f).toString());
-              os = metaClient.getFs().create(commitFile, true);
-              // Write empty clean metadata
-              os.write(TimelineMetadataUtils.serializeCleanerPlan(
-                  new HoodieCleanerPlan(new HoodieActionInstant("", "", ""), "", new HashMap<>(),
-                      CleanPlanV2MigrationHandler.VERSION, new HashMap<>())).get());
-            } catch (IOException ioe) {
-              throw new HoodieIOException(ioe.getMessage(), ioe);
-            } finally {
-              if (null != os) {
-                try {
-                  os.close();
-                } catch (IOException e) {
-                  throw new HoodieIOException(e.getMessage(), e);
-                }
-              }
-            }
-          });
-    }
-  }
-
   /**
    * @deprecated Use {@link HoodieTestTable} instead.
    */
@@ -243,26 +182,6 @@ public class HoodieTestUtils {
         TimelineMetadataUtils.serializeCompactionPlan(plan));
   }
 
-  public static void createCleanFiles(HoodieTableMetaClient metaClient, String basePath,
-      String instantTime, Configuration configuration)
-      throws IOException {
-    createPendingCleanFiles(metaClient, instantTime);
-    Path commitFile = new Path(
-        basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeCleanerFileName(instantTime));
-    FileSystem fs = FSUtils.getFs(basePath, configuration);
-    try (FSDataOutputStream os = fs.create(commitFile, true)) {
-      HoodieCleanStat cleanStats = new HoodieCleanStat(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
-          DEFAULT_PARTITION_PATHS[rand.nextInt(DEFAULT_PARTITION_PATHS.length)], new ArrayList<>(), new ArrayList<>(),
-          new ArrayList<>(), instantTime);
-      // Create the clean metadata
-
-      HoodieCleanMetadata cleanMetadata =
-          CleanerUtils.convertCleanMetadata(instantTime, Option.of(0L), Collections.singletonList(cleanStats));
-      // Write empty clean metadata
-      os.write(TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata).get());
-    }
-  }
-
   public static <T extends Serializable> T serializeDeserialize(T object, Class<T> clazz) {
     // Using Kyro as the default serializer in Spark Jobs
     Kryo kryo = new Kryo();
@@ -277,78 +196,6 @@ public class HoodieTestUtils {
     T deseralizedObject = kryo.readObject(input, clazz);
     input.close();
     return deseralizedObject;
-  }
-
-  /**
-   * @deprecated Use {@link HoodieTestTable} instead.
-   */
-  public static void writeRecordsToLogFiles(FileSystem fs, String basePath, Schema schema,
-      List<HoodieRecord> updatedRecords) {
-    Map<HoodieRecordLocation, List<HoodieRecord>> groupedUpdated =
-        updatedRecords.stream().collect(Collectors.groupingBy(HoodieRecord::getCurrentLocation));
-
-    groupedUpdated.forEach((location, value) -> {
-      String partitionPath = value.get(0).getPartitionPath();
-
-      Writer logWriter;
-      try {
-        logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(basePath, partitionPath))
-          .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(location.getFileId())
-          .overBaseCommit(location.getInstantTime()).withFs(fs).build();
-
-        Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
-        header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, location.getInstantTime());
-        header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-        logWriter.appendBlock(new HoodieAvroDataBlock(value.stream().map(r -> {
-          try {
-            GenericRecord val = (GenericRecord) r.getData().getInsertValue(schema).get();
-            HoodieAvroUtils.addHoodieKeyToRecord(val, r.getRecordKey(), r.getPartitionPath(), "");
-            return (IndexedRecord) val;
-          } catch (IOException e) {
-            return null;
-          }
-        }).collect(Collectors.toList()), header));
-        logWriter.close();
-      } catch (Exception e) {
-        fail(e.toString());
-      }
-    });
-  }
-
-  // TODO: should be removed
-  public static FileStatus[] listAllDataFilesInPath(FileSystem fs, String basePath) throws IOException {
-    return listAllDataFilesInPath(fs, basePath, HoodieFileFormat.PARQUET.getFileExtension());
-  }
-
-  public static FileStatus[] listAllDataFilesInPath(FileSystem fs, String basePath, String datafileExtension)
-      throws IOException {
-    RemoteIterator<LocatedFileStatus> itr = fs.listFiles(new Path(basePath), true);
-    List<FileStatus> returns = new ArrayList<>();
-    while (itr.hasNext()) {
-      LocatedFileStatus status = itr.next();
-      if (status.getPath().getName().contains(datafileExtension) && !status.getPath().getName().contains(".marker")) {
-        returns.add(status);
-      }
-    }
-    return returns.toArray(new FileStatus[returns.size()]);
-  }
-
-  public static FileStatus[] listAllLogFilesInPath(FileSystem fs, String basePath)
-      throws IOException {
-    RemoteIterator<LocatedFileStatus> itr = fs.listFiles(new Path(basePath), true);
-    List<FileStatus> returns = new ArrayList<>();
-    while (itr.hasNext()) {
-      LocatedFileStatus status = itr.next();
-      if (status.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())) {
-        returns.add(status);
-      }
-    }
-    return returns.toArray(new FileStatus[returns.size()]);
-  }
-
-  public static FileStatus[] listAllDataFilesAndLogFilesInPath(FileSystem fs, String basePath) throws IOException {
-    return Stream.concat(Arrays.stream(listAllDataFilesInPath(fs, basePath)), Arrays.stream(listAllLogFilesInPath(fs, basePath)))
-            .toArray(FileStatus[]::new);
   }
 
   public static List<HoodieWriteStat> generateFakeHoodieWriteStat(int limit) {

@@ -35,7 +35,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -130,7 +130,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
       assertNoWriteErrors(statusList);
       metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
-      List<HoodieBaseFile> dataFilesToRead = getCurrentLatestDataFiles(hoodieTable, cfg);
+      List<HoodieBaseFile> dataFilesToRead = getCurrentLatestBaseFiles(hoodieTable);
       assertTrue(dataFilesToRead.stream().findAny().isPresent(),
           "should list the parquet files we wrote in the delta commit");
       validateDeltaCommit(firstInstant, fgIdToCompactionOperation, cfg);
@@ -225,10 +225,10 @@ public class CompactionTestBase extends HoodieClientTestBase {
     return statusList;
   }
 
-  protected List<HoodieBaseFile> getCurrentLatestDataFiles(HoodieTable table, HoodieWriteConfig cfg) throws IOException {
-    FileStatus[] allFiles = HoodieTestUtils.listAllDataFilesInPath(table.getMetaClient().getFs(), cfg.getBasePath());
+  protected List<HoodieBaseFile> getCurrentLatestBaseFiles(HoodieTable table) throws IOException {
+    FileStatus[] allBaseFiles = HoodieTestTable.of(table.getMetaClient()).listAllBaseFiles();
     HoodieTableFileSystemView view =
-        getHoodieTableFileSystemView(table.getMetaClient(), table.getCompletedCommitsTimeline(), allFiles);
+        getHoodieTableFileSystemView(table.getMetaClient(), table.getCompletedCommitsTimeline(), allBaseFiles);
     return view.getLatestBaseFiles().collect(Collectors.toList());
   }
 

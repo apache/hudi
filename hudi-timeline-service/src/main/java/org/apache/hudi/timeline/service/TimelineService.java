@@ -41,6 +41,7 @@ import java.io.Serializable;
 public class TimelineService {
 
   private static final Logger LOG = LogManager.getLogger(TimelineService.class);
+  private static final int START_SERVICE_MAX_RETRIES = 16;
 
   private int serverPort;
   private Configuration conf;
@@ -98,16 +99,42 @@ public class TimelineService {
     public Boolean help = false;
   }
 
+  private int startServiceOnPort(int port) throws IOException {
+    if (!(port == 0 || (1024 <= port && port < 65536))) {
+      throw new IllegalArgumentException(String.format("startPort should be between 1024 and 65535 (inclusive), "
+          + "or 0 for a random free port. but now is %s.", port));
+    }
+    for (int attempt = 0; attempt < START_SERVICE_MAX_RETRIES; attempt++) {
+      // Returns port to try when trying to bind a service. Handles wrapping and skipping privileged ports.
+      int tryPort = port == 0 ? port : (port + attempt - 1024) % (65536 - 1024) + 1024;
+      try {
+        app.start(tryPort);
+        return app.port();
+      } catch (Exception e) {
+        if (e.getMessage() != null && e.getMessage().contains("Failed to bind to")) {
+          if (tryPort == 0) {
+            LOG.warn("Timeline server could not bind on a random free port.");
+          } else {
+            LOG.warn(String.format("Timeline server could not bind on port %d. "
+                + "Attempting port %d + 1.",tryPort, tryPort));
+          }
+        } else {
+          LOG.warn(String.format("Timeline server start failed on port %d. Attempting port %d + 1.",tryPort, tryPort), e);
+        }
+      }
+    }
+    throw new IOException(String.format("Timeline server start failed on port %d, after retry %d times", port, START_SERVICE_MAX_RETRIES));
+  }
+
   public int startService() throws IOException {
     app = Javalin.create();
     FileSystemViewHandler router = new FileSystemViewHandler(app, conf, fsViewsManager);
     app.get("/", ctx -> ctx.result("Hello World"));
     router.register();
-    app.start(serverPort);
-    // If port = 0, a dynamic port is assigned. Store it.
-    serverPort = app.port();
-    LOG.info("Starting Timeline server on port :" + serverPort);
-    return serverPort;
+    int realServerPort = startServiceOnPort(serverPort);
+    LOG.info("Starting Timeline server on port :" + realServerPort);
+    this.serverPort = realServerPort;
+    return realServerPort;
   }
 
   public void run() throws IOException {

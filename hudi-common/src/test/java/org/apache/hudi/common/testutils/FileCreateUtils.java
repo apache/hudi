@@ -19,7 +19,8 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -31,6 +32,8 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.hadoop.fs.FileSystem;
+
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
@@ -39,6 +42,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
+
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCleanMetadata;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCleanerPlan;
 
 public class FileCreateUtils {
 
@@ -120,6 +126,18 @@ public class FileCreateUtils {
 
   public static void createInflightReplaceCommit(String basePath, String instantTime) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION);
+  }
+
+  public static void createCleanFile(String basePath, String instantTime, HoodieCleanMetadata metadata) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.CLEAN_EXTENSION, serializeCleanMetadata(metadata).get());
+  }
+
+  public static void createRequestedCleanFile(String basePath, String instantTime, HoodieCleanerPlan cleanerPlan) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_CLEAN_EXTENSION, serializeCleanerPlan(cleanerPlan).get());
+  }
+
+  public static void createInflightCleanFile(String basePath, String instantTime, HoodieCleanerPlan cleanerPlan) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLEAN_EXTENSION, serializeCleanerPlan(cleanerPlan).get());
   }
 
   private static void createAuxiliaryMetaFile(String basePath, String instantTime, String suffix) throws IOException {

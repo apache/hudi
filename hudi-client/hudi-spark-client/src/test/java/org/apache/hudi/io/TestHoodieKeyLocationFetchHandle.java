@@ -130,7 +130,7 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
 
       for (List<HoodieRecord> recordsPerSlice : recordsForFileSlices) {
         String instantTime = makeNewCommitTime();
-        String fileId = testTable.addCommit(instantTime).withInserts(entry.getKey(), recordsPerSlice.toArray(new HoodieRecord[0]));
+        String fileId = testTable.addCommit(instantTime).getFileIdWithInserts(entry.getKey(), recordsPerSlice.toArray(new HoodieRecord[0]));
         Tuple2<String, String> fileIdInstantTimePair = new Tuple2<>(fileId, instantTime);
         List<Tuple2<HoodieKey, HoodieRecordLocation>> expectedEntries = new ArrayList<>();
         for (HoodieRecord record : recordsPerSlice) {

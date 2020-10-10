@@ -217,10 +217,10 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record5));
 
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
-    String fileId1 = testTable.addCommit("1000").withInserts("2016/04/01", record1);
-    String fileId2 = testTable.addCommit("2000").withInserts("2015/03/12");
-    String fileId3 = testTable.addCommit("3000").withInserts("2015/03/12", record2);
-    String fileId4 = testTable.addCommit("4000").withInserts("2015/03/12", record4);
+    String fileId1 = testTable.addCommit("1000").getFileIdWithInserts("2016/04/01", record1);
+    String fileId2 = testTable.addCommit("2000").getFileIdWithInserts("2015/03/12");
+    String fileId3 = testTable.addCommit("3000").getFileIdWithInserts("2015/03/12", record2);
+    String fileId4 = testTable.addCommit("4000").getFileIdWithInserts("2015/03/12", record4);
 
     // partitions will NOT be respected by this loadInvolvedFiles(...) call
     JavaRDD<HoodieRecord> taggedRecordRDD = index.tagLocation(recordRDD, context, hoodieTable);
@@ -299,7 +299,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
             new HoodieKey(incomingPayloadSamePartition.getRowKey(), incomingPayloadSamePartition.getPartitionPath()),
             incomingPayloadSamePartition);
 
-    testTable.addCommit("1000").withInserts(p1, originalRecord);
+    testTable.addCommit("1000").getFileIdWithInserts(p1, originalRecord);
 
     // test against incoming record with a different partition
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Collections.singletonList(incomingRecord));
