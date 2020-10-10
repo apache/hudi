@@ -21,17 +21,17 @@ package org.apache.hudi.exception;
 /**
  * An exception thrown when schema has compatibility problems.
  */
-public class SchemaCompatabilityException extends HoodieException {
+public class SchemaCompatibilityException extends HoodieException {
 
-  public SchemaCompatabilityException(String message) {
+  public SchemaCompatibilityException(String message) {
     super(message);
   }
 
-  public SchemaCompatabilityException(String message, Throwable t) {
+  public SchemaCompatibilityException(String message, Throwable t) {
     super(message, t);
   }
 
-  public SchemaCompatabilityException(Throwable t) {
+  public SchemaCompatibilityException(Throwable t) {
     super(t);
   }
 }
