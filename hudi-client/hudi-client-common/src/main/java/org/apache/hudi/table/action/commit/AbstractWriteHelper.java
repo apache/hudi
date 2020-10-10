@@ -40,7 +40,7 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
                                       int shuffleParallelism,
                                       BaseCommitActionExecutor<T, I, K, O, R> executor,
                                       boolean performTagging) {
-    return write(instantTime, inputRecordsRDD, context, table, shouldCombine, shuffleParallelism,false,
+    return write(instantTime, inputRecords, context, table, shouldCombine, shuffleParallelism,false,
             null, executor, performTagging);
   }
 
