@@ -41,6 +41,17 @@ public abstract class DagNode<O> implements Comparable<DagNode<O>> {
   protected Config config;
   private boolean isCompleted;
 
+  public DagNode clone() {
+    List<DagNode<O>> tempChildNodes = new ArrayList<>();
+    for(DagNode dagNode: childNodes) {
+      tempChildNodes.add(dagNode.clone());
+    }
+    this.childNodes = tempChildNodes;
+    this.result = null;
+    this.isCompleted = false;
+    return this;
+  }
+
   public DagNode<O> addChildNode(DagNode childNode) {
     childNode.getParentNodes().add(this);
     getChildNodes().add(childNode);

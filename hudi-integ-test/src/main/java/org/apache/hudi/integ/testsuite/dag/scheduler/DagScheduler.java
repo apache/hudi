@@ -23,6 +23,7 @@ import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 import org.apache.hudi.integ.testsuite.dag.WorkflowDag;
 import org.apache.hudi.integ.testsuite.dag.WriterContext;
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
+import org.apache.hudi.integ.testsuite.dag.nodes.DelayNode;
 import org.apache.hudi.metrics.Metrics;
 
 import org.slf4j.Logger;
@@ -49,10 +50,14 @@ public class DagScheduler {
   private static Logger log = LoggerFactory.getLogger(DagScheduler.class);
   private WorkflowDag workflowDag;
   private ExecutionContext executionContext;
+  private int numRounds;
+  private int delayMins;
 
-  public DagScheduler(WorkflowDag workflowDag, WriterContext writerContext) {
+  public DagScheduler(WorkflowDag workflowDag, WriterContext writerContext, int numRounds, int delayMins) {
     this.workflowDag = workflowDag;
     this.executionContext = new ExecutionContext(null, writerContext);
+    this.numRounds = numRounds;
+    this.delayMins = delayMins;
   }
 
   /**
@@ -82,28 +87,39 @@ public class DagScheduler {
    */
   private void execute(ExecutorService service, List<DagNode> nodes) throws Exception {
     // Nodes at the same level are executed in parallel
-    Queue<DagNode> queue = new PriorityQueue<>(nodes);
     log.info("Running workloads");
+    int curRound = 1;
     do {
-      List<Future> futures = new ArrayList<>();
-      Set<DagNode> childNodes = new HashSet<>();
-      while (queue.size() > 0) {
-        DagNode nodeToExecute = queue.poll();
-        log.info("Node to execute in dag scheduler " + nodeToExecute.getConfig().toString());
-        futures.add(service.submit(() -> executeNode(nodeToExecute)));
-        if (nodeToExecute.getChildNodes().size() > 0) {
-          childNodes.addAll(nodeToExecute.getChildNodes());
-        }
+      Queue<DagNode> queue = new PriorityQueue<>();
+      for (DagNode dagNode : nodes) {
+        queue.add(dagNode.clone());
       }
-      queue.addAll(childNodes);
-      childNodes.clear();
-      for (Future future : futures) {
-        future.get(1, TimeUnit.HOURS);
+      log.info("Running workloads for round num " + curRound);
+      do {
+        List<Future> futures = new ArrayList<>();
+        Set<DagNode> childNodes = new HashSet<>();
+        while (queue.size() > 0) {
+          DagNode nodeToExecute = queue.poll();
+          log.info("Executing node " + nodeToExecute.getConfig());
+          futures.add(service.submit(() -> executeNode(nodeToExecute)));
+          if (nodeToExecute.getChildNodes().size() > 0) {
+            childNodes.addAll(nodeToExecute.getChildNodes());
+          }
+        }
+        queue.addAll(childNodes);
+        childNodes.clear();
+        for (Future future : futures) {
+          future.get(1, TimeUnit.HOURS);
+        }
+      } while (queue.size() > 0);
+      log.info("Finished workloads for round num " + curRound);
+      if (curRound < numRounds) {
+        new DelayNode(delayMins).execute(executionContext);
       }
 
       // After each level, report and flush the metrics
       Metrics.flush();
-    } while (queue.size() > 0);
+    } while (curRound++ < numRounds);
     log.info("Finished workloads");
   }
 
