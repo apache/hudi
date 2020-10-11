@@ -36,10 +36,10 @@ import java.io.IOException;
 import java.io.Serializable;
 
 /**
- * Abstract class taking care of holding common member variables (FileSystem, SparkContext, HoodieConfigs) Also, manages
- * embedded timeline-server if enabled.
+ * This class taking care of holding common member variables (FileSystem, SparkContext, HoodieConfigs).
+ * Also, manages embedded timeline-server if enabled.
  */
-public abstract class AbstractHoodieClient implements Serializable, AutoCloseable {
+public class AbstractHoodieClient implements Serializable, AutoCloseable {
 
   private static final Logger LOG = LogManager.getLogger(AbstractHoodieClient.class);
 
