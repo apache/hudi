@@ -20,6 +20,8 @@ package org.apache.hudi.index.hbase;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -58,6 +60,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
 import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -165,6 +168,59 @@ public class TestHBaseIndex extends FunctionalTestHarness {
       assertEquals(numRecords, records3.stream().map(record -> record.getKey().getRecordKey()).distinct().count());
       assertEquals(numRecords, records3.stream().filter(record -> (record.getCurrentLocation() != null
           && record.getCurrentLocation().getInstantTime().equals(newCommitTime))).distinct().count());
+    }
+  }
+
+  @Test
+  public void testTagLocationAndPartitionPathUpdate() throws Exception {
+    final String newCommitTime = "001";
+    final int numRecords = 10;
+    final String oldPartitionPath = "1970/01/01";
+    final String emptyHoodieRecordPayloadClasssName = EmptyHoodieRecordPayload.class.getName();
+
+    List<HoodieRecord> newRecords = dataGen.generateInserts(newCommitTime, numRecords);
+    List<HoodieRecord> oldRecords = new LinkedList();
+    for (HoodieRecord newRecord: newRecords) {
+      HoodieKey key = new HoodieKey(newRecord.getRecordKey(), oldPartitionPath);
+      HoodieRecord hoodieRecord = new HoodieRecord(key, newRecord.getData());
+      oldRecords.add(hoodieRecord);
+    }
+
+    JavaRDD<HoodieRecord> newWriteRecords = jsc().parallelize(newRecords, 1);
+    JavaRDD<HoodieRecord> oldWriteRecords = jsc().parallelize(oldRecords, 1);
+
+    HoodieWriteConfig config = getConfig(true);
+    SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(getConfig(true));
+
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config);) {
+      // allowed path change test
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+
+      JavaRDD<HoodieRecord> oldHoodieRecord = index.tagLocation(oldWriteRecords, context, hoodieTable);
+      assertEquals(0, oldHoodieRecord.filter(record -> record.isCurrentLocationKnown()).count());
+      writeClient.startCommitWithTime(newCommitTime);
+      JavaRDD<WriteStatus> writeStatues = writeClient.upsert(oldWriteRecords, newCommitTime);
+      writeClient.commit(newCommitTime, writeStatues);
+      assertNoWriteErrors(writeStatues.collect());
+      index.updateLocation(writeStatues, context, hoodieTable);
+
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+      List<HoodieRecord> taggedRecords = index.tagLocation(newWriteRecords, context, hoodieTable).collect();
+      assertEquals(numRecords * 2L, taggedRecords.stream().count());
+      // Verify the number of deleted records
+      assertEquals(numRecords, taggedRecords.stream().filter(record -> record.getKey().getPartitionPath().equals(oldPartitionPath)
+          && record.getData().getClass().getName().equals(emptyHoodieRecordPayloadClasssName)).count());
+      // Verify the number of inserted records
+      assertEquals(numRecords, taggedRecords.stream().filter(record -> !record.getKey().getPartitionPath().equals(oldPartitionPath)).count());
+
+      // not allowed path change test
+      index = new SparkHoodieHBaseIndex<>(getConfig(false));
+      List<HoodieRecord> notAllowPathChangeRecords = index.tagLocation(newWriteRecords, context, hoodieTable).collect();
+      assertEquals(numRecords, notAllowPathChangeRecords.stream().count());
+      assertEquals(numRecords, taggedRecords.stream().filter(hoodieRecord -> hoodieRecord.isCurrentLocationKnown()
+          && hoodieRecord.getKey().getPartitionPath().equals(oldPartitionPath)).count());
     }
   }
 
@@ -454,14 +510,18 @@ public class TestHBaseIndex extends FunctionalTestHarness {
   }
 
   private HoodieWriteConfig getConfig() {
-    return getConfigBuilder(100).build();
+    return getConfigBuilder(100, false).build();
   }
 
   private HoodieWriteConfig getConfig(int hbaseIndexBatchSize) {
-    return getConfigBuilder(hbaseIndexBatchSize).build();
+    return getConfigBuilder(hbaseIndexBatchSize, false).build();
   }
 
-  private HoodieWriteConfig.Builder getConfigBuilder(int hbaseIndexBatchSize) {
+  private HoodieWriteConfig getConfig(boolean updatePartitionPath) {
+    return getConfigBuilder(100,  updatePartitionPath).build();
+  }
+
+  private HoodieWriteConfig.Builder getConfigBuilder(int hbaseIndexBatchSize, boolean updatePartitionPath) {
     return HoodieWriteConfig.newBuilder().withPath(basePath()).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(1, 1).withDeleteParallelism(1)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024)
@@ -475,6 +535,7 @@ public class TestHBaseIndex extends FunctionalTestHarness {
                 .hbaseIndexPutBatchSizeAutoCompute(true)
                 .hbaseZkZnodeParent(hbaseConfig.get("zookeeper.znode.parent", ""))
                 .hbaseZkQuorum(hbaseConfig.get("hbase.zookeeper.quorum")).hbaseTableName(TABLE_NAME)
+                .hbaseIndexUpdatePartitionPath(updatePartitionPath)
                 .hbaseIndexGetBatchSize(hbaseIndexBatchSize).build())
             .build());
   }

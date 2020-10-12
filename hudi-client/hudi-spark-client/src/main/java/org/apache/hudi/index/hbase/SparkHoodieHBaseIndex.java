@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.SparkMemoryUtils;
+import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -188,6 +189,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
         hoodieRecordIterator) -> {
 
       int multiGetBatchSize = config.getHbaseIndexGetBatchSize();
+      boolean updatePartitionPath = config.getHbaseIndexUpdatePartitionPath();
 
       // Grab the global HBase connection
       synchronized (SparkHoodieHBaseIndex.class) {
@@ -205,35 +207,51 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
           statements.add(generateStatement(rec.getRecordKey()));
           currentBatchOfRecords.add(rec);
           // iterator till we reach batch size
-          if (statements.size() >= multiGetBatchSize || !hoodieRecordIterator.hasNext()) {
-            // get results for batch from Hbase
-            Result[] results = doGet(hTable, statements);
-            // clear statements to be GC'd
-            statements.clear();
-            for (Result result : results) {
-              // first, attempt to grab location from HBase
-              HoodieRecord currentRecord = currentBatchOfRecords.remove(0);
-              if (result.getRow() != null) {
-                String keyFromResult = Bytes.toString(result.getRow());
-                String commitTs = Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN));
-                String fileId = Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN));
-                String partitionPath = Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN));
-
-                if (checkIfValidCommit(metaClient, commitTs)) {
-                  currentRecord = new HoodieRecord(new HoodieKey(currentRecord.getRecordKey(), partitionPath),
-                      currentRecord.getData());
-                  currentRecord.unseal();
-                  currentRecord.setCurrentLocation(new HoodieRecordLocation(commitTs, fileId));
-                  currentRecord.seal();
-                  taggedRecords.add(currentRecord);
-                  // the key from Result and the key being processed should be same
-                  assert (currentRecord.getRecordKey().contentEquals(keyFromResult));
-                } else { // if commit is invalid, treat this as a new taggedRecord
-                  taggedRecords.add(currentRecord);
-                }
-              } else {
-                taggedRecords.add(currentRecord);
-              }
+          if (hoodieRecordIterator.hasNext() && statements.size() < multiGetBatchSize) {
+            continue;
+          }
+          // get results for batch from Hbase
+          Result[] results = doGet(hTable, statements);
+          // clear statements to be GC'd
+          statements.clear();
+          for (Result result : results) {
+            // first, attempt to grab location from HBase
+            HoodieRecord currentRecord = currentBatchOfRecords.remove(0);
+            if (result.getRow() == null) {
+              taggedRecords.add(currentRecord);
+              continue;
+            }
+            String keyFromResult = Bytes.toString(result.getRow());
+            String commitTs = Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, COMMIT_TS_COLUMN));
+            String fileId = Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN));
+            String partitionPath = Bytes.toString(result.getValue(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN));
+            if (!checkIfValidCommit(metaClient, commitTs)) {
+              // if commit is invalid, treat this as a new taggedRecord
+              taggedRecords.add(currentRecord);
+              continue;
+            }
+            // check whether to do partition change processing
+            if (updatePartitionPath && !partitionPath.equals(currentRecord.getPartitionPath())) {
+              // delete partition old data record
+              HoodieRecord emptyRecord = new HoodieRecord(new HoodieKey(currentRecord.getRecordKey(), partitionPath),
+                  new EmptyHoodieRecordPayload());
+              emptyRecord.unseal();
+              emptyRecord.setCurrentLocation(new HoodieRecordLocation(commitTs, fileId));
+              emptyRecord.seal();
+              // insert partition new data record
+              currentRecord = new HoodieRecord(new HoodieKey(currentRecord.getRecordKey(), currentRecord.getPartitionPath()),
+                  currentRecord.getData());
+              taggedRecords.add(emptyRecord);
+              taggedRecords.add(currentRecord);
+            } else {
+              currentRecord = new HoodieRecord(new HoodieKey(currentRecord.getRecordKey(), partitionPath),
+                  currentRecord.getData());
+              currentRecord.unseal();
+              currentRecord.setCurrentLocation(new HoodieRecordLocation(commitTs, fileId));
+              currentRecord.seal();
+              taggedRecords.add(currentRecord);
+              // the key from Result and the key being processed should be same
+              assert (currentRecord.getRecordKey().contentEquals(keyFromResult));
             }
           }
         }
