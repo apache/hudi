@@ -470,6 +470,36 @@ an open source license <a href="https://www.apache.org/legal/resolved.html#crite
   </li>
 </ul>
 
+<h4 id="tests">Tests</h4>
+
+<ul>
+  <li><strong>Categories</strong>
+    <ul>
+      <li>unit - testing basic functionality at the class level, potentially using mocks. Expected to finish quicker</li>
+      <li>functional - brings up the services needed and runs test without mocking</li>
+      <li>integration - runs subset of functional tests, on a full fledged enviroment with dockerized services</li>
+    </ul>
+  </li>
+  <li><strong>Prepare Test Data</strong>
+    <ul>
+      <li>Many unit and functional test cases require a Hudi dataset to be prepared beforehand. <code class="highlighter-rouge">HoodieTestTable</code> and <code class="highlighter-rouge">HoodieWriteableTestTable</code> are dedicated test utility classes for this purpose. Use them whenever appropriate, and add new APIs to them when needed.</li>
+      <li>When add new APIs in the test utility classes, overload APIs with variety of arguments to do more heavy-liftings for callers.</li>
+      <li>In most scenarios, you won’t need to use <code class="highlighter-rouge">FileCreateUtils</code> directly.</li>
+      <li>If test cases require interaction with actual <code class="highlighter-rouge">HoodieRecord</code>s, use <code class="highlighter-rouge">HoodieWriteableTestTable</code> (and <code class="highlighter-rouge">HoodieTestDataGenerator</code> probably). Otherwise, <code class="highlighter-rouge">HoodieTestTable</code> that manipulates empty files shall serve the purpose.</li>
+    </ul>
+  </li>
+  <li><strong>Strive for Readability</strong>
+    <ul>
+      <li>Avoid writing flow controls for different assertion cases. Split to a new test case when appropriate.</li>
+      <li>Use plain for-loop to avoid try-catch in lambda block. Declare exceptions is okay.</li>
+      <li>Use static import for constants and static helper methods to avoid lengthy code.</li>
+      <li>Avoid reusing local variable names. Create new variables generously.</li>
+      <li>Keep helper methods local to the test class until it becomes obviously generic and re-useable. When that happens, move the helper method to the right utility class. For example, <code class="highlighter-rouge">Assertions</code> contains common assert helpers, and <code class="highlighter-rouge">SchemaTestUtil</code> is for schema related helpers.</li>
+      <li>Avoid putting new helpers in <code class="highlighter-rouge">HoodieTestUtils</code> and <code class="highlighter-rouge">HoodieClientTestUtils</code>, which are named too generic. Eventually, all test helpers shall be categorized properly.</li>
+    </ul>
+  </li>
+</ul>
+
 <h3 id="reviewing-coderfcs">Reviewing Code/RFCs</h3>
 
 <ul>
