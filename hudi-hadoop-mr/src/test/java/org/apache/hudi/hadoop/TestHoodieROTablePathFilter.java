@@ -88,7 +88,7 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
   public void testPartitionPathsAsNonHoodiePaths() throws Exception {
     final String p1 = "2017/01/01";
     final String p2 = "2017/01/02";
-    testTable.addCommit("001").withBaseFilesInPartitions(p1, p2);
+    testTable.addCommit("001").getFileIdsWithBaseFilesInPartitions(p1, p2);
     Path partitionPath1 = testTable.getPartitionPath(p1).getParent();
     Path partitionPath2 = testTable.getPartitionPath(p2).getParent();
     assertTrue(pathFilter.accept(partitionPath1), "Directories should be accepted");
