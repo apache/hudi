@@ -184,6 +184,24 @@ of how we want to evolve our code in the future.
    - Any changes to methods annotated with `PublicAPIMethod` or classes annotated with `PublicAPIClass` require upfront discussion and potentially an RFC.
    - Any non-backwards compatible changes similarly need upfront discussion and the functionality needs to implement an upgrade-downgrade path.
 
+#### Tests
+
+- **Categories**
+    - unit - testing basic functionality at the class level, potentially using mocks. Expected to finish quicker
+    - functional - brings up the services needed and runs test without mocking
+    - integration - runs subset of functional tests, on a full fledged enviroment with dockerized services
+- **Prepare Test Data**
+    - Many unit and functional test cases require a Hudi dataset to be prepared beforehand. `HoodieTestTable` and `HoodieWriteableTestTable` are dedicated test utility classes for this purpose. Use them whenever appropriate, and add new APIs to them when needed.
+    - When add new APIs in the test utility classes, overload APIs with variety of arguments to do more heavy-liftings for callers.
+    - In most scenarios, you won't need to use `FileCreateUtils` directly.
+    - If test cases require interaction with actual `HoodieRecord`s, use `HoodieWriteableTestTable` (and `HoodieTestDataGenerator` probably). Otherwise, `HoodieTestTable` that manipulates empty files shall serve the purpose.
+- **Strive for Readability**
+    - Avoid writing flow controls for different assertion cases. Split to a new test case when appropriate.
+    - Use plain for-loop to avoid try-catch in lambda block. Declare exceptions is okay.
+    - Use static import for constants and static helper methods to avoid lengthy code.
+    - Avoid reusing local variable names. Create new variables generously.
+    - Keep helper methods local to the test class until it becomes obviously generic and re-useable. When that happens, move the helper method to the right utility class. For example, `Assertions` contains common assert helpers, and `SchemaTestUtil` is for schema related helpers.
+    - Avoid putting new helpers in `HoodieTestUtils` and `HoodieClientTestUtils`, which are named too generic. Eventually, all test helpers shall be categorized properly.  
 
 ### Reviewing Code/RFCs
 
