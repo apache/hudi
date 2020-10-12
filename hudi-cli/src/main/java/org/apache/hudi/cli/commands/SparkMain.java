@@ -22,12 +22,13 @@ import org.apache.hudi.cli.DeDupeType;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.cli.DedupeSparkJob;
 import org.apache.hudi.cli.utils.SparkUtil;
-import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.client.utils.ClientUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieBootstrapConfig;
@@ -35,8 +36,8 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
+import org.apache.hudi.table.upgrade.SparkUpgradeDowngrade;
 import org.apache.hudi.utilities.HDFSParquetImporter;
 import org.apache.hudi.utilities.HDFSParquetImporter.Config;
 import org.apache.hudi.utilities.HoodieCleaner;
@@ -343,7 +344,7 @@ public class SparkMain {
   }
 
   private static int rollback(JavaSparkContext jsc, String instantTime, String basePath) throws Exception {
-    HoodieWriteClient client = createHoodieClient(jsc, basePath);
+    SparkRDDWriteClient client = createHoodieClient(jsc, basePath);
     if (client.rollback(instantTime)) {
       LOG.info(String.format("The commit \"%s\" rolled back.", instantTime));
       return 0;
@@ -355,7 +356,7 @@ public class SparkMain {
 
   private static int createSavepoint(JavaSparkContext jsc, String commitTime, String user,
       String comments, String basePath) throws Exception {
-    HoodieWriteClient client = createHoodieClient(jsc, basePath);
+    SparkRDDWriteClient client = createHoodieClient(jsc, basePath);
     try {
       client.savepoint(commitTime, user, comments);
       LOG.info(String.format("The commit \"%s\" has been savepointed.", commitTime));
@@ -367,7 +368,7 @@ public class SparkMain {
   }
 
   private static int rollbackToSavepoint(JavaSparkContext jsc, String savepointTime, String basePath) throws Exception {
-    HoodieWriteClient client = createHoodieClient(jsc, basePath);
+    SparkRDDWriteClient client = createHoodieClient(jsc, basePath);
     try {
       client.restoreToSavepoint(savepointTime);
       LOG.info(String.format("The commit \"%s\" rolled back.", savepointTime));
@@ -379,7 +380,7 @@ public class SparkMain {
   }
 
   private static int deleteSavepoint(JavaSparkContext jsc, String savepointTime, String basePath) throws Exception {
-    HoodieWriteClient client = createHoodieClient(jsc, basePath);
+    SparkRDDWriteClient client = createHoodieClient(jsc, basePath);
     try {
       client.deleteSavepoint(savepointTime);
       LOG.info(String.format("Savepoint \"%s\" deleted.", savepointTime));
@@ -401,9 +402,10 @@ public class SparkMain {
    */
   protected static int upgradeOrDowngradeTable(JavaSparkContext jsc, String basePath, String toVersion) {
     HoodieWriteConfig config = getWriteConfig(basePath);
-    HoodieTableMetaClient metaClient = ClientUtils.createMetaClient(jsc.hadoopConfiguration(), config, false);
+    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), config.getBasePath(), false,
+        config.getConsistencyGuardConfig(), Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())));
     try {
-      UpgradeDowngrade.run(metaClient, HoodieTableVersion.valueOf(toVersion), config, jsc, null);
+      new SparkUpgradeDowngrade(metaClient, config, new HoodieSparkEngineContext(jsc)).run(metaClient, HoodieTableVersion.valueOf(toVersion), config, new HoodieSparkEngineContext(jsc), null);
       LOG.info(String.format("Table at \"%s\" upgraded / downgraded to version \"%s\".", basePath, toVersion));
       return 0;
     } catch (Exception e) {
@@ -412,9 +414,9 @@ public class SparkMain {
     }
   }
 
-  private static HoodieWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) throws Exception {
+  private static SparkRDDWriteClient createHoodieClient(JavaSparkContext jsc, String basePath) throws Exception {
     HoodieWriteConfig config = getWriteConfig(basePath);
-    return new HoodieWriteClient(jsc, config);
+    return new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), config);
   }
 
   private static HoodieWriteConfig getWriteConfig(String basePath) {

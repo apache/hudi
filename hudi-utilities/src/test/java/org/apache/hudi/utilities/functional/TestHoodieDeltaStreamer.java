@@ -520,7 +520,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     // generate parquet files using kafka connect naming convention
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     Helpers.saveParquetToDFS(Helpers.toGenericRecords(dataGenerator.generateInserts("000", 100)), new Path(filePath));
-    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc, dfs, hdfsTestService.getHadoopConf(), props);
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc, dfs, hdfsTestService.getHadoopConf(), Option.ofNullable(props));
     assertEquals("kafka_topic1,0:200", deltaStreamer.getConfig().checkpoint);
   }
 
