@@ -319,7 +319,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       boolean hasMagic = hasNextMagic();
       if (!hasMagic) {
         throw new CorruptedLogFileException(
-            logFile + "could not be read. Did not find the magic bytes at the start of the block");
+            logFile + " could not be read. Did not find the magic bytes at the start of the block");
       }
       return hasMagic;
     } catch (EOFException e) {
