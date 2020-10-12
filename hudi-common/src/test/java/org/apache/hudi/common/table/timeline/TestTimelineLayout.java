@@ -57,7 +57,7 @@ public class TestTimelineLayout  {
     List<HoodieInstant> layout0Instants = TimelineLayout.getLayout(new TimelineLayoutVersion(0))
         .filterHoodieInstants(rawInstants.stream()).collect(Collectors.toList());
     assertEquals(rawInstants, layout0Instants);
-    List<HoodieInstant> layout1Instants = TimelineLayout.getLayout(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
+    List<HoodieInstant> layout1Instants = TimelineLayout.getLayout(new TimelineLayoutVersion(1))
         .filterHoodieInstants(rawInstants.stream()).collect(Collectors.toList());
     assertEquals(7, layout1Instants.size());
     assertTrue(layout1Instants.contains(
