@@ -36,7 +36,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.metadata.HoodieMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
@@ -227,8 +226,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>,
       HoodieCommitMetadata metadata = CommitUtils.buildMetadata(writeStats, result.getPartitionToReplaceFileIds(),
           extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());
 
-      // Update Metadata Table
-      HoodieMetadata.update(config, metadata, instantTime);
+      table.metadata().update(jsc, metadata, instantTime);
 
       activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));

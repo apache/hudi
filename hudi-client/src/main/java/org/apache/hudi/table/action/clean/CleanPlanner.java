@@ -41,7 +41,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSavepointException;
-import org.apache.hudi.metadata.HoodieMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -186,7 +185,7 @@ public class CleanPlanner<T extends HoodieRecordPayload<T>> implements Serializa
    */
   private List<String> getPartitionPathsForFullCleaning() throws IOException {
     // Go to brute force mode of scanning all partitions
-    return HoodieMetadata.getAllPartitionPaths(hoodieTable.getMetaClient().getFs(),
+    return hoodieTable.metadata().getAllPartitionPaths(hoodieTable.getMetaClient().getFs(),
         hoodieTable.getMetaClient().getBasePath(), config.shouldAssumeDatePartitioning());
   }
 

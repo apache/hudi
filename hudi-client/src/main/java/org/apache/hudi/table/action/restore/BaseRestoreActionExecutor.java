@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
-import org.apache.hudi.metadata.HoodieMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.log4j.LogManager;
@@ -94,8 +93,7 @@ public abstract class BaseRestoreActionExecutor extends BaseActionExecutor<Hoodi
     HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.convertRestoreMetadata(
         instantTime, durationInMs, instantsRolledBack, instantToMetadata);
 
-    // Update Metadata Table
-    HoodieMetadata.update(config, restoreMetadata, instantTime);
+    table.metadata().update(jsc, restoreMetadata, instantTime);
 
     table.getActiveTimeline().saveAsComplete(new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, instantTime),
         TimelineMetadataUtils.serializeRestoreMetadata(restoreMetadata));

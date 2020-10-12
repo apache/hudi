@@ -92,7 +92,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType);
     initTestDataGenerator();
 
-    metadataTableBasePath = HoodieMetadata.getMetadataTableBasePath(basePath);
+    metadataTableBasePath = HoodieMetadataReader.getMetadataTableBasePath(basePath);
   }
 
   @AfterEach
@@ -122,7 +122,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
     try (HoodieWriteClient client = new HoodieWriteClient<>(jsc, getWriteConfig(true, true), true)) {
       client.startCommitWithTime("001");
       assertTrue(dfs.exists(new Path(metadataTableBasePath)));
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
     }
   }
 
@@ -142,9 +142,9 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
 
     try (HoodieWriteClient client = new HoodieWriteClient<>(jsc, getWriteConfig(true, true))) {
       client.startCommitWithTime("001");
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
 
-      List<String> partitions = HoodieMetadata.getAllPartitionPaths(dfs, basePath, true);
+      List<String> partitions = metadata(client).getAllPartitionPaths(dfs, basePath, true);
       assertFalse(partitions.contains(nonPartitionDirectory),
           "Must not contain the non-partition " + nonPartitionDirectory);
     }
@@ -165,17 +165,17 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
       client.startCommitWithTime(newCommitTime);
       List<WriteStatus> writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
 
       // Write 2 (inserts)
       newCommitTime = "002";
       client.startCommitWithTime(newCommitTime);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
 
       records = dataGen.generateInserts(newCommitTime, 20);
       writeStatuses = client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
 
       // Write 3 (updates)
       newCommitTime = "003";
@@ -183,7 +183,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       records = dataGen.generateUniqueUpdates(newCommitTime, 10);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
 
       // Write 4 (updates and inserts)
       newCommitTime = "004";
@@ -191,14 +191,14 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       records = dataGen.generateUpdates(newCommitTime, 10);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
 
       // Compaction
       if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
         newCommitTime = "005";
         client.scheduleCompactionAtInstant(newCommitTime, Option.empty());
         client.compact(newCommitTime);
-        validateMetadata(client.getConfig());
+        validateMetadata(client);
       }
 
       // Write 5 (updates and inserts)
@@ -207,14 +207,14 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       records = dataGen.generateUpdates(newCommitTime, 5);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
 
       // Compaction
       if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
         newCommitTime = "007";
         client.scheduleCompactionAtInstant(newCommitTime, Option.empty());
         client.compact(newCommitTime);
-        validateMetadata(client.getConfig());
+        validateMetadata(client);
       }
 
       // Deletes
@@ -223,16 +223,16 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       JavaRDD<HoodieKey> deleteKeys = jsc.parallelize(records, 1).map(r -> r.getKey());
       client.startCommitWithTime(newCommitTime);
       client.delete(deleteKeys, newCommitTime);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
 
       // Clean
       newCommitTime = "009";
       client.clean(newCommitTime);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
 
       // Restore
       client.restoreToInstant("006");
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
     }
   }
 
@@ -250,7 +250,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
       client.startCommitWithTime(newCommitTime);
       List<WriteStatus> writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
 
       // Rollback of inserts
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
@@ -258,9 +258,9 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       records = dataGen.generateInserts(newCommitTime, 20);
       writeStatuses = client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
       client.rollback(newCommitTime);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
 
       // Rollback of updates
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
@@ -268,9 +268,9 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       records = dataGen.generateUniqueUpdates(newCommitTime, 20);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
       client.rollback(newCommitTime);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
 
       // Rollback of updates and inserts
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
@@ -278,16 +278,16 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       records = dataGen.generateUpdates(newCommitTime, 10);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
       client.rollback(newCommitTime);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
 
       // Rollback of Compaction
       if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
         newCommitTime = "005";
         client.scheduleCompactionAtInstant(newCommitTime, Option.empty());
         client.compact(newCommitTime);
-        validateMetadata(client.getConfig());
+        validateMetadata(client);
       }
 
       // Rollback of Deletes
@@ -297,16 +297,16 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       client.startCommitWithTime(newCommitTime);
       writeStatuses = client.delete(deleteKeys, newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
       client.rollback(newCommitTime);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
 
       // Rollback of Clean
       newCommitTime = "009";
       client.clean(newCommitTime);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
       client.rollback(newCommitTime);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
 
     }
 
@@ -320,7 +320,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
       client.rollback(newCommitTime);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
     }
 
     // Marker based rollback of partial commits
@@ -333,7 +333,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
       client.rollback(newCommitTime);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
     }
 
   }
@@ -374,9 +374,8 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       writeStatuses = client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
 
-      validateMetadata(client.getConfig());
-      assertTrue(HoodieMetadata.isInSync(basePath));
-      assertTrue(HoodieMetadata.findInstantsToSync(hadoopConf, basePath).isEmpty());
+      validateMetadata(client);
+      assertTrue(metadata(client).isInSync());
     }
 
     // Various table operations without metadata table enabled
@@ -387,7 +386,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       records = dataGen.generateUniqueUpdates(newCommitTime, 5);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
-      assertFalse(HoodieMetadata.isInSync(basePath));
+      assertFalse(metadata(client).isInSync());
 
       // updates and inserts
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
@@ -395,21 +394,21 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       records = dataGen.generateUpdates(newCommitTime, 10);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
-      assertFalse(HoodieMetadata.isInSync(basePath));
+      assertFalse(metadata(client).isInSync());
 
       // Compaction
       if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
         newCommitTime = HoodieActiveTimeline.createNewInstantTime();
         client.scheduleCompactionAtInstant(newCommitTime, Option.empty());
         client.compact(newCommitTime);
-        assertFalse(HoodieMetadata.isInSync(basePath));
+        assertFalse(metadata(client).isInSync());
       }
 
       // Savepoint
       String savepointInstant = newCommitTime;
       if (metaClient.getTableType() == HoodieTableType.COPY_ON_WRITE) {
         client.savepoint("hoodie", "metadata test");
-        assertFalse(HoodieMetadata.isInSync(basePath));
+        assertFalse(metadata(client).isInSync());
       }
 
       // Deletes
@@ -418,12 +417,12 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       JavaRDD<HoodieKey> deleteKeys = jsc.parallelize(records, 1).map(r -> r.getKey());
       client.startCommitWithTime(newCommitTime);
       client.delete(deleteKeys, newCommitTime);
-      assertFalse(HoodieMetadata.isInSync(basePath));
+      assertFalse(metadata(client).isInSync());
 
       // Clean
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.clean(newCommitTime);
-      assertFalse(HoodieMetadata.isInSync(basePath));
+      assertFalse(metadata(client).isInSync());
 
       // updates
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
@@ -431,26 +430,22 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       records = dataGen.generateUniqueUpdates(newCommitTime, 10);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
-      assertFalse(HoodieMetadata.isInSync(basePath));
+      assertFalse(metadata(client).isInSync());
 
-      // TODO: This is broken for MOR due to rollback issue. Fix testRollbackOperations first.
-      // Restore
-      //client.restoreToInstant(savepointInstant);
-      //assertFalse(HoodieMetadata.isInSync());
+      client.restoreToInstant(savepointInstant);
+      assertFalse(metadata(client).isInSync());
     }
 
-    assertFalse(HoodieMetadata.findInstantsToSync(hadoopConf, basePath).isEmpty());
 
     // Enable metadata table and ensure it is synced
     try (HoodieWriteClient client = new HoodieWriteClient<>(jsc, getWriteConfig(true, true))) {
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
 
-      validateMetadata(client.getConfig());
-      assertTrue(HoodieMetadata.isInSync(basePath));
+      validateMetadata(client);
+      assertTrue(metadata(client).isInSync());
     }
 
-    assertTrue(HoodieMetadata.findInstantsToSync(hadoopConf, basePath).isEmpty());
   }
 
   /**
@@ -485,7 +480,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
         client.startCommitWithTime(newCommitTime);
         List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
         assertNoWriteErrors(writeStatuses);
-        validateMetadata(client.getConfig());
+        validateMetadata(client);
 
         // Inline compaction is enabled so metadata table should be compacted as required
         HoodieTableMetaClient metadataMetaClient = new HoodieTableMetaClient(hadoopConf, metadataTableBasePath);
@@ -534,7 +529,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 10);
       List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
 
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
@@ -549,9 +544,6 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
           commitInstantFileName), false));
     }
 
-    // Simulates a new process which will re-initialize the metadata table
-    HoodieMetadata.remove(basePath);
-
     try (HoodieWriteClient client = new HoodieWriteClient<>(jsc, getWriteConfig(true, true), true)) {
       // Start the next commit which will rollback the previous one and also should update the metadata table by
       // updating it with HoodieRollbackMetadata.
@@ -559,7 +551,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       client.startCommitWithTime(newCommitTime);
 
       // Dangling commit but metadata should be valid at this time
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
 
       // Next insert
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 5);
@@ -567,7 +559,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       assertNoWriteErrors(writeStatuses);
 
       // Post rollback commit and metadata should be valid
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
     }
   }
 
@@ -585,9 +577,9 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       List<HoodieRecord> records = nonPartitionedGenerator.generateInserts(newCommitTime, 10);
       client.startCommitWithTime(newCommitTime);
       List<WriteStatus> writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
 
-      List<String> metadataPartitions = HoodieMetadata.getAllPartitionPaths(dfs, basePath, false);
+      List<String> metadataPartitions = metadata(client).getAllPartitionPaths(dfs, basePath, false);
       assertTrue(metadataPartitions.contains(""), "Must contain empty partition");
     }
   }
@@ -607,12 +599,12 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       client.startCommitWithTime(newCommitTime);
       List<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
-      validateMetadata(client.getConfig());
+      validateMetadata(client);
 
-      Registry metricsRegistry = Registry.getRegistry(HoodieMetadata.class.getSimpleName());
-      assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataImpl.INITIALIZE_STR + ".count"));
-      assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataImpl.INITIALIZE_STR + ".duration"));
-      assertTrue(metricsRegistry.getAllCounts().get(HoodieMetadataImpl.INITIALIZE_STR + ".count") == 1L);
+      Registry metricsRegistry = Registry.getRegistry("HoodieMetadata");
+      assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataWriter.INITIALIZE_STR + ".count"));
+      assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataWriter.INITIALIZE_STR + ".duration"));
+      assertEquals(metricsRegistry.getAllCounts().get(HoodieMetadataWriter.INITIALIZE_STR + ".count"), 1L);
     }
   }
 
@@ -621,19 +613,24 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
    *
    * @throws IOException
    */
-  private void validateMetadata(HoodieWriteConfig config) throws IOException {
+  private void validateMetadata(HoodieWriteClient client) throws IOException {
     long t1 = System.currentTimeMillis();
+
+    HoodieWriteConfig config = client.getConfig();
+    HoodieMetadataWriter metadata = metadata(client);
+    assertFalse(metadata == null, "MetadataWriter should have been initialized");
+
     // Validate write config for metadata table
-    HoodieWriteConfig metadataWriteConfig = HoodieMetadata.getWriteConfig(basePath);
+    HoodieWriteConfig metadataWriteConfig = metadata.getWriteConfig();
     assertFalse(metadataWriteConfig.useFileListingMetadata(), "No metadata table for metadata table");
     assertFalse(metadataWriteConfig.getFileListingMetadataVerify(), "No verify for metadata table");
 
     // Metadata table should be in sync with the dataset
-    assertTrue(HoodieMetadata.isInSync(basePath));
+    assertTrue(metadata.isInSync());
 
     // Partitions should match
     List<String> fsPartitions = FSUtils.getAllFoldersWithPartitionMetaFile(dfs, basePath);
-    List<String> metadataPartitions = HoodieMetadata.getAllPartitionPaths(dfs, basePath, false);
+    List<String> metadataPartitions = metadata.getAllPartitionPaths(dfs, basePath, false);
 
     Collections.sort(fsPartitions);
     Collections.sort(metadataPartitions);
@@ -643,7 +640,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
 
     // Files within each partition should match
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieTable.create(metaClient, config, hadoopConf);
+    HoodieTable table = HoodieTable.create(config, hadoopConf);
     TableFileSystemView tableView = table.getHoodieView();
     fsPartitions.forEach(partition -> {
       try {
@@ -655,7 +652,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
           partitionPath = new Path(basePath, partition);
         }
         FileStatus[] fsStatuses = FSUtils.getAllDataFilesInPartition(dfs, partitionPath);
-        FileStatus[] metaStatuses = HoodieMetadata.getAllFilesInPartition(hadoopConf, basePath, partitionPath);
+        FileStatus[] metaStatuses = metadata.getAllFilesInPartition(hadoopConf, basePath, partitionPath);
         List<String> fsFileNames = Arrays.stream(fsStatuses)
             .map(s -> s.getPath().getName()).collect(Collectors.toList());
         List<String> metadataFilenames = Arrays.stream(metaStatuses)
@@ -694,7 +691,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
     HoodieTableMetaClient metadataMetaClient = new HoodieTableMetaClient(hadoopConf, metadataTableBasePath);
 
     // Metadata table should be in sync with the dataset
-    assertTrue(HoodieMetadata.isInSync(basePath));
+    assertTrue(metadata.isInSync());
 
     // Metadata table is MOR
     assertEquals(metadataMetaClient.getTableType(), HoodieTableType.MERGE_ON_READ, "Metadata Table should be MOR");
@@ -706,8 +703,9 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
     // Metadata table has a fixed number of partitions
     // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
     // in the .hoodie folder.
-    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(dfs, HoodieMetadata.getMetadataTableBasePath(basePath), false);
-    assertEquals(HoodieMetadataImpl.METADATA_ALL_PARTITIONS.length, metadataTablePartitions.size());
+    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(dfs, metadata.getMetadataTableBasePath(basePath),
+        false);
+    assertEquals(HoodieMetadataWriter.METADATA_ALL_PARTITIONS.length, metadataTablePartitions.size());
 
     // Metadata table should automatically compact and clean
     // versions are +1 as autoclean / compaction happens end of commits
@@ -727,6 +725,10 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
     });
 
     LOG.info("Validation time=" + (System.currentTimeMillis() - t1));
+  }
+
+  private HoodieMetadataWriter metadata(HoodieWriteClient client) {
+    return HoodieMetadataWriter.instance(hadoopConf, client.getConfig());
   }
 
   // TODO: this can be moved to TestHarness after merge from master

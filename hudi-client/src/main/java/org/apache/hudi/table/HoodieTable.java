@@ -62,6 +62,7 @@ import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
+import org.apache.hudi.metadata.HoodieMetadataWriter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.log4j.LogManager;
@@ -92,6 +93,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   private SerializableConfiguration hadoopConfiguration;
   private transient FileSystemViewManager viewManager;
+  private HoodieMetadataWriter metadataWriter;
 
   protected final SparkTaskContextSupplier sparkTaskContextSupplier = new SparkTaskContextSupplier();
 
@@ -263,7 +265,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   private SyncableFileSystemView getFileSystemViewInternal(HoodieTimeline timeline) {
     if (config.useFileListingMetadata()) {
       FileSystemViewStorageConfig viewConfig = config.getViewStorageConfig();
-      return new HoodieMetadataFileSystemView(metaClient, timeline, viewConfig.isIncrementalTimelineSyncEnabled());
+      return new HoodieMetadataFileSystemView(metaClient, this, timeline, viewConfig.isIncrementalTimelineSyncEnabled());
     } else {
       return getViewManager().getFileSystemView(metaClient);
     }
@@ -623,5 +625,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   public boolean requireSortedRecords() {
     return getBaseFileFormat() == HoodieFileFormat.HFILE;
+  }
+
+  public HoodieMetadataWriter metadata() {
+    if (metadataWriter == null) {
+      metadataWriter = HoodieMetadataWriter.instance(hadoopConfiguration.get(), config);
+    }
+
+    return metadataWriter;
   }
 }

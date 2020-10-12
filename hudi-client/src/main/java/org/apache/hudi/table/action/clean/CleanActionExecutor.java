@@ -38,7 +38,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.metadata.HoodieMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.log4j.LogManager;
@@ -245,10 +244,6 @@ public class CleanActionExecutor extends BaseActionExecutor<HoodieCleanMetadata>
         inflightInstant = cleanInstant;
       }
 
-      // Update Metadata Table before even finishing clean. This ensures that an async clean operation in the
-      // background does not lead to stale metadata being returned from Metadata Table.
-      HoodieMetadata.update(config, cleanerPlan, cleanInstant.getTimestamp());
-
       List<HoodieCleanStat> cleanStats = clean(jsc, cleanerPlan);
       if (cleanStats.isEmpty()) {
         return HoodieCleanMetadata.newBuilder().build();
@@ -260,6 +255,8 @@ public class CleanActionExecutor extends BaseActionExecutor<HoodieCleanMetadata>
           Option.of(timer.endTimer()),
           cleanStats
       );
+
+      table.metadata().update(jsc, cleanerPlan, cleanInstant.getTimestamp());
 
       table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant,
           TimelineMetadataUtils.serializeCleanMetadata(metadata));

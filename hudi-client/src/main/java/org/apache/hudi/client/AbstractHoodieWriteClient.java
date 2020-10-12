@@ -38,7 +38,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.metadata.HoodieMetadata;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
@@ -129,8 +128,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     finalizeWrite(table, instantTime, stats);
 
     try {
-      // Update Metadata Table
-      HoodieMetadata.update(config, metadata, instantTime);
+      table.metadata().update(jsc, metadata, instantTime);
 
       activeTimeline.saveAsComplete(new HoodieInstant(true, commitActionType, instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));

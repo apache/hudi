@@ -26,8 +26,6 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieMetadataException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -41,6 +39,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.hudi.metadata.HoodieMetadataReader.METADATA_PARTITION_NAME;
+import static org.apache.hudi.metadata.HoodieMetadataReader.RECORDKEY_PARTITION_LIST;
 
 /**
  * This is a payload which saves information about a single entry in the Metadata Table.
@@ -59,8 +60,6 @@ import java.util.stream.Stream;
  * HoodieMetadataRecord for ease of operations.
  */
 public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadataPayload> {
-  private static final Logger LOG = LogManager.getLogger(HoodieMetadataPayload.class);
-
   // Type of the record
   // This can be an enum in the schema but Avro 1.8 has a bug - https://issues.apache.org/jira/browse/AVRO-1810
   private static final int PARTITION_LIST = 1;
@@ -101,7 +100,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>();
     partitions.forEach(partition -> fileInfo.put(partition, new HoodieMetadataFileInfo(0L,  false)));
 
-    HoodieKey key = new HoodieKey(HoodieMetadataCommon.RECORDKEY_PARTITION_LIST, HoodieMetadataCommon.METADATA_PARTITION_NAME);
+    HoodieKey key = new HoodieKey(RECORDKEY_PARTITION_LIST, METADATA_PARTITION_NAME);
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), PARTITION_LIST, fileInfo);
     return new HoodieRecord<>(key, payload);
   }
@@ -121,7 +120,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     filesDeleted.ifPresent(
         m -> m.forEach(filename -> fileInfo.put(filename, new HoodieMetadataFileInfo(0L,  true))));
 
-    HoodieKey key = new HoodieKey(partition, HoodieMetadataCommon.METADATA_PARTITION_NAME);
+    HoodieKey key = new HoodieKey(partition, METADATA_PARTITION_NAME);
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), FILE_LIST, fileInfo);
     return new HoodieRecord<>(key, payload);
   }

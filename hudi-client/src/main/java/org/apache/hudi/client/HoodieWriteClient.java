@@ -44,7 +44,7 @@ import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.metadata.HoodieMetadata;
+import org.apache.hudi.metadata.HoodieMetadataWriter;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
@@ -124,7 +124,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     this.rollbackPending = rollbackPending;
 
     // Initialize Metadata Table
-    HoodieMetadata.init(jsc, writeConfig);
+    HoodieMetadataWriter.instance(hadoopConf, writeConfig).initialize(jsc);
   }
 
   /**
@@ -701,8 +701,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     finalizeWrite(table, compactionCommitTime, writeStats);
     LOG.info("Committing Compaction " + compactionCommitTime + ". Finished with result " + metadata);
 
-    // Update Metadata Table
-    HoodieMetadata.update(config, metadata, compactionCommitTime);
+    table.metadata().update(jsc, metadata, compactionCommitTime);
 
     CompactHelpers.completeInflightCompaction(table, compactionCommitTime, metadata);
 

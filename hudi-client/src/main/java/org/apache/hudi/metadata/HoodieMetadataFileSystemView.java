@@ -25,14 +25,18 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.table.HoodieTable;
 
 /**
  * {@code HoodieTableFileSystemView} implementation that retrieved partition listings from the Metadata Table.
  */
 public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
-  public HoodieMetadataFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
-      boolean enableIncrementalTimelineSync) {
+  private HoodieTable hoodieTable;
+
+  public HoodieMetadataFileSystemView(HoodieTableMetaClient metaClient, HoodieTable table,
+                                      HoodieTimeline visibleActiveTimeline, boolean enableIncrementalTimelineSync) {
     super(metaClient, visibleActiveTimeline, enableIncrementalTimelineSync);
+    this.hoodieTable = table;
   }
 
   /**
@@ -43,8 +47,8 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
    */
   @Override
   protected FileStatus[] listPartition(Path partitionPath) throws IOException {
-    FileStatus[] statuses = HoodieMetadata.getAllFilesInPartition(metaClient.getHadoopConf(), metaClient.getBasePath(),
-        partitionPath);
+    FileStatus[] statuses = hoodieTable.metadata().getAllFilesInPartition(metaClient.getHadoopConf(),
+        metaClient.getBasePath(), partitionPath);
 
     return statuses;
   }

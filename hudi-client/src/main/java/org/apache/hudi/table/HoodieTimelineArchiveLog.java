@@ -53,7 +53,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.metadata.HoodieMetadata;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -90,8 +89,12 @@ public class HoodieTimelineArchiveLog {
   private final HoodieTableMetaClient metaClient;
 
   public HoodieTimelineArchiveLog(HoodieWriteConfig config, Configuration configuration) {
+    this(config, HoodieTable.create(config, configuration));
+  }
+
+  public HoodieTimelineArchiveLog(HoodieWriteConfig config, HoodieTable table) {
     this.config = config;
-    this.table = HoodieTable.create(config, configuration);
+    this.table = table;
     this.metaClient = table.getMetaClient();
     this.archiveFilePath = HoodieArchivedTimeline.getArchiveLogPath(metaClient.getArchivePath());
     this.maxInstantsToKeep = config.getMaxCommitsToKeep();
@@ -200,7 +203,7 @@ public class HoodieTimelineArchiveLog {
     // If metadata table is enabled, do not archive instants which are more recent that the latest compaction
     // of the metadata table. This is required for metadata table sync.
     if (config.useFileListingMetadata()) {
-      Option<String> latestCompaction = HoodieMetadata.getLatestCompactionTimestamp(config.getBasePath());
+      Option<String> latestCompaction = table.metadata().getLatestCompactionTimestamp();
       if (latestCompaction.isPresent()) {
         LOG.info("Limiting archiving of instants to last compaction on metadata table at " + latestCompaction.get());
         instants = instants.filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(), HoodieTimeline.LESSER_THAN,
@@ -213,7 +216,7 @@ public class HoodieTimelineArchiveLog {
 
     // For metadata tables, ensure commits >= latest compaction commit are retained. This is required for
     // metadata table sync.
-    if (HoodieMetadata.isMetadataTable(config.getBasePath())) {
+    if (table.metadata().isMetadataTable(config.getBasePath())) {
       Option<HoodieInstant> latestCompactionInstant =
           table.getActiveTimeline().filterPendingCompactionTimeline().lastInstant();
       if (latestCompactionInstant.isPresent()) {
