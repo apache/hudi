@@ -51,11 +51,6 @@ public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload>
   }
 
   @Override
-  public HoodieAvroPayload preCombine(HoodieAvroPayload another, Schema schema) throws IOException {
-    return this;
-  }
-
-  @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
     return getInsertValue(schema);
   }

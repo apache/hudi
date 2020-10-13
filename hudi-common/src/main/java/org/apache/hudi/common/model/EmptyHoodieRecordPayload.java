@@ -24,8 +24,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
-import java.io.IOException;
-
 /**
  * Empty payload used for deletions.
  */
@@ -39,11 +37,6 @@ public class EmptyHoodieRecordPayload implements HoodieRecordPayload<EmptyHoodie
 
   @Override
   public EmptyHoodieRecordPayload preCombine(EmptyHoodieRecordPayload another) {
-    return another;
-  }
-
-  @Override
-  public EmptyHoodieRecordPayload preCombine(EmptyHoodieRecordPayload another, Schema schema) throws IOException {
     return another;
   }
 

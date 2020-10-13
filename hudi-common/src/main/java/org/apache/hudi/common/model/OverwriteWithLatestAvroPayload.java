@@ -26,7 +26,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
-import java.util.List;
 
 /**
  * Default payload used for delta streamer.
@@ -48,26 +47,6 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
   }
 
   @Override
-  public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload another,Schema schema) throws IOException {
-    // pick the payload with greatest ordering value and aggregate all the fields,choosing the
-    // value that is not null
-    GenericRecord thisValue = (GenericRecord) HoodieAvroUtils.bytesToAvro(this.recordBytes, schema);
-    GenericRecord anotherValue = (GenericRecord) HoodieAvroUtils.bytesToAvro(another.recordBytes,schema);
-    List<Schema.Field> fields = schema.getFields();
-
-    if (another.orderingVal.compareTo(orderingVal) > 0) {
-      GenericRecord anotherRoc = combineAllFields(fields,anotherValue,thisValue);
-      another.recordBytes = HoodieAvroUtils.avroToBytes(anotherRoc);
-      return another;
-    } else {
-      GenericRecord thisRoc = combineAllFields(fields,thisValue,anotherValue);
-      this.recordBytes = HoodieAvroUtils.avroToBytes(thisRoc);
-      return this;
-    }
-
-  }
-
-  @Override
   public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload another) {
     // pick the payload with greatest ordering value
     if (another.orderingVal.compareTo(orderingVal) > 0) {
@@ -75,18 +54,6 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
     } else {
       return this;
     }
-  }
-
-  public GenericRecord combineAllFields(List<Schema.Field> fields,GenericRecord priorRec,GenericRecord inferiorRoc) {
-    for (int i = 0; i < fields.size(); i++) {
-      Object priorValue = priorRec.get(fields.get(i).name());
-      Object inferiorValue = inferiorRoc.get(fields.get(i).name());
-      Object defaultVal = fields.get(i).defaultVal();
-      if (overwriteField(priorValue,defaultVal) && !overwriteField(inferiorValue,defaultVal)) {
-        priorRec.put(fields.get(i).name(), inferiorValue);
-      }
-    }
-    return priorRec;
   }
 
   @Override

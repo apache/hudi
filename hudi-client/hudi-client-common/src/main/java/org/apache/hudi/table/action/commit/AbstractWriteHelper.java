@@ -40,7 +40,7 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
                                       int shuffleParallelism,
                                       BaseCommitActionExecutor<T, I, K, O, R> executor,
                                       boolean performTagging) {
-    return write(instantTime, inputRecords, context, table, shouldCombine, shuffleParallelism,false,
+    return write(instantTime, inputRecords, context, table, shouldCombine, shuffleParallelism,
             null, executor, performTagging);
   }
 
@@ -49,15 +49,14 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
                                       HoodieEngineContext context,
                                       HoodieTable<T, I, K, O> table,
                                       boolean shouldCombine,
-                                      int shuffleParallelism, boolean precombineAgg,
+                                      int shuffleParallelism,
                                       Option<String> schema,
                                       BaseCommitActionExecutor<T, I, K, O, R> executor,
                                       boolean performTagging) {
     try {
       // De-dupe/merge if needed
       I dedupedRecords =
-          combineOnCondition(shouldCombine, inputRecordsRDD, shuffleParallelism, table,
-                  precombineAgg, schema);
+          combineOnCondition(shouldCombine, inputRecordsRDD, shuffleParallelism, table, schema);
 
       Instant lookupBegin = Instant.now();
       I taggedRecords = dedupedRecords;
@@ -85,9 +84,8 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
   }
 
   public I combineOnCondition(
-      boolean condition, I records, int parallelism, HoodieTable<T, I, K, O> table,
-      boolean precombineAgg, Option<String> schema) {
-    return condition ? deduplicateRecords(records, table, parallelism, precombineAgg, schema) : records;
+      boolean condition, I records, int parallelism, HoodieTable<T, I, K, O> table, Option<String> schema) {
+    return condition ? deduplicateRecords(records, table, parallelism, schema) : records;
   }
 
   /**
@@ -98,10 +96,10 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
    * @return Collection of HoodieRecord already be deduplicated
    */
   public I deduplicateRecords(
-      I records, HoodieTable<T, I, K, O> table, int parallelism, boolean precombineAgg, Option<String> schema) {
-    return deduplicateRecords(records, table.getIndex(), parallelism, precombineAgg, schema);
+      I records, HoodieTable<T, I, K, O> table, int parallelism, Option<String> schema) {
+    return deduplicateRecords(records, table.getIndex(), parallelism, schema);
   }
 
   public abstract I deduplicateRecords(
-      I records, HoodieIndex<T, I, K, O> index, int parallelism, boolean precombineAgg, Option<String> schema);
+      I records, HoodieIndex<T, I, K, O> index, int parallelism, Option<String> schema);
 }

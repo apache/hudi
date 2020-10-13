@@ -51,7 +51,7 @@ public class SparkWriteHelper<T extends HoodieRecordPayload,R> extends AbstractW
   @Override
   public JavaRDD<HoodieRecord<T>> deduplicateRecords(JavaRDD<HoodieRecord<T>> records,
                                                      HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> index,
-                                                     int parallelism, boolean precombineAgg, Option<String> schema) {
+                                                     int parallelism, Option<String> schema) {
     boolean isIndexingGlobal = index.isGlobal();
     return records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
@@ -60,8 +60,8 @@ public class SparkWriteHelper<T extends HoodieRecordPayload,R> extends AbstractW
       return new Tuple2<>(key, record);
     }).reduceByKey((rec1, rec2) -> {
       @SuppressWarnings("unchecked")
-      T reducedData = precombineAgg && !schema.get().isEmpty() ? (T) rec1.getData().preCombine(rec2.getData(),
-              new Schema.Parser().parse(schema.get())) : (T) rec1.getData().preCombine(rec2.getData());
+      T reducedData = !schema.get().isEmpty() ? (T) rec1.getData().preCombine(rec2.getData(), new Schema.Parser().parse(schema.get()))
+                      : (T) rec1.getData().preCombine(rec2.getData());
       // we cannot allow the user to change the key or partitionPath, since that will affect
       // everything
       // so pick it from one of the records.

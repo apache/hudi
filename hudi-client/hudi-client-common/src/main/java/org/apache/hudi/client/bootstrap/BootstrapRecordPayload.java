@@ -25,8 +25,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
-import java.io.IOException;
-
 public class BootstrapRecordPayload implements HoodieRecordPayload<BootstrapRecordPayload> {
 
   private final GenericRecord record;
@@ -37,11 +35,6 @@ public class BootstrapRecordPayload implements HoodieRecordPayload<BootstrapReco
 
   @Override
   public BootstrapRecordPayload preCombine(BootstrapRecordPayload another) {
-    return this;
-  }
-
-  @Override
-  public BootstrapRecordPayload preCombine(BootstrapRecordPayload another, Schema schema) throws IOException {
     return this;
   }
 
