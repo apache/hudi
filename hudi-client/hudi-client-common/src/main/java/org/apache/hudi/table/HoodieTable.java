@@ -102,11 +102,11 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     this.viewManager = FileSystemViewManager.createViewManager(hadoopConfiguration,
         config.getViewStorageConfig());
     this.metaClient = metaClient;
-    this.index = getIndex(config);
+    this.index = getIndex(config, context);
     this.taskContextSupplier = context.getTaskContextSupplier();
   }
 
-  protected abstract HoodieIndex<T, I, K, O> getIndex(HoodieWriteConfig config);
+  protected abstract HoodieIndex<T, I, K, O> getIndex(HoodieWriteConfig config, HoodieEngineContext context);
 
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {

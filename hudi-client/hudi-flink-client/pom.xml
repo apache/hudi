@@ -38,6 +38,16 @@
       <version>${parent.version}</version>
     </dependency>
 
+    <!-- Flink -->
+    <dependency>
+      <groupId>org.apache.flink</groupId>
+      <artifactId>flink-streaming-java_${scala.binary.version}</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.flink</groupId>
+      <artifactId>flink-clients_${scala.binary.version}</artifactId>
+    </dependency>
+
     <!-- Parquet -->
     <dependency>
       <groupId>org.apache.parquet</groupId>
