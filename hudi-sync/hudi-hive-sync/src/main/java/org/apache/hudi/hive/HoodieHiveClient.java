@@ -239,7 +239,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
 
   void updateTableDefinition(String tableName, MessageType newSchema) {
     try {
-      String newSchemaStr = HiveSchemaUtil.generateSchemaString(newSchema, syncConfig.partitionFields);
+      String newSchemaStr = HiveSchemaUtil.generateSchemaString(newSchema, syncConfig.partitionFields, syncConfig.supportTimestamp);
       // Cascade clause should not be present for non-partitioned tables
       String cascadeClause = syncConfig.partitionFields.size() > 0 ? " cascade" : "";
       StringBuilder sqlBuilder = new StringBuilder("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)

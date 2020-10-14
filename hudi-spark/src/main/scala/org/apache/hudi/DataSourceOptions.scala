@@ -302,6 +302,7 @@ object DataSourceWriteOptions {
   val HIVE_USE_JDBC_OPT_KEY = "hoodie.datasource.hive_sync.use_jdbc"
   val HIVE_AUTO_CREATE_DATABASE_OPT_KEY = "hoodie.datasource.hive_sync.auto_create_database"
   val HIVE_SKIP_RO_SUFFIX = "hoodie.datasource.hive_sync.skip_ro_suffix"
+  val HIVE_SUPPORT_TIMESTAMP = "hoodie.datasource.hive_sync.support_timestamp"
 
   // DEFAULT FOR HIVE SPECIFIC CONFIGS
   val DEFAULT_HIVE_SYNC_ENABLED_OPT_VAL = "false"
@@ -319,6 +320,7 @@ object DataSourceWriteOptions {
   val DEFAULT_HIVE_USE_JDBC_OPT_VAL = "true"
   val DEFAULT_HIVE_AUTO_CREATE_DATABASE_OPT_KEY = "true"
   val DEFAULT_HIVE_SKIP_RO_SUFFIX_VAL = "false"
+  val DEFAULT_HIVE_SUPPORT_TIMESTAMP = "false"
 
   // Async Compaction - Enabled by default for MOR
   val ASYNC_COMPACT_ENABLE_OPT_KEY = "hoodie.datasource.compaction.async.enable"
