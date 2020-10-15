@@ -45,7 +45,7 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
     SchemaProvider provider =
         UtilHelpers.wrapSchemaProviderWithPostProcessor(
         UtilHelpers.createSchemaProvider(DummySchemaProvider.class.getName(), properties, jsc),
-            properties, jsc);
+            properties, jsc ,null);
 
     Schema schema = provider.getSourceSchema();
     assertEquals(schema.getType(), Type.RECORD);

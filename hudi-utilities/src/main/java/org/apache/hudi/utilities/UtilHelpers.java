@@ -37,12 +37,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
-import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
-import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
-import org.apache.hudi.utilities.schema.SchemaPostProcessor;
+import org.apache.hudi.utilities.schema.*;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor.Config;
-import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
 import org.apache.hudi.utilities.sources.JsonKafkaSource;
 import org.apache.hudi.utilities.sources.Source;
@@ -404,7 +400,7 @@ public class UtilHelpers {
   }
 
   public static SchemaProviderWithPostProcessor wrapSchemaProviderWithPostProcessor(SchemaProvider provider,
-      TypedProperties cfg, JavaSparkContext jssc) {
+      TypedProperties cfg, JavaSparkContext jssc, List<String> transformerClassNames) {
 
     if (provider == null) {
       return null;
@@ -413,7 +409,12 @@ public class UtilHelpers {
     if (provider instanceof  SchemaProviderWithPostProcessor) {
       return (SchemaProviderWithPostProcessor)provider;
     }
+
     String schemaPostProcessorClass = cfg.getString(Config.SCHEMA_POST_PROCESSOR_PROP, null);
+    if (!transformerClassNames.isEmpty()) {
+      schemaPostProcessorClass = cfg.getString(Config.SCHEMA_POST_PROCESSOR_PROP, SparkAvroPostProcessor.class.getName());
+    }
+
     return new SchemaProviderWithPostProcessor(provider,
         Option.ofNullable(createSchemaPostProcessor(schemaPostProcessorClass, cfg, jssc)));
   }
@@ -421,6 +422,6 @@ public class UtilHelpers {
   public static SchemaProvider createRowBasedSchemaProvider(StructType structType,
       TypedProperties cfg, JavaSparkContext jssc) {
     SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
-    return wrapSchemaProviderWithPostProcessor(rowSchemaProvider, cfg, jssc);
+    return wrapSchemaProviderWithPostProcessor(rowSchemaProvider, cfg, jssc, null);
   }
 }
