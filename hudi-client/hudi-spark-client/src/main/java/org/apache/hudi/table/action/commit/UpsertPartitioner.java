@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.NumericUtils;
@@ -115,17 +114,28 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
     for (Map.Entry<String, WorkloadStat> partitionStat : partitionStatEntries) {
       for (Map.Entry<String, Pair<String, Long>> updateLocEntry :
           partitionStat.getValue().getUpdateLocationToCount().entrySet()) {
-        addUpdateBucket(partitionStat.getKey(), updateLocEntry.getKey(), profile.getOperationType());
+        addUpdateBucket(partitionStat.getKey(), updateLocEntry.getKey());
       }
     }
   }
 
-  private int addUpdateBucket(String partitionPath, String fileIdHint, WriteOperationType operationType) {
+  private int addUpdateBucket(String partitionPath, String fileIdHint) {
     int bucket = totalBuckets;
     updateLocationToBucket.put(fileIdHint, bucket);
     BucketInfo bucketInfo = new BucketInfo();
-    bucketInfo.bucketType = operationType == null || isChangingRecords(operationType)
-         ? BucketType.UPDATE : BucketType.INSERT;
+    bucketInfo.bucketType = BucketType.UPDATE;
+    bucketInfo.fileIdPrefix = fileIdHint;
+    bucketInfo.partitionPath = partitionPath;
+    bucketInfoMap.put(totalBuckets, bucketInfo);
+    totalBuckets++;
+    return bucket;
+  }
+
+  private int addInsertBucket(String partitionPath, String fileIdHint) {
+    int bucket = totalBuckets;
+    updateLocationToBucket.put(fileIdHint, bucket);
+    BucketInfo bucketInfo = new BucketInfo();
+    bucketInfo.bucketType = BucketType.INSERT;
     bucketInfo.fileIdPrefix = fileIdHint;
     bucketInfo.partitionPath = partitionPath;
     bucketInfoMap.put(totalBuckets, bucketInfo);
@@ -203,7 +213,9 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
               bucket = updateLocationToBucket.get(smallFile.location.getFileId());
               LOG.info("Assigning " + recordsToAppend + " inserts to existing update bucket " + bucket);
             } else {
-              bucket = addUpdateBucket(partitionPath, smallFile.location.getFileId(), profile.getOperationType());
+              bucket = profile.getOperationType() == null || isChangingRecords(profile.getOperationType())
+                      ? addUpdateBucket(partitionPath, smallFile.location.getFileId())
+                      : addInsertBucket(partitionPath, smallFile.location.getFileId());
               LOG.info("Assigning " + recordsToAppend + " inserts to new update bucket " + bucket);
             }
             bucketNumbers.add(bucket);

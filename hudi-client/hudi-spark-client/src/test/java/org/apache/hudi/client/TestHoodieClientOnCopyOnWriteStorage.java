@@ -895,6 +895,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertNoWriteErrors(statuses);
     assertPartitionMetadata(new String[]{testPartitionPath}, fs);
     assertEquals(1, statuses.size(), "Just 1 file needs to be added.");
+    String file1 = statuses.get(0).getFileId();
     assertEquals(100,
         readRowKeysFromParquet(hadoopConf, new Path(basePath, statuses.get(0).getStat().getPath()))
             .size(), "file should contain 100 records");
@@ -907,6 +908,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     statuses = client.insert(insertRecordsRDD2, commitTime2).collect();
     assertNoWriteErrors(statuses);
     assertEquals(1, statuses.size(), "Just 1 file needs to be added.");
+    assertEquals(file1 + "-0", statuses.get(0).getFileId(), "Small file should be added");
+    assertEquals("null", statuses.get(0).getStat().getPrevCommit(), "Small file should be added");
     Path newFile = new Path(basePath, statuses.get(0).getStat().getPath());
     assertEquals(40, readRowKeysFromParquet(hadoopConf, newFile).size(),
         "file should contain 40 records");
