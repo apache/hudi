@@ -22,15 +22,20 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor.Config;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.SchemaBuilder;
+import org.apache.hudi.utilities.transform.AddColumnTransform;
+
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -45,7 +50,24 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
     SchemaProvider provider =
         UtilHelpers.wrapSchemaProviderWithPostProcessor(
         UtilHelpers.createSchemaProvider(DummySchemaProvider.class.getName(), properties, jsc),
-            properties, jsc ,null);
+            properties, jsc,null);
+
+    Schema schema = provider.getSourceSchema();
+    assertEquals(schema.getType(), Type.RECORD);
+    assertEquals(schema.getName(), "test");
+    assertNotNull(schema.getField("testString"));
+  }
+
+  @Test
+  public void testSparkAvro() throws IOException {
+    properties.put(Config.SCHEMA_POST_PROCESSOR_PROP, SparkAvroPostProcessor.class.getName());
+    List<String> transformerClassNames = new ArrayList<>();
+    transformerClassNames.add(AddColumnTransform.class.getName());
+
+    SchemaProvider provider =
+            UtilHelpers.wrapSchemaProviderWithPostProcessor(
+                    UtilHelpers.createSchemaProvider(SparkAvroSchemaProvider.class.getName(), properties, jsc),
+                    properties, jsc, transformerClassNames);
 
     Schema schema = provider.getSourceSchema();
     assertEquals(schema.getType(), Type.RECORD);
