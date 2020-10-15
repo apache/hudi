@@ -131,16 +131,13 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
     return bucket;
   }
 
-  private int addInsertBucket(String partitionPath, String fileIdHint) {
-    int bucket = totalBuckets;
-    updateLocationToBucket.put(fileIdHint, bucket);
+  private void addInsertBucket(String partitionPath) {
     BucketInfo bucketInfo = new BucketInfo();
     bucketInfo.bucketType = BucketType.INSERT;
-    bucketInfo.fileIdPrefix = fileIdHint;
+    bucketInfo.fileIdPrefix = FSUtils.createNewFileIdPfx();
     bucketInfo.partitionPath = partitionPath;
     bucketInfoMap.put(totalBuckets, bucketInfo);
     totalBuckets++;
-    return bucket;
   }
 
   /**
@@ -212,11 +209,13 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
                     && updateLocationToBucket.containsKey(smallFile.location.getFileId())) {
               bucket = updateLocationToBucket.get(smallFile.location.getFileId());
               LOG.info("Assigning " + recordsToAppend + " inserts to existing update bucket " + bucket);
-            } else {
-              bucket = profile.getOperationType() == null || isChangingRecords(profile.getOperationType())
-                      ? addUpdateBucket(partitionPath, smallFile.location.getFileId())
-                      : addInsertBucket(partitionPath, smallFile.location.getFileId());
+            } else if (profile.getOperationType() == null || isChangingRecords(profile.getOperationType())) {
+              bucket = addUpdateBucket(partitionPath, smallFile.location.getFileId());
               LOG.info("Assigning " + recordsToAppend + " inserts to new update bucket " + bucket);
+            } else {
+              bucket = totalBuckets;
+              addInsertBucket(partitionPath);
+              LOG.info("Assigning " + recordsToAppend + " inserts to new insert bucket " + bucket);
             }
             bucketNumbers.add(bucket);
             recordsPerBucket.add(recordsToAppend);
@@ -236,17 +235,8 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
               + ", totalInsertBuckets => " + insertBuckets + ", recordsPerBucket => " + insertRecordsPerBucket);
           for (int b = 0; b < insertBuckets; b++) {
             bucketNumbers.add(totalBuckets);
-            if (b < insertBuckets - 1) {
-              recordsPerBucket.add(insertRecordsPerBucket);
-            } else {
-              recordsPerBucket.add(totalUnassignedInserts - (insertBuckets - 1) * insertRecordsPerBucket);
-            }
-            BucketInfo bucketInfo = new BucketInfo();
-            bucketInfo.bucketType = BucketType.INSERT;
-            bucketInfo.partitionPath = partitionPath;
-            bucketInfo.fileIdPrefix = FSUtils.createNewFileIdPfx();
-            bucketInfoMap.put(totalBuckets, bucketInfo);
-            totalBuckets++;
+            recordsPerBucket.add(totalUnassignedInserts / insertBuckets);
+            addInsertBucket(partitionPath);
           }
         }
 

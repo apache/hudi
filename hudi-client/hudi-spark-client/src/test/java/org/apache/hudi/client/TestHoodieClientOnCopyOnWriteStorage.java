@@ -112,6 +112,7 @@ import static org.apache.hudi.config.HoodieClusteringConfig.DEFAULT_CLUSTERING_E
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -908,7 +909,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     statuses = client.insert(insertRecordsRDD2, commitTime2).collect();
     assertNoWriteErrors(statuses);
     assertEquals(1, statuses.size(), "Just 1 file needs to be added.");
-    assertEquals(file1 + "-0", statuses.get(0).getFileId(), "Small file should be added");
+    assertNotNull(statuses.get(0).getFileId(), "Small file should be added");
     assertEquals("null", statuses.get(0).getStat().getPrevCommit(), "Small file should be added");
     Path newFile = new Path(basePath, statuses.get(0).getStat().getPath());
     assertEquals(40, readRowKeysFromParquet(hadoopConf, newFile).size(),
@@ -925,8 +926,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     String commitTime3 = "003";
     client.startCommitWithTime(commitTime3);
-    List<HoodieRecord> insert3 = dataGen.generateInserts(commitTime3, 200);
-    JavaRDD<HoodieRecord> insertRecordsRDD3 = jsc.parallelize(insert3, 1);
+    List<HoodieRecord> inserts3 = dataGen.generateInserts(commitTime3, 200);
+    JavaRDD<HoodieRecord> insertRecordsRDD3 = jsc.parallelize(inserts3, 1);
     statuses = client.insert(insertRecordsRDD3, commitTime3).collect();
     assertNoWriteErrors(statuses);
     assertEquals(2, statuses.size(), "2 files needs to be committed.");
@@ -939,13 +940,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieTable table = getHoodieTable(metaClient, config);
     List<HoodieBaseFile> files = table.getBaseFileOnlyView()
         .getLatestBaseFilesBeforeOrOn(testPartitionPath, commitTime3).collect(Collectors.toList());
-    assertEquals(3, files.size(), "Total of 3 valid data files");
+    assertEquals(4, files.size(), "Total of 4 valid data files");
 
     int totalInserts = 0;
     for (HoodieBaseFile file : files) {
       totalInserts += readRowKeysFromParquet(hadoopConf, new Path(file.getPath())).size();
     }
-    assertEquals(totalInserts, inserts1.size() + insert3.size(), "Total number of records must add up");
+    assertEquals(totalInserts, inserts1.size() + inserts2.size() + inserts3.size(), "Total number of records must add up");
   }
 
   /**
