@@ -63,9 +63,9 @@
               </transformers>
               <artifactSet>
                 <includes>
-                  <include>com.yammer.metrics:metrics-core</include>
                   <include>org.apache.hudi:hudi-common</include>
-                  <include>org.apache.hudi:hudi-client</include>
+                  <include>org.apache.hudi:hudi-client-common</include>
+                  <include>org.apache.hudi:hudi-spark-client</include>
                   <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-hive-sync</include>
                   <include>org.apache.hudi:hudi-sync-common</include>
@@ -95,6 +95,7 @@
                   <include>io.prometheus:simpleclient_pushgateway</include>
                   <include>io.prometheus:simpleclient_common</include>
                   <include>com.yammer.metrics:metrics-core</include>
+                  <include>com.google.guava:guava</include>
 
                   <include>org.apache.spark:spark-avro_${scala.binary.version}</include>
                   <include>org.apache.hive:hive-common</include>
@@ -156,20 +157,12 @@
                   <shadedPattern>org.apache.hudi.com.codahale.metrics.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.commons.codec.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.commons.codec.</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>org.eclipse.jetty.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.jetty.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.hadoop.hbase.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.htrace.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
+                  <pattern>com.google.common.</pattern>
+                  <shadedPattern>${spark.bundle.spark.shade.prefix}com.google.common.</shadedPattern>
                 </relocation>
                 <!-- TODO: Revisit GH ISSUE #533 & PR#633-->
               </relocations>
@@ -209,7 +202,12 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-client</artifactId>
+      <artifactId>hudi-client-common</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-spark-client</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>

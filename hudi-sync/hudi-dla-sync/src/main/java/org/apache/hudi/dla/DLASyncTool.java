@@ -159,7 +159,7 @@ public class DLASyncTool extends AbstractSyncTool {
     } else {
       // Check if the table schema has evolved
       Map<String, String> tableSchema = hoodieDLAClient.getTableSchema(tableName);
-      SchemaDifference schemaDiff = HiveSchemaUtil.getSchemaDifference(schema, tableSchema, cfg.partitionFields);
+      SchemaDifference schemaDiff = HiveSchemaUtil.getSchemaDifference(schema, tableSchema, cfg.partitionFields, cfg.supportTimestamp);
       if (!schemaDiff.isEmpty()) {
         LOG.info("Schema difference found for " + tableName);
         hoodieDLAClient.updateTableDefinition(tableName, schemaDiff);

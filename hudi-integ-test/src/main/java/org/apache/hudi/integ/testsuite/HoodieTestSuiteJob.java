@@ -156,8 +156,7 @@ public class HoodieTestSuiteJob {
     public String inputBasePath;
 
     @Parameter(names = {
-        "--workload-generator-classname"}, description = "WorkflowDag of operations to generate the workload",
-        required = true)
+        "--workload-generator-classname"}, description = "WorkflowDag of operations to generate the workload")
     public String workloadDagGenerator = WorkflowDagGenerator.class.getName();
 
     @Parameter(names = {
@@ -177,8 +176,7 @@ public class HoodieTestSuiteJob {
     public Long limitFileSize = 1024 * 1024 * 120L;
 
     @Parameter(names = {"--use-deltastreamer"}, description = "Choose whether to use HoodieDeltaStreamer to "
-        + "perform"
-        + " ingestion. If set to false, HoodieWriteClient will be used")
+        + "perform ingestion. If set to false, HoodieWriteClient will be used")
     public Boolean useDeltaStreamer = false;
 
   }

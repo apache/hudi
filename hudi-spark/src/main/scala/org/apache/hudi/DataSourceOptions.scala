@@ -109,6 +109,15 @@ object DataSourceReadOptions {
   val END_INSTANTTIME_OPT_KEY = "hoodie.datasource.read.end.instanttime"
 
   /**
+    * If use the end instant schema when incrementally fetched data to.
+    *
+    * Default: false (use latest instant schema)
+    *
+    */
+  val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY = "hoodie.datasource.read.schema.use.end.instanttime"
+  val DEFAULT_INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_VAL = "false"
+
+  /**
     * For use-cases like DeltaStreamer which reads from Hoodie Incremental table and applies opaque map functions,
     * filters appearing late in the sequence of transformations cannot be automatically pushed down.
     * This option allows setting filters directly on Hoodie Source
@@ -142,6 +151,7 @@ object DataSourceWriteOptions {
   val UPSERT_OPERATION_OPT_VAL = WriteOperationType.UPSERT.value
   val DELETE_OPERATION_OPT_VAL = WriteOperationType.DELETE.value
   val BOOTSTRAP_OPERATION_OPT_VAL = WriteOperationType.BOOTSTRAP.value
+  val INSERT_OVERWRITE_OPERATION_OPT_VAL = WriteOperationType.INSERT_OVERWRITE.value
   val DEFAULT_OPERATION_OPT_VAL = UPSERT_OPERATION_OPT_VAL
 
   /**
@@ -290,7 +300,9 @@ object DataSourceWriteOptions {
   val HIVE_ASSUME_DATE_PARTITION_OPT_KEY = "hoodie.datasource.hive_sync.assume_date_partitioning"
   val HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY = "hoodie.datasource.hive_sync.use_pre_apache_input_format"
   val HIVE_USE_JDBC_OPT_KEY = "hoodie.datasource.hive_sync.use_jdbc"
+  val HIVE_AUTO_CREATE_DATABASE_OPT_KEY = "hoodie.datasource.hive_sync.auto_create_database"
   val HIVE_SKIP_RO_SUFFIX = "hoodie.datasource.hive_sync.skip_ro_suffix"
+  val HIVE_SUPPORT_TIMESTAMP = "hoodie.datasource.hive_sync.support_timestamp"
 
   // DEFAULT FOR HIVE SPECIFIC CONFIGS
   val DEFAULT_HIVE_SYNC_ENABLED_OPT_VAL = "false"
@@ -306,7 +318,9 @@ object DataSourceWriteOptions {
   val DEFAULT_HIVE_ASSUME_DATE_PARTITION_OPT_VAL = "false"
   val DEFAULT_USE_PRE_APACHE_INPUT_FORMAT_OPT_VAL = "false"
   val DEFAULT_HIVE_USE_JDBC_OPT_VAL = "true"
+  val DEFAULT_HIVE_AUTO_CREATE_DATABASE_OPT_KEY = "true"
   val DEFAULT_HIVE_SKIP_RO_SUFFIX_VAL = "false"
+  val DEFAULT_HIVE_SUPPORT_TIMESTAMP = "false"
 
   // Async Compaction - Enabled by default for MOR
   val ASYNC_COMPACT_ENABLE_OPT_KEY = "hoodie.datasource.compaction.async.enable"

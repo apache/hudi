@@ -21,7 +21,7 @@ package org.apache.hudi.cli.utils;
 import org.apache.hudi.cli.HoodieCliSparkConfig;
 import org.apache.hudi.cli.commands.SparkEnvCommand;
 import org.apache.hudi.cli.commands.SparkMain;
-import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -40,7 +40,7 @@ import java.util.Objects;
  */
 public class SparkUtil {
 
-  private static final String DEFAULT_SPARK_MASTER = "yarn-client";
+  private static final String DEFAULT_SPARK_MASTER = "yarn";
 
   /**
    * TODO: Need to fix a bunch of hardcoded stuff here eg: history server, spark distro.
@@ -91,7 +91,7 @@ public class SparkUtil {
     sparkConf.set(HoodieCliSparkConfig.CLI_MAPRED_OUTPUT_COMPRESSION_CODEC, "org.apache.hadoop.io.compress.GzipCodec");
     sparkConf.set(HoodieCliSparkConfig.CLI_MAPRED_OUTPUT_COMPRESSION_TYPE, "BLOCK");
 
-    HoodieWriteClient.registerClasses(sparkConf);
+    SparkRDDWriteClient.registerClasses(sparkConf);
     JavaSparkContext jsc = new JavaSparkContext(sparkConf);
     jsc.hadoopConfiguration().setBoolean(HoodieCliSparkConfig.CLI_PARQUET_ENABLE_SUMMARY_METADATA, false);
     FSUtils.prepareHadoopConf(jsc.hadoopConfiguration());

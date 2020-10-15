@@ -31,7 +31,7 @@ import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskCont
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.{AvroDeserializer, AvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeProjection, UnsafeRow}
+import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
