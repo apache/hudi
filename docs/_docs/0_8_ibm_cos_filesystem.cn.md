@@ -29,6 +29,11 @@ For example, using HMAC keys and service name `myCOS`:
   </property>
 
   <property>
+      <name>fs.cos.flat.list</name>
+      <value>true</value>
+  </property>
+
+  <property>
 	  <name>fs.stocator.scheme.list</name>
 	  <value>cos</value>
   </property>
