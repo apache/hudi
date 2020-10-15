@@ -121,6 +121,8 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
 
 16. ["Panel Discussion on Presto Ecosystem"](https://www.youtube.com/watch?v=lsFSM2Z4kPs) - By Vinoth Chandar, Sep 2020, PrestoCon ["panel"](https://prestocon2020.sched.com/event/dgyw).
 
+17. ["Next Generation Data lakes using Apache Hudi"](https://docs.google.com/presentation/d/1y-ryRwCdTbqQHGr_bn3lxM_B8L1L5nsZOIXlJsDl_wU/edit?usp=sharing) - By Balaji Varadarajan and Sivabalan Narayanan, Sep 2020, ["ApacheCon"](https://www.apachecon.com/)
+
 ## Articles
 
 1. ["The Case for incremental processing on Hadoop"](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop) - O'reilly Ideas article by Vinoth Chandar
