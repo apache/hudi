@@ -22,6 +22,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -29,21 +32,18 @@ import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Validate node to compare input and hudi content.
- */
-public class ValidateDatasetNode extends DagNode<Boolean> {
+public class ValidatePartialDatasetNode extends DagNode<Boolean> {
 
   private static Logger log = LoggerFactory.getLogger(ValidateDatasetNode.class);
 
-  public ValidateDatasetNode(Config config) {
+  public ValidatePartialDatasetNode(Config config) {
     this.config = config;
   }
 
   @Override
   public void execute(ExecutionContext context) throws Exception {
 
-    SparkConf sparkConf = new SparkConf().setAppName("ValidateApp").setMaster("local");
+    SparkConf sparkConf = new SparkConf().setAppName("ValidateApp").setMaster("local[2]");
     SparkSession spark = SparkSession
         .builder()
         .config(sparkConf)
@@ -52,21 +52,33 @@ public class ValidateDatasetNode extends DagNode<Boolean> {
     String inputPath = context.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/../input/*/*";
     String hudiPath = context.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/*/*/*";
     log.warn("ValidateDataset Node: Input path " + inputPath + ", hudi path " + hudiPath);
+    String inputPathStr = context.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/../input/";
+    FileSystem fs = new Path(inputPathStr)
+        .getFileSystem(context.getHoodieTestSuiteWriter().getConfiguration());
+    FileStatus[] fileStatuses = fs.listStatus(new Path(inputPathStr));
+    for (FileStatus fileStatus : fileStatuses) {
+      log.warn("Micro batch available to be validated : " + fileStatus.getPath().toString());
+    }
     Dataset<Row> inputDf = spark.read().format("avro").load(inputPath);
     Dataset<Row> hudiDf = spark.read().format("hudi").load(hudiPath);
     Dataset<Row> trimmedDf = hudiDf.drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
         .drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.FILENAME_METADATA_FIELD);
-    if (inputDf.except(trimmedDf).count() != 0) {
+
+    Dataset<Row> intersectionDf = inputDf.intersect(trimmedDf);
+    // the intersected df should be same as inputDf. if not, there is some mismatch.
+    if (inputDf.except(intersectionDf).count() != 0) {
       log.error("Data set validation failed. Total count in hudi " + trimmedDf.count() + ", input df count " + inputDf.count());
       throw new AssertionError("Hudi contents does not match contents input data. ");
+    } else {
+      // clean up input data for current group of writes.
+      inputPathStr = context.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/../input/";
+      fs = new Path(inputPathStr)
+          .getFileSystem(context.getHoodieTestSuiteWriter().getConfiguration());
+      fileStatuses = fs.listStatus(new Path(inputPathStr));
+      for (FileStatus fileStatus : fileStatuses) {
+        log.warn("Micro batch to be deleted " + fileStatus.getPath().toString());
+        fs.delete(fileStatus.getPath(), true);
+      }
     }
-
-    /*Dataset<Row> cowDf = spark.sql("SELECT * FROM testdb.table1");
-    Dataset<Row> trimmedCowDf = cowDf.drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
-        .drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.FILENAME_METADATA_FIELD);
-    if (inputDf.except(trimmedCowDf).count() != 0) {
-      log.error("Data set validation failed for COW table. Total count in hudi " + trimmedCowDf.count() + ", input df count " + inputDf.count());
-      throw new AssertionError("Hudi contents does not match contents input data. ");
-    }*/
   }
 }
