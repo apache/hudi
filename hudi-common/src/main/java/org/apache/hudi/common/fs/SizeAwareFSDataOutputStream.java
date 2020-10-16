@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.fs;
 
-import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -42,8 +41,6 @@ public class SizeAwareFSDataOutputStream extends FSDataOutputStream {
   private final Path path;
   // Consistency guard
   private final ConsistencyGuard consistencyGuard;
-  // Registry or read and write metrics
-  Registry metricsRegistry;
 
   public SizeAwareFSDataOutputStream(Path path, FSDataOutputStream out, ConsistencyGuard consistencyGuard,
       Runnable closeCallback) throws IOException {
@@ -86,9 +83,5 @@ public class SizeAwareFSDataOutputStream extends FSDataOutputStream {
 
   public long getBytesWritten() {
     return bytesWritten.get();
-  }
-
-  public void setMetricRegistry(Registry metricsRegistry) {
-    this.metricsRegistry = metricsRegistry;
   }
 }

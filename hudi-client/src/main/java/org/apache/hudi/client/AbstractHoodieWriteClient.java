@@ -232,6 +232,11 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     return table;
   }
 
+  protected HoodieTable<T> getTable() {
+    HoodieTableMetaClient metaClient = createMetaClient(true);
+    return HoodieTable.create(metaClient, config, hadoopConf);
+  }
+
   /**
    * Sets write schema from last instant since deletes may not have schema set in the config.
    */
