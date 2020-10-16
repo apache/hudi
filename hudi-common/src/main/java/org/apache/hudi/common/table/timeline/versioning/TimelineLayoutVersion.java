@@ -31,13 +31,13 @@ public class TimelineLayoutVersion implements Serializable, Comparable<TimelineL
   public static final Integer VERSION_0 = 0; // pre 0.5.1  version format
   public static final Integer VERSION_1 = 1; // current version with no renames
 
-  public static final Integer CURR_VERSION = VERSION_0;
+  public static final Integer CURR_VERSION = VERSION_1;
   public static final TimelineLayoutVersion CURR_LAYOUT_VERSION = new TimelineLayoutVersion(CURR_VERSION);
 
   private Integer version;
 
   public TimelineLayoutVersion(Integer version) {
-    ValidationUtils.checkArgument(version <= VERSION_1);
+    ValidationUtils.checkArgument(version <= CURR_VERSION);
     ValidationUtils.checkArgument(version >= VERSION_0);
     this.version = version;
   }
