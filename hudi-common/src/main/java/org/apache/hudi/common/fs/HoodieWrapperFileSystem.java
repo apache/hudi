@@ -74,9 +74,8 @@ public class HoodieWrapperFileSystem extends FileSystem {
   private FileSystem fileSystem;
   private URI uri;
   private ConsistencyGuard consistencyGuard = new NoOpConsistencyGuard();
-  private static Registry metricsRegistry = Registry.getRegistry(HoodieWrapperFileSystem.class.getSimpleName());
-  private static Registry metricsRegistryMetaFolder =
-      Registry.getRegistry(HoodieWrapperFileSystem.class.getSimpleName() + "MetaFolder");
+  private static Registry metricsRegistry;
+  private static Registry metricsRegistryMetaFolder;
 
   @FunctionalInterface
   public interface CheckedFunction<R> {
@@ -89,12 +88,14 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   protected static <R> R executeFuncWithTimeMetrics(String metricName, Path p, CheckedFunction<R> func) throws IOException {
-    Registry registry = getMetricRegistryForPath(p);
-
     long t1 = System.currentTimeMillis();
     R res = func.get();
-    registry.increment(metricName);
-    registry.add(metricName + ".totalDuration", System.currentTimeMillis() - t1);
+
+    Registry registry = getMetricRegistryForPath(p);
+    if (registry != null) {
+      registry.increment(metricName);
+      registry.add(metricName + ".totalDuration", System.currentTimeMillis() - t1);
+    }
 
     return res;
   }
@@ -102,8 +103,16 @@ public class HoodieWrapperFileSystem extends FileSystem {
   protected static <R> R executeFuncWithTimeAndByteMetrics(String metricName, Path p, long byteCount,
                                                            CheckedFunction<R> func) throws IOException {
     Registry registry = getMetricRegistryForPath(p);
-    registry.add(metricName + ".totalBytes", byteCount);
+    if (registry != null) {
+      registry.add(metricName + ".totalBytes", byteCount);
+    }
+
     return executeFuncWithTimeMetrics(metricName, p, func);
+  }
+
+  public static void setMetricsRegistry(Registry registry, Registry registryMeta) {
+    metricsRegistry = registry;
+    metricsRegistryMetaFolder = registryMeta;
   }
 
   public HoodieWrapperFileSystem() {}

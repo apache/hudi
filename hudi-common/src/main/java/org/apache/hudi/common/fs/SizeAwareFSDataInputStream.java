@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.fs;
 
-import org.apache.hudi.common.metrics.Registry;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.ReadOption;
@@ -35,8 +34,6 @@ public class SizeAwareFSDataInputStream extends FSDataInputStream {
 
   // Path
   private final Path path;
-  // Registry or read and write metrics
-  Registry metricsRegistry;
 
   public SizeAwareFSDataInputStream(Path path, FSDataInputStream in) throws IOException {
     super(in);
@@ -85,9 +82,4 @@ public class SizeAwareFSDataInputStream extends FSDataInputStream {
           return null;
         });
   }
-
-  public void setMetricRegistry(Registry metricsRegistry) {
-    this.metricsRegistry = metricsRegistry;
-  }
-
 }

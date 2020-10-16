@@ -62,6 +62,9 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
   public static final String METRICS_REPORTER_CLASS = METRIC_PREFIX + ".reporter.class";
   public static final String DEFAULT_METRICS_REPORTER_CLASS = "";
 
+  // Enable metrics collection from executors
+  public static final String ENABLE_EXECUTOR_METRICS = METRIC_PREFIX + ".executor.enable";
+
   private HoodieMetricsConfig(Properties props) {
     super(props);
   }
@@ -123,6 +126,11 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
 
     public Builder withReporterClass(String className) {
       props.setProperty(METRICS_REPORTER_CLASS, className);
+      return this;
+    }
+
+    public Builder withExecutorMetrics(boolean enable) {
+      props.setProperty(ENABLE_EXECUTOR_METRICS, String.valueOf(enable));
       return this;
     }
 
