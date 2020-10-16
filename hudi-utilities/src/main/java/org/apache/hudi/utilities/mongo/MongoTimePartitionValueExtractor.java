@@ -41,14 +41,17 @@ public class MongoTimePartitionValueExtractor implements PartitionValueExtractor
   public List<String> extractPartitionValuesInPath(String partitionPath) {
     // Partition path is expected to contain "/"
     String[] splits = partitionPath.split("/");
-    if (splits.length != 2) {
+    if (splits.length != 2 && splits.length != 1) {
       throw new HoodieKeyException(
-          "Mongo hourly partition path " + partitionPath + " should contain a backslash");
+          "Mongo hourly partition path " + partitionPath + " should be yyyy-mm-dd or yyyy-mm-dd/HH");
     }
     // Get the partition key values
-    ArrayList<String> values = new ArrayList<>(2);
+    ArrayList<String> values = new ArrayList<>();
     values.add(partValue(splits[0]));
-    values.add(partValue(splits[1]));
+
+    if (splits.length == 2) {
+      values.add(partValue(splits[1]));
+    }
     return values;
   }
 }

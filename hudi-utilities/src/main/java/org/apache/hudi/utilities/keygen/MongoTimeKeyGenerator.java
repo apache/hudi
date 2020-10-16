@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.keygen;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Arrays;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
@@ -35,18 +36,30 @@ import org.bson.types.ObjectId;
  */
 public class MongoTimeKeyGenerator extends KeyGenerator {
 
-  private static final String DATE_FORMAT = "yyyy-MM-dd/HH";
-  private static final String HIVE_DATE_FORMAT = "'dt='yyyy-MM-dd'/hr='HH";
+  private static final String DATE_FORMAT_DEFAULT = "yyyy-MM-dd/HH";
+  private static final String HIVE_DATE_FORMAT_DEFAULT = "'dt='yyyy-MM-dd'/hr='HH";
   private static final String RECORD_KEY = SchemaUtils.ID_FIELD;
   private final boolean hiveStylePartitioning;
   private final SimpleDateFormat dateFormat;
+  private final String outputDateFormat;
+  private final String hiveOutputDateFormat;
+
+  static class Config {
+    private static final String TIMESTAMP_OUTPUT_DATE_FORMAT_PROP =
+        "hoodie.deltastreamer.keygen.timebased.output.dateformat";
+    private static final String HIVE_TIMESTAMP_OUTPUT_DATE_FORMAT_PROP =
+	"hoodie.deltastreamer.keygen.timebased.hive.output.dateformat";
+  }
 
   public MongoTimeKeyGenerator(TypedProperties props) {
     super(props);
     hiveStylePartitioning = props.getBoolean(
         DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY(),
         Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL()));
-    dateFormat = new SimpleDateFormat(hiveStylePartitioning ? HIVE_DATE_FORMAT : DATE_FORMAT);
+
+    this.outputDateFormat = props.getString(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, DATE_FORMAT_DEFAULT);
+    this.hiveOutputDateFormat = props.getString(Config.HIVE_TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, HIVE_DATE_FORMAT_DEFAULT);
+    dateFormat = new SimpleDateFormat(hiveStylePartitioning ? this.hiveOutputDateFormat : this.outputDateFormat);
   }
 
   @Override
