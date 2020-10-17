@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 import java.util.stream.Collectors;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -457,6 +458,8 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
     init(HoodieTableType.COPY_ON_WRITE);
 
     final int maxDeltaCommitsBeforeCompaction = 6;
+    // Test autoClean and asyncClean based on this flag which is randomly chosen.
+    boolean asyncClean = new Random().nextBoolean();
     HoodieWriteConfig config = getWriteConfigBuilder(true, true, false)
         .withMetadataCompactionConfig(HoodieCompactionConfig.newBuilder()
             .archiveCommitsWith(2, 4).retainCommits(1).retainFileVersions(1).withAutoClean(true)
@@ -464,7 +467,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
             .withInlineCompaction(true).withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommitsBeforeCompaction)
             .build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 3)
-            .retainCommits(1).retainFileVersions(1).withAutoClean(false).build())
+            .retainCommits(1).retainFileVersions(1).withAutoClean(true).withAsyncClean(asyncClean).build())
         .build();
     List<HoodieRecord> records;
     HoodieTableMetaClient metaClient = ClientUtils.createMetaClient(jsc.hadoopConfiguration(), config, true);
