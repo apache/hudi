@@ -99,6 +99,7 @@ public class HoodieMetadataReader implements Serializable {
   public static final String VALIDATE_FILES_STR = "validate_files";
   public static final String VALIDATE_ERRORS_STR = "validate_errors";
   public static final String SCAN_STR = "scan";
+  public static final String BASEFILE_READ_STR = "basefile_read";
 
   // Stats names
   public static final String STAT_TOTAL_BASE_FILE_SIZE = "totalBaseFileSizeInBytes";
@@ -116,7 +117,7 @@ public class HoodieMetadataReader implements Serializable {
   protected final SerializableConfiguration hadoopConf;
   protected final String datasetBasePath;
   protected final String metadataBasePath;
-  protected transient Registry metricsRegistry;
+  protected Registry metricsRegistry;
   protected HoodieTableMetaClient metaClient;
   protected boolean enabled;
   private final boolean validateLookups;
@@ -138,6 +139,17 @@ public class HoodieMetadataReader implements Serializable {
    */
   public HoodieMetadataReader(Configuration conf, String datasetBasePath, String spillableMapDirectory,
                               boolean enabled, boolean validateLookups) {
+    this(conf, datasetBasePath, spillableMapDirectory, enabled, validateLookups, false);
+  }
+
+  /**
+   * Create a the Metadata Table in read-only mode.
+   *
+   * @param hadoopConf {@code Configuration}
+   * @param basePath The basePath for the dataset
+   */
+  public HoodieMetadataReader(Configuration conf, String datasetBasePath, String spillableMapDirectory,
+                              boolean enabled, boolean validateLookups, boolean enableMetrics) {
     this.hadoopConf = new SerializableConfiguration(conf);
     this.datasetBasePath = datasetBasePath;
     this.metadataBasePath = getMetadataTableBasePath(datasetBasePath);
@@ -156,6 +168,10 @@ public class HoodieMetadataReader implements Serializable {
       }
     } else {
       LOG.info("Metadata table is disabled.");
+    }
+
+    if (enableMetrics) {
+      metricsRegistry = Registry.getRegistry("HoodieMetadata");
     }
 
     this.enabled = enabled;
@@ -334,10 +350,12 @@ public class HoodieMetadataReader implements Serializable {
     // Retrieve record from base file
     HoodieRecord<HoodieMetadataPayload> hoodieRecord = null;
     if (basefileReader != null) {
+      long t1 = System.currentTimeMillis();
       Option<GenericRecord> baseRecord = basefileReader.getRecordByKey(key);
       if (baseRecord.isPresent()) {
         hoodieRecord = SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) baseRecord.get(),
             metaClient.getTableConfig().getPayloadClass());
+        updateMetrics(BASEFILE_READ_STR, System.currentTimeMillis() - t1);
       }
     }
 
@@ -406,7 +424,7 @@ public class HoodieMetadataReader implements Serializable {
 
     // TODO: The below code may open the metadata to include incomplete instants on the dataset
     logRecordScanner =
-        new HoodieMetadataMergedLogRecordScanner(FSUtils.getFs(datasetBasePath, hadoopConf.get()), metadataBasePath,
+        new HoodieMetadataMergedLogRecordScanner(metaClient.getFs(), metadataBasePath,
             logFilePaths, schema, latestMetaInstantTimestamp, maxMemorySizeInBytes, bufferSize,
             spillableMapDirectory, null);
 
@@ -512,25 +530,29 @@ public class HoodieMetadataReader implements Serializable {
   }
 
   public Map<String, String> getStats(boolean detailed) throws IOException {
+    metaClient.reloadActiveTimeline();
+    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline());
+    return getStats(fsView, detailed);
+  }
+
+  private Map<String, String> getStats(HoodieTableFileSystemView fsView, boolean detailed) throws IOException {
     Map<String, String> stats = new HashMap<>();
-    FileSystem fs = FSUtils.getFs(metadataBasePath, hadoopConf.get());
 
     // Total size of the metadata and count of base/log files
     long totalBaseFileSizeInBytes = 0;
     long totalLogFileSizeInBytes = 0;
     int baseFileCount = 0;
     int logFileCount = 0;
-    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline());
     List<FileSlice> latestSlices = fsView.getLatestFileSlices(METADATA_PARTITION_NAME).collect(Collectors.toList());
 
     for (FileSlice slice : latestSlices) {
       if (slice.getBaseFile().isPresent()) {
-        totalBaseFileSizeInBytes += fs.getFileStatus(new Path(slice.getBaseFile().get().getPath())).getLen();
+        totalBaseFileSizeInBytes += slice.getBaseFile().get().getFileStatus().getLen();
         ++baseFileCount;
       }
       Iterator<HoodieLogFile> it = slice.getLogFiles().iterator();
       while (it.hasNext()) {
-        totalLogFileSizeInBytes += fs.getFileStatus(it.next().getPath()).getLen();
+        totalLogFileSizeInBytes += it.next().getFileStatus().getLen();
         ++logFileCount;
       }
     }
@@ -550,40 +572,33 @@ public class HoodieMetadataReader implements Serializable {
   }
 
   protected void updateMetrics(String action, long durationInMs) {
+    if (metricsRegistry == null) {
+      return;
+    }
+
+    // Update sum of duration and total for count
     String countKey = action + ".count";
-    String durationKey = action + ".duration";
-    Registry registry = getMetricsRegistry();
+    String durationKey = action + ".totalDuration";
+    metricsRegistry.add(countKey, 1);
+    metricsRegistry.add(durationKey, durationInMs);
 
-    // Update average for duration and total for count
-    long existingCount = registry.getAllCounts().getOrDefault(countKey, 0L);
-    long existingDuration = registry.getAllCounts().getOrDefault(durationKey, 0L);
-    long avgDuration = (long)Math.ceil((existingDuration * existingCount + durationInMs) / (existingCount + 1));
-
-    registry.add(countKey, 1);
-    registry.add(durationKey, avgDuration - existingDuration);
-
-    LOG.info(String.format("Updating metadata metrics (%s=%dms, %s=%d)", durationKey, avgDuration, countKey,
-        existingCount + 1));
+    LOG.info(String.format("Updating metadata metrics (%s=%dms, %s=1)", durationKey, durationInMs, countKey));
   }
 
   protected void updateMetrics(long totalBaseFileSizeInBytes, long totalLogFileSizeInBytes, int baseFileCount,
-                            int logFileCount) {
-    LOG.info(String.format("Updating metadata size metrics (basefile.size=%d, logfile.size=%d, basefile.count=%d, "
-        + "logfile.count=%d)", totalBaseFileSizeInBytes, totalLogFileSizeInBytes, baseFileCount, logFileCount));
-
-    Registry registry = getMetricsRegistry();
-    registry.add("basefile.size", totalBaseFileSizeInBytes);
-    registry.add("logfile.size", totalLogFileSizeInBytes);
-    registry.add("basefile.count", baseFileCount);
-    registry.add("logfile.count", logFileCount);
-  }
-
-  private Registry getMetricsRegistry() {
+                               int logFileCount) {
     if (metricsRegistry == null) {
-      metricsRegistry = Registry.getRegistry("HoodieMetadata");
+      return;
     }
 
-    return metricsRegistry;
+    // Update sizes and count for metadata table's data files
+    metricsRegistry.add("basefile.size", totalBaseFileSizeInBytes);
+    metricsRegistry.add("logfile.size", totalLogFileSizeInBytes);
+    metricsRegistry.add("basefile.count", baseFileCount);
+    metricsRegistry.add("logfile.count", logFileCount);
+
+    LOG.info(String.format("Updating metadata size metrics (basefile.size=%d, logfile.size=%d, basefile.count=%d, "
+        + "logfile.count=%d)", totalBaseFileSizeInBytes, totalLogFileSizeInBytes, baseFileCount, logFileCount));
   }
 
   /**
