@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.fs;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -562,22 +561,6 @@ public class FSUtils {
     returnConf.set("fs." + HoodieWrapperFileSystem.getHoodieScheme(scheme) + ".impl",
         HoodieWrapperFileSystem.class.getName());
     return returnConf;
-  }
-
-  /**
-   * Get the FS implementation for this table.
-   * @param path  Path String
-   * @param hadoopConf  Serializable Hadoop Configuration
-   * @param consistencyGuardConfig Consistency Guard Config
-   * @return HoodieWrapperFileSystem
-   */
-  public static HoodieWrapperFileSystem getFs(String path, SerializableConfiguration hadoopConf,
-      ConsistencyGuardConfig consistencyGuardConfig) {
-    FileSystem fileSystem = FSUtils.getFs(path, hadoopConf.newCopy());
-    return new HoodieWrapperFileSystem(fileSystem,
-        consistencyGuardConfig.isConsistencyCheckEnabled()
-            ? new FailSafeConsistencyGuard(fileSystem, consistencyGuardConfig)
-            : new NoOpConsistencyGuard());
   }
 
   /**
