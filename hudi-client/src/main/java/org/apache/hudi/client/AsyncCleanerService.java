@@ -19,6 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.async.AbstractAsyncService;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
@@ -52,11 +53,11 @@ class AsyncCleanerService extends AbstractAsyncService {
     }), executor);
   }
 
-  public static AsyncCleanerService startAsyncCleaningIfEnabled(HoodieWriteClient writeClient,
-                                                                String instantTime) {
+  public static AsyncCleanerService startAsyncCleaningIfEnabled(HoodieWriteClient writeClient) {
     AsyncCleanerService asyncCleanerService = null;
     if (writeClient.getConfig().isAutoClean() && writeClient.getConfig().isAsyncClean()) {
-      LOG.info("Auto cleaning is enabled. Running cleaner async to write operation");
+      String instantTime = HoodieActiveTimeline.createNewInstantTime();
+      LOG.info("Auto cleaning is enabled. Running cleaner async to write operation at instant time " + instantTime);
       asyncCleanerService = new AsyncCleanerService(writeClient, instantTime);
       asyncCleanerService.start(null);
     } else {
