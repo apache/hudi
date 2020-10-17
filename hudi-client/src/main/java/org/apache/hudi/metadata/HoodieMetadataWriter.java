@@ -45,6 +45,7 @@ import org.apache.hudi.client.utils.ClientUtils;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -68,6 +69,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -95,12 +97,6 @@ public class HoodieMetadataWriter extends HoodieMetadataReader implements Serial
   private static Map<String, HoodieMetadataWriter> instances = new HashMap<>();
 
   public static HoodieMetadataWriter instance(Configuration conf, HoodieWriteConfig writeConfig) {
-    try {
-      return new HoodieMetadataWriter(conf, writeConfig);
-    } catch (IOException e) {
-      throw new HoodieMetadataException("Could not initialize HoodieMetadataWriter", e);
-    }
-    /*
     return instances.computeIfAbsent(writeConfig.getBasePath(), k -> {
       try {
         return new HoodieMetadataWriter(conf, writeConfig);
@@ -108,12 +104,11 @@ public class HoodieMetadataWriter extends HoodieMetadataReader implements Serial
         throw new HoodieMetadataException("Could not initialize HoodieMetadataWriter", e);
       }
     });
-    */
   }
 
   HoodieMetadataWriter(Configuration hadoopConf, HoodieWriteConfig writeConfig) throws IOException {
     super(hadoopConf, writeConfig.getBasePath(), writeConfig.getSpillableMapBasePath(),
-        writeConfig.useFileListingMetadata(), writeConfig.getFileListingMetadataVerify());
+        writeConfig.useFileListingMetadata(), writeConfig.getFileListingMetadataVerify(), false);
 
     if (writeConfig.useFileListingMetadata()) {
       this.tableName = writeConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX;
@@ -126,6 +121,14 @@ public class HoodieMetadataWriter extends HoodieMetadataReader implements Serial
       // Metadata Table cannot have its metadata optimized
       ValidationUtils.checkArgument(this.config.shouldAutoCommit(), "Auto commit is required for Metadata Table");
       ValidationUtils.checkArgument(!this.config.useFileListingMetadata(), "File listing cannot be used for Metadata Table");
+
+      if (config.isMetricsOn()) {
+        if (config.isExecutorMetricsEnabled()) {
+          metricsRegistry = Registry.getRegistry("HoodieMetadata", DistributedRegistry.class.getName());
+        } else {
+          metricsRegistry = Registry.getRegistry("HoodieMetadata");
+        }
+      }
     } else {
       enabled = false;
     }
@@ -162,6 +165,7 @@ public class HoodieMetadataWriter extends HoodieMetadataReader implements Serial
     if (writeConfig.isMetricsOn()) {
       HoodieMetricsConfig.Builder metricsConfig = HoodieMetricsConfig.newBuilder()
           .withReporterType(writeConfig.getMetricsReporterType().toString())
+          .withExecutorMetrics(writeConfig.isExecutorMetricsEnabled())
           .on(true);
       switch (writeConfig.getMetricsReporterType()) {
         case GRAPHITE:
@@ -215,6 +219,10 @@ public class HoodieMetadataWriter extends HoodieMetadataReader implements Serial
    */
   public void initialize(JavaSparkContext jsc) {
     try {
+      if (metricsRegistry instanceof DistributedRegistry) {
+        ((DistributedRegistry) metricsRegistry).register(jsc);
+      }
+
       if (enabled) {
         initializeAndSync(jsc);
       }
@@ -261,12 +269,6 @@ public class HoodieMetadataWriter extends HoodieMetadataReader implements Serial
     } else {
       updateMetrics(INITIALIZE_STR, durationInMs);
     }
-
-    // Total size of the metadata and count of base/log files
-    Map<String, String> stats = getStats(false);
-    updateMetrics(Long.valueOf(stats.get(STAT_TOTAL_BASE_FILE_SIZE)),
-        Long.valueOf(stats.get(STAT_TOTAL_LOG_FILE_SIZE)), Integer.valueOf(stats.get(STAT_COUNT_BASE_FILES)),
-        Integer.valueOf(stats.get(STAT_COUNT_LOG_FILES)));
   }
 
   /**
@@ -287,7 +289,7 @@ public class HoodieMetadataWriter extends HoodieMetadataReader implements Serial
         HoodieFileFormat.HFILE.toString());
 
     // List all partitions in the basePath of the containing dataset
-    FileSystem fs = FSUtils.getFs(datasetBasePath, hadoopConf.get());
+    FileSystem fs = datasetMetaClient.getFs();
     List<String> partitions = FSUtils.getAllPartitionPaths(fs, datasetBasePath, false);
     LOG.info("Initializing metadata table by using file listings in " + partitions.size() + " partitions");
 
@@ -297,7 +299,7 @@ public class HoodieMetadataWriter extends HoodieMetadataReader implements Serial
     int parallelism =  Math.min(partitions.size(), jsc.defaultParallelism()) + 1; // +1 to prevent 0 parallelism
     JavaPairRDD<String, FileStatus[]> partitionFileListRDD = jsc.parallelize(partitions, parallelism)
         .mapToPair(partition -> {
-          FileSystem fsys = FSUtils.getFs(dbasePath, serializedConf.get());
+          FileSystem fsys = datasetMetaClient.getFs();
           FileStatus[] statuses = FSUtils.getAllDataFilesInPartition(fsys, new Path(dbasePath, partition));
           return new Tuple2<>(partition, statuses);
         });
@@ -473,7 +475,7 @@ public class HoodieMetadataWriter extends HoodieMetadataReader implements Serial
       return;
     }
 
-    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
     long cnt = timeline.filterCompletedInstants().getInstants().filter(i -> i.getTimestamp().equals(instantTime)).count();
     if (cnt == 1) {
       LOG.info("Ignoring update from cleaner plan for already completed instant " + instantTime);

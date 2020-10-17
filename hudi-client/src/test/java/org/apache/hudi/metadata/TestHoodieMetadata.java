@@ -762,6 +762,6 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
         .withUseFileListingMetadata(useFileListingMetadata)
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().withReporterType("CONSOLE").on(enableMetrics)
-                           .usePrefix("unit-test").build());
+                           .withExecutorMetrics(true).usePrefix("unit-test").build());
   }
 }
