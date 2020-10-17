@@ -18,20 +18,28 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
-import org.apache.hudi.table.BulkInsertPartitionerRows;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.functions;
 
-public class NonSortPartitionerRows implements BulkInsertPartitionerRows {
+/**
+ * A built-in partitioner that does global sorting for the input Rows across partitions after repartition for bulk insert operation, corresponding to the {@code BulkInsertSortMode.GLOBAL_SORT} mode.
+ */
+public class GlobalSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
-    return rows.coalesce(outputSparkPartitions);
+    // Now, sort the records and line them up nicely for loading.
+    // Let's use "partitionPath + key" as the sort key.
+    return rows.sort(functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD), functions.col(HoodieRecord.RECORD_KEY_METADATA_FIELD))
+        .coalesce(outputSparkPartitions);
   }
 
   @Override
   public boolean arePartitionRecordsSorted() {
-    return false;
+    return true;
   }
 }

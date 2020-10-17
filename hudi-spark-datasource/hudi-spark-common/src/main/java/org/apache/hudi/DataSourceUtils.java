@@ -18,9 +18,6 @@
 
 package org.apache.hudi;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -46,9 +43,6 @@ import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -56,6 +50,8 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -108,21 +104,21 @@ public class DataSourceUtils {
   /**
    * Create a UserDefinedBulkInsertPartitionerRows class via reflection,
    * <br>
-   * if the class name of UserDefinedBulkInsertPartitionerRows is configured through the HoodieWriteConfig.
+   * if the class name of UserDefinedBulkInsertPartitioner is configured through the HoodieWriteConfig.
    *
    * @see HoodieWriteConfig#getUserDefinedBulkInsertPartitionerClass()
    */
-  /*public static Option<BulkInsertPartitionerRows> createUserDefinedBulkInsertPartitionerRows(HoodieWriteConfig config)
+  public static Option<BulkInsertPartitioner<Dataset<Row>>> createUserDefinedBulkInsertPartitionerWithRows(HoodieWriteConfig config)
       throws HoodieException {
     String bulkInsertPartitionerClass = config.getUserDefinedBulkInsertPartitionerClass();
     try {
       return StringUtils.isNullOrEmpty(bulkInsertPartitionerClass)
           ? Option.empty() :
-          Option.of((BulkInsertPartitionerRows) ReflectionUtils.loadClass(bulkInsertPartitionerClass));
+          Option.of((BulkInsertPartitioner) ReflectionUtils.loadClass(bulkInsertPartitionerClass));
     } catch (Throwable e) {
       throw new HoodieException("Could not create UserDefinedBulkInsertPartitionerRows class " + bulkInsertPartitionerClass, e);
     }
-  }*/
+  }
 
   /**
    * Create a payload class via reflection, passing in an ordering/precombine value.
@@ -188,11 +184,11 @@ public class DataSourceUtils {
   }
 
   public static HoodieWriteResult doWriteOperation(SparkRDDWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
-                                                   String instantTime, WriteOperationType operation) throws HoodieException {
+      String instantTime, WriteOperationType operation) throws HoodieException {
     switch (operation) {
       case BULK_INSERT:
         Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner =
-                createUserDefinedBulkInsertPartitioner(client.getConfig());
+            createUserDefinedBulkInsertPartitioner(client.getConfig());
         return new HoodieWriteResult(client.bulkInsert(hoodieRecords, instantTime, userDefinedBulkInsertPartitioner));
       case INSERT:
         return new HoodieWriteResult(client.insert(hoodieRecords, instantTime));
@@ -219,7 +215,7 @@ public class DataSourceUtils {
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, HoodieKey hKey,
-                                                String payloadClass) throws IOException {
+      String payloadClass) throws IOException {
     HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr);
     return new HoodieRecord<>(hKey, payload);
   }

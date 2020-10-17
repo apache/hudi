@@ -19,18 +19,22 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.table.BulkInsertPartitionerRows;
+import org.apache.hudi.table.BulkInsertPartitioner;
 
-public abstract class BulkInsertInternalPartitionerRowsFactory {
+/**
+ * A factory to generate built-in partitioner to repartition input Rows into at least
+ * expected number of output spark partitions for bulk insert operation.
+ */
+public abstract class BulkInsertInternalPartitionerWithRowsFactory {
 
-  public static BulkInsertPartitionerRows get(BulkInsertSortMode sortMode) {
+  public static BulkInsertPartitioner get(BulkInsertSortMode sortMode) {
     switch (sortMode) {
       case NONE:
-        return new NonSortPartitionerRows();
+        return new NonSortPartitionerWithRows();
       case GLOBAL_SORT:
-        return new GlobalSortPartitionerRows();
+        return new GlobalSortPartitionerWithRows();
       case PARTITION_SORT:
-        return new RDDPartitionSortPartitionerRows();
+        return new RDDPartitionSortPartitionerWithRows();
       default:
         throw new HoodieException("The bulk insert sort mode \"" + sortMode.name() + "\" is not supported.");
     }
