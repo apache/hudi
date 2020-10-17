@@ -19,7 +19,7 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.table.BulkInsertPartitionerRows;
+import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.api.java.function.MapPartitionsFunction;
 import org.apache.spark.sql.Dataset;
@@ -33,42 +33,37 @@ import org.apache.spark.sql.types.StructType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import scala.collection.JavaConversions;
 import scala.collection.JavaConverters;
 
-public class RDDPartitionSortPartitionerRows implements BulkInsertPartitionerRows {
+/**
+ * A built-in partitioner that does local sorting for each spark partitions after coalesce for bulk insert operation, corresponding to the {@code BulkInsertSortMode.PARTITION_SORT} mode.
+ */
+public class RDDPartitionSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
     ExpressionEncoder encoder = getEncoder(rows.schema());
-    return rows.coalesce(outputSparkPartitions).mapPartitions(new MapPartitionsFunction<Row, Row>() {
-      @Override
-      public Iterator<Row> call(Iterator<Row> input) throws Exception {
-        // Sort locally in partition
-        List<Row> recordList = new ArrayList<>();
-        for (; input.hasNext(); ) {
-          recordList.add(input.next());
-        }
-        Collections.sort(recordList, Comparator.comparing(o -> (o.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD) + "+" + o.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD))));
-
-        Row row1 = recordList.get(0);
-        Row row2 = recordList.get(1);
-
-        return recordList.iterator();
+    return rows.coalesce(outputSparkPartitions).mapPartitions((MapPartitionsFunction<Row, Row>) input -> {
+      // Sort locally in partition
+      List<Row> recordList = new ArrayList<>();
+      for (; input.hasNext(); ) {
+        recordList.add(input.next());
       }
+      Collections.sort(recordList, Comparator.comparing(o -> (o.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD) + "+" + o.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD))));
+      return recordList.iterator();
     }, encoder);
   }
 
   @Override
   public boolean arePartitionRecordsSorted() {
-    return false;
+    return true;
   }
 
-  private static ExpressionEncoder getEncoder(StructType schema) {
+  private ExpressionEncoder getEncoder(StructType schema) {
     List<Attribute> attributes = JavaConversions.asJavaCollection(schema.toAttributes()).stream()
         .map(Attribute::toAttribute).collect(Collectors.toList());
     return RowEncoder.apply(schema)

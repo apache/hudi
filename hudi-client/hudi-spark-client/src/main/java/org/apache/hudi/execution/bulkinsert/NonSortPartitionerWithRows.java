@@ -16,17 +16,27 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table;
+package org.apache.hudi.execution.bulkinsert;
+
+import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
-public interface BulkInsertPartitionerRows {
+/**
+ * A built-in partitioner that only does coalesce for input Rows for bulk insert operation,
+ * corresponding to the {@code BulkInsertSortMode.NONE} mode.
+ *
+ */
+public class NonSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
-  Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions);
+  @Override
+  public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
+    return rows.coalesce(outputSparkPartitions);
+  }
 
-  /**
-   * @return {@code true} if the records within a RDD partition are sorted; {@code false} otherwise.
-   */
-  boolean arePartitionRecordsSorted();
+  @Override
+  public boolean arePartitionRecordsSorted() {
+    return false;
+  }
 }

@@ -65,39 +65,4 @@ public class SparkWriteHelper<T extends HoodieRecordPayload,R> extends AbstractW
     }, parallelism).map(Tuple2::_2);
   }
 
-    /*public static Dataset<Row> combineOnCondition(
-      boolean condition, Dataset<Row> rows, int parallelism, HoodieTable<T> table) {
-    return condition ? deduplicateRecords(records, table, parallelism) : records;
-  }*/
-
-  /**
-   * Deduplicate Hoodie records, using the given deduplication function.
-   *
-   * @param records hoodieRecords to deduplicate
-   * @param parallelism parallelism or partitions to be used while reducing/deduplicating
-   * @return RDD of HoodieRecord already be deduplicated
-   */
-  /*public static Dataset<Row> rows deduplicateRows(
-      Dataset<Row> rows, HoodieTable<T> table, int parallelism) {
-    return deduplicateRows(rows, table.getIndex(), parallelism);
-  }
-
-  public static Dataset<Row> deduplicateRows(
-      Dataset<Row> rows, HoodieIndex<T> index, int parallelism) {
-    boolean isIndexingGlobal = index.isGlobal();
-    return records.mapToPair(record -> {
-      HoodieKey hoodieKey = record.getKey();
-      // If index used is global, then records are expected to differ in their partitionPath
-      Object key = isIndexingGlobal ? hoodieKey.getRecordKey() : hoodieKey;
-      return new Tuple2<>(key, record);
-    }).reduceByKey((rec1, rec2) -> {
-      @SuppressWarnings("unchecked")
-      T reducedData = (T) rec1.getData().preCombine(rec2.getData());
-      // we cannot allow the user to change the key or partitionPath, since that will affect
-      // everything
-      // so pick it from one of the records.
-      return new HoodieRecord<T>(rec1.getKey(), reducedData);
-    }, parallelism).map(Tuple2::_2);
-  }*/
-
 }
