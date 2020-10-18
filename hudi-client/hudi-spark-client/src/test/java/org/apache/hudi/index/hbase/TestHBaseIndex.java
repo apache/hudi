@@ -117,7 +117,7 @@ public class TestHBaseIndex extends FunctionalTestHarness {
     utility = new HBaseTestingUtility(hbaseConfig);
     utility.startMiniCluster();
     hbaseConfig = utility.getConnection().getConfiguration();
-    utility.createTable(TableName.valueOf(TABLE_NAME), Bytes.toBytes("_s"));
+    utility.createTable(TableName.valueOf(TABLE_NAME), Bytes.toBytes("_s"),2);
   }
 
   @BeforeEach
@@ -270,6 +270,66 @@ public class TestHBaseIndex extends FunctionalTestHarness {
     assertEquals(numRecords, taggedRecords.stream().map(record -> record.getKey().getRecordKey()).distinct().count());
     assertEquals(numRecords, taggedRecords.stream().filter(record -> (record.getCurrentLocation() != null
         && record.getCurrentLocation().getInstantTime().equals(newCommitTime))).distinct().count());
+  }
+
+  @Test
+  public void testTagLocationAndPartitionPathUpdateWithExplicitRollback() throws Exception {
+    final int numRecords = 10;
+    final String oldPartitionPath = "1970/01/01";
+    final String emptyHoodieRecordPayloadClasssName = EmptyHoodieRecordPayload.class.getName();
+    HoodieWriteConfig config = getConfig(true);
+    SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(getConfig(true));
+
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config);) {
+      final String firstCommitTime = writeClient.startCommit();
+      List<HoodieRecord> newRecords = dataGen.generateInserts(firstCommitTime, numRecords);
+      List<HoodieRecord> oldRecords = new LinkedList();
+      for (HoodieRecord newRecord: newRecords) {
+        HoodieKey key = new HoodieKey(newRecord.getRecordKey(), oldPartitionPath);
+        HoodieRecord hoodieRecord = new HoodieRecord(key, newRecord.getData());
+        oldRecords.add(hoodieRecord);
+      }
+      JavaRDD<HoodieRecord> newWriteRecords = jsc().parallelize(newRecords, 1);
+      JavaRDD<HoodieRecord> oldWriteRecords = jsc().parallelize(oldRecords, 1);
+      // first commit old record
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+      List<HoodieRecord> beforeFirstTaggedRecords = index.tagLocation(oldWriteRecords, context, hoodieTable).collect();
+      JavaRDD<WriteStatus> oldWriteStatues = writeClient.upsert(oldWriteRecords, firstCommitTime);
+      index.updateLocation(oldWriteStatues, context, hoodieTable);
+      writeClient.commit(firstCommitTime, oldWriteStatues);
+      List<HoodieRecord> afterFirstTaggedRecords = index.tagLocation(oldWriteRecords, context, hoodieTable).collect();
+
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+      final String secondCommitTime = writeClient.startCommit();
+      List<HoodieRecord> beforeSecondTaggedRecords = index.tagLocation(newWriteRecords, context, hoodieTable).collect();
+      JavaRDD<WriteStatus> newWriteStatues = writeClient.upsert(newWriteRecords, secondCommitTime);
+      index.updateLocation(newWriteStatues, context, hoodieTable);
+      writeClient.commit(secondCommitTime, newWriteStatues);
+      List<HoodieRecord> afterSecondTaggedRecords = index.tagLocation(newWriteRecords, context, hoodieTable).collect();
+      writeClient.rollback(secondCommitTime);
+      List<HoodieRecord> afterRollback = index.tagLocation(newWriteRecords, context, hoodieTable).collect();
+
+      // Verify the first commit
+      assertEquals(numRecords, beforeFirstTaggedRecords.stream().filter(record -> record.getCurrentLocation() == null).count());
+      assertEquals(numRecords, afterFirstTaggedRecords.stream().filter(HoodieRecord::isCurrentLocationKnown).count());
+      // Verify the second commit
+      assertEquals(numRecords, beforeSecondTaggedRecords.stream()
+              .filter(record -> record.getKey().getPartitionPath().equals(oldPartitionPath)
+                      && record.getData().getClass().getName().equals(emptyHoodieRecordPayloadClasssName)).count());
+      assertEquals(numRecords * 2, beforeSecondTaggedRecords.stream().count());
+      assertEquals(numRecords, afterSecondTaggedRecords.stream().count());
+      assertEquals(numRecords, afterSecondTaggedRecords.stream().filter(record -> !record.getKey().getPartitionPath().equals(oldPartitionPath)).count());
+      // Verify the rollback
+      // If an exception occurs after hbase writes the index and the index does not roll back,
+      // the currentLocation information will not be returned.
+      assertEquals(numRecords, afterRollback.stream().filter(record -> record.getKey().getPartitionPath().equals(oldPartitionPath)
+              && record.getData().getClass().getName().equals(emptyHoodieRecordPayloadClasssName)).count());
+      assertEquals(numRecords * 2, beforeSecondTaggedRecords.stream().count());
+      assertEquals(numRecords, afterRollback.stream().filter(HoodieRecord::isCurrentLocationKnown)
+              .filter(record -> record.getCurrentLocation().getInstantTime().equals(firstCommitTime)).count());
+    }
   }
 
   @Test
