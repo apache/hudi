@@ -22,3 +22,5 @@ language: cn
    Azure和Hudi协同工作所需的配置。
  * [Tencent Cloud Object Storage](/cn/docs/cos_hoodie.html) <br/>
    COS和Hudi协同工作所需的配置。
+ * [IBM Cloud Object Storage](/cn/docs/ibm_cos_hoodie.html) <br/>
+   IBM Cloud Object Storage和Hudi协同工作所需的配置。
