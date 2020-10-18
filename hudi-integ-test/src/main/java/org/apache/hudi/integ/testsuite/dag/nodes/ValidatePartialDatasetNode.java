@@ -43,11 +43,13 @@ public class ValidatePartialDatasetNode extends DagNode<Boolean> {
   @Override
   public void execute(ExecutionContext context) throws Exception {
 
-    SparkConf sparkConf = new SparkConf().setAppName("ValidateApp").setMaster("local[2]");
+    /*SparkConf sparkConf = new SparkConf().setAppName("ValidateApp").setMaster("local[2]");
     SparkSession spark = SparkSession
         .builder()
         .config(sparkConf)
-        .getOrCreate();
+        .getOrCreate();*/
+
+    SparkSession session = SparkSession.builder().sparkContext(context.getJsc().sc()).getOrCreate();
 
     String inputPath = context.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/../input/*/*";
     String hudiPath = context.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/*/*/*";
@@ -59,8 +61,8 @@ public class ValidatePartialDatasetNode extends DagNode<Boolean> {
     for (FileStatus fileStatus : fileStatuses) {
       log.warn("Micro batch available to be validated : " + fileStatus.getPath().toString());
     }
-    Dataset<Row> inputDf = spark.read().format("avro").load(inputPath);
-    Dataset<Row> hudiDf = spark.read().format("hudi").load(hudiPath);
+    Dataset<Row> inputDf = session.read().format("avro").load(inputPath);
+    Dataset<Row> hudiDf = session.read().format("hudi").load(hudiPath);
     Dataset<Row> trimmedDf = hudiDf.drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
         .drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.FILENAME_METADATA_FIELD);
 

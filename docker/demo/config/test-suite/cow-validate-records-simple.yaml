@@ -21,24 +21,13 @@ first_insert:
     num_records_insert: 1000
   type: InsertNode
   deps: none
-zero_hive_sync:
-  config:
-    queue_name: "adhoc"
-    engine: "mr"
-  type: HiveSyncNode
-  deps: first_insert
-first_validate:
-  config:
-    abc: def
-  type: ValidateDatasetNode
-  deps: zero_hive_sync
 second_insert:
   config:
     record_size: 70000
     num_insert_partitions: 1
     repeat_count: 5
     num_records_insert: 10000
-  deps: first_validate
+  deps: first_insert
   type: InsertNode
 third_insert:
   config:
@@ -48,11 +37,6 @@ third_insert:
     num_records_insert: 300
   deps: second_insert
   type: InsertNode
-second_validate:
-  config:
-    abc: def
-  type: ValidateDatasetNode
-  deps: third_insert
 first_upsert:
   config:
     record_size: 70000
@@ -62,13 +46,13 @@ first_upsert:
     num_records_upsert: 100
     num_upsert_partitions: 10
   type: UpsertNode
-  deps: second_validate
+  deps: third_insert
 first_hive_sync:
   config:
     queue_name: "adhoc"
     engine: "mr"
   type: HiveSyncNode
-  deps: first_upser
+  deps: first_upsert
 third_validate:
   config:
     abc: def

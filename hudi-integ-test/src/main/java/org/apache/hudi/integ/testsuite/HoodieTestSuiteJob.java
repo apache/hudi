@@ -147,7 +147,7 @@ public class HoodieTestSuiteJob {
       long startTime = System.currentTimeMillis();
       WriterContext writerContext = new WriterContext(jsc, props, cfg, keyGenerator, sparkSession);
       writerContext.initContext(jsc);
-      DagScheduler dagScheduler = new DagScheduler(workflowDag, writerContext, cfg.numRounds, cfg.delayMins);
+      DagScheduler dagScheduler = new DagScheduler(workflowDag, writerContext, jsc, cfg.numRounds, cfg.delayMins);
       dagScheduler.schedule();
       log.info("Finished scheduling all tasks, Time taken {}", System.currentTimeMillis() - startTime);
     } catch (Exception e) {

@@ -26,6 +26,7 @@ import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.DelayNode;
 import org.apache.hudi.metrics.Metrics;
 
+import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,9 +54,9 @@ public class DagScheduler {
   private int numRounds;
   private int delayMins;
 
-  public DagScheduler(WorkflowDag workflowDag, WriterContext writerContext, int numRounds, int delayMins) {
+  public DagScheduler(WorkflowDag workflowDag, WriterContext writerContext, JavaSparkContext jsc, int numRounds, int delayMins) {
     this.workflowDag = workflowDag;
-    this.executionContext = new ExecutionContext(null, writerContext);
+    this.executionContext = new ExecutionContext(jsc, writerContext);
     this.numRounds = numRounds;
     this.delayMins = delayMins;
   }

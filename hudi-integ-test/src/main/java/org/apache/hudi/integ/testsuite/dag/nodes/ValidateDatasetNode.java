@@ -22,7 +22,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 
-import org.apache.spark.SparkConf;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
@@ -43,17 +42,18 @@ public class ValidateDatasetNode extends DagNode<Boolean> {
   @Override
   public void execute(ExecutionContext context) throws Exception {
 
-    SparkConf sparkConf = new SparkConf().setAppName("ValidateApp").setMaster("local");
+    /*SparkConf sparkConf = new SparkConf().setAppName("ValidateApp").setMaster("local");
     SparkSession spark = SparkSession
         .builder()
         .config(sparkConf)
-        .getOrCreate();
+        .getOrCreate();*/
+    SparkSession session = SparkSession.builder().sparkContext(context.getJsc().sc()).getOrCreate();
 
     String inputPath = context.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/../input/*/*";
     String hudiPath = context.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/*/*/*";
     log.warn("ValidateDataset Node: Input path " + inputPath + ", hudi path " + hudiPath);
-    Dataset<Row> inputDf = spark.read().format("avro").load(inputPath);
-    Dataset<Row> hudiDf = spark.read().format("hudi").load(hudiPath);
+    Dataset<Row> inputDf = session.read().format("avro").load(inputPath);
+    Dataset<Row> hudiDf = session.read().format("hudi").load(hudiPath);
     Dataset<Row> trimmedDf = hudiDf.drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
         .drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.FILENAME_METADATA_FIELD);
     if (inputDf.except(trimmedDf).count() != 0) {
@@ -61,12 +61,13 @@ public class ValidateDatasetNode extends DagNode<Boolean> {
       throw new AssertionError("Hudi contents does not match contents input data. ");
     }
 
-    /*Dataset<Row> cowDf = spark.sql("SELECT * FROM testdb.table1");
+    log.warn("Validating hive table");
+    Dataset<Row> cowDf = session.sql("SELECT * FROM testdb.table1");
     Dataset<Row> trimmedCowDf = cowDf.drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
         .drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.FILENAME_METADATA_FIELD);
     if (inputDf.except(trimmedCowDf).count() != 0) {
       log.error("Data set validation failed for COW table. Total count in hudi " + trimmedCowDf.count() + ", input df count " + inputDf.count());
       throw new AssertionError("Hudi contents does not match contents input data. ");
-    }*/
+    }
   }
 }
