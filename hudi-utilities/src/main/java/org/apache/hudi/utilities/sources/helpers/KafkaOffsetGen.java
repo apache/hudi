@@ -24,7 +24,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -167,15 +166,12 @@ public class KafkaOffsetGen {
     topicName = props.getString(Config.KAFKA_TOPIC_NAME);
   }
 
-  public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long sourceLimit, HoodieDeltaStreamerMetrics metrics) {
+  public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long sourceLimit) {
 
     // Obtain current metadata for the topic
     Map<TopicPartition, Long> fromOffsets;
     Map<TopicPartition, Long> toOffsets;
     try (KafkaConsumer consumer = new KafkaConsumer(kafkaParams)) {
-      if (!checkTopicExists(consumer)) {
-        throw new HoodieException("Kafka topic:" + topicName + " does not exist");
-      }
       List<PartitionInfo> partitionInfoList;
       partitionInfoList = consumer.partitionsFor(topicName);
       Set<TopicPartition> topicPartitions = partitionInfoList.stream()
@@ -184,7 +180,6 @@ public class KafkaOffsetGen {
       // Determine the offset ranges to read from
       if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty()) {
         fromOffsets = checkupValidOffsets(consumer, lastCheckpointStr, topicPartitions);
-        metrics.updateDeltaStreamerKafkaDelayCountMetrics(delayOffsetCalculation(lastCheckpointStr, topicPartitions, consumer));
       } else {
         KafkaResetOffsetStrategies autoResetValue = KafkaResetOffsetStrategies
                 .valueOf(props.getString("auto.offset.reset", Config.DEFAULT_AUTO_RESET_OFFSET.toString()).toUpperCase());
@@ -233,28 +228,6 @@ public class KafkaOffsetGen {
     boolean checkpointOffsetReseter = checkpointOffsets.entrySet().stream()
             .anyMatch(offset -> offset.getValue() < earliestOffsets.get(offset.getKey()));
     return checkpointOffsetReseter ? earliestOffsets : checkpointOffsets;
-  }
-
-  private Long delayOffsetCalculation(Option<String> lastCheckpointStr, Set<TopicPartition> topicPartitions, KafkaConsumer consumer) {
-    Long delayCount = 0L;
-    Map<TopicPartition, Long> checkpointOffsets = CheckpointUtils.strToOffsets(lastCheckpointStr.get());
-    Map<TopicPartition, Long> lastOffsets = consumer.endOffsets(topicPartitions);
-
-    for (Map.Entry<TopicPartition, Long> entry : lastOffsets.entrySet()) {
-      Long offect = checkpointOffsets.getOrDefault(entry.getKey(), 0L);
-      delayCount += entry.getValue() - offect > 0 ? entry.getValue() - offect : 0L;
-    }
-    return delayCount;
-  }
-
-  /**
-   * Check if topic exists.
-   * @param consumer kafka consumer
-   * @return
-   */
-  public boolean checkTopicExists(KafkaConsumer consumer)  {
-    Map<String, List<PartitionInfo>> result = consumer.listTopics();
-    return result.containsKey(topicName);
   }
 
   public String getTopicName() {

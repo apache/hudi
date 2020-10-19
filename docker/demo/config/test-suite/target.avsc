@@ -21,7 +21,7 @@
   "fields" : [
   {
     "name" : "timestamp",
-    "type" : "long"
+    "type" : "double"
   }, {
     "name" : "_row_key",
     "type" : "string"

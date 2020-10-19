@@ -26,21 +26,17 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
+import java.io.File;
 import java.io.IOException;
-import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Arrays;
 
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -52,45 +48,43 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class ITTestCommitsCommand extends AbstractShellIntegrationTest {
 
+  private String tablePath;
+
   @BeforeEach
   public void init() throws IOException {
-    String tableName = "test_table_" + ITTestCommitsCommand.class.getName();
-    String tablePath = Paths.get(basePath, tableName).toString();
+    String tableName = "test_table";
+    tablePath = basePath + File.separator + tableName;
 
     HoodieCLI.conf = jsc.hadoopConfiguration();
     // Create table and connect
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
-    metaClient.setBasePath(tablePath);
-    metaClient = HoodieTableMetaClient.reload(metaClient);
   }
 
   /**
    * Test case of 'commit rollback' command.
    */
   @Test
-  public void testRollbackCommit() throws Exception {
+  public void testRollbackCommit() throws IOException {
     //Create some commits files and parquet files
-    Map<String, String> partitionAndFileId = new HashMap<String, String>() {
-      {
-        put(DEFAULT_FIRST_PARTITION_PATH, "file-1");
-        put(DEFAULT_SECOND_PARTITION_PATH, "file-2");
-        put(DEFAULT_THIRD_PARTITION_PATH, "file-3");
-      }
-    };
-    final String rollbackCommit = "102";
-    HoodieTestTable.of(metaClient)
-        .withPartitionMetaFiles(DEFAULT_PARTITION_PATHS)
-        .addCommit("100")
-        .withBaseFilesInPartitions(partitionAndFileId)
-        .addCommit("101")
-        .withBaseFilesInPartitions(partitionAndFileId)
-        .addCommit(rollbackCommit)
-        .withBaseFilesInPartitions(partitionAndFileId);
+    String commitTime1 = "100";
+    String commitTime2 = "101";
+    String commitTime3 = "102";
+    HoodieTestDataGenerator.writePartitionMetadata(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, tablePath);
+
+    // three commit files
+    HoodieTestUtils.createCommitFiles(tablePath, commitTime1, commitTime2, commitTime3);
+
+    // generate commit files for commits
+    for (String commitTime : Arrays.asList(commitTime1, commitTime2, commitTime3)) {
+      HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, commitTime, "file-1");
+      HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, commitTime, "file-2");
+      HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, commitTime, "file-3");
+    }
 
     CommandResult cr = getShell().executeCommand(String.format("commit rollback --commit %s --sparkMaster %s --sparkMemory %s",
-        rollbackCommit, "local", "4G"));
+        commitTime3, "local", "4G"));
     assertTrue(cr.isSuccess());
 
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());

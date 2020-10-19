@@ -132,7 +132,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
       Option<Long> numRecordsToUpdate, Option<Double> percentageRecordsPerFile) throws IOException {
     log.info("NumPartitions : {}, NumFiles : {}, numRecordsToUpdate : {}, percentageRecordsPerFile : {}",
         numPartitions, numFiles, numRecordsToUpdate, percentageRecordsPerFile);
-    final List<String> partitionPaths = getPartitions(numPartitions);
+    List<String> partitionPaths = getPartitions(numPartitions);
     // Read all file slices in the partition
     JavaPairRDD<String, Iterator<FileSlice>> partitionToFileSlice = getPartitionToFileSlice(metaClient,
         partitionPaths);
@@ -156,7 +156,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
     }
     // Adjust the number of files to read per partition based on the requested partition & file counts
     Map<String, Integer> adjustedPartitionToFileIdCountMap = getFilesToReadPerPartition(partitionToFileSlice,
-        partitionPaths.size(), numFilesToUpdate);
+        getPartitions(numPartitions).size(), numFilesToUpdate);
     JavaRDD<GenericRecord> updates = projectSchema(generateUpdates(adjustedPartitionToFileIdCountMap,
         partitionToFileSlice, numFilesToUpdate, (int) numRecordsToUpdatePerFile));
     if (numRecordsToUpdate.isPresent() && numFiles.isPresent() && numFiles.get() != 0 && numRecordsToUpdate.get()

@@ -135,7 +135,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
       String ts = i + "";
       HoodieInstant instant = new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, ts);
       activeTimeline.createNewInstant(instant);
-      activeTimeline.saveAsComplete(instant, Option.of(getRestoreMetadata(basePath, ts, ts, 2, HoodieTimeline.COMMIT_ACTION)));
+      activeTimeline.saveAsComplete(instant, Option.of(getRestoreMetadata(basePath, ts, ts, 2)));
     }
 
     metaClient.reloadActiveTimeline();
@@ -184,23 +184,25 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     assertEquals(extraMetadataValue1, extraMetadataEntries.get("1").get());
   }
 
-  private byte[] getRestoreMetadata(String basePath, String partition, String commitTs, int count, String actionType) throws IOException {
+  private byte[] getRestoreMetadata(String basePath, String partition, String commitTs, int count) throws IOException {
+    HoodieRestoreMetadata metadata = new HoodieRestoreMetadata();
     List<HoodieRollbackMetadata> rollbackM = new ArrayList<>();
-    rollbackM.add(getRollbackMetadataInstance(basePath, partition, commitTs, count, actionType));
-    List<HoodieInstant> rollbackInstants = new ArrayList<>();
-    rollbackInstants.add(new HoodieInstant(false, commitTs, actionType));
-    HoodieRestoreMetadata metadata = TimelineMetadataUtils.convertRestoreMetadata(commitTs, 200, rollbackInstants,
-        CollectionUtils.createImmutableMap(commitTs, rollbackM));
+    rollbackM.add(getRollbackMetadataInstance(basePath, partition, commitTs, count));
+    metadata.setHoodieRestoreMetadata(CollectionUtils.createImmutableMap(commitTs, rollbackM));
+    List<String> rollbackInstants = new ArrayList<>();
+    rollbackInstants.add(commitTs);
+    metadata.setInstantsToRollback(rollbackInstants);
+    metadata.setStartRestoreTime(commitTs);
     return TimelineMetadataUtils.serializeRestoreMetadata(metadata).get();
   }
 
-  private HoodieRollbackMetadata getRollbackMetadataInstance(String basePath, String partition, String commitTs, int count, String actionType) {
+  private HoodieRollbackMetadata getRollbackMetadataInstance(String basePath, String partition, String commitTs, int count) {
     List<String> deletedFiles = new ArrayList<>();
     for (int i = 1; i <= count; i++) {
       deletedFiles.add("file-" + i);
     }
-    List<HoodieInstant> rollbacks = new ArrayList<>();
-    rollbacks.add(new HoodieInstant(false, actionType, commitTs));
+    List<String> rollbacks = new ArrayList<>();
+    rollbacks.add(commitTs);
 
     HoodieRollbackStat rollbackStat = new HoodieRollbackStat(partition, deletedFiles, Collections.emptyList(), Collections.emptyMap());
     List<HoodieRollbackStat> rollbackStats = new ArrayList<>();

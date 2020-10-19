@@ -191,13 +191,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-client-common</artifactId>
-      <version>${project.version}</version>
-      <type>test-jar</type>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark-client</artifactId>
+      <artifactId>hudi-client</artifactId>
       <version>${project.version}</version>
       <type>test-jar</type>
     </dependency>

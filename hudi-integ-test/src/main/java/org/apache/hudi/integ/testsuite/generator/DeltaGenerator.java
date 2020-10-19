@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.stream.StreamSupport;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.integ.testsuite.converter.Converter;
 import org.apache.hudi.integ.testsuite.converter.UpdateConverter;
 import org.apache.hudi.integ.testsuite.reader.DFSAvroDeltaInputReader;
 import org.apache.hudi.integ.testsuite.reader.DFSHoodieDatasetInputReader;
@@ -92,11 +93,11 @@ public class DeltaGenerator implements Serializable {
   }
 
   public JavaRDD<GenericRecord> generateInserts(Config operation) {
+    long recordsPerPartition = operation.getNumRecordsInsert();
     int numPartitions = operation.getNumInsertPartitions();
-    long recordsPerPartition = operation.getNumRecordsInsert() / numPartitions;
     int minPayloadSize = operation.getRecordSize();
     JavaRDD<GenericRecord> inputBatch = jsc.parallelize(Collections.EMPTY_LIST)
-        .repartition(numPartitions).mapPartitions(p -> {
+        .repartition(operation.getNumInsertPartitions()).mapPartitions(p -> {
           return new LazyRecordGeneratorIterator(new FlexibleSchemaRecordGenerationIterator(recordsPerPartition,
             minPayloadSize, schemaStr, partitionPathFieldNames, numPartitions));
         });
@@ -111,44 +112,34 @@ public class DeltaGenerator implements Serializable {
       }
       DeltaInputReader deltaInputReader = null;
       JavaRDD<GenericRecord> adjustedRDD = null;
-      if (config.getNumUpsertPartitions() != 0) {
-        if (config.getNumUpsertPartitions() < 0) {
-          // randomly generate updates for a given number of records without regard to partitions and files
-          deltaInputReader = new DFSAvroDeltaInputReader(sparkSession, schemaStr,
-              ((DFSDeltaConfig) deltaOutputConfig).getDeltaBasePath(), Option.empty(), Option.empty());
-          adjustedRDD = deltaInputReader.read(config.getNumRecordsUpsert());
-          adjustedRDD = adjustRDDToGenerateExactNumUpdates(adjustedRDD, jsc, config.getNumRecordsUpsert());
+      if (config.getNumUpsertPartitions() < 1) {
+        // randomly generate updates for a given number of records without regard to partitions and files
+        deltaInputReader = new DFSAvroDeltaInputReader(sparkSession, schemaStr,
+            ((DFSDeltaConfig) deltaOutputConfig).getDeltaBasePath(), Option.empty(), Option.empty());
+        adjustedRDD = deltaInputReader.read(config.getNumRecordsUpsert());
+        adjustedRDD = adjustRDDToGenerateExactNumUpdates(adjustedRDD, jsc, config.getNumRecordsUpsert());
+      } else {
+        deltaInputReader =
+            new DFSHoodieDatasetInputReader(jsc, ((DFSDeltaConfig) deltaOutputConfig).getDatasetOutputPath(),
+                schemaStr);
+        if (config.getFractionUpsertPerFile() > 0) {
+          adjustedRDD = deltaInputReader.read(config.getNumUpsertPartitions(), config.getNumUpsertFiles(),
+              config.getFractionUpsertPerFile());
         } else {
-          deltaInputReader =
-              new DFSHoodieDatasetInputReader(jsc, ((DFSDeltaConfig) deltaOutputConfig).getDatasetOutputPath(),
-                  schemaStr);
-          if (config.getFractionUpsertPerFile() > 0) {
-            adjustedRDD = deltaInputReader.read(config.getNumUpsertPartitions(), config.getNumUpsertFiles(),
-                config.getFractionUpsertPerFile());
-          } else {
-            adjustedRDD = deltaInputReader.read(config.getNumUpsertPartitions(), config.getNumUpsertFiles(), config
-                .getNumRecordsUpsert());
-          }
-        }
-
-        log.info("Repartitioning records");
-        // persist this since we will make multiple passes over this
-        adjustedRDD = adjustedRDD.repartition(jsc.defaultParallelism());
-        log.info("Repartitioning records done");
-        UpdateConverter converter = new UpdateConverter(schemaStr, config.getRecordSize(),
-            partitionPathFieldNames, recordRowKeyFieldNames);
-        JavaRDD<GenericRecord> updates = converter.convert(adjustedRDD);
-
-        log.info("Records converted");
-        updates.persist(StorageLevel.DISK_ONLY());
-
-        if (inserts == null) {
-          inserts = updates;
-        } else {
-          inserts = inserts.union(updates);
+          adjustedRDD = deltaInputReader.read(config.getNumUpsertPartitions(), config.getNumUpsertFiles(), config
+              .getNumRecordsUpsert());
         }
       }
-      return inserts;
+      log.info("Repartitioning records");
+      // persist this since we will make multiple passes over this
+      adjustedRDD = adjustedRDD.repartition(jsc.defaultParallelism());
+      log.info("Repartitioning records done");
+      Converter converter = new UpdateConverter(schemaStr, config.getRecordSize(),
+          partitionPathFieldNames, recordRowKeyFieldNames);
+      JavaRDD<GenericRecord> updates = converter.convert(adjustedRDD);
+      log.info("Records converted");
+      updates.persist(StorageLevel.DISK_ONLY());
+      return inserts != null ? inserts.union(updates) : updates;
       // TODO : Generate updates for only N partitions.
     } else {
       throw new IllegalArgumentException("Other formats are not supported at the moment");

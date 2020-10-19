@@ -18,11 +18,6 @@
 
 package org.apache.hudi.hive;
 
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.metastore.api.MetaException;
-import org.apache.hadoop.hive.metastore.api.Partition;
-import org.apache.hadoop.hive.metastore.api.Table;
-import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -34,6 +29,10 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.hadoop.hive.metastore.api.MetaException;
+import org.apache.hadoop.hive.metastore.api.Partition;
+import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
@@ -239,7 +238,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
 
   void updateTableDefinition(String tableName, MessageType newSchema) {
     try {
-      String newSchemaStr = HiveSchemaUtil.generateSchemaString(newSchema, syncConfig.partitionFields, syncConfig.supportTimestamp);
+      String newSchemaStr = HiveSchemaUtil.generateSchemaString(newSchema, syncConfig.partitionFields);
       // Cascade clause should not be present for non-partitioned tables
       String cascadeClause = syncConfig.partitionFields.size() > 0 ? " cascade" : "";
       StringBuilder sqlBuilder = new StringBuilder("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)
@@ -335,22 +334,6 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     } catch (TException e) {
       throw new HoodieHiveSyncException("Failed to check if table exists " + tableName, e);
     }
-  }
-
-  /**
-   * @param databaseName
-   * @return  true if the configured database exists
-   */
-  public boolean doesDataBaseExist(String databaseName) {
-    try {
-      Database database = client.getDatabase(databaseName);
-      if (database != null && databaseName.equals(database.getName())) {
-        return true;
-      }
-    } catch (TException e) {
-      throw new HoodieHiveSyncException("Failed to check if database exists " + databaseName, e);
-    }
-    return false;
   }
 
   /**

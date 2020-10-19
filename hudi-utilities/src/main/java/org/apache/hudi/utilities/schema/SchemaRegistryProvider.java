@@ -48,6 +48,9 @@ public class SchemaRegistryProvider extends SchemaProvider {
         "hoodie.deltastreamer.schemaprovider.registry.targetUrl";
   }
 
+  private final Schema schema;
+  private final Schema targetSchema;
+
   private static String fetchSchemaFromRegistry(String registryUrl) throws IOException {
     URL registry = new URL(registryUrl);
     ObjectMapper mapper = new ObjectMapper();
@@ -58,6 +61,18 @@ public class SchemaRegistryProvider extends SchemaProvider {
   public SchemaRegistryProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SRC_SCHEMA_REGISTRY_URL_PROP));
+    String registryUrl = props.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
+    String targetRegistryUrl = props.getString(Config.TARGET_SCHEMA_REGISTRY_URL_PROP, registryUrl);
+    try {
+      this.schema = getSchema(registryUrl);
+      if (!targetRegistryUrl.equals(registryUrl)) {
+        this.targetSchema = getSchema(targetRegistryUrl);
+      } else {
+        this.targetSchema = schema;
+      }
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Error reading schema from registry :" + registryUrl, ioe);
+    }
   }
 
   private static Schema getSchema(String registryUrl) throws IOException {
@@ -66,22 +81,11 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   @Override
   public Schema getSourceSchema() {
-    String registryUrl = config.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
-    try {
-      return getSchema(registryUrl);
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Error reading source schema from registry :" + registryUrl, ioe);
-    }
+    return schema;
   }
 
   @Override
   public Schema getTargetSchema() {
-    String registryUrl = config.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
-    String targetRegistryUrl = config.getString(Config.TARGET_SCHEMA_REGISTRY_URL_PROP, registryUrl);
-    try {
-      return getSchema(targetRegistryUrl);
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Error reading target schema from registry :" + registryUrl, ioe);
-    }
+    return targetSchema;
   }
 }

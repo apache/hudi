@@ -18,9 +18,8 @@
 
 package org.apache.hudi.examples.spark;
 
-import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
@@ -49,13 +48,11 @@ import java.util.stream.Collectors;
 
 
 /**
- * Simple examples of #{@link SparkRDDWriteClient}.
+ * Simple examples of #{@link HoodieWriteClient}.
  *
  * To run this example, you should
- * <pre>
- *   1. For running in IDE, set VM options `-Dspark.master=local[2]`;
- *   2. For running in shell, using `spark-submit`.
- *</pre>
+ *   1. For running in IDE, set VM options `-Dspark.master=local[2]`
+ *   2. For running in shell, using `spark-submit`
  *
  * Usage: HoodieWriteClientExample <tablePath> <tableName>
  * <tablePath> and <tableName> describe root path of hudi and table name
@@ -95,7 +92,7 @@ public class HoodieWriteClientExample {
               .withDeleteParallelism(2).forTable(tableName)
               .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
               .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(20, 30).build()).build();
-      SparkRDDWriteClient<HoodieAvroPayload> client = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), cfg);
+      HoodieWriteClient<HoodieAvroPayload> client = new HoodieWriteClient<>(jsc, cfg);
 
       // inserts
       String newCommitTime = client.startCommit();

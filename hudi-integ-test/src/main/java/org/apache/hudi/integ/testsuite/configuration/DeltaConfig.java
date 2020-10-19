@@ -257,11 +257,6 @@ public class DeltaConfig implements Serializable {
         return this;
       }
 
-      public Builder withName(String name) {
-        this.configsMap.put(CONFIG_NAME, name);
-        return this;
-      }
-
       public Config build() {
         return new Config(configsMap);
       }

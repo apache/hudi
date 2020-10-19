@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.functional;
 
-import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -85,7 +85,7 @@ public class TestHoodieSnapshotExporter extends FunctionalTestHarness {
 
     // Prepare data as source Hudi dataset
     HoodieWriteConfig cfg = getHoodieWriteConfig(sourcePath);
-    SparkRDDWriteClient hdfsWriteClient = new SparkRDDWriteClient(context(), cfg);
+    HoodieWriteClient hdfsWriteClient = new HoodieWriteClient(jsc(), cfg);
     hdfsWriteClient.startCommitWithTime(COMMIT_TIME);
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {PARTITION_PATH});
     List<HoodieRecord> records = dataGen.generateInserts(COMMIT_TIME, NUM_RECORDS);

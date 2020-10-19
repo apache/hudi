@@ -39,10 +39,10 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveClient;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
-import org.apache.hudi.utilities.DummySchemaProvider;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Operation;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.CsvDFSSource;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 import org.apache.hudi.utilities.sources.InputBatch;
@@ -54,6 +54,7 @@ import org.apache.hudi.utilities.testutils.sources.config.SourceConfigs;
 import org.apache.hudi.utilities.transform.SqlQueryBasedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -520,7 +521,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     // generate parquet files using kafka connect naming convention
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     Helpers.saveParquetToDFS(Helpers.toGenericRecords(dataGenerator.generateInserts("000", 100)), new Path(filePath));
-    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc, dfs, hdfsTestService.getHadoopConf(), Option.ofNullable(props));
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc, dfs, hdfsTestService.getHadoopConf(), props);
     assertEquals("kafka_topic1,0:200", deltaStreamer.getConfig().checkpoint);
   }
 
@@ -1120,6 +1121,18 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
                          TypedProperties properties) {
       System.out.println("DropAllTransformer called !!");
       return sparkSession.createDataFrame(jsc.emptyRDD(), rowDataset.schema());
+    }
+  }
+
+  public static class DummySchemaProvider extends SchemaProvider {
+
+    public DummySchemaProvider(TypedProperties props, JavaSparkContext jssc) {
+      super(props, jssc);
+    }
+
+    @Override
+    public Schema getSourceSchema() {
+      return Schema.create(Schema.Type.NULL);
     }
   }
 }

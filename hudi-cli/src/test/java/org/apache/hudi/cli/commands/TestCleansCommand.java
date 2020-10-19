@@ -62,7 +62,7 @@ public class TestCleansCommand extends AbstractShellIntegrationTest {
   private URL propsFilePath;
 
   @BeforeEach
-  public void init() throws Exception {
+  public void init() throws IOException {
     HoodieCLI.conf = jsc.hadoopConfiguration();
 
     String tableName = "test_table";

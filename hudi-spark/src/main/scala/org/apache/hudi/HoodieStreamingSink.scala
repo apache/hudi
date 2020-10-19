@@ -17,11 +17,10 @@
 package org.apache.hudi
 
 import java.lang
-import java.util.function.Function
+import java.util.function.{Function, Supplier}
 
 import org.apache.hudi.async.{AsyncCompactService, SparkStreamingAsyncCompactService}
-import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.client.HoodieWriteClient
 import org.apache.hudi.common.model.HoodieRecordPayload
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
@@ -31,7 +30,7 @@ import org.apache.hudi.exception.HoodieCorruptedDataException
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.execution.streaming.Sink
-import org.apache.spark.sql.streaming.OutputMode
+import org.apache.spark.sql.streaming.{OutputMode, StreamingQueryListener}
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
 
 import scala.util.{Failure, Success, Try}
@@ -61,7 +60,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     }
 
   private var asyncCompactorService : AsyncCompactService = _
-  private var writeClient : Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty
+  private var writeClient : Option[HoodieWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty
   private var hoodieTableConfig : Option[HoodieTableConfig] = Option.empty
 
   override def addBatch(batchId: Long, data: DataFrame): Unit = this.synchronized {
@@ -154,10 +153,10 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     }
   }
 
-  protected def triggerAsyncCompactor(client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]]): Unit = {
+  protected def triggerAsyncCompactor(client: HoodieWriteClient[HoodieRecordPayload[Nothing]]): Unit = {
     if (null == asyncCompactorService) {
       log.info("Triggering Async compaction !!")
-      asyncCompactorService = new SparkStreamingAsyncCompactService(new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
+      asyncCompactorService = new SparkStreamingAsyncCompactService(new JavaSparkContext(sqlContext.sparkContext),
         client)
       asyncCompactorService.start(new Function[java.lang.Boolean, java.lang.Boolean] {
         override def apply(errored: lang.Boolean): lang.Boolean = {

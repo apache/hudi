@@ -50,6 +50,5 @@ public class TestDLASyncConfig {
     assertEquals(copied.basePath, dlaSyncConfig.basePath);
     assertEquals(copied.jdbcUrl, dlaSyncConfig.jdbcUrl);
     assertEquals(copied.skipROSuffix, dlaSyncConfig.skipROSuffix);
-    assertEquals(copied.supportTimestamp, dlaSyncConfig.supportTimestamp);
   }
 }

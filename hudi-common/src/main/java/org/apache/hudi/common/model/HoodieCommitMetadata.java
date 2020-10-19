@@ -48,9 +48,9 @@ public class HoodieCommitMetadata implements Serializable {
   protected Map<String, List<HoodieWriteStat>> partitionToWriteStats;
   protected Boolean compacted;
 
-  protected Map<String, String> extraMetadata;
+  private Map<String, String> extraMetadata;
 
-  protected WriteOperationType operationType = WriteOperationType.UNKNOWN;
+  private WriteOperationType operationType = WriteOperationType.UNKNOWN;
 
   // for ser/deser
   public HoodieCommitMetadata() {
@@ -365,9 +365,7 @@ public class HoodieCommitMetadata implements Serializable {
 
   @Override
   public String toString() {
-    return "HoodieCommitMetadata{" + "partitionToWriteStats=" + partitionToWriteStats
-        + ", compacted=" + compacted
-        + ", extraMetadata=" + extraMetadata
-        + ", operationType=" + operationType + '}';
+    return "HoodieCommitMetadata{partitionToWriteStats=" + partitionToWriteStats + ", compacted=" + compacted
+        + ", extraMetadata=" + extraMetadata + '}';
   }
 }

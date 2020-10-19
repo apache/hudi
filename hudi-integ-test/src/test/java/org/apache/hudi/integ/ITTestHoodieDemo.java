@@ -209,6 +209,7 @@ public class ITTestHoodieDemo extends ITTestBase {
         + " --initial-checkpoint-provider"
         + " org.apache.hudi.utilities.checkpointing.InitialCheckpointFromAnotherHoodieTimelineProvider"
         + " --hoodie-conf hoodie.bootstrap.base.path=" + BOOTSTRAPPED_SRC_PATH
+        + " --hoodie-conf hoodie.bootstrap.recordkey.columns=key"
         + " --hoodie-conf hoodie.deltastreamer.checkpoint.provider.path=" + COW_BASE_PATH
         + " --hoodie-conf hoodie.bootstrap.parallelism=2 "
         + " --hoodie-conf hoodie.bootstrap.keygen.class=" + SimpleKeyGenerator.class.getName()
@@ -223,6 +224,7 @@ public class ITTestHoodieDemo extends ITTestBase {
         + " --initial-checkpoint-provider"
         + " org.apache.hudi.utilities.checkpointing.InitialCheckpointFromAnotherHoodieTimelineProvider"
         + " --hoodie-conf hoodie.bootstrap.base.path=" + BOOTSTRAPPED_SRC_PATH
+        + " --hoodie-conf hoodie.bootstrap.recordkey.columns=key"
         + " --hoodie-conf hoodie.deltastreamer.checkpoint.provider.path=" + COW_BASE_PATH
         + " --hoodie-conf hoodie.bootstrap.parallelism=2 "
         + " --hoodie-conf hoodie.bootstrap.keygen.class=" + SimpleKeyGenerator.class.getName()

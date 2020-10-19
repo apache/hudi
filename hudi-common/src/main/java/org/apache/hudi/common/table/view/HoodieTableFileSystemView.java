@@ -18,17 +18,17 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hudi.common.model.BootstrapBaseFileMapping;
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.model.BootstrapBaseFileMapping;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -37,7 +37,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -64,11 +63,6 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
    * PartitionPath + File-Id to bootstrap base File (Index Only bootstrapped).
    */
   protected Map<HoodieFileGroupId, BootstrapBaseFileMapping> fgIdToBootstrapBaseFile;
-
-  /**
-   * Track replace time for replaced file groups.
-   */
-  protected Map<HoodieFileGroupId, HoodieInstant> fgIdToReplaceInstants;
 
   /**
    * Flag to determine if closed.
@@ -112,7 +106,6 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     this.fgIdToPendingCompaction = null;
     this.partitionToFileGroupsMap = null;
     this.fgIdToBootstrapBaseFile = null;
-    this.fgIdToReplaceInstants = null;
   }
 
   protected Map<String, List<HoodieFileGroup>> createPartitionToFileGroups() {
@@ -127,11 +120,6 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected Map<HoodieFileGroupId, BootstrapBaseFileMapping> createFileIdToBootstrapBaseFileMap(
       Map<HoodieFileGroupId, BootstrapBaseFileMapping> fileGroupIdBootstrapBaseFileMap) {
     return fileGroupIdBootstrapBaseFileMap;
-  }
-
-  protected Map<HoodieFileGroupId, HoodieInstant> createFileIdToReplaceInstantMap(final Map<HoodieFileGroupId, HoodieInstant> replacedFileGroups) {
-    Map<HoodieFileGroupId, HoodieInstant> replacedFileGroupsMap = new ConcurrentHashMap<>(replacedFileGroups);
-    return replacedFileGroupsMap;
   }
 
   /**
@@ -274,33 +262,12 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   }
 
   @Override
-  protected void resetReplacedFileGroups(final Map<HoodieFileGroupId, HoodieInstant> replacedFileGroups) {
-    fgIdToReplaceInstants = createFileIdToReplaceInstantMap(replacedFileGroups);
-  }
-
-  @Override
-  protected void addReplacedFileGroups(final Map<HoodieFileGroupId, HoodieInstant> replacedFileGroups) {
-    fgIdToReplaceInstants.putAll(replacedFileGroups);
-  }
-
-  @Override
-  protected void removeReplacedFileIdsAtInstants(Set<String> instants) {
-    fgIdToReplaceInstants.entrySet().removeIf(entry -> instants.contains(entry.getValue().getTimestamp()));
-  }
-
-  @Override
-  protected Option<HoodieInstant> getReplaceInstant(final HoodieFileGroupId fileGroupId) {
-    return Option.ofNullable(fgIdToReplaceInstants.get(fileGroupId));
-  }
-
-  @Override
   public void close() {
     closed = true;
     super.reset();
     partitionToFileGroupsMap = null;
     fgIdToPendingCompaction = null;
     fgIdToBootstrapBaseFile = null;
-    fgIdToReplaceInstants = null;
   }
 
   @Override

@@ -64,7 +64,7 @@ public class ITTestBootstrapCommand extends AbstractShellIntegrationTest {
 
     // generate test data
     partitions = Arrays.asList("2018", "2019", "2020");
-    long timestamp = Instant.now().toEpochMilli();
+    double timestamp = new Double(Instant.now().toEpochMilli()).longValue();
     for (int i = 0; i < partitions.size(); i++) {
       Dataset<Row> df = TestBootstrap.generateTestRawTripDataset(timestamp,
           i * NUM_OF_RECORDS, i * NUM_OF_RECORDS + NUM_OF_RECORDS, null, jsc, sqlContext);

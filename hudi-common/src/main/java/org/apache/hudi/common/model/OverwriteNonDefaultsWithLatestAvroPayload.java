@@ -29,12 +29,10 @@ import java.util.List;
 
 /**
  * subclass of OverwriteWithLatestAvroPayload used for delta streamer.
- *
- * <ol>
- * <li>preCombine - Picks the latest delta record for a key, based on an ordering field;
- * <li>combineAndGetUpdateValue/getInsertValue - overwrite storage for specified fields
+ * <p>
+ * 1. preCombine - Picks the latest delta record for a key, based on an ordering field.
+ * 2. combineAndGetUpdateValue/getInsertValue - overwrite storage for specified fields
  * that doesn't equal defaultValue.
- * </ol>
  */
 public class OverwriteNonDefaultsWithLatestAvroPayload extends OverwriteWithLatestAvroPayload {
 

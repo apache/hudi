@@ -69,8 +69,7 @@
                   <include>commons-pool:commons-pool</include>
 
                   <include>org.apache.hudi:hudi-common</include>
-                  <include>org.apache.hudi:hudi-client-common</include>
-                  <include>org.apache.hudi:hudi-spark-client</include>
+                  <include>org.apache.hudi:hudi-client</include>
                   <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-hive-sync</include>
@@ -432,12 +431,7 @@
 
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-client-common</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark-client</artifactId>
+      <artifactId>hudi-client</artifactId>
       <version>${project.version}</version>
     </dependency>
 
@@ -456,15 +450,7 @@
 
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-client-common</artifactId>
-      <version>${project.version}</version>
-      <classifier>tests</classifier>
-      <type>test-jar</type>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark-client</artifactId>
+      <artifactId>hudi-client</artifactId>
       <version>${project.version}</version>
       <classifier>tests</classifier>
       <type>test-jar</type>

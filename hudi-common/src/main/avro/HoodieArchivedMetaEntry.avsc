@@ -96,14 +96,6 @@
          "name":"actionState",
          "type":["null","string"],
          "default": null
-      },
-      {
-         "name":"hoodieReplaceCommitMetadata",
-         "type":[
-            "null",
-            "HoodieReplaceCommitMetadata"
-         ],
-         "default": null
       }
    ]
 }

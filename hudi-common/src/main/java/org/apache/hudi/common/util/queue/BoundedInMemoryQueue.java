@@ -51,63 +51,43 @@ import java.util.function.Function;
  */
 public class BoundedInMemoryQueue<I, O> implements Iterable<O> {
 
-  /** Interval used for polling records in the queue. **/
+  // interval used for polling records in the queue.
   public static final int RECORD_POLL_INTERVAL_SEC = 1;
-
-  /** Rate used for sampling records to determine avg record size in bytes. **/
+  // rate used for sampling records to determine avg record size in bytes.
   public static final int RECORD_SAMPLING_RATE = 64;
-
-  /** Maximum records that will be cached. **/
+  // maximum records that will be cached
   private static final int RECORD_CACHING_LIMIT = 128 * 1024;
-
   private static final Logger LOG = LogManager.getLogger(BoundedInMemoryQueue.class);
-
-  /**
-   * It indicates number of records to cache. We will be using sampled record's average size to
-   * determine how many records we should cache and will change (increase/decrease) permits accordingly.
-   */
+  // It indicates number of records to cache. We will be using sampled record's average size to
+  // determine how many
+  // records we should cache and will change (increase/decrease) permits accordingly.
   public final Semaphore rateLimiter = new Semaphore(1);
-
-  /** Used for sampling records with "RECORD_SAMPLING_RATE" frequency. **/
+  // used for sampling records with "RECORD_SAMPLING_RATE" frequency.
   public final AtomicLong samplingRecordCounter = new AtomicLong(-1);
-
-  /** Internal queue for records. **/
+  // internal queue for records.
   private final LinkedBlockingQueue<Option<O>> queue = new LinkedBlockingQueue<>();
-
-  /** Maximum amount of memory to be used for queueing records. **/
+  // maximum amount of memory to be used for queueing records.
   private final long memoryLimit;
-
-  /**
-   * it holds the root cause of the exception in case either queueing records
-   * (consuming from inputIterator) fails or thread reading records from queue fails.
-   */
+  // it holds the root cause of the exception in case either queueing records (consuming from
+  // inputIterator) fails or
+  // thread reading records from queue fails.
   private final AtomicReference<Exception> hasFailed = new AtomicReference<>(null);
-
-  /** Used for indicating that all the records from queue are read successfully. **/
+  // used for indicating that all the records from queue are read successfully.
   private final AtomicBoolean isReadDone = new AtomicBoolean(false);
-
-  /** used for indicating that all records have been enqueued. **/
+  // used for indicating that all records have been enqueued
   private final AtomicBoolean isWriteDone = new AtomicBoolean(false);
-
-  /** Function to transform the input payload to the expected output payload. **/
+  // Function to transform the input payload to the expected output payload
   private final Function<I, O> transformFunction;
-
-  /** Payload Size Estimator. **/
+  // Payload Size Estimator
   private final SizeEstimator<O> payloadSizeEstimator;
-
-  /** Singleton (w.r.t this instance) Iterator for this queue. **/
+  // Singleton (w.r.t this instance) Iterator for this queue
   private final QueueIterator iterator;
-
-  /**
-   * indicates rate limit (number of records to cache). it is updated
-   * whenever there is a change in avg record size.
-   */
+  // indicates rate limit (number of records to cache). it is updated whenever there is a change
+  // in avg record size.
   public int currentRateLimit = 1;
-
-  /** Indicates avg record size in bytes. It is updated whenever a new record is sampled. **/
+  // indicates avg record size in bytes. It is updated whenever a new record is sampled.
   public long avgRecordSizeInBytes = 0;
-
-  /** Indicates number of samples collected so far. **/
+  // indicates number of samples collected so far.
   private long numSamples = 0;
 
   /**

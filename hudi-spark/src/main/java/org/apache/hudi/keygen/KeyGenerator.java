@@ -36,7 +36,7 @@ import java.util.List;
  * Abstract class to extend for plugging in extraction of {@link HoodieKey} from an Avro record.
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
-public abstract class KeyGenerator implements Serializable, SparkKeyGeneratorInterface {
+public abstract class KeyGenerator implements Serializable, KeyGeneratorInterface {
 
   private static final String STRUCT_NAME = "hoodieRowTopLevelField";
   private static final String NAMESPACE = "hoodieRow";

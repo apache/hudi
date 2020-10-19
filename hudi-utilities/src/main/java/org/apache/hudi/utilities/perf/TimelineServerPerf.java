@@ -18,8 +18,6 @@
 
 package org.apache.hudi.utilities.perf;
 
-import org.apache.hudi.client.common.HoodieEngineContext;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -134,9 +132,8 @@ public class TimelineServerPerf implements Serializable {
 
   public List<PerfStats> runLookups(JavaSparkContext jsc, List<String> partitionPaths, SyncableFileSystemView fsView,
       int numIterations, int concurrency) {
-    HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
-    context.setJobStatus(this.getClass().getSimpleName(), "Lookup all performance stats");
-    return context.flatMap(partitionPaths, p -> {
+    jsc.setJobGroup(this.getClass().getSimpleName(), "Lookup all performance stats");
+    return jsc.parallelize(partitionPaths, cfg.numExecutors).flatMap(p -> {
       ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(100);
       final List<PerfStats> result = new ArrayList<>();
       final List<ScheduledFuture<PerfStats>> futures = new ArrayList<>();
@@ -144,7 +141,7 @@ public class TimelineServerPerf implements Serializable {
       String fileId = slices.isEmpty() ? "dummyId"
           : slices.get(new Random(Double.doubleToLongBits(Math.random())).nextInt(slices.size())).getFileId();
       IntStream.range(0, concurrency).forEach(i -> futures.add(executor.schedule(() -> runOneRound(fsView, p, fileId,
-          i, numIterations), 0, TimeUnit.NANOSECONDS)));
+              i, numIterations), 0, TimeUnit.NANOSECONDS)));
       futures.forEach(x -> {
         try {
           result.add(x.get());
@@ -154,8 +151,8 @@ public class TimelineServerPerf implements Serializable {
       });
       System.out.println("SLICES are=");
       slices.forEach(s -> System.out.println("\t\tFileSlice=" + s));
-      return result.stream();
-    }, cfg.numExecutors);
+      return result.iterator();
+    }).collect();
   }
 
   private static PerfStats runOneRound(SyncableFileSystemView fsView, String partition, String fileId, int id,

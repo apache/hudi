@@ -391,7 +391,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
   }
 
   /**
-   * Bootstrap Index Writer to build bootstrap index.
+   * Boostrap Index Writer to build bootstrap index.
    */
   public static class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
 
@@ -443,7 +443,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
         bootstrapPartitionMetadata.setPartitionPath(partitionPath);
         bootstrapPartitionMetadata.setFileIdToBootstrapFile(
             bootstrapFileMappings.stream().map(m -> Pair.of(m.getFileId(),
-                m.getBootstrapFileStatus())).collect(Collectors.toMap(Pair::getKey, Pair::getValue)));
+                m.getBoostrapFileStatus())).collect(Collectors.toMap(Pair::getKey, Pair::getValue)));
         Option<byte[]> bytes = TimelineMetadataUtils.serializeAvroMetadata(bootstrapPartitionMetadata, HoodieBootstrapPartitionMetadata.class);
         if (bytes.isPresent()) {
           indexByPartitionWriter
@@ -459,14 +459,14 @@ public class HFileBootstrapIndex extends BootstrapIndex {
     /**
      * Write next source file to hudi file-id. Entries are expected to be appended in hudi file-group id
      * order.
-     * @param mapping bootstrap source file mapping.
+     * @param mapping boostrap source file mapping.
      */
     private void writeNextSourceFileMapping(BootstrapFileMapping mapping) {
       try {
         HoodieBootstrapFilePartitionInfo srcFilePartitionInfo = new HoodieBootstrapFilePartitionInfo();
         srcFilePartitionInfo.setPartitionPath(mapping.getPartitionPath());
         srcFilePartitionInfo.setBootstrapPartitionPath(mapping.getBootstrapPartitionPath());
-        srcFilePartitionInfo.setBootstrapFileStatus(mapping.getBootstrapFileStatus());
+        srcFilePartitionInfo.setBootstrapFileStatus(mapping.getBoostrapFileStatus());
         KeyValue kv = new KeyValue(getFileGroupKey(mapping.getFileGroupId()).getBytes(), new byte[0], new byte[0],
             HConstants.LATEST_TIMESTAMP, KeyValue.Type.Put,
             TimelineMetadataUtils.serializeAvroMetadata(srcFilePartitionInfo,

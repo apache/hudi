@@ -48,12 +48,4 @@ public class DelegatingSchemaProvider extends SchemaProvider {
   public Schema getTargetSchema() {
     return targetSchemaProvider.getTargetSchema();
   }
-
-  public SchemaProvider getSourceSchemaProvider() {
-    return sourceSchemaProvider;
-  }
-
-  public SchemaProvider getTargetSchemaProvider() {
-    return targetSchemaProvider;
-  }
 }

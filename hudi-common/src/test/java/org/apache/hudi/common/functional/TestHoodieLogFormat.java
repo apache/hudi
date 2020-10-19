@@ -145,7 +145,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     assertEquals(size, fs.getFileStatus(writer.getLogFile().getPath()).getLen(),
         "Write should be auto-flushed. The size reported by FileStatus and the writer should match");
     writer.close();
-
   }
 
   @ParameterizedTest
@@ -175,8 +174,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer = writer.appendBlock(dataBlock);
     assertEquals(0, writer.getCurrentSize(), "This should be a new log file and hence size should be 0");
     assertEquals(2, writer.getLogFile().getLogVersion(), "Version should be rolled to 2");
-    Path logFilePath = writer.getLogFile().getPath();
-    assertFalse(fs.exists(logFilePath), "Path (" + logFilePath + ") must not exist");
     writer.close();
   }
 
@@ -219,16 +216,16 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       builder1 = builder1.withLogVersion(1).withRolloverLogWriteToken(HoodieLogFormat.UNKNOWN_WRITE_TOKEN);
     }
     Writer writer = builder1.build();
+    Writer writer2 = builder2.build();
+    HoodieLogFile logFile1 = writer.getLogFile();
+    HoodieLogFile logFile2 = writer2.getLogFile();
     List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, 100);
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
     HoodieDataBlock dataBlock = getDataBlock(records, header);
     writer = writer.appendBlock(dataBlock);
-    Writer writer2 = builder2.build();
     writer2 = writer2.appendBlock(dataBlock);
-    HoodieLogFile logFile1 = writer.getLogFile();
-    HoodieLogFile logFile2 = writer2.getLogFile();
     writer.close();
     writer2.close();
     assertNotNull(logFile1.getLogWriteToken());

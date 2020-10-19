@@ -19,7 +19,7 @@
 package org.apache.hudi;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -63,7 +63,7 @@ import static org.mockito.Mockito.when;
 public class TestDataSourceUtils {
 
   @Mock
-  private SparkRDDWriteClient hoodieWriteClient;
+  private HoodieWriteClient hoodieWriteClient;
 
   @Mock
   private JavaRDD<HoodieRecord> hoodieRecords;
@@ -172,7 +172,7 @@ public class TestDataSourceUtils {
   }
 
   public static class NoOpBulkInsertPartitioner<T extends HoodieRecordPayload>
-      implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+      implements BulkInsertPartitioner<T> {
 
     @Override
     public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {

@@ -35,7 +35,6 @@ import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -77,19 +76,17 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
   }
 
-  private LinkedHashMap<String, Integer[]> generateData() throws Exception {
+  private LinkedHashMap<String, Integer[]> generateData() {
     // generate data and metadata
     LinkedHashMap<String, Integer[]> data = new LinkedHashMap<>();
     data.put("102", new Integer[] {15, 10});
     data.put("101", new Integer[] {20, 10});
     data.put("100", new Integer[] {15, 15});
 
-    for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
-      String key = entry.getKey();
-      Integer[] value = entry.getValue();
+    data.forEach((key, value) -> {
       HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, key, jsc.hadoopConfiguration(),
           Option.of(value[0]), Option.of(value[1]));
-    }
+    });
 
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
     assertEquals(3, metaClient.reloadActiveTimeline().getCommitsTimeline().countInstants(),
@@ -141,7 +138,7 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
    * Test case of 'commits show' command.
    */
   @Test
-  public void testShowCommits() throws Exception {
+  public void testShowCommits() throws IOException {
     Map<String, Integer[]> data = generateData();
 
     CommandResult cr = getShell().executeCommand("commits show");
@@ -157,7 +154,7 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
    * Test case of 'commits showarchived' command.
    */
   @Test
-  public void testShowArchivedCommits() throws Exception {
+  public void testShowArchivedCommits() throws IOException {
     // Generate archive
     HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withSchema(HoodieTestCommitMetadataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
@@ -171,18 +168,15 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
     data.put("102", new Integer[] {25, 45});
     data.put("101", new Integer[] {35, 15});
 
-    for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
-      String key = entry.getKey();
-      Integer[] value = entry.getValue();
+    data.forEach((key, value) -> {
       HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, key, jsc.hadoopConfiguration(),
           Option.of(value[0]), Option.of(value[1]));
-    }
+    });
 
     // archive
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
-    HoodieSparkTable table = HoodieSparkTable.create(cfg, context, metaClient);
-    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
-    archiveLog.archiveIfRequired(context);
+    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, jsc.hadoopConfiguration());
+    archiveLog.archiveIfRequired(jsc);
 
     CommandResult cr = getShell().executeCommand(String.format("commits showarchived --startTs %s --endTs %s", "100", "104"));
     assertTrue(cr.isSuccess());
@@ -204,7 +198,7 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
    * Test case of 'commit showpartitions' command.
    */
   @Test
-  public void testShowCommitPartitions() throws Exception {
+  public void testShowCommitPartitions() {
     Map<String, Integer[]> data = generateData();
 
     String commitInstant = "101";
@@ -241,7 +235,7 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
    * Test case of 'commit showfiles' command.
    */
   @Test
-  public void testShowCommitFiles() throws Exception {
+  public void testShowCommitFiles() {
     Map<String, Integer[]> data = generateData();
 
     String commitInstant = "101";
@@ -276,7 +270,7 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
    * Test case of 'commits compare' command.
    */
   @Test
-  public void testCompareCommits() throws Exception {
+  public void testCompareCommits() throws IOException {
     Map<String, Integer[]> data = generateData();
 
     String tableName2 = "test_table2";
@@ -284,12 +278,10 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
     HoodieTestUtils.init(jsc.hadoopConfiguration(), tablePath2, getTableType());
 
     data.remove("102");
-    for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
-      String key = entry.getKey();
-      Integer[] value = entry.getValue();
+    data.forEach((key, value) -> {
       HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath2, key, jsc.hadoopConfiguration(),
           Option.of(value[0]), Option.of(value[1]));
-    }
+    });
 
     CommandResult cr = getShell().executeCommand(String.format("commits compare --path %s", tablePath2));
     assertTrue(cr.isSuccess());
@@ -306,7 +298,7 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
    * Test case of 'commits sync' command.
    */
   @Test
-  public void testSyncCommits() throws Exception {
+  public void testSyncCommits() throws IOException {
     Map<String, Integer[]> data = generateData();
 
     String tableName2 = "test_table2";
@@ -314,12 +306,10 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
     HoodieTestUtils.init(jsc.hadoopConfiguration(), tablePath2, getTableType(), tableName2);
 
     data.remove("102");
-    for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
-      String key = entry.getKey();
-      Integer[] value = entry.getValue();
+    data.forEach((key, value) -> {
       HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath2, key, jsc.hadoopConfiguration(),
           Option.of(value[0]), Option.of(value[1]));
-    }
+    });
 
     CommandResult cr = getShell().executeCommand(String.format("commits sync --path %s", tablePath2));
     assertTrue(cr.isSuccess());

@@ -54,7 +54,6 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private final String logWriteToken;
   private final String rolloverLogWriteToken;
   private FSDataOutputStream output;
-  private boolean closed = false;
   private static final String APPEND_UNAVAILABLE_EXCEPTION_MESSAGE = "not sufficiently replicated yet";
 
   /**
@@ -65,7 +64,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
    * @param sizeThreshold
    */
   HoodieLogFormatWriter(FileSystem fs, HoodieLogFile logFile, Integer bufferSize, Short replication, Long sizeThreshold,
-      String logWriteToken, String rolloverLogWriteToken) {
+      String logWriteToken, String rolloverLogWriteToken) throws IOException, InterruptedException {
     this.fs = fs;
     this.logFile = logFile;
     this.sizeThreshold = sizeThreshold;
@@ -74,6 +73,40 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     this.logWriteToken = logWriteToken;
     this.rolloverLogWriteToken = rolloverLogWriteToken;
     addShutDownHook();
+    Path path = logFile.getPath();
+    if (fs.exists(path)) {
+      boolean isAppendSupported = StorageSchemes.isAppendSupported(fs.getScheme());
+      if (isAppendSupported) {
+        LOG.info(logFile + " exists. Appending to existing file");
+        try {
+          this.output = fs.append(path, bufferSize);
+        } catch (RemoteException e) {
+          LOG.warn("Remote Exception, attempting to handle or recover lease", e);
+          handleAppendExceptionOrRecoverLease(path, e);
+        } catch (IOException ioe) {
+          if (ioe.getMessage().toLowerCase().contains("not supported")) {
+            // may still happen if scheme is viewfs.
+            isAppendSupported = false;
+          } else {
+            /*
+             * Before throwing an exception, close the outputstream,
+             * to ensure that the lease on the log file is released.
+             */
+            close();
+            throw ioe;
+          }
+        }
+      }
+      if (!isAppendSupported) {
+        this.logFile = logFile.rollOver(fs, rolloverLogWriteToken);
+        LOG.info("Append not supported.. Rolling over to " + logFile);
+        createNewFile();
+      }
+    } else {
+      LOG.info(logFile + " does not exist. Create a new file");
+      // Block size does not matter as we will always manually autoflush
+      createNewFile();
+    }
   }
 
   public FileSystem getFs() {
@@ -89,64 +122,16 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     return sizeThreshold;
   }
 
-  /**
-   * Lazily opens the output stream if needed for writing.
-   * @return OutputStream for writing to current log file.
-   * @throws IOException
-   * @throws InterruptedException
-   */
-  private FSDataOutputStream getOutputStream() throws IOException, InterruptedException {
-    if (this.output == null) {
-      Path path = logFile.getPath();
-      if (fs.exists(path)) {
-        boolean isAppendSupported = StorageSchemes.isAppendSupported(fs.getScheme());
-        if (isAppendSupported) {
-          LOG.info(logFile + " exists. Appending to existing file");
-          try {
-            this.output = fs.append(path, bufferSize);
-          } catch (RemoteException e) {
-            LOG.warn("Remote Exception, attempting to handle or recover lease", e);
-            handleAppendExceptionOrRecoverLease(path, e);
-          } catch (IOException ioe) {
-            if (ioe.getMessage().toLowerCase().contains("not supported")) {
-              // may still happen if scheme is viewfs.
-              isAppendSupported = false;
-            } else {
-              /*
-               * Before throwing an exception, close the outputstream,
-               * to ensure that the lease on the log file is released.
-               */
-              close();
-              throw ioe;
-            }
-          }
-        }
-        if (!isAppendSupported) {
-          this.logFile = logFile.rollOver(fs, rolloverLogWriteToken);
-          LOG.info("Append not supported.. Rolling over to " + logFile);
-          createNewFile();
-        }
-      } else {
-        LOG.info(logFile + " does not exist. Create a new file");
-        // Block size does not matter as we will always manually autoflush
-        createNewFile();
-      }
-    }
-    return output;
-  }
-
   @Override
   public Writer appendBlock(HoodieLogBlock block) throws IOException, InterruptedException {
 
     // Find current version
     HoodieLogFormat.LogFormatVersion currentLogFormatVersion =
         new HoodieLogFormatVersion(HoodieLogFormat.CURRENT_VERSION);
-
-    FSDataOutputStream outputStream = getOutputStream();
-    long currentSize = outputStream.size();
+    long currentSize = this.output.size();
 
     // 1. Write the magic header for the start of the block
-    outputStream.write(HoodieLogFormat.MAGIC);
+    this.output.write(HoodieLogFormat.MAGIC);
 
     // bytes for header
     byte[] headerBytes = HoodieLogBlock.getLogMetadataBytes(block.getLogBlockHeader());
@@ -156,27 +141,27 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     byte[] footerBytes = HoodieLogBlock.getLogMetadataBytes(block.getLogBlockFooter());
 
     // 2. Write the total size of the block (excluding Magic)
-    outputStream.writeLong(getLogBlockLength(content.length, headerBytes.length, footerBytes.length));
+    this.output.writeLong(getLogBlockLength(content.length, headerBytes.length, footerBytes.length));
 
     // 3. Write the version of this log block
-    outputStream.writeInt(currentLogFormatVersion.getVersion());
+    this.output.writeInt(currentLogFormatVersion.getVersion());
     // 4. Write the block type
-    outputStream.writeInt(block.getBlockType().ordinal());
+    this.output.writeInt(block.getBlockType().ordinal());
 
     // 5. Write the headers for the log block
-    outputStream.write(headerBytes);
+    this.output.write(headerBytes);
     // 6. Write the size of the content block
-    outputStream.writeLong(content.length);
+    this.output.writeLong(content.length);
     // 7. Write the contents of the data block
-    outputStream.write(content);
+    this.output.write(content);
     // 8. Write the footers for the log block
-    outputStream.write(footerBytes);
+    this.output.write(footerBytes);
     // 9. Write the total size of the log block (including magic) which is everything written
     // until now (for reverse pointer)
     // Update: this information is now used in determining if a block is corrupt by comparing to the
     //   block size in header. This change assumes that the block size will be the last data written
     //   to a block. Read will break if any data is written past this point for a block.
-    outputStream.writeLong(outputStream.size() - currentSize);
+    this.output.writeLong(this.output.size() - currentSize);
     // Flush every block to disk
     flush();
 
@@ -222,12 +207,9 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   @Override
   public void close() throws IOException {
-    if (output != null) {
-      flush();
-      output.close();
-      output = null;
-      closed = true;
-    }
+    flush();
+    output.close();
+    output = null;
   }
 
   private void flush() throws IOException {
@@ -242,12 +224,8 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   @Override
   public long getCurrentSize() throws IOException {
-    if (closed) {
-      throw new IllegalStateException("Cannot get current size as the underlying stream has been closed already");
-    }
-
     if (output == null) {
-      return 0;
+      throw new IllegalStateException("Cannot get current size as the underlying stream has been closed already");
     }
     return output.getPos();
   }
@@ -324,4 +302,5 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       }
     }
   }
+
 }

@@ -164,9 +164,4 @@ public interface TableFileSystemView {
    * Timeline corresponding to the view.
    */
   HoodieTimeline getTimeline();
-
-  /**
-   * Stream all the replaced file groups before maxCommitTime.
-   */
-  Stream<HoodieFileGroup> getReplacedFileGroupsBeforeOrOn(String maxCommitTime, String partitionPath);
 }

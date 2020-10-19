@@ -18,10 +18,8 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieEngineContext;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.HoodieJsonPayload;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
@@ -144,7 +142,7 @@ public class HDFSParquetImporter implements Serializable {
       // Get schema.
       String schemaStr = UtilHelpers.parseSchema(fs, cfg.schemaFile);
 
-      SparkRDDWriteClient client =
+      HoodieWriteClient client =
           UtilHelpers.createHoodieClient(jsc, cfg.targetPath, schemaStr, cfg.parallelism, Option.empty(), props);
 
       JavaRDD<HoodieRecord<HoodieRecordPayload>> hoodieRecords = buildHoodieRecordsForImport(jsc, schemaStr);
@@ -168,8 +166,7 @@ public class HDFSParquetImporter implements Serializable {
     AvroReadSupport.setAvroReadSchema(jsc.hadoopConfiguration(), (new Schema.Parser().parse(schemaStr)));
     ParquetInputFormat.setReadSupportClass(job, (AvroReadSupport.class));
 
-    HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
-    context.setJobStatus(this.getClass().getSimpleName(), "Build records for import");
+    jsc.setJobGroup(this.getClass().getSimpleName(), "Build records for import");
     return jsc.newAPIHadoopFile(cfg.srcPath, ParquetInputFormat.class, Void.class, GenericRecord.class,
             job.getConfiguration())
         // To reduce large number of tasks.
@@ -206,8 +203,8 @@ public class HDFSParquetImporter implements Serializable {
    * @param hoodieRecords Hoodie Records
    * @param <T> Type
    */
-  protected <T extends HoodieRecordPayload> JavaRDD<WriteStatus> load(SparkRDDWriteClient client, String instantTime,
-                                                                      JavaRDD<HoodieRecord<T>> hoodieRecords) {
+  protected <T extends HoodieRecordPayload> JavaRDD<WriteStatus> load(HoodieWriteClient client, String instantTime,
+      JavaRDD<HoodieRecord<T>> hoodieRecords) {
     switch (cfg.command.toLowerCase()) {
       case "upsert": {
         return client.upsert(hoodieRecords, instantTime);
