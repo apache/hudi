@@ -25,6 +25,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -38,7 +40,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.ClientUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
-import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieKey;
@@ -52,6 +53,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -82,16 +84,23 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
   private String metadataTableBasePath;
 
   public void init() throws IOException {
-    init(HoodieTableType.MERGE_ON_READ);
+    init(HoodieTableType.MERGE_ON_READ, true);
   }
 
   public void init(HoodieTableType tableType) throws IOException {
-    initDFS();
-    initSparkContexts("TestHoodieMetadata");
-    hadoopConf.addResource(dfs.getConf());
+    init(tableType, true);
+  }
+
+  public void init(HoodieTableType tableType, boolean useDFS) throws IOException {
     initPath();
-    dfs.mkdirs(new Path(basePath));
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType);
+    initSparkContexts("TestHoodieMetadata");
+    initFileSystem();
+    if (useDFS) {
+      initDFS();
+      dfs.mkdirs(new Path(basePath));
+    }
+    initMetaClient();
+
     initTestDataGenerator();
 
     metadataTableBasePath = HoodieMetadataReader.getMetadataTableBasePath(basePath);
@@ -133,22 +142,33 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
    */
   @Test
   public void testOnlyValidPartitionsAdded() throws Exception {
-    init();
-
-    HoodieTestDataGenerator.writePartitionMetadata(dfs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
+    // This test requires local file system
+    init(HoodieTableType.MERGE_ON_READ, false);
 
     // Create an empty directory which is not a partition directory (lacks partition metadata)
     final String nonPartitionDirectory = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0] + "-nonpartition";
-    final Path nonPartitionPath = new Path(basePath, nonPartitionDirectory);
-    dfs.mkdirs(nonPartitionPath);
+    Files.createDirectories(Paths.get(basePath, nonPartitionDirectory));
+
+    // Create some commits
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    testTable.withPartitionMetaFiles("p1", "p2")
+             .addCommit("001").withBaseFilesInPartition("p1", 10).withBaseFilesInPartition("p2", 10, 10)
+             .addCommit("002").withBaseFilesInPartition("p1", 10).withBaseFilesInPartition("p2", 10, 10, 10)
+             .addInflightCommit("003").withBaseFilesInPartition("p1", 10).withBaseFilesInPartition("p2", 10);
 
     try (HoodieWriteClient client = new HoodieWriteClient<>(jsc, getWriteConfig(true, true))) {
-      client.startCommitWithTime("001");
-      validateMetadata(client);
+      client.startCommitWithTime("005");
 
-      List<String> partitions = metadata(client).getAllPartitionPaths(dfs, basePath, true);
+      List<String> partitions = metadata(client).getAllPartitionPaths(dfs, basePath, false);
       assertFalse(partitions.contains(nonPartitionDirectory),
           "Must not contain the non-partition " + nonPartitionDirectory);
+      assertTrue(partitions.contains("p1"), "Must contain partition p1");
+      assertTrue(partitions.contains("p2"), "Must contain partition p2");
+
+      FileStatus[] statuses = metadata(client).getAllFilesInPartition(hadoopConf, basePath, new Path(basePath, "p1"));
+      assertTrue(statuses.length == 2);
+      statuses = metadata(client).getAllFilesInPartition(hadoopConf, basePath, new Path(basePath, "p2"));
+      assertTrue(statuses.length == 5);
     }
   }
 

@@ -58,9 +58,9 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
@@ -305,7 +305,16 @@ public class HoodieMetadataWriter extends HoodieMetadataReader implements Serial
     ValidationUtils.checkState(enabled, "Metadata table cannot be initialized as it is not enabled");
 
     // If there is no commit on the dataset yet, use the SOLO_COMMIT_TIMESTAMP as the instant time for initial commit
-    Option<HoodieInstant> latestInstant = datasetMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
+    // Otherwise, we use the timestamp of the instant which does not have any non-completed instants before it.
+    Option<HoodieInstant> latestInstant = Option.empty();
+    boolean foundNonComplete = false;
+    for (HoodieInstant instant : datasetMetaClient.getActiveTimeline().getInstants().collect(Collectors.toList())) {
+      if (!instant.isCompleted()) {
+        foundNonComplete = true;
+      } else if (!foundNonComplete) {
+        latestInstant = Option.of(instant);
+      }
+    }
     String createInstantTime = latestInstant.isPresent() ? latestInstant.get().getTimestamp() : SOLO_COMMIT_TIMESTAMP;
 
     LOG.info("Creating a new metadata table in " + metadataBasePath + " at instant " + createInstantTime);
@@ -320,7 +329,6 @@ public class HoodieMetadataWriter extends HoodieMetadataReader implements Serial
 
     // List all partitions in parallel and collect the files in them
     final String dbasePath = datasetBasePath;
-    final SerializableConfiguration serializedConf = new SerializableConfiguration(hadoopConf);
     int parallelism =  Math.min(partitions.size(), jsc.defaultParallelism()) + 1; // +1 to prevent 0 parallelism
     JavaPairRDD<String, FileStatus[]> partitionFileListRDD = jsc.parallelize(partitions, parallelism)
         .mapToPair(partition -> {
@@ -335,6 +343,7 @@ public class HoodieMetadataWriter extends HoodieMetadataReader implements Serial
     // Create a HoodieCommitMetadata with writeStats for all discovered files
     int[] stats = {0};
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+
     partitionFileList.forEach(t -> {
       final String partition = t._1;
       try {
@@ -345,25 +354,32 @@ public class HoodieMetadataWriter extends HoodieMetadataReader implements Serial
         throw new HoodieMetadataException("Failed to check partition " + partition, e);
       }
 
+      // Filter the statuses to only include files which were created before or on createInstantTime
+      Arrays.stream(t._2).filter(status -> {
+        String filename = status.getPath().getName();
+        if (filename.equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)) {
+          return false;
+        }
+        if (HoodieTimeline.compareTimestamps(FSUtils.getCommitTime(filename), HoodieTimeline.GREATER_THAN,
+            createInstantTime)) {
+          return false;
+        }
+        return true;
+      }).forEach(status -> {
+        HoodieWriteStat writeStat = new HoodieWriteStat();
+        writeStat.setPath(partition + Path.SEPARATOR + status.getPath().getName());
+        writeStat.setPartitionPath(partition);
+        writeStat.setTotalWriteBytes(status.getLen());
+        metadata.addWriteStat(partition, writeStat);
+        stats[0] += 1;
+      });
+
       // If the partition has no files then create a writeStat with no file path
-      if (t._2.length == 0) {
+      if (metadata.getWriteStats(partition) == null) {
         HoodieWriteStat writeStat = new HoodieWriteStat();
         writeStat.setPartitionPath(partition);
         metadata.addWriteStat(partition, writeStat);
-      } else {
-        Arrays.stream(t._2).forEach(status -> {
-          String filename = status.getPath().getName();
-          if (filename.equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)) {
-            return;
-          }
-          HoodieWriteStat writeStat = new HoodieWriteStat();
-          writeStat.setPath(partition + Path.SEPARATOR + filename);
-          writeStat.setPartitionPath(partition);
-          writeStat.setTotalWriteBytes(status.getLen());
-          metadata.addWriteStat(partition, writeStat);
-        });
       }
-      stats[0] += t._2.length;
     });
 
     LOG.info("Committing " + partitionFileList.size() + " partitions and " + stats[0] + " files to metadata");
