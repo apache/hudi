@@ -28,7 +28,6 @@ import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.SchemaBuilder;
-import org.apache.hudi.utilities.transform.AddColumnTransform;
 
 import org.apache.hudi.utilities.transform.FlatteningTransformer;
 import org.apache.spark.api.java.JavaSparkContext;
