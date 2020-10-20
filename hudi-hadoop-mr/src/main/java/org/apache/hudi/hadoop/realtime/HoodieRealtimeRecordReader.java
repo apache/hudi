@@ -63,10 +63,10 @@ public class HoodieRealtimeRecordReader implements RecordReader<NullWritable, Ar
       JobConf jobConf, RecordReader<NullWritable, ArrayWritable> realReader) {
     try {
       if (canSkipMerging(jobConf)) {
-        LOG.info("Enabling un-merged reading of realtime records");
+        System.out.println("Enabling un-merged reading of realtime records");
         return new RealtimeUnmergedRecordReader(split, jobConf, realReader);
       }
-      LOG.info("Enabling merged reading of realtime records for split " + split);
+      System.out.println("Enabling merged reading of realtime records for split " + split);
       return new RealtimeCompactedRecordReader(split, jobConf, realReader);
     } catch (IOException ex) {
       LOG.error("Got exception when constructing record reader", ex);
