@@ -118,17 +118,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static final String MAX_CONSISTENCY_CHECKS_PROP = "hoodie.consistency.check.max_checks";
   public static int DEFAULT_MAX_CONSISTENCY_CHECKS = 7;
 
-  // Enable the internal Metadata Table which saves file listings
-  private static final String USE_FILE_LISTING_METADATA = "hoodie.metadata.file.listings.enable";
-  private static final String DEFAULT_USE_FILE_LISTING_METADATA = "false";
-
-  // Validate contents of Metadata Table on each access against the actual filesystem
-  private static final String FILE_LISTING_METADATA_VERIFY = "hoodie.metadata.file.listings.verify";
-  private static final String DEFAULT_FILE_LISTING_METADATA_VERIFY = "false";
-
-  // Serialized compaction config to be used for Metadata Table
-  public static final String HOODIE_METADATA_COMPACTION_CONFIG = "hoodie.metadata.compaction.config";
-
   /**
    * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
    * multiple write operations (upsert/buk-insert/...) to be executed within a single commit.
@@ -776,30 +765,35 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
    * File listing metadata configs.
    */
   public boolean useFileListingMetadata() {
-    return Boolean.parseBoolean(props.getProperty(USE_FILE_LISTING_METADATA));
+    return Boolean.parseBoolean(props.getProperty(HoodieMetadataConfig.METADATA_ENABLE));
   }
 
   public boolean getFileListingMetadataVerify() {
-    return Boolean.parseBoolean(props.getProperty(FILE_LISTING_METADATA_VERIFY));
+    return Boolean.parseBoolean(props.getProperty(HoodieMetadataConfig.METADATA_VALIDATE));
   }
 
-  public HoodieCompactionConfig getMetadataCompactionConfig() throws IOException {
-    String serializedCompactionConfig = props.getProperty(HOODIE_METADATA_COMPACTION_CONFIG);
-    if (serializedCompactionConfig != null) {
-      StringReader reader = new StringReader(serializedCompactionConfig);
-      Properties loadedProps = new Properties();
-      loadedProps.load(reader);
-      return HoodieCompactionConfig.newBuilder().fromProperties(loadedProps).build();
-    }
+  public int getMetadataInsertParallelism() {
+    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.INSERT_PARALLELISM));
+  }
 
-    // Default config for compacting metadata tables
-    return HoodieCompactionConfig.newBuilder()
-        .withAutoClean(true)
-        .withInlineCompaction(true)
-        .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
-        .archiveCommitsWith(24, 30)
-        .withMaxNumDeltaCommitsBeforeCompaction(24)
-        .build();
+  public int getMetadataCompactDeltaCommitMax() {
+    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS));
+  }
+
+  public boolean isMetadataAsyncClean() {
+    return Boolean.parseBoolean(props.getProperty(HoodieMetadataConfig.ASYNC_CLEAN));
+  }
+
+  public int getMetadataMaxCommitsToKeep() {
+    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.MAX_COMMITS_TO_KEEP));
+  }
+
+  public int getMetadataMinCommitsToKeep() {
+    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.MIN_COMMITS_TO_KEEP));
+  }
+
+  public int getMetadataCleanerCommitsRetained() {
+    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED));
   }
 
   public static class Builder {
@@ -814,6 +808,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private boolean isViewConfigSet = false;
     private boolean isConsistencyGuardSet = false;
     private boolean isCallbackConfigSet = false;
+    private boolean isMetadataConfigSet = false;
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
@@ -931,12 +926,9 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder withMetadataCompactionConfig(HoodieCompactionConfig compactionConfig) throws IOException {
-      // Since the property names from HoodieCompactionConfig are already used in withCompactionConfig,
-      // metadata compaction config can only be saved serialized.
-      StringWriter writer = new StringWriter();
-      compactionConfig.getProps().store(writer, "metadata compaction config");
-      props.setProperty(HOODIE_METADATA_COMPACTION_CONFIG, writer.toString());
+    public Builder withMetadataConfig(HoodieMetadataConfig metadataConfig) {
+      props.putAll(metadataConfig.getProps());
+      isMetadataConfigSet = true;
       return this;
     }
 
@@ -1026,16 +1018,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder withUseFileListingMetadata(boolean enable) {
-      props.setProperty(USE_FILE_LISTING_METADATA, String.valueOf(enable));
-      return this;
-    }
-
-    public Builder withFileListingMetadataVerify(boolean enable) {
-      props.setProperty(FILE_LISTING_METADATA_VERIFY, String.valueOf(enable));
-      return this;
-    }
-
     protected void setDefaults() {
       // Check for mandatory properties
       setDefaultOnCondition(props, !props.containsKey(INSERT_PARALLELISM), INSERT_PARALLELISM, DEFAULT_PARALLELISM);
@@ -1081,11 +1063,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(BULKINSERT_SORT_MODE),
           BULKINSERT_SORT_MODE, DEFAULT_BULKINSERT_SORT_MODE);
 
-      setDefaultOnCondition(props, !props.containsKey(USE_FILE_LISTING_METADATA), USE_FILE_LISTING_METADATA,
-          DEFAULT_USE_FILE_LISTING_METADATA);
-      setDefaultOnCondition(props, !props.containsKey(FILE_LISTING_METADATA_VERIFY), FILE_LISTING_METADATA_VERIFY,
-          DEFAULT_FILE_LISTING_METADATA_VERIFY);
-
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isStorageConfigSet, HoodieStorageConfig.newBuilder().fromProperties(props).build());
@@ -1101,6 +1078,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           ConsistencyGuardConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isCallbackConfigSet,
           HoodieWriteCommitCallbackConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isMetadataConfigSet,
+          HoodieMetadataConfig.newBuilder().fromProperties(props).build());
 
       setDefaultOnCondition(props, !props.containsKey(EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION),
           EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION, DEFAULT_EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION);
