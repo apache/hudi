@@ -1359,12 +1359,17 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
   }
 
   private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer) throws IOException {
+    prepareParquetDFSSource(useSchemaProvider, hasTransformer, null);
+  }
+
+  private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, TypedProperties typedProperties) throws IOException {
     prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc",
-        PROPS_FILENAME_TEST_PARQUET, PARQUET_SOURCE_ROOT, false);
+        PROPS_FILENAME_TEST_PARQUET, PARQUET_SOURCE_ROOT, false, typedProperties);
   }
 
   private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
-                                       String propsFileName, String parquetSourceRoot, boolean addCommonProps) throws IOException {
+                                       String propsFileName, String parquetSourceRoot, boolean addCommonProps,
+                                       TypedProperties typedProperties) throws IOException {
     // Properties used for testing delta-streamer with Parquet source
     TypedProperties parquetProps = new TypedProperties();
 
@@ -1383,6 +1388,11 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
       }
     }
     parquetProps.setProperty("hoodie.deltastreamer.source.dfs.root", parquetSourceRoot);
+    if (null != typedProperties) {
+      for (String key: typedProperties.stringPropertyNames()) {
+        parquetProps.setProperty(key, typedProperties.getString(key));
+      }
+    }
     UtilitiesTestBase.Helpers.savePropsToDFS(parquetProps, dfs, dfsBasePath + "/" + propsFileName);
   }
 
@@ -1429,7 +1439,7 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     prepareParquetDFSFiles(parquetRecords, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, true, HoodieTestDataGenerator.TRIP_SCHEMA, HoodieTestDataGenerator.AVRO_TRIP_SCHEMA);
 
     prepareParquetDFSSource(true, false, "source_uber.avsc", "target_uber.avsc", PROPS_FILENAME_TEST_PARQUET,
-        PARQUET_SOURCE_ROOT, false);
+        PARQUET_SOURCE_ROOT, false, null);
     // delta streamer w/ parquest source
     String tableBasePath = dfsBasePath + "/test_dfs_to_kakfa" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
@@ -1747,6 +1757,71 @@ public class TestHoodieDeltaStreamer extends TestHoodieDeltaStreamerBase {
     TestHelpers.assertRecordCount(1950, tableBasePath + "/*/*.parquet", sqlContext);
     TestHelpers.assertDistanceCount(1950, tableBasePath + "/*/*.parquet", sqlContext);
     TestHelpers.assertCommitMetadata("00001", tableBasePath, dfs, 2);
+  }
+
+  @Test
+  public void testDFSSourceDeleteFilesAfterCommit() throws Exception {
+    TypedProperties props = new TypedProperties();
+    props.setProperty("hoodie.deltastreamer.source.dfs.clean.mode", "delete");
+    testDFSSourceCleanUp(props);
+  }
+
+  @Test
+  public void testDFSSourceArchiveFilesAfterCommit() throws Exception {
+    TypedProperties props = new TypedProperties();
+    props.setProperty("hoodie.deltastreamer.source.dfs.clean.mode", "archive");
+    final String archivePath = dfsBasePath + "/archive";
+    dfs.mkdirs(new Path(archivePath));
+    props.setProperty("hoodie.deltastreamer.source.dfs.clean.archiveDir", archivePath);
+    assertEquals(0, Helpers.listAllFiles(archivePath).size());
+    testDFSSourceCleanUp(props);
+    // archive dir should contain source files
+    assertEquals(1, Helpers.listAllFiles(archivePath).size());
+  }
+
+  private void testDFSSourceCleanUp(TypedProperties props) throws Exception {
+    // since each source cleanup test will modify source, we need to set different dfs.root each test
+    final String dfsRoot = dfsBasePath + "/test_dfs_cleanup_source" + testNum;
+    dfs.mkdirs(new Path(dfsRoot));
+    prepareParquetDFSFiles(PARQUET_NUM_RECORDS, dfsRoot);
+    prepareParquetDFSSource(false, false, "source.avsc", "target.avsc",
+        PROPS_FILENAME_TEST_PARQUET, dfsRoot, false,  props);
+
+    String tableBasePath = dfsBasePath + "/test_dfs_cleanup_output" + testNum;
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
+        TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
+          null, PROPS_FILENAME_TEST_PARQUET, false,
+          false, 100000, false, null, null, "timestamp", null),
+          jsc);
+
+    assertEquals(1, Helpers.listAllFiles(PARQUET_SOURCE_ROOT).size());
+    deltaStreamer.sync();
+    TestHelpers.assertRecordCount(PARQUET_NUM_RECORDS, tableBasePath + "/*/*.parquet", sqlContext);
+    // source files should be removed
+    assertEquals(0, Helpers.listAllFiles(dfsRoot).size());
+    testNum++;
+  }
+
+  @Test
+  public void testDFSSourceArchiveFilesInvalidArchiveDir() throws Exception {
+    Exception e = assertThrows(IOException.class, () -> {
+      TypedProperties props = new TypedProperties();
+      props.setProperty("hoodie.deltastreamer.source.dfs.clean.mode", "archive");
+      final String rootPath = dfsBasePath + "/test_dfs_cleanup" + testNum;
+      props.setProperty("hoodie.deltastreamer.source.dfs.clean.archiveDir", rootPath + "/archive");
+      props.setProperty("hoodie.deltastreamer.source.dfs.root", rootPath);
+      prepareParquetDFSSource(false, false, props);
+
+      String tableBasePath = dfsBasePath + "/test_dfs_cleanup_output" + testNum;
+      HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
+          TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
+          null, PROPS_FILENAME_TEST_PARQUET, false,
+          false, 100000, false, null, null, "timestamp", null),
+          jsc);
+    }, "should throw error when archiveDir is child of dfs.root");
+    assertEquals("hoodie.deltastreamer.source.dfs.clean.archiveDir must not be child of "
+        + "hoodie.deltastreamer.source.dfs.root", Helpers.getRootCause(e).getMessage());
+    testNum++;
   }
 
   /**

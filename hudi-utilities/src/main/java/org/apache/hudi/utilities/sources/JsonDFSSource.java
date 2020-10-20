@@ -24,9 +24,14 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 
+import org.apache.hudi.utilities.sources.helpers.FileSourceCleaner;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * DFS Source that reads json data.
@@ -34,17 +39,23 @@ import org.apache.spark.sql.SparkSession;
 public class JsonDFSSource extends JsonSource {
 
   private final DFSPathSelector pathSelector;
+  private final FileSourceCleaner fileCleaner;
+  private Set<String> inputFiles;
 
   public JsonDFSSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    this.pathSelector = DFSPathSelector.createSourceSelector(props, sparkContext.hadoopConfiguration());
+    this.pathSelector = new DFSPathSelector(props, sparkContext.hadoopConfiguration());
+    this.fileCleaner = FileSourceCleaner.create(props, pathSelector.getFileSystem());
+    this.inputFiles = new HashSet<>();
   }
 
   @Override
   protected InputBatch<JavaRDD<String>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
     Pair<Option<String>, String> selPathsWithMaxModificationTime =
         pathSelector.getNextFilePathsAndMaxModificationTime(sparkContext, lastCkptStr, sourceLimit);
+    selPathsWithMaxModificationTime.getLeft().ifPresent(paths ->
+        inputFiles.addAll(Arrays.asList(paths.split(","))));
     return selPathsWithMaxModificationTime.getLeft()
         .map(pathStr -> new InputBatch<>(Option.of(fromFiles(pathStr)), selPathsWithMaxModificationTime.getRight()))
         .orElse(new InputBatch<>(Option.empty(), selPathsWithMaxModificationTime.getRight()));
@@ -52,5 +63,13 @@ public class JsonDFSSource extends JsonSource {
 
   private JavaRDD<String> fromFiles(String pathStr) {
     return sparkContext.textFile(pathStr);
+  }
+
+  @Override
+  public void postCommit() {
+    for (String file: inputFiles) {
+      fileCleaner.clean(file);
+    }
+    inputFiles.clear();
   }
 }

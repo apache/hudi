@@ -42,8 +42,8 @@ public class TestJsonDFSSource extends AbstractDFSSourceTestBase {
   }
 
   @Override
-  public Source prepareDFSSource() {
-    TypedProperties props = new TypedProperties();
+  public Source prepareDFSSource(TypedProperties defaults) {
+    TypedProperties props = new TypedProperties(defaults);
     props.setProperty("hoodie.deltastreamer.source.dfs.root", dfsRoot);
     return new JsonDFSSource(props, jsc, sparkSession, schemaProvider);
   }

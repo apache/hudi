@@ -46,8 +46,8 @@ public class TestCsvDFSSource extends AbstractDFSSourceTestBase {
   }
 
   @Override
-  public Source prepareDFSSource() {
-    TypedProperties props = new TypedProperties();
+  public Source prepareDFSSource(TypedProperties defaults) {
+    TypedProperties props = new TypedProperties(defaults);
     props.setProperty("hoodie.deltastreamer.source.dfs.root", dfsRoot);
     props.setProperty("hoodie.deltastreamer.csv.header", Boolean.toString(true));
     props.setProperty("hoodie.deltastreamer.csv.sep", "\t");

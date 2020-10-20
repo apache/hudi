@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.testutils.sources;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -44,8 +45,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -53,6 +56,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * An abstract test base for {@link Source} using DFS as the file system.
  */
 public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
+
+  protected static String dfsArchivePath;
 
   protected FilebasedSchemaProvider schemaProvider;
   protected String dfsRoot;
@@ -63,6 +68,7 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
   @BeforeAll
   public static void initClass() throws Exception {
     UtilitiesTestBase.initClass();
+    dfsArchivePath = dfsBasePath + "/archive";
   }
 
   @AfterAll
@@ -79,14 +85,24 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
   @AfterEach
   public void teardown() throws Exception {
     super.teardown();
+    dfs.delete(new Path(dfsRoot), true);
+    dfs.delete(new Path(dfsArchivePath), true);
   }
 
   /**
    * Prepares the specific {@link Source} to test, by passing in necessary configurations.
    *
    * @return A {@link Source} using DFS as the file system.
+   * @param defaults
    */
-  protected abstract Source prepareDFSSource();
+  protected abstract Source prepareDFSSource(TypedProperties defaults);
+
+  /**
+   * Prepares the specific {@link Source} to test.
+   */
+  protected Source prepareDFSSource() {
+    return prepareDFSSource(new TypedProperties());
+  }
 
   /**
    * Writes test data, i.e., a {@link List} of {@link HoodieRecord}, to a file on DFS.
@@ -188,5 +204,64 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
     InputBatch<JavaRDD<GenericRecord>> fetch6 = sourceFormatAdapter.fetchNewDataInAvroFormat(
         Option.empty(), Long.MAX_VALUE);
     assertEquals(10101, fetch6.getBatch().get().count());
+  }
+
+  @Test
+  public void testCleanUpSourceAfterCommit() throws IOException {
+    dfs.mkdirs(new Path(dfsRoot));
+    TypedProperties props = new TypedProperties();
+    props.setProperty("hoodie.deltastreamer.source.dfs.clean.mode", "delete");
+    // use synchronous clean to be able to verify immediately
+    props.setProperty("hoodie.deltastreamer.source.dfs.clean.numThreads", "0");
+    SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(prepareDFSSource(props));
+    assertEquals(Option.empty(),
+        sourceFormatAdapter.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
+
+    generateOneFile("1", "001", 100);
+    generateOneFile("foo/2", "001", 100);
+    generateOneFile("foo/bar/3", "001", 100);
+    assertEquals(3, Helpers.listAllFiles(dfsRoot).size());
+
+    // fetch new batch
+    InputBatch<JavaRDD<GenericRecord>> fetch =
+        sourceFormatAdapter.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
+    assertEquals(300, fetch.getBatch().get().count());
+
+    // trigger clean up
+    sourceFormatAdapter.postCommit();
+    assertEquals(0, Helpers.listAllFiles(dfsRoot).size());
+  }
+
+  @Test
+  public void testArchiveSourceAfterCommit() throws IOException {
+    dfs.mkdirs(new Path(dfsRoot));
+    dfs.mkdirs(new Path(dfsArchivePath));
+    TypedProperties props = new TypedProperties();
+    props.setProperty("hoodie.deltastreamer.source.dfs.clean.mode", "archive");
+    props.setProperty("hoodie.deltastreamer.source.dfs.clean.archiveDir", dfsArchivePath);
+    // use synchronous clean to be able to verify immediately
+    props.setProperty("hoodie.deltastreamer.source.dfs.clean.numThreads", "0");
+    SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(prepareDFSSource(props));
+
+    assertEquals(Option.empty(),
+        sourceFormatAdapter.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
+
+    generateOneFile("1", "001", 100);
+    generateOneFile("foo/2", "001", 100);
+    generateOneFile("foo/bar/3", "001", 100);
+    assertEquals(3, Helpers.listAllFiles(dfsRoot).size());
+    assertEquals(0, Helpers.listAllFiles(dfsArchivePath).size());
+
+    // fetch new data
+    InputBatch<JavaRDD<GenericRecord>> fetch =
+        sourceFormatAdapter.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
+    assertEquals(300, fetch.getBatch().get().count());
+
+    // trigger clean up
+    sourceFormatAdapter.postCommit();
+    assertEquals(0, Helpers.listAllFiles(dfsRoot).size());
+    final String[] expected = Arrays.stream(new String[] { "1", "foo/2", "foo/bar/3" })
+      .map(it -> dfsArchivePath + "/" + it + fileSuffix).toArray(String[]::new);
+    assertArrayEquals(expected, Helpers.listAllFiles(dfsArchivePath).toArray());
   }
 }

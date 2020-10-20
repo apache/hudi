@@ -24,10 +24,15 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 
+import org.apache.hudi.utilities.sources.helpers.FileSourceCleaner;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * DFS Source that reads parquet data.
@@ -35,17 +40,23 @@ import org.apache.spark.sql.SparkSession;
 public class ParquetDFSSource extends RowSource {
 
   private final DFSPathSelector pathSelector;
+  private final FileSourceCleaner fileCleaner;
+  private Set<String> inputFiles;
 
   public ParquetDFSSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
     this.pathSelector = DFSPathSelector.createSourceSelector(props, this.sparkContext.hadoopConfiguration());
+    this.fileCleaner = FileSourceCleaner.create(props, pathSelector.getFileSystem());
+    this.inputFiles = new HashSet<>();
   }
 
   @Override
   public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
     Pair<Option<String>, String> selectPathsWithMaxModificationTime =
         pathSelector.getNextFilePathsAndMaxModificationTime(sparkContext, lastCkptStr, sourceLimit);
+    selectPathsWithMaxModificationTime.getLeft().ifPresent(paths ->
+        inputFiles.addAll(Arrays.asList(paths.split(","))));
     return selectPathsWithMaxModificationTime.getLeft()
         .map(pathStr -> Pair.of(Option.of(fromFiles(pathStr)), selectPathsWithMaxModificationTime.getRight()))
         .orElseGet(() -> Pair.of(Option.empty(), selectPathsWithMaxModificationTime.getRight()));
@@ -53,5 +64,13 @@ public class ParquetDFSSource extends RowSource {
 
   private Dataset<Row> fromFiles(String pathStr) {
     return sparkSession.read().parquet(pathStr.split(","));
+  }
+
+  @Override
+  public void postCommit() {
+    for (String file: inputFiles) {
+      fileCleaner.clean(file);
+    }
+    inputFiles.clear();
   }
 }

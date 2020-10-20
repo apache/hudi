@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 
+import org.apache.hudi.utilities.sources.helpers.FileSourceCleaner;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
@@ -33,7 +34,9 @@ import org.apache.spark.sql.avro.SchemaConverters;
 import org.apache.spark.sql.types.StructType;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Reads data from CSV files on DFS as the data source.
@@ -73,6 +76,8 @@ public class CsvDFSSource extends RowSource {
 
   private final transient DFSPathSelector pathSelector;
   private final StructType sourceSchema;
+  private final FileSourceCleaner fileCleaner;
+  private Set<String> inputFiles;
 
   public CsvDFSSource(TypedProperties props,
       JavaSparkContext sparkContext,
@@ -86,6 +91,8 @@ public class CsvDFSSource extends RowSource {
     } else {
       sourceSchema = null;
     }
+    this.fileCleaner = FileSourceCleaner.create(props, pathSelector.getFileSystem());
+    this.inputFiles = new HashSet<>();
   }
 
   @Override
@@ -93,6 +100,8 @@ public class CsvDFSSource extends RowSource {
       long sourceLimit) {
     Pair<Option<String>, String> selPathsWithMaxModificationTime =
         pathSelector.getNextFilePathsAndMaxModificationTime(sparkContext, lastCkptStr, sourceLimit);
+    selPathsWithMaxModificationTime.getLeft().ifPresent(paths ->
+        inputFiles.addAll(Arrays.asList(paths.split(","))));
     return Pair.of(fromFiles(
         selPathsWithMaxModificationTime.getLeft()), selPathsWithMaxModificationTime.getRight());
   }
@@ -124,5 +133,13 @@ public class CsvDFSSource extends RowSource {
     } else {
       return Option.empty();
     }
+  }
+
+  @Override
+  public void postCommit() {
+    for (String file: inputFiles) {
+      fileCleaner.clean(file);
+    }
+    inputFiles.clear();
   }
 }

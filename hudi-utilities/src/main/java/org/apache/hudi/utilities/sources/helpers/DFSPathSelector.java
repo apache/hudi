@@ -170,4 +170,8 @@ public class DFSPathSelector implements Serializable {
     }
     return res;
   }
+
+  public FileSystem getFileSystem() {
+    return fs;
+  }
 }

@@ -18,6 +18,10 @@
 
 package org.apache.hudi.utilities.testutils;
 
+import java.io.FileInputStream;
+
+import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -69,7 +73,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.io.BufferedReader;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
@@ -363,6 +366,29 @@ public class UtilitiesTestBase {
 
     public static String[] jsonifyRecords(List<HoodieRecord> records) {
       return records.stream().map(Helpers::toJsonString).toArray(String[]::new);
+    }
+
+    /**
+     * Return all files recursively under a path.
+     */
+    public static List<String> listAllFiles(String path) throws IOException {
+      RemoteIterator<LocatedFileStatus> iter = dfs.listFiles(new Path(path), true);
+      List<String> res = new ArrayList<>();
+      while (iter.hasNext()) {
+        res.add(iter.next().getPath().toString());
+      }
+      return res;
+    }
+
+    /**
+     * Similar to Guava's Throwables.getRootCause(), only it doesn't check for loop.
+     */
+    public static Throwable getRootCause(Throwable throwable) {
+      Throwable cause;
+      while ((cause = throwable.getCause()) != null) {
+        throwable = cause;
+      }
+      return throwable;
     }
   }
 }

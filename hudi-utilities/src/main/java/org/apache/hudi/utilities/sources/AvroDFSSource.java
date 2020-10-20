@@ -28,12 +28,16 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.mapred.AvroKey;
 import org.apache.avro.mapreduce.AvroKeyInputFormat;
 import org.apache.hadoop.io.NullWritable;
+import org.apache.hudi.utilities.sources.helpers.FileSourceCleaner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * DFS Source that reads avro data.
@@ -41,18 +45,24 @@ import java.io.IOException;
 public class AvroDFSSource extends AvroSource {
 
   private final DFSPathSelector pathSelector;
+  private final FileSourceCleaner fileCleaner;
+  private Set<String> inputFiles;
 
   public AvroDFSSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) throws IOException {
     super(props, sparkContext, sparkSession, schemaProvider);
     this.pathSelector = DFSPathSelector
         .createSourceSelector(props, sparkContext.hadoopConfiguration());
+    this.fileCleaner = FileSourceCleaner.create(props, pathSelector.getFileSystem());
+    this.inputFiles = new HashSet<>();
   }
 
   @Override
   protected InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
     Pair<Option<String>, String> selectPathsWithMaxModificationTime =
         pathSelector.getNextFilePathsAndMaxModificationTime(sparkContext, lastCkptStr, sourceLimit);
+    selectPathsWithMaxModificationTime.getLeft().ifPresent(paths ->
+        inputFiles.addAll(Arrays.asList(paths.split(","))));
     return selectPathsWithMaxModificationTime.getLeft()
         .map(pathStr -> new InputBatch<>(Option.of(fromFiles(pathStr)), selectPathsWithMaxModificationTime.getRight()))
         .orElseGet(() -> new InputBatch<>(Option.empty(), selectPathsWithMaxModificationTime.getRight()));
@@ -63,5 +73,13 @@ public class AvroDFSSource extends AvroSource {
     JavaPairRDD<AvroKey, NullWritable> avroRDD = sparkContext.newAPIHadoopFile(pathStr, AvroKeyInputFormat.class,
         AvroKey.class, NullWritable.class, sparkContext.hadoopConfiguration());
     return avroRDD.keys().map(r -> ((GenericRecord) r.datum()));
+  }
+
+  @Override
+  public void postCommit() {
+    for (String file: inputFiles) {
+      fileCleaner.clean(file);
+    }
+    inputFiles.clear();
   }
 }

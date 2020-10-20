@@ -123,4 +123,11 @@ public final class SourceFormatAdapter {
   public Source getSource() {
     return source;
   }
+
+  /**
+   * Signal source after successfully commit a input batch.
+   */
+  public void postCommit() {
+    source.postCommit();
+  }
 }
