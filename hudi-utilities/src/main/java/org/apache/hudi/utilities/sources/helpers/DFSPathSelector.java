@@ -22,8 +22,10 @@ import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.conf.Configuration;
@@ -66,6 +68,33 @@ public class DFSPathSelector {
     this.fs = FSUtils.getFs(props.getString(Config.ROOT_INPUT_PATH_PROP), hadoopConf);
   }
 
+  /**
+   * Factory method for creating custom DFSPathSelector. Default selector
+   * to use is {@link DFSPathSelector}
+   */
+  public static DFSPathSelector createSourceSelector(TypedProperties props,
+                                                     Configuration conf) {
+    String sourceSelectorClass = props.getString(DFSPathSelector.Config.SOURCE_INPUT_SELECTOR,
+        DFSPathSelector.class.getName());
+    try {
+      DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(sourceSelectorClass,
+          new Class<?>[]{TypedProperties.class, Configuration.class},
+          props, conf);
+
+      log.info("Using path selector " + selector.getClass().getName());
+      return selector;
+    } catch (Exception e) {
+      throw new HoodieException("Could not load source selector class " + sourceSelectorClass, e);
+    }
+  }
+
+  /**
+   * Get the list of files changed since last checkpoint.
+   *
+   * @param lastCheckpointStr the last checkpoint time string, empty if first run
+   * @param sourceLimit       max bytes to read each time
+   * @return the list of files concatenated and their latest modified time
+   */
   public Pair<Option<String>, String> getNextFilePathsAndMaxModificationTime(Option<String> lastCheckpointStr,
       long sourceLimit) {
 

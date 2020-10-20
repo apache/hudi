@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -46,7 +45,6 @@ import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
 import org.apache.hudi.utilities.sources.JsonKafkaSource;
 import org.apache.hudi.utilities.sources.Source;
-import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
@@ -374,22 +372,6 @@ public class UtilHelpers {
       }
     } else {
       throw new HoodieException(String.format("%s table does not exists!", table));
-    }
-  }
-
-  public static DFSPathSelector createSourceSelector(TypedProperties props,
-      Configuration conf) throws IOException {
-    String sourceSelectorClass =
-        props.getString(DFSPathSelector.Config.SOURCE_INPUT_SELECTOR, DFSPathSelector.class.getName());
-    try {
-      DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(sourceSelectorClass,
-          new Class<?>[]{TypedProperties.class, Configuration.class},
-          props, conf);
-
-      LOG.info("Using path selector " + selector.getClass().getName());
-      return selector;
-    } catch (Throwable e) {
-      throw new IOException("Could not load source selector class " + sourceSelectorClass, e);
     }
   }
 
