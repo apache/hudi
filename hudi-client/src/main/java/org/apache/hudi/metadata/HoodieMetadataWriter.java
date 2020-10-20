@@ -47,6 +47,7 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -59,11 +60,15 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieMetadataConfig;
 import org.apache.hudi.config.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -97,7 +102,15 @@ public class HoodieMetadataWriter extends HoodieMetadataReader implements Serial
   private static Map<String, HoodieMetadataWriter> instances = new HashMap<>();
 
   public static HoodieMetadataWriter instance(Configuration conf, HoodieWriteConfig writeConfig) {
-    return instances.computeIfAbsent(writeConfig.getBasePath(), k -> {
+    String key = writeConfig.getBasePath();
+    if (instances.containsKey(key)) {
+      if (instances.get(key).enabled() != writeConfig.useFileListingMetadata()) {
+        // Enabled state has changed. Remove so it is recreated.
+        instances.remove(key);
+      }
+    }
+
+    return instances.computeIfAbsent(key, k -> {
       try {
         return new HoodieMetadataWriter(conf, writeConfig);
       } catch (IOException e) {
@@ -141,17 +154,18 @@ public class HoodieMetadataWriter extends HoodieMetadataReader implements Serial
    * @param schemaStr Metadata Table schema
    */
   private HoodieWriteConfig createMetadataWriteConfig(HoodieWriteConfig writeConfig) throws IOException {
+    int parallelism = writeConfig.getMetadataInsertParallelism();
+
     // Create the write config for the metadata table by borrowing options from the main write config.
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
-        .withTimelineLayoutVersion(writeConfig.getTimelineLayoutVersion())
+        .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
             .withConsistencyCheckEnabled(writeConfig.getConsistencyGuardConfig().isConsistencyCheckEnabled())
             .withInitialConsistencyCheckIntervalMs(writeConfig.getConsistencyGuardConfig().getInitialConsistencyCheckIntervalMs())
             .withMaxConsistencyCheckIntervalMs(writeConfig.getConsistencyGuardConfig().getMaxConsistencyCheckIntervalMs())
             .withMaxConsistencyChecks(writeConfig.getConsistencyGuardConfig().getMaxConsistencyChecks())
             .build())
-        .withUseFileListingMetadata(false)
-        .withFileListingMetadataVerify(false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .withAutoCommit(true)
         .withAvroSchemaValidate(true)
         .withEmbeddedTimelineServerEnabled(false)
@@ -159,8 +173,19 @@ public class HoodieMetadataWriter extends HoodieMetadataReader implements Serial
         .withPath(metadataBasePath)
         .withSchema(HoodieMetadataRecord.getClassSchema().toString())
         .forTable(tableName)
-        .withParallelism(1, 1).withDeleteParallelism(1).withRollbackParallelism(1).withFinalizeWriteParallelism(1)
-        .withCompactionConfig(writeConfig.getMetadataCompactionConfig());
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withAsyncClean(writeConfig.isMetadataAsyncClean())
+            .withAutoClean(true)
+            .withCleanerParallelism(parallelism)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+            .retainCommits(writeConfig.getMetadataCleanerCommitsRetained())
+            .archiveCommitsWith(writeConfig.getMetadataMinCommitsToKeep(), writeConfig.getMetadataMaxCommitsToKeep())
+            .withInlineCompaction(true)
+            .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax()).build())
+        .withParallelism(parallelism, parallelism)
+        .withDeleteParallelism(parallelism)
+        .withRollbackParallelism(parallelism)
+        .withFinalizeWriteParallelism(parallelism);
 
     if (writeConfig.isMetricsOn()) {
       HoodieMetricsConfig.Builder metricsConfig = HoodieMetricsConfig.newBuilder()

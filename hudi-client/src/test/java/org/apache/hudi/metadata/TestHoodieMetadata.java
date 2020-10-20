@@ -56,6 +56,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieMetadataConfig;
 import org.apache.hudi.config.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -461,11 +462,9 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
     // Test autoClean and asyncClean based on this flag which is randomly chosen.
     boolean asyncClean = new Random().nextBoolean();
     HoodieWriteConfig config = getWriteConfigBuilder(true, true, false)
-        .withMetadataCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .archiveCommitsWith(2, 4).retainCommits(1).retainFileVersions(1).withAutoClean(true)
-            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
-            .withInlineCompaction(true).withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommitsBeforeCompaction)
-            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
+            .archiveCommitsWith(2, 4).retainCommits(1)
+            .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommitsBeforeCompaction).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 3)
             .retainCommits(1).retainFileVersions(1).withAutoClean(true).withAsyncClean(asyncClean).build())
         .build();
@@ -594,8 +593,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
   public void testMetadataMetrics() throws Exception {
     init();
 
-    try (HoodieWriteClient client = new HoodieWriteClient<>(jsc,
-        getWriteConfigBuilder(true, true, true).withFileListingMetadataVerify(true).build())) {
+    try (HoodieWriteClient client = new HoodieWriteClient<>(jsc, getWriteConfigBuilder(true, true, true).build())) {
       // Write
       String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
@@ -606,8 +604,12 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
 
       Registry metricsRegistry = Registry.getRegistry("HoodieMetadata");
       assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataWriter.INITIALIZE_STR + ".count"));
-      assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataWriter.INITIALIZE_STR + ".duration"));
+      assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataWriter.INITIALIZE_STR + ".totalDuration"));
       assertEquals(metricsRegistry.getAllCounts().get(HoodieMetadataWriter.INITIALIZE_STR + ".count"), 1L);
+      assertTrue(metricsRegistry.getAllCounts().containsKey("basefile.size"));
+      assertTrue(metricsRegistry.getAllCounts().containsKey("logfile.size"));
+      assertTrue(metricsRegistry.getAllCounts().containsKey("basefile.count"));
+      assertTrue(metricsRegistry.getAllCounts().containsKey("logfile.count"));
     }
   }
 
@@ -617,11 +619,14 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
    * @throws IOException
    */
   private void validateMetadata(HoodieWriteClient client) throws IOException {
-    long t1 = System.currentTimeMillis();
-
     HoodieWriteConfig config = client.getConfig();
     HoodieMetadataWriter metadata = metadata(client);
     assertFalse(metadata == null, "MetadataWriter should have been initialized");
+    if (!config.useFileListingMetadata()) {
+      return;
+    }
+
+    long t1 = System.currentTimeMillis();
 
     // Validate write config for metadata table
     HoodieWriteConfig metadataWriteConfig = metadata.getWriteConfig();
@@ -742,10 +747,6 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
     }
   }
 
-  private HoodieWriteConfig getWriteConfig() {
-    return getWriteConfig(true, true);
-  }
-
   private HoodieWriteConfig getWriteConfig(boolean autoCommit, boolean useFileListingMetadata) {
     return getWriteConfigBuilder(autoCommit, useFileListingMetadata, false).build();
   }
@@ -763,7 +764,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
         .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
             .withEnableBackupForRemoteFileSystemView(false).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-        .withUseFileListingMetadata(useFileListingMetadata)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(useFileListingMetadata).build())
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().withReporterType("CONSOLE").on(enableMetrics)
                            .withExecutorMetrics(true).usePrefix("unit-test").build());
   }
