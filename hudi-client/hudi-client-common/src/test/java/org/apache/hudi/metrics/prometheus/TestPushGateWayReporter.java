@@ -39,6 +39,7 @@ public class TestPushGateWayReporter {
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS_PUSHGATEWAY);
     when(config.getPushGatewayHost()).thenReturn("localhost");
     when(config.getPushGatewayPort()).thenReturn(9091);
+    when(config.getPushGatewayReportPeriodSeconds()).thenReturn(10);
     new HoodieMetrics(config, "raw_table");
     registerGauge("pushGateWayReporter_metric", 123L);
     assertEquals("123", Metrics.getInstance().getRegistry().getGauges()
