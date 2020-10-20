@@ -33,8 +33,10 @@ offering, providing means for AWS users to perform record-level updates/deletes 
 [Clinbrain](https://www.clinbrain.com/)  is the leader of big data platform and usage in medical industry. We have built 200 medical big data centers by integrating Hudi Data Lake solution in numerous hospitals. Hudi provides the ability to upsert and delete on hdfs, at the same time, it can make the fresh data-stream up-to-date efficiently in hadoop system with the hudi incremental view.
 
 ### EMIS Health
-
 [EMIS Health](https://www.emishealth.com/) is the largest provider of Primary Care IT software in the UK with datasets including more than 500Bn healthcare records. HUDI is used to manage their analytics dataset in production and keeping them up-to-date with their upstream source. Presto is being used to query the data written in HUDI format.
+
+### Grofers
+[Grofers](https://grofers.com) is a grocery delivery provider operating across APAC region. Grofers has [integrated hudi](https://lambda.grofers.com/origins-of-data-lake-at-grofers-6c011f94b86c) in its central pipelines for replicating backend database CDC into the warehouse.
 
 ### Kyligence
 
@@ -133,6 +135,7 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
 6. ["Building a Large-scale Transactional Data Lake at Uber Using Apache Hudi"](https://eng.uber.com/apache-hudi-graduation/) - Uber eng blog by Nishith Agarwal
 7. ["Hudi On Hops"](https://www.diva-portal.org/smash/get/diva2:1413103/FULLTEXT01.pdf) - By NETSANET GEBRETSADKAN KIDANE
 8. ["PrestoDB and Apache Hudi](https://prestodb.io/blog/2020/08/04/prestodb-and-hudi) - PrestoDB - Hudi integration blog by Bhavani Sudha Saktheeswaran and Brandon Scheller 
+9. ["Origins of Data Lake at Grofers"](https://lambda.grofers.com/origins-of-data-lake-at-grofers-6c011f94b86c) - by Akshay Agarwal
 
 ## Powered by
 
