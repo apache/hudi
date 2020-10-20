@@ -20,10 +20,10 @@ jdk:
   - openjdk8
 jobs:
   include:
-    - name: "Unit tests except hudi-client"
-      env: MODE=unit MODULES='!hudi-client' HUDI_QUIETER_LOGGING=1
-    - name: "Unit tests for hudi-client"
-      env: MODE=unit MODULES=hudi-client HUDI_QUIETER_LOGGING=1
+    - name: "Unit tests except hudi-spark-client"
+      env: MODE=unit MODULES='!hudi-client/hudi-spark-client' HUDI_QUIETER_LOGGING=1
+    - name: "Unit tests for hudi-spark-client"
+      env: MODE=unit MODULES=hudi-client/hudi-spark-client HUDI_QUIETER_LOGGING=1
     - name: "Functional tests"
       env: MODE=functional HUDI_QUIETER_LOGGING=1
     - name: "Integration tests"

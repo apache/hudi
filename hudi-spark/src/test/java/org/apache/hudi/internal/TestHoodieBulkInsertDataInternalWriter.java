@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 
@@ -76,7 +77,7 @@ public class TestHoodieBulkInsertDataInternalWriter extends HoodieClientTestHarn
   public void testDataInternalWriter() throws IOException {
     // init config and table
     HoodieWriteConfig cfg = getConfigBuilder(basePath).build();
-    HoodieTable table = HoodieTable.create(metaClient, cfg, hadoopConf);
+    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     // execute N rounds
     for (int i = 0; i < 5; i++) {
       String instantTime = "00" + i;
@@ -121,7 +122,7 @@ public class TestHoodieBulkInsertDataInternalWriter extends HoodieClientTestHarn
   public void testGlobalFailure() throws IOException {
     // init config and table
     HoodieWriteConfig cfg = getConfigBuilder(basePath).build();
-    HoodieTable table = HoodieTable.create(metaClient, cfg, hadoopConf);
+    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
 
     String instantTime = "001";

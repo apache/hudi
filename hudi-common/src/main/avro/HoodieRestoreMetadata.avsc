@@ -34,6 +34,16 @@
         "name":"version",
         "type":["int", "null"],
         "default": 1
+     },
+     /* overlaps with 'instantsToRollback' field. Adding this to track action type for all the instants being rolled back. */
+     {
+       "name": "restoreInstantInfo",
+       "default": null,
+       "type": {
+         "type": "array",
+         "default": null,
+         "items": "HoodieInstantInfo"
+       }
      }
  ]
 }

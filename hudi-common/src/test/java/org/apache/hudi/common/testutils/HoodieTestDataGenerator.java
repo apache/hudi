@@ -19,9 +19,6 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.avro.Conversions;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.generic.GenericFixed;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.fs.FSUtils;
@@ -37,9 +34,12 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
+import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -89,7 +89,7 @@ public class HoodieTestDataGenerator {
       {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH};
   public static final int DEFAULT_PARTITION_DEPTH = 3;
   public static final String TRIP_SCHEMA_PREFIX = "{\"type\": \"record\"," + "\"name\": \"triprec\"," + "\"fields\": [ "
-      + "{\"name\": \"timestamp\",\"type\": \"double\"}," + "{\"name\": \"_row_key\", \"type\": \"string\"},"
+      + "{\"name\": \"timestamp\",\"type\": \"long\"}," + "{\"name\": \"_row_key\", \"type\": \"string\"},"
       + "{\"name\": \"rider\", \"type\": \"string\"}," + "{\"name\": \"driver\", \"type\": \"string\"},"
       + "{\"name\": \"begin_lat\", \"type\": \"double\"}," + "{\"name\": \"begin_lon\", \"type\": \"double\"},"
       + "{\"name\": \"end_lat\", \"type\": \"double\"}," + "{\"name\": \"end_lon\", \"type\": \"double\"},";
@@ -116,14 +116,14 @@ public class HoodieTestDataGenerator {
       TRIP_SCHEMA_PREFIX + FARE_FLATTENED_SCHEMA + TRIP_SCHEMA_SUFFIX;
 
   public static final String TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"tripUberRec\",\"fields\":["
-      + "{\"name\":\"timestamp\",\"type\":\"double\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
+      + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
       + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
   public static final String SHORT_TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"shortTripRec\",\"fields\":["
-      + "{\"name\":\"timestamp\",\"type\":\"double\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
+      + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
       + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
 
   public static final String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
-  public static final String TRIP_HIVE_COLUMN_TYPES = "double,string,string,string,double,double,double,double,int,bigint,float,binary,int,bigint,decimal(10,6),"
+  public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,double,double,double,double,int,bigint,float,binary,int,bigint,decimal(10,6),"
       + "map<string,string>,struct<amount:double,currency:string>,array<struct<amount:double,currency:string>>,boolean";
 
 
@@ -157,6 +157,10 @@ public class HoodieTestDataGenerator {
     numKeysBySchema = new HashMap<>();
   }
 
+  /**
+   * @implNote {@link HoodieTestDataGenerator} is supposed to just generate records with schemas. Leave HoodieTable files (metafile, basefile, logfile, etc) to {@link HoodieTestTable}.
+   * @deprecated Use {@link HoodieTestTable#withPartitionMetaFiles(java.lang.String...)} instead.
+   */
   public static void writePartitionMetadata(FileSystem fs, String[] partitionPaths, String basePath) {
     for (String partitionPath : partitionPaths) {
       new HoodiePartitionMetadata(fs, "000", new Path(basePath), new Path(basePath, partitionPath)).trySave(0);
@@ -204,7 +208,7 @@ public class HoodieTestDataGenerator {
   public static RawTripTestPayload generateRandomValue(
       HoodieKey key, String instantTime, boolean isFlattened) throws IOException {
     GenericRecord rec = generateGenericRecord(
-        key.getRecordKey(), "rider-" + instantTime, "driver-" + instantTime, 0.0,
+        key.getRecordKey(), "rider-" + instantTime, "driver-" + instantTime, 0,
         false, isFlattened);
     return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
   }
@@ -213,12 +217,12 @@ public class HoodieTestDataGenerator {
    * Generates a new avro record with TRIP_SCHEMA, retaining the key if optionally provided.
    */
   public RawTripTestPayload generatePayloadForTripSchema(HoodieKey key, String commitTime) throws IOException {
-    GenericRecord rec = generateRecordForTripSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0);
+    GenericRecord rec = generateRecordForTripSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
     return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_SCHEMA);
   }
 
   public RawTripTestPayload generatePayloadForShortTripSchema(HoodieKey key, String commitTime) throws IOException {
-    GenericRecord rec = generateRecordForShortTripSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0);
+    GenericRecord rec = generateRecordForShortTripSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
     return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), SHORT_TRIP_SCHEMA);
   }
 
@@ -226,7 +230,7 @@ public class HoodieTestDataGenerator {
    * Generates a new avro record of the above schema format for a delete.
    */
   public static RawTripTestPayload generateRandomDeleteValue(HoodieKey key, String instantTime) throws IOException {
-    GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + instantTime, "driver-" + instantTime, 0.0,
+    GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + instantTime, "driver-" + instantTime, 0,
         true, false);
     return new RawTripTestPayload(Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA, true);
   }
@@ -235,17 +239,17 @@ public class HoodieTestDataGenerator {
    * Generates a new avro record of the above schema format, retaining the key if optionally provided.
    */
   public static HoodieAvroPayload generateAvroPayload(HoodieKey key, String instantTime) {
-    GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + instantTime, "driver-" + instantTime, 0.0);
+    GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + instantTime, "driver-" + instantTime, 0);
     return new HoodieAvroPayload(Option.of(rec));
   }
 
   public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
-                                                    double timestamp) {
+                                                    long timestamp) {
     return generateGenericRecord(rowKey, riderName, driverName, timestamp, false, false);
   }
 
   public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
-                                                    double timestamp, boolean isDeleteRecord,
+                                                    long timestamp, boolean isDeleteRecord,
                                                     boolean isFlattened) {
     GenericRecord rec = new GenericData.Record(isFlattened ? FLATTENED_AVRO_SCHEMA : AVRO_SCHEMA);
     rec.put("_row_key", rowKey);
@@ -303,7 +307,7 @@ public class HoodieTestDataGenerator {
   /*
   Generate random record using TRIP_SCHEMA
    */
-  public GenericRecord generateRecordForTripSchema(String rowKey, String riderName, String driverName, double timestamp) {
+  public GenericRecord generateRecordForTripSchema(String rowKey, String riderName, String driverName, long timestamp) {
     GenericRecord rec = new GenericData.Record(AVRO_TRIP_SCHEMA);
     rec.put("_row_key", rowKey);
     rec.put("timestamp", timestamp);
@@ -314,7 +318,7 @@ public class HoodieTestDataGenerator {
     return rec;
   }
 
-  public GenericRecord generateRecordForShortTripSchema(String rowKey, String riderName, String driverName, double timestamp) {
+  public GenericRecord generateRecordForShortTripSchema(String rowKey, String riderName, String driverName, long timestamp) {
     GenericRecord rec = new GenericData.Record(AVRO_SHORT_TRIP_SCHEMA);
     rec.put("_row_key", rowKey);
     rec.put("timestamp", timestamp);
@@ -326,30 +330,42 @@ public class HoodieTestDataGenerator {
   }
 
   public static void createCommitFile(String basePath, String instantTime, Configuration configuration) {
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    createCommitFile(basePath, instantTime, configuration, commitMetadata);
+  }
+
+  public static void createCommitFile(String basePath, String instantTime, Configuration configuration, HoodieCommitMetadata commitMetadata) {
     Arrays.asList(HoodieTimeline.makeCommitFileName(instantTime), HoodieTimeline.makeInflightCommitFileName(instantTime),
         HoodieTimeline.makeRequestedCommitFileName(instantTime))
-        .forEach(f -> {
-          Path commitFile = new Path(
-              basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
-          FSDataOutputStream os = null;
-          try {
-            FileSystem fs = FSUtils.getFs(basePath, configuration);
-            os = fs.create(commitFile, true);
-            HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
-            // Write empty commit metadata
-            os.writeBytes(new String(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-          } catch (IOException ioe) {
-            throw new HoodieIOException(ioe.getMessage(), ioe);
-          } finally {
-            if (null != os) {
-              try {
-                os.close();
-              } catch (IOException e) {
-                throw new HoodieIOException(e.getMessage(), e);
-              }
-            }
-          }
-        });
+        .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
+  }
+
+  private static void createMetadataFile(String f, String basePath, Configuration configuration, HoodieCommitMetadata commitMetadata) {
+    Path commitFile = new Path(
+        basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
+    FSDataOutputStream os = null;
+    try {
+      FileSystem fs = FSUtils.getFs(basePath, configuration);
+      os = fs.create(commitFile, true);
+      // Write empty commit metadata
+      os.writeBytes(new String(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
+    } finally {
+      if (null != os) {
+        try {
+          os.close();
+        } catch (IOException e) {
+          throw new HoodieIOException(e.getMessage(), e);
+        }
+      }
+    }
+  }
+
+  public static void createReplaceFile(String basePath, String instantTime, Configuration configuration, HoodieCommitMetadata commitMetadata) {
+    Arrays.asList(HoodieTimeline.makeReplaceFileName(instantTime), HoodieTimeline.makeInflightReplaceFileName(instantTime),
+        HoodieTimeline.makeRequestedReplaceFileName(instantTime))
+        .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
   }
 
   public static void createEmptyCleanRequestedFile(String basePath, String instantTime, Configuration configuration)
@@ -378,9 +394,9 @@ public class HoodieTestDataGenerator {
         new Path(basePath + "/" + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + "/" + instant.getFileName());
     FileSystem fs = FSUtils.getFs(basePath, configuration);
     try (FSDataOutputStream os = fs.create(commitFile, true)) {
-      HoodieCompactionPlan workload = new HoodieCompactionPlan();
+      HoodieCompactionPlan workload = HoodieCompactionPlan.newBuilder().setVersion(1).build();
       // Write empty commit metadata
-      os.writeBytes(new String(TimelineMetadataUtils.serializeCompactionPlan(workload).get(), StandardCharsets.UTF_8));
+      os.write(TimelineMetadataUtils.serializeCompactionPlan(workload).get());
     }
   }
 
@@ -780,7 +796,7 @@ public class HoodieTestDataGenerator {
     List<GenericRecord> list = new ArrayList<>();
     IntStream.range(0, numRecords).forEach(i -> {
       list.add(generateGenericRecord(UUID.randomUUID().toString(), UUID.randomUUID().toString(), UUID.randomUUID()
-          .toString(), RAND.nextDouble()));
+          .toString(), RAND.nextLong()));
     });
     return list;
   }

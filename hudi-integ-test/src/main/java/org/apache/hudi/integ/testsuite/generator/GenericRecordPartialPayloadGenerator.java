@@ -38,7 +38,7 @@ public class GenericRecordPartialPayloadGenerator extends GenericRecordFullPaylo
   }
 
   @Override
-  protected GenericRecord convert(Schema schema) {
+  protected GenericRecord getNewPayload(Schema schema) {
     GenericRecord record = super.convertPartial(schema);
     return record;
   }
