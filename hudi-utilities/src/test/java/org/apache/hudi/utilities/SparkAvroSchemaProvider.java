@@ -30,6 +30,6 @@ public class SparkAvroSchemaProvider extends SchemaProvider {
 
   @Override
   public Schema getSourceSchema() {
-    return new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"stock_ticks\",\"fields\":[{\"name\": \"day\", \"type\":\"string\"}]}");
+    return new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"test\",\"fields\":[{\"name\": \"day\", \"type\":\"string\"}]}");
   }
 }

@@ -411,7 +411,7 @@ public class UtilHelpers {
     }
 
     String schemaPostProcessorClass = cfg.getString(Config.SCHEMA_POST_PROCESSOR_PROP, null);
-    if (!transformerClassNames.isEmpty()) {
+    if (transformerClassNames!=null && !transformerClassNames.isEmpty()) {
       schemaPostProcessorClass = cfg.getString(Config.SCHEMA_POST_PROCESSOR_PROP, SparkAvroPostProcessor.class.getName());
     }
 

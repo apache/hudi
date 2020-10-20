@@ -8,7 +8,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 
 public class SparkAvroPostProcessor extends SchemaPostProcessor {
 
-  protected SparkAvroPostProcessor(TypedProperties props, JavaSparkContext jssc) {
+  public SparkAvroPostProcessor(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
   }
 

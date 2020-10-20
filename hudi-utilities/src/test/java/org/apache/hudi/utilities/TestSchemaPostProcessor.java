@@ -30,6 +30,7 @@ import org.apache.avro.Schema.Type;
 import org.apache.avro.SchemaBuilder;
 import org.apache.hudi.utilities.transform.AddColumnTransform;
 
+import org.apache.hudi.utilities.transform.FlatteningTransformer;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.Test;
 
@@ -62,7 +63,7 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
   public void testSparkAvro() throws IOException {
     properties.put(Config.SCHEMA_POST_PROCESSOR_PROP, SparkAvroPostProcessor.class.getName());
     List<String> transformerClassNames = new ArrayList<>();
-    transformerClassNames.add(AddColumnTransform.class.getName());
+    transformerClassNames.add(FlatteningTransformer.class.getName());
 
     SchemaProvider provider =
             UtilHelpers.wrapSchemaProviderWithPostProcessor(
@@ -71,8 +72,9 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
 
     Schema schema = provider.getSourceSchema();
     assertEquals(schema.getType(), Type.RECORD);
-    assertEquals(schema.getName(), "test");
-    assertNotNull(schema.getField("testString"));
+    assertEquals(schema.getName(), "hoodie_source");
+    assertEquals(schema.getNamespace(), "hoodie.source");
+    assertNotNull(schema.getField("day"));
   }
 
   public static class DummySchemaPostProcessor extends SchemaPostProcessor {
