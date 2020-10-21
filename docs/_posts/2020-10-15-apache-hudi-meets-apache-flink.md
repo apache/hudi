@@ -5,7 +5,7 @@ author: wangxianghu
 category: blog
 ---
 
-Apache Hudi is a data lake framework developed and open sourced by Uber. Hudi joined the Apache incubator for incubation in January 2019, and was promoted to the top Apache project in May 2020. It is one of the most popular data lake frameworks.
+Apache Hudi (Hudi for short) is a data lake framework created at Uber. Hudi joined the Apache incubator for incubation in January 2019, and was promoted to the top Apache project in May 2020. It is one of the most popular data lake frameworks.
 
 ## 1. Why decouple
 
@@ -44,7 +44,7 @@ For example: Hudi uses the `JavaSparkContext#map()` method in many places. To de
 
 4) Replace the `JavaSparkContext` with the `HoodieEngineContext` abstract class to provide the running environment context.
 
-In addition, some of the core algorithms in Hudi, like rollbacks, has been redone without the need for computing a workload profile ahead of time, which used to rely on Spark caching. 
+In addition, some of the core algorithms in Hudi, like [rollbacks](https://github.com/apache/hudi/pull/1756), has been redone without the need for computing a workload profile ahead of time, which used to rely on Spark caching. 
 
 ## 4. Flink integration design
 Hudi's write operation is batch processing in nature, and the continuous mode of `DeltaStreamer` is realized by looping batch processing. In order to use a unified API, when Hudi integrates Flink, we choose to collect a batch of data before processing, and finally submit it in a unified manner (here we use List to collect data in Flink).
