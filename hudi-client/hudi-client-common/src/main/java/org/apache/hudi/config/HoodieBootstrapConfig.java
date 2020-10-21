@@ -34,6 +34,8 @@ import java.util.Properties;
  */
 public class HoodieBootstrapConfig extends DefaultHoodieConfig {
 
+  public static final String BOOTSTRAP_IGNORE_FILE_SUFFIX = "hoodie.bootstrap.ignore.file.suffix";
+  public static final boolean DEFAULT_BOOTSTRAP_IGNORE_FILE_SUFFIX = false;
   public static final String BOOTSTRAP_BASE_PATH_PROP = "hoodie.bootstrap.base.path";
   public static final String BOOTSTRAP_MODE_SELECTOR = "hoodie.bootstrap.mode.selector";
   public static final String FULL_BOOTSTRAP_INPUT_PROVIDER = "hoodie.bootstrap.full.input.provider";
@@ -138,6 +140,8 @@ public class HoodieBootstrapConfig extends DefaultHoodieConfig {
           DEFAULT_BOOTSTRAP_INDEX_CLASS);
       setDefaultOnCondition(props, !props.containsKey(FULL_BOOTSTRAP_INPUT_PROVIDER), FULL_BOOTSTRAP_INPUT_PROVIDER,
           DEFAULT_FULL_BOOTSTRAP_INPUT_PROVIDER);
+      setDefaultOnCondition(props, !props.containsKey(BOOTSTRAP_IGNORE_FILE_SUFFIX), BOOTSTRAP_IGNORE_FILE_SUFFIX,
+          String.valueOf(DEFAULT_BOOTSTRAP_IGNORE_FILE_SUFFIX));
       return config;
     }
   }

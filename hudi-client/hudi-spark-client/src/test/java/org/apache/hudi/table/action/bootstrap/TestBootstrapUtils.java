@@ -64,14 +64,14 @@ public class TestBootstrapUtils extends HoodieClientTestBase {
     });
 
     List<Pair<String, List<HoodieFileStatus>>> collected = BootstrapUtils.getAllLeafFoldersWithFiles(metaClient,
-            metaClient.getFs(), basePath, context);
+            metaClient.getFs(), null, context); //basePath
     assertEquals(3, collected.size());
     collected.stream().forEach(k -> {
       assertEquals(2, k.getRight().size());
     });
 
     // Simulate reading from un-partitioned dataset
-    collected = BootstrapUtils.getAllLeafFoldersWithFiles(metaClient, metaClient.getFs(), basePath + "/" + folders.get(0), context);
+    collected = BootstrapUtils.getAllLeafFoldersWithFiles(metaClient, metaClient.getFs(), null, context);  //basePath + "/" + folders.get(0)
     assertEquals(1, collected.size());
     collected.stream().forEach(k -> {
       assertEquals(2, k.getRight().size());

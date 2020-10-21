@@ -31,6 +31,7 @@ import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -51,7 +52,9 @@ public class BootstrapUtils {
    * @throws IOException
    */
   public static List<Pair<String, List<HoodieFileStatus>>> getAllLeafFoldersWithFiles(HoodieTableMetaClient metaClient,
-      FileSystem fs, String basePathStr, HoodieEngineContext context) throws IOException {
+      FileSystem fs, HoodieWriteConfig conf, HoodieEngineContext context) throws IOException {
+    String basePathStr = conf.getBootstrapSourceBasePath();
+    Boolean ignoreFileSuffix = conf.getBootstrapIgnoreFileSuffix();
     final Path basePath = new Path(basePathStr);
     final String baseFileExtension = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
     final Map<Integer, List<String>> levelToPartitions = new HashMap<>();
@@ -65,7 +68,7 @@ public class BootstrapUtils {
     List<Pair<HoodieFileStatus, Pair<Integer, String>>> result = new ArrayList<>();
 
     for (FileStatus topLevelStatus: topLevelStatuses) {
-      if (topLevelStatus.isFile() && filePathFilter.accept(topLevelStatus.getPath())) {
+      if (topLevelStatus.isFile() && ignoreFileSuffix || filePathFilter.accept(topLevelStatus.getPath())) {
         String relativePath = FSUtils.getRelativePartitionPath(basePath, topLevelStatus.getPath().getParent());
         Integer level = (int) relativePath.chars().filter(ch -> ch == '/').count();
         HoodieFileStatus hoodieFileStatus = FileStatusUtils.fromFileStatus(topLevelStatus);
@@ -84,7 +87,7 @@ public class BootstrapUtils {
         List<Pair<HoodieFileStatus, Pair<Integer, String>>> res = new ArrayList<>();
         while (itr.hasNext()) {
           FileStatus status = itr.next();
-          if (pathFilter.accept(status.getPath())) {
+          if (ignoreFileSuffix || pathFilter.accept(status.getPath())) {
             String relativePath = FSUtils.getRelativePartitionPath(new Path(basePathStr), status.getPath().getParent());
             Integer level = (int) relativePath.chars().filter(ch -> ch == '/').count();
             HoodieFileStatus hoodieFileStatus = FileStatusUtils.fromFileStatus(status);

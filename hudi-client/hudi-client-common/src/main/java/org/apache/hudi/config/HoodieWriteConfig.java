@@ -736,6 +736,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return props.getProperty(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP);
   }
 
+  public Boolean getBootstrapIgnoreFileSuffix() {
+    return Boolean.valueOf(props.getProperty(HoodieBootstrapConfig.BOOTSTRAP_IGNORE_FILE_SUFFIX));
+  }
+
   public String getBootstrapModeSelectorClass() {
     return props.getProperty(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR);
   }
