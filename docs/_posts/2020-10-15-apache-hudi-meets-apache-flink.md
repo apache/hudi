@@ -30,7 +30,7 @@ This difference in abstraction and the reuse of intermediate results during impl
 
 ## 3. Decoupling Spark
 In theory, Hudi uses Spark as its computing engine to use Spark's distributed computing power and RDD's rich operator capabilities. Apart from distributed computing power, Hudi uses RDD more as a data structure, and RDD is essentially a bounded data set. 
-Therefore, it is theoretically feasible to replace RDD with List (of course, it may sacrifice performance/scale). In order to ensure the performance and stability of the Hudi Spark version as much as possible. We can keep the setting the bounded data set as the basic operation unit. 
+Therefore, it is theoretically feasible to replace RDD with List (of course, it may sacrifice performance/scale). In order to ensure the performance and stability of the Hudi Spark version as much as possible. We can keep setting the bounded data set as the basic operation unit. 
 Hudi's main operation API remains unchanged, and RDD is extracted as a generic type. The Spark engine implementation still uses RDD, and other engines use List or other bounded  data set according to the actual situation.
 
 ### Decoupling principle
@@ -44,7 +44,7 @@ For example: Hudi uses the `JavaSparkContext#map()` method in many places. To de
 
 4) Replace the `JavaSparkContext` with the `HoodieEngineContext` abstract class to provide the running environment context.
 
-In addition, some of the core algorithms in Hudi, like [rollbacks](https://github.com/apache/hudi/pull/1756), has been redone without the need for computing a workload profile ahead of time, which used to rely on Spark caching. 
+In addition, some of the core algorithms in Hudi, like [rollback](https://github.com/apache/hudi/pull/1756), has been redone without the need for computing a workload profile ahead of time, which used to rely on Spark caching. 
 
 ## 4. Flink integration design
 Hudi's write operation is batch processing in nature, and the continuous mode of `DeltaStreamer` is realized by looping batch processing. In order to use a unified API, when Hudi integrates Flink, we choose to collect a batch of data before processing, and finally submit it in a unified manner (here we use List to collect data in Flink).
@@ -112,7 +112,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
 `HoodieTable` is one of the core abstractions of Hudi, which defines operations such as `insert`, `upsert`, and `bulkInsert` supported by the table. 
 Take `upsert` as an example, the input data is changed from the original `JavaRDD<HoodieRecord> inputRdds` to `I records`, and the runtime `JavaSparkContext jsc` is changed to `HoodieEngineContext context`.
 
-From the class annotations, we can see that `T, I, K, O` represent the load data type, input data type, primary key type and output data type of Hudi operation respectively. 
+From the class annotations, we can see that `T, I, K, O` represents the load data type, input data type, primary key type and output data type of Hudi operation respectively. 
 These generics will run through the entire abstraction layer.
 
 ### 2) HoodieEngineContext
@@ -146,7 +146,7 @@ Take the `map` method as an example. In the Spark implementation class `HoodieSp
   }
 ```
 
-In the engine that operates List, the implementation can be as follows (different methods need to pay attention to thread safety issues, use `parallel()` with caution):
+In the engine that operates List, the implementation can be as follows (different methods need to pay attention to thread-safety issues, use `parallel()` with caution):
 
 ```
   @Override
@@ -169,7 +169,7 @@ public interface SerializableFunction<I, O> extends Serializable {
 
 This method is actually a variant of `java.util.function.Function`. The difference from `java.util.function.Function` is that `SerializableFunction` can be serialized and can throw exceptions. 
 This function is introduced because the input parameters that the `JavaSparkContext#map()` function can receive must be serializable. 
-At the same time, there are many exceptions that need to be thrown in the logic of Hudi, and the code for `try catch` in the Lambda expression will be omitted It is bloated and not very elegant.
+At the same time, there are many exceptions that need to be thrown in the logic of Hudi, and the code for `try-catch` in the Lambda expression will be omitted It is bloated and not very elegant.
 
 ## 6. Current progress and follow-up plan
 
@@ -185,7 +185,7 @@ At the same time, there are many exceptions that need to be thrown in the logic 
 
 #### 1) Promote the integration of Hudi and Flink
 
-Push the integration of Flink and Hudi to the community as soon as possible. In the initial stage, this feature may only support kafka data sources.
+Push the integration of Flink and Hudi to the community as soon as possible. In the initial stage, this feature may only support Kafka data sources.
 
 #### 2) Performance optimization
 
