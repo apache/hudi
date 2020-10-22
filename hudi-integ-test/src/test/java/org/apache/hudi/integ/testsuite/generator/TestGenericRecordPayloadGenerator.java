@@ -24,7 +24,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.IntStream;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -92,7 +94,8 @@ public class TestGenericRecordPayloadGenerator {
       insertRowKeys.add(record.get("_row_key").toString());
       insertTimeStamps.add((Long) record.get("timestamp"));
     });
-    List<String> blacklistFields = Arrays.asList("_row_key");
+    Set<String> blacklistFields = new HashSet<>();
+    blacklistFields.add("_row_key");
     records.stream().forEach(a -> {
       // Generate 10 updated records
       GenericRecord record = payloadGenerator.getUpdatePayload(a, blacklistFields);

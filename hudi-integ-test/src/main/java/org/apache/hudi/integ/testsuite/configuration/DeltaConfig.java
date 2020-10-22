@@ -83,6 +83,7 @@ public class DeltaConfig implements Serializable {
     private static String DISABLE_INGEST = "disable_ingest";
     private static String HIVE_LOCAL = "hive_local";
     private static String REINIT_CONTEXT = "reinitialize_context";
+    private static String START_PARTITION = "start_partition";
 
     private Map<String, Object> configsMap;
 
@@ -118,8 +119,12 @@ public class DeltaConfig implements Serializable {
       return Integer.valueOf(configsMap.getOrDefault(NUM_PARTITIONS_UPSERT, 0).toString());
     }
 
+    public int getStartPartition() {
+      return Integer.valueOf(configsMap.getOrDefault(START_PARTITION, 0).toString());
+    }
+
     public int getNumUpsertFiles() {
-      return Integer.valueOf(configsMap.getOrDefault(NUM_FILES_UPSERT, 1).toString());
+      return Integer.valueOf(configsMap.getOrDefault(NUM_FILES_UPSERT, 0).toString());
     }
 
     public double getFractionUpsertPerFile() {
@@ -204,6 +209,11 @@ public class DeltaConfig implements Serializable {
 
       public Builder withFractionUpsertPerFile(double fractionUpsertPerFile) {
         this.configsMap.put(FRACTION_UPSERT_PER_FILE, fractionUpsertPerFile);
+        return this;
+      }
+
+      public Builder withStartPartition(int startPartition) {
+        this.configsMap.put(START_PARTITION, startPartition);
         return this;
       }
 

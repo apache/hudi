@@ -36,15 +36,22 @@ public class DFSDeltaConfig extends DeltaConfig {
   private final Long maxFileSize;
   // The current batch id
   private Integer batchId;
+  // Paralleism to use when generating input data
+  private int inputParallelism;
+  // Whether to delete older input data once it has been ingested
+  private boolean deleteOldInputData;
 
   public DFSDeltaConfig(DeltaOutputMode deltaOutputMode, DeltaInputType deltaInputType,
                         SerializableConfiguration configuration,
-                        String deltaBasePath, String targetBasePath, String schemaStr, Long maxFileSize) {
+                        String deltaBasePath, String targetBasePath, String schemaStr, Long maxFileSize,
+                        int inputParallelism, boolean deleteOldInputData) {
     super(deltaOutputMode, deltaInputType, configuration);
     this.deltaBasePath = deltaBasePath;
     this.schemaStr = schemaStr;
     this.maxFileSize = maxFileSize;
     this.datasetOutputPath = targetBasePath;
+    this.inputParallelism = inputParallelism;
+    this.deleteOldInputData = deleteOldInputData;
   }
 
   public String getDeltaBasePath() {
@@ -69,5 +76,13 @@ public class DFSDeltaConfig extends DeltaConfig {
 
   public void setBatchId(Integer batchId) {
     this.batchId = batchId;
+  }
+
+  public int getInputParallelism() {
+    return inputParallelism;
+  }
+
+  public boolean shouldDeleteOldInputData() {
+    return deleteOldInputData;
   }
 }

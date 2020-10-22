@@ -36,6 +36,7 @@ import java.util.stream.StreamSupport;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
@@ -78,8 +79,10 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
   }
 
   protected List<String> getPartitions(Option<Integer> partitionsLimit) throws IOException {
-    List<String> partitionPaths = FSUtils
-        .getAllPartitionPaths(metaClient.getFs(), metaClient.getBasePath(), false);
+    // Using FSUtils.getFS here instead of metaClient.getFS() since we dont want to count these listStatus
+    // calls in metrics as they are not part of normal HUDI operation.
+    FileSystem fs = FSUtils.getFs(metaClient.getBasePath(), metaClient.getHadoopConf());
+    List<String> partitionPaths = FSUtils.getAllPartitionPaths(fs, metaClient.getBasePath(), false);
     // Sort partition so we can pick last N partitions by default
     Collections.sort(partitionPaths);
     if (!partitionPaths.isEmpty()) {
@@ -136,6 +139,9 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
     // Read all file slices in the partition
     JavaPairRDD<String, Iterator<FileSlice>> partitionToFileSlice = getPartitionToFileSlice(metaClient,
         partitionPaths);
+    Map<String, Integer> partitionToFileIdCountMap = partitionToFileSlice
+        .mapToPair(p -> new Tuple2<>(p._1, iteratorSize(p._2))).collectAsMap();
+
     // TODO : read record count from metadata
     // Read the records in a single file
     long recordsInSingleFile = iteratorSize(readParquetOrLogFiles(getSingleSliceFromRDD(partitionToFileSlice)));
@@ -144,7 +150,11 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
     if (!numFiles.isPresent() || numFiles.get() == 0) {
       // If num files are not passed, find the number of files to update based on total records to update and records
       // per file
-      numFilesToUpdate = (int) (numRecordsToUpdate.get() / recordsInSingleFile);
+      numFilesToUpdate = (int)Math.ceil((double)numRecordsToUpdate.get() / recordsInSingleFile);
+      // recordsInSingleFile is not average so we still need to account for bias is records distribution
+      // in the files. Limit to the maximum number of files available.
+      int totalExistingFilesCount = partitionToFileIdCountMap.values().stream().reduce((a, b) -> a + b).get();
+      numFilesToUpdate = Math.min(numFilesToUpdate, totalExistingFilesCount);
       log.info("Files to update {}", numFilesToUpdate);
       numRecordsToUpdatePerFile = recordsInSingleFile;
     } else {
@@ -154,9 +164,10 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
       numRecordsToUpdatePerFile = percentageRecordsPerFile.isPresent() ? (long) (recordsInSingleFile
           * percentageRecordsPerFile.get()) : numRecordsToUpdate.get() / numFilesToUpdate;
     }
+
     // Adjust the number of files to read per partition based on the requested partition & file counts
     Map<String, Integer> adjustedPartitionToFileIdCountMap = getFilesToReadPerPartition(partitionToFileSlice,
-        partitionPaths.size(), numFilesToUpdate);
+        partitionPaths.size(), numFilesToUpdate, partitionToFileIdCountMap);
     JavaRDD<GenericRecord> updates = projectSchema(generateUpdates(adjustedPartitionToFileIdCountMap,
         partitionToFileSlice, numFilesToUpdate, (int) numRecordsToUpdatePerFile));
     if (numRecordsToUpdate.isPresent() && numFiles.isPresent() && numFiles.get() != 0 && numRecordsToUpdate.get()
@@ -190,10 +201,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
   }
 
   private Map<String, Integer> getFilesToReadPerPartition(JavaPairRDD<String, Iterator<FileSlice>>
-      partitionToFileSlice, Integer numPartitions, Integer numFiles) {
-    int numFilesPerPartition = (int) Math.ceil(numFiles / numPartitions);
-    Map<String, Integer> partitionToFileIdCountMap = partitionToFileSlice
-        .mapToPair(p -> new Tuple2<>(p._1, iteratorSize(p._2))).collectAsMap();
+      partitionToFileSlice, Integer numPartitions, Integer numFiles, Map<String, Integer> partitionToFileIdCountMap) {
     long totalExistingFilesCount = partitionToFileIdCountMap.values().stream().reduce((a, b) -> a + b).get();
     ValidationUtils.checkArgument(totalExistingFilesCount >= numFiles, "Cannot generate updates "
         + "for more files than present in the dataset, file requested " + numFiles + ", files present "
@@ -204,7 +212,9 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
         .sorted(comparingByValue())
         .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (e1, e2) -> e2,
             LinkedHashMap::new));
+
     // Limit files to be read per partition
+    int numFilesPerPartition = (int) Math.ceil((double)numFiles / numPartitions);
     Map<String, Integer> adjustedPartitionToFileIdCountMap = new HashMap<>();
     partitionToFileIdCountSortedMap.entrySet().stream().forEach(e -> {
       if (e.getValue() <= numFilesPerPartition) {
