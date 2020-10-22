@@ -38,7 +38,6 @@ import org.apache.hudi.config.HoodieBootstrapConfig.{BOOTSTRAP_BASE_PATH_PROP, B
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
-import org.apache.hudi.internal.HoodieDataSourceInternalWriter
 import org.apache.hudi.sync.common.AbstractSyncTool
 import org.apache.log4j.LogManager
 import org.apache.spark.SparkContext
@@ -117,15 +116,6 @@ private[hudi] object HoodieSparkSqlWriter {
       }
 
       val commitActionType = DataSourceUtils.getCommitActionType(operation, tableConfig.getTableType)
-
-      // short-circuit if bulk_insert via row is enabled.
-      // scalastyle:off
-      if (parameters(ENABLE_ROW_WRITER_OPT_KEY).toBoolean) {
-        val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, parameters, df, tblName,
-                                                                                basePath, path, instantTime)
-        return (success, commitTime, common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
-      }
-      // scalastyle:on
 
       val (writeResult, writeClient: SparkRDDWriteClient[HoodieRecordPayload[Nothing]]) =
         if (operation != WriteOperationType.DELETE) {
@@ -267,31 +257,6 @@ private[hudi] object HoodieSparkSqlWriter {
     writeClient.bootstrap(org.apache.hudi.common.util.Option.empty())
     val metaSyncSuccess = metaSync(parameters, basePath, jsc.hadoopConfiguration)
     metaSyncSuccess
-  }
-
-  def bulkInsertAsRow(sqlContext: SQLContext,
-                      parameters: Map[String, String],
-                      df: DataFrame,
-                      tblName: String,
-                      basePath: Path,
-                      path: Option[String],
-                      instantTime: String): (Boolean, common.util.Option[String]) = {
-    val structName = s"${tblName}_record"
-    val nameSpace = s"hoodie.${tblName}"
-    val writeConfig = DataSourceUtils.createHoodieConfig(null, path.get, tblName, mapAsJavaMap(parameters))
-    val hoodieDF = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, writeConfig, df, structName, nameSpace)
-    hoodieDF.write.format("org.apache.hudi.internal")
-      .option(HoodieDataSourceInternalWriter.INSTANT_TIME_OPT_KEY, instantTime)
-      .options(parameters)
-      .save()
-    val hiveSyncEnabled = parameters.get(HIVE_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
-    val metaSyncEnabled = parameters.get(META_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
-    val syncHiveSucess = if (hiveSyncEnabled || metaSyncEnabled) {
-      metaSync(parameters, basePath, sqlContext.sparkContext.hadoopConfiguration)
-    } else {
-      true
-    }
-    (syncHiveSucess, common.util.Option.ofNullable(instantTime))
   }
 
   def toProperties(params: Map[String, String]): TypedProperties = {

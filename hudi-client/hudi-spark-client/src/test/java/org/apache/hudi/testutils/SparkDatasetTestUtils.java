@@ -142,8 +142,9 @@ public class SparkDatasetTestUtils {
   public static List<InternalRow> toInternalRows(Dataset<Row> rows, ExpressionEncoder encoder) {
     List<InternalRow> toReturn = new ArrayList<>();
     List<Row> rowList = rows.collectAsList();
+    ExpressionEncoder.Serializer<Row> serializer = encoder.createSerializer();
     for (Row row : rowList) {
-      toReturn.add(encoder.toRow(row).copy());
+      toReturn.add(serializer.apply(row).copy());
     }
     return toReturn;
   }

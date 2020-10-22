@@ -23,7 +23,7 @@ import org.apache.avro.Schema
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.SchemaConverters
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
+import org.apache.spark.sql.catalyst.encoders.{ExpressionEncoder, RowEncoder}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
 
@@ -41,7 +41,8 @@ object AvroConversionUtils {
     // Use the Avro schema to derive the StructType which has the correct nullability information
     val dataType = SchemaConverters.toSqlType(avroSchema).dataType.asInstanceOf[StructType]
     val encoder = RowEncoder.apply(dataType).resolveAndBind()
-    df.queryExecution.toRdd.map(encoder.fromRow)
+    val deserializer: ExpressionEncoder.Deserializer[Row] = encoder.createDeserializer()
+    df.queryExecution.toRdd.map(internalR => deserializer.apply(internalR))
       .mapPartitions { records =>
         if (records.isEmpty) Iterator.empty
         else {

@@ -18,16 +18,16 @@
 
 mode=$1
 modules=$2
-sparkVersion=2.4.4
+sparkVersion=3.0.0
 hadoopVersion=2.7
 
 if [ "$mode" = "unit" ]; then
-  mvn clean install -DskipTests -q
+  mvn clean install -Pscala-2.12 -DskipTests -q
   echo "Running Unit Tests"
-  mvn test -Punit-tests -pl "$modules" -B
+  mvn test -Pscala-2.12 -Punit-tests -pl "$modules" -B
 elif [ "$mode" = "functional" ]; then
   echo "Running Functional Tests"
-  mvn test -Pfunctional-tests -B
+  mvn test -Pscala-2.12 -Pfunctional-tests -B
 elif [ "$mode" = "integration" ]; then
   echo "Downloading Apache Spark-${sparkVersion}-bin-hadoop${hadoopVersion}"
   wget http://archive.apache.org/dist/spark/spark-${sparkVersion}/spark-${sparkVersion}-bin-hadoop${hadoopVersion}.tgz -O /tmp/spark-${sparkVersion}.tgz
@@ -35,7 +35,7 @@ elif [ "$mode" = "integration" ]; then
   export SPARK_HOME=$PWD/spark-${sparkVersion}-bin-hadoop${hadoopVersion}
   mkdir /tmp/spark-events/
   echo "Running Integration Tests"
-  mvn verify -Pintegration-tests -B
+  mvn verify -Pscala-2.12 -Pintegration-tests -B
 else
   echo "Unknown mode $mode"
   exit 1
