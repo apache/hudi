@@ -114,9 +114,15 @@ public class HoodieDeltaStreamer implements Serializable {
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                              Option<TypedProperties> props) throws IOException {
     // Resolving the properties first in a consistent way
-    this.properties = props.isPresent() ? props.get() : UtilHelpers.readConfig(
-        FSUtils.getFs(cfg.propsFilePath, jssc.hadoopConfiguration()),
-        new Path(cfg.propsFilePath), cfg.configs).getConfig();
+    if (props.isPresent()) {
+      this.properties = props.get();
+    } else if (cfg.propsFilePath.equals(Config.DEFAULT_DFS_SOURCE_PROPERTIES)) {
+      this.properties = UtilHelpers.getConfig(cfg.configs).getConfig();
+    } else {
+      this.properties = UtilHelpers.readConfig(
+          FSUtils.getFs(cfg.propsFilePath, jssc.hadoopConfiguration()),
+          new Path(cfg.propsFilePath), cfg.configs).getConfig();
+    }
 
     if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
       InitialCheckPointProvider checkPointProvider =
@@ -199,6 +205,8 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   public static class Config implements Serializable {
+    public static final String DEFAULT_DFS_SOURCE_PROPERTIES = "file://" + System.getProperty("user.dir")
+        + "/src/test/resources/delta-streamer-config/dfs-source.properties";
 
     @Parameter(names = {"--target-base-path"},
         description = "base path for the target hoodie table. "
@@ -221,8 +229,7 @@ public class HoodieDeltaStreamer implements Serializable {
         + "used, but recommend use to provide basic things like metrics endpoints, hive configs etc. For sources, refer"
         + "to individual classes, for supported properties."
         + " Properties in this file can be overridden by \"--hoodie-conf\"")
-    public String propsFilePath =
-        "file://" + System.getProperty("user.dir") + "/src/test/resources/delta-streamer-config/dfs-source.properties";
+    public String propsFilePath = DEFAULT_DFS_SOURCE_PROPERTIES;
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
         + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
