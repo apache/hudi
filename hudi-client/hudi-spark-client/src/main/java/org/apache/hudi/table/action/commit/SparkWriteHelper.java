@@ -37,42 +37,42 @@ import scala.Tuple2;
  * @param <T>
  */
 public class SparkWriteHelper<T extends HoodieRecordPayload, R> extends AbstractWriteHelper<T, JavaRDD<HoodieRecord<T>>,
-                JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> {
-    private SparkWriteHelper() {
-    }
+        JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, R> {
+  private SparkWriteHelper() {
+  }
 
-    private static class WriteHelperHolder {
-        private static final SparkWriteHelper SPARK_WRITE_HELPER = new SparkWriteHelper();
-    }
+  private static class WriteHelperHolder {
+    private static final SparkWriteHelper SPARK_WRITE_HELPER = new SparkWriteHelper();
+  }
 
-    public static SparkWriteHelper newInstance() {
-        return WriteHelperHolder.SPARK_WRITE_HELPER;
-    }
+  public static SparkWriteHelper newInstance() {
+    return WriteHelperHolder.SPARK_WRITE_HELPER;
+  }
 
-    @Override
-    public JavaRDD<HoodieRecord<T>> deduplicateRecords(JavaRDD<HoodieRecord<T>> records,
-                                                       HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> index,
-                                                       int parallelism, Option<String> schema) {
-        boolean isIndexingGlobal = index.isGlobal();
-        return records.mapToPair(record -> {
-            HoodieKey hoodieKey = record.getKey();
-            // If index used is global, then records are expected to differ in their partitionPath
-            Object key = isIndexingGlobal ? hoodieKey.getRecordKey() : hoodieKey;
-            return new Tuple2<>(key, record);
-        }).reduceByKey((rec1, rec2) -> {
-            @SuppressWarnings("unchecked")
-            T reducedData;
-            if (rec2.getData() instanceof UpdatePrecombineAvroPayload) {
-                reducedData = schema.isPresent() ? (T) rec1.getData().preCombine(rec2.getData(), new Schema.Parser().parse(schema.get()))
-                                : (T) rec1.getData().preCombine(rec2.getData());
-            } else {
-                reducedData = (T) rec1.getData().preCombine(rec2.getData());
-            }
-            // we cannot allow the user to change the key or partitionPath, since that will affect
-            // everything
-            // so pick it from one of the records.
-            return new HoodieRecord<T>(rec1.getKey(), reducedData);
-        }, parallelism).map(Tuple2::_2);
-    }
+  @Override
+  public JavaRDD<HoodieRecord<T>> deduplicateRecords(JavaRDD<HoodieRecord<T>> records,
+                                                     HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> index,
+                                                     int parallelism, Option<String> schema) {
+    boolean isIndexingGlobal = index.isGlobal();
+    return records.mapToPair(record -> {
+      HoodieKey hoodieKey = record.getKey();
+      // If index used is global, then records are expected to differ in their partitionPath
+      Object key = isIndexingGlobal ? hoodieKey.getRecordKey() : hoodieKey;
+      return new Tuple2<>(key, record);
+    }).reduceByKey((rec1, rec2) -> {
+      @SuppressWarnings("unchecked")
+      T reducedData;
+      if (rec2.getData() instanceof UpdatePrecombineAvroPayload) {
+        reducedData = schema.isPresent() ? (T) rec1.getData().preCombine(rec2.getData(), new Schema.Parser().parse(schema.get()))
+                : (T) rec1.getData().preCombine(rec2.getData());
+      } else {
+        reducedData = (T) rec1.getData().preCombine(rec2.getData());
+      }
+      // we cannot allow the user to change the key or partitionPath, since that will affect
+      // everything
+      // so pick it from one of the records.
+      return new HoodieRecord<T>(rec1.getKey(), reducedData);
+    }, parallelism).map(Tuple2::_2);
+  }
 
 }
