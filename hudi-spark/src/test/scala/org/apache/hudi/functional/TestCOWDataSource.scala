@@ -20,12 +20,14 @@ package org.apache.hudi.functional
 import java.sql.{Date, Timestamp}
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.DataSourceReadOptions.{BEGIN_INSTANTTIME_OPT_KEY, END_INSTANTTIME_OPT_KEY, QUERY_TYPE_INCREMENTAL_OPT_VAL, QUERY_TYPE_OPT_KEY}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.spark.sql.SaveMode.{Append, Overwrite}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types.{DataTypes, DateType, IntegerType, StringType, StructField, StructType, TimestampType}
@@ -185,6 +187,115 @@ class TestCOWDataSource extends HoodieClientTestBase {
     commits.foreach(println)
     assertEquals("commit", commits(0))
     assertEquals("replacecommit", commits(1))
+  }
+
+  @Test def testIncrementalReadWithReplaceAction(): Unit = {
+    val schema = StructType(StructField("_row_key", StringType, true) :: StructField("name", StringType, true)
+      :: StructField("age", IntegerType, true)
+      :: StructField("timestamp", IntegerType, true)
+      :: StructField("partition", IntegerType, true) :: Nil)
+
+    // 1. insert table with 3 records
+    val records1 = Seq(Row("11", "Andy", 32, 11, 1), Row("22", "Andy1", 32, 12, 1), Row("33", "Andy3", 32, 13, 1))
+    val rdd1 = jsc.parallelize(records1)
+    val recordsDF1 = spark.createDataFrame(rdd1, schema)
+    recordsDF1.write.format("org.apache.hudi").
+      options(commonOpts).mode(Append).
+      save(basePath)
+    val readHudiResult1 = spark.read.format("org.apache.hudi").load(basePath + "/*").collect()
+    assertEquals(3, readHudiResult1.size)
+
+    // 2. overwrite table with 1 records
+    val records2 = Seq(Row("11", "Andy22", 32, 14, 1))
+    val rdd2 = jsc.parallelize(records2)
+    val recordsDF2 = spark.createDataFrame(rdd2, schema)
+    recordsDF2.write.format("org.apache.hudi").
+      options(commonOpts).mode(Overwrite).
+      save(basePath)
+    val readHudiResult2 = spark.read.format("org.apache.hudi").load(basePath + "/*").collect()
+    assertEquals(1, readHudiResult2.size)
+    assertEquals("11", readHudiResult2(0).get(5))
+    assertEquals("Andy22", readHudiResult2(0).get(6))
+
+    // 3. upsert table with 1 records as key is 11
+    val records3 = Seq(Row("11", "Andy44", 32, 14, 1))
+    val rdd3 = jsc.parallelize(records3)
+    val recordsDF3 = spark.createDataFrame(rdd3, schema)
+    recordsDF3.write.format("org.apache.hudi").
+      options(commonOpts).mode(Append).
+      save(basePath)
+    val readHudiResult3 = spark.read.format("org.apache.hudi").load(basePath + "/*").collect()
+    assertEquals(1, readHudiResult3.size)
+    assertEquals("11", readHudiResult3(0).get(5))
+    assertEquals("Andy44", readHudiResult3(0).get(6))
+
+    // 4. get the commits and then test increment case
+    val basePathFS = new Path(basePath).getFileSystem(spark.sparkContext.hadoopConfiguration)
+    val metaClient = new HoodieTableMetaClient(spark.sparkContext.hadoopConfiguration, basePath, true)
+    val commits =  metaClient.getActiveTimeline.filterCompletedInstants().getInstants.toArray
+      .map(instant => {
+        println(instant)
+        (instant. asInstanceOf[HoodieInstant]).getTimestamp
+      })
+    assertEquals(3, commits.size)
+    var beginTime = "000" // Represents all commits > this time.
+
+    // 5. increment read the first commit
+    var endTime = commits(commits.length - 3) // commit time we are interested in
+    val incViewResult1 = spark.read.format("org.apache.hudi").
+      option(QUERY_TYPE_OPT_KEY, QUERY_TYPE_INCREMENTAL_OPT_VAL).
+      option(BEGIN_INSTANTTIME_OPT_KEY, beginTime).
+      option(END_INSTANTTIME_OPT_KEY, endTime).
+      load(basePath + "/*").collect()
+    assertEquals(3, incViewResult1.size)
+    assertEquals("11", incViewResult1(0).get(5))
+    assertEquals("Andy", incViewResult1(0).get(6))
+
+    // 6. increment read before the second commit
+    endTime = commits(commits.length - 2) // commit time we are interested in
+    val incViewResult2 = spark.read.format("org.apache.hudi").
+      option(QUERY_TYPE_OPT_KEY, QUERY_TYPE_INCREMENTAL_OPT_VAL).
+      option(BEGIN_INSTANTTIME_OPT_KEY, beginTime).
+      option(END_INSTANTTIME_OPT_KEY, endTime).
+      load(basePath + "/*").collect()
+    assertEquals(1, incViewResult2.size)
+    assertEquals("11", incViewResult2(0).get(5))
+    assertEquals("Andy22", incViewResult2(0).get(6))
+
+    // 7. increment read before the third commit
+    endTime = commits(commits.length - 1) // commit time we are interested in
+    val incViewResult3 = spark.read.format("org.apache.hudi").
+      option(QUERY_TYPE_OPT_KEY, QUERY_TYPE_INCREMENTAL_OPT_VAL).
+      option(BEGIN_INSTANTTIME_OPT_KEY, beginTime).
+      option(END_INSTANTTIME_OPT_KEY, endTime).
+      load(basePath + "/*").collect()
+    assertEquals(1, incViewResult3.size)
+    assertEquals("11", incViewResult3(0).get(5))
+    assertEquals("Andy44", incViewResult3(0).get(6))
+
+    // 8. increment read the third commit
+    beginTime = commits(commits.length - 2) // commit time we are interested in
+    endTime = commits(commits.length - 1) // commit time we are interested in
+    val incViewResult4 = spark.read.format("org.apache.hudi").
+      option(QUERY_TYPE_OPT_KEY, QUERY_TYPE_INCREMENTAL_OPT_VAL).
+      option(BEGIN_INSTANTTIME_OPT_KEY, beginTime).
+      option(END_INSTANTTIME_OPT_KEY, endTime).
+      load(basePath + "/*").collect()
+    assertEquals(1, incViewResult4.size)
+    assertEquals("11", incViewResult4(0).get(5))
+    assertEquals("Andy44", incViewResult4(0).get(6))
+
+    // 9. increment read the second commit
+    beginTime = commits(commits.length - 3) // commit time we are interested in
+    endTime = commits(commits.length - 2) // commit time we are interested in
+    val incViewResult5 = spark.read.format("org.apache.hudi").
+      option(QUERY_TYPE_OPT_KEY, QUERY_TYPE_INCREMENTAL_OPT_VAL).
+      option(BEGIN_INSTANTTIME_OPT_KEY, beginTime).
+      option(END_INSTANTTIME_OPT_KEY, endTime).
+      load(basePath + "/*").collect()
+    assertEquals(1, incViewResult5.size)
+    assertEquals("11", incViewResult5(0).get(5))
+    assertEquals("Andy22", incViewResult5(0).get(6))
   }
 
   @Test def testDropInsertDup(): Unit = {

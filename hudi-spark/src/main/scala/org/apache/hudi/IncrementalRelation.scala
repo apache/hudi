@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hadoop.fs.GlobPattern
@@ -34,6 +34,7 @@ import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 
 /**
   * Relation, that implements the Hoodie incremental view.
@@ -73,18 +74,30 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   private val lastInstant = commitTimeline.lastInstant().get()
 
-  private val commitsToReturn = commitTimeline.findInstantsInRange(
-    optParams(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY),
-    optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY, lastInstant.getTimestamp))
-    .getInstants.iterator().toList
+  private val commitsValid = {
+    val commitsToReturn = commitTimeline.findInstantsInRange(
+      optParams(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY),
+      optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY, lastInstant.getTimestamp))
+      .getInstants.iterator().toList
+    val commitsValid = new ArrayBuffer[HoodieInstant]
+    var hasFindReplaceAction = false
+    // just get the commits after the last replace commit
+    for (i <- commitsToReturn.length -1 to 0 by -1 if !hasFindReplaceAction) {
+      commitsValid.add(commitsToReturn.get(i))
+      if (commitsToReturn.get(i).getAction.equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+        hasFindReplaceAction = true
+      }
+    }
+    commitsValid.toList.reverse
+  }
 
   // use schema from a file produced in the end/latest instant
   val usedSchema: StructType = {
     log.info("Inferring schema..")
     val schemaResolver = new TableSchemaResolver(metaClient)
     val tableSchema = if (useEndInstantSchema) {
-      if (commitsToReturn.isEmpty)  schemaResolver.getTableAvroSchemaWithoutMetadataFields() else
-        schemaResolver.getTableAvroSchemaWithoutMetadataFields(commitsToReturn.last)
+      if (commitsValid.isEmpty)  schemaResolver.getTableAvroSchemaWithoutMetadataFields() else
+        schemaResolver.getTableAvroSchemaWithoutMetadataFields(commitsValid.last)
     } else {
       schemaResolver.getTableAvroSchemaWithoutMetadataFields()
     }
@@ -110,7 +123,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
     val regularFileIdToFullPath = mutable.HashMap[String, String]()
     var metaBootstrapFileIdToFullPath = mutable.HashMap[String, String]()
 
-    for (commit <- commitsToReturn) {
+    for (commit <- commitsValid) {
       val metadata: HoodieCommitMetadata = HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit)
         .get, classOf[HoodieCommitMetadata])
 
@@ -164,11 +177,10 @@ class IncrementalRelation(val sqlContext: SQLContext,
                         .schema(usedSchema)
                         .parquet(filteredRegularFullPaths.toList: _*)
                         .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-                          commitsToReturn.head.getTimestamp))
+                          commitsValid.head.getTimestamp))
                         .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-                          commitsToReturn.last.getTimestamp)))
+                          commitsValid.last.getTimestamp)))
       }
-
       filters.foldLeft(df)((e, f) => e.filter(f)).rdd
     }
   }
