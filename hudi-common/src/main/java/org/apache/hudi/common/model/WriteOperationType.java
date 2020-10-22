@@ -40,6 +40,8 @@ public enum WriteOperationType {
   BOOTSTRAP("bootstrap"),
   // insert overwrite
   INSERT_OVERWRITE("insert_overwrite"),
+  // cluster
+  CLUSTER("cluster"),
   // used for old version
   UNKNOWN("unknown");
 

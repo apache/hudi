@@ -136,6 +136,65 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   }
 
   @Override
+  protected boolean isPendingClusteringScheduledForFileId(HoodieFileGroupId fgId) {
+    return getPendingClusteringInstant(fgId).isPresent();
+  }
+
+  @Override
+  protected Option<HoodieInstant> getPendingClusteringInstant(HoodieFileGroupId fgId) {
+    String lookupKey = schemaHelper.getKeyForFileGroupsInPendingClustering(fgId);
+    HoodieInstant pendingClusteringInstant =
+        rocksDB.get(schemaHelper.getColFamilyForFileGroupsInPendingClustering(), lookupKey);
+    return Option.ofNullable(pendingClusteringInstant);
+  }
+
+  @Override
+  public Stream<Pair<HoodieFileGroupId, HoodieInstant>> fetchFileGroupsInPendingClustering() {
+    return rocksDB.<Pair<HoodieFileGroupId, HoodieInstant>>prefixSearch(schemaHelper.getColFamilyForFileGroupsInPendingClustering(), "")
+        .map(Pair::getValue);
+  }
+
+  @Override
+  void resetFileGroupsInPendingClustering(Map<HoodieFileGroupId, HoodieInstant> fgIdToInstantMap) {
+    LOG.info("Resetting file groups in pending clustering to ROCKSDB based file-system view at "
+        + config.getRocksdbBasePath() + ", Total file-groups=" + fgIdToInstantMap.size());
+
+    // Delete all replaced file groups
+    rocksDB.prefixDelete(schemaHelper.getColFamilyForFileGroupsInPendingClustering(), "part=");
+    // Now add new entries
+    addFileGroupsInPendingClustering(fgIdToInstantMap.entrySet().stream().map(entry -> Pair.of(entry.getKey(), entry.getValue())));
+    LOG.info("Resetting replacedFileGroups to ROCKSDB based file-system view complete");
+  }
+
+  @Override
+  void addFileGroupsInPendingClustering(Stream<Pair<HoodieFileGroupId, HoodieInstant>> fileGroups) {
+    rocksDB.writeBatch(batch ->
+        fileGroups.forEach(fgIdToClusterInstant -> {
+          ValidationUtils.checkArgument(!isPendingClusteringScheduledForFileId(fgIdToClusterInstant.getLeft()),
+              "Duplicate FileGroupId found in pending compaction operations. FgId :"
+                  + fgIdToClusterInstant.getLeft());
+
+          rocksDB.putInBatch(batch, schemaHelper.getColFamilyForFileGroupsInPendingClustering(),
+              schemaHelper.getKeyForFileGroupsInPendingClustering(fgIdToClusterInstant.getKey()), fgIdToClusterInstant);
+        })
+    );
+  }
+
+  @Override
+  void removeFileGroupsInPendingClustering(Stream<Pair<HoodieFileGroupId, HoodieInstant>> fileGroups) {
+    rocksDB.writeBatch(batch ->
+        fileGroups.forEach(fgToPendingClusteringInstant -> {
+          ValidationUtils.checkArgument(
+              !isPendingClusteringScheduledForFileId(fgToPendingClusteringInstant.getLeft()),
+              "Trying to remove a FileGroupId which is not found in pending compaction operations. FgId :"
+                  + fgToPendingClusteringInstant.getLeft());
+          rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForFileGroupsInPendingClustering(),
+              schemaHelper.getKeyForFileGroupsInPendingClustering(fgToPendingClusteringInstant.getLeft()));
+        })
+    );
+  }
+
+  @Override
   protected void resetViewState() {
     LOG.info("Deleting all rocksdb data associated with table filesystem view");
     rocksDB.close();

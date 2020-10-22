@@ -20,6 +20,7 @@ package org.apache.hudi.timeline.service;
 
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.dto.BaseFileDTO;
+import org.apache.hudi.common.table.timeline.dto.ClusteringOpDTO;
 import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
@@ -295,6 +296,12 @@ public class FileSystemViewHandler {
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
           ctx.queryParam(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM,""),
           ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
+      writeValueAsString(ctx, dtos);
+    }, true));
+
+    app.get(RemoteHoodieTableFileSystemView.PENDING_CLUSTERING_FILEGROUPS, new ViewHandler(ctx -> {
+      List<ClusteringOpDTO> dtos = sliceHandler.getFileGroupsInPendingClustering(
+          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());
       writeValueAsString(ctx, dtos);
     }, true));
   }

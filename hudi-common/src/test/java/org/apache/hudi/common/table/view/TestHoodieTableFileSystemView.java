@@ -21,10 +21,12 @@ package org.apache.hudi.common.table.view;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieFSPermission;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex.IndexWriter;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
@@ -49,6 +51,7 @@ import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
@@ -1422,6 +1425,63 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     Set<String> allReplacedFileIds = allReplaced.stream().map(fg -> fg.getFileGroupId().getFileId()).collect(Collectors.toSet());
     Set<String> actualReplacedFileIds = Stream.of(fileId1, fileId3, fileId4).collect(Collectors.toSet());
     assertEquals(actualReplacedFileIds, allReplacedFileIds);
+  }
+
+  @Test
+  public void testPendingClusteringOperations() throws IOException {
+    String partitionPath1 = "2020/06/27";
+    new File(basePath + "/" + partitionPath1).mkdirs();
+
+    // create 2 fileId in partition1 - fileId1 is replaced later on.
+    String fileId1 = UUID.randomUUID().toString();
+    String fileId2 = UUID.randomUUID().toString();
+    String fileId3 = UUID.randomUUID().toString();
+
+    assertFalse(roView.getLatestBaseFiles(partitionPath1)
+            .anyMatch(dfile -> dfile.getFileId().equals(fileId1) || dfile.getFileId().equals(fileId2) || dfile.getFileId().equals(fileId3)),
+        "No commit, should not find any data file");
+    // Only one commit
+    String commitTime1 = "1";
+    String fileName1 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId1);
+    String fileName2 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId2);
+    String fileName3 = FSUtils.makeDataFileName(commitTime1, TEST_WRITE_TOKEN, fileId3);
+    new File(basePath + "/" + partitionPath1 + "/" + fileName1).createNewFile();
+    new File(basePath + "/" + partitionPath1 + "/" + fileName2).createNewFile();
+    new File(basePath + "/" + partitionPath1 + "/" + fileName3).createNewFile();
+
+    HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, commitTime1);
+    saveAsComplete(commitTimeline, instant1, Option.empty());
+    refreshFsView();
+    assertEquals(1, roView.getLatestBaseFiles(partitionPath1)
+        .filter(dfile -> dfile.getFileId().equals(fileId1)).count());
+    assertEquals(1, roView.getLatestBaseFiles(partitionPath1)
+        .filter(dfile -> dfile.getFileId().equals(fileId2)).count());
+    assertEquals(1, roView.getLatestBaseFiles(partitionPath1)
+        .filter(dfile -> dfile.getFileId().equals(fileId3)).count());
+
+    List<FileSlice>[] fileSliceGroups = new List[] {
+        Collections.singletonList(fsView.getLatestFileSlice(partitionPath1, fileId1).get()),
+        Collections.singletonList(fsView.getLatestFileSlice(partitionPath1, fileId2).get())
+    };
+
+    // create pending clustering operation - fileId1, fileId2 are being clustered in different groups
+    HoodieClusteringPlan plan = ClusteringUtils.createClusteringPlan("strategy", new HashMap<>(),
+        fileSliceGroups, Collections.emptyMap());
+
+    String clusterTime = "2";
+    HoodieInstant instant2 = new HoodieInstant(State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, clusterTime);
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
+        .setClusteringPlan(plan).setOperationType(WriteOperationType.CLUSTER.name()).build();
+    metaClient.getActiveTimeline().saveToPendingReplaceCommit(instant2, TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
+
+    //make sure view doesnt include fileId1
+    refreshFsView();
+    Set<String> fileIds =
+        fsView.getFileGroupsInPendingClustering().map(e -> e.getLeft().getFileId()).collect(Collectors.toSet());
+    assertTrue(fileIds.contains(fileId1));
+    assertTrue(fileIds.contains(fileId2));
+    assertFalse(fileIds.contains(fileId3));
   }
 
   @Override
