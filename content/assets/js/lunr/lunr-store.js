@@ -1188,4 +1188,9 @@ var store = [{
         "excerpt":"When building a change data capture pipeline for already existing or newly created relational databases, one of the most common problems that one faces is simplifying the onboarding process for multiple tables. Ingesting multiple tables to Hudi dataset at a single go is now possible using HoodieMultiTableDeltaStreamer class which is...","categories": ["blog"],
         "tags": [],
         "url": "https://hudi.apache.org/blog/ingest-multiple-tables-using-hudi/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Apache Hudi meets Apache Flink",
+        "excerpt":"Apache Hudi (Hudi for short) is a data lake framework created at Uber. Hudi joined the Apache incubator for incubation in January 2019, and was promoted to the top Apache project in May 2020. It is one of the most popular data lake frameworks. 1. Why decouple Hudi has been...","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/apache-hudi-meets-apache-flink/",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},]
