@@ -20,12 +20,12 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import scala.Option;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -41,7 +41,7 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
                                       BaseCommitActionExecutor<T, I, K, O, R> executor,
                                       boolean performTagging) {
     return write(instantTime, inputRecords, context, table, shouldCombine, shuffleParallelism,
-            null, executor, performTagging);
+            Option.empty(), executor, performTagging);
   }
 
   public HoodieWriteMetadata<O> write(String instantTime,

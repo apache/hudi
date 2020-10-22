@@ -31,7 +31,7 @@ import java.util.Arrays;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Unit tests {@link OverwritePrecombineAvroPayload}.
+ * Unit tests {@link UpdatePrecombineAvroPayload}.
  */
 public class TestOverwritePrecombineAvroPayload {
 
@@ -67,8 +67,8 @@ public class TestOverwritePrecombineAvroPayload {
     record3.put("ts", 1L);
     record3.put("_hoodie_is_deleted", false);
 
-    OverwriteWithLatestAvroPayload payload1 = new OverwritePrecombineAvroPayload(record1, 1);
-    OverwriteWithLatestAvroPayload payload2 = new OverwritePrecombineAvroPayload(record2, 2);
+    OverwriteWithLatestAvroPayload payload1 = new UpdatePrecombineAvroPayload(record1, 1);
+    OverwriteWithLatestAvroPayload payload2 = new UpdatePrecombineAvroPayload(record2, 2);
     assertEquals(payload1.preCombine(payload2), payload2);
     assertEquals(payload2.preCombine(payload1), payload2);
 

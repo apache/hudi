@@ -23,12 +23,12 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.spark.api.java.JavaRDD;
-import scala.Option;
 
 public class SparkUpsertCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseSparkCommitActionExecutor<T> {
@@ -46,6 +46,6 @@ public class SparkUpsertCommitActionExecutor<T extends HoodieRecordPayload<T>>
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> execute() {
     return SparkWriteHelper.newInstance().write(instantTime, inputRecordsRDD, context, table,
             config.shouldCombineBeforeUpsert(), config.getUpsertShuffleParallelism(),
-                    Option.apply(config.getSchema()), this, true);
+                    Option.of(config.getSchema()), this, true);
   }
 }

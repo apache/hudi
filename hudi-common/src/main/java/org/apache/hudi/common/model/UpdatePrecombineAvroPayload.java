@@ -27,7 +27,7 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * subclass of OverwriteWithLatestAvroPayload used for delta streamer.
+ * subclass of OverwriteWithLatestAvroPayload.
  *
  * <ol>
  * <li>preCombine - When more than one HoodieRecord have the same HoodieKey, this function combines all fields(which is not null)
@@ -42,12 +42,12 @@ import java.util.List;
  * 1  Karl  18    0.0
  * </ol>
  */
-public class OverwritePrecombineAvroPayload extends OverwriteWithLatestAvroPayload {
-  public OverwritePrecombineAvroPayload(GenericRecord record, Comparable orderingVal) {
+public class UpdatePrecombineAvroPayload extends OverwriteWithLatestAvroPayload {
+  public UpdatePrecombineAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
   }
 
-  public OverwritePrecombineAvroPayload(Option<GenericRecord> record) {
+  public UpdatePrecombineAvroPayload(Option<GenericRecord> record) {
     super(record);
   }
 
@@ -55,8 +55,8 @@ public class OverwritePrecombineAvroPayload extends OverwriteWithLatestAvroPaylo
   public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload another, Schema schema) throws IOException {
     // pick the payload with greatest ordering value and aggregate all the fields,choosing the
     // value that is not null
-    GenericRecord thisValue = (GenericRecord) HoodieAvroUtils.bytesToAvro(this.recordBytes, schema);
-    GenericRecord anotherValue = (GenericRecord) HoodieAvroUtils.bytesToAvro(another.recordBytes, schema);
+    GenericRecord thisValue = HoodieAvroUtils.bytesToAvro(this.recordBytes, schema);
+    GenericRecord anotherValue = HoodieAvroUtils.bytesToAvro(another.recordBytes, schema);
     List<Schema.Field> fields = schema.getFields();
 
     if (another.orderingVal.compareTo(orderingVal) > 0) {
