@@ -93,6 +93,11 @@ private[hudi] object HoodieSparkSqlWriter {
       operation = WriteOperationType.INSERT
     }
 
+    // If the mode is Overwrite, should use INSERT_OVERWRITE operation
+    if (mode == SaveMode.Overwrite && operation !=  WriteOperationType.INSERT_OVERWRITE) {
+      operation = WriteOperationType.INSERT_OVERWRITE
+    }
+
     val jsc = new JavaSparkContext(sparkContext)
     val basePath = new Path(path.get)
     val instantTime = HoodieActiveTimeline.createNewInstantTime()
@@ -309,13 +314,15 @@ private[hudi] object HoodieSparkSqlWriter {
       }
     }
 
+    if (mode == SaveMode.Overwrite) {
+      if (operation != WriteOperationType.INSERT_OVERWRITE) {
+        throw new HoodieException(s"hoodie table with mode Overwrite need set operation type to INSERT_OVERWRITE at $tablePath")
+      }
+    }
+
     if (operation != WriteOperationType.DELETE) {
       if (mode == SaveMode.ErrorIfExists && tableExists) {
         throw new HoodieException(s"hoodie table at $tablePath already exists.")
-      } else if (mode == SaveMode.Overwrite && tableExists) {
-        log.warn(s"hoodie table at $tablePath already exists. Deleting existing data & overwriting with new data.")
-        fs.delete(tablePath, true)
-        tableExists = false
       }
     } else {
       // Delete Operation only supports Append mode
