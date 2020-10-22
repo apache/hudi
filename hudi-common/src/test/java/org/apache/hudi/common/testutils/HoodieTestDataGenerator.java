@@ -451,6 +451,10 @@ public class HoodieTestDataGenerator {
     return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, true).collect(Collectors.toList());
   }
 
+  public List<HoodieRecord> generateInsertsForPartition(String instantTime, Integer n, String partition) {
+    return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, false, () -> partition, () -> UUID.randomUUID().toString()).collect(Collectors.toList());
+  }
+
   public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions) {
     return generateInsertsStream(commitTime, n, isFlattened, schemaStr, containsAllPartitions,
         () -> partitionPaths[RAND.nextInt(partitionPaths.length)],
