@@ -166,7 +166,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
         break;
     }
     String content = response.returnContent().asString();
-    return mapper.readValue(content, reference);
+    return (T) mapper.readValue(content, reference);
   }
 
   private Map<String, String> getParamsWithPartitionPath(String partitionPath) {
