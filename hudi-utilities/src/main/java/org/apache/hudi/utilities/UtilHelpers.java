@@ -175,6 +175,20 @@ public class UtilHelpers {
     return conf;
   }
 
+  public static DFSPropertiesConfiguration getConfig(List<String> overriddenProps) {
+    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration();
+    try {
+      if (!overriddenProps.isEmpty()) {
+        LOG.info("Adding overridden properties to file properties.");
+        conf.addProperties(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
+      }
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Unexpected error adding config overrides", ioe);
+    }
+
+    return conf;
+  }
+
   public static TypedProperties buildProperties(List<String> props) {
     TypedProperties properties = new TypedProperties();
     props.forEach(x -> {
