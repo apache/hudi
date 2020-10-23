@@ -62,7 +62,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
   public InputSplit[] getSplits(JobConf job, int numSplits) throws IOException {
 
     Stream<FileSplit> fileSplits = Arrays.stream(super.getSplits(job, numSplits)).map(is -> (FileSplit) is);
-    System.out.println("getSplits=" + fileSplits.toString());
+
     return HoodieRealtimeInputFormatUtils.getRealtimeSplits(job, fileSplits);
   }
 

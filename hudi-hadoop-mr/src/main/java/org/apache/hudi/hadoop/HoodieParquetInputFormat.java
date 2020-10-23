@@ -78,10 +78,8 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
   public FileStatus[] listStatus(JobConf job) throws IOException {
     // Segregate inputPaths[] to incremental, snapshot and non hoodie paths
     List<String> incrementalTables = HoodieHiveUtils.getIncrementalTableNames(Job.getInstance(job));
-    System.out.println("incrementalTables string = " + incrementalTables.toString());
     InputPathHandler inputPathHandler = new InputPathHandler(conf, getInputPaths(job), incrementalTables);
     List<FileStatus> returns = new ArrayList<>();
-    System.out.println("incrementalTables size = " + incrementalTables.size());
 
     Map<String, HoodieTableMetaClient> tableMetaClientMap = inputPathHandler.getTableMetaClientMap();
     // process incremental pulls first
@@ -146,11 +144,6 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     if (!commitsToCheck.isPresent()) {
       return null;
     }
-    System.out.println("hahahahhaha");
-    for (HoodieInstant commit : commitsToCheck.get()) {
-      System.out.println("commit action:" + commit.getAction());
-    }
-
     Option<String> incrementalInputPaths = HoodieInputFormatUtils.getAffectedPartitions(commitsToCheck.get(), tableMetaClient, timeline.get(), inputPaths);
     // Mutate the JobConf to set the input paths to only partitions touched by incremental pull.
     if (!incrementalInputPaths.isPresent()) {
