@@ -113,9 +113,6 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
     )
 
-    // Follow the implementation of Spark internal HadoopRDD to handle the broadcast configuration.
-    FileSystem.getLocal(jobConf)
-    SparkHadoopUtil.get.addCredentials(jobConf)
     val rdd = new HoodieMergeOnReadRDD(
       sqlContext.sparkContext,
       jobConf,

@@ -43,7 +43,7 @@ import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.streaming.DataStreamWriter;
 import org.apache.spark.sql.streaming.OutputMode;
-import org.apache.spark.sql.streaming.ProcessingTime;
+import org.apache.spark.sql.streaming.Trigger;
 
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -366,7 +366,7 @@ public class HoodieJavaStreamingApp {
         .outputMode(OutputMode.Append());
 
     updateHiveSyncConfig(writer);
-    StreamingQuery query = writer.trigger(new ProcessingTime(500)).start(tablePath);
+    StreamingQuery query = writer.trigger(Trigger.ProcessingTime(500)).start(tablePath);
     query.awaitTermination(streamingDurationInMs);
   }
 

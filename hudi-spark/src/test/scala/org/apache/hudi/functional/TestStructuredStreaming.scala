@@ -26,7 +26,7 @@ import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.log4j.LogManager
 import org.apache.spark.sql._
-import org.apache.spark.sql.streaming.{OutputMode, ProcessingTime}
+import org.apache.spark.sql.streaming.{OutputMode, Trigger}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
@@ -93,7 +93,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
         .writeStream
         .format("org.apache.hudi")
         .options(commonOpts)
-        .trigger(new ProcessingTime(100))
+        .trigger(Trigger.ProcessingTime(100))
         .option("checkpointLocation", basePath + "/checkpoint")
         .outputMode(OutputMode.Append)
         .start(destPath)
