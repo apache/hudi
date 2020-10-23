@@ -54,7 +54,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
-
   private static final Logger LOG = LogManager.getLogger(HoodieRealtimeInputFormatUtils.class);
 
   public static InputSplit[] getRealtimeSplits(Configuration conf, Stream<FileSplit> fileSplits) throws IOException {
@@ -76,17 +75,33 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
         // Both commit and delta-commits are included - pick the latest completed one
         Option<HoodieInstant> latestCompletedInstant =
             metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
-
+        LOG.info("latestCompletedInstant =" + latestCompletedInstant.get().toString());
         Stream<FileSlice> latestFileSlices = latestCompletedInstant
             .map(instant -> fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, instant.getTimestamp()))
             .orElse(Stream.empty());
+        List<FileSlice> latestFileSlicesList = latestCompletedInstant
+            .map(instant -> fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, instant.getTimestamp()))
+            .orElse(Stream.empty()).collect(Collectors.toList());
+        LOG.info("latestFileSlices ="   + latestFileSlicesList.size());
+        for (FileSlice fileSlice : latestFileSlicesList) {
+          LOG.info("latestFileSlices item = " + fileSlice.toString());
+        }
+
+        Stream<HoodieInstant> instants1 = metaClient.getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
+            HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION))
+            .filterCompletedInstants().getInstants();
+        List<HoodieInstant> instants1List = instants1.collect(Collectors.toList());
+        LOG.info("maxCommitTime ="   + instants1List.size());
+        for (HoodieInstant hoodieInstant : instants1List) {
+          LOG.info("instants1 item = " + hoodieInstant.toString());
+        }
 
         // subgroup splits again by file id & match with log files.
         Map<String, List<FileSplit>> groupedInputSplits = partitionsToParquetSplits.get(partitionPath).stream()
             .collect(Collectors.groupingBy(split -> FSUtils.getFileId(split.getPath().getName())));
         // Get the maxCommit from the last delta or compaction or commit - when bootstrapped from COW table
         String maxCommitTime = metaClient.getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
-                HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
+                HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION))
             .filterCompletedInstants().lastInstant().get().getTimestamp();
         latestFileSlices.forEach(fileSlice -> {
           List<FileSplit> dataFileSplits = groupedInputSplits.get(fileSlice.getFileId());
