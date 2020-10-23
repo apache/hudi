@@ -62,6 +62,7 @@ public class SparkWriteHelper<T extends HoodieRecordPayload, R> extends Abstract
     }).reduceByKey((rec1, rec2) -> {
       @SuppressWarnings("unchecked")
       T reducedData;
+      //To prevent every records from parsing schema
       if (rec2.getData() instanceof UpdatePrecombineAvroPayload) {
         reducedData = schema.isPresent() ? (T) rec1.getData().preCombine(rec2.getData(), new Schema.Parser().parse(schema.get()))
                 : (T) rec1.getData().preCombine(rec2.getData());
