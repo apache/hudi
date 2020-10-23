@@ -19,7 +19,7 @@
 package org.apache.hudi.internal;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.DataSourceUtilsForSpark2;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -106,7 +106,7 @@ public class HoodieDataSourceInternalWriter implements DataSourceWriter {
 
     try {
       writeClient.commitStats(instantTime, writeStatList, Option.empty(),
-          DataSourceUtils.getCommitActionType(operationType, metaClient.getTableType()));
+          DataSourceUtilsForSpark2.getCommitActionType(operationType, metaClient.getTableType()));
     } catch (Exception ioe) {
       throw new HoodieException(ioe.getMessage(), ioe);
     } finally {

@@ -18,11 +18,19 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Schema
+import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hudi.client.utils.SparkRowDeserializer
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.SPARK_VERSION
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
+import org.apache.spark.sql.avro.SchemaConverters
+import org.apache.spark.sql.catalyst.encoders.{ExpressionEncoder, RowEncoder}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFileIndex}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
+
 import scala.collection.JavaConverters._
 
 
@@ -79,5 +87,35 @@ object HoodieSparkUtils {
   def createInMemoryFileIndex(sparkSession: SparkSession, globbedPaths: Seq[Path]): InMemoryFileIndex = {
     val fileStatusCache = FileStatusCache.getOrCreate(sparkSession)
     new InMemoryFileIndex(sparkSession, globbedPaths, Map(), Option.empty, fileStatusCache)
+  }
+
+  def createRdd(df: DataFrame, structName: String, recordNamespace: String): RDD[GenericRecord] = {
+    val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, recordNamespace)
+    createRdd(df, avroSchema, structName, recordNamespace)
+  }
+
+  def createRdd(df: DataFrame, avroSchema: Schema, structName: String, recordNamespace: String)
+  : RDD[GenericRecord] = {
+    // Use the Avro schema to derive the StructType which has the correct nullability information
+    val dataType = SchemaConverters.toSqlType(avroSchema).dataType.asInstanceOf[StructType]
+    val encoder = RowEncoder.apply(dataType).resolveAndBind()
+    val deserializer = HoodieSparkUtils.createDeserializer(encoder)
+    df.queryExecution.toRdd.map(row => deserializer.deserializeRow(row))
+      .mapPartitions { records =>
+        if (records.isEmpty) Iterator.empty
+        else {
+          val convertor = AvroConversionHelper.createConverterToAvro(dataType, structName, recordNamespace)
+          records.map { x => convertor(x).asInstanceOf[GenericRecord] }
+        }
+      }
+  }
+
+  def createDeserializer(encoder: ExpressionEncoder[Row]): SparkRowDeserializer = {
+    // TODO remove Spark2RowDeserializer if Spark 2.x support is dropped
+    if (SPARK_VERSION.startsWith("2.")) {
+      new Spark2RowDeserializer(encoder)
+    } else {
+      new Spark3RowDeserializer(encoder)
+    }
   }
 }

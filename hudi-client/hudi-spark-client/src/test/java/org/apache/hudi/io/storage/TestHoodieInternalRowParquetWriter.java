@@ -35,7 +35,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
@@ -64,7 +63,7 @@ public class TestHoodieInternalRowParquetWriter extends HoodieClientTestHarness 
   }
 
   @Test
-  public void endToEndTest() throws IOException {
+  public void endToEndTest() throws Exception {
     HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath).build();
     for (int i = 0; i < 5; i++) {
       // init write support and parquet config

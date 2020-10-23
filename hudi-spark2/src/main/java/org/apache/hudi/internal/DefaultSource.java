@@ -18,7 +18,7 @@
 
 package org.apache.hudi.internal;
 
-import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.DataSourceUtilsForSpark2;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.hadoop.conf.Configuration;
@@ -70,7 +70,7 @@ public class DefaultSource implements DataSourceV2, ReadSupport, WriteSupport,
     String instantTime = options.get(HoodieDataSourceInternalWriter.INSTANT_TIME_OPT_KEY).get();
     String path = options.get("path").get();
     String tblName = options.get(HoodieWriteConfig.TABLE_NAME).get();
-    HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(null, path, tblName, options.asMap());
+    HoodieWriteConfig config = DataSourceUtilsForSpark2.createHoodieConfig(null, path, tblName, options.asMap());
     return Optional.of(new HoodieDataSourceInternalWriter(instantTime, config, schema, getSparkSession(),
             getConfiguration()));
   }

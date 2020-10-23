@@ -18,8 +18,8 @@
 
 package org.apache.hudi.bootstrap;
 
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.bootstrap.FullRecordBootstrapDataProvider;
@@ -65,7 +65,7 @@ public class SparkParquetBootstrapDataProvider extends FullRecordBootstrapDataPr
       KeyGenerator keyGenerator = DataSourceUtils.createKeyGenerator(props);
       String structName = tableName + "_record";
       String namespace = "hoodie." + tableName;
-      RDD<GenericRecord> genericRecords = AvroConversionUtils.createRdd(inputDataset, structName, namespace);
+      RDD<GenericRecord> genericRecords = HoodieSparkUtils.createRdd(inputDataset, structName, namespace);
       return genericRecords.toJavaRDD().map(gr -> {
         String orderingVal = HoodieAvroUtils.getNestedFieldValAsString(
             gr, props.getString("hoodie.datasource.write.precombine.field"), false);

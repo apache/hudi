@@ -27,6 +27,7 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 
+import org.apache.spark.package$;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -34,7 +35,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -51,6 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Unit tests {@link HoodieBulkInsertDataInternalWriter}.
@@ -61,6 +62,8 @@ public class TestHoodieBulkInsertDataInternalWriter extends HoodieClientTestHarn
 
   @BeforeEach
   public void setUp() throws Exception {
+    // this test is only compatible with spark 2
+    assumeTrue(package$.MODULE$.SPARK_VERSION().startsWith("2."));
     initSparkContexts("TestHoodieBulkInsertDataInternalWriter");
     initPath();
     initFileSystem();
@@ -74,7 +77,7 @@ public class TestHoodieBulkInsertDataInternalWriter extends HoodieClientTestHarn
   }
 
   @Test
-  public void testDataInternalWriter() throws IOException {
+  public void testDataInternalWriter() throws Exception {
     // init config and table
     HoodieWriteConfig cfg = getConfigBuilder(basePath).build();
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
@@ -119,7 +122,7 @@ public class TestHoodieBulkInsertDataInternalWriter extends HoodieClientTestHarn
    * to throw Global Error. Verify global error is set appropriately and only first batch of records are written to disk.
    */
   @Test
-  public void testGlobalFailure() throws IOException {
+  public void testGlobalFailure() throws Exception {
     // init config and table
     HoodieWriteConfig cfg = getConfigBuilder(basePath).build();
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
@@ -165,7 +168,8 @@ public class TestHoodieBulkInsertDataInternalWriter extends HoodieClientTestHarn
     assertOutput(inputRows, result, instantTime, fileNames);
   }
 
-  private void writeRows(Dataset<Row> inputRows, HoodieBulkInsertDataInternalWriter writer) throws IOException {
+  private void writeRows(Dataset<Row> inputRows, HoodieBulkInsertDataInternalWriter writer)
+      throws Exception {
     List<InternalRow> internalRows = toInternalRows(inputRows, ENCODER);
     // issue writes
     for (InternalRow internalRow : internalRows) {
