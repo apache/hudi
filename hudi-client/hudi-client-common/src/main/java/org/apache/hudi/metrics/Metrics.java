@@ -38,7 +38,8 @@ public class Metrics {
   private static final Logger LOG = LogManager.getLogger(Metrics.class);
 
   private static volatile boolean initialized = false;
-  private static Metrics metrics = null;
+  private static Metrics instance = null;
+
   private final MetricRegistry registry;
   private MetricsReporter reporter;
   private final String commonMetricPrefix;
@@ -72,12 +73,11 @@ public class Metrics {
   private void reportAndFlushMetrics() {
     try {
       LOG.info("Reporting and flushing all metrics");
-
       this.registerHoodieCommonMetrics();
       this.reporter.report();
-      this.registry.getNames().forEach(name -> this.registry.remove(name));
+      this.registry.getNames().forEach(this.registry::remove);
     } catch (Exception e) {
-      Metrics.LOG.error((Object)"Error while reporting and flushing metrics", (Throwable)e);
+      LOG.error("Error while reporting and flushing metrics", e);
     }
   }
 
@@ -87,7 +87,7 @@ public class Metrics {
 
   public static Metrics getInstance() {
     assert initialized;
-    return metrics;
+    return instance;
   }
 
   public static synchronized void init(HoodieWriteConfig metricConfig) {
@@ -95,7 +95,7 @@ public class Metrics {
       return;
     }
     try {
-      metrics = new Metrics(metricConfig);
+      instance = new Metrics(metricConfig);
     } catch (Exception e) {
       throw new HoodieException(e);
     }
@@ -106,7 +106,7 @@ public class Metrics {
     if (!initialized) {
       return;
     }
-    metrics.reportAndCloseReporter();
+    instance.reportAndCloseReporter();
     initialized = false;
   }
 
@@ -114,8 +114,7 @@ public class Metrics {
     if (!Metrics.initialized) {
       return;
     }
-
-    metrics.reportAndFlushMetrics();
+    instance.reportAndFlushMetrics();
   }
 
   public static void registerGauges(Map<String, Long> metricsMap, Option<String> prefix) {
