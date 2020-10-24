@@ -24,8 +24,6 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -39,7 +37,7 @@ import java.util.List;
  * `docker/setup_demo.sh` and then run the test class as you would do normally.
  */
 public class ITTestHoodieDemo extends ITTestBase {
-  public static final Logger LOG = LogManager.getLogger(ITTestHoodieDemo.class);
+
   private static final String HDFS_DATA_DIR = "/usr/hive/data/input";
   private static final String HDFS_BATCH_PATH1 = HDFS_DATA_DIR + "/batch_1.json";
   private static final String HDFS_BATCH_PATH2 = HDFS_DATA_DIR + "/batch_2.json";
@@ -425,7 +423,6 @@ public class ITTestHoodieDemo extends ITTestBase {
   private void testIncrementalSparkSQLQuery() throws Exception {
     Pair<String, String> stdOutErrPair = executeSparkSQLCommand(SPARKSQL_INCREMENTAL_COMMANDS, true);
     assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 10:59:00|9021  |1227.1993|1227.215|", 2);
-    LOG.info("hahhahaahhaha testIncrementalSparkSQLQuery = " + stdOutErrPair);
     assertStdOutContains(stdOutErrPair, "|default |stock_ticks_cow              |false      |\n"
         + "|default |stock_ticks_cow_bs           |false      |\n"
         + "|default |stock_ticks_derived_mor_bs_ro|false      |\n"
