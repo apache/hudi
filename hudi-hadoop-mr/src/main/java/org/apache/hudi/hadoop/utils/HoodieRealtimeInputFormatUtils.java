@@ -86,7 +86,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
             .collect(Collectors.groupingBy(split -> FSUtils.getFileId(split.getPath().getName())));
         // Get the maxCommit from the last delta or compaction or commit - when bootstrapped from COW table
         String maxCommitTime = metaClient.getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
-                HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
+                HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION))
             .filterCompletedInstants().lastInstant().get().getTimestamp();
         latestFileSlices.forEach(fileSlice -> {
           List<FileSplit> dataFileSplits = groupedInputSplits.get(fileSlice.getFileId());
