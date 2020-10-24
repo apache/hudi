@@ -22,14 +22,35 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.spark.api.java.function.MapFunction;
+import org.apache.spark.api.java.function.ReduceFunction;
 import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer$;
+import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
+import org.apache.spark.sql.catalyst.encoders.RowEncoder;
+import org.apache.spark.sql.catalyst.expressions.Attribute;
+import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
+import scala.Tuple2;
+import scala.collection.JavaConversions;
+import scala.collection.JavaConverters;
+
 /**
- * Validate node to compare input and hudi content.
+ * This nodes validates contents from input path are in tact with Hudi. This nodes uses spark datasource for comparison purposes.
+ * By default no configs are required for this node. But there is an optional config "delete_input_data" that you can set for this node.
+ * If set, once validation completes, contents from inputPath are deleted. This will come in handy for long running test suites.
+ * README has more details under docker set up for usages of this node.
  */
 public class ValidateDatasetNode extends DagNode<Boolean> {
 
@@ -42,32 +63,68 @@ public class ValidateDatasetNode extends DagNode<Boolean> {
   @Override
   public void execute(ExecutionContext context) throws Exception {
 
-    /*SparkConf sparkConf = new SparkConf().setAppName("ValidateApp").setMaster("local");
-    SparkSession spark = SparkSession
-        .builder()
-        .config(sparkConf)
-        .getOrCreate();*/
     SparkSession session = SparkSession.builder().sparkContext(context.getJsc().sc()).getOrCreate();
 
-    String inputPath = context.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/../input/*/*";
+    String inputPath = context.getHoodieTestSuiteWriter().getCfg().inputBasePath + "/*/*";
     String hudiPath = context.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/*/*/*";
     log.warn("ValidateDataset Node: Input path " + inputPath + ", hudi path " + hudiPath);
+    // listing batches to be validated
+    String inputPathStr = context.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/../input/";
+    FileSystem fs = new Path(inputPathStr)
+        .getFileSystem(context.getHoodieTestSuiteWriter().getConfiguration());
+    FileStatus[] fileStatuses = fs.listStatus(new Path(inputPathStr));
+    for (FileStatus fileStatus : fileStatuses) {
+      log.debug("Listing all Micro batches to be validated :: " + fileStatus.getPath().toString());
+    }
+
+    // fix hard coded fields from configs.
+    // read input and resolve insert, updates, etc.
     Dataset<Row> inputDf = session.read().format("avro").load(inputPath);
+    ExpressionEncoder encoder = getEncoder(inputDf.schema());
+    Dataset<Row> inputSnapshotDf = inputDf.groupByKey(
+        (MapFunction<Row, String>) value -> value.getAs("timestamp") + "+" + value.getAs("_row_key"), Encoders.STRING())
+        .reduceGroups((ReduceFunction<Row>) (v1, v2) -> {
+          long ts1 = v1.getAs("ts");
+          long ts2 = v2.getAs("ts");
+          if (ts1 > ts2) {
+            return v1;
+          } else {
+            return v2;
+          }
+        })
+        .map((MapFunction<Tuple2<String, Row>, Row>) value -> value._2, encoder);
+
+    // read from hudi and remove meta columns.
     Dataset<Row> hudiDf = session.read().format("hudi").load(hudiPath);
     Dataset<Row> trimmedDf = hudiDf.drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
         .drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.FILENAME_METADATA_FIELD);
-    if (inputDf.except(trimmedDf).count() != 0) {
+
+    Dataset<Row> intersectionDf = inputSnapshotDf.intersect(trimmedDf);
+    // the intersected df should be same as inputDf. if not, there is some mismatch.
+    if (inputSnapshotDf.except(intersectionDf).count() != 0) {
       log.error("Data set validation failed. Total count in hudi " + trimmedDf.count() + ", input df count " + inputDf.count());
       throw new AssertionError("Hudi contents does not match contents input data. ");
+    } else {
+      // if delete input data is enabled, erase input data.
+      if (config.isDeleteInputData()) {
+        // clean up input data for current group of writes.
+        inputPathStr = context.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/../input/";
+        fs = new Path(inputPathStr)
+            .getFileSystem(context.getHoodieTestSuiteWriter().getConfiguration());
+        fileStatuses = fs.listStatus(new Path(inputPathStr));
+        for (FileStatus fileStatus : fileStatuses) {
+          log.debug("Micro batch to be deleted " + fileStatus.getPath().toString());
+          fs.delete(fileStatus.getPath(), true);
+        }
+      }
     }
+  }
 
-    log.warn("Validating hive table");
-    Dataset<Row> cowDf = session.sql("SELECT * FROM testdb.table1");
-    Dataset<Row> trimmedCowDf = cowDf.drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
-        .drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.FILENAME_METADATA_FIELD);
-    if (inputDf.except(trimmedCowDf).count() != 0) {
-      log.error("Data set validation failed for COW table. Total count in hudi " + trimmedCowDf.count() + ", input df count " + inputDf.count());
-      throw new AssertionError("Hudi contents does not match contents input data. ");
-    }
+  private ExpressionEncoder getEncoder(StructType schema) {
+    List<Attribute> attributes = JavaConversions.asJavaCollection(schema.toAttributes()).stream()
+        .map(Attribute::toAttribute).collect(Collectors.toList());
+    return RowEncoder.apply(schema)
+        .resolveAndBind(JavaConverters.asScalaBufferConverter(attributes).asScala().toSeq(),
+            SimpleAnalyzer$.MODULE$);
   }
 }

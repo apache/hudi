@@ -20,6 +20,11 @@ package org.apache.hudi.integ.testsuite.generator;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Iterator;
+import java.util.List;
 
 import java.util.HashSet;
 import java.util.Iterator;
@@ -40,18 +45,23 @@ public class FlexibleSchemaRecordGenerationIterator implements Iterator<GenericR
   // Store last record for the partition path of the first payload to be used for all subsequent generated payloads
   private GenericRecord lastRecord;
   // Partition path field name
-  private Set<String> partitionPathFieldNames;
+  private List<String> partitionPathFieldNames;
+  private final String preCombineField;
+  private final int preCombineFieldValue;
 
   public FlexibleSchemaRecordGenerationIterator(long maxEntriesToProduce, String schema) {
-    this(maxEntriesToProduce, GenericRecordFullPayloadGenerator.DEFAULT_PAYLOAD_SIZE, schema, null, 0);
+    this(maxEntriesToProduce, GenericRecordFullPayloadGenerator.DEFAULT_PAYLOAD_SIZE, schema, null, GenericRecordFullPayloadGenerator.DEFAULT_NUM_DATE_PARTITIONS,
+        "ts", 0, 0);
   }
 
   public FlexibleSchemaRecordGenerationIterator(long maxEntriesToProduce, int minPayloadSize, String schemaStr,
-      List<String> partitionPathFieldNames, int partitionIndex) {
+      List<String> partitionPathFieldNames, int numPartitions, String preCombineField, int preCombineFieldValue, int partitionIndex) {
     this.counter = maxEntriesToProduce;
     this.partitionPathFieldNames = new HashSet<>(partitionPathFieldNames);
     Schema schema = new Schema.Parser().parse(schemaStr);
     this.generator = new GenericRecordFullPayloadGenerator(schema, minPayloadSize, partitionIndex);
+    this.preCombineField = preCombineField;
+    this.preCombineFieldValue = preCombineFieldValue;
   }
 
   @Override
@@ -65,9 +75,12 @@ public class FlexibleSchemaRecordGenerationIterator implements Iterator<GenericR
     if (lastRecord == null) {
       GenericRecord record = this.generator.getNewPayload(partitionPathFieldNames);
       lastRecord = record;
+      record.put(preCombineField, new Long(preCombineFieldValue));
       return record;
     } else {
-      return this.generator.randomize(lastRecord, partitionPathFieldNames);
+      GenericRecord toReturn = this.generator.randomize(lastRecord, this.partitionPathFieldNames);
+      toReturn.put(preCombineField, new Long(preCombineFieldValue));
+      return toReturn;
     }
   }
 }

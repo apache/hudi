@@ -142,7 +142,9 @@ Start the Hudi Docker demo:
 docker/setup_demo.sh
 ```
 
-NOTE: We need to make a couple of environment changes for Hive 2.x support. This will be fixed once Hudi moves to Spark 3.x
+NOTE: We need to make a couple of environment changes for Hive 2.x support. This will be fixed once Hudi moves to Spark 3.x.
+Execute below if you are using Hudi query node in your dag. If not, below section is not required. 
+Also, for longer running tests, go to next section. 
 
 ```
 docker exec -it adhoc-2 bash
@@ -214,7 +216,7 @@ spark-submit \
 --conf spark.sql.catalogImplementation=hive \
 --class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
 /opt/hudi-integ-test-bundle-0.6.1-SNAPSHOT.jar \
---source-ordering-field timestamp \
+--source-ordering-field ts \
 --use-deltastreamer \
 --target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \
 --input-base-path /user/hive/warehouse/hudi-integ-test-suite/input \
@@ -253,7 +255,7 @@ spark-submit \
 --conf spark.sql.catalogImplementation=hive \
 --class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
 /opt/hudi-integ-test-bundle-0.6.1-SNAPSHOT.jar \
---source-ordering-field timestamp \
+--source-ordering-field ts \
 --use-deltastreamer \
 --target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \
 --input-base-path /user/hive/warehouse/hudi-integ-test-suite/input \
@@ -267,3 +269,163 @@ spark-submit \
 --table-type MERGE_ON_READ \
 --compact-scheduling-minshare 1
 ``` 
+
+For long running test suite, validation has to be done differently. Idea is to run same dag in a repeated manner. 
+Hence "ValidateDatasetNode" is introduced which will read entire input data and compare it with hudi.
+For repeated runs, two additional configs need to be set. "--num-rounds N" and "--delay-between-rounds-mins Y". 
+
+Also, ValidateDatasetNode can be configured in two ways. Either with "delete_input_data: true" set or not set. 
+When "delete_input_data" is set for ValidateDatasetNode, once validation is complete, entire input data will be deleted. 
+So, suggestion is to use this ValidateDatasetNode as the last node in the dag with "delete_input_data". 
+Example dag: 
+```
+     Insert
+     Upsert
+     ValidateDatasetNode with delete_input_data = true
+```
+
+If above dag is run with "--num-rounds 10 --delay-between-rounds-mins 10", then this dag will run for 10 times with 10 
+mins delay between every run. At the end of every run, records written as part of this round will be validated. 
+At the end of validation, all contents of input are deleted.   
+For eg: incase of above dag, 
+```
+Round1: 
+    insert => inputPath/batch1
+    upsert -> inputPath/batch2
+    Validate with delete_input_data = true
+              Validates contents from batch1 and batch2 are in hudi and ensures Row equality
+              Since "delete_input_data" is set, deletes contents from batch1 and batch2.
+Round2:    
+    insert => inputPath/batch3
+    upsert -> inputPath/batch4
+    Validate with delete_input_data = true
+              Validates contents from batch3 and batch4 are in hudi and ensures Row equality
+              Since "delete_input_data" is set, deletes contents from batch3 and batch4.
+Round3:    
+    insert => inputPath/batch5
+    upsert -> inputPath/batch6
+    Validate with delete_input_data = true
+              Validates contents from batch5 and batch6 are in hudi and ensures Row equality
+              Since "delete_input_data" is set, deletes contents from batch5 and batch6.   
+.
+.
+```
+If you wish to do a cumulative validation, do not set delete_input_data in ValidateDatasetNode. But remember that this 
+may not scale beyond certain point since input data as well as hudi content's keeps occupying the disk and grows for 
+every cycle.
+
+Lets see an example where you don't set "delete_input_data" as part of Validation. 
+```
+Round1: 
+    insert => inputPath/batch1
+    upsert -> inputPath/batch2
+    Validate: validates contents from batch1 and batch2 are in hudi and ensures Row equality
+Round2:    
+    insert => inputPath/batch3
+    upsert -> inputPath/batch4
+    Validate: validates contents from batch1 to batch4 are in hudi and ensures Row equality
+Round3:    
+    insert => inputPath/batch5
+    upsert -> inputPath/batch6
+    Validate: validates contents from batch1 and batch6 are in hudi and ensures Row equality
+.
+.
+```
+
+You could also have validations in the middle of your dag and not set the "delete_input_data". But set it only in the 
+last node in the dag.
+```
+Round1: 
+    insert => inputPath/batch1
+    upsert -> inputPath/batch2
+    Validate: validates contents from batch1 and batch2 are in hudi and ensures Row equality
+    insert => inputPath/batch3
+    upsert -> inputPath/batch4
+    Validate with delete_input_data = true
+             Validates contents from batch1 to batch4 are in hudi and ensures Row equality
+             since "delete_input_data" is set to true, this node deletes contents from batch1 and batch4.
+Round2: 
+    insert => inputPath/batch5
+    upsert -> inputPath/batch6
+    Validate: validates contents from batch5 and batch6 are in hudi and ensures Row equality
+    insert => inputPath/batch7
+    upsert -> inputPath/batch8
+    Validate: validates contents from batch5 to batch8 are in hudi and ensures Row equality
+             since "delete_input_data" is set to true, this node deletes contents from batch5 to batch8.
+Round3: 
+    insert => inputPath/batch9
+    upsert -> inputPath/batch10
+    Validate: validates contents from batch9 and batch10 are in hudi and ensures Row equality
+    insert => inputPath/batch11
+    upsert -> inputPath/batch12
+     Validate with delete_input_data = true
+             Validates contents from batch9 to batch12 are in hudi and ensures Row equality
+             Set "delete_input_data" to true. so this node deletes contents from batch9 to batch12. 
+.
+.
+```
+Above dag was just an example for illustration purposes. But you can make it complex as per your needs.
+```
+    Insert
+    Upsert
+    Delete
+    Validate w/o deleting
+    Insert
+    Rollback
+    Validate w/o deleting
+    Upsert
+    Validate w/ deletion
+```                        
+With this dag, you can set the two additional configs "--num-rounds N" and "--delay-between-rounds-mins Y" and have a long 
+running test suite. 
+
+Sample COW command with repeated runs. 
+```
+spark-submit \
+--packages org.apache.spark:spark-avro_2.11:2.4.0 \
+--conf spark.task.cpus=1 \
+--conf spark.executor.cores=1 \
+--conf spark.task.maxFailures=100 \
+--conf spark.memory.fraction=0.4  \
+--conf spark.rdd.compress=true  \
+--conf spark.kryoserializer.buffer.max=2000m \
+--conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.memory.storageFraction=0.1 \
+--conf spark.shuffle.service.enabled=true  \
+--conf spark.sql.hive.convertMetastoreParquet=false  \
+--conf spark.driver.maxResultSize=12g \
+--conf spark.executor.heartbeatInterval=120s \
+--conf spark.network.timeout=600s \
+--conf spark.yarn.max.executor.failures=10 \
+--conf spark.sql.catalogImplementation=hive \
+--conf spark.driver.extraClassPath=/var/demo/jars/* \
+--conf spark.executor.extraClassPath=/var/demo/jars/* \
+--class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
+/opt/hudi-integ-test-bundle-0.6.1-SNAPSHOT.jar \
+--source-ordering-field ts \
+--use-deltastreamer \
+--target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \
+--input-base-path /user/hive/warehouse/hudi-integ-test-suite/input \
+--target-table table1 \
+--props test.properties \
+--schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
+--source-class org.apache.hudi.utilities.sources.AvroDFSSource \
+--input-file-size 125829120 \
+--workload-yaml-path file:/var/hoodie/ws/docker/demo/config/test-suite/complex-dag-cow.yaml \
+--workload-generator-classname org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator \
+--table-type COPY_ON_WRITE \
+--compact-scheduling-minshare 1 \
+--delay-between-rounds-mins 10 \
+--num-rounds 4
+```
+
+Few ready to use dags are available under docker/demo/config/test-suite/ that could give you an idea for long running 
+dags.
+cow-per-round-validate-once.yaml
+cow-validate-cumulative-multiple-rounds.yaml
+cow-per-round-mixed-validate.yaml
+
+As of now, "ValidateDatasetNode" uses spark data source and hive tables for comparison. Hence COW and real time view in 
+MOR works.
+              
+                        

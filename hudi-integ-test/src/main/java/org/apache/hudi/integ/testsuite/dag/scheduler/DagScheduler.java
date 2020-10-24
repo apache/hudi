@@ -103,7 +103,7 @@ public class DagScheduler {
         Set<DagNode> childNodes = new HashSet<>();
         while (queue.size() > 0) {
           DagNode nodeToExecute = queue.poll();
-          log.warn("Executing node " + nodeToExecute.getConfig());
+          log.warn("Executing node \"" + nodeToExecute.getConfig().getOtherConfigs().get(CONFIG_NAME) + "\" :: " + nodeToExecute.getConfig());
           futures.add(service.submit(() -> executeNode(nodeToExecute)));
           if (nodeToExecute.getChildNodes().size() > 0) {
             childNodes.addAll(nodeToExecute.getChildNodes());

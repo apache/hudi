@@ -26,6 +26,9 @@
     "name" : "_row_key",
     "type" : "string"
   }, {
+     "name" : "ts",
+     "type" : "long"
+  }, {
     "name" : "rider",
     "type" : "string"
   }, {

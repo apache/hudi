@@ -23,6 +23,9 @@
     "name" : "timestamp",
     "type" : "long"
   }, {
+    "name" : "ts",
+    "type" : "long"
+  }, {
     "name" : "_row_key",
     "type" : "string"
   }, {

@@ -18,11 +18,13 @@
 
 package org.apache.hudi.integ.testsuite.converter;
 
-import java.util.List;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.integ.testsuite.generator.LazyRecordGeneratorIterator;
 import org.apache.hudi.integ.testsuite.generator.UpdateGeneratorIterator;
+
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
+
+import java.util.List;
 
 /**
  * This converter creates an update {@link GenericRecord} from an existing {@link GenericRecord}.
@@ -35,19 +37,23 @@ public class UpdateConverter implements Converter<GenericRecord, GenericRecord> 
   private final List<String> partitionPathFields;
   private final List<String> recordKeyFields;
   private final int minPayloadSize;
+  private final String preCombineField;
+  private final int preCombineFieldValue;
 
   public UpdateConverter(String schemaStr, int minPayloadSize, List<String> partitionPathFields,
-      List<String> recordKeyFields) {
+      List<String> recordKeyFields, String preCombineField, int preCombineFieldValue) {
     this.schemaStr = schemaStr;
     this.partitionPathFields = partitionPathFields;
     this.recordKeyFields = recordKeyFields;
     this.minPayloadSize = minPayloadSize;
+    this.preCombineField = preCombineField;
+    this.preCombineFieldValue = preCombineFieldValue;
   }
 
   @Override
   public JavaRDD<GenericRecord> convert(JavaRDD<GenericRecord> inputRDD) {
     return inputRDD.mapPartitions(recordItr -> new LazyRecordGeneratorIterator(new UpdateGeneratorIterator(recordItr,
-        schemaStr, partitionPathFields, recordKeyFields, minPayloadSize)));
+        schemaStr, partitionPathFields, recordKeyFields, minPayloadSize, preCombineField, preCombineFieldValue)));
   }
 
 }

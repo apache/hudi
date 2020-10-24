@@ -21,15 +21,16 @@ package org.apache.hudi.integ.testsuite.dag;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob.HoodieTestSuiteConfig;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteWriter;
 import org.apache.hudi.integ.testsuite.configuration.DFSDeltaConfig;
+import org.apache.hudi.integ.testsuite.generator.DeltaGenerator;
 import org.apache.hudi.integ.testsuite.reader.DeltaInputType;
 import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
-import org.apache.hudi.integ.testsuite.generator.DeltaGenerator;
-import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob.HoodieTestSuiteConfig;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -38,8 +39,7 @@ import org.apache.spark.sql.SparkSession;
 import java.util.Map;
 
 /**
- * WriterContext wraps the delta writer/data generator related configuration needed
- * to init/reinit.
+ * WriterContext wraps the delta writer/data generator related configuration needed to init/reinit.
  */
 public class WriterContext {
 
@@ -53,8 +53,9 @@ public class WriterContext {
   private BuiltinKeyGenerator keyGenerator;
   private transient SparkSession sparkSession;
   private transient JavaSparkContext jsc;
+
   public WriterContext(JavaSparkContext jsc, TypedProperties props, HoodieTestSuiteConfig cfg,
-                       BuiltinKeyGenerator keyGenerator, SparkSession sparkSession) {
+      BuiltinKeyGenerator keyGenerator, SparkSession sparkSession) {
     this.cfg = cfg;
     this.props = props;
     this.keyGenerator = keyGenerator;
@@ -71,8 +72,8 @@ public class WriterContext {
       this.deltaGenerator = new DeltaGenerator(
           new DFSDeltaConfig(DeltaOutputMode.valueOf(cfg.outputTypeName), DeltaInputType.valueOf(cfg.inputFormatName),
               new SerializableConfiguration(jsc.hadoopConfiguration()), cfg.inputBasePath, cfg.targetBasePath,
-              schemaStr, cfg.limitFileSize, inputParallelism, cfg.deleteOldInput),
-          jsc, sparkSession, schemaStr, keyGenerator);
+              schemaStr, cfg.limitFileSize),
+          jsc, sparkSession, schemaStr, keyGenerator, cfg.preCombineField);
       log.info(String.format("Initialized writerContext with: %s", schemaStr));
     } catch (Exception e) {
       throw new HoodieException("Failed to reinitialize writerContext", e);

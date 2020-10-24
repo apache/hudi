@@ -16,24 +16,24 @@
 first_insert:
   config:
     record_size: 70000
-    num_insert_partitions: 1
-    repeat_count: 1
+    num_partitions_insert: 1
+    repeat_count: 5
     num_records_insert: 100
   type: InsertNode
   deps: none
 second_insert:
   config:
     record_size: 70000
-    num_insert_partitions: 1
-    repeat_count: 1
+    num_partitions_insert: 1
+    repeat_count: 5
     num_records_insert: 100
   deps: first_insert
   type: InsertNode
 third_insert:
   config:
     record_size: 70000
-    num_insert_partitions: 1
-    repeat_count: 1
+    num_partitions_insert: 1
+    repeat_count: 2
     num_records_insert: 300
   deps: second_insert
   type: InsertNode
@@ -44,11 +44,11 @@ first_rollback:
 first_upsert:
   config:
     record_size: 70000
-    num_insert_partitions: 1
+    num_partitions_insert: 1
     num_records_insert: 300
     repeat_count: 1
     num_records_upsert: 100
-    num_upsert_partitions: 10
+    num_partitions_upsert: 10
   type: UpsertNode
   deps: first_rollback
 first_hive_sync:
@@ -66,11 +66,11 @@ first_hive_query:
 second_upsert:
   config:
     record_size: 70000
-    num_insert_partitions: 1
+    num_partitions_insert: 1
     num_records_insert: 300
     repeat_count: 1
     num_records_upsert: 100
-    num_upsert_partitions: 10
+    num_partitions_upsert: 10
   type: UpsertNode
   deps: first_hive_query
 second_hive_query:
@@ -91,11 +91,11 @@ first_schedule_compact:
 third_upsert:
   config:
     record_size: 70000
-    num_insert_partitions: 1
+    num_partitions_insert: 1
     num_records_insert: 300
     repeat_count: 1
     num_records_upsert: 100
-    num_upsert_partitions: 10
+    num_partitions_upsert: 10
   type: UpsertNode
   deps: first_schedule_compact
 first_compact:

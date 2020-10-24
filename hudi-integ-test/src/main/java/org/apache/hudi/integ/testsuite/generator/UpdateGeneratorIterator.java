@@ -18,15 +18,15 @@
 
 package org.apache.hudi.integ.testsuite.generator;
 
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
 
 /**
  * A lazy update payload generator to generate {@link GenericRecord}s lazily.
@@ -40,15 +40,19 @@ public class UpdateGeneratorIterator implements Iterator<GenericRecord> {
   private Set<String> blackListedFields;
   // iterator
   private Iterator<GenericRecord> itr;
+  private final String preCombineField;
+  private final int preCombineFieldValue;
 
   public UpdateGeneratorIterator(Iterator<GenericRecord> itr, String schemaStr, List<String> partitionPathFieldNames,
-      List<String> recordKeyFieldNames, int minPayloadSize) {
+      List<String> recordKeyFieldNames, int minPayloadSize, String preCombineField, int preCombineFieldValue) {
     this.itr = itr;
     this.blackListedFields = new HashSet<>();
     this.blackListedFields.addAll(partitionPathFieldNames);
     this.blackListedFields.addAll(recordKeyFieldNames);
     Schema schema = new Schema.Parser().parse(schemaStr);
     this.generator = new GenericRecordFullPayloadGenerator(schema, minPayloadSize);
+    this.preCombineField = preCombineField;
+    this.preCombineFieldValue = preCombineFieldValue;
   }
 
   @Override
@@ -59,7 +63,9 @@ public class UpdateGeneratorIterator implements Iterator<GenericRecord> {
   @Override
   public GenericRecord next() {
     GenericRecord newRecord = itr.next();
-    return this.generator.randomize(newRecord, this.blackListedFields);
+    GenericRecord toReturn = this.generator.randomize(newRecord, this.blackListedFields);
+    toReturn.put(preCombineField, new Long(preCombineFieldValue));
+    return toReturn;
   }
 
 }
