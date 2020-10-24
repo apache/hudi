@@ -30,6 +30,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
+import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 import org.apache.hudi.integ.testsuite.dag.WorkflowDag;
 import org.apache.hudi.integ.testsuite.dag.WriterContext;
@@ -95,6 +96,9 @@ public class DagScheduler {
       for (Future future : futures) {
         future.get(1, TimeUnit.HOURS);
       }
+
+      // After each level, report and flush the metrics
+      Metrics.flush();
     } while (queue.size() > 0);
     log.info("Finished workloads");
   }
