@@ -20,6 +20,7 @@ package org.apache.hudi;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
@@ -56,11 +57,8 @@ public class HoodieDatasetBulkInsertHelper {
   private static final String PARTITION_PATH_UDF_FN = "hudi_partition_gen_function";
 
   /**
-   * Prepares input hoodie spark dataset for bulk insert. It does the following steps.
-   *  1. Uses KeyGenerator to generate hoodie record keys and partition path.
-   *  2. Add hoodie columns to input spark dataset.
-   *  3. Reorders input dataset columns so that hoodie columns appear in the beginning.
-   *  4. Sorts input dataset by hoodie partition path and record key
+   * Prepares input hoodie spark dataset for bulk insert. It does the following steps. 1. Uses KeyGenerator to generate hoodie record keys and partition path. 2. Add hoodie columns to input spark
+   * dataset. 3. Reorders input dataset columns so that hoodie columns appear in the beginning. 4. Sorts input dataset by hoodie partition path and record key
    *
    * @param sqlContext SQL Context
    * @param config Hoodie Write Config
@@ -69,7 +67,7 @@ public class HoodieDatasetBulkInsertHelper {
    */
   public static Dataset<Row> prepareHoodieDatasetForBulkInsert(SQLContext sqlContext,
       HoodieWriteConfig config, Dataset<Row> rows, String structName, String recordNamespace,
-                                                               BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows) {
+                                                               BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows, Option<PreCombineRow> preCombineRowOpt) {
     List<Column> originalFields =
         Arrays.stream(rows.schema().fields()).map(f -> new Column(f.name())).collect(Collectors.toList());
 
@@ -100,9 +98,17 @@ public class HoodieDatasetBulkInsertHelper {
                 functions.lit("").cast(DataTypes.StringType))
             .withColumn(HoodieRecord.FILENAME_METADATA_FIELD,
                 functions.lit("").cast(DataTypes.StringType));
+
+    Dataset<Row> dedupedDf = rowDatasetWithHoodieColumns;
+    if (config.shouldCombineBeforeBulkInsert() && preCombineRowOpt.isPresent()) {
+      dedupedDf = SparkRowWriteHelper.newInstance().deduplicateRows(rowDatasetWithHoodieColumns, preCombineRowOpt.get());
+    } else if (config.shouldCombineBeforeBulkInsert()) {
+      throw new IllegalStateException("No PrecombineRow class set for BulkInsert but dedup config set");
+    }
+
     List<Column> orderedFields = Stream.concat(HoodieRecord.HOODIE_META_COLUMNS.stream().map(Column::new),
         originalFields.stream()).collect(Collectors.toList());
-    Dataset<Row> colOrderedDataset = rowDatasetWithHoodieColumns.select(
+    Dataset<Row> colOrderedDataset = dedupedDf.select(
         JavaConverters.collectionAsScalaIterableConverter(orderedFields).asScala().toSeq());
 
     return bulkInsertPartitionerRows.repartitionRecords(colOrderedDataset, config.getBulkInsertShuffleParallelism());

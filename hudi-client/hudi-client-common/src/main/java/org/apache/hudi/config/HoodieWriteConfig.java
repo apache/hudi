@@ -18,7 +18,6 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
@@ -44,6 +43,7 @@ import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.orc.CompressionKind;
+import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import javax.annotation.concurrent.Immutable;
@@ -452,6 +452,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(BULKINSERT_USER_DEFINED_PARTITIONER_CLASS);
   }
 
+  public String getBulkinsertPrecombimeRowClass() {
+    return props.getProperty("");
+  }
+
   public int getInsertShuffleParallelism() {
     return getInt(INSERT_PARALLELISM);
   }
@@ -482,6 +486,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean shouldCombineBeforeInsert() {
     return getBoolean(COMBINE_BEFORE_INSERT_PROP);
+  }
+
+  public boolean shouldCombineBeforeBulkInsert() {
+    return Boolean.parseBoolean(props.getProperty(COMBINE_BEFORE_BULK_INSERT_PROP));
   }
 
   public boolean shouldCombineBeforeUpsert() {
@@ -821,9 +829,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
-   * Fraction of the global share of QPS that should be allocated to this job. Let's say there are 3 jobs which have
-   * input size in terms of number of rows required for HbaseIndexing as x, 2x, 3x respectively. Then this fraction for
-   * the jobs would be (0.17) 1/6, 0.33 (2/6) and 0.5 (3/6) respectively.
+   * Fraction of the global share of QPS that should be allocated to this job. Let's say there are 3 jobs which have input size in terms of number of rows required for HbaseIndexing as x, 2x, 3x
+   * respectively. Then this fraction for the jobs would be (0.17) 1/6, 0.33 (2/6) and 0.5 (3/6) respectively.
    */
   public float getHbaseIndexQPSFraction() {
     return getFloat(HoodieHBaseIndexConfig.HBASE_QPS_FRACTION_PROP);
@@ -838,8 +845,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
-   * This should be same across various jobs. This is intended to limit the aggregate QPS generated across various
-   * Hoodie jobs to an Hbase Region Server
+   * This should be same across various jobs. This is intended to limit the aggregate QPS generated across various Hoodie jobs to an Hbase Region Server
    */
   public int getHbaseIndexMaxQPSPerRegionServer() {
     return getInt(HoodieHBaseIndexConfig.HBASE_MAX_QPS_PER_REGION_SERVER_PROP);
@@ -1335,6 +1341,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withBulkInsertPreCombineRowClass(String className) {
+      props.setProperty(BULKINSERT_PRECOMBIME_ROW_CLASS, className);
+      return this;
+    }
+
     public Builder withDeleteParallelism(int parallelism) {
       writeConfig.setValue(DELETE_PARALLELISM, String.valueOf(parallelism));
       return this;
@@ -1364,6 +1375,11 @@ public class HoodieWriteConfig extends HoodieConfig {
     public Builder combineInput(boolean onInsert, boolean onUpsert) {
       writeConfig.setValue(COMBINE_BEFORE_INSERT_PROP, String.valueOf(onInsert));
       writeConfig.setValue(COMBINE_BEFORE_UPSERT_PROP, String.valueOf(onUpsert));
+      return this;
+    }
+
+    public Builder combineBulkInsertInput(boolean enablePreCombine) {
+      props.setProperty(COMBINE_BEFORE_BULK_INSERT_PROP, String.valueOf(enablePreCombine));
       return this;
     }
 

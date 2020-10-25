@@ -116,6 +116,26 @@ public class DataSourceUtils {
           Option.of((BulkInsertPartitioner) ReflectionUtils.loadClass(bulkInsertPartitionerClass));
     } catch (Throwable e) {
       throw new HoodieException("Could not create UserDefinedBulkInsertPartitionerRows class " + bulkInsertPartitionerClass, e);
+
+    }
+  }
+
+  /**
+   * Create a PreCombineRow class via reflection,
+   * <br>
+   * if the class name of PrecombineRow class is configured through the HoodieWriteConfig.
+   *
+   * @see HoodieWriteConfig#getBulkinsertPrecombimeRowClass() ()
+   */
+  static Option<PreCombineRow> createBulkInsertPreCombineRow(HoodieWriteConfig config)
+      throws HoodieException {
+    String preCombineRowClass = config.getBulkinsertPrecombimeRowClass();
+    try {
+      return StringUtils.isNullOrEmpty(preCombineRowClass)
+          ? Option.empty() :
+          Option.of((PreCombineRow) ReflectionUtils.loadClass(preCombineRowClass));
+    } catch (Throwable e) {
+      throw new HoodieException("Could not create PreCombineRow class " + preCombineRowClass, e);
     }
   }
 
