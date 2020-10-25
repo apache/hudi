@@ -119,8 +119,8 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     try {
-      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName", "testNamespace"
-          , Option.empty());
+      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
+          "testNamespace", Option.empty());
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore
@@ -130,8 +130,8 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     rows = DataSourceTestUtils.generateRandomRows(10);
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
-      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName", "testNamespace"
-          , Option.empty());
+      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
+          "testNamespace", Option.empty());
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore
@@ -141,8 +141,8 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     rows = DataSourceTestUtils.generateRandomRows(10);
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
-      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName", "testNamespace"
-          , Option.empty());
+      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
+          "testNamespace", Option.empty());
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore
@@ -152,8 +152,8 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     rows = DataSourceTestUtils.generateRandomRows(10);
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
-      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName", "testNamespace"
-          , Option.empty());
+      HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
+          "testNamespace", Option.empty());
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore
