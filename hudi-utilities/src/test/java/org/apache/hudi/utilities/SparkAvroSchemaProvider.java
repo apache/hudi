@@ -24,6 +24,7 @@ import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.spark.api.java.JavaSparkContext;
 
 public class SparkAvroSchemaProvider extends SchemaProvider {
+
   public SparkAvroSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
   }
