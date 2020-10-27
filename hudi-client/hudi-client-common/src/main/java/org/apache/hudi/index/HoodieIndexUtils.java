@@ -25,7 +25,10 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +39,7 @@ import static java.util.stream.Collectors.toList;
  * Hoodie Index Utilities.
  */
 public class HoodieIndexUtils {
+  private static final Logger LOG = LogManager.getLogger(HoodieIndexUtils.class);
 
   /**
    * Fetches Pair of partition path and {@link HoodieBaseFile}s for interested partitions.
@@ -84,5 +88,30 @@ public class HoodieIndexUtils {
       record.seal();
     }
     return record;
+  }
+
+  /**
+   * Check compatible between new writeIndexType and indexType already in hoodie.properties.
+   * @param writeIndexType new indexType
+   * @param persistIndexType indexType already in hoodie.properties
+   */
+  public static void checkIndexTypeCompatible(String writeIndexType, String persistIndexType) {
+    if (writeIndexType.equals(persistIndexType)) {
+      return;
+    } else {
+      if ((persistIndexType.equals(HoodieIndex.IndexType.GLOBAL_BLOOM.name())
+          && (writeIndexType.equals(HoodieIndex.IndexType.BLOOM.name())
+          || writeIndexType.equals(HoodieIndex.IndexType.SIMPLE.name())
+          || writeIndexType.equals(HoodieIndex.IndexType.GLOBAL_SIMPLE.name())))
+          || (persistIndexType.equals(HoodieIndex.IndexType.GLOBAL_SIMPLE.name())
+          && writeIndexType.equals(HoodieIndex.IndexType.GLOBAL_BLOOM.name()))) {
+        return;
+      } else if (writeIndexType.equals(HoodieIndex.IndexType.INMEMORY.name())) {
+        LOG.error("IndexType INMEMORY can not be used in production");
+      } else {
+        throw new HoodieException("The new write indextype " + writeIndexType
+            + " is not compatible with persistIndexType " + persistIndexType);
+      }
+    }
   }
 }

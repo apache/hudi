@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -112,7 +113,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     metaClient = HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(),
         metaClient.getBasePath(), metaClient.getTableType(), metaClient.getTableConfig().getTableName(),
         metaClient.getArchivePath(), metaClient.getTableConfig().getPayloadClass(), VERSION_0,
-        metaClient.getTableConfig().getProperties().getProperty("hoodie.index.type"));
+        metaClient.getTableConfig().getProperties().getProperty(HoodieTableConfig.HOODIE_INDEX_TYPE_PROP_NAME));
     HoodieInstant instant6 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "9");
     byte[] dummy = new byte[5];
     HoodieActiveTimeline oldTimeline = new HoodieActiveTimeline(new HoodieTableMetaClient(metaClient.getHadoopConf(),

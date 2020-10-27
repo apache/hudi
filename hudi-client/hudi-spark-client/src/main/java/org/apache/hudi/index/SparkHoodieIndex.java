@@ -45,6 +45,7 @@ public abstract class SparkHoodieIndex<T extends HoodieRecordPayload> extends Ho
   }
 
   public static SparkHoodieIndex createIndex(HoodieWriteConfig config) {
+    config.getBasePath();
     // first use index class config to create index.
     if (!StringUtils.isNullOrEmpty(config.getIndexClass())) {
       Object instance = ReflectionUtils.loadClass(config.getIndexClass(), config);

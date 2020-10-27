@@ -67,6 +67,7 @@ public class HoodieTableConfig implements Serializable {
   public static final String HOODIE_ARCHIVELOG_FOLDER_PROP_NAME = "hoodie.archivelog.folder";
   public static final String HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME = "hoodie.bootstrap.index.class";
   public static final String HOODIE_BOOTSTRAP_BASE_PATH = "hoodie.bootstrap.base.path";
+  public static final String HOODIE_INDEX_TYPE_PROP_NAME = "hoodie.index.type";
 
   public static final HoodieTableType DEFAULT_TABLE_TYPE = HoodieTableType.COPY_ON_WRITE;
   public static final HoodieTableVersion DEFAULT_TABLE_VERSION = HoodieTableVersion.ZERO;
@@ -75,6 +76,7 @@ public class HoodieTableConfig implements Serializable {
   public static final String DEFAULT_PAYLOAD_CLASS = OverwriteWithLatestAvroPayload.class.getName();
   public static final String DEFAULT_BOOTSTRAP_INDEX_CLASS = HFileBootstrapIndex.class.getName();
   public static final String DEFAULT_ARCHIVELOG_FOLDER = "";
+
 
   private Properties props;
 

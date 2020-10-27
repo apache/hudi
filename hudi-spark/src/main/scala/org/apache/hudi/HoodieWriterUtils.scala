@@ -19,9 +19,12 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.config.HoodieIndexConfig
 
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters.mapAsScalaMapConverter
+import scala.collection.mutable
 
 /**
  * WriterUtils to assist in write path in Datasource and tests.
@@ -65,7 +68,9 @@ object HoodieWriterUtils {
       HIVE_STYLE_PARTITIONING_OPT_KEY -> DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL,
       HIVE_USE_JDBC_OPT_KEY -> DEFAULT_HIVE_USE_JDBC_OPT_VAL,
       ASYNC_COMPACT_ENABLE_OPT_KEY -> DEFAULT_ASYNC_COMPACT_ENABLE_OPT_VAL,
-      ENABLE_ROW_WRITER_OPT_KEY -> DEFAULT_ENABLE_ROW_WRITER_OPT_VAL
+      ENABLE_ROW_WRITER_OPT_KEY -> DEFAULT_ENABLE_ROW_WRITER_OPT_VAL,
+      HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME-> "archived",
+      HoodieIndexConfig.INDEX_TYPE_PROP-> HoodieIndexConfig.DEFAULT_INDEX_TYPE
     ) ++ translateStorageTypeToTableType(parameters)
   }
 

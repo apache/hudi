@@ -173,6 +173,8 @@ public class DeltaSync implements Serializable {
 
   private transient HoodieDeltaStreamerMetrics metrics;
 
+  private transient HoodieWriteConfig hoodieClientConfig;
+
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
                    TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                    Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
@@ -192,7 +194,8 @@ public class DeltaSync implements Serializable {
     this.transformer = UtilHelpers.createTransformer(cfg.transformerClassNames);
     this.keyGenerator = DataSourceUtils.createKeyGenerator(props);
 
-    this.metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(this.schemaProvider));
+    this.hoodieClientConfig = getHoodieClientConfig(this.schemaProvider);
+    this.metrics = new HoodieDeltaStreamerMetrics(this.hoodieClientConfig);
 
     this.formatAdapter = new SourceFormatAdapter(
         UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics));
@@ -222,7 +225,7 @@ public class DeltaSync implements Serializable {
       this.commitTimelineOpt = Option.empty();
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
           HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName, cfg.baseFileFormat,
-          getHoodieClientConfig(this.schemaProvider).getIndexType().name());
+          this.hoodieClientConfig.getIndexType().name());
     }
   }
 
@@ -291,7 +294,7 @@ public class DeltaSync implements Serializable {
     } else {
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
           HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName, cfg.baseFileFormat,
-          getHoodieClientConfig(this.schemaProvider).getIndexType().name());
+          this.hoodieClientConfig.getIndexType().name());
     }
 
     if (!resumeCheckpointStr.isPresent() && cfg.checkpoint != null) {
@@ -545,8 +548,7 @@ public class DeltaSync implements Serializable {
     LOG.info("Setting up Hoodie Write Client");
     if ((null != schemaProvider) && (null == writeClient)) {
       registerAvroSchemas(schemaProvider);
-      HoodieWriteConfig hoodieCfg = getHoodieClientConfig(schemaProvider);
-      writeClient = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), hoodieCfg, true);
+      writeClient = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), this.hoodieClientConfig, true);
       onInitializingHoodieWriteClient.apply(writeClient);
     }
   }

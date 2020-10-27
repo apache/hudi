@@ -36,7 +36,7 @@ import java.util.Arrays;
 
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_1;
 
-public class TestTableIndexTypeCompatible extends HoodieClientTestBase {
+public class TestIndexCompatibility extends HoodieClientTestBase {
 
   private void createTableWithPersisIndexType(String indexType) throws IOException {
     // Create the table
@@ -54,7 +54,8 @@ public class TestTableIndexTypeCompatible extends HoodieClientTestBase {
   }
 
   private static Iterable<Object[]> indexTypeCompatibleParameter() {
-    return Arrays.asList(new Object[][] { { "BLOOM", "BLOOM" }, { "GLOBAL_BLOOM", "SIMPLE" }, { "GLOBAL_BLOOM", "BLOOM" } });
+    return Arrays.asList(new Object[][] { { "BLOOM", "BLOOM" }, { "GLOBAL_BLOOM", "SIMPLE" },
+        { "GLOBAL_BLOOM", "BLOOM" }, { "GLOBAL_BLOOM", "GLOBAL_SIMPLE" }, { "GLOBAL_SIMPLE", "GLOBAL_BLOOM" } });
   }
 
   private static Iterable<Object[]> indexTypeNotCompatibleParameter() {

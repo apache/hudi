@@ -390,7 +390,7 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     if (null != indexType) {
-      properties.put("hoodie.index.type", indexType);
+      properties.put(HoodieTableConfig.HOODIE_INDEX_TYPE_PROP_NAME, indexType);
     }
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
   }

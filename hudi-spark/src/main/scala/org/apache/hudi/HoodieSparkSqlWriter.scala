@@ -109,10 +109,8 @@ private[hudi] object HoodieSparkSqlWriter {
       handleSaveModes(mode, basePath, tableConfig, tblName, operation, fs)
       // Create the table if not present
       if (!tableExists) {
-        val archiveLogFolder = parameters.getOrElse(
-          HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, "archived")
-        val indexType = parameters.getOrElse(
-          HoodieIndexConfig.INDEX_TYPE_PROP, HoodieIndexConfig.DEFAULT_INDEX_TYPE)
+        val archiveLogFolder = parameters.get(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME).get
+        val indexType = parameters.get(HoodieIndexConfig.INDEX_TYPE_PROP).get
         val tableMetaClient = HoodieTableMetaClient.initTableType(sparkContext.hadoopConfiguration, path.get,
           tableType, tblName, archiveLogFolder, parameters(PAYLOAD_CLASS_OPT_KEY),
           null.asInstanceOf[String], indexType)
@@ -251,10 +249,8 @@ private[hudi] object HoodieSparkSqlWriter {
     }
 
     if (!tableExists) {
-      val archiveLogFolder = parameters.getOrElse(
-        HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, "archived")
-      val indexType = parameters.getOrElse(
-        HoodieIndexConfig.INDEX_TYPE_PROP, HoodieIndexConfig.DEFAULT_INDEX_TYPE)
+      val archiveLogFolder = parameters.get(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME).get
+      val indexType = parameters.get(HoodieIndexConfig.INDEX_TYPE_PROP).get
       HoodieTableMetaClient.initTableTypeWithBootstrap(sparkContext.hadoopConfiguration, path,
         HoodieTableType.valueOf(tableType), tableName, archiveLogFolder, parameters(PAYLOAD_CLASS_OPT_KEY),
         null, bootstrapIndexClass, bootstrapBasePath, indexType)
