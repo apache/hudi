@@ -23,6 +23,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.config.HoodieMetadataConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieMetadataReader;
 import org.apache.hudi.metadata.HoodieMetadataWriter;
@@ -71,8 +72,7 @@ public class MetadataCommand implements CommandMarker {
     }
 
     long t1 = System.currentTimeMillis();
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(HoodieCLI.basePath)
-        .withUseFileListingMetadata(true).build();
+    HoodieWriteConfig writeConfig = getWriteConfig();
     initJavaSparkContext();
     HoodieMetadataWriter.instance(HoodieCLI.conf, writeConfig).initialize(jsc);
     long t2 = System.currentTimeMillis();
@@ -113,8 +113,7 @@ public class MetadataCommand implements CommandMarker {
     if (readOnly) {
       //HoodieMetadata.init(HoodieCLI.conf, HoodieCLI.basePath);
     } else {
-      HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(HoodieCLI.basePath)
-          .withUseFileListingMetadata(true).build();
+      HoodieWriteConfig writeConfig = getWriteConfig();
       initJavaSparkContext();
       HoodieMetadataWriter.instance(HoodieCLI.conf, writeConfig).initialize(jsc);
     }
@@ -193,6 +192,11 @@ public class MetadataCommand implements CommandMarker {
     out.append(String.format("\n=== Files in partition retrieved in %.2fsec ===", (t2 - t1) / 1000.0));
 
     return out.toString();
+  }
+
+  private HoodieWriteConfig getWriteConfig() {
+    return HoodieWriteConfig.newBuilder().withPath(HoodieCLI.basePath)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build()).build();
   }
 
   private void initJavaSparkContext() {
