@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestPartitionValueExtractor {
   @Test
@@ -31,5 +32,6 @@ public class TestPartitionValueExtractor {
     List<String> list = new ArrayList<>();
     list.add("2020-12-20-01");
     assertEquals(hourPartition.extractPartitionValuesInPath("2020/12/20/01"), list);
+    assertThrows(IllegalArgumentException.class, () -> hourPartition.extractPartitionValuesInPath("2020/12/20"));
   }
 }

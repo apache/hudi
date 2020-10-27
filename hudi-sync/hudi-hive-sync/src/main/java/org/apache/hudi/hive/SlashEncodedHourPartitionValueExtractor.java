@@ -54,7 +54,7 @@ public class SlashEncodedHourPartitionValueExtractor implements PartitionValueEx
     if (splits.length != 4) {
       throw new IllegalArgumentException("Partition path " + partitionPath + " is not in the form  yyyy/mm/dd/HH");
     }
-    // Get the partition part and remove the / as well at the end
+    //Hive style partitions need to contain '='
     int year = Integer.parseInt(splits[0].contains("=") ? splits[0].split("=")[1] : splits[0]);
     int mm = Integer.parseInt(splits[1].contains("=") ? splits[1].split("=")[1] : splits[1]);
     int dd = Integer.parseInt(splits[2].contains("=") ? splits[2].split("=")[1] : splits[2]);
