@@ -63,6 +63,7 @@ import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.log4j.LogManager;
@@ -784,7 +785,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
             .withEnableBackupForRemoteFileSystemView(false).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(useFileListingMetadata).build())
-        .withMetricsConfig(HoodieMetricsConfig.newBuilder().withReporterType("CONSOLE").on(enableMetrics)
+        .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(enableMetrics)
                            .withExecutorMetrics(true).usePrefix("unit-test").build());
   }
 }
