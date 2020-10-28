@@ -208,13 +208,15 @@ public abstract class AbstractHoodieLogRecordScanner {
                     LOG.info("Rolling back the last log block read in " + logFile.getPath());
                     currentInstantLogBlocks.pop();
                     numBlocksRolledBack++;
+                  } else if (!targetInstantForCommandBlock
+                      .contentEquals(currentInstantLogBlocks.peek().getLogBlockHeader().get(INSTANT_TIME))) {
+                    // invalid or extra rollback block
+                    LOG.warn("TargetInstantTime " + targetInstantForCommandBlock
+                        + " invalid or extra rollback command block in " + logFile.getPath());
+                    break;
                   } else {
-                    if (numBlocksRolledBack == 0) {
-                      // no blocks rolled back. this was an invalid or extra rollback block
-                      LOG.warn("TargetInstantTime " + targetInstantForCommandBlock
-                          + " invalid or extra rollback command block in " + logFile.getPath());
-                      break;
-                    }
+                    // this should not happen ideally
+                    LOG.warn("Unable to apply rollback command block in " + logFile.getPath());
                   }
                 }
 
