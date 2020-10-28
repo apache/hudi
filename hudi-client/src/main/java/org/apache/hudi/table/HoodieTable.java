@@ -49,6 +49,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
@@ -238,7 +239,11 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
    * Get the view of the file system for this table.
    */
   public TableFileSystemView getFileSystemView() {
-    return getFileSystemViewInternal(getCompletedCommitsTimeline());
+    if (config.useFileListingMetadata()) {
+      return getFileSystemViewInternal(getCompletedCommitsTimeline());
+    } else {
+      return new HoodieTableFileSystemView(metaClient, getCompletedCommitsTimeline());
+    }
   }
 
   /**
