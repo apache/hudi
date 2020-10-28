@@ -104,6 +104,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public static final String FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP = "hoodie.fail.on.timeline.archiving";
   public static final String DEFAULT_FAIL_ON_TIMELINE_ARCHIVING_ENABLED = "true";
+
+  private static final String BLOOM_FILTER_PRE_APACHE_KEY_SUPPORT = "hoodie.bloom.filter.support.preapache.key";
+  private static final String DEFAULT_BLOOM_FILTER_PRE_APACHE_KEY_SUPPORT = "true";
+
   // time between successive attempts to ensure written data's metadata is consistent on storage
   public static final String INITIAL_CONSISTENCY_CHECK_INTERVAL_MS_PROP =
       "hoodie.consistency.check.initial_interval_ms";
@@ -263,6 +267,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public boolean isFailOnTimelineArchivingEnabled() {
     return Boolean.parseBoolean(props.getProperty(FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP));
+  }
+
+  public boolean isBloomFilterPreApacheKeyEnabled() {
+    return Boolean.parseBoolean(props.getProperty(BLOOM_FILTER_PRE_APACHE_KEY_SUPPORT));
   }
 
   public int getMaxConsistencyChecks() {
@@ -1032,6 +1040,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(AVRO_SCHEMA_VALIDATE), AVRO_SCHEMA_VALIDATE, DEFAULT_AVRO_SCHEMA_VALIDATE);
       setDefaultOnCondition(props, !props.containsKey(BULKINSERT_SORT_MODE),
           BULKINSERT_SORT_MODE, DEFAULT_BULKINSERT_SORT_MODE);
+      setDefaultOnCondition(props, !props.containsKey(BLOOM_FILTER_PRE_APACHE_KEY_SUPPORT),
+          BLOOM_FILTER_PRE_APACHE_KEY_SUPPORT, DEFAULT_BLOOM_FILTER_PRE_APACHE_KEY_SUPPORT);
 
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().fromProperties(props).build());

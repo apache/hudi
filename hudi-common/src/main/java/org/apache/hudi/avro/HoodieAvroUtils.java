@@ -307,15 +307,19 @@ public class HoodieAvroUtils {
     return rewrite(record, new LinkedHashSet<>(newSchema.getFields()), newSchema);
   }
 
+  private static void setDefaultVal(GenericRecord newRecord, Schema.Field f) {
+    if (f.defaultVal() instanceof JsonProperties.Null) {
+      newRecord.put(f.name(), null);
+    } else {
+      newRecord.put(f.name(), f.defaultVal());
+    }
+  }
+
   private static GenericRecord rewrite(GenericRecord record, LinkedHashSet<Field> fieldsToWrite, Schema newSchema) {
     GenericRecord newRecord = new GenericData.Record(newSchema);
     for (Schema.Field f : fieldsToWrite) {
       if (record.get(f.name()) == null) {
-        if (f.defaultVal() instanceof JsonProperties.Null) {
-          newRecord.put(f.name(), null);
-        } else {
-          newRecord.put(f.name(), f.defaultVal());
-        }
+        setDefaultVal(newRecord, f);
       } else {
         newRecord.put(f.name(), record.get(f.name()));
       }

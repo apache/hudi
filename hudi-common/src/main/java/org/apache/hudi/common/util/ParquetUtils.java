@@ -200,12 +200,12 @@ public class ParquetUtils {
     Map<String, String> footerVals =
         readParquetFooter(configuration, false, parquetFilePath,
             HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
-            HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
+            HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_PRE_APACHE_METADATA_KEY,
             HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE);
     String footerVal = footerVals.get(HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
     if (null == footerVal) {
       // We use old style key "com.uber.hoodie.bloomfilter"
-      footerVal = footerVals.get(HoodieAvroWriteSupport.OLD_HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
+      footerVal = footerVals.get(HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_PRE_APACHE_METADATA_KEY);
     }
     BloomFilter toReturn = null;
     if (footerVal != null) {

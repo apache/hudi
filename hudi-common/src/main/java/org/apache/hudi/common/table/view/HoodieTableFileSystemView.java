@@ -195,7 +195,10 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
    */
   @Override
   Stream<HoodieFileGroup> fetchAllStoredFileGroups(String partition) {
-    final List<HoodieFileGroup> fileGroups = new ArrayList<>(partitionToFileGroupsMap.get(partition));
+    final List<HoodieFileGroup> fileGroups = new ArrayList<>();
+    if (partitionToFileGroupsMap.containsKey(partition)) {
+      fileGroups.addAll(partitionToFileGroupsMap.get(partition));
+    }
     return fileGroups.stream();
   }
 
