@@ -271,8 +271,15 @@ spark-submit \
 ``` 
 
 For long running test suite, validation has to be done differently. Idea is to run same dag in a repeated manner. 
-Hence "ValidateDatasetNode" is introduced which will read entire input data and compare it with hudi.
+Hence "ValidateDatasetNode" is introduced which will read entire input data and compare it with hudi contents both via 
+spark datasource and hive table via spark sql engine.
+
+If you have "ValidateDatasetNode" in your dag, do not replace hive jars as instructed above. Spark sql engine does not 
+go well w/ hive2* jars. So, after running docker setup, just copy test.properties and your dag of interest and you are 
+good to go ahead. 
+
 For repeated runs, two additional configs need to be set. "--num-rounds N" and "--delay-between-rounds-mins Y". 
+This means that your dag will be repeated for N times w/ a delay of Y mins between each round.
 
 Also, ValidateDatasetNode can be configured in two ways. Either with "delete_input_data: true" set or not set. 
 When "delete_input_data" is set for ValidateDatasetNode, once validation is complete, entire input data will be deleted. 
