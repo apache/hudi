@@ -295,4 +295,12 @@ public class SparkHoodieBloomIndex<T extends HoodieRecordPayload> extends SparkH
                                              HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) {
     return writeStatusRDD;
   }
+
+  /**
+   * Get the index Type.
+   */
+  @Override
+  public String indexType() {
+    return IndexType.BLOOM.name();
+  }
 }

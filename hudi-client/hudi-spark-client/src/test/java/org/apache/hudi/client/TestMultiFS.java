@@ -75,6 +75,7 @@ public class TestMultiFS extends HoodieClientTestHarness {
   @Test
   public void readLocalWriteHDFS() throws Exception {
     // Initialize table and filesystem
+    // TODO: Default
     HoodieTableMetaClient.initTableType(hadoopConf, dfsBasePath, HoodieTableType.valueOf(tableType),
         tableName, HoodieAvroPayload.class.getName(), null);
 
@@ -100,6 +101,7 @@ public class TestMultiFS extends HoodieClientTestHarness {
       assertEquals(readRecords.count(), records.size(), "Should contain 100 records");
 
       // Write to local
+      // TODO default
       HoodieTableMetaClient.initTableType(hadoopConf, tablePath, HoodieTableType.valueOf(tableType),
           tableName, HoodieAvroPayload.class.getName(), null);
 

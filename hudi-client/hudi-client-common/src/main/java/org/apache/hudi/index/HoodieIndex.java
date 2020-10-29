@@ -98,6 +98,12 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implem
   public abstract boolean isImplicitWithStorage();
 
   /**
+   * Get the index Type.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract String indexType();
+
+  /**
    * Each index type should implement it's own logic to release any resources acquired during the process.
    */
   public void close() {

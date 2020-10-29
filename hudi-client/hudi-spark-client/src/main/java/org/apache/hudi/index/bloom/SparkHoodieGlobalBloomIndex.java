@@ -147,4 +147,12 @@ public class SparkHoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends 
   public boolean isGlobal() {
     return true;
   }
+
+  /**
+   * Get the index Type.
+   */
+  @Override
+  public String indexType() {
+    return IndexType.GLOBAL_BLOOM.name();
+  }
 }

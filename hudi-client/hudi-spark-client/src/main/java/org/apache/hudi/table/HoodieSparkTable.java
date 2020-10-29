@@ -27,9 +27,11 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.index.SparkHoodieIndex;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -67,6 +69,10 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
 
   @Override
   protected HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> getIndex(HoodieWriteConfig config) {
-    return SparkHoodieIndex.createIndex(config);
+    String persistIndexType = this.metaClient.getTableConfig().getProperties().getProperty(HoodieIndexConfig.INDEX_TYPE_PROP);
+    HoodieIndex hoodieIndex = SparkHoodieIndex.createIndex(config);
+    String indexType = hoodieIndex.indexType();
+    HoodieIndexUtils.checkIndexTypeCompatible(indexType, persistIndexType);
+    return hoodieIndex;
   }
 }

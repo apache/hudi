@@ -42,6 +42,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.index.SparkHoodieIndex;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.hudi.utilities.UtilHelpers;
@@ -223,9 +224,10 @@ public class DeltaSync implements Serializable {
       }
     } else {
       this.commitTimelineOpt = Option.empty();
+      SparkHoodieIndex index = SparkHoodieIndex.createIndex(hoodieClientConfig);
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
           HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName, cfg.baseFileFormat,
-          this.hoodieClientConfig.getIndexType().name());
+          index.indexType());
     }
   }
 
@@ -292,9 +294,10 @@ public class DeltaSync implements Serializable {
         }
       }
     } else {
+      SparkHoodieIndex index = SparkHoodieIndex.createIndex(hoodieClientConfig);
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
           HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName, cfg.baseFileFormat,
-          this.hoodieClientConfig.getIndexType().name());
+          index.indexType());
     }
 
     if (!resumeCheckpointStr.isPresent() && cfg.checkpoint != null) {

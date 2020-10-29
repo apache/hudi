@@ -149,4 +149,12 @@ public class SparkHoodieSimpleIndex<T extends HoodieRecordPayload> extends Spark
     return jsc.parallelize(baseFiles, fetchParallelism)
         .flatMapToPair(partitionPathBaseFile -> new HoodieKeyLocationFetchHandle(config, hoodieTable, partitionPathBaseFile).locations());
   }
+
+  /**
+   * Get the index Type.
+   */
+  @Override
+  public String indexType() {
+    return IndexType.SIMPLE.name();
+  }
 }

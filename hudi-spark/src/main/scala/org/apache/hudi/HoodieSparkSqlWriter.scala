@@ -27,7 +27,7 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.client.{SparkRDDWriteClient, HoodieWriteResult}
+import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.client.{SparkRDDWriteClient, WriteStatus}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, WriteOperationType}
@@ -38,7 +38,7 @@ import org.apache.hudi.config.HoodieBootstrapConfig.{BOOTSTRAP_BASE_PATH_PROP, B
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
-import org.apache.hudi.index.HoodieIndex
+import org.apache.hudi.index.{HoodieIndex, SparkHoodieIndex}
 import org.apache.hudi.internal.HoodieDataSourceInternalWriter
 import org.apache.hudi.sync.common.AbstractSyncTool
 import org.apache.log4j.LogManager
@@ -66,7 +66,6 @@ private[hudi] object HoodieSparkSqlWriter {
            )
   : (Boolean, common.util.Option[String], common.util.Option[String],
     SparkRDDWriteClient[HoodieRecordPayload[Nothing]], HoodieTableConfig) = {
-
     val sparkContext = sqlContext.sparkContext
     val path = parameters.get("path")
     val tblNameOp = parameters.get(HoodieWriteConfig.TABLE_NAME)
@@ -110,10 +109,11 @@ private[hudi] object HoodieSparkSqlWriter {
       // Create the table if not present
       if (!tableExists) {
         val archiveLogFolder = parameters.get(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME).get
-        val indexType = parameters.get(HoodieIndexConfig.INDEX_TYPE_PROP).get
+        val hoodieWriteConfig = DataSourceUtils.createHoodieConfig(Schema.create(Schema.Type.NULL).toString, path.get, tblName, mapAsJavaMap(parameters))
+        val index = SparkHoodieIndex.createIndex(hoodieWriteConfig)
         val tableMetaClient = HoodieTableMetaClient.initTableType(sparkContext.hadoopConfiguration, path.get,
           tableType, tblName, archiveLogFolder, parameters(PAYLOAD_CLASS_OPT_KEY),
-          null.asInstanceOf[String], indexType)
+          null.asInstanceOf[String], index.indexType())
         tableConfig = tableMetaClient.getTableConfig
       }
 
@@ -250,10 +250,11 @@ private[hudi] object HoodieSparkSqlWriter {
 
     if (!tableExists) {
       val archiveLogFolder = parameters.get(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME).get
-      val indexType = parameters.get(HoodieIndexConfig.INDEX_TYPE_PROP).get
+      val hoodieWriteConfig = DataSourceUtils.createHoodieConfig(Schema.create(Schema.Type.NULL).toString, path, tableName, mapAsJavaMap(parameters))
+      val index = SparkHoodieIndex.createIndex(hoodieWriteConfig)
       HoodieTableMetaClient.initTableTypeWithBootstrap(sparkContext.hadoopConfiguration, path,
         HoodieTableType.valueOf(tableType), tableName, archiveLogFolder, parameters(PAYLOAD_CLASS_OPT_KEY),
-        null, bootstrapIndexClass, bootstrapBasePath, indexType)
+        null, bootstrapIndexClass, bootstrapBasePath, index.indexType())
     }
 
     val jsc = new JavaSparkContext(sqlContext.sparkContext)

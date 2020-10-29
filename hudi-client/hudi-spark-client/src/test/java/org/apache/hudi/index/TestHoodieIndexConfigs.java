@@ -164,6 +164,11 @@ public class TestHoodieIndexConfigs {
     public boolean isImplicitWithStorage() {
       return false;
     }
+
+    @Override
+    public String indexType() {
+      return "Dummy";
+    }
   }
 
   public static class IndexWithConstructor {

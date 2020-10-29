@@ -489,6 +489,14 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
     return false;
   }
 
+  /**
+   * Get the index Type.
+   */
+  @Override
+  public String indexType() {
+    return IndexType.HBASE.name();
+  }
+
   public void setHbaseConnection(Connection hbaseConnection) {
     SparkHoodieHBaseIndex.hbaseConnection = hbaseConnection;
   }

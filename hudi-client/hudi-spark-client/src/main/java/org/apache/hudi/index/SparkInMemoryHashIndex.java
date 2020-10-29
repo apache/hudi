@@ -113,6 +113,14 @@ public class SparkInMemoryHashIndex<T extends HoodieRecordPayload> extends Spark
   }
 
   /**
+   * Get the index Type.
+   */
+  @Override
+  public String indexType() {
+    return IndexType.INMEMORY.name();
+  }
+
+  /**
    * Function that tags each HoodieRecord with an existing location, if known.
    */
   class LocationTagFunction implements Function2<Integer, Iterator<HoodieRecord<T>>, Iterator<HoodieRecord<T>>> {

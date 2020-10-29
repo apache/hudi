@@ -127,6 +127,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     tableType = HoodieTableType.MERGE_ON_READ;
 
     // Create the table
+    // TODO defaulttype
     HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(),
         HoodieTableType.MERGE_ON_READ, metaClient.getTableConfig().getTableName(),
         metaClient.getArchivePath(), metaClient.getTableConfig().getPayloadClass(), VERSION_1, null);
@@ -271,6 +272,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
   @Test
   public void testCopyOnWriteTable() throws Exception {
+    // TODO default type
     // Create the table
     HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(),
         HoodieTableType.COPY_ON_WRITE, metaClient.getTableConfig().getTableName(),

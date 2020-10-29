@@ -33,9 +33,11 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.index.SparkHoodieIndex;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -88,7 +90,11 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   protected HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> createIndex(HoodieWriteConfig writeConfig) {
-    return SparkHoodieIndex.createIndex(config);
+    String persistIndexType = this.createMetaClient(true).getTableConfig().getProperties().getProperty(HoodieIndexConfig.INDEX_TYPE_PROP);
+    HoodieIndex hoodieIndex = SparkHoodieIndex.createIndex(config);
+    String indexType = hoodieIndex.indexType();
+    HoodieIndexUtils.checkIndexTypeCompatible(indexType, persistIndexType);
+    return hoodieIndex;
   }
 
   /**
@@ -239,9 +245,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
         metrics.updateFinalizeWriteMetrics(result.getFinalizeDuration().get().toMillis(),
             result.getWriteStats().get().size());
       }
-
       postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime, Option.empty());
-
       emitCommitMetrics(instantTime, result.getCommitMetadata().get(), hoodieTable.getMetaClient().getCommitActionType());
     }
     return result.getWriteStatuses();

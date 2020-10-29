@@ -19,12 +19,10 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.client.common.HoodieEngineContext;
-import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.FileIOUtils;
-import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -134,8 +132,6 @@ public abstract class AbstractUpgradeDowngrade {
   }
 
   private void createUpdatedFile(Properties props) throws IOException {
-    DefaultHoodieConfig.setDefaultOnCondition(props, !props.containsKey(HoodieIndexConfig.INDEX_TYPE_PROP),
-        HoodieIndexConfig.INDEX_TYPE_PROP, HoodieIndexConfig.DEFAULT_INDEX_TYPE);
     try (FSDataOutputStream outputStream = fs.create(updatedPropsFilePath)) {
       props.store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
     }
