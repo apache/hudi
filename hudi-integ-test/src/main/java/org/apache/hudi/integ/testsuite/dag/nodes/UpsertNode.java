@@ -23,7 +23,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteWriter;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.generator.DeltaGenerator;
-
 import org.apache.spark.api.java.JavaRDD;
 
 /**

@@ -40,12 +40,12 @@ public class DFSDeltaWriterAdapter implements DeltaWriterAdapter<GenericRecord> 
   @Override
   public List<DeltaWriteStats> write(Iterator<GenericRecord> input) throws IOException {
     while (input.hasNext()) {
-      //GenericRecord next = input.next();
+      GenericRecord next = input.next();
       if (this.deltaInputGenerator.canWrite()) {
-        this.deltaInputGenerator.writeData(input.next());
+        this.deltaInputGenerator.writeData(next);
       } else if (input.hasNext()) {
         rollOver();
-        // this.deltaInputGenerator.writeData(next);
+        this.deltaInputGenerator.writeData(next);
       }
     }
     close();

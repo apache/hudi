@@ -207,10 +207,8 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
     for (Schema.Field f : record.getSchema().getFields()) {
       if (f.name().equals(DEFAULT_HOODIE_IS_DELETED_COL)) {
         record.put(f.name(), false);
-      } else {
-        if (blacklistFields == null || !blacklistFields.contains(f.name())) {
-          record.put(f.name(), typeConvert(f));
-        }
+      } else if (blacklistFields == null || !blacklistFields.contains(f.name())) {
+        record.put(f.name(), typeConvert(f));
       }
     }
     return record;

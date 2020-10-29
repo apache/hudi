@@ -59,10 +59,8 @@ first_hive_sync:
   deps: first_upsert
 first_hive_query:
   config:
-    hive_props:
-      prop2: "set spark.yarn.queue="
-      prop3: "set hive.strict.checks.large.query=false"
-      prop4: "set hive.stats.autogather=false"
+    queue_name: "adhoc"
+    engine: "mr"
     hive_queries:
       query1: "select count(*) from testdb.table1 group by `_row_key` having count(*) > 1"
       result1: 0
@@ -82,10 +80,8 @@ second_upsert:
   deps: first_hive_query
 second_hive_query:
   config:
-    hive_props:
-      prop2: "set mapred.job.queue.name="
-      prop3: "set hive.strict.checks.large.query=false"
-      prop4: "set hive.stats.autogather=false"
+    queue_name: "adhoc"
+    engine: "mr"
     hive_queries:
       query1: "select count(*) from testdb.table1 group by `_row_key` having count(*) > 1"
       result1: 0
@@ -103,10 +99,8 @@ fourth_insert:
   type: InsertNode
 third_hive_query:
   config:
-    hive_props:
-      prop2: "set spark.yarn.queue="
-      prop3: "set hive.strict.checks.large.query=false"
-      prop4: "set hive.stats.autogather=false"
+    queue_name: "adhoc"
+    engine: "mr"
     hive_queries:
       query1: "select count(*) from testdb.table1 group by `_row_key` having count(*) > 1"
       result1: 0
@@ -129,10 +123,8 @@ fourth_hive_sync:
   deps: first_delete
 fourth_hive_query:
   config:
-    hive_props:
-      prop2: "set spark.yarn.queue="
-      prop3: "set hive.strict.checks.large.query=false"
-      prop4: "set hive.stats.autogather=false"
+    queue_name: "adhoc"
+    engine: "mr"
     hive_queries:
       query1: "select count(*) from testdb.table1 group by `_row_key` having count(*) > 1"
       result1: 0
