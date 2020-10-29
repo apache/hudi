@@ -30,7 +30,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.SimpleKeyGenerator
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieWriterUtils}
-import org.apache.spark.SparkContext
+import org.apache.spark.{SparkContext, SparkException}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{Row, SQLContext, SaveMode, SparkSession}
 import org.mockito.ArgumentMatchers.any
@@ -378,7 +378,23 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
 
       val dfSaved = spark.read.format("org.apache.hudi").load(path.toAbsolutePath.toAbsolutePath + "/*")
       assert(1 == dfSaved.filter("name = 'Jack' and age = 22").count())
-    } finally {
+
+      //not upset
+      var e = intercept[SparkException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append,
+        fooTableParams ++ Map(DataSourceWriteOptions.OPERATION_OPT_KEY->DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL), dfUpdate))
+      assert(e.getMessage.contains("Parquet/Avro schema mismatch: Avro field 'name' not found"))
+      //not required payload
+      e = intercept[SparkException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append,
+        fooTableParams ++ Map(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY->DataSourceWriteOptions.DEFAULT_PAYLOAD_OPT_VAL), dfUpdate))
+      assert(e.getMessage.contains("Parquet/Avro schema mismatch: Avro field 'name' not found"))
+      //key missing
+      val update1 = List(
+        """{"age" : 22, "ts" : 2, "dt" : "20191212"}""")
+      val dfUpdate1 = spark.read.json(sc.parallelize(update1, 2))
+      e = intercept[SparkException](HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, dfUpdate1))
+      assert(e.getMessage.contains("\"id\" cannot be null or empty"))
+    }
+    finally {
       spark.stop()
       FileUtils.deleteDirectory(path.toFile)
     }
