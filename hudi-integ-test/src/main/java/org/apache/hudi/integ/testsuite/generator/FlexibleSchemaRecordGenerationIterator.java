@@ -18,8 +18,11 @@
 
 package org.apache.hudi.integ.testsuite.generator;
 
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
@@ -37,18 +40,18 @@ public class FlexibleSchemaRecordGenerationIterator implements Iterator<GenericR
   // Store last record for the partition path of the first payload to be used for all subsequent generated payloads
   private GenericRecord lastRecord;
   // Partition path field name
-  private List<String> partitionPathFieldNames;
+  private Set<String> partitionPathFieldNames;
 
   public FlexibleSchemaRecordGenerationIterator(long maxEntriesToProduce, String schema) {
-    this(maxEntriesToProduce, GenericRecordFullPayloadGenerator.DEFAULT_PAYLOAD_SIZE, schema, null, GenericRecordFullPayloadGenerator.DEFAULT_NUM_DATE_PARTITIONS);
+    this(maxEntriesToProduce, GenericRecordFullPayloadGenerator.DEFAULT_PAYLOAD_SIZE, schema, null, 0);
   }
 
   public FlexibleSchemaRecordGenerationIterator(long maxEntriesToProduce, int minPayloadSize, String schemaStr,
-      List<String> partitionPathFieldNames, int numPartitions) {
+      List<String> partitionPathFieldNames, int partitionIndex) {
     this.counter = maxEntriesToProduce;
-    this.partitionPathFieldNames = partitionPathFieldNames;
+    this.partitionPathFieldNames = new HashSet<>(partitionPathFieldNames);
     Schema schema = new Schema.Parser().parse(schemaStr);
-    this.generator = new GenericRecordFullPayloadGenerator(schema, minPayloadSize, numPartitions);
+    this.generator = new GenericRecordFullPayloadGenerator(schema, minPayloadSize, partitionIndex);
   }
 
   @Override
@@ -60,7 +63,7 @@ public class FlexibleSchemaRecordGenerationIterator implements Iterator<GenericR
   public GenericRecord next() {
     this.counter--;
     if (lastRecord == null) {
-      GenericRecord record = this.generator.getNewPayload();
+      GenericRecord record = this.generator.getNewPayload(partitionPathFieldNames);
       lastRecord = record;
       return record;
     } else {

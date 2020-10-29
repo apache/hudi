@@ -22,10 +22,12 @@ import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -47,14 +49,13 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
   private static Logger LOG = LoggerFactory.getLogger(GenericRecordFullPayloadGenerator.class);
 
   public static final int DEFAULT_PAYLOAD_SIZE = 1024 * 10; // 10 KB
-  public static final int DEFAULT_NUM_DATE_PARTITIONS = 50;
   protected final Random random = new Random();
   // The source schema used to generate a payload
   private final transient Schema baseSchema;
   // Used to validate a generic record
   private final transient GenericData genericData = new GenericData();
-  // The number of unique dates to create
-  private int numDatePartitions = DEFAULT_NUM_DATE_PARTITIONS;
+  // The index of partition for which records are being generated
+  private int partitionIndex = 0;
   // The size of a full record where every field of a generic record created contains 1 random value
   private final int estimatedFullPayloadSize;
   // Number of extra entries to add in a complex/collection field to achieve the desired record size
@@ -89,9 +90,9 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
     }
   }
 
-  public GenericRecordFullPayloadGenerator(Schema schema, int minPayloadSize, int numDatePartitions) {
+  public GenericRecordFullPayloadGenerator(Schema schema, int minPayloadSize, int partitionIndex) {
     this(schema, minPayloadSize);
-    this.numDatePartitions = numDatePartitions;
+    this.partitionIndex = partitionIndex;
   }
 
   protected static boolean isPrimitive(Schema localSchema) {
@@ -115,7 +116,50 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
   }
 
   protected GenericRecord getNewPayload(Schema schema) {
-    return randomize(new GenericData.Record(schema), null);
+    return create(schema, null);
+  }
+
+  /**
+   * Create a new {@link GenericRecord} with random value according to given schema.
+   *
+   * Long fields which are specified within partitionPathFieldNames are constrained to the value of the partition
+   * for which records are being generated.
+   *
+   * @return {@link GenericRecord} with random value
+   */
+  public GenericRecord getNewPayload(Set<String> partitionPathFieldNames) {
+    return create(baseSchema, partitionPathFieldNames);
+  }
+
+  protected GenericRecord create(Schema schema, Set<String> partitionPathFieldNames) {
+    GenericRecord result = new GenericData.Record(schema);
+    for (Schema.Field f : schema.getFields()) {
+      if (isPartialLongField(f, partitionPathFieldNames)) {
+        // This is a long field used as partition field. Set it to seconds since epoch.
+        long value = TimeUnit.SECONDS.convert(partitionIndex, TimeUnit.DAYS);
+        result.put(f.name(), (long)value);
+      } else {
+        result.put(f.name(), typeConvert(f));
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Return true if this is a partition field of type long which should be set to the partition index.
+   * @return
+   */
+  private boolean isPartialLongField(Schema.Field field, Set<String> partitionPathFieldNames) {
+    if ((partitionPathFieldNames == null) || !partitionPathFieldNames.contains(field.name())) {
+      return false;
+    }
+
+    Schema fieldSchema = field.schema();
+    if (isOption(fieldSchema)) {
+      fieldSchema = getNonNull(fieldSchema);
+    }
+
+    return fieldSchema.getType() == org.apache.avro.Schema.Type.LONG;
   }
 
   /**
@@ -125,7 +169,7 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
    * @param blacklistFields Fields whose value should not be touched
    * @return The updated {@link GenericRecord}
    */
-  public GenericRecord getUpdatePayload(GenericRecord record, List<String> blacklistFields) {
+  public GenericRecord getUpdatePayload(GenericRecord record, Set<String> blacklistFields) {
     return randomize(record, blacklistFields);
   }
 
@@ -158,19 +202,13 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
    * @param blacklistFields blacklistFields where the filed will not be randomized.
    * @return Randomized GenericRecord.
    */
-  protected GenericRecord randomize(GenericRecord record, List<String> blacklistFields) {
+  protected GenericRecord randomize(GenericRecord record, Set<String> blacklistFields) {
     for (Schema.Field f : record.getSchema().getFields()) {
       if (blacklistFields == null || !blacklistFields.contains(f.name())) {
         record.put(f.name(), typeConvert(f));
       }
     }
     return record;
-  }
-
-  private long getNextConstrainedLong() {
-    int numPartitions = random.nextInt(numDatePartitions);
-    long unixTimeStamp = TimeUnit.SECONDS.convert(numPartitions, TimeUnit.DAYS);
-    return unixTimeStamp;
   }
 
   /**
@@ -191,7 +229,7 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
       case INT:
         return random.nextInt();
       case LONG:
-        return getNextConstrainedLong();
+        return random.nextLong();
       case STRING:
        return UUID.randomUUID().toString();
       case ENUM:
