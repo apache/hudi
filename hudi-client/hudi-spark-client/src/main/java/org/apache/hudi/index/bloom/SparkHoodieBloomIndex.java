@@ -300,7 +300,7 @@ public class SparkHoodieBloomIndex<T extends HoodieRecordPayload> extends SparkH
    * Get the index Type.
    */
   @Override
-  public String indexType() {
-    return IndexType.BLOOM.name();
+  public IndexType indexType() {
+    return IndexType.BLOOM;
   }
 }

@@ -311,7 +311,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         VERSION_0).build();
     HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(), metaClient.getTableType(),
         metaClient.getTableConfig().getTableName(), metaClient.getArchivePath(),
-        metaClient.getTableConfig().getPayloadClass(), VERSION_0, hoodieWriteConfig.getIndexType().toString());
+        metaClient.getTableConfig().getPayloadClass(), VERSION_0, hoodieWriteConfig.getIndexType().name());
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);
 
     // Write 1 (only inserts)

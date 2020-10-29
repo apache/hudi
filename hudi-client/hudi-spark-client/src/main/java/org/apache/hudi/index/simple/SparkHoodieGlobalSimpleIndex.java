@@ -162,7 +162,7 @@ public class SparkHoodieGlobalSimpleIndex<T extends HoodieRecordPayload> extends
    * Get the index Type.
    */
   @Override
-  public String indexType() {
-    return IndexType.GLOBAL_SIMPLE.name();
+  public IndexType indexType() {
+    return IndexType.GLOBAL_SIMPLE;
   }
 }

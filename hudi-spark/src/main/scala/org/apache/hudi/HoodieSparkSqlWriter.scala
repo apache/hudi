@@ -114,7 +114,8 @@ private[hudi] object HoodieSparkSqlWriter {
         val index = SparkHoodieIndex.createIndex(hoodieWriteConfig)
         val tableMetaClient = HoodieTableMetaClient.initTableType(sparkContext.hadoopConfiguration, path.get,
           tableType, tblName, archiveLogFolder, parameters(PAYLOAD_CLASS_OPT_KEY),
-          null.asInstanceOf[String], index.indexType())
+          null.asInstanceOf[String], index.indexType().name())
+        index.close()
         tableConfig = tableMetaClient.getTableConfig
       }
 
@@ -261,7 +262,8 @@ private[hudi] object HoodieSparkSqlWriter {
       val index = SparkHoodieIndex.createIndex(hoodieWriteConfig)
       HoodieTableMetaClient.initTableTypeWithBootstrap(sparkContext.hadoopConfiguration, path,
         HoodieTableType.valueOf(tableType), tableName, archiveLogFolder, parameters(PAYLOAD_CLASS_OPT_KEY),
-        null, bootstrapIndexClass, bootstrapBasePath, index.indexType())
+        null, bootstrapIndexClass, bootstrapBasePath, index.indexType().name())
+      index.close()
     }
 
     val jsc = new JavaSparkContext(sqlContext.sparkContext)

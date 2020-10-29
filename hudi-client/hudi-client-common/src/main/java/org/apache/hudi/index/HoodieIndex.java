@@ -31,6 +31,7 @@ import org.apache.hudi.table.HoodieTable;
 
 import java.io.Serializable;
 
+
 /**
  * Base class for different types of indexes to determine the mapping from uuid.
  *
@@ -100,8 +101,9 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implem
   /**
    * Get the index Type.
    */
-  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract String indexType();
+  public IndexType indexType() {
+    return IndexType.CUSTOM;
+  }
 
   /**
    * Each index type should implement it's own logic to release any resources acquired during the process.
@@ -110,6 +112,6 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   public enum IndexType {
-    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, SIMPLE, GLOBAL_SIMPLE
+    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, SIMPLE, GLOBAL_SIMPLE, CUSTOM
   }
 }

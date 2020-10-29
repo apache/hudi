@@ -170,11 +170,11 @@ public class BootstrapExecutor  implements Serializable {
       throw new HoodieException("target base path already exists at " + cfg.targetBasePath
           + ". Cannot bootstrap data on top of an existing table");
     }
-    
     SparkHoodieIndex index = SparkHoodieIndex.createIndex(bootstrapConfig);
     HoodieTableMetaClient.initTableTypeWithBootstrap(new Configuration(jssc.hadoopConfiguration()),
         cfg.targetBasePath, HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName,
-        cfg.baseFileFormat, cfg.bootstrapIndexClass, bootstrapBasePath, index.indexType());
+        cfg.baseFileFormat, cfg.bootstrapIndexClass, bootstrapBasePath, index.indexType().name());
+    index.close();
   }
 
   public HoodieWriteConfig getBootstrapConfig() {

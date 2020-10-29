@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.index.SparkHoodieIndex;
@@ -90,10 +91,16 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   protected HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> createIndex(HoodieWriteConfig writeConfig) {
-    String persistIndexType = this.createMetaClient(true).getTableConfig().getProperties().getProperty(HoodieIndexConfig.INDEX_TYPE_PROP);
+    String persistIndexType = null;
+    try {
+      persistIndexType = this.createMetaClient(true).getTableConfig().getProperties().getProperty(HoodieIndexConfig.INDEX_TYPE_PROP);
+    } catch (TableNotFoundException e) {
+      persistIndexType = null;
+    }
     HoodieIndex hoodieIndex = SparkHoodieIndex.createIndex(config);
     if (persistIndexType != null) {
-      HoodieIndexUtils.checkIndexTypeCompatible(hoodieIndex.indexType(), persistIndexType);
+      HoodieIndexUtils.checkIndexTypeCompatible(hoodieIndex.indexType(),
+          HoodieIndex.IndexType.valueOf(persistIndexType));
     }
     return hoodieIndex;
   }

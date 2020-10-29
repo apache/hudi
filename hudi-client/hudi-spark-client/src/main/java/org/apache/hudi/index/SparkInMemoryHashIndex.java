@@ -116,8 +116,8 @@ public class SparkInMemoryHashIndex<T extends HoodieRecordPayload> extends Spark
    * Get the index Type.
    */
   @Override
-  public String indexType() {
-    return IndexType.INMEMORY.name();
+  public IndexType indexType() {
+    return IndexType.INMEMORY;
   }
 
   /**

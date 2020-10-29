@@ -511,8 +511,8 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
    * Get the index Type.
    */
   @Override
-  public String indexType() {
-    return IndexType.HBASE.name();
+  public IndexType indexType() {
+    return IndexType.HBASE;
   }
 
   public void setHbaseConnection(Connection hbaseConnection) {

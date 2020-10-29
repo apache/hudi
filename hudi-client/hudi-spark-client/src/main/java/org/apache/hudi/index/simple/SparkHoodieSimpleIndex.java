@@ -154,7 +154,7 @@ public class SparkHoodieSimpleIndex<T extends HoodieRecordPayload> extends Spark
    * Get the index Type.
    */
   @Override
-  public String indexType() {
-    return IndexType.SIMPLE.name();
+  public IndexType indexType() {
+    return IndexType.SIMPLE;
   }
 }

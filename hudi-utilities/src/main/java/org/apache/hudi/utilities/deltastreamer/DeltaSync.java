@@ -239,10 +239,11 @@ public class DeltaSync implements Serializable {
       }
     } else {
       this.commitTimelineOpt = Option.empty();
-      SparkHoodieIndex index = SparkHoodieIndex.createIndex(hoodieClientConfig);
+      SparkHoodieIndex index = SparkHoodieIndex.createIndex(this.getHoodieClientConfig((Schema) null));
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
           HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName, cfg.baseFileFormat,
-          index.indexType());
+          index.indexType().name());
+      index.close();
     }
   }
 
@@ -324,7 +325,8 @@ public class DeltaSync implements Serializable {
       SparkHoodieIndex index = SparkHoodieIndex.createIndex(hoodieClientConfig);
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
           HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName, cfg.baseFileFormat,
-          index.indexType());
+          index.indexType().name());
+      index.close();
     }
 
     if (!resumeCheckpointStr.isPresent() && cfg.checkpoint != null) {

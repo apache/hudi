@@ -35,9 +35,6 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.io.Serializable;
 
-
-
-
 /**
  * Abstract class taking care of holding common member variables (FileSystem, SparkContext, HoodieConfigs) Also, manages
  * embedded timeline-server if enabled.

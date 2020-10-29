@@ -152,7 +152,7 @@ public class SparkHoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends 
    * Get the index Type.
    */
   @Override
-  public String indexType() {
-    return IndexType.GLOBAL_BLOOM.name();
+  public IndexType indexType() {
+    return IndexType.GLOBAL_BLOOM;
   }
 }

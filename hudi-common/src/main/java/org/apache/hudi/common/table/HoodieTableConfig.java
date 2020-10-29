@@ -77,7 +77,6 @@ public class HoodieTableConfig implements Serializable {
   public static final String DEFAULT_BOOTSTRAP_INDEX_CLASS = HFileBootstrapIndex.class.getName();
   public static final String DEFAULT_ARCHIVELOG_FOLDER = "";
 
-
   private Properties props;
 
   public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName) {

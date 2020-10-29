@@ -219,8 +219,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   }
 
   /**
-   * Initializes an instance of {@link HoodieTableMetaClient} with a special table type specified by
-   * {@code getTableType()}, and other properties such as indextype in properties.
+   * Initializes an instance of {@link HoodieTableMetaClient} with properties.
    *
    * @throws IOException
    */

@@ -18,12 +18,9 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex.IndexType;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -31,55 +28,35 @@ import org.junit.jupiter.params.provider.MethodSource;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.io.IOException;
 import java.util.Arrays;
-
-import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_1;
 
 public class TestIndexCompatibility extends HoodieClientTestBase {
 
-  private void createTableWithPersisIndexType(String indexType) throws IOException {
-    // Create the table
-    HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(),
-        HoodieTableType.MERGE_ON_READ, metaClient.getTableConfig().getTableName(),
-        metaClient.getArchivePath(), metaClient.getTableConfig().getPayloadClass(), VERSION_1, indexType);
-  }
-
-  private SparkRDDWriteClient getWriteClientWithIndexType(IndexType indexType) {
-    HoodieWriteConfig hoodieWriteConfig = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
-        .build();
-    SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);
-    return client;
-  }
-
   private static Iterable<Object[]> indexTypeCompatibleParameter() {
-    return Arrays.asList(new Object[][] { { "BLOOM", "BLOOM" }, { "GLOBAL_BLOOM", "SIMPLE" },
-        { "GLOBAL_BLOOM", "BLOOM" }, { "GLOBAL_BLOOM", "GLOBAL_SIMPLE" }, { "GLOBAL_SIMPLE", "GLOBAL_BLOOM" } });
+    return Arrays.asList(new Object[][] { { "GLOBAL_BLOOM", "GLOBAL_BLOOM" }, { "GLOBAL_BLOOM", "BLOOM" },
+        { "GLOBAL_BLOOM", "SIMPLE" }, { "GLOBAL_BLOOM", "GLOBAL_SIMPLE" }, { "GLOBAL_SIMPLE", "GLOBAL_SIMPLE" },
+        { "GLOBAL_SIMPLE", "GLOBAL_BLOOM" }, { "SIMPLE", "SIMPLE" }, { "BLOOM", "BLOOM" }, { "HBASE", "HBASE" },
+        { "CUSTOM", "CUSTOM" } });
   }
 
   private static Iterable<Object[]> indexTypeNotCompatibleParameter() {
     return Arrays.asList(new Object[][] { { "SIMPLE", "BLOOM"}, { "SIMPLE", "GLOBAL_BLOOM"},
-        { "BLOOM", "GLOBAL_BLOOM"}});
+        { "BLOOM", "GLOBAL_BLOOM"}, { "CUSTOM", "BLOOM"}, { "CUSTOM", "GLOBAL_BLOOM"}, { "CUSTOM", "HBASE"}});
   }
 
   @ParameterizedTest
   @MethodSource("indexTypeCompatibleParameter")
-  public void testTableIndexTypeCompatible(String persistIndexType, String writeIndexType) throws Exception {
-    createTableWithPersisIndexType(persistIndexType);
-    SparkRDDWriteClient client = getWriteClientWithIndexType(IndexType.valueOf(writeIndexType));
+  public void testTableIndexTypeCompatible(String persistIndexType, String writeIndexType) {
     assertDoesNotThrow(() -> {
-      client.createMetaClient(true);
+      HoodieIndexUtils.checkIndexTypeCompatible(IndexType.valueOf(writeIndexType), IndexType.valueOf(persistIndexType));
     }, "");
   }
 
   @ParameterizedTest
   @MethodSource("indexTypeNotCompatibleParameter")
-  public void testTableIndexTypeNotCompatible(String persistIndexType, String writeIndexType) throws Exception {
-    createTableWithPersisIndexType(persistIndexType);
-    SparkRDDWriteClient client = getWriteClientWithIndexType(IndexType.valueOf(writeIndexType));
+  public void testTableIndexTypeNotCompatible(String persistIndexType, String writeIndexType) {
     assertThrows(HoodieException.class, () -> {
-      client.createMetaClient(true);
+      HoodieIndexUtils.checkIndexTypeCompatible(IndexType.valueOf(writeIndexType), IndexType.valueOf(persistIndexType));
     }, "");
   }
 }
