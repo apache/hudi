@@ -74,7 +74,6 @@ public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileR
 
   @Override
   public long getTotalRecords() {
-    // TODO Auto-generated method stub
-    return 0;
+    return ParquetUtils.getRowCount(conf, path);
   }
 }
