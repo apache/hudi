@@ -27,10 +27,11 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.client.{SparkRDDWriteClient, HoodieWriteResult, WriteStatus}
+import org.apache.hudi.client.HoodieWriteResult
+import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, OverwriteNonDefaultsWithLatestAvroPayload, WriteOperationType}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.config.HoodieBootstrapConfig.{BOOTSTRAP_BASE_PATH_PROP, BOOTSTRAP_INDEX_CLASS_PROP, DEFAULT_BOOTSTRAP_INDEX_CLASS}
@@ -105,45 +106,14 @@ private[hudi] object HoodieSparkSqlWriter {
     } else {
       // Handle various save modes
       handleSaveModes(mode, basePath, tableConfig, tblName, operation, fs)
-      val dfFull = if (!tableExists) {
-        // Create the table if not present
+      // Create the table if not present
+      if (!tableExists) {
         val archiveLogFolder = parameters.getOrElse(
           HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, "archived")
         val tableMetaClient = HoodieTableMetaClient.initTableType(sparkContext.hadoopConfiguration, path.get,
           tableType, tblName, archiveLogFolder, parameters(PAYLOAD_CLASS_OPT_KEY),
           null.asInstanceOf[String])
         tableConfig = tableMetaClient.getTableConfig
-        df
-      } else {
-        val tableMetaClient = new HoodieTableMetaClient(sparkContext.hadoopConfiguration, path.get)
-        val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
-        val oldSchema = tableSchemaResolver.getTableAvroSchemaWithoutMetadataFields
-        val oldStructType = AvroConversionUtils.convertAvroSchemaToStructType(oldSchema)
-        val dfFields = df.schema.fields.map(sf => sf.name).toList
-        val missingField = oldStructType.fields.exists(f => !dfFields.contains(f.name))
-
-        val recordKeyFields = parameters(RECORDKEY_FIELD_OPT_KEY).split(",").map{ f => f.trim }.filter { p => !p.isEmpty }.toList
-        val partitionPathFields = parameters(PARTITIONPATH_FIELD_OPT_KEY).split(",").map{ f => f.trim }.filter { p => !p.isEmpty }.toList
-        val precombineField = parameters(PRECOMBINE_FIELD_OPT_KEY).trim
-        val keyFields =  recordKeyFields ++ partitionPathFields :+ precombineField
-        val allKeysExist = dfFields.containsAll(keyFields)
-
-        val isUpsert = UPSERT_OPERATION_OPT_VAL.equals(parameters(OPERATION_OPT_KEY))
-        val isRequiredPayload = classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName.equals(parameters(PAYLOAD_CLASS_OPT_KEY))
-        if (isUpsert && isRequiredPayload && allKeysExist && missingField) {
-          //missing normal fields except key
-          val selectExprs = oldStructType.fields.map(f => {
-            if (dfFields.contains(f.name))
-              f.name
-            else
-              s"cast(${oldSchema.getField(f.name).defaultVal()} as ${f.dataType.typeName}) as ${f.name}"
-          }).toList
-
-          df.selectExpr(selectExprs:_*)
-        } else {
-          //missing key fields fallback to original logic
-          df
-        }
       }
 
       val commitActionType = DataSourceUtils.getCommitActionType(operation, tableConfig.getTableType)
@@ -151,7 +121,7 @@ private[hudi] object HoodieSparkSqlWriter {
       // short-circuit if bulk_insert via row is enabled.
       // scalastyle:off
       if (parameters(ENABLE_ROW_WRITER_OPT_KEY).toBoolean) {
-        val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, parameters, dfFull, tblName,
+        val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, parameters, df, tblName,
                                                                                 basePath, path, instantTime)
         return (success, commitTime, common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
       }
@@ -164,13 +134,13 @@ private[hudi] object HoodieSparkSqlWriter {
           sparkContext.getConf.registerKryoClasses(
             Array(classOf[org.apache.avro.generic.GenericData],
               classOf[org.apache.avro.Schema]))
-          val schema = AvroConversionUtils.convertStructTypeToAvroSchema(dfFull.schema, structName, nameSpace)
+          val schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
           sparkContext.getConf.registerAvroSchemas(schema)
           log.info(s"Registered avro schema : ${schema.toString(true)}")
 
           // Convert to RDD[HoodieRecord]
           val keyGenerator = DataSourceUtils.createKeyGenerator(toProperties(parameters))
-          val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(dfFull, structName, nameSpace)
+          val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(df, structName, nameSpace)
           val shouldCombine = parameters(INSERT_DROP_DUPS_OPT_KEY).toBoolean || operation.equals(WriteOperationType.UPSERT);
           val hoodieAllIncomingRecords = genericRecords.map(gr => {
             val hoodieRecord = if (shouldCombine) {
@@ -217,7 +187,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
           // Convert to RDD[HoodieKey]
           val keyGenerator = DataSourceUtils.createKeyGenerator(toProperties(parameters))
-          val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(dfFull, structName, nameSpace)
+          val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(df, structName, nameSpace)
           val hoodieKeysToDelete = genericRecords.map(gr => keyGenerator.getKey(gr)).toJavaRDD()
 
           if (!tableExists) {
@@ -378,6 +348,7 @@ private[hudi] object HoodieSparkSqlWriter {
       ListBuffer(parameters(HIVE_PARTITION_FIELDS_OPT_KEY).split(",").map(_.trim).filter(!_.isEmpty).toList: _*)
     hiveSyncConfig.partitionValueExtractorClass = parameters(HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY)
     hiveSyncConfig.useJdbc = parameters(HIVE_USE_JDBC_OPT_KEY).toBoolean
+    hiveSyncConfig.supportTimestamp = parameters.get(HIVE_SUPPORT_TIMESTAMP).exists(r => r.toBoolean)
     hiveSyncConfig
   }
 

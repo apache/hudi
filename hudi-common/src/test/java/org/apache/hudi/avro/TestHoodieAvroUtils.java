@@ -20,7 +20,7 @@ package org.apache.hudi.avro;
 
 import org.apache.avro.JsonProperties;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.exception.SchemaCompatabilityException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -147,7 +147,7 @@ public class TestHoodieAvroUtils {
     rec.put("non_pii_col", "val1");
     rec.put("pii_col", "val2");
     rec.put("timestamp", 3.5);
-    assertThrows(SchemaCompatabilityException.class, () -> HoodieAvroUtils.rewriteRecord(rec, new Schema.Parser().parse(SCHEMA_WITH_NON_NULLABLE_FIELD)));
+    assertThrows(SchemaCompatibilityException.class, () -> HoodieAvroUtils.rewriteRecord(rec, new Schema.Parser().parse(SCHEMA_WITH_NON_NULLABLE_FIELD)));
   }
 
   @Test

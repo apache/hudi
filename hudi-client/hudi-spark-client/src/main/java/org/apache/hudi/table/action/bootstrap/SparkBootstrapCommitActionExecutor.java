@@ -284,7 +284,7 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
   protected BaseSparkCommitActionExecutor<T> getBulkInsertActionExecutor(JavaRDD<HoodieRecord> inputRecordsRDD) {
     return new SparkBulkInsertCommitActionExecutor((HoodieSparkEngineContext) context, new HoodieWriteConfig.Builder().withProps(config.getProps())
         .withSchema(bootstrapSchema).build(), table, HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
-        inputRecordsRDD, extraMetadata);
+        inputRecordsRDD, Option.empty(), extraMetadata);
   }
 
   private BootstrapWriteStatus handleMetadataBootstrap(String srcPartitionPath, String partitionPath,
