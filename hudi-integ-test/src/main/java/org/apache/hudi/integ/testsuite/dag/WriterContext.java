@@ -96,6 +96,14 @@ public class WriterContext {
     return deltaGenerator;
   }
 
+  public HoodieTestSuiteConfig getCfg() {
+    return cfg;
+  }
+
+  public TypedProperties getProps() {
+    return props;
+  }
+
   public String toString() {
     return this.hoodieTestSuiteWriter.toString() + "\n" + this.deltaGenerator.toString() + "\n";
   }
