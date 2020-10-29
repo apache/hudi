@@ -68,7 +68,7 @@ public class DagUtils {
     Iterator<Entry<String, JsonNode>> itr = jsonNode.fields();
     while (itr.hasNext()) {
       Entry<String, JsonNode> dagNode = itr.next();
-      allNodes.put(dagNode.getKey(), convertJsonToDagNode(allNodes, dagNode.getValue()));
+      allNodes.put(dagNode.getKey(), convertJsonToDagNode(allNodes, dagNode.getKey(), dagNode.getValue()));
     }
     return new WorkflowDag(findRootNodes(allNodes));
   }
@@ -94,9 +94,10 @@ public class DagUtils {
     }
   }
 
-  private static DagNode convertJsonToDagNode(Map<String, DagNode> allNodes, JsonNode node) throws IOException {
+  private static DagNode convertJsonToDagNode(Map<String, DagNode> allNodes, String name, JsonNode node)
+      throws IOException {
     String type = node.get(DeltaConfig.Config.TYPE).asText();
-    final DagNode retNode = convertJsonToDagNode(node, type);
+    final DagNode retNode = convertJsonToDagNode(node, type, name);
     Arrays.asList(node.get(DeltaConfig.Config.DEPENDENCIES).textValue().split(",")).stream().forEach(dep -> {
       DagNode parentNode = allNodes.get(dep);
       if (parentNode != null) {
@@ -116,9 +117,10 @@ public class DagUtils {
     return rootNodes;
   }
 
-  private static DagNode convertJsonToDagNode(JsonNode node, String type) {
+  private static DagNode convertJsonToDagNode(JsonNode node, String type, String name) {
     try {
-      DeltaConfig.Config config = DeltaConfig.Config.newBuilder().withConfigsMap(convertJsonNodeToMap(node)).build();
+      DeltaConfig.Config config = DeltaConfig.Config.newBuilder().withConfigsMap(convertJsonNodeToMap(node))
+          .withName(name).build();
       return (DagNode) ReflectionUtils.loadClass(generateFQN(type), config);
     } catch (ClassNotFoundException e) {
       throw new RuntimeException(e);

@@ -18,9 +18,7 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hadoop.conf.Configuration;
-
-import org.apache.hudi.client.common.EngineProperty;
+import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -28,10 +26,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.config.HoodieIndexConfig;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -105,14 +102,8 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
     if (config.isEmbeddedTimelineServerEnabled()) {
       if (!timelineServer.isPresent()) {
         // Run Embedded Timeline Server
-        LOG.info("Starting Timeline service !!");
-        Option<String> hostAddr = context.getProperty(EngineProperty.EMBEDDED_SERVER_HOST);
-        timelineServer = Option.of(new EmbeddedTimelineService(context, hostAddr.orElse(null),
-            config.getClientSpecifiedViewStorageConfig()));
         try {
-          timelineServer.get().startServer();
-          // Allow executor to find this newly instantiated timeline service
-          config.setViewStorageConfig(timelineServer.get().getRemoteFileSystemViewConfig());
+          timelineServer = EmbeddedTimelineServerHelper.createEmbeddedTimelineService(context, config);
         } catch (IOException e) {
           LOG.warn("Unable to start timeline service. Proceeding as if embedded server is disabled", e);
           stopEmbeddedServerView(false);
@@ -130,15 +121,12 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
   }
 
   protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
-    HoodieTableMetaClient hoodieTableMetaClient = new HoodieTableMetaClient(hadoopConf, config.getBasePath(),
-        loadActiveTimelineOnLoad, config.getConsistencyGuardConfig(),
+    return new HoodieTableMetaClient(hadoopConf, config.getBasePath(), loadActiveTimelineOnLoad,
+        config.getConsistencyGuardConfig(),
         Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())));
-    String persistIndexType = hoodieTableMetaClient.getTableConfig().getProperties()
-        .getProperty(HoodieIndexConfig.INDEX_TYPE_PROP);
-    // just check compatible for persistIndexType already exist. if persistIndexType not exist , it will persist when upgrade
-    if (persistIndexType != null) {
-      HoodieIndexUtils.checkIndexTypeCompatible(this.config.getIndexType().name(), persistIndexType);
-    }
-    return hoodieTableMetaClient;
+  }
+
+  public Option<EmbeddedTimelineService> getTimelineServer() {
+    return timelineServer;
   }
 }

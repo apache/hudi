@@ -72,7 +72,9 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
     String persistIndexType = this.metaClient.getTableConfig().getProperties().getProperty(HoodieIndexConfig.INDEX_TYPE_PROP);
     HoodieIndex hoodieIndex = SparkHoodieIndex.createIndex(config);
     String indexType = hoodieIndex.indexType();
-    HoodieIndexUtils.checkIndexTypeCompatible(indexType, persistIndexType);
+    if (persistIndexType != null) {
+      HoodieIndexUtils.checkIndexTypeCompatible(indexType, persistIndexType);
+    }
     return hoodieIndex;
   }
 }

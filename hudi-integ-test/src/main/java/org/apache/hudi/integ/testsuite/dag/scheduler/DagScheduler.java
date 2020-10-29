@@ -18,6 +18,15 @@
 
 package org.apache.hudi.integ.testsuite.dag.scheduler;
 
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
+import org.apache.hudi.integ.testsuite.dag.WorkflowDag;
+import org.apache.hudi.integ.testsuite.dag.WriterContext;
+import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
+import org.apache.hudi.metrics.Metrics;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -28,13 +37,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
-import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
-import org.apache.hudi.integ.testsuite.dag.WorkflowDag;
-import org.apache.hudi.integ.testsuite.dag.WriterContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * The Dag scheduler schedules the workflow DAGs. It will convert DAG to node set and execute the nodes according to
@@ -95,6 +97,9 @@ public class DagScheduler {
       for (Future future : futures) {
         future.get(1, TimeUnit.HOURS);
       }
+
+      // After each level, report and flush the metrics
+      Metrics.flush();
     } while (queue.size() > 0);
     log.info("Finished workloads");
   }
@@ -109,12 +114,16 @@ public class DagScheduler {
       throw new RuntimeException("DagNode already completed! Cannot re-execute");
     }
     try {
-      log.info("executing node: " + node.getName() + " of type: " + node.getClass());
-      node.execute(executionContext);
+      int repeatCount = node.getConfig().getRepeatCount();
+      while (repeatCount > 0) {
+        log.warn("executing node: " + node.getName() + " of type: " + node.getClass());
+        node.execute(executionContext);
+        log.info("Finished executing {}", node.getName());
+        repeatCount--;
+      }
       node.setCompleted(true);
-      log.info("Finished executing {}", node.getName());
     } catch (Exception e) {
-      log.error("Exception executing node");
+      log.error("Exception executing node", e);
       throw new HoodieException(e);
     }
   }

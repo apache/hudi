@@ -35,7 +35,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -55,6 +55,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
@@ -130,7 +131,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
       assertNoWriteErrors(statusList);
       metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
-      List<HoodieBaseFile> dataFilesToRead = getCurrentLatestDataFiles(hoodieTable, cfg);
+      List<HoodieBaseFile> dataFilesToRead = getCurrentLatestBaseFiles(hoodieTable);
       assertTrue(dataFilesToRead.stream().findAny().isPresent(),
           "should list the parquet files we wrote in the delta commit");
       validateDeltaCommit(firstInstant, fgIdToCompactionOperation, cfg);
@@ -200,6 +201,31 @@ public class CompactionTestBase extends HoodieClientTestBase {
 
   }
 
+  protected void executeCompactionWithReplacedFiles(String compactionInstantTime, SparkRDDWriteClient client, HoodieTable table,
+                                   HoodieWriteConfig cfg, String[] partitions, Set<HoodieFileGroupId> replacedFileIds) throws IOException {
+
+    client.compact(compactionInstantTime);
+    List<FileSlice> fileSliceList = getCurrentLatestFileSlices(table);
+    assertTrue(fileSliceList.stream().findAny().isPresent(), "Ensure latest file-slices are not empty");
+    assertFalse(fileSliceList.stream()
+            .anyMatch(fs -> replacedFileIds.contains(fs.getFileGroupId())),
+        "Compacted files should not show up in latest slices");
+
+    // verify that there is a commit
+    table = getHoodieTable(new HoodieTableMetaClient(hadoopConf, cfg.getBasePath(), true), cfg);
+    HoodieTimeline timeline = table.getMetaClient().getCommitTimeline().filterCompletedInstants();
+    // verify compaction commit is visible in timeline
+    assertTrue(timeline.filterCompletedInstants().getInstants()
+        .filter(instant -> compactionInstantTime.equals(instant.getTimestamp())).findFirst().isPresent());
+    for (String partition: partitions) {
+      table.getSliceView().getLatestFileSlicesBeforeOrOn(partition, compactionInstantTime, true).forEach(fs -> {
+        // verify that all log files are merged
+        assertEquals(0, fs.getLogFiles().count());
+        assertTrue(fs.getBaseFile().isPresent());
+      });
+    }
+  }
+
   protected List<WriteStatus> createNextDeltaCommit(String instantTime, List<HoodieRecord> records, SparkRDDWriteClient client,
                                                     HoodieTableMetaClient metaClient, HoodieWriteConfig cfg, boolean skipCommit) {
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
@@ -225,10 +251,10 @@ public class CompactionTestBase extends HoodieClientTestBase {
     return statusList;
   }
 
-  protected List<HoodieBaseFile> getCurrentLatestDataFiles(HoodieTable table, HoodieWriteConfig cfg) throws IOException {
-    FileStatus[] allFiles = HoodieTestUtils.listAllDataFilesInPath(table.getMetaClient().getFs(), cfg.getBasePath());
+  protected List<HoodieBaseFile> getCurrentLatestBaseFiles(HoodieTable table) throws IOException {
+    FileStatus[] allBaseFiles = HoodieTestTable.of(table.getMetaClient()).listAllBaseFiles();
     HoodieTableFileSystemView view =
-        getHoodieTableFileSystemView(table.getMetaClient(), table.getCompletedCommitsTimeline(), allFiles);
+        getHoodieTableFileSystemView(table.getMetaClient(), table.getCompletedCommitsTimeline(), allBaseFiles);
     return view.getLatestBaseFiles().collect(Collectors.toList());
   }
 

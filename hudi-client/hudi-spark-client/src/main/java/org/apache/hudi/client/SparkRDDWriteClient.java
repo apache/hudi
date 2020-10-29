@@ -92,8 +92,9 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   protected HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> createIndex(HoodieWriteConfig writeConfig) {
     String persistIndexType = this.createMetaClient(true).getTableConfig().getProperties().getProperty(HoodieIndexConfig.INDEX_TYPE_PROP);
     HoodieIndex hoodieIndex = SparkHoodieIndex.createIndex(config);
-    String indexType = hoodieIndex.indexType();
-    HoodieIndexUtils.checkIndexTypeCompatible(indexType, persistIndexType);
+    if (persistIndexType != null) {
+      HoodieIndexUtils.checkIndexTypeCompatible(hoodieIndex.indexType(), persistIndexType);
+    }
     return hoodieIndex;
   }
 

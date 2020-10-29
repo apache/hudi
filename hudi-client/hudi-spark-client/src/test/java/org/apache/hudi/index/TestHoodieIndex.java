@@ -70,7 +70,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestHoodieIndex extends HoodieClientTestHarness {
 
-  private static final Schema SCHEMA = getSchemaFromResource(TestHoodieIndex.class, "/exampleSchema.txt", true);
+  private static final Schema SCHEMA = getSchemaFromResource(TestHoodieIndex.class, "/exampleSchema.avsc", true);
   private final Random random = new Random();
   private IndexType indexType;
   private HoodieIndex index;
@@ -284,9 +284,9 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
 
     // We create three parquet file, each having one record. (two different partitions)
     HoodieWriteableTestTable testTable = HoodieWriteableTestTable.of(hoodieTable, SCHEMA);
-    String fileId1 = testTable.addCommit("001").withInserts(p1, record1);
-    String fileId2 = testTable.addCommit("002").withInserts(p1, record2);
-    String fileId3 = testTable.addCommit("003").withInserts(p2, record4);
+    String fileId1 = testTable.addCommit("001").getFileIdWithInserts(p1, record1);
+    String fileId2 = testTable.addCommit("002").getFileIdWithInserts(p1, record2);
+    String fileId3 = testTable.addCommit("003").getFileIdWithInserts(p2, record4);
 
     // We do the tag again
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -378,7 +378,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
             incomingPayloadSamePartition);
 
     // We have some records to be tagged (two different partitions)
-    testTable.addCommit("1000").withInserts(p1, originalRecord);
+    testTable.addCommit("1000").getFileIdWithInserts(p1, originalRecord);
 
     // test against incoming record with a different partition
     JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Collections.singletonList(incomingRecord));

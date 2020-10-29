@@ -99,7 +99,6 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath, true);
     this.hoodieTable = HoodieSparkTable.create(clientConfig, context, metaClient);
     this.index = this.hoodieTable.getIndex();
-    // this.index = SparkHoodieIndex.createIndex(clientConfig);
     this.sqlContextOpt = Option.empty();
   }
 

@@ -68,7 +68,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieBloomIndex extends HoodieClientTestHarness {
 
-  private static final Schema SCHEMA = getSchemaFromResource(TestHoodieBloomIndex.class, "/exampleSchema.txt", true);
+  private static final Schema SCHEMA = getSchemaFromResource(TestHoodieBloomIndex.class, "/exampleSchema.avsc", true);
   private static final String TEST_NAME_WITH_PARAMS = "[{index}] Test with rangePruning={0}, treeFiltering={1}, bucketizedChecking={2}";
 
   public static Stream<Arguments> configParams() {
@@ -223,7 +223,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
     filter.add(record3.getRecordKey());
     HoodieWriteableTestTable testTable = HoodieWriteableTestTable.of(metaClient, SCHEMA, filter);
-    String fileId = testTable.addCommit("000").withInserts(partition, record1, record2);
+    String fileId = testTable.addCommit("000").getFileIdWithInserts(partition, record1, record2);
     String filename = testTable.getBaseFileNameById(fileId);
 
     // The bloom filter contains 3 records
@@ -310,9 +310,9 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     }
 
     // We create three parquet file, each having one record. (two different partitions)
-    String fileId1 = testTable.addCommit("001").withInserts("2016/01/31", record1);
-    String fileId2 = testTable.addCommit("002").withInserts("2016/01/31", record2);
-    String fileId3 = testTable.addCommit("003").withInserts("2015/01/31", record4);
+    String fileId1 = testTable.addCommit("001").getFileIdWithInserts("2016/01/31", record1);
+    String fileId2 = testTable.addCommit("002").getFileIdWithInserts("2016/01/31", record2);
+    String fileId3 = testTable.addCommit("003").getFileIdWithInserts("2015/01/31", record4);
 
     // We do the tag again
     taggedRecordRDD = bloomIndex.tagLocation(recordRDD, context, HoodieSparkTable.create(config, context, metaClient));
@@ -380,9 +380,9 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
     }
 
     // We create three parquet file, each having one record. (two different partitions)
-    String fileId1 = testTable.addCommit("001").withInserts("2016/01/31", record1);
-    String fileId2 = testTable.addCommit("002").withInserts("2016/01/31", record2);
-    String fileId3 = testTable.addCommit("003").withInserts("2015/01/31", record4);
+    String fileId1 = testTable.addCommit("001").getFileIdWithInserts("2016/01/31", record1);
+    String fileId2 = testTable.addCommit("002").getFileIdWithInserts("2016/01/31", record2);
+    String fileId3 = testTable.addCommit("003").getFileIdWithInserts("2015/01/31", record4);
 
     // We do the tag again
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -433,7 +433,7 @@ public class TestHoodieBloomIndex extends HoodieClientTestHarness {
         BloomFilterTypeCode.SIMPLE.name());
     filter.add(record2.getRecordKey());
     HoodieWriteableTestTable testTable = HoodieWriteableTestTable.of(metaClient, SCHEMA, filter);
-    String fileId = testTable.addCommit("000").withInserts("2016/01/31", record1);
+    String fileId = testTable.addCommit("000").getFileIdWithInserts("2016/01/31", record1);
     assertTrue(filter.mightContain(record1.getRecordKey()));
     assertTrue(filter.mightContain(record2.getRecordKey()));
 

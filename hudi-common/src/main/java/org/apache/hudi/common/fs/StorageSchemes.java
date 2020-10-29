@@ -51,7 +51,9 @@ public enum StorageSchemes {
   // Tencent Cloud Object Storage
   COSN("cosn", false),
   // Databricks file system
-  DBFS("dbfs", false);
+  DBFS("dbfs", false),
+  // IBM Cloud Object Storage
+  COS("cos", false);
 
   private String scheme;
   private boolean supportsAppend;

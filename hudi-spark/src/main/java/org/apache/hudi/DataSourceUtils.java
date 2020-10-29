@@ -142,6 +142,19 @@ public class DataSourceUtils {
     }
   }
 
+  /**
+   * Create a payload class via reflection, do not ordering/precombine value.
+   */
+  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record)
+      throws IOException {
+    try {
+      return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
+          new Class<?>[] {Option.class}, Option.of(record));
+    } catch (Throwable e) {
+      throw new IOException("Could not create payload for class: " + payloadClass, e);
+    }
+  }
+
   public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
     checkPropNames.forEach(prop -> {
       if (!props.containsKey(prop)) {
@@ -214,6 +227,12 @@ public class DataSourceUtils {
     return new HoodieRecord<>(hKey, payload);
   }
 
+  public static HoodieRecord createHoodieRecord(GenericRecord gr, HoodieKey hKey,
+                                                String payloadClass) throws IOException {
+    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr);
+    return new HoodieRecord<>(hKey, payload);
+  }
+
   /**
    * Drop records already present in the dataset.
    *
@@ -271,6 +290,8 @@ public class DataSourceUtils {
         DataSourceWriteOptions.DEFAULT_HIVE_AUTO_CREATE_DATABASE_OPT_KEY()));
     hiveSyncConfig.skipROSuffix = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX(),
         DataSourceWriteOptions.DEFAULT_HIVE_SKIP_RO_SUFFIX_VAL()));
+    hiveSyncConfig.supportTimestamp = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SUPPORT_TIMESTAMP(),
+        DataSourceWriteOptions.DEFAULT_HIVE_SUPPORT_TIMESTAMP()));
     return hiveSyncConfig;
   }
 }
