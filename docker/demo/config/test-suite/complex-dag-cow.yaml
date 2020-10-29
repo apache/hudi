@@ -65,7 +65,7 @@ first_hive_query:
       query1: "select count(*) from testdb.table1 group by `_row_key` having count(*) > 1"
       result1: 0
       query2: "select count(*) from testdb.table1"
-      result2: 11600
+      result2: 11300
   type: HiveQueryNode
   deps: first_hive_sync
 second_upsert:
@@ -86,7 +86,7 @@ second_hive_query:
       query1: "select count(*) from testdb.table1 group by `_row_key` having count(*) > 1"
       result1: 0
       query2: "select count(*) from testdb.table1"
-      result2: 11900
+      result2: 11600
   type: HiveQueryNode
   deps: second_upsert
 fourth_insert:
@@ -105,7 +105,7 @@ third_hive_query:
       query1: "select count(*) from testdb.table1 group by `_row_key` having count(*) > 1"
       result1: 0
       query2: "select count(*) from testdb.table1"
-      result2: 12900
+      result2: 12600
   type: HiveQueryNode
   deps: fourth_insert
 first_delete:
@@ -129,6 +129,6 @@ fourth_hive_query:
       query1: "select count(*) from testdb.table1 group by `_row_key` having count(*) > 1"
       result1: 0
       query2: "select count(*) from testdb.table1"
-      result2: 12700
+      result2: 12400
   type: HiveQueryNode
   deps: fourth_hive_sync
