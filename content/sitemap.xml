@@ -953,8 +953,16 @@
 <lastmod>2020-08-22T00:00:00-04:00</lastmod>
 </url>
 <url>
+<loc>https://hudi.apache.org/blog/cdc-solution-using-hudi-by-nclouds/</loc>
+<lastmod>2020-10-06T00:00:00-04:00</lastmod>
+</url>
+<url>
 <loc>https://hudi.apache.org/blog/apache-hudi-meets-apache-flink/</loc>
 <lastmod>2020-10-15T00:00:00-04:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/blog/hudi-meets-aws-emr-and-aws-dms/</loc>
+<lastmod>2020-10-19T00:00:00-04:00</lastmod>
 </url>
 <url>
 <loc>https://hudi.apache.org/cn/activity</loc>

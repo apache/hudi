@@ -1189,8 +1189,18 @@ var store = [{
         "tags": [],
         "url": "https://hudi.apache.org/blog/ingest-multiple-tables-using-hudi/",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "How nClouds Helps Accelerate Data Delivery with Apache Hudi on Amazon EMR",
+        "excerpt":"This blog published by nClouds in partnership with AWS shows how to build a CDC pipeline using Apache Hudi on Amazon EMR and other managed services like Amazon RDS and AWS DMS, including Amazon QuickSight for data visualization.  ","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/cdc-solution-using-hudi-by-nclouds/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
         "title": "Apache Hudi meets Apache Flink",
         "excerpt":"Apache Hudi (Hudi for short) is a data lake framework created at Uber. Hudi joined the Apache incubator for incubation in January 2019, and was promoted to the top Apache project in May 2020. It is one of the most popular data lake frameworks. 1. Why decouple Hudi has been...","categories": ["blog"],
         "tags": [],
         "url": "https://hudi.apache.org/blog/apache-hudi-meets-apache-flink/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Apply record level changes from relational databases to Amazon S3 data lake using Apache Hudi on Amazon EMR and AWS Database Migration Service",
+        "excerpt":"This blog published by AWS shows how to build a CDC pipeline that captures data from an Amazon Relational Database Service (Amazon RDS) for MySQL database using AWS Database Migration Service (AWS DMS) and applies those changes to a dataset in Amazon S3 using Apache Hudi on Amazon EMR.  ","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/hudi-meets-aws-emr-and-aws-dms/",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},]
