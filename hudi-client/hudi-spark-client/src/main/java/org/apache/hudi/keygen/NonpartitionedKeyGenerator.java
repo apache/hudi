@@ -28,25 +28,27 @@ import java.util.List;
  * Simple Key generator for unpartitioned Hive Tables.
  */
 public class NonpartitionedKeyGenerator extends SimpleKeyGenerator {
-  private CommonNonpartitionedKeyGenerator commonNonpartitionedKeyGenerator;
+
+  private final NonpartitionedAvroKeyGenerator nonpartitionedAvroKeyGenerator;
+
   public NonpartitionedKeyGenerator(TypedProperties config) {
     super(config);
-    commonNonpartitionedKeyGenerator = new CommonNonpartitionedKeyGenerator(config);
+    nonpartitionedAvroKeyGenerator = new NonpartitionedAvroKeyGenerator(config);
   }
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    return commonNonpartitionedKeyGenerator.getPartitionPath(record);
+    return nonpartitionedAvroKeyGenerator.getPartitionPath(record);
   }
 
   @Override
   public List<String> getPartitionPathFields() {
-    return commonNonpartitionedKeyGenerator.getPartitionPathFields();
+    return nonpartitionedAvroKeyGenerator.getPartitionPathFields();
   }
 
   @Override
   public String getPartitionPath(Row row) {
-    return commonNonpartitionedKeyGenerator.getEmptyPartition();
+    return nonpartitionedAvroKeyGenerator.getEmptyPartition();
   }
 
 }

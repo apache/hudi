@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
  */
 public class ComplexKeyGenerator extends BuiltinKeyGenerator {
 
-  private CommonComplexKeyGenerator commonComplexKeyGenerator;
+  private final ComplexAvroKeyGenerator complexAvroKeyGenerator;
 
   public ComplexKeyGenerator(TypedProperties props) {
     super(props);
@@ -38,17 +38,17 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
         .split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
     this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY)
         .split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
-    commonComplexKeyGenerator = new CommonComplexKeyGenerator(props);
+    complexAvroKeyGenerator = new ComplexAvroKeyGenerator(props);
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return commonComplexKeyGenerator.getRecordKey(record);
+    return complexAvroKeyGenerator.getRecordKey(record);
   }
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    return commonComplexKeyGenerator.getPartitionPath(record);
+    return complexAvroKeyGenerator.getPartitionPath(record);
   }
 
   @Override

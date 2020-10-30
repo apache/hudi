@@ -33,21 +33,21 @@ import java.util.List;
  */
 public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
 
-  private CommonGlobalDeleteKeyGenerator commonGlobalDeleteKeyGenerator;
+  private final GlobalAvroDeleteKeyGenerator globalAvroDeleteKeyGenerator;
   public GlobalDeleteKeyGenerator(TypedProperties config) {
     super(config);
     this.recordKeyFields = Arrays.asList(config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY).split(","));
-    commonGlobalDeleteKeyGenerator = new CommonGlobalDeleteKeyGenerator(config);
+    globalAvroDeleteKeyGenerator = new GlobalAvroDeleteKeyGenerator(config);
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return commonGlobalDeleteKeyGenerator.getRecordKey(record);
+    return globalAvroDeleteKeyGenerator.getRecordKey(record);
   }
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    return commonGlobalDeleteKeyGenerator.getPartitionPath(record);
+    return globalAvroDeleteKeyGenerator.getPartitionPath(record);
   }
 
   @Override
@@ -63,7 +63,7 @@ public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getPartitionPath(Row row) {
-    return commonGlobalDeleteKeyGenerator.getEmptyPartition();
+    return globalAvroDeleteKeyGenerator.getEmptyPartition();
   }
 }
 

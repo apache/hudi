@@ -15,37 +15,19 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.keygen;
-
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.common.config.TypedProperties;
-
-import java.util.ArrayList;
-import java.util.List;
+package org.apache.hudi.exception;
 
 /**
- * Common simple Key generator for unpartitioned Hive Tables.
+ * Exception thrown for any higher level errors when {@link org.apache.hudi.keygen.KeyGeneratorInterface} is generating
+ * a {@link org.apache.hudi.common.model.HoodieKey}.
  */
-public class CommonNonpartitionedKeyGenerator extends CommonSimpleKeyGenerator {
+public class HoodieKeyGeneratorException extends HoodieException {
 
-  private static final String EMPTY_PARTITION = "";
-  private static final List<String> EMPTY_PARTITION_FIELD_LIST = new ArrayList<>();
-
-  public CommonNonpartitionedKeyGenerator(TypedProperties props) {
-    super(props);
+  public HoodieKeyGeneratorException(String msg, Throwable e) {
+    super(msg, e);
   }
 
-  @Override
-  public String getPartitionPath(GenericRecord record) {
-    return EMPTY_PARTITION;
-  }
-
-  @Override
-  public List<String> getPartitionPathFields() {
-    return EMPTY_PARTITION_FIELD_LIST;
-  }
-
-  public String getEmptyPartition() {
-    return EMPTY_PARTITION;
+  public HoodieKeyGeneratorException(String msg) {
+    super(msg);
   }
 }

@@ -30,7 +30,7 @@ import java.util.Collections;
  */
 public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
-  private CommonSimpleKeyGenerator commonSimpleKeyGenerator;
+  private final SimpleAvroKeyGenerator simpleAvroKeyGenerator;
 
   public SimpleKeyGenerator(TypedProperties props) {
     this(props, props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY),
@@ -47,17 +47,17 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
         ? Collections.emptyList()
         : Collections.singletonList(recordKeyField);
     this.partitionPathFields = Collections.singletonList(partitionPathField);
-    commonSimpleKeyGenerator = new CommonSimpleKeyGenerator(props, recordKeyField, partitionPathField);
+    simpleAvroKeyGenerator = new SimpleAvroKeyGenerator(props, recordKeyField, partitionPathField);
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return commonSimpleKeyGenerator.getRecordKey(record);
+    return simpleAvroKeyGenerator.getRecordKey(record);
   }
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    return commonSimpleKeyGenerator.getPartitionPath(record);
+    return simpleAvroKeyGenerator.getPartitionPath(record);
   }
 
   @Override

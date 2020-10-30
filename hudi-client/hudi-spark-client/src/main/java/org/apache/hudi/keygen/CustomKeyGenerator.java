@@ -22,7 +22,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieKeyException;
-import org.apache.hudi.exception.HoodieKeyGenerateException;
+import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.spark.sql.Row;
 
@@ -45,23 +45,23 @@ import java.util.stream.Collectors;
  */
 public class CustomKeyGenerator extends BuiltinKeyGenerator {
 
-  private CommonCustomKeyGenerator commonCustomKeyGenerator;
+  private final CustomAvroKeyGenerator customAvroKeyGenerator;
 
   public CustomKeyGenerator(TypedProperties props) {
     super(props);
     this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY).split(",")).map(String::trim).collect(Collectors.toList());
     this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY).split(",")).map(String::trim).collect(Collectors.toList());
-    commonCustomKeyGenerator = new CommonCustomKeyGenerator(props);
+    customAvroKeyGenerator = new CustomAvroKeyGenerator(props);
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return commonCustomKeyGenerator.getRecordKey(record);
+    return customAvroKeyGenerator.getRecordKey(record);
   }
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    return commonCustomKeyGenerator.getPartitionPath(record);
+    return customAvroKeyGenerator.getPartitionPath(record);
   }
 
   @Override
@@ -90,13 +90,13 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
       return "";
     }
     for (String field : getPartitionPathFields()) {
-      String[] fieldWithType = field.split(commonCustomKeyGenerator.getSplitRegex());
+      String[] fieldWithType = field.split(customAvroKeyGenerator.getSplitRegex());
       if (fieldWithType.length != 2) {
-        throw new HoodieKeyGenerateException("Unable to find field names for partition path in proper format");
+        throw new HoodieKeyGeneratorException("Unable to find field names for partition path in proper format");
       }
 
       partitionPathField = fieldWithType[0];
-      CommonCustomKeyGenerator.PartitionKeyType keyType = CommonCustomKeyGenerator.PartitionKeyType.valueOf(fieldWithType[1].toUpperCase());
+      CustomAvroKeyGenerator.PartitionKeyType keyType = CustomAvroKeyGenerator.PartitionKeyType.valueOf(fieldWithType[1].toUpperCase());
       switch (keyType) {
         case SIMPLE:
           if (record.isPresent()) {
@@ -113,14 +113,14 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
               partitionPath.append(new TimestampBasedKeyGenerator(config, partitionPathField).getPartitionPath(row.get()));
             }
           } catch (IOException ioe) {
-            throw new HoodieKeyGenerateException("Unable to initialise TimestampBasedKeyGenerator class");
+            throw new HoodieKeyGeneratorException("Unable to initialise TimestampBasedKeyGenerator class");
           }
           break;
         default:
-          throw new HoodieKeyGenerateException("Please provide valid PartitionKeyType with fields! You provided: " + keyType);
+          throw new HoodieKeyGeneratorException("Please provide valid PartitionKeyType with fields! You provided: " + keyType);
       }
 
-      partitionPath.append(commonCustomKeyGenerator.getDefaultPartitionPathSeparator());
+      partitionPath.append(customAvroKeyGenerator.getDefaultPartitionPathSeparator());
     }
     partitionPath.deleteCharAt(partitionPath.length() - 1);
     return partitionPath.toString();

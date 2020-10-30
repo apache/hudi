@@ -140,7 +140,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
       keyGenerator.getKey(getRecord());
       Assertions.fail("should fail when invalid PartitionKeyType is provided!");
     } catch (Exception e) {
-      Assertions.assertTrue(e.getMessage().contains("No enum constant org.apache.hudi.keygen.CommonCustomKeyGenerator.PartitionKeyType.DUMMY"));
+      Assertions.assertTrue(e.getMessage().contains("No enum constant org.apache.hudi.keygen.CustomAvroKeyGenerator.PartitionKeyType.DUMMY"));
     }
 
     try {
@@ -150,7 +150,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
       keyGenerator.getPartitionPath(row);
       Assertions.fail("should fail when invalid PartitionKeyType is provided!");
     } catch (Exception e) {
-      Assertions.assertTrue(e.getMessage().contains("No enum constant org.apache.hudi.keygen.CommonCustomKeyGenerator.PartitionKeyType.DUMMY"));
+      Assertions.assertTrue(e.getMessage().contains("No enum constant org.apache.hudi.keygen.CustomAvroKeyGenerator.PartitionKeyType.DUMMY"));
     }
   }
 

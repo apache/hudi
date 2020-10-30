@@ -25,12 +25,12 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 
 /**
- * Common complex key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
+ * Avro complex key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
  */
-public class CommonComplexKeyGenerator extends BaseKeyGenerator {
+public class ComplexAvroKeyGenerator extends BaseKeyGenerator {
   public static final String DEFAULT_RECORD_KEY_SEPARATOR = ":";
 
-  public CommonComplexKeyGenerator(TypedProperties props) {
+  public ComplexAvroKeyGenerator(TypedProperties props) {
     super(props);
     this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY)
         .split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());

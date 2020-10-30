@@ -26,14 +26,14 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Common Key generator for deletes using global indices. Global index deletes do not require partition value so this key generator
+ * Avro Key generator for deletes using global indices. Global index deletes do not require partition value so this key generator
  * avoids using partition value for generating HoodieKey.
  */
-public class CommonGlobalDeleteKeyGenerator extends BaseKeyGenerator {
+public class GlobalAvroDeleteKeyGenerator extends BaseKeyGenerator {
 
   private static final String EMPTY_PARTITION = "";
 
-  public CommonGlobalDeleteKeyGenerator(TypedProperties config) {
+  public GlobalAvroDeleteKeyGenerator(TypedProperties config) {
     super(config);
     this.recordKeyFields = Arrays.asList(config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY).split(","));
   }

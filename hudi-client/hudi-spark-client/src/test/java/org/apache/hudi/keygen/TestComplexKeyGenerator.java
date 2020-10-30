@@ -125,8 +125,8 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     GenericRecord record = dataGenerator.generateGenericRecords(1).get(0);
     String rowKey =
-        "_row_key" + CommonComplexKeyGenerator.DEFAULT_RECORD_KEY_SEPARATOR + record.get("_row_key").toString() + ","
-            + "timestamp" + CommonComplexKeyGenerator.DEFAULT_RECORD_KEY_SEPARATOR + record.get("timestamp").toString();
+        "_row_key" + ComplexAvroKeyGenerator.DEFAULT_RECORD_KEY_SEPARATOR + record.get("_row_key").toString() + ","
+            + "timestamp" + ComplexAvroKeyGenerator.DEFAULT_RECORD_KEY_SEPARATOR + record.get("timestamp").toString();
     String partitionPath = record.get("rider").toString() + "/" + record.get("driver").toString();
     HoodieKey hoodieKey = compositeKeyGenerator.getKey(record);
     assertEquals(rowKey, hoodieKey.getRecordKey());
@@ -144,8 +144,8 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     GenericRecord record = dataGenerator.generateGenericRecords(1).get(0);
     String rowKey =
-        "_row_key" + CommonComplexKeyGenerator.DEFAULT_RECORD_KEY_SEPARATOR + record.get("_row_key").toString() + ","
-            + "timestamp" + CommonComplexKeyGenerator.DEFAULT_RECORD_KEY_SEPARATOR + record.get("timestamp").toString();
+        "_row_key" + ComplexAvroKeyGenerator.DEFAULT_RECORD_KEY_SEPARATOR + record.get("_row_key").toString() + ","
+            + "timestamp" + ComplexAvroKeyGenerator.DEFAULT_RECORD_KEY_SEPARATOR + record.get("timestamp").toString();
     String partitionPath = "";
     HoodieKey hoodieKey = compositeKeyGenerator.getKey(record);
     assertEquals(rowKey, hoodieKey.getRecordKey());

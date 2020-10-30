@@ -24,20 +24,20 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import java.util.Collections;
 
 /**
- * Common simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
+ * Avro simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
  */
-public class CommonSimpleKeyGenerator  extends BaseKeyGenerator {
+public class SimpleAvroKeyGenerator extends BaseKeyGenerator {
 
-  public CommonSimpleKeyGenerator(TypedProperties props) {
+  public SimpleAvroKeyGenerator(TypedProperties props) {
     this(props, props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY),
         props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY));
   }
 
-  CommonSimpleKeyGenerator(TypedProperties props, String partitionPathField) {
+  SimpleAvroKeyGenerator(TypedProperties props, String partitionPathField) {
     this(props, null, partitionPathField);
   }
 
-  CommonSimpleKeyGenerator(TypedProperties props, String recordKeyField, String partitionPathField) {
+  SimpleAvroKeyGenerator(TypedProperties props, String recordKeyField, String partitionPathField) {
     super(props);
     this.recordKeyFields = recordKeyField == null
         ? Collections.emptyList()

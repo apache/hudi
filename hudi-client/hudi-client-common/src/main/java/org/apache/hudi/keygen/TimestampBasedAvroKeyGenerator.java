@@ -22,7 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieKeyGenerateException;
+import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.parser.AbstractHoodieDateTimeParser;
@@ -44,9 +44,9 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
- * Common Key generator, that relies on timestamps for partitioning field. Still picks record key by name.
+ * Avro Key generator, that relies on timestamps for partitioning field. Still picks record key by name.
  */
-public class CommonTimestampBasedKeyGenerator extends CommonSimpleKeyGenerator {
+public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
   public enum TimestampType implements Serializable {
     UNIX_TIMESTAMP, DATE_STRING, MIXED, EPOCHMILLISECONDS, SCALAR
   }
@@ -88,16 +88,16 @@ public class CommonTimestampBasedKeyGenerator extends CommonSimpleKeyGenerator {
     static final String DATE_TIME_PARSER_PROP = "hoodie.deltastreamer.keygen.datetime.parser.class";
   }
 
-  public CommonTimestampBasedKeyGenerator(TypedProperties config) throws IOException {
+  public TimestampBasedAvroKeyGenerator(TypedProperties config) throws IOException {
     this(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY),
         config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY));
   }
 
-  CommonTimestampBasedKeyGenerator(TypedProperties config, String partitionPathField) throws IOException {
+  TimestampBasedAvroKeyGenerator(TypedProperties config, String partitionPathField) throws IOException {
     this(config, null, partitionPathField);
   }
 
-  CommonTimestampBasedKeyGenerator(TypedProperties config, String recordKeyField, String partitionPathField) throws IOException {
+  TimestampBasedAvroKeyGenerator(TypedProperties config, String recordKeyField, String partitionPathField) throws IOException {
     super(config, recordKeyField, partitionPathField);
     String dateTimeParserClass = config.getString(Config.DATE_TIME_PARSER_PROP, HoodieDateTimeParserImpl.class.getName());
     this.parser = KeyGenUtils.createDateTimeParser(config, dateTimeParserClass);
@@ -133,7 +133,7 @@ public class CommonTimestampBasedKeyGenerator extends CommonSimpleKeyGenerator {
     try {
       return getPartitionPath(partitionVal);
     } catch (Exception e) {
-      throw new HoodieKeyGenerateException("Unable to parse input partition field :" + partitionVal, e);
+      throw new HoodieKeyGeneratorException("Unable to parse input partition field :" + partitionVal, e);
     }
   }
 

@@ -20,7 +20,7 @@ package org.apache.hudi.keygen;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.exception.HoodieKeyGenerateException;
+import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.spark.sql.Row;
 
@@ -35,7 +35,7 @@ import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
  */
 public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
-  private CommonTimestampBasedKeyGenerator commonTimestampBasedKeyGenerator;
+  private final TimestampBasedAvroKeyGenerator timestampBasedAvroKeyGenerator;
 
   public TimestampBasedKeyGenerator(TypedProperties config) throws IOException {
     this(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY),
@@ -48,12 +48,12 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
 
   TimestampBasedKeyGenerator(TypedProperties config, String recordKeyField, String partitionPathField) throws IOException {
     super(config, recordKeyField, partitionPathField);
-    commonTimestampBasedKeyGenerator = new CommonTimestampBasedKeyGenerator(config, recordKeyField, partitionPathField);
+    timestampBasedAvroKeyGenerator = new TimestampBasedAvroKeyGenerator(config, recordKeyField, partitionPathField);
   }
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    return commonTimestampBasedKeyGenerator.getPartitionPath(record);
+    return timestampBasedAvroKeyGenerator.getPartitionPath(record);
   }
 
   @Override
@@ -70,13 +70,13 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
     try {
       if (partitionPathFieldVal == null || partitionPathFieldVal.toString().contains(DEFAULT_PARTITION_PATH) || partitionPathFieldVal.toString().contains(NULL_RECORDKEY_PLACEHOLDER)
           || partitionPathFieldVal.toString().contains(EMPTY_RECORDKEY_PLACEHOLDER)) {
-        fieldVal = commonTimestampBasedKeyGenerator.getDefaultPartitionVal();
+        fieldVal = timestampBasedAvroKeyGenerator.getDefaultPartitionVal();
       } else {
         fieldVal = partitionPathFieldVal;
       }
-      return commonTimestampBasedKeyGenerator.getPartitionPath(fieldVal);
+      return timestampBasedAvroKeyGenerator.getPartitionPath(fieldVal);
     } catch (Exception e) {
-      throw new HoodieKeyGenerateException("Unable to parse input partition field :" + fieldVal, e);
+      throw new HoodieKeyGeneratorException("Unable to parse input partition field :" + fieldVal, e);
     }
   }
 }

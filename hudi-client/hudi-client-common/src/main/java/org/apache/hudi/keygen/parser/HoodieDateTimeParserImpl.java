@@ -19,8 +19,8 @@ package org.apache.hudi.keygen.parser;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.keygen.CommonTimestampBasedKeyGenerator.TimestampType;
-import org.apache.hudi.keygen.CommonTimestampBasedKeyGenerator.Config;
+import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.TimestampType;
+import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.Config;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;
