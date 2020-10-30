@@ -19,7 +19,6 @@
 package org.apache.hudi.config;
 
 import org.apache.hudi.common.config.DefaultHoodieConfig;
-import org.apache.hudi.config.HoodieCompactionConfig.Builder;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -37,33 +36,33 @@ public class HoodieMetadataConfig extends DefaultHoodieConfig {
   public static final String METADATA_PREFIX = "hoodie.metadata";
 
   // Enable the internal Metadata Table which saves file listings
-  public static final String METADATA_ENABLE = METADATA_PREFIX + ".enable";
+  public static final String METADATA_ENABLE_PROP = METADATA_PREFIX + ".enable";
   public static final boolean DEFAULT_METADATA_ENABLE = false;
 
   // Validate contents of Metadata Table on each access against the actual filesystem
-  public static final String METADATA_VALIDATE = METADATA_PREFIX + ".validate";
+  public static final String METADATA_VALIDATE_PROP = METADATA_PREFIX + ".validate";
   public static final boolean DEFAULT_METADATA_VALIDATE = false;
 
   // Parallelism for inserts
-  public static final String INSERT_PARALLELISM = METADATA_PREFIX + ".insert.parallelism";
-  public static final int DEFAULT_INSERT_PARALLELISM = 1;
+  public static final String METADATA_INSERT_PARALLELISM_PROP = METADATA_PREFIX + ".insert.parallelism";
+  public static final int DEFAULT_METADATA_INSERT_PARALLELISM = 1;
 
   // Async clean
-  public static final String ASYNC_CLEAN = METADATA_PREFIX + ".clean.async";
-  public static final boolean DEFAULT_ASYNC_CLEAN = false;
+  public static final String METADATA_ASYNC_CLEAN_PROP = METADATA_PREFIX + ".clean.async";
+  public static final boolean DEFAULT_METADATA_ASYNC_CLEAN = false;
 
   // Maximum delta commits before compaction occurs
-  public static final String COMPACT_NUM_DELTA_COMMITS = METADATA_PREFIX + ".compact.max.delta.commits";
-  public static final int DEFAULT_COMPACT_NUM_DELTA_COMMITS = 24;
+  public static final String METADATA_COMPACT_NUM_DELTA_COMMITS_PROP = METADATA_PREFIX + ".compact.max.delta.commits";
+  public static final int DEFAULT_METADATA_COMPACT_NUM_DELTA_COMMITS = 24;
 
   // Archival settings
-  public static final String MIN_COMMITS_TO_KEEP = METADATA_PREFIX + ".keep.min.commits";
+  public static final String MIN_COMMITS_TO_KEEP_PROP = METADATA_PREFIX + ".keep.min.commits";
   public static final int DEFAULT_MIN_COMMITS_TO_KEEP = 20;
-  public static final String MAX_COMMITS_TO_KEEP = METADATA_PREFIX + ".keep.max.commits";
+  public static final String MAX_COMMITS_TO_KEEP_PROP = METADATA_PREFIX + ".keep.max.commits";
   public static final int DEFAULT_MAX_COMMITS_TO_KEEP = 30;
 
   // Cleaner commits retained
-  public static final String CLEANER_COMMITS_RETAINED = METADATA_PREFIX + ".cleaner.commits.retained";
+  public static final String CLEANER_COMMITS_RETAINED_PROP = METADATA_PREFIX + ".cleaner.commits.retained";
   public static final int DEFAULT_CLEANER_COMMITS_RETAINED = 3;
 
   private HoodieMetadataConfig(Properties props) {
@@ -91,58 +90,58 @@ public class HoodieMetadataConfig extends DefaultHoodieConfig {
     }
 
     public Builder enable(boolean enable) {
-      props.setProperty(METADATA_ENABLE, String.valueOf(enable));
+      props.setProperty(METADATA_ENABLE_PROP, String.valueOf(enable));
       return this;
     }
 
     public Builder validate(boolean validate) {
-      props.setProperty(METADATA_VALIDATE, String.valueOf(validate));
+      props.setProperty(METADATA_VALIDATE_PROP, String.valueOf(validate));
       return this;
     }
 
     public Builder withInsertParallelism(int parallelism) {
-      props.setProperty(INSERT_PARALLELISM, String.valueOf(parallelism));
+      props.setProperty(METADATA_INSERT_PARALLELISM_PROP, String.valueOf(parallelism));
       return this;
     }
 
     public Builder withAsyncClean(boolean asyncClean) {
-      props.setProperty(ASYNC_CLEAN, String.valueOf(asyncClean));
+      props.setProperty(METADATA_ASYNC_CLEAN_PROP, String.valueOf(asyncClean));
       return this;
     }
 
     public Builder withMaxNumDeltaCommitsBeforeCompaction(int maxNumDeltaCommitsBeforeCompaction) {
-      props.setProperty(COMPACT_NUM_DELTA_COMMITS, String.valueOf(maxNumDeltaCommitsBeforeCompaction));
+      props.setProperty(METADATA_COMPACT_NUM_DELTA_COMMITS_PROP, String.valueOf(maxNumDeltaCommitsBeforeCompaction));
       return this;
     }
 
     public Builder archiveCommitsWith(int minToKeep, int maxToKeep) {
-      props.setProperty(MIN_COMMITS_TO_KEEP, String.valueOf(minToKeep));
-      props.setProperty(MAX_COMMITS_TO_KEEP, String.valueOf(maxToKeep));
+      props.setProperty(MIN_COMMITS_TO_KEEP_PROP, String.valueOf(minToKeep));
+      props.setProperty(MAX_COMMITS_TO_KEEP_PROP, String.valueOf(maxToKeep));
       return this;
     }
 
     public Builder retainCommits(int commitsRetained) {
-      props.setProperty(CLEANER_COMMITS_RETAINED, String.valueOf(commitsRetained));
+      props.setProperty(CLEANER_COMMITS_RETAINED_PROP, String.valueOf(commitsRetained));
       return this;
     }
 
     public HoodieMetadataConfig build() {
       HoodieMetadataConfig config = new HoodieMetadataConfig(props);
-      setDefaultOnCondition(props, !props.containsKey(METADATA_ENABLE), METADATA_ENABLE,
+      setDefaultOnCondition(props, !props.containsKey(METADATA_ENABLE_PROP), METADATA_ENABLE_PROP,
           String.valueOf(DEFAULT_METADATA_ENABLE));
-      setDefaultOnCondition(props, !props.containsKey(METADATA_VALIDATE), METADATA_VALIDATE,
+      setDefaultOnCondition(props, !props.containsKey(METADATA_VALIDATE_PROP), METADATA_VALIDATE_PROP,
           String.valueOf(DEFAULT_METADATA_VALIDATE));
-      setDefaultOnCondition(props, !props.containsKey(INSERT_PARALLELISM), INSERT_PARALLELISM,
-          String.valueOf(DEFAULT_INSERT_PARALLELISM));
-      setDefaultOnCondition(props, !props.containsKey(ASYNC_CLEAN), ASYNC_CLEAN,
-          String.valueOf(DEFAULT_ASYNC_CLEAN));
-      setDefaultOnCondition(props, !props.containsKey(COMPACT_NUM_DELTA_COMMITS),
-          COMPACT_NUM_DELTA_COMMITS, String.valueOf(DEFAULT_COMPACT_NUM_DELTA_COMMITS));
-      setDefaultOnCondition(props, !props.containsKey(CLEANER_COMMITS_RETAINED), CLEANER_COMMITS_RETAINED,
+      setDefaultOnCondition(props, !props.containsKey(METADATA_INSERT_PARALLELISM_PROP), METADATA_INSERT_PARALLELISM_PROP,
+          String.valueOf(DEFAULT_METADATA_INSERT_PARALLELISM));
+      setDefaultOnCondition(props, !props.containsKey(METADATA_ASYNC_CLEAN_PROP), METADATA_ASYNC_CLEAN_PROP,
+          String.valueOf(DEFAULT_METADATA_ASYNC_CLEAN));
+      setDefaultOnCondition(props, !props.containsKey(METADATA_COMPACT_NUM_DELTA_COMMITS_PROP),
+          METADATA_COMPACT_NUM_DELTA_COMMITS_PROP, String.valueOf(DEFAULT_METADATA_COMPACT_NUM_DELTA_COMMITS));
+      setDefaultOnCondition(props, !props.containsKey(CLEANER_COMMITS_RETAINED_PROP), CLEANER_COMMITS_RETAINED_PROP,
           String.valueOf(DEFAULT_CLEANER_COMMITS_RETAINED));
-      setDefaultOnCondition(props, !props.containsKey(MAX_COMMITS_TO_KEEP), MAX_COMMITS_TO_KEEP,
+      setDefaultOnCondition(props, !props.containsKey(MAX_COMMITS_TO_KEEP_PROP), MAX_COMMITS_TO_KEEP_PROP,
           String.valueOf(DEFAULT_MAX_COMMITS_TO_KEEP));
-      setDefaultOnCondition(props, !props.containsKey(MIN_COMMITS_TO_KEEP), MIN_COMMITS_TO_KEEP,
+      setDefaultOnCondition(props, !props.containsKey(MIN_COMMITS_TO_KEEP_PROP), MIN_COMMITS_TO_KEEP_PROP,
           String.valueOf(DEFAULT_MIN_COMMITS_TO_KEEP));
 
       return config;

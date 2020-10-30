@@ -634,7 +634,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
 
   public HoodieMetadataWriter metadata() {
     if (metadataWriter == null) {
-      metadataWriter = HoodieMetadataWriter.instance(hadoopConfiguration.get(), config);
+      metadataWriter = HoodieMetadataWriter.create(hadoopConfiguration.get(), config);
     }
 
     return metadataWriter;

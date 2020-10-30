@@ -28,14 +28,14 @@ import java.nio.ByteBuffer;
 import java.util.EnumSet;
 
 /**
- * Wrapper over <code>FSDataInputStream</code> to keep track of the size of the written bytes.
+ * Wrapper over <code>FSDataInputStream</code> that also times the operations.
  */
-public class SizeAwareFSDataInputStream extends FSDataInputStream {
+public class TimedFSDataInputStream extends FSDataInputStream {
 
   // Path
   private final Path path;
 
-  public SizeAwareFSDataInputStream(Path path, FSDataInputStream in) throws IOException {
+  public TimedFSDataInputStream(Path path, FSDataInputStream in) {
     super(in);
     this.path = path;
   }
@@ -43,26 +43,20 @@ public class SizeAwareFSDataInputStream extends FSDataInputStream {
   @Override
   public int read(ByteBuffer buf) throws IOException {
     return HoodieWrapperFileSystem.executeFuncWithTimeAndByteMetrics(HoodieWrapperFileSystem.MetricName.read.name(),
-        path, 0, () -> {
-            return super.read(buf);
-      });
+        path, 0, () -> super.read(buf));
   }
 
   @Override
   public int read(long position, byte[] buffer, int offset, int length) throws IOException {
     return HoodieWrapperFileSystem.executeFuncWithTimeAndByteMetrics(HoodieWrapperFileSystem.MetricName.read.name(),
-        path, length, () -> {
-            return super.read(position, buffer, offset, length);
-      });
+        path, length, () -> super.read(position, buffer, offset, length));
   }
 
   @Override
   public ByteBuffer read(ByteBufferPool bufferPool, int maxLength, EnumSet<ReadOption> opts)
           throws IOException, UnsupportedOperationException {
     return HoodieWrapperFileSystem.executeFuncWithTimeAndByteMetrics(HoodieWrapperFileSystem.MetricName.read.name(),
-        path, maxLength, () -> {
-          return super.read(bufferPool, maxLength, opts);
-      });
+        path, maxLength, () -> super.read(bufferPool, maxLength, opts));
   }
 
   @Override

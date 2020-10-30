@@ -763,35 +763,35 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
    * File listing metadata configs.
    */
   public boolean useFileListingMetadata() {
-    return Boolean.parseBoolean(props.getProperty(HoodieMetadataConfig.METADATA_ENABLE));
+    return Boolean.parseBoolean(props.getProperty(HoodieMetadataConfig.METADATA_ENABLE_PROP));
   }
 
   public boolean getFileListingMetadataVerify() {
-    return Boolean.parseBoolean(props.getProperty(HoodieMetadataConfig.METADATA_VALIDATE));
+    return Boolean.parseBoolean(props.getProperty(HoodieMetadataConfig.METADATA_VALIDATE_PROP));
   }
 
   public int getMetadataInsertParallelism() {
-    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.INSERT_PARALLELISM));
+    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.METADATA_INSERT_PARALLELISM_PROP));
   }
 
   public int getMetadataCompactDeltaCommitMax() {
-    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS));
+    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.METADATA_COMPACT_NUM_DELTA_COMMITS_PROP));
   }
 
   public boolean isMetadataAsyncClean() {
-    return Boolean.parseBoolean(props.getProperty(HoodieMetadataConfig.ASYNC_CLEAN));
+    return Boolean.parseBoolean(props.getProperty(HoodieMetadataConfig.METADATA_ASYNC_CLEAN_PROP));
   }
 
   public int getMetadataMaxCommitsToKeep() {
-    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.MAX_COMMITS_TO_KEEP));
+    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.MAX_COMMITS_TO_KEEP_PROP));
   }
 
   public int getMetadataMinCommitsToKeep() {
-    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.MIN_COMMITS_TO_KEEP));
+    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.MIN_COMMITS_TO_KEEP_PROP));
   }
 
   public int getMetadataCleanerCommitsRetained() {
-    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED));
+    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED_PROP));
   }
 
   public static class Builder {

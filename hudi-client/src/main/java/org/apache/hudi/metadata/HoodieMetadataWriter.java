@@ -99,7 +99,7 @@ public class HoodieMetadataWriter extends HoodieMetadataReader implements Serial
   private String tableName;
   private static Map<String, HoodieMetadataWriter> instances = new HashMap<>();
 
-  public static HoodieMetadataWriter instance(Configuration conf, HoodieWriteConfig writeConfig) {
+  public static HoodieMetadataWriter create(Configuration conf, HoodieWriteConfig writeConfig) {
     String key = writeConfig.getBasePath();
     if (instances.containsKey(key)) {
       if (instances.get(key).enabled() != writeConfig.useFileListingMetadata()) {
@@ -314,7 +314,6 @@ public class HoodieMetadataWriter extends HoodieMetadataReader implements Serial
       }
     }
     String createInstantTime = latestInstant.isPresent() ? latestInstant.get().getTimestamp() : SOLO_COMMIT_TIMESTAMP;
-
     LOG.info("Creating a new metadata table in " + metadataBasePath + " at instant " + createInstantTime);
     metaClient = HoodieTableMetaClient.initTableType(hadoopConf.get(), metadataBasePath.toString(),
         HoodieTableType.MERGE_ON_READ, tableName, "archived", HoodieMetadataPayload.class.getName(),

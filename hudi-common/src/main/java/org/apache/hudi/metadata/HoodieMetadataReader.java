@@ -52,6 +52,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -133,9 +134,6 @@ public class HoodieMetadataReader implements Serializable {
 
   /**
    * Create a the Metadata Table in read-only mode.
-   *
-   * @param hadoopConf {@code Configuration}
-   * @param basePath The basePath for the dataset
    */
   public HoodieMetadataReader(Configuration conf, String datasetBasePath, String spillableMapDirectory,
                               boolean enabled, boolean validateLookups) {
@@ -144,9 +142,6 @@ public class HoodieMetadataReader implements Serializable {
 
   /**
    * Create a the Metadata Table in read-only mode.
-   *
-   * @param hadoopConf {@code Configuration}
-   * @param basePath The basePath for the dataset
    */
   public HoodieMetadataReader(Configuration conf, String datasetBasePath, String spillableMapDirectory,
                               boolean enabled, boolean validateLookups, boolean enableMetrics) {
@@ -230,9 +225,9 @@ public class HoodieMetadataReader implements Serializable {
    * Returns a list of all partitions.
    */
   protected List<String> getAllPartitionPaths() throws IOException {
-    long t1 = System.currentTimeMillis();
+    HoodieTimer timer = new HoodieTimer().startTimer();
     Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getMergedRecordByKey(RECORDKEY_PARTITION_LIST);
-    updateMetrics(LOOKUP_PARTITIONS_STR, System.currentTimeMillis() - t1);
+    updateMetrics(LOOKUP_PARTITIONS_STR, timer.endTimer());
 
     List<String> partitions = Collections.emptyList();
     if (hoodieRecord.isPresent()) {
@@ -251,9 +246,9 @@ public class HoodieMetadataReader implements Serializable {
 
     if (validateLookups) {
       // Validate the Metadata Table data by listing the partitions from the file system
-      t1 = System.currentTimeMillis();
+      timer.startTimer();
       List<String> actualPartitions  = getAllPartitionPathsByListing(metaClient.getFs(), datasetBasePath, false);
-      updateMetrics(VALIDATE_PARTITIONS_STR, System.currentTimeMillis() - t1);
+      updateMetrics(VALIDATE_PARTITIONS_STR, timer.endTimer());
 
       Collections.sort(actualPartitions);
       Collections.sort(partitions);
@@ -284,9 +279,9 @@ public class HoodieMetadataReader implements Serializable {
       partitionName = NON_PARTITIONED_NAME;
     }
 
-    long t1 = System.currentTimeMillis();
+    HoodieTimer timer = new HoodieTimer().startTimer();
     Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getMergedRecordByKey(partitionName);
-    updateMetrics(LOOKUP_FILES_STR, System.currentTimeMillis() - t1);
+    updateMetrics(LOOKUP_FILES_STR, timer.endTimer());
 
     FileStatus[] statuses = {};
     if (hoodieRecord.isPresent()) {
@@ -299,20 +294,21 @@ public class HoodieMetadataReader implements Serializable {
 
     if (validateLookups) {
       // Validate the Metadata Table data by listing the partitions from the file system
-      t1 = System.currentTimeMillis();
+      timer.startTimer();
 
       // Ignore partition metadata file
       FileStatus[] directStatuses = metaClient.getFs().listStatus(partitionPath,
           p -> !p.getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
-      updateMetrics(VALIDATE_FILES_STR, System.currentTimeMillis() - t1);
+      updateMetrics(VALIDATE_FILES_STR, timer.endTimer());
 
       List<String> directFilenames = Arrays.stream(directStatuses)
-          .map(s -> s.getPath().getName()).collect(Collectors.toList());
-      List<String> metadataFilenames = Arrays.stream(statuses)
-          .map(s -> s.getPath().getName()).collect(Collectors.toList());
+          .map(s -> s.getPath().getName()).sorted()
+          .collect(Collectors.toList());
 
-      Collections.sort(metadataFilenames);
-      Collections.sort(directFilenames);
+      List<String> metadataFilenames = Arrays.stream(statuses)
+          .map(s -> s.getPath().getName()).sorted()
+          .collect(Collectors.toList());
+
       if (!metadataFilenames.equals(directFilenames)) {
         LOG.error("Validation of metadata file listing for partition " + partitionName + " failed.");
         LOG.error("File list from metadata: " + Arrays.toString(metadataFilenames.toArray()));
@@ -350,12 +346,12 @@ public class HoodieMetadataReader implements Serializable {
     // Retrieve record from base file
     HoodieRecord<HoodieMetadataPayload> hoodieRecord = null;
     if (basefileReader != null) {
-      long t1 = System.currentTimeMillis();
+      HoodieTimer timer = new HoodieTimer().startTimer();
       Option<GenericRecord> baseRecord = basefileReader.getRecordByKey(key);
       if (baseRecord.isPresent()) {
         hoodieRecord = SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) baseRecord.get(),
             metaClient.getTableConfig().getPayloadClass());
-        updateMetrics(BASEFILE_READ_STR, System.currentTimeMillis() - t1);
+        updateMetrics(BASEFILE_READ_STR, timer.endTimer());
       }
     }
 
