@@ -72,6 +72,7 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
     this.timelineServer = timelineServer;
     shouldStopTimelineServer = !timelineServer.isPresent();
     startEmbeddedServerView();
+    initWrapperFSMetrics();
   }
 
   /**
@@ -123,7 +124,7 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
     return config;
   }
 
-  protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
+  private void initWrapperFSMetrics() {
     if (config.isMetricsOn()) {
       Registry registry;
       Registry registryMeta;
@@ -143,7 +144,9 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
 
       HoodieWrapperFileSystem.setMetricsRegistry(registry, registryMeta);
     }
+  }
 
+  protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
     return ClientUtils.createMetaClient(hadoopConf, config, loadActiveTimelineOnLoad);
   }
 }

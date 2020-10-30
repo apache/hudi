@@ -30,7 +30,8 @@ import org.apache.hudi.common.util.ReflectionUtils;
  * Interface which defines a lightweight Metrics Registry to track Hudi events.
  */
 public interface Registry extends Serializable {
-  static ConcurrentHashMap<String, Registry> REGISTRYMAP = new ConcurrentHashMap<>();
+
+  ConcurrentHashMap<String, Registry> REGISTRY_MAP = new ConcurrentHashMap<>();
 
   /**
    * Get (or create) the registry for a provided name.
@@ -39,7 +40,7 @@ public interface Registry extends Serializable {
    *
    * @param registryName Name of the registry
    */
-  public static Registry getRegistry(String registryName) {
+  static Registry getRegistry(String registryName) {
     return getRegistry(registryName, LocalRegistry.class.getName());
   }
 
@@ -49,13 +50,13 @@ public interface Registry extends Serializable {
    * @param registryName Name of the registry.
    * @param clazz The fully qualified name of the registry class to create.
    */
-  public static Registry getRegistry(String registryName, String clazz) {
+  static Registry getRegistry(String registryName, String clazz) {
     synchronized (Registry.class) {
-      if (!REGISTRYMAP.containsKey(registryName)) {
+      if (!REGISTRY_MAP.containsKey(registryName)) {
         Registry registry = (Registry)ReflectionUtils.loadClass(clazz, registryName);
-        REGISTRYMAP.put(registryName, registry);
+        REGISTRY_MAP.put(registryName, registry);
       }
-      return REGISTRYMAP.get(registryName);
+      return REGISTRY_MAP.get(registryName);
     }
   }
 
@@ -66,10 +67,10 @@ public interface Registry extends Serializable {
    * @param prefixWithRegistryName prefix each metric name with the registry name.
    * @return
    */
-  public static Map<String, Long> getAllMetrics(boolean flush, boolean prefixWithRegistryName) {
+  static Map<String, Long> getAllMetrics(boolean flush, boolean prefixWithRegistryName) {
     synchronized (Registry.class) {
       HashMap<String, Long> allMetrics = new HashMap<>();
-      REGISTRYMAP.forEach((registryName, registry) -> {
+      REGISTRY_MAP.forEach((registryName, registry) -> {
         allMetrics.putAll(registry.getAllCounts(prefixWithRegistryName));
         if (flush) {
           registry.clear();
@@ -82,14 +83,14 @@ public interface Registry extends Serializable {
   /**
    * Clear all metrics.
    */
-  public void clear();
+  void clear();
 
   /**
    * Increment the metric.
    *
    * @param name Name of the metric to increment.
    */
-  public void increment(String name);
+  void increment(String name);
 
   /**
    * Add value to the metric.
@@ -97,12 +98,12 @@ public interface Registry extends Serializable {
    * @param name Name of the metric.
    * @param value The value to add to the metrics.
    */
-  public void add(String name, long value);
+  void add(String name, long value);
 
   /**
    * Get all Counter type metrics.
    */
-  public default Map<String, Long> getAllCounts() {
+  default Map<String, Long> getAllCounts() {
     return getAllCounts(false);
   }
 
@@ -111,5 +112,5 @@ public interface Registry extends Serializable {
    *
    * @param prefixWithRegistryName If true, the names of all metrics are prefixed with name of this registry.
    */
-  public abstract Map<String, Long> getAllCounts(boolean prefixWithRegistryName);
+  Map<String, Long> getAllCounts(boolean prefixWithRegistryName);
 }

@@ -23,11 +23,11 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Lightweight Metrics Registry to track Hudi events.
+ * Registry that tracks metrics local to a single jvm process.
  */
 public class LocalRegistry implements Registry {
   ConcurrentHashMap<String, Counter> counters = new ConcurrentHashMap<>();
-  private String name;
+  private final String name;
 
   public LocalRegistry(String name) {
     this.name = name;

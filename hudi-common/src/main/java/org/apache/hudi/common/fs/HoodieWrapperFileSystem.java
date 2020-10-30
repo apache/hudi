@@ -20,6 +20,7 @@ package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -70,12 +71,19 @@ public class HoodieWrapperFileSystem extends FileSystem {
     create, rename, delete, listStatus, mkdirs, getFileStatus, globStatus, listFiles, read, write
   }
 
+  private static Registry METRICS_REGISTRY_DATA;
+  private static Registry METRICS_REGISTRY_META;
+
+  public static void setMetricsRegistry(Registry registry, Registry registryMeta) {
+    METRICS_REGISTRY_DATA = registry;
+    METRICS_REGISTRY_META = registryMeta;
+  }
+
+
   private ConcurrentMap<String, SizeAwareFSDataOutputStream> openStreams = new ConcurrentHashMap<>();
   private FileSystem fileSystem;
   private URI uri;
   private ConsistencyGuard consistencyGuard = new NoOpConsistencyGuard();
-  private static Registry metricsRegistry;
-  private static Registry metricsRegistryMetaFolder;
 
   @FunctionalInterface
   public interface CheckedFunction<R> {
@@ -84,17 +92,17 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   private static Registry getMetricRegistryForPath(Path p) {
     return ((p != null) && (p.toString().contains(HoodieTableMetaClient.METAFOLDER_NAME)))
-        ? metricsRegistryMetaFolder : metricsRegistry;
+        ? METRICS_REGISTRY_META : METRICS_REGISTRY_DATA;
   }
 
   protected static <R> R executeFuncWithTimeMetrics(String metricName, Path p, CheckedFunction<R> func) throws IOException {
-    long t1 = System.currentTimeMillis();
+    HoodieTimer timer = new HoodieTimer().startTimer();
     R res = func.get();
 
     Registry registry = getMetricRegistryForPath(p);
     if (registry != null) {
       registry.increment(metricName);
-      registry.add(metricName + ".totalDuration", System.currentTimeMillis() - t1);
+      registry.add(metricName + ".totalDuration", timer.endTimer());
     }
 
     return res;
@@ -108,11 +116,6 @@ public class HoodieWrapperFileSystem extends FileSystem {
     }
 
     return executeFuncWithTimeMetrics(metricName, p, func);
-  }
-
-  public static void setMetricsRegistry(Registry registry, Registry registryMeta) {
-    metricsRegistry = registry;
-    metricsRegistryMetaFolder = registryMeta;
   }
 
   public HoodieWrapperFileSystem() {}
@@ -206,12 +209,10 @@ public class HoodieWrapperFileSystem extends FileSystem {
   }
 
   private FSDataInputStream wrapInputStream(final Path path, FSDataInputStream fsDataInputStream) throws IOException {
-    if (fsDataInputStream instanceof SizeAwareFSDataInputStream) {
+    if (fsDataInputStream instanceof TimedFSDataInputStream) {
       return fsDataInputStream;
     }
-
-    SizeAwareFSDataInputStream os = new SizeAwareFSDataInputStream(path, fsDataInputStream);
-    return os;
+    return new TimedFSDataInputStream(path, fsDataInputStream);
   }
 
   @Override

@@ -30,7 +30,6 @@ import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Random;
 import java.util.stream.Collectors;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -54,6 +53,7 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -73,6 +73,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class TestHoodieMetadata extends HoodieClientTestHarness {
   private static final Logger LOG = LogManager.getLogger(TestHoodieMetadata.class);
@@ -473,13 +474,12 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
    * Instants on Metadata Table should be archived as per config.
    * Metadata Table should be automatically compacted as per config.
    */
-  @Test
-  public void testArchivingAndCompaction() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans =  {true, false})
+  public void testArchivingAndCompaction(boolean asyncClean) throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
 
     final int maxDeltaCommitsBeforeCompaction = 6;
-    // Test autoClean and asyncClean based on this flag which is randomly chosen.
-    boolean asyncClean = new Random().nextBoolean();
     HoodieWriteConfig config = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
             .archiveCommitsWith(2, 4).retainCommits(1)
@@ -645,7 +645,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       return;
     }
 
-    long t1 = System.currentTimeMillis();
+    HoodieTimer timer = new HoodieTimer().startTimer();
 
     // Validate write config for metadata table
     HoodieWriteConfig metadataWriteConfig = metadata.getWriteConfig();
@@ -751,11 +751,11 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
           + numFileVersions + " but was " + fsView.getAllFileSlices(partition).count());
     });
 
-    LOG.info("Validation time=" + (System.currentTimeMillis() - t1));
+    LOG.info("Validation time=" + timer.endTimer());
   }
 
   private HoodieMetadataWriter metadata(HoodieWriteClient client) {
-    return HoodieMetadataWriter.instance(hadoopConf, client.getConfig());
+    return HoodieMetadataWriter.create(hadoopConf, client.getConfig());
   }
 
   // TODO: this can be moved to TestHarness after merge from master

@@ -124,7 +124,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     this.rollbackPending = rollbackPending;
 
     // Initialize Metadata Table
-    HoodieMetadataWriter.instance(hadoopConf, writeConfig).initialize(jsc);
+    HoodieMetadataWriter.create(hadoopConf, writeConfig).initialize(jsc);
   }
 
   /**

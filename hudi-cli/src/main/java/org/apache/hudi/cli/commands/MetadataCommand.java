@@ -23,6 +23,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieMetadataConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieMetadataReader;
@@ -71,13 +72,11 @@ public class MetadataCommand implements CommandMarker {
       HoodieCLI.fs.mkdirs(metadataPath);
     }
 
-    long t1 = System.currentTimeMillis();
+    HoodieTimer timer = new HoodieTimer().startTimer();
     HoodieWriteConfig writeConfig = getWriteConfig();
     initJavaSparkContext();
-    HoodieMetadataWriter.instance(HoodieCLI.conf, writeConfig).initialize(jsc);
-    long t2 = System.currentTimeMillis();
-
-    return String.format("Created Metadata Table in %s (duration=%.2fsec)", metadataPath, (t2 - t1) / 1000.0);
+    HoodieMetadataWriter.create(HoodieCLI.conf, writeConfig).initialize(jsc);
+    return String.format("Created Metadata Table in %s (duration=%.2f secs)", metadataPath, timer.endTimer() / 1000.0);
   }
 
   @CliCommand(value = "metadata delete", help = "Remove the Metadata Table")
@@ -115,7 +114,7 @@ public class MetadataCommand implements CommandMarker {
     } else {
       HoodieWriteConfig writeConfig = getWriteConfig();
       initJavaSparkContext();
-      HoodieMetadataWriter.instance(HoodieCLI.conf, writeConfig).initialize(jsc);
+      HoodieMetadataWriter.create(HoodieCLI.conf, writeConfig).initialize(jsc);
     }
     long t2 = System.currentTimeMillis();
 
