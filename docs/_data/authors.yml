@@ -35,3 +35,11 @@ pratyakshsharma:
 wangxianghu:
     name: Xianghu Wang
     web: https://cwiki.apache.org/confluence/display/~mathieu
+
+aws:
+    name: Amazon Web Services
+    web: https://aws.amazon.com/
+
+nclouds:
+    name: nClouds
+    web: https://www.nclouds.com/
