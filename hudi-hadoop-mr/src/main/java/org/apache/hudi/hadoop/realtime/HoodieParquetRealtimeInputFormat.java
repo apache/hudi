@@ -87,7 +87,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
     // actual heavy lifting of reading the parquet files happen.
     if (jobConf.get(HoodieInputFormatUtils.HOODIE_READ_COLUMNS_PROP) == null) {
       synchronized (jobConf) {
-        LOG.info(
+        System.out.println(
             "Before adding Hoodie columns, Projections :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
                 + ", Ids :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
         if (jobConf.get(HoodieInputFormatUtils.HOODIE_READ_COLUMNS_PROP) == null) {
@@ -107,7 +107,6 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
         }
       }
     }
-
   }
 
   @Override
@@ -117,12 +116,11 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
     ValidationUtils.checkArgument(split instanceof RealtimeSplit,
         "HoodieRealtimeRecordReader can only work on RealtimeSplit and not with " + split);
     RealtimeSplit realtimeSplit = (RealtimeSplit) split;
-    LOG.info("1111Creating record reader with readCols :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
+    System.out.println("1111Creating record reader with readCols :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
         + ", Ids :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
     addProjectionToJobConf(realtimeSplit, jobConf);
-    LOG.info("Creating record reader with readCols :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
+    System.out.println("Creating record reader with readCols :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
         + ", Ids :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
-
     return new HoodieRealtimeRecordReader(realtimeSplit, jobConf,
         super.getRecordReader(split, jobConf, reporter));
   }

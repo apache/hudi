@@ -56,7 +56,9 @@ println("33333333333")
 spark.sql("select count(*) from stock_ticks_derived_mor_ro").show(20, false)
 println("4444444444444")
 spark.sql("select count(*) from stock_ticks_derived_mor_rt").show(20, false)
-println("55555555555")
+println("555555555553333333")
+spark.sql("select * from stock_ticks_derived_mor_rt").show(20, false)
+println("55555555555222222")
 val hoodieIncQueryBsDF =  spark.read.format("org.apache.hudi").
                       option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
                       option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, "00000000000001").

@@ -58,9 +58,9 @@ public abstract class AbstractRealtimeRecordReader {
   public AbstractRealtimeRecordReader(RealtimeSplit split, JobConf job) {
     this.split = split;
     this.jobConf = job;
-    LOG.info("cfg ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
-    LOG.info("columnIds ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
-    LOG.info("partitioningColumns ==> " + job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, ""));
+    System.out.println("cfg ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
+    System.out.println("columnIds ==> " + job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
+    System.out.println("partitioningColumns ==> " + job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, ""));
     try {
       this.usesCustomPayload = usesCustomPayload();
       LOG.info("usesCustomPayload ==> " + this.usesCustomPayload);
@@ -85,10 +85,10 @@ public abstract class AbstractRealtimeRecordReader {
     Schema schemaFromLogFile = LogReaderUtils.readLatestSchemaFromLogFiles(split.getBasePath(), split.getDeltaLogPaths(), jobConf);
     if (schemaFromLogFile == null) {
       writerSchema = InputSplitUtils.getBaseFileSchema((FileSplit)split, jobConf);
-      LOG.info("Writer Schema From Parquet => " + writerSchema.getFields());
+      System.out.println("Writer Schema From Parquet => " + writerSchema.getFields());
     } else {
       writerSchema = schemaFromLogFile;
-      LOG.info("Writer Schema From Log => " + writerSchema.toString(true));
+      System.out.println("Writer Schema From Log => " + writerSchema.toString(true));
     }
     // Add partitioning fields to writer schema for resulting row to contain null values for these fields
     String partitionFields = jobConf.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
