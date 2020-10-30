@@ -17,11 +17,11 @@
 
 package org.apache.hudi.keygen.parser;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.keygen.TimestampBasedKeyGenerator.Config;
-import org.apache.hudi.keygen.TimestampBasedKeyGenerator.TimestampType;
+import org.apache.hudi.keygen.CommonTimestampBasedKeyGenerator.TimestampType;
+import org.apache.hudi.keygen.CommonTimestampBasedKeyGenerator.Config;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
@@ -42,7 +42,7 @@ public class HoodieDateTimeParserImpl extends AbstractHoodieDateTimeParser {
 
   public HoodieDateTimeParserImpl(TypedProperties config) {
     super(config);
-    DataSourceUtils.checkRequiredProperties(config, Arrays.asList(Config.TIMESTAMP_TYPE_FIELD_PROP, Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP));
+    KeyGenUtils.checkRequiredProperties(config, Arrays.asList(Config.TIMESTAMP_TYPE_FIELD_PROP, Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP));
     this.inputDateTimeZone = getInputDateTimeZone();
   }
 
@@ -79,7 +79,7 @@ public class HoodieDateTimeParserImpl extends AbstractHoodieDateTimeParser {
   public Option<DateTimeFormatter> getInputFormatter() {
     TimestampType timestampType = TimestampType.valueOf(config.getString(Config.TIMESTAMP_TYPE_FIELD_PROP));
     if (timestampType == TimestampType.DATE_STRING || timestampType == TimestampType.MIXED) {
-      DataSourceUtils.checkRequiredProperties(config,
+      KeyGenUtils.checkRequiredProperties(config,
           Collections.singletonList(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP));
       this.configInputDateFormatList = config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "");
       return Option.of(getInputDateFormatter());

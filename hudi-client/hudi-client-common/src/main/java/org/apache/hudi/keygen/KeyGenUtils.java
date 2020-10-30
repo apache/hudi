@@ -18,14 +18,20 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieKeyException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.keygen.parser.AbstractHoodieDateTimeParser;
+
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieKeyException;
 
 public class KeyGenUtils {
 
@@ -110,5 +116,24 @@ public class KeyGenUtils {
       partitionPath = partitionPathField + "=" + partitionPath;
     }
     return partitionPath;
+  }
+
+  /**
+   * Create a date time parser class for TimestampBasedKeyGenerator, passing in any configs needed.
+   */
+  public static AbstractHoodieDateTimeParser createDateTimeParser(TypedProperties props, String parserClass) throws IOException  {
+    try {
+      return (AbstractHoodieDateTimeParser) ReflectionUtils.loadClass(parserClass, props);
+    } catch (Throwable e) {
+      throw new IOException("Could not load date time parser class " + parserClass, e);
+    }
+  }
+
+  public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
+    checkPropNames.forEach(prop -> {
+      if (!props.containsKey(prop)) {
+        throw new HoodieNotSupportedException("Required property " + prop + " is missing");
+      }
+    });
   }
 }

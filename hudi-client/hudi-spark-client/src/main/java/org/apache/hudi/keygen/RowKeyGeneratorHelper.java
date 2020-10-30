@@ -19,10 +19,10 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.exception.HoodieKeyException;
-
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
+import scala.Option;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -32,8 +32,6 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-
-import scala.Option;
 
 import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH_SEPARATOR;

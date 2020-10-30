@@ -18,11 +18,11 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.config.TypedProperties;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Assertions;
@@ -33,48 +33,48 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   private TypedProperties getCommonProps(boolean getComplexRecordKey) {
     TypedProperties properties = new TypedProperties();
     if (getComplexRecordKey) {
-      properties.put(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key, pii_col");
+      properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_row_key, pii_col");
     } else {
-      properties.put(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key");
+      properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_row_key");
     }
-    properties.put(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY(), "true");
+    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY, "true");
     return properties;
   }
 
   private TypedProperties getPropertiesForSimpleKeyGen() {
     TypedProperties properties = getCommonProps(false);
-    properties.put(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "timestamp:simple");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp:simple");
     return properties;
   }
 
   private TypedProperties getImproperPartitionFieldFormatProp() {
     TypedProperties properties = getCommonProps(false);
-    properties.put(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "timestamp");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp");
     return properties;
   }
 
   private TypedProperties getInvalidPartitionKeyTypeProps() {
     TypedProperties properties = getCommonProps(false);
-    properties.put(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "timestamp:dummy");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp:dummy");
     return properties;
   }
 
   private TypedProperties getComplexRecordKeyWithSimplePartitionProps() {
     TypedProperties properties = getCommonProps(true);
-    properties.put(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "timestamp:simple");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp:simple");
     return properties;
   }
 
   private TypedProperties getComplexRecordKeyAndPartitionPathProps() {
     TypedProperties properties = getCommonProps(true);
-    properties.put(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "timestamp:simple,ts_ms:timestamp");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp:simple,ts_ms:timestamp");
     populateNecessaryPropsForTimestampBasedKeyGen(properties);
     return properties;
   }
 
   private TypedProperties getPropsWithoutRecordKeyFieldProps() {
     TypedProperties properties = new TypedProperties();
-    properties.put(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "timestamp:simple");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp:simple");
     return properties;
   }
 
@@ -86,20 +86,20 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
   private TypedProperties getPropertiesForTimestampBasedKeyGen() {
     TypedProperties properties = getCommonProps(false);
-    properties.put(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "ts_ms:timestamp");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "ts_ms:timestamp");
     populateNecessaryPropsForTimestampBasedKeyGen(properties);
     return properties;
   }
 
   private TypedProperties getPropertiesForNonPartitionedKeyGen() {
     TypedProperties properties = getCommonProps(false);
-    properties.put(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "");
     return properties;
   }
 
   @Test
   public void testSimpleKeyGenerator() {
-    KeyGenerator keyGenerator = new CustomKeyGenerator(getPropertiesForSimpleKeyGen());
+    BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getPropertiesForSimpleKeyGen());
     GenericRecord record = getRecord();
     HoodieKey key = keyGenerator.getKey(record);
     Assertions.assertEquals(key.getRecordKey(), "key1");
@@ -111,7 +111,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
   @Test
   public void testTimestampBasedKeyGenerator() {
-    KeyGenerator keyGenerator = new CustomKeyGenerator(getPropertiesForTimestampBasedKeyGen());
+    BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getPropertiesForTimestampBasedKeyGen());
     GenericRecord record = getRecord();
     HoodieKey key = keyGenerator.getKey(record);
     Assertions.assertEquals(key.getRecordKey(), "key1");
@@ -123,7 +123,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
   @Test
   public void testNonPartitionedKeyGenerator() {
-    KeyGenerator keyGenerator = new CustomKeyGenerator(getPropertiesForNonPartitionedKeyGen());
+    BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getPropertiesForNonPartitionedKeyGen());
     GenericRecord record = getRecord();
     HoodieKey key = keyGenerator.getKey(record);
     Assertions.assertEquals(key.getRecordKey(), "key1");
@@ -136,28 +136,28 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   @Test
   public void testInvalidPartitionKeyType() {
     try {
-      KeyGenerator keyGenerator = new CustomKeyGenerator(getInvalidPartitionKeyTypeProps());
+      BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getInvalidPartitionKeyTypeProps());
       keyGenerator.getKey(getRecord());
       Assertions.fail("should fail when invalid PartitionKeyType is provided!");
     } catch (Exception e) {
-      Assertions.assertTrue(e.getMessage().contains("No enum constant org.apache.hudi.keygen.CustomKeyGenerator.PartitionKeyType.DUMMY"));
+      Assertions.assertTrue(e.getMessage().contains("No enum constant org.apache.hudi.keygen.CommonCustomKeyGenerator.PartitionKeyType.DUMMY"));
     }
 
     try {
-      KeyGenerator keyGenerator = new CustomKeyGenerator(getInvalidPartitionKeyTypeProps());
+      BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getInvalidPartitionKeyTypeProps());
       GenericRecord record = getRecord();
       Row row = KeyGeneratorTestUtilities.getRow(record);
       keyGenerator.getPartitionPath(row);
       Assertions.fail("should fail when invalid PartitionKeyType is provided!");
     } catch (Exception e) {
-      Assertions.assertTrue(e.getMessage().contains("No enum constant org.apache.hudi.keygen.CustomKeyGenerator.PartitionKeyType.DUMMY"));
+      Assertions.assertTrue(e.getMessage().contains("No enum constant org.apache.hudi.keygen.CommonCustomKeyGenerator.PartitionKeyType.DUMMY"));
     }
   }
 
   @Test
   public void testNoRecordKeyFieldProp() {
     try {
-      KeyGenerator keyGenerator = new CustomKeyGenerator(getPropsWithoutRecordKeyFieldProps());
+      BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getPropsWithoutRecordKeyFieldProps());
       keyGenerator.getKey(getRecord());
       Assertions.fail("should fail when record key field is not provided!");
     } catch (Exception e) {
@@ -165,7 +165,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
     }
 
     try {
-      KeyGenerator keyGenerator = new CustomKeyGenerator(getPropsWithoutRecordKeyFieldProps());
+      BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getPropsWithoutRecordKeyFieldProps());
       GenericRecord record = getRecord();
       Row row = KeyGeneratorTestUtilities.getRow(record);
       keyGenerator.getRecordKey(row);
@@ -178,7 +178,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   @Test
   public void testPartitionFieldsInImproperFormat() {
     try {
-      KeyGenerator keyGenerator = new CustomKeyGenerator(getImproperPartitionFieldFormatProp());
+      BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getImproperPartitionFieldFormatProp());
       keyGenerator.getKey(getRecord());
       Assertions.fail("should fail when partition key field is provided in improper format!");
     } catch (Exception e) {
@@ -186,7 +186,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
     }
 
     try {
-      KeyGenerator keyGenerator = new CustomKeyGenerator(getImproperPartitionFieldFormatProp());
+      BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getImproperPartitionFieldFormatProp());
       GenericRecord record = getRecord();
       Row row = KeyGeneratorTestUtilities.getRow(record);
       keyGenerator.getPartitionPath(row);
@@ -198,7 +198,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
   @Test
   public void testComplexRecordKeyWithSimplePartitionPath() {
-    KeyGenerator keyGenerator = new CustomKeyGenerator(getComplexRecordKeyWithSimplePartitionProps());
+    BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getComplexRecordKeyWithSimplePartitionProps());
     GenericRecord record = getRecord();
     HoodieKey key = keyGenerator.getKey(record);
     Assertions.assertEquals(key.getRecordKey(), "_row_key:key1,pii_col:pi");
@@ -211,7 +211,7 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
   @Test
   public void testComplexRecordKeysWithComplexPartitionPath() {
-    KeyGenerator keyGenerator = new CustomKeyGenerator(getComplexRecordKeyAndPartitionPathProps());
+    BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getComplexRecordKeyAndPartitionPathProps());
     GenericRecord record = getRecord();
     HoodieKey key = keyGenerator.getKey(record);
     Assertions.assertEquals(key.getRecordKey(), "_row_key:key1,pii_col:pi");

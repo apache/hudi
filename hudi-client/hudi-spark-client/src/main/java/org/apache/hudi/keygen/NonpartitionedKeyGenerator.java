@@ -18,52 +18,36 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.common.config.TypedProperties;
-
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.spark.sql.Row;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 /**
- * Key generator for deletes using global indices. Global index deletes do not require partition value so this key generator
- * avoids using partition value for generating HoodieKey.
+ * Simple Key generator for unpartitioned Hive Tables.
  */
-public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
-
-  private static final String EMPTY_PARTITION = "";
-
-  public GlobalDeleteKeyGenerator(TypedProperties config) {
+public class NonpartitionedKeyGenerator extends SimpleKeyGenerator {
+  private CommonNonpartitionedKeyGenerator commonNonpartitionedKeyGenerator;
+  public NonpartitionedKeyGenerator(TypedProperties config) {
     super(config);
-    this.recordKeyFields = Arrays.asList(config.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()).split(","));
-  }
-
-  @Override
-  public String getRecordKey(GenericRecord record) {
-    return KeyGenUtils.getRecordKey(record, getRecordKeyFields());
+    commonNonpartitionedKeyGenerator = new CommonNonpartitionedKeyGenerator(config);
   }
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    return EMPTY_PARTITION;
+    return commonNonpartitionedKeyGenerator.getPartitionPath(record);
   }
 
   @Override
   public List<String> getPartitionPathFields() {
-    return new ArrayList<>();
-  }
-
-  @Override
-  public String getRecordKey(Row row) {
-    buildFieldPositionMapIfNeeded(row.schema());
-    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeyPositions, true);
+    return commonNonpartitionedKeyGenerator.getPartitionPathFields();
   }
 
   @Override
   public String getPartitionPath(Row row) {
-    return EMPTY_PARTITION;
+    return commonNonpartitionedKeyGenerator.getEmptyPartition();
   }
+
 }
+
