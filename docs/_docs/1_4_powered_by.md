@@ -127,6 +127,8 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
 
 ## Articles
 
+You can check out [our blog pages](https://hudi.apache.org/blog.html) for content written by our committers/contributors.
+
 1. ["The Case for incremental processing on Hadoop"](https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop) - O'reilly Ideas article by Vinoth Chandar
 2. ["Hoodie: Uber Engineering's Incremental Processing Framework on Hadoop"](https://eng.uber.com/hoodie/) - Engineering Blog By Prasanna Rajaperumal
 3. ["New – Insert, Update, Delete Data on S3 with Amazon EMR and Apache Hudi"](https://aws.amazon.com/blogs/aws/new-insert-update-delete-data-on-s3-with-amazon-emr-and-apache-hudi/) - AWS Blog by Danilo Poccia
@@ -136,6 +138,9 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
 7. ["Hudi On Hops"](https://www.diva-portal.org/smash/get/diva2:1413103/FULLTEXT01.pdf) - By NETSANET GEBRETSADKAN KIDANE
 8. ["PrestoDB and Apache Hudi](https://prestodb.io/blog/2020/08/04/prestodb-and-hudi) - PrestoDB - Hudi integration blog by Bhavani Sudha Saktheeswaran and Brandon Scheller 
 9. ["Origins of Data Lake at Grofers"](https://lambda.grofers.com/origins-of-data-lake-at-grofers-6c011f94b86c) - by Akshay Agarwal
+10. ["Data Lake Change Capture using Apache Hudi & Amazon AMS/EMR"](https://towardsdatascience.com/data-lake-change-data-capture-cdc-using-apache-hudi-on-amazon-emr-part-2-process-65e4662d7b4b) - Towards DataScience article, Oct 20
+11. ["How nClouds Helps Accelerate Data Delivery with Apache Hudi on Amazon EMR"](https://aws.amazon.com/blogs/apn/how-nclouds-helps-accelerate-data-delivery-with-apache-hudi-on-amazon-emr/) - published by nClouds in partnership with AWS 
+12. ["Apply record level changes from relational databases to Amazon S3 data lake using Apache Hudi on Amazon EMR and AWS Database Migration Service"](https://aws.amazon.com/blogs/big-data/apply-record-level-changes-from-relational-databases-to-amazon-s3-data-lake-using-apache-hudi-on-amazon-emr-and-aws-database-migration-service/) - AWS blog 
 
 ## Powered by
 
