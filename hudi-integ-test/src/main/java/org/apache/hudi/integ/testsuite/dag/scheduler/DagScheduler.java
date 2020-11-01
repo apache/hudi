@@ -24,6 +24,7 @@ import org.apache.hudi.integ.testsuite.dag.WorkflowDag;
 import org.apache.hudi.integ.testsuite.dag.WriterContext;
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 import org.apache.hudi.metrics.Metrics;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,9 +39,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config.CONFIG_NAME;
+
 /**
- * The Dag scheduler schedules the workflow DAGs. It will convert DAG to node set and execute the nodes according to
- * the relations between nodes.
+ * The Dag scheduler schedules the workflow DAGs. It will convert DAG to node set and execute the nodes according to the relations between nodes.
  */
 public class DagScheduler {
 
@@ -75,7 +77,7 @@ public class DagScheduler {
    * Method to start executing the nodes in workflow DAGs.
    *
    * @param service ExecutorService
-   * @param nodes   Nodes to be executed
+   * @param nodes Nodes to be executed
    * @throws Exception will be thrown if ant error occurred
    */
   private void execute(ExecutorService service, List<DagNode> nodes) throws Exception {
@@ -87,6 +89,7 @@ public class DagScheduler {
       Set<DagNode> childNodes = new HashSet<>();
       while (queue.size() > 0) {
         DagNode nodeToExecute = queue.poll();
+        log.info("Node to execute in dag scheduler " + nodeToExecute.getConfig().toString());
         futures.add(service.submit(() -> executeNode(nodeToExecute)));
         if (nodeToExecute.getChildNodes().size() > 0) {
           childNodes.addAll(nodeToExecute.getChildNodes());
@@ -116,7 +119,7 @@ public class DagScheduler {
     try {
       int repeatCount = node.getConfig().getRepeatCount();
       while (repeatCount > 0) {
-        log.warn("executing node: " + node.getName() + " of type: " + node.getClass());
+        log.warn("executing node: \"" + node.getConfig().getOtherConfigs().get(CONFIG_NAME) + "\" of type: " + node.getClass() + " :: " + node.getConfig().toString());
         node.execute(executionContext);
         log.info("Finished executing {}", node.getName());
         repeatCount--;
