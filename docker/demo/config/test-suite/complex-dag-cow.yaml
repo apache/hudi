@@ -59,15 +59,13 @@ first_hive_sync:
   deps: first_upsert
 first_hive_query:
   config:
-    hive_props:
-      prop2: "set spark.yarn.queue="
-      prop3: "set hive.strict.checks.large.query=false"
-      prop4: "set hive.stats.autogather=false"
+    queue_name: "adhoc"
+    engine: "mr"
     hive_queries:
       query1: "select count(*) from testdb.table1 group by `_row_key` having count(*) > 1"
       result1: 0
       query2: "select count(*) from testdb.table1"
-      result2: 11600
+      result2: 11300
   type: HiveQueryNode
   deps: first_hive_sync
 second_upsert:
@@ -82,14 +80,55 @@ second_upsert:
   deps: first_hive_query
 second_hive_query:
   config:
-    hive_props:
-      prop2: "set mapred.job.queue.name="
-      prop3: "set hive.strict.checks.large.query=false"
-      prop4: "set hive.stats.autogather=false"
+    queue_name: "adhoc"
+    engine: "mr"
     hive_queries:
       query1: "select count(*) from testdb.table1 group by `_row_key` having count(*) > 1"
       result1: 0
       query2: "select count(*) from testdb.table1"
-      result2: 11900
+      result2: 11600
   type: HiveQueryNode
   deps: second_upsert
+fourth_insert:
+  config:
+    record_size: 70000
+    num_insert_partitions: 1
+    repeat_count: 1
+    num_records_insert: 1000
+  deps: second_hive_query
+  type: InsertNode
+third_hive_query:
+  config:
+    queue_name: "adhoc"
+    engine: "mr"
+    hive_queries:
+      query1: "select count(*) from testdb.table1 group by `_row_key` having count(*) > 1"
+      result1: 0
+      query2: "select count(*) from testdb.table1"
+      result2: 12600
+  type: HiveQueryNode
+  deps: fourth_insert
+first_delete:
+  config:
+    record_size: 70000
+    num_partitions_delete: 1
+    num_records_delete: 200
+  deps: third_hive_query
+  type: DeleteNode
+fourth_hive_sync:
+  config:
+    queue_name: "adhoc"
+    engine: "mr"
+  type: HiveSyncNode
+  deps: first_delete
+fourth_hive_query:
+  config:
+    queue_name: "adhoc"
+    engine: "mr"
+    hive_queries:
+      query1: "select count(*) from testdb.table1 group by `_row_key` having count(*) > 1"
+      result1: 0
+      query2: "select count(*) from testdb.table1"
+      result2: 12400
+  type: HiveQueryNode
+  deps: fourth_hive_sync

@@ -18,35 +18,25 @@
 
 package org.apache.hudi.integ.testsuite.generator;
 
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 /**
- * A lazy update payload generator to generate {@link GenericRecord}s lazily.
+ * Lazy delete record generator.
  */
-public class UpdateGeneratorIterator implements Iterator<GenericRecord> {
-
-  private static Logger LOG = LoggerFactory.getLogger(UpdateGeneratorIterator.class);
+public class DeleteGeneratorIterator implements Iterator<GenericRecord> {
 
   // Use the full payload generator as default
   private GenericRecordFullPayloadGenerator generator;
-  private Set<String> blackListedFields;
   // iterator
   private Iterator<GenericRecord> itr;
 
-  public UpdateGeneratorIterator(Iterator<GenericRecord> itr, String schemaStr, List<String> partitionPathFieldNames,
-      List<String> recordKeyFieldNames, int minPayloadSize) {
+  public DeleteGeneratorIterator(Iterator<GenericRecord> itr, String schemaStr, int minPayloadSize) {
     this.itr = itr;
-    this.blackListedFields = new HashSet<>();
-    this.blackListedFields.addAll(partitionPathFieldNames);
-    this.blackListedFields.addAll(recordKeyFieldNames);
     Schema schema = new Schema.Parser().parse(schemaStr);
     this.generator = new GenericRecordFullPayloadGenerator(schema, minPayloadSize);
   }
@@ -59,7 +49,6 @@ public class UpdateGeneratorIterator implements Iterator<GenericRecord> {
   @Override
   public GenericRecord next() {
     GenericRecord newRecord = itr.next();
-    return this.generator.randomize(newRecord, this.blackListedFields);
+    return this.generator.generateDeleteRecord(newRecord);
   }
-
 }

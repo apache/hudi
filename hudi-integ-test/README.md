@@ -178,41 +178,6 @@ Copy the integration tests jar into the docker container
 docker cp packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.6.1-SNAPSHOT.jar adhoc-2:/opt
 ```
 
-Copy the following test properties file:
-```
-echo '
-hoodie.insert.shuffle.parallelism=100
-hoodie.upsert.shuffle.parallelism=100
-hoodie.bulkinsert.shuffle.parallelism=100
-
-hoodie.deltastreamer.source.test.num_partitions=100
-hoodie.deltastreamer.source.test.datagen.use_rocksdb_for_storing_existing_keys=false
-hoodie.deltastreamer.source.test.max_unique_records=100000000
-hoodie.embed.timeline.server=false
-hoodie.deltastreamer.source.input.selector=org.apache.hudi.integ.testsuite.helpers.DFSTestSuitePathSelector
-
-hoodie.datasource.write.recordkey.field=_row_key
-hoodie.datasource.write.keygenerator.class=org.apache.hudi.keygen.TimestampBasedKeyGenerator
-hoodie.datasource.write.partitionpath.field=timestamp
-
-hoodie.deltastreamer.source.dfs.root=/user/hive/warehouse/hudi-integ-test-suite/input
-hoodie.deltastreamer.schemaprovider.target.schema.file=file:/var/hoodie/ws/docker/demo/config/test-suite/source.avsc
-hoodie.deltastreamer.schemaprovider.source.schema.file=file:/var/hoodie/ws/docker/demo/config/test-suite/source.avsc
-hoodie.deltastreamer.keygen.timebased.timestamp.type=UNIX_TIMESTAMP
-hoodie.deltastreamer.keygen.timebased.output.dateformat=yyyy/MM/dd
-
-hoodie.datasource.hive_sync.jdbcurl=jdbc:hive2://hiveserver:10000/
-hoodie.datasource.hive_sync.database=testdb
-hoodie.datasource.hive_sync.table=table1
-hoodie.datasource.hive_sync.assume_date_partitioning=false
-hoodie.datasource.hive_sync.partition_fields=_hoodie_partition_path
-hoodie.datasource.hive_sync.partition_extractor_class=org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor 
-hoodie.datasource.hive_sync.skip_ro_suffix=true
-' > test.properties
-
-docker cp test.properties adhoc-2:/opt
-```
-
 ```
 docker exec -it adhoc-2 /bin/bash
 ```
@@ -254,7 +219,7 @@ spark-submit \
 --target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \
 --input-base-path /user/hive/warehouse/hudi-integ-test-suite/input \
 --target-table table1 \
---props test.properties \
+--props file:/var/hoodie/ws/docker/demo/config/test-suite/test.properties \
 --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
 --source-class org.apache.hudi.utilities.sources.AvroDFSSource \
 --input-file-size 125829120 \
@@ -293,7 +258,7 @@ spark-submit \
 --target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \
 --input-base-path /user/hive/warehouse/hudi-integ-test-suite/input \
 --target-table table1 \
---props test.properties \
+--props file:/var/hoodie/ws/docker/demo/config/test-suite/test.properties \
 --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
 --source-class org.apache.hudi.utilities.sources.AvroDFSSource \
 --input-file-size 125829120 \
