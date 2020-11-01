@@ -35,7 +35,7 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Contains utility methods for calculating the memory usage of objects. It only works on the HotSpot JVM, and infers
+ * Contains utility methods for calculating the memory usage of objects. It only works on the HotSpot and OpenJ9 JVMs, and infers
  * the actual memory layout (32 bit vs. 64 bit word size, compressed object pointers vs. uncompressed) from best
  * available indicators. It can reliably detect a 32 bit vs. 64 bit JVM. It can only make an educated guess at whether
  * compressed OOPs are used, though; specifically, it knows what the JVM's default choice of OOP compression would be
@@ -328,8 +328,8 @@ public class ObjectSizeCalculator {
   static MemoryLayoutSpecification getEffectiveMemoryLayoutSpecification() {
     final String vmName = System.getProperty("java.vm.name");
     if (vmName == null || !(vmName.startsWith("Java HotSpot(TM) ") || vmName.startsWith("OpenJDK")
-        || vmName.startsWith("TwitterJDK"))) {
-      throw new UnsupportedOperationException("ObjectSizeCalculator only supported on HotSpot VM");
+        || vmName.startsWith("TwitterJDK") || vmName.startsWith("Eclipse OpenJ9"))) {
+      throw new UnsupportedOperationException("ObjectSizeCalculator only supported on HotSpot or Eclipse OpenJ9 VMs");
     }
 
     final String dataModel = System.getProperty("sun.arch.data.model");
@@ -367,15 +367,14 @@ public class ObjectSizeCalculator {
     }
 
     final String strVmVersion = System.getProperty("java.vm.version");
-    final int vmVersion = Integer.parseInt(strVmVersion.substring(0, strVmVersion.indexOf('.')));
-    if (vmVersion >= 17) {
+    // Support for OpenJ9 VM
+    if (strVmVersion.startsWith("openj9")) {
       long maxMemory = 0;
       for (MemoryPoolMXBean mp : ManagementFactory.getMemoryPoolMXBeans()) {
         maxMemory += mp.getUsage().getMax();
       }
-      if (maxMemory < 30L * 1024 * 1024 * 1024) {
-        // HotSpot 17.0 and above use compressed OOPs below 30GB of RAM total
-        // for all memory pools (yes, including code cache).
+      if (maxMemory < 57L * 1024 * 1024 * 1024) {
+        // OpenJ9 use compressed references below 57GB of RAM total
         return new MemoryLayoutSpecification() {
           @Override
           public int getArrayHeaderSize() {
@@ -384,7 +383,7 @@ public class ObjectSizeCalculator {
 
           @Override
           public int getObjectHeaderSize() {
-            return 12;
+            return 16;
           }
 
           @Override
@@ -402,6 +401,72 @@ public class ObjectSizeCalculator {
             return 4;
           }
         };
+      } else {
+        // it's a 64-bit uncompressed OOPs object model
+        return new MemoryLayoutSpecification() {
+          @Override
+          public int getArrayHeaderSize() {
+            return 16;
+          }
+
+          @Override
+          public int getObjectHeaderSize() {
+            return 16;
+          }
+
+          @Override
+          public int getObjectPadding() {
+            return 8;
+          }
+
+          @Override
+          public int getReferenceSize() {
+            return 8;
+          }
+
+          @Override
+          public int getSuperclassFieldPadding() {
+            return 8;
+          }
+        };
+      }
+    } else {
+      final int vmVersion = Integer.parseInt(strVmVersion.substring(0, strVmVersion.indexOf('.')));
+      if (vmVersion >= 17) {
+        long maxMemory = 0;
+        for (MemoryPoolMXBean mp : ManagementFactory.getMemoryPoolMXBeans()) {
+          maxMemory += mp.getUsage().getMax();
+        }
+        if (maxMemory < 30L * 1024 * 1024 * 1024) {
+          // HotSpot 17.0 and above use compressed OOPs below 30GB of RAM total
+          // for all memory pools (yes, including code cache).
+          return new MemoryLayoutSpecification() {
+            @Override
+            public int getArrayHeaderSize() {
+              return 16;
+            }
+
+            @Override
+            public int getObjectHeaderSize() {
+              return 12;
+            }
+
+            @Override
+            public int getObjectPadding() {
+              return 8;
+            }
+
+            @Override
+            public int getReferenceSize() {
+              return 4;
+            }
+
+            @Override
+            public int getSuperclassFieldPadding() {
+              return 4;
+            }
+          };
+        }
       }
     }
 
