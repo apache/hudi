@@ -367,7 +367,7 @@ public class ObjectSizeCalculator {
     }
 
     final String strVmVersion = System.getProperty("java.vm.version");
-    // Support for OpenJ9 VM
+    // Support for OpenJ9 JVM
     if (strVmVersion.startsWith("openj9")) {
       long maxMemory = 0;
       for (MemoryPoolMXBean mp : ManagementFactory.getMemoryPoolMXBeans()) {
@@ -402,7 +402,7 @@ public class ObjectSizeCalculator {
           }
         };
       } else {
-        // it's a 64-bit uncompressed OOPs object model
+        // it's a 64-bit uncompressed references object model
         return new MemoryLayoutSpecification() {
           @Override
           public int getArrayHeaderSize() {
@@ -431,6 +431,7 @@ public class ObjectSizeCalculator {
         };
       }
     } else {
+      // Support for HotSpot JVM
       final int vmVersion = Integer.parseInt(strVmVersion.substring(0, strVmVersion.indexOf('.')));
       if (vmVersion >= 17) {
         long maxMemory = 0;
