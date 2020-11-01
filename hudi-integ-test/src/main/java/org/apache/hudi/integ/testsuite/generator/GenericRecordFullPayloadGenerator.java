@@ -18,11 +18,21 @@
 
 package org.apache.hudi.integ.testsuite.generator;
 
+import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.avro.Schema;
+import org.apache.avro.Schema.Type;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericData.Fixed;
+import org.apache.avro.generic.GenericFixed;
+import org.apache.avro.generic.GenericRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,24 +41,15 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.avro.Schema;
-import org.apache.avro.Schema.Type;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericData.Fixed;
-import org.apache.avro.generic.GenericFixed;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.common.util.collection.Pair;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /**
- * This is a GenericRecord payload generator that generates full generic records {@link GenericRecord}.
- * Every field of a generic record created using this generator contains a random value.
+ * This is a GenericRecord payload generator that generates full generic records {@link GenericRecord}. Every field of a generic record created using this generator contains a random value.
  */
 public class GenericRecordFullPayloadGenerator implements Serializable {
+
   private static Logger LOG = LoggerFactory.getLogger(GenericRecordFullPayloadGenerator.class);
 
   public static final int DEFAULT_PAYLOAD_SIZE = 1024 * 10; // 10 KB
+  public static final String DEFAULT_HOODIE_IS_DELETED_COL = "_hoodie_is_deleted";
   protected final Random random = new Random();
   // The source schema used to generate a payload
   private final transient Schema baseSchema;
@@ -81,12 +82,12 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
     this.baseSchema = schema;
     if (estimatedFullPayloadSize < minPayloadSize) {
       int numberOfComplexFields = sizeInfo.getRight();
-        if (numberOfComplexFields < 1) {
-          LOG.warn("The schema does not have any collections/complex fields. "
-              + "Cannot achieve minPayloadSize => " + minPayloadSize);
-        }
+      if (numberOfComplexFields < 1) {
+        LOG.warn("The schema does not have any collections/complex fields. "
+            + "Cannot achieve minPayloadSize => " + minPayloadSize);
+      }
 
-        determineExtraEntriesRequired(numberOfComplexFields, minPayloadSize - estimatedFullPayloadSize);
+      determineExtraEntriesRequired(numberOfComplexFields, minPayloadSize - estimatedFullPayloadSize);
     }
   }
 
@@ -122,8 +123,7 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
   /**
    * Create a new {@link GenericRecord} with random value according to given schema.
    *
-   * Long fields which are specified within partitionPathFieldNames are constrained to the value of the partition
-   * for which records are being generated.
+   * Long fields which are specified within partitionPathFieldNames are constrained to the value of the partition for which records are being generated.
    *
    * @return {@link GenericRecord} with random value
    */
@@ -137,7 +137,7 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
       if (isPartialLongField(f, partitionPathFieldNames)) {
         // This is a long field used as partition field. Set it to seconds since epoch.
         long value = TimeUnit.SECONDS.convert(partitionIndex, TimeUnit.DAYS);
-        result.put(f.name(), (long)value);
+        result.put(f.name(), (long) value);
       } else {
         result.put(f.name(), typeConvert(f));
       }
@@ -147,7 +147,6 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
 
   /**
    * Return true if this is a partition field of type long which should be set to the partition index.
-   * @return
    */
   private boolean isPartialLongField(Schema.Field field, Set<String> partitionPathFieldNames) {
     if ((partitionPathFieldNames == null) || !partitionPathFieldNames.contains(field.name())) {
@@ -165,7 +164,7 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
   /**
    * Update a given {@link GenericRecord} with random value. The fields in {@code blacklistFields} will not be updated.
    *
-   * @param record          GenericRecord to update
+   * @param record GenericRecord to update
    * @param blacklistFields Fields whose value should not be touched
    * @return The updated {@link GenericRecord}
    */
@@ -174,8 +173,7 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
   }
 
   /**
-   * Create a new {@link GenericRecord} with random values. Not all the fields have value, it is random, and its value
-   * is random too.
+   * Create a new {@link GenericRecord} with random values. Not all the fields have value, it is random, and its value is random too.
    *
    * @param schema Schema to create with.
    * @return A {@link GenericRecord} with random value.
@@ -183,11 +181,15 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
   protected GenericRecord convertPartial(Schema schema) {
     GenericRecord result = new GenericData.Record(schema);
     for (Schema.Field f : schema.getFields()) {
-      boolean setNull = random.nextBoolean();
-      if (!setNull) {
-        result.put(f.name(), typeConvert(f));
+      if (f.name().equals(DEFAULT_HOODIE_IS_DELETED_COL)) {
+        result.put(f.name(), false);
       } else {
-        result.put(f.name(), null);
+        boolean setNull = random.nextBoolean();
+        if (!setNull) {
+          result.put(f.name(), typeConvert(f));
+        } else {
+          result.put(f.name(), null);
+        }
       }
     }
     // TODO : pack remaining bytes into a complex field
@@ -195,19 +197,31 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
   }
 
   /**
-   * Set random value to {@link GenericRecord} according to the schema type of field.
-   * The field in blacklist will not be set.
+   * Set random value to {@link GenericRecord} according to the schema type of field. The field in blacklist will not be set.
    *
-   * @param record          GenericRecord to randomize.
+   * @param record GenericRecord to randomize.
    * @param blacklistFields blacklistFields where the filed will not be randomized.
    * @return Randomized GenericRecord.
    */
   protected GenericRecord randomize(GenericRecord record, Set<String> blacklistFields) {
     for (Schema.Field f : record.getSchema().getFields()) {
-      if (blacklistFields == null || !blacklistFields.contains(f.name())) {
+      if (f.name().equals(DEFAULT_HOODIE_IS_DELETED_COL)) {
+        record.put(f.name(), false);
+      } else if (blacklistFields == null || !blacklistFields.contains(f.name())) {
         record.put(f.name(), typeConvert(f));
       }
     }
+    return record;
+  }
+
+  /**
+   * Set _hoodie_is_deleted column value to true.
+   *
+   * @param record GenericRecord to delete.
+   * @return GenericRecord representing deleted record.
+   */
+  protected GenericRecord generateDeleteRecord(GenericRecord record) {
+    record.put(DEFAULT_HOODIE_IS_DELETED_COL, true);
     return record;
   }
 
@@ -219,6 +233,10 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
     if (isOption(fieldSchema)) {
       fieldSchema = getNonNull(fieldSchema);
     }
+    if (fieldSchema.getName().equals(DEFAULT_HOODIE_IS_DELETED_COL)) {
+      return false;
+    }
+
     switch (fieldSchema.getType()) {
       case BOOLEAN:
         return random.nextBoolean();
@@ -231,7 +249,7 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
       case LONG:
         return random.nextLong();
       case STRING:
-       return UUID.randomUUID().toString();
+        return UUID.randomUUID().toString();
       case ENUM:
         List<String> enumSymbols = fieldSchema.getEnumSymbols();
         return new GenericData.EnumSymbol(fieldSchema, enumSymbols.get(random.nextInt(enumSymbols.size() - 1)));
@@ -293,14 +311,7 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
   }
 
   /**
-   * Check whether a schema is option.
-   * return true if it match the follows:
-   * 1. Its type is Type.UNION
-   * 2. Has two types
-   * 3. Has a NULL type.
-   *
-   * @param schema
-   * @return
+   * Check whether a schema is option. return true if it match the follows: 1. Its type is Type.UNION 2. Has two types 3. Has a NULL type.
    */
   protected boolean isOption(Schema schema) {
     return schema.getType().equals(Schema.Type.UNION)
@@ -346,7 +357,6 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
   /**
    * Method help to calculate the number of entries to add.
    *
-   * @param elementSchema
    * @return Number of entries to add
    */
   private void determineExtraEntriesRequired(int numberOfComplexFields, int numberOfBytesToAdd) {
