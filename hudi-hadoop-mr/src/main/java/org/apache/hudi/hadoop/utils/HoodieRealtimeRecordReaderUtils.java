@@ -252,12 +252,12 @@ public class HoodieRealtimeRecordReaderUtils {
 
     System.out.println("fieldNameCsv = " + fieldNameCsv + ",fieldOrderCsv = "
         + fieldOrderCsv + ",partitioningFields = " + partitioningFields.toString());
-    String[] fieldOrdersWithDups = fieldOrderCsv.split(",");
+    String[] fieldOrdersWithDups = fieldOrderCsv.isEmpty() ? new String[0] : fieldOrderCsv.split(",");
     Set<String> fieldOrdersSet = new LinkedHashSet<>(Arrays.asList(fieldOrdersWithDups));
     String[] fieldOrders = fieldOrdersSet.toArray(new String[0]);
     System.out.println("fieldOrdersWithDups = " + fieldOrdersWithDups.toString() + ",fieldOrdersSet = "
         + fieldOrdersSet.toString() + ",fieldOrders=" + fieldOrders.toString());
-    List<String> fieldNames = Arrays.stream(fieldNameCsv.split(","))
+    List<String> fieldNames = fieldNameCsv.isEmpty() ? new ArrayList<>() : Arrays.stream(fieldNameCsv.split(","))
         .filter(fn -> !partitioningFields.contains(fn)).collect(Collectors.toList());
     Set<String> fieldNamesSet = new LinkedHashSet<>(fieldNames);
     // Hive does not provide ids for partitioning fields, so check for lengths excluding that.
