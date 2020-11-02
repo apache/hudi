@@ -1,13 +1,12 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,19 +17,16 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.parser.AbstractHoodieDateTimeParser;
 import org.apache.hudi.keygen.parser.HoodieDateTimeParserImpl;
-
-import org.apache.avro.generic.GenericRecord;
-import org.apache.spark.sql.Row;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;
@@ -46,15 +42,11 @@ import java.util.concurrent.TimeUnit;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH;
-import static org.apache.hudi.keygen.KeyGenUtils.EMPTY_RECORDKEY_PLACEHOLDER;
-import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
 
 /**
- * Key generator, that relies on timestamps for partitioning field. Still picks record key by name.
+ * Avro Key generator, that relies on timestamps for partitioning field. Still picks record key by name.
  */
-public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
-
+public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
   public enum TimestampType implements Serializable {
     UNIX_TIMESTAMP, DATE_STRING, MIXED, EPOCHMILLISECONDS, SCALAR
   }
@@ -96,19 +88,19 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
     static final String DATE_TIME_PARSER_PROP = "hoodie.deltastreamer.keygen.datetime.parser.class";
   }
 
-  public TimestampBasedKeyGenerator(TypedProperties config) throws IOException {
-    this(config, config.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()),
-        config.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()));
+  public TimestampBasedAvroKeyGenerator(TypedProperties config) throws IOException {
+    this(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY),
+        config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY));
   }
 
-  TimestampBasedKeyGenerator(TypedProperties config, String partitionPathField) throws IOException {
+  TimestampBasedAvroKeyGenerator(TypedProperties config, String partitionPathField) throws IOException {
     this(config, null, partitionPathField);
   }
 
-  TimestampBasedKeyGenerator(TypedProperties config, String recordKeyField, String partitionPathField) throws IOException {
+  TimestampBasedAvroKeyGenerator(TypedProperties config, String recordKeyField, String partitionPathField) throws IOException {
     super(config, recordKeyField, partitionPathField);
     String dateTimeParserClass = config.getString(Config.DATE_TIME_PARSER_PROP, HoodieDateTimeParserImpl.class.getName());
-    this.parser = DataSourceUtils.createDateTimeParser(config, dateTimeParserClass);
+    this.parser = KeyGenUtils.createDateTimeParser(config, dateTimeParserClass);
     this.inputDateTimeZone = parser.getInputDateTimeZone();
     this.outputDateTimeZone = parser.getOutputDateTimeZone();
     this.outputDateFormat = parser.getOutputDateFormat();
@@ -128,8 +120,8 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
       default:
         timeUnit = null;
     }
-    this.encodePartitionPath = config.getBoolean(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY(),
-        Boolean.parseBoolean(DataSourceWriteOptions.DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL()));
+    this.encodePartitionPath = config.getBoolean(KeyGeneratorOptions.URL_ENCODE_PARTITIONING_OPT_KEY,
+        Boolean.parseBoolean(KeyGeneratorOptions.DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL));
   }
 
   @Override
@@ -141,14 +133,14 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
     try {
       return getPartitionPath(partitionVal);
     } catch (Exception e) {
-      throw new HoodieDeltaStreamerException("Unable to parse input partition field :" + partitionVal, e);
+      throw new HoodieKeyGeneratorException("Unable to parse input partition field :" + partitionVal, e);
     }
   }
 
   /**
    * Set default value to partitionVal if the input value of partitionPathField is null.
    */
-  private Object getDefaultPartitionVal() {
+  public Object getDefaultPartitionVal() {
     Object result = 1L;
     if (timestampType == TimestampType.DATE_STRING || timestampType == TimestampType.MIXED) {
       // since partitionVal is null, we can set a default value of any format as TIMESTAMP_INPUT_DATE_FORMAT_PROP
@@ -191,7 +183,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
    * @param partitionVal partition path object value fetched from record/row
    * @return the parsed partition path based on data type
    */
-  private String getPartitionPath(Object partitionVal) {
+  public String getPartitionPath(Object partitionVal) {
     initIfNeeded();
     long timeMs;
     if (partitionVal instanceof Double) {
@@ -202,7 +194,7 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
       timeMs = convertLongTimeToMillis((Long) partitionVal);
     } else if (partitionVal instanceof CharSequence) {
       if (!inputFormatter.isPresent()) {
-        throw new HoodieException("Missing inputformatter. Ensure " +  Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP + " config is set when timestampType is DATE_STRING or MIXED!");
+        throw new HoodieException("Missing inputformatter. Ensure " + Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP + " config is set when timestampType is DATE_STRING or MIXED!");
       }
       DateTime parsedDateTime = inputFormatter.get().parseDateTime(partitionVal.toString());
       if (this.outputDateTimeZone == null) {
@@ -235,27 +227,4 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
     return MILLISECONDS.convert(partitionVal, timeUnit);
   }
 
-  @Override
-  public String getRecordKey(Row row) {
-    buildFieldPositionMapIfNeeded(row.schema());
-    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeyPositions, false);
-  }
-
-  @Override
-  public String getPartitionPath(Row row) {
-    Object fieldVal = null;
-    buildFieldPositionMapIfNeeded(row.schema());
-    Object partitionPathFieldVal =  RowKeyGeneratorHelper.getNestedFieldVal(row, partitionPathPositions.get(getPartitionPathFields().get(0)));
-    try {
-      if (partitionPathFieldVal == null || partitionPathFieldVal.toString().contains(DEFAULT_PARTITION_PATH) || partitionPathFieldVal.toString().contains(NULL_RECORDKEY_PLACEHOLDER)
-          || partitionPathFieldVal.toString().contains(EMPTY_RECORDKEY_PLACEHOLDER)) {
-        fieldVal = getDefaultPartitionVal();
-      } else {
-        fieldVal = partitionPathFieldVal;
-      }
-      return getPartitionPath(fieldVal);
-    } catch (Exception e) {
-      throw new HoodieDeltaStreamerException("Unable to parse input partition field :" + fieldVal, e);
-    }
-  }
 }

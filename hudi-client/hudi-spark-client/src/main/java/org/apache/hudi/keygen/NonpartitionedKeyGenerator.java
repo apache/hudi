@@ -18,52 +18,38 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.common.config.TypedProperties;
-
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.spark.sql.Row;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 /**
- * Key generator for deletes using global indices. Global index deletes do not require partition value so this key generator
- * avoids using partition value for generating HoodieKey.
+ * Simple Key generator for unpartitioned Hive Tables.
  */
-public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
+public class NonpartitionedKeyGenerator extends SimpleKeyGenerator {
 
-  private static final String EMPTY_PARTITION = "";
+  private final NonpartitionedAvroKeyGenerator nonpartitionedAvroKeyGenerator;
 
-  public GlobalDeleteKeyGenerator(TypedProperties config) {
+  public NonpartitionedKeyGenerator(TypedProperties config) {
     super(config);
-    this.recordKeyFields = Arrays.asList(config.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()).split(","));
-  }
-
-  @Override
-  public String getRecordKey(GenericRecord record) {
-    return KeyGenUtils.getRecordKey(record, getRecordKeyFields());
+    nonpartitionedAvroKeyGenerator = new NonpartitionedAvroKeyGenerator(config);
   }
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    return EMPTY_PARTITION;
+    return nonpartitionedAvroKeyGenerator.getPartitionPath(record);
   }
 
   @Override
   public List<String> getPartitionPathFields() {
-    return new ArrayList<>();
-  }
-
-  @Override
-  public String getRecordKey(Row row) {
-    buildFieldPositionMapIfNeeded(row.schema());
-    return RowKeyGeneratorHelper.getRecordKeyFromRow(row, getRecordKeyFields(), recordKeyPositions, true);
+    return nonpartitionedAvroKeyGenerator.getPartitionPathFields();
   }
 
   @Override
   public String getPartitionPath(Row row) {
-    return EMPTY_PARTITION;
+    return nonpartitionedAvroKeyGenerator.getEmptyPartition();
   }
+
 }
+

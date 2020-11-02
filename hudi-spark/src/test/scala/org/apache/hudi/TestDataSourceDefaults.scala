@@ -17,8 +17,6 @@
 
 package org.apache.hudi
 
-import java.util
-
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
@@ -236,13 +234,28 @@ class TestDataSourceDefaults {
     assertEquals("name1", keyGen.getPartitionPath(baseRow))
   }
 
-  class UserDefinedKeyGenerator(props: TypedProperties) extends KeyGenerator(props) {
+  class UserDefinedKeyGenerator(props: TypedProperties) extends KeyGenerator(props) with SparkKeyGeneratorInterface {
     val recordKeyProp: String = props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY)
     val partitionPathProp: String = props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY)
+    val STRUCT_NAME: String = "hoodieRowTopLevelField"
+    val NAMESPACE: String = "hoodieRow"
+    var converterFn: Function1[Any, Any] = _
 
     override def getKey(record: GenericRecord): HoodieKey = {
       new HoodieKey(HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyProp, true),
         HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathProp, true))
+    }
+
+    override def getRecordKey(row: Row): String = {
+      if (null == converterFn) converterFn = AvroConversionHelper.createConverterToAvro(row.schema, STRUCT_NAME, NAMESPACE)
+      val genericRecord = converterFn.apply(row).asInstanceOf[GenericRecord]
+      getKey(genericRecord).getRecordKey
+    }
+
+    override def getPartitionPath(row: Row): String = {
+      if (null == converterFn) converterFn = AvroConversionHelper.createConverterToAvro(row.schema, STRUCT_NAME, NAMESPACE)
+      val genericRecord = converterFn.apply(row).asInstanceOf[GenericRecord]
+      getKey(genericRecord).getPartitionPath
     }
   }
 

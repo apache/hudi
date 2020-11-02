@@ -19,7 +19,7 @@ package org.apache.hudi.keygen.parser;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
+import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.Config;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormatter;
 
@@ -36,7 +36,7 @@ public abstract class AbstractHoodieDateTimeParser implements Serializable {
   }
 
   private String initInputDateFormatDelimiter() {
-    String inputDateFormatDelimiter = config.getString(TimestampBasedKeyGenerator.Config.TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX_PROP, ",").trim();
+    String inputDateFormatDelimiter = config.getString(Config.TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX_PROP, ",").trim();
     inputDateFormatDelimiter = inputDateFormatDelimiter.isEmpty() ? "," : inputDateFormatDelimiter;
     return inputDateFormatDelimiter;
   }
@@ -45,7 +45,7 @@ public abstract class AbstractHoodieDateTimeParser implements Serializable {
    * Returns the output date format in which the partition paths will be created for the hudi dataset.
    */
   public String getOutputDateFormat() {
-    return config.getString(TimestampBasedKeyGenerator.Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP);
+    return config.getString(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP);
   }
 
   /**
