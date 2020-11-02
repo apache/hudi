@@ -199,6 +199,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     commitOnAutoCommit(result);
   }
 
+  @Override
   protected String getCommitActionType() {
     return  table.getMetaClient().getCommitActionType();
   }
@@ -273,14 +274,6 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     }
     // these are updates
     HoodieMergeHandle upsertHandle = getUpdateHandle(partitionPath, fileId, recordItr);
-    return handleUpdateInternal(upsertHandle, fileId);
-  }
-
-  public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
-                                                  Map<String, HoodieRecord<T>> keyToNewRecords,
-                                                  HoodieBaseFile oldDataFile) throws IOException {
-    // these are updates
-    HoodieMergeHandle upsertHandle = getUpdateHandle(partitionPath, fileId, keyToNewRecords, oldDataFile);
     return handleUpdateInternal(upsertHandle, fileId);
   }
 

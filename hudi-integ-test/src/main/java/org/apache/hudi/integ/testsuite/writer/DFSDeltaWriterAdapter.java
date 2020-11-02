@@ -18,15 +18,15 @@
 
 package org.apache.hudi.integ.testsuite.writer;
 
+import org.apache.avro.generic.GenericRecord;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import org.apache.avro.generic.GenericRecord;
 
 /**
- * {@link org.apache.hadoop.hdfs.DistributedFileSystem} (or {@link org.apache.hadoop.fs.LocalFileSystem}) based delta
- * generator.
+ * {@link org.apache.hadoop.hdfs.DistributedFileSystem} (or {@link org.apache.hadoop.fs.LocalFileSystem}) based delta generator.
  */
 public class DFSDeltaWriterAdapter implements DeltaWriterAdapter<GenericRecord> {
 
@@ -40,10 +40,12 @@ public class DFSDeltaWriterAdapter implements DeltaWriterAdapter<GenericRecord> 
   @Override
   public List<DeltaWriteStats> write(Iterator<GenericRecord> input) throws IOException {
     while (input.hasNext()) {
+      GenericRecord next = input.next();
       if (this.deltaInputGenerator.canWrite()) {
-        this.deltaInputGenerator.writeData(input.next());
+        this.deltaInputGenerator.writeData(next);
       } else if (input.hasNext()) {
         rollOver();
+        this.deltaInputGenerator.writeData(next);
       }
     }
     close();

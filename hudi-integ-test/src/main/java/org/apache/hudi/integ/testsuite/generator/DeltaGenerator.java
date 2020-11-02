@@ -28,9 +28,19 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.integ.testsuite.configuration.DFSDeltaConfig;
+import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
+import org.apache.hudi.integ.testsuite.converter.Converter;
+import org.apache.hudi.integ.testsuite.converter.DeleteConverter;
 import org.apache.hudi.integ.testsuite.converter.UpdateConverter;
 import org.apache.hudi.integ.testsuite.reader.DFSAvroDeltaInputReader;
 import org.apache.hudi.integ.testsuite.reader.DFSHoodieDatasetInputReader;
@@ -40,15 +50,15 @@ import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriterAdapter;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriterFactory;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
-import org.apache.hudi.integ.testsuite.configuration.DFSDeltaConfig;
-import org.apache.hudi.integ.testsuite.configuration.DeltaConfig;
-import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.storage.StorageLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+
 import scala.Tuple2;
 
 /**
@@ -58,7 +68,7 @@ public class DeltaGenerator implements Serializable {
 
   private static Logger log = LoggerFactory.getLogger(DeltaGenerator.class);
 
-  private DeltaConfig deltaOutputConfig;
+  private DFSDeltaConfig deltaOutputConfig;
   private transient JavaSparkContext jsc;
   private transient SparkSession sparkSession;
   private String schemaStr;
@@ -66,7 +76,7 @@ public class DeltaGenerator implements Serializable {
   private List<String> partitionPathFieldNames;
   private int batchId;
 
-  public DeltaGenerator(DeltaConfig deltaOutputConfig, JavaSparkContext jsc, SparkSession sparkSession,
+  public DeltaGenerator(DFSDeltaConfig deltaOutputConfig, JavaSparkContext jsc, SparkSession sparkSession,
                         String schemaStr, BuiltinKeyGenerator keyGenerator) {
     this.deltaOutputConfig = deltaOutputConfig;
     this.jsc = jsc;
@@ -77,6 +87,16 @@ public class DeltaGenerator implements Serializable {
   }
 
   public JavaRDD<DeltaWriteStats> writeRecords(JavaRDD<GenericRecord> records) {
+    if (deltaOutputConfig.shouldDeleteOldInputData() && batchId > 1) {
+      Path oldInputDir = new Path(deltaOutputConfig.getDeltaBasePath(), Integer.toString(batchId - 1));
+      try {
+        FileSystem fs = FSUtils.getFs(oldInputDir.toString(), deltaOutputConfig.getConfiguration());
+        fs.delete(oldInputDir, true);
+      } catch (IOException e) {
+        log.error("Failed to delete older input data direcory " + oldInputDir, e);
+      }
+    }
+
     // The following creates a new anonymous function for iterator and hence results in serialization issues
     JavaRDD<DeltaWriteStats> ws = records.mapPartitions(itr -> {
       try {
@@ -95,11 +115,21 @@ public class DeltaGenerator implements Serializable {
     int numPartitions = operation.getNumInsertPartitions();
     long recordsPerPartition = operation.getNumRecordsInsert() / numPartitions;
     int minPayloadSize = operation.getRecordSize();
-    JavaRDD<GenericRecord> inputBatch = jsc.parallelize(Collections.EMPTY_LIST)
-        .repartition(numPartitions).mapPartitions(p -> {
+    int startPartition = operation.getStartPartition();
+
+    // Each spark partition below will generate records for a single partition given by the integer index.
+    List<Integer> partitionIndexes = IntStream.rangeClosed(0 + startPartition, numPartitions + startPartition)
+        .boxed().collect(Collectors.toList());
+
+    JavaRDD<GenericRecord> inputBatch = jsc.parallelize(partitionIndexes, numPartitions)
+        .mapPartitionsWithIndex((index, p) -> {
           return new LazyRecordGeneratorIterator(new FlexibleSchemaRecordGenerationIterator(recordsPerPartition,
-            minPayloadSize, schemaStr, partitionPathFieldNames, numPartitions));
-        });
+            minPayloadSize, schemaStr, partitionPathFieldNames, (Integer)index));
+        }, true);
+
+    if (deltaOutputConfig.getInputParallelism() < numPartitions) {
+      inputBatch = inputBatch.coalesce(deltaOutputConfig.getInputParallelism());
+    }
     return inputBatch;
   }
 
@@ -131,17 +161,17 @@ public class DeltaGenerator implements Serializable {
           }
         }
 
-        log.info("Repartitioning records");
         // persist this since we will make multiple passes over this
-        adjustedRDD = adjustedRDD.repartition(jsc.defaultParallelism());
-        log.info("Repartitioning records done");
+        int numPartition = Math.min(deltaOutputConfig.getInputParallelism(),
+            Math.max(1, config.getNumUpsertPartitions()));
+        log.info("Repartitioning records into " + numPartition + " partitions for updates");
+        adjustedRDD = adjustedRDD.repartition(numPartition);
+        log.info("Repartitioning records done for updates");
+
         UpdateConverter converter = new UpdateConverter(schemaStr, config.getRecordSize(),
             partitionPathFieldNames, recordRowKeyFieldNames);
         JavaRDD<GenericRecord> updates = converter.convert(adjustedRDD);
-
-        log.info("Records converted");
         updates.persist(StorageLevel.DISK_ONLY());
-
         if (inserts == null) {
           inserts = updates;
         } else {
@@ -154,6 +184,42 @@ public class DeltaGenerator implements Serializable {
       throw new IllegalArgumentException("Other formats are not supported at the moment");
     }
   }
+
+  public JavaRDD<GenericRecord> generateDeletes(Config config) throws IOException {
+    if (deltaOutputConfig.getDeltaOutputMode() == DeltaOutputMode.DFS) {
+      DeltaInputReader deltaInputReader = null;
+      JavaRDD<GenericRecord> adjustedRDD = null;
+
+      if (config.getNumDeletePartitions() < 1) {
+        // randomly generate deletes for a given number of records without regard to partitions and files
+        deltaInputReader = new DFSAvroDeltaInputReader(sparkSession, schemaStr,
+            ((DFSDeltaConfig) deltaOutputConfig).getDeltaBasePath(), Option.empty(), Option.empty());
+        adjustedRDD = deltaInputReader.read(config.getNumRecordsDelete());
+        adjustedRDD = adjustRDDToGenerateExactNumUpdates(adjustedRDD, jsc, config.getNumRecordsDelete());
+      } else {
+        deltaInputReader =
+            new DFSHoodieDatasetInputReader(jsc, ((DFSDeltaConfig) deltaOutputConfig).getDatasetOutputPath(),
+                schemaStr);
+        if (config.getFractionUpsertPerFile() > 0) {
+          adjustedRDD = deltaInputReader.read(config.getNumDeletePartitions(), config.getNumUpsertFiles(),
+              config.getFractionUpsertPerFile());
+        } else {
+          adjustedRDD = deltaInputReader.read(config.getNumDeletePartitions(), config.getNumUpsertFiles(), config
+              .getNumRecordsDelete());
+        }
+      }
+      log.info("Repartitioning records for delete");
+      // persist this since we will make multiple passes over this
+      adjustedRDD = adjustedRDD.repartition(jsc.defaultParallelism());
+      Converter converter = new DeleteConverter(schemaStr, config.getRecordSize());
+      JavaRDD<GenericRecord> deletes = converter.convert(adjustedRDD);
+      deletes.persist(StorageLevel.DISK_ONLY());
+      return deletes;
+    } else {
+      throw new IllegalArgumentException("Other formats are not supported at the moment");
+    }
+  }
+
 
   public Map<Integer, Long> getPartitionToCountMap(JavaRDD<GenericRecord> records) {
     // Requires us to keep the partitioner the same

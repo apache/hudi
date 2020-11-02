@@ -39,7 +39,7 @@ public class ParquetDFSSource extends RowSource {
   public ParquetDFSSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    this.pathSelector = new DFSPathSelector(props, this.sparkContext.hadoopConfiguration());
+    this.pathSelector = DFSPathSelector.createSourceSelector(props, this.sparkContext.hadoopConfiguration());
   }
 
   @Override

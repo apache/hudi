@@ -96,6 +96,20 @@ public class HoodieTestSuiteJob {
       HoodieTableMetaClient.initTableType(jsc.hadoopConfiguration(), cfg.targetBasePath,
           HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived");
     }
+
+    if (cfg.cleanInput) {
+      Path inputPath = new Path(cfg.inputBasePath);
+      if (fs.exists(inputPath)) {
+        fs.delete(inputPath, true);
+      }
+    }
+
+    if (cfg.cleanOutput) {
+      Path outputPath = new Path(cfg.targetBasePath);
+      if (fs.exists(outputPath)) {
+        fs.delete(outputPath, true);
+      }
+    }
   }
 
   private static HiveConf getDefaultHiveConf(Configuration cfg) {
@@ -175,9 +189,24 @@ public class HoodieTestSuiteJob {
         required = true)
     public Long limitFileSize = 1024 * 1024 * 120L;
 
+    @Parameter(names = {"--input-parallelism"}, description = "Parallelism to use when generation input files",
+        required = false)
+    public Integer inputParallelism = 0;
+
+    @Parameter(names = {"--delete-old-input"}, description = "Delete older input files once they have been ingested",
+        required = false)
+    public Boolean deleteOldInput = false;
+
     @Parameter(names = {"--use-deltastreamer"}, description = "Choose whether to use HoodieDeltaStreamer to "
         + "perform ingestion. If set to false, HoodieWriteClient will be used")
     public Boolean useDeltaStreamer = false;
 
+    @Parameter(names = {"--clean-input"}, description = "Clean the input folders and delete all files within it "
+        + "before starting the Job")
+    public Boolean cleanInput = false;
+
+    @Parameter(names = {"--clean-output"}, description = "Clean the output folders and delete all files within it "
+        + "before starting the Job")
+    public Boolean cleanOutput = false;
   }
 }

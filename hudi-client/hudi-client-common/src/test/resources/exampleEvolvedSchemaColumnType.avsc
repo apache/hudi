@@ -16,43 +16,21 @@
  * limitations under the License.
  */
 {
-  "type" : "record",
-  "name" : "triprec",
-  "fields" : [
-  {
-    "name" : "timestamp",
-    "type" : "long"
-  }, {
-    "name" : "_row_key",
-    "type" : "string"
-  }, {
-    "name" : "rider",
-    "type" : "string"
-  }, {
-    "name" : "driver",
-    "type" : "string"
-  }, {
-    "name" : "begin_lat",
-    "type" : "double"
-  }, {
-    "name" : "begin_lon",
-    "type" : "double"
-  }, {
-    "name" : "end_lat",
-    "type" : "double"
-  }, {
-    "name" : "end_lon",
-    "type" : "double"
-  }, {
-    "name" : "fare",
-    "type" : "double"
-  }, {
-   "name" : "_hoodie_is_deleted",
-   "type" : "boolean",
-    "default" : false
-  }, {
-    "name" : "haversine_distance",
-    "type" : "double"
-  }]
+    "namespace": "example.schema",
+    "type": "record",
+    "name": "trip",
+    "fields": [
+        {
+            "name": "number",
+            "type": ["string", "null"]
+        },
+        {
+            "name": "time",
+            "type": "string"
+        },
+        {
+            "name": "_row_key",
+            "type": "string"
+        }
+    ]
 }
-

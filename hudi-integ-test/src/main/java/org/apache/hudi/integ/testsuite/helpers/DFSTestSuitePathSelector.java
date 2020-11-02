@@ -18,12 +18,17 @@
 
 package org.apache.hudi.integ.testsuite.helpers;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FsStatus;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
@@ -62,19 +67,27 @@ public class DFSTestSuitePathSelector extends DFSPathSelector {
         lastBatchId = 0;
         nextBatchId = 1;
       }
-
-      log.info("Using DFSTestSuitePathSelector, checkpoint: " + lastCheckpointStr + " sourceLimit: " + sourceLimit
-          + " lastBatchId: " + lastBatchId + " nextBatchId: " + nextBatchId);
       // obtain all eligible files for the batch
       List<FileStatus> eligibleFiles = new ArrayList<>();
       FileStatus[] fileStatuses = fs.globStatus(
           new Path(props.getString(Config.ROOT_INPUT_PATH_PROP), "*"));
+      // Say input data is as follow input/1, input/2, input/5 since 3,4 was rolled back and 5 is new generated data
+      // checkpoint from the latest commit metadata will be 2 since 3,4 has been rolled back. We need to set the
+      // next batch id correctly as 5 instead of 3
+      Optional<String> correctBatchIdDueToRollback = Arrays.stream(fileStatuses)
+          .map(f -> f.getPath().toString().split("/")[f.getPath().toString().split("/").length - 1])
+          .filter(bid1 -> Integer.parseInt(bid1) > lastBatchId)
+          .min((bid1, bid2) -> Integer.min(Integer.parseInt(bid1), Integer.parseInt(bid2)));
+      if (correctBatchIdDueToRollback.isPresent() && Integer.parseInt(correctBatchIdDueToRollback.get()) > nextBatchId) {
+        nextBatchId = Integer.parseInt(correctBatchIdDueToRollback.get());
+      }
+      log.info("Using DFSTestSuitePathSelector, checkpoint: " + lastCheckpointStr + " sourceLimit: " + sourceLimit
+          + " lastBatchId: " + lastBatchId + " nextBatchId: " + nextBatchId);
       for (FileStatus fileStatus : fileStatuses) {
         if (!fileStatus.isDirectory() || IGNORE_FILEPREFIX_LIST.stream()
             .anyMatch(pfx -> fileStatus.getPath().getName().startsWith(pfx))) {
           continue;
-        } else if (fileStatus.getPath().getName().compareTo(lastBatchId.toString()) > 0 && fileStatus.getPath()
-            .getName().compareTo(nextBatchId.toString()) <= 0) {
+        } else if (fileStatus.getPath().getName().compareTo(lastBatchId.toString()) > 0) {
           RemoteIterator<LocatedFileStatus> files = fs.listFiles(fileStatus.getPath(), true);
           while (files.hasNext()) {
             eligibleFiles.add(files.next());
