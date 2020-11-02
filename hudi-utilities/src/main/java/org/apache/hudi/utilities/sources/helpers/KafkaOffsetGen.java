@@ -40,6 +40,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -156,15 +158,18 @@ public class KafkaOffsetGen {
   private final HashMap<String, Object> kafkaParams;
   private final TypedProperties props;
   protected final String topicName;
+  private final KafkaResetOffsetStrategies autoResetValue;
 
   public KafkaOffsetGen(TypedProperties props) {
     this.props = props;
+
     kafkaParams = new HashMap<>();
     for (Object prop : props.keySet()) {
       kafkaParams.put(prop.toString(), props.get(prop.toString()));
     }
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.KAFKA_TOPIC_NAME));
     topicName = props.getString(Config.KAFKA_TOPIC_NAME);
+    autoResetValue = KafkaResetOffsetStrategies.valueOf(props.getString("auto.offset.reset", Config.DEFAULT_AUTO_RESET_OFFSET.toString()).toUpperCase());
   }
 
   public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long sourceLimit, HoodieDeltaStreamerMetrics metrics) {
@@ -186,8 +191,6 @@ public class KafkaOffsetGen {
         fromOffsets = checkupValidOffsets(consumer, lastCheckpointStr, topicPartitions);
         metrics.updateDeltaStreamerKafkaDelayCountMetrics(delayOffsetCalculation(lastCheckpointStr, topicPartitions, consumer));
       } else {
-        KafkaResetOffsetStrategies autoResetValue = KafkaResetOffsetStrategies
-                .valueOf(props.getString("auto.offset.reset", Config.DEFAULT_AUTO_RESET_OFFSET.toString()).toUpperCase());
         switch (autoResetValue) {
           case EARLIEST:
             fromOffsets = consumer.beginningOffsets(topicPartitions);
@@ -227,12 +230,23 @@ public class KafkaOffsetGen {
   // else return earliest offsets
   private Map<TopicPartition, Long> checkupValidOffsets(KafkaConsumer consumer,
                                                         Option<String> lastCheckpointStr, Set<TopicPartition> topicPartitions) {
-    Map<TopicPartition, Long> checkpointOffsets = CheckpointUtils.strToOffsets(lastCheckpointStr.get());
     Map<TopicPartition, Long> earliestOffsets = consumer.beginningOffsets(topicPartitions);
+    if (checkTopicCheckPoint(lastCheckpointStr)) {
+      Map<TopicPartition, Long> checkpointOffsets = CheckpointUtils.strToOffsets(lastCheckpointStr.get());
+      boolean checkpointOffsetReseter = checkpointOffsets.entrySet().stream()
+              .anyMatch(offset -> offset.getValue() < earliestOffsets.get(offset.getKey()));
+      return checkpointOffsetReseter ? earliestOffsets : checkpointOffsets;
+    }
 
-    boolean checkpointOffsetReseter = checkpointOffsets.entrySet().stream()
-            .anyMatch(offset -> offset.getValue() < earliestOffsets.get(offset.getKey()));
-    return checkpointOffsetReseter ? earliestOffsets : checkpointOffsets;
+    switch (autoResetValue) {
+      case EARLIEST:
+        return earliestOffsets;
+      case LATEST:
+        return consumer.endOffsets(topicPartitions);
+      default:
+        throw new HoodieNotSupportedException("Auto reset value must be one of 'earliest' or 'latest' ");
+    }
+
   }
 
   private Long delayOffsetCalculation(Option<String> lastCheckpointStr, Set<TopicPartition> topicPartitions, KafkaConsumer consumer) {
@@ -255,6 +269,12 @@ public class KafkaOffsetGen {
   public boolean checkTopicExists(KafkaConsumer consumer)  {
     Map<String, List<PartitionInfo>> result = consumer.listTopics();
     return result.containsKey(topicName);
+  }
+
+  public boolean checkTopicCheckPoint(Option<String> lastCheckpointStr) {
+    Pattern DIRECTORY_PATTERN = Pattern.compile(".*=.*");
+    Matcher matcher = DIRECTORY_PATTERN.matcher(lastCheckpointStr.get());
+    return matcher.matches();
   }
 
   public String getTopicName() {
