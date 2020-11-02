@@ -19,6 +19,7 @@ package org.apache.hudi.functional
 
 import java.sql.{Date, Timestamp}
 
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieClientTestBase
@@ -50,6 +51,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     initPath()
     initSparkContexts()
     spark = sqlContext.sparkSession
+    println("hahahahah:" + spark.conf.get("spark.serializer"))
     initTestDataGenerator()
     initFileSystem()
   }
@@ -73,7 +75,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
   }
 
-  @Test def testCopyOnWriteStorage() {
+    @Test def testCopyOnWriteStorage() {
     // Insert Operation
     val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
@@ -227,5 +229,33 @@ class TestCOWDataSource extends HoodieClientTestBase {
         case _ =>
       }
     })
+  }
+
+  def copyOnWriteTableSelect(enableDropPartitionColumns: Boolean): Boolean = {
+    // Insert Operation
+    val records1 = recordsToStrings(dataGen.generateInsertsContainsAllPartitions("000", 3)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.ENABLE_DROP_PARTITION_COLUMNS_OPT_KEY, enableDropPartitionColumns)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val snapshotDF1 = spark.read.format("org.apache.hudi")
+      .load(basePath + "/" + HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH +  "/*")
+    snapshotDF1.registerTempTable("tmptable")
+    val result = spark.sql("select * from tmptable limit 1").collect()(0)
+    result.schema.contains(new StructField("partition", StringType, true))
+  }
+
+  @Test def testCopyOnWriteWithEnableDropPartitionColumnsOpt() {
+    val resultContainPartitionColumn = copyOnWriteTableSelect(false)
+    assertTrue(resultContainPartitionColumn)
+  }
+
+  @Test def testCopyOnWriteWithNotEnableDropPartitionColumnsOpt() {
+    val resultContainPartitionColumn = copyOnWriteTableSelect(true)
+    assertTrue(!resultContainPartitionColumn)
   }
 }

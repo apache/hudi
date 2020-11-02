@@ -247,6 +247,13 @@ object DataSourceWriteOptions {
   val DEFAULT_ENABLE_ROW_WRITER_OPT_VAL = "false"
 
   /**
+    * When set to true, will not write the  partition columns into parquet file
+    * By default, false
+    */
+  val ENABLE_DROP_PARTITION_COLUMNS_OPT_KEY = "hoodie.datasource.write.drop.partition.columns.enable"
+  val ENABLE_DROP_PARTITION_COLUMNS_OPT_VAL = "false"
+
+  /**
     * Option keys beginning with this prefix, are automatically added to the commit/deltacommit metadata.
     * This is useful to store checkpointing information, in a consistent way with the hoodie timeline
     */

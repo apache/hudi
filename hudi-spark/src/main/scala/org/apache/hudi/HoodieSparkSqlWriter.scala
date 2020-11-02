@@ -55,6 +55,23 @@ private[hudi] object HoodieSparkSqlWriter {
   private var tableExists: Boolean = false
   private var asyncCompactionTriggerFnDefined: Boolean = false
 
+  def generateSchemaWithoutPartitionColumns(partitionParam: String, oldSchema: Schema): Schema = {
+    val fieldsToRemove =  new util.ArrayList[String]()
+    partitionParam.split(",").map(partitionField => partitionField.trim)
+      .filter(s => !s.isEmpty).map(field => fieldsToRemove.add(field))
+    HoodieAvroUtils.removeFields(oldSchema, fieldsToRemove, true)
+  }
+
+  def generateNewRecordForPartitionColumnsDrop(enableDropPartitionColumns: Boolean,
+                                               oldRecord: GenericRecord, partitionParam: String): GenericRecord = {
+    var record = oldRecord
+    if (enableDropPartitionColumns) {
+      val newSchema = generateSchemaWithoutPartitionColumns(partitionParam, oldRecord.getSchema)
+      record = HoodieAvroUtils.rewriteRecordWithOnlyNewSchemaFields(oldRecord, newSchema)
+    }
+    record
+  }
+
   def write(sqlContext: SQLContext,
             mode: SaveMode,
             parameters: Map[String, String],
@@ -117,6 +134,8 @@ private[hudi] object HoodieSparkSqlWriter {
       }
 
       val commitActionType = DataSourceUtils.getCommitActionType(operation, tableConfig.getTableType)
+      val partition_key = parameters.get(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY).get
+      val enableDropPartitionColumns = parameters.get(DataSourceWriteOptions.ENABLE_DROP_PARTITION_COLUMNS_OPT_KEY).get.toBoolean
 
       // short-circuit if bulk_insert via row is enabled.
       // scalastyle:off
@@ -126,7 +145,6 @@ private[hudi] object HoodieSparkSqlWriter {
         return (success, commitTime, common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
       }
       // scalastyle:on
-
       val (writeResult, writeClient: SparkRDDWriteClient[HoodieRecordPayload[Nothing]]) =
         if (operation != WriteOperationType.DELETE) {
           // register classes & schemas
@@ -141,22 +159,25 @@ private[hudi] object HoodieSparkSqlWriter {
           // Convert to RDD[HoodieRecord]
           val keyGenerator = DataSourceUtils.createKeyGenerator(toProperties(parameters))
           val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(df, structName, nameSpace)
-          val shouldCombine = parameters(INSERT_DROP_DUPS_OPT_KEY).toBoolean || operation.equals(WriteOperationType.UPSERT);
+          val shouldCombine = parameters(INSERT_DROP_DUPS_OPT_KEY).toBoolean || operation.equals(WriteOperationType.UPSERT)
           val hoodieAllIncomingRecords = genericRecords.map(gr => {
             val hoodieRecord = if (shouldCombine) {
               val orderingVal = HoodieAvroUtils.getNestedFieldVal(gr, parameters(PRECOMBINE_FIELD_OPT_KEY), false)
                 .asInstanceOf[Comparable[_]]
-              DataSourceUtils.createHoodieRecord(gr,
+              val newRecord = generateNewRecordForPartitionColumnsDrop(enableDropPartitionColumns, gr, partition_key)
+              DataSourceUtils.createHoodieRecord(newRecord,
                 orderingVal, keyGenerator.getKey(gr),
                 parameters(PAYLOAD_CLASS_OPT_KEY))
             } else {
-              DataSourceUtils.createHoodieRecord(gr, keyGenerator.getKey(gr), parameters(PAYLOAD_CLASS_OPT_KEY))
+              val newRecord = generateNewRecordForPartitionColumnsDrop(enableDropPartitionColumns, gr, partition_key)
+              DataSourceUtils.createHoodieRecord(newRecord, keyGenerator.getKey(gr), parameters(PAYLOAD_CLASS_OPT_KEY))
             }
             hoodieRecord
           }).toJavaRDD()
 
+          val newSchema = if (enableDropPartitionColumns) generateSchemaWithoutPartitionColumns(partition_key, schema) else schema
           // Create a HoodieWriteClient & issue the write.
-          val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc, schema.toString, path.get,
+          val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc, newSchema.toString, path.get,
             tblName, mapAsJavaMap(parameters)
           )).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
 
