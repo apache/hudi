@@ -249,14 +249,9 @@ public class HoodieRealtimeRecordReaderUtils {
     // /org/apache/hadoop/hive/serde2/ColumnProjectionUtils.java#L188}
     // Field Names -> {@link https://github.com/apache/hive/blob/f37c5de6c32b9395d1b34fa3c02ed06d1bfbf6eb/serde/src/java
     // /org/apache/hadoop/hive/serde2/ColumnProjectionUtils.java#L229}
-
-    System.out.println("fieldNameCsv = " + fieldNameCsv + ",fieldOrderCsv = "
-        + fieldOrderCsv + ",partitioningFields = " + partitioningFields.toString());
     String[] fieldOrdersWithDups = fieldOrderCsv.isEmpty() ? new String[0] : fieldOrderCsv.split(",");
     Set<String> fieldOrdersSet = new LinkedHashSet<>(Arrays.asList(fieldOrdersWithDups));
     String[] fieldOrders = fieldOrdersSet.toArray(new String[0]);
-    System.out.println("fieldOrdersWithDups = " + fieldOrdersWithDups.toString() + ",fieldOrdersSet = "
-        + fieldOrdersSet.toString() + ",fieldOrders=" + fieldOrders.toString());
     List<String> fieldNames = fieldNameCsv.isEmpty() ? new ArrayList<>() : Arrays.stream(fieldNameCsv.split(","))
         .filter(fn -> !partitioningFields.contains(fn)).collect(Collectors.toList());
     Set<String> fieldNamesSet = new LinkedHashSet<>(fieldNames);
@@ -268,8 +263,6 @@ public class HoodieRealtimeRecordReaderUtils {
     }
     TreeMap<Integer, String> orderedFieldMap = new TreeMap<>();
     String[] fieldNamesArray = fieldNamesSet.toArray(new String[0]);
-    System.out.println("fieldNamesSet = " + fieldNamesSet.toString() + ",orderedFieldMap = "
-        + orderedFieldMap.toString());
     for (int ox = 0; ox < fieldOrders.length; ox++) {
       orderedFieldMap.put(Integer.parseInt(fieldOrders[ox]), fieldNamesArray[ox]);
     }

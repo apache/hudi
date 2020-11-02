@@ -30,9 +30,8 @@ val hoodieIncQueryDF =  spark.read.format("org.apache.hudi").
                       option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, beginInstantTime).
                       load("/user/hive/warehouse/stock_ticks_cow");
 hoodieIncQueryDF.registerTempTable("stock_ticks_cow_incr")
-println("111111111111")
 spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_cow_incr where  symbol = 'GOOG'").show(100, false);
-println("222222222222")
+
 spark.sql("select key, `_hoodie_partition_path` as datestr, symbol, ts, open, close from stock_ticks_cow_incr").
     write.format("org.apache.hudi").
     option("hoodie.insert.shuffle.parallelism", "2").
@@ -52,20 +51,17 @@ spark.sql("select key, `_hoodie_partition_path` as datestr, symbol, ts, open, cl
     option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY, "datestr").
     mode(SaveMode.Overwrite).
     save("/user/hive/warehouse/stock_ticks_derived_mor");
-println("33333333333")
+
 spark.sql("select count(*) from stock_ticks_derived_mor_ro").show(20, false)
-println("4444444444444")
 spark.sql("select count(*) from stock_ticks_derived_mor_rt").show(20, false)
-println("555555555553333333")
-spark.sql("select * from stock_ticks_derived_mor_rt").show(20, false)
-println("55555555555222222")
+
 val hoodieIncQueryBsDF =  spark.read.format("org.apache.hudi").
                       option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
                       option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, "00000000000001").
                       load("/user/hive/warehouse/stock_ticks_cow_bs");
 hoodieIncQueryBsDF.registerTempTable("stock_ticks_cow_bs_incr")
 spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_cow_bs_incr where  symbol = 'GOOG'").show(100, false);
-println("6666666666666")
+
 spark.sql("select key, `_hoodie_partition_path` as datestr, symbol, ts, open, close from stock_ticks_cow_bs_incr").
     write.format("org.apache.hudi").
     option("hoodie.insert.shuffle.parallelism", "2").
@@ -85,12 +81,9 @@ spark.sql("select key, `_hoodie_partition_path` as datestr, symbol, ts, open, cl
     option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY, "datestr").
     mode(SaveMode.Overwrite).
     save("/user/hive/warehouse/stock_ticks_derived_mor_bs");
-println("77777777777777")
+
 spark.sql("show tables").show(20, false)
-println("88888888888888")
 spark.sql("select count(*) from stock_ticks_derived_mor_bs_ro").show(20, false)
-println("999999999999999")
 spark.sql("select count(*) from stock_ticks_derived_mor_bs_rt").show(20, false)
-println("1000000000000")
 
 System.exit(0);
