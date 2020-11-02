@@ -75,11 +75,11 @@ public class DFSPathSelector {
   public static DFSPathSelector createSourceSelector(TypedProperties props,
                                                      Configuration conf) {
     String sourceSelectorClass = props.getString(DFSPathSelector.Config.SOURCE_INPUT_SELECTOR,
-            DFSPathSelector.class.getName());
+        DFSPathSelector.class.getName());
     try {
       DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(sourceSelectorClass,
-              new Class<?>[]{TypedProperties.class, Configuration.class},
-              props, conf);
+          new Class<?>[]{TypedProperties.class, Configuration.class},
+          props, conf);
 
       log.info("Using path selector " + selector.getClass().getName());
       return selector;
@@ -96,7 +96,7 @@ public class DFSPathSelector {
    * @return the list of files concatenated and their latest modified time
    */
   public Pair<Option<String>, String> getNextFilePathsAndMaxModificationTime(Option<String> lastCheckpointStr,
-                                                                             long sourceLimit) {
+      long sourceLimit) {
 
     try {
       String pathStr = props.getString(Config.ROOT_INPUT_PATH_PROP);
