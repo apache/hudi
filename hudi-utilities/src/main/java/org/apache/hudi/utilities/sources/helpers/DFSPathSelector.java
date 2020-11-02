@@ -53,6 +53,7 @@ public class DFSPathSelector {
 
     public static final String ROOT_INPUT_PATH_PROP = "hoodie.deltastreamer.source.dfs.root";
     public static final String SOURCE_INPUT_SELECTOR = "hoodie.deltastreamer.source.input.selector";
+    public static final String FULL_OVERWRITE = "hoodie.deltastreamer.source.dfs.full.overwrite";
   }
 
   protected static final List<String> IGNORE_FILEPREFIX_LIST = Arrays.asList(".", "_");
@@ -67,53 +68,56 @@ public class DFSPathSelector {
   }
 
   public Pair<Option<String>, String> getNextFilePathsAndMaxModificationTime(Option<String> lastCheckpointStr,
-      long sourceLimit) {
+                                                                             long sourceLimit) {
 
     try {
-      // obtain all eligible files under root folder.
-      log.info("Root path => " + props.getString(Config.ROOT_INPUT_PATH_PROP) + " source limit => " + sourceLimit);
-      List<FileStatus> eligibleFiles = new ArrayList<>();
-      RemoteIterator<LocatedFileStatus> fitr =
-          fs.listFiles(new Path(props.getString(Config.ROOT_INPUT_PATH_PROP)), true);
-      while (fitr.hasNext()) {
-        LocatedFileStatus fileStatus = fitr.next();
-        if (fileStatus.isDirectory()
-            || fileStatus.getLen() == 0
-            || IGNORE_FILEPREFIX_LIST.stream().anyMatch(pfx -> fileStatus.getPath().getName().startsWith(pfx))) {
-          continue;
-        }
-        eligibleFiles.add(fileStatus);
-      }
-      // sort them by modification time.
-      eligibleFiles.sort(Comparator.comparingLong(FileStatus::getModificationTime));
-      // Filter based on checkpoint & input size, if needed
-      long currentBytes = 0;
+      String pathStr = props.getString(Config.ROOT_INPUT_PATH_PROP);
       long maxModificationTime = Long.MIN_VALUE;
-      List<FileStatus> filteredFiles = new ArrayList<>();
-      for (FileStatus f : eligibleFiles) {
-        if (lastCheckpointStr.isPresent() && f.getModificationTime() <= Long.valueOf(lastCheckpointStr.get()).longValue()) {
-          // skip processed files
-          continue;
+      if (!Boolean.valueOf(props.getString(Config.FULL_OVERWRITE,"false"))) {
+        // obtain all eligible files under root folder.
+        log.info("Root path => " + props.getString(Config.ROOT_INPUT_PATH_PROP) + " source limit => " + sourceLimit);
+        List<FileStatus> eligibleFiles = new ArrayList<>();
+        RemoteIterator<LocatedFileStatus> fitr =
+                fs.listFiles(new Path(props.getString(Config.ROOT_INPUT_PATH_PROP)), true);
+        while (fitr.hasNext()) {
+          LocatedFileStatus fileStatus = fitr.next();
+          if (fileStatus.isDirectory()
+                  || IGNORE_FILEPREFIX_LIST.stream().anyMatch(pfx -> fileStatus.getPath().getName().startsWith(pfx))) {
+            continue;
+          }
+          eligibleFiles.add(fileStatus);
+        }
+        // sort them by modification time.
+        eligibleFiles.sort(Comparator.comparingLong(FileStatus::getModificationTime));
+        // Filter based on checkpoint & input size, if needed
+        long currentBytes = 0;
+
+        List<FileStatus> filteredFiles = new ArrayList<>();
+        for (FileStatus f : eligibleFiles) {
+          if (lastCheckpointStr.isPresent() && f.getModificationTime() <= Long.valueOf(lastCheckpointStr.get()).longValue()) {
+            // skip processed files
+            continue;
+          }
+
+          if (currentBytes + f.getLen() >= sourceLimit) {
+            // we have enough data, we are done
+            break;
+          }
+
+          maxModificationTime = f.getModificationTime();
+          currentBytes += f.getLen();
+          filteredFiles.add(f);
         }
 
-        if (currentBytes + f.getLen() >= sourceLimit) {
-          // we have enough data, we are done
-          break;
+        // no data to read
+        if (filteredFiles.size() == 0) {
+          return new ImmutablePair<>(Option.empty(), lastCheckpointStr.orElseGet(() -> String.valueOf(Long.MIN_VALUE)));
         }
 
-        maxModificationTime = f.getModificationTime();
-        currentBytes += f.getLen();
-        filteredFiles.add(f);
+        // read the files out.
+        pathStr = filteredFiles.stream().map(f -> f.getPath().toString()).collect(Collectors.joining(","));
+
       }
-
-      // no data to read
-      if (filteredFiles.size() == 0) {
-        return new ImmutablePair<>(Option.empty(), lastCheckpointStr.orElseGet(() -> String.valueOf(Long.MIN_VALUE)));
-      }
-
-      // read the files out.
-      String pathStr = filteredFiles.stream().map(f -> f.getPath().toString()).collect(Collectors.joining(","));
-
       return new ImmutablePair<>(Option.ofNullable(pathStr), String.valueOf(maxModificationTime));
     } catch (IOException ioe) {
       throw new HoodieIOException("Unable to read from source from checkpoint: " + lastCheckpointStr, ioe);

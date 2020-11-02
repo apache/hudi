@@ -521,8 +521,9 @@ public class HoodieDeltaStreamer implements Serializable {
       this.jssc = jssc;
       this.sparkSession = SparkSession.builder().config(jssc.getConf()).getOrCreate();
       this.asyncCompactService = Option.empty();
+      this.props = properties.get();
 
-      if (fs.exists(new Path(cfg.targetBasePath))) {
+      if (fs.exists(new Path(cfg.targetBasePath)) && !Boolean.valueOf(props.getString("hoodie.deltastreamer.source.dfs.full.overwrite", "false"))) {
         HoodieTableMetaClient meta =
             new HoodieTableMetaClient(new Configuration(fs.getConf()), cfg.targetBasePath, false);
         tableType = meta.getTableType();
@@ -539,6 +540,9 @@ public class HoodieDeltaStreamer implements Serializable {
         cfg.baseFileFormat = meta.getTableConfig().getBaseFileFormat().toString();
         this.cfg.baseFileFormat = cfg.baseFileFormat;
       } else {
+        if(fs.exists(new Path(cfg.targetBasePath))) {
+          fs.delete(new Path(cfg.targetBasePath));
+        }
         tableType = HoodieTableType.valueOf(cfg.tableType);
         if (cfg.baseFileFormat == null) {
           cfg.baseFileFormat = "PARQUET"; // default for backward compatibility
@@ -548,7 +552,6 @@ public class HoodieDeltaStreamer implements Serializable {
       ValidationUtils.checkArgument(!cfg.filterDupes || cfg.operation != Operation.UPSERT,
           "'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed.");
 
-      this.props = properties.get();
       LOG.info("Creating delta streamer with configs : " + props.toString());
       this.schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
           UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc), props, jssc);
