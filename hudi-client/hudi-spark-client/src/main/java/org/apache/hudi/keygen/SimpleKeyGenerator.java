@@ -18,10 +18,9 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.common.config.TypedProperties;
-
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.spark.sql.Row;
 
 import java.util.Collections;
@@ -31,9 +30,11 @@ import java.util.Collections;
  */
 public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
+  private final SimpleAvroKeyGenerator simpleAvroKeyGenerator;
+
   public SimpleKeyGenerator(TypedProperties props) {
-    this(props, props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()),
-        props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY()));
+    this(props, props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY),
+        props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY));
   }
 
   SimpleKeyGenerator(TypedProperties props, String partitionPathField) {
@@ -46,16 +47,17 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
         ? Collections.emptyList()
         : Collections.singletonList(recordKeyField);
     this.partitionPathFields = Collections.singletonList(partitionPathField);
+    simpleAvroKeyGenerator = new SimpleAvroKeyGenerator(props, recordKeyField, partitionPathField);
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return KeyGenUtils.getRecordKey(record, getRecordKeyFields().get(0));
+    return simpleAvroKeyGenerator.getRecordKey(record);
   }
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    return KeyGenUtils.getPartitionPath(record, getPartitionPathFields().get(0), hiveStylePartitioning, encodePartitionPath);
+    return simpleAvroKeyGenerator.getPartitionPath(record);
   }
 
   @Override
