@@ -51,7 +51,7 @@ public class KafkaOffsetGen {
 
   private static final Logger LOG = LogManager.getLogger(KafkaOffsetGen.class);
 
-  private final Pattern pattern = Pattern.compile(".*=.*");
+  private final Pattern pattern = Pattern.compile(".*,.*:.*");
 
   public static class CheckpointUtils {
 
