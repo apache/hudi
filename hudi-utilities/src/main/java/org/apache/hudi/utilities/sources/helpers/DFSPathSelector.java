@@ -142,7 +142,7 @@ public class DFSPathSelector {
   private List<FileStatus> listEligibleFiles(FileSystem fs, Path path, long lastCheckpointTime) throws IOException {
     // skip files/dirs whose names start with (_, ., etc)
     FileStatus[] statuses = fs.listStatus(path, file ->
-            IGNORE_FILEPREFIX_LIST.stream().noneMatch(pfx -> file.getName().startsWith(pfx)));
+      IGNORE_FILEPREFIX_LIST.stream().noneMatch(pfx -> file.getName().startsWith(pfx)));
     List<FileStatus> res = new ArrayList<>();
     for (FileStatus status: statuses) {
       if (status.isDirectory()) {
