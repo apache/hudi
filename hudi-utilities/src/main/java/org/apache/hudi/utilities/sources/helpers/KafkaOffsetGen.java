@@ -51,6 +51,8 @@ public class KafkaOffsetGen {
 
   private static final Logger LOG = LogManager.getLogger(KafkaOffsetGen.class);
 
+  private final Pattern pattern = Pattern.compile(".*=.*");
+
   public static class CheckpointUtils {
 
     /**
@@ -272,8 +274,7 @@ public class KafkaOffsetGen {
   }
 
   public boolean checkTopicCheckPoint(Option<String> lastCheckpointStr) {
-    Pattern DIRECTORY_PATTERN = Pattern.compile(".*=.*");
-    Matcher matcher = DIRECTORY_PATTERN.matcher(lastCheckpointStr.get());
+    Matcher matcher = pattern.matcher(lastCheckpointStr.get());
     return matcher.matches();
   }
 
