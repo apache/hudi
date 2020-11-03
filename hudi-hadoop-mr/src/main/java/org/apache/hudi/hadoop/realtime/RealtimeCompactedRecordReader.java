@@ -84,7 +84,8 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     if (!result) {
       // if the result is false, then there are no more records
       return false;
-    } else {
+    }
+    if (!deltaRecordMap.isEmpty()) {
       // TODO(VC): Right now, we assume all records in log, have a matching base record. (which
       // would be true until we have a way to index logs too)
       // return from delta records map if we have some match.
@@ -134,8 +135,8 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
           throw new RuntimeException(errMsg, re);
         }
       }
-      return true;
     }
+    return true;
   }
 
   @Override
