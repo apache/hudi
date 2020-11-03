@@ -547,7 +547,7 @@ public class HoodieDeltaStreamer implements Serializable {
         cfg.baseFileFormat = meta.getTableConfig().getBaseFileFormat().toString();
         this.cfg.baseFileFormat = cfg.baseFileFormat;
       } else {
-        if(fs.exists(new Path(cfg.targetBasePath))) {
+        if (fs.exists(new Path(cfg.targetBasePath))) {
           fs.delete(new Path(cfg.targetBasePath));
         }
         tableType = HoodieTableType.valueOf(cfg.tableType);
