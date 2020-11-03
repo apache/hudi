@@ -79,9 +79,7 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
     return timeline;
   }
 
-  @Override
-  public RecordReader<NullWritable, ArrayWritable> getRecordReader(final InputSplit split, final JobConf jobConf,
-                                                                   final Reporter reporter) throws IOException {
+  void addProjectionToJobConf(final RealtimeSplit realtimeSplit, final JobConf jobConf) {
     // Hive on Spark invokes multiple getRecordReaders from different threads in the same spark task (and hence the
     // same JVM) unlike Hive on MR. Due to this, accesses to JobConf, which is shared across all threads, is at the
     // risk of experiencing race conditions. Hence, we synchronize on the JobConf object here. There is negligible
@@ -101,22 +99,27 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
           // TO fix this, hoodie columns are appended late at the time record-reader gets built instead of construction
           // time.
           HoodieRealtimeInputFormatUtils.cleanProjectionColumnIds(jobConf);
-          HoodieRealtimeInputFormatUtils.addRequiredProjectionFields(jobConf);
-
+          if (!realtimeSplit.getDeltaLogPaths().isEmpty()) {
+            HoodieRealtimeInputFormatUtils.addRequiredProjectionFields(jobConf);
+          }
           this.conf = jobConf;
           this.conf.set(HoodieInputFormatUtils.HOODIE_READ_COLUMNS_PROP, "true");
         }
       }
     }
+  }
 
-    LOG.info("Creating record reader with readCols :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
-        + ", Ids :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
-
+  @Override
+  public RecordReader<NullWritable, ArrayWritable> getRecordReader(final InputSplit split, final JobConf jobConf,
+                                                                   final Reporter reporter) throws IOException {
     // sanity check
     ValidationUtils.checkArgument(split instanceof RealtimeSplit,
         "HoodieRealtimeRecordReader can only work on RealtimeSplit and not with " + split);
-
-    return new HoodieRealtimeRecordReader((RealtimeSplit) split, jobConf,
+    RealtimeSplit realtimeSplit = (RealtimeSplit) split;
+    addProjectionToJobConf(realtimeSplit, jobConf);
+    LOG.info("Creating record reader with readCols :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
+        + ", Ids :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
+    return new HoodieRealtimeRecordReader(realtimeSplit, jobConf,
         super.getRecordReader(split, jobConf, reporter));
   }
 
