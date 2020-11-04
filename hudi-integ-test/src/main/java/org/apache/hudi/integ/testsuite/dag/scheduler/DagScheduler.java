@@ -91,13 +91,13 @@ public class DagScheduler {
     log.info("Running workloads");
     int curRound = 1;
     do {
+      log.warn("===================================================================");
+      log.warn("Running workloads for round num " + curRound);
+      log.warn("===================================================================");
       Queue<DagNode> queue = new PriorityQueue<>();
       for (DagNode dagNode : nodes) {
         queue.add(dagNode.clone());
       }
-      log.warn("===================================================================");
-      log.warn("Running workloads for round num " + curRound);
-      log.warn("===================================================================");
       do {
         List<Future> futures = new ArrayList<>();
         Set<DagNode> childNodes = new HashSet<>();

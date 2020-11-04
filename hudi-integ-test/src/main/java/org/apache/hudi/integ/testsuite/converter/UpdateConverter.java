@@ -40,7 +40,7 @@ public class UpdateConverter implements Converter<GenericRecord, GenericRecord> 
   private final String preCombineField;
   private final int preCombineFieldValue;
 
-  public UpdateConverter(String schemaStr, int minPayloadSize, List<String> partitionPathFields,
+  public  UpdateConverter(String schemaStr, int minPayloadSize, List<String> partitionPathFields,
       List<String> recordKeyFields, String preCombineField, int preCombineFieldValue) {
     this.schemaStr = schemaStr;
     this.partitionPathFields = partitionPathFields;

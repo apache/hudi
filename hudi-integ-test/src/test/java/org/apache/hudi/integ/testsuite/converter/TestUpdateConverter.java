@@ -65,7 +65,7 @@ public class TestUpdateConverter {
 
     // 2. DFS converter reads existing records and generates random updates for the same row keys
     UpdateConverter updateConverter = new UpdateConverter(schemaStr, minPayloadSize,
-        Arrays.asList("timestamp"), Arrays.asList("_row_key"));
+        Arrays.asList("timestamp"), Arrays.asList("_row_key"),"timestamp",0);
     List<String> insertRowKeys = inputRDD.map(r -> r.get("_row_key").toString()).collect();
     assertTrue(inputRDD.count() == 10);
     JavaRDD<GenericRecord> outputRDD = updateConverter.convert(inputRDD);

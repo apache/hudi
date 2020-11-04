@@ -45,17 +45,17 @@ public class FlexibleSchemaRecordGenerationIterator implements Iterator<GenericR
   // Store last record for the partition path of the first payload to be used for all subsequent generated payloads
   private GenericRecord lastRecord;
   // Partition path field name
-  private List<String> partitionPathFieldNames;
+  private Set<String> partitionPathFieldNames;
   private final String preCombineField;
   private final int preCombineFieldValue;
 
   public FlexibleSchemaRecordGenerationIterator(long maxEntriesToProduce, String schema) {
-    this(maxEntriesToProduce, GenericRecordFullPayloadGenerator.DEFAULT_PAYLOAD_SIZE, schema, null, GenericRecordFullPayloadGenerator.DEFAULT_NUM_DATE_PARTITIONS,
+    this(maxEntriesToProduce, GenericRecordFullPayloadGenerator.DEFAULT_PAYLOAD_SIZE, schema, null,
         "ts", 0, 0);
   }
 
   public FlexibleSchemaRecordGenerationIterator(long maxEntriesToProduce, int minPayloadSize, String schemaStr,
-      List<String> partitionPathFieldNames, int numPartitions, String preCombineField, int preCombineFieldValue, int partitionIndex) {
+      List<String> partitionPathFieldNames, String preCombineField, int preCombineFieldValue, int partitionIndex) {
     this.counter = maxEntriesToProduce;
     this.partitionPathFieldNames = new HashSet<>(partitionPathFieldNames);
     Schema schema = new Schema.Parser().parse(schemaStr);

@@ -93,7 +93,7 @@ public class DeltaGenerator implements Serializable {
   private int batchId;
   private String preCombineField;
 
-  public DeltaGenerator(DeltaConfig deltaOutputConfig, JavaSparkContext jsc, SparkSession sparkSession,
+  public DeltaGenerator(DFSDeltaConfig deltaOutputConfig, JavaSparkContext jsc, SparkSession sparkSession,
       String schemaStr, BuiltinKeyGenerator keyGenerator, String preCombineField) {
     this.deltaOutputConfig = deltaOutputConfig;
     this.jsc = jsc;
@@ -142,7 +142,7 @@ public class DeltaGenerator implements Serializable {
     JavaRDD<GenericRecord> inputBatch = jsc.parallelize(partitionIndexes, numPartitions)
         .mapPartitionsWithIndex((index, p) -> {
           return new LazyRecordGeneratorIterator(new FlexibleSchemaRecordGenerationIterator(recordsPerPartition,
-            minPayloadSize, schemaStr, partitionPathFieldNames, numPartitions, preCombineField, batchId, index));
+            minPayloadSize, schemaStr, partitionPathFieldNames, preCombineField, batchId, (Integer)index));
         }, true);
 
     if (deltaOutputConfig.getInputParallelism() < numPartitions) {

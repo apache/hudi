@@ -43,7 +43,7 @@ public class DFSDeltaWriterAdapter implements DeltaWriterAdapter<GenericRecord> 
       GenericRecord next = input.next();
       if (this.deltaInputWriter.canWrite()) {
         this.deltaInputWriter.writeData(next);
-      } else if (input.hasNext()) {
+      } else {
         rollOver();
         this.deltaInputWriter.writeData(next);
       }
