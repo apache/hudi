@@ -19,30 +19,22 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.ApiMaturityLevel;
-import org.apache.hudi.AvroConversionHelper;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.spark.sql.Row;
-import scala.Function1;
 
-import java.io.Serializable;
 import java.util.List;
 
 /**
  * Abstract class to extend for plugging in extraction of {@link HoodieKey} from an Avro record.
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
-public abstract class KeyGenerator implements Serializable, SparkKeyGeneratorInterface {
-
-  private static final String STRUCT_NAME = "hoodieRowTopLevelField";
-  private static final String NAMESPACE = "hoodieRow";
+public abstract class KeyGenerator implements KeyGeneratorInterface {
 
   protected TypedProperties config;
-  private transient Function1<Object, Object> converterFn = null;
 
   protected KeyGenerator(TypedProperties config) {
     this.config = config;
@@ -63,33 +55,5 @@ public abstract class KeyGenerator implements Serializable, SparkKeyGeneratorInt
   public List<String> getRecordKeyFieldNames() {
     throw new UnsupportedOperationException("Bootstrap not supported for key generator. "
         + "Please override this method in your custom key generator.");
-  }
-
-  /**
-   * Fetch record key from {@link Row}.
-   * @param row instance of {@link Row} from which record key is requested.
-   * @return the record key of interest from {@link Row}.
-   */
-  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public String getRecordKey(Row row) {
-    if (null == converterFn) {
-      converterFn = AvroConversionHelper.createConverterToAvro(row.schema(), STRUCT_NAME, NAMESPACE);
-    }
-    GenericRecord genericRecord = (GenericRecord) converterFn.apply(row);
-    return getKey(genericRecord).getRecordKey();
-  }
-
-  /**
-   * Fetch partition path from {@link Row}.
-   * @param row instance of {@link Row} from which partition path is requested
-   * @return the partition path of interest from {@link Row}.
-   */
-  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public String getPartitionPath(Row row) {
-    if (null == converterFn) {
-      converterFn = AvroConversionHelper.createConverterToAvro(row.schema(), STRUCT_NAME, NAMESPACE);
-    }
-    GenericRecord genericRecord = (GenericRecord) converterFn.apply(row);
-    return getKey(genericRecord).getPartitionPath();
   }
 }

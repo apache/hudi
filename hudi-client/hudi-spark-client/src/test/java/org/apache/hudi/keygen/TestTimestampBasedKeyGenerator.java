@@ -20,14 +20,14 @@ package org.apache.hudi.keygen;
 
 import org.apache.hudi.AvroConversionHelper;
 import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
-import org.apache.hudi.exception.HoodieDeltaStreamerException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.exception.HoodieKeyGeneratorException;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
 import org.apache.spark.sql.types.StructType;
@@ -58,15 +58,15 @@ public class TestTimestampBasedKeyGenerator {
         .generateAvroRecordFromJson(schema, 1, "001", "f1");
     baseRow = genericRecordToRow(baseRecord);
 
-    properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "field1");
-    properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "createTime");
-    properties.setProperty(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY(), "false");
+    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "field1");
+    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "createTime");
+    properties.setProperty(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY, "false");
   }
 
   private TypedProperties getBaseKeyConfig(String timestampType, String dateFormat, String timezone, String scalarType) {
-    properties.setProperty(TimestampBasedKeyGenerator.Config.TIMESTAMP_TYPE_FIELD_PROP, timestampType);
-    properties.setProperty(TimestampBasedKeyGenerator.Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, dateFormat);
-    properties.setProperty(TimestampBasedKeyGenerator.Config.TIMESTAMP_TIMEZONE_FORMAT_PROP, timezone);
+    properties.setProperty(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_TYPE_FIELD_PROP, timestampType);
+    properties.setProperty(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, dateFormat);
+    properties.setProperty(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_TIMEZONE_FORMAT_PROP, timezone);
 
     if (scalarType != null) {
       properties.setProperty("hoodie.deltastreamer.keygen.timebased.timestamp.scalar.time.unit", scalarType);
@@ -88,22 +88,22 @@ public class TestTimestampBasedKeyGenerator {
 
   private TypedProperties getBaseKeyConfig(String timestampType, String inputFormatList, String inputFormatDelimiterRegex, String inputTimezone, String outputFormat, String outputTimezone) {
     if (timestampType != null) {
-      properties.setProperty(TimestampBasedKeyGenerator.Config.TIMESTAMP_TYPE_FIELD_PROP, timestampType);
+      properties.setProperty(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_TYPE_FIELD_PROP, timestampType);
     }
     if (inputFormatList != null) {
-      properties.setProperty(TimestampBasedKeyGenerator.Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, inputFormatList);
+      properties.setProperty(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, inputFormatList);
     }
     if (inputFormatDelimiterRegex != null) {
-      properties.setProperty(TimestampBasedKeyGenerator.Config.TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX_PROP, inputFormatDelimiterRegex);
+      properties.setProperty(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX_PROP, inputFormatDelimiterRegex);
     }
     if (inputTimezone != null) {
-      properties.setProperty(TimestampBasedKeyGenerator.Config.TIMESTAMP_INPUT_TIMEZONE_FORMAT_PROP, inputTimezone);
+      properties.setProperty(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_INPUT_TIMEZONE_FORMAT_PROP, inputTimezone);
     }
     if (outputFormat != null) {
-      properties.setProperty(TimestampBasedKeyGenerator.Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, outputFormat);
+      properties.setProperty(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, outputFormat);
     }
     if (outputTimezone != null) {
-      properties.setProperty(TimestampBasedKeyGenerator.Config.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT_PROP, outputTimezone);
+      properties.setProperty(TimestampBasedAvroKeyGenerator.Config.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT_PROP, outputTimezone);
     }
     return properties;
   }
@@ -213,7 +213,7 @@ public class TestTimestampBasedKeyGenerator {
         "",
         "yyyyMMddHH",
         "GMT");
-    KeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
+    BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
     Assertions.assertEquals("2020040113", hk1.getPartitionPath());
 
@@ -231,7 +231,7 @@ public class TestTimestampBasedKeyGenerator {
         "",
         "yyyyMMddHH",
         "");
-    KeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
+    BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
     Assertions.assertEquals("2020040113", hk1.getPartitionPath());
 
@@ -249,7 +249,7 @@ public class TestTimestampBasedKeyGenerator {
         "",
         "yyyyMMddHH",
         "UTC");
-    KeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
+    BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
     Assertions.assertEquals("2020040113", hk1.getPartitionPath());
 
@@ -267,7 +267,7 @@ public class TestTimestampBasedKeyGenerator {
         "",
         "yyyyMMddHH",
         "UTC");
-    KeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
+    BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
     Assertions.assertEquals("2020040113", hk1.getPartitionPath());
 
@@ -285,7 +285,7 @@ public class TestTimestampBasedKeyGenerator {
         "",
         "yyyyMMddHH",
         "UTC");
-    KeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
+    BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
     Assertions.assertEquals("2020040118", hk1.getPartitionPath());
 
@@ -303,7 +303,7 @@ public class TestTimestampBasedKeyGenerator {
         "",
         "yyyyMMddHH",
         "UTC");
-    KeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
+    BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
     Assertions.assertEquals("2020040118", hk1.getPartitionPath());
 
@@ -321,7 +321,7 @@ public class TestTimestampBasedKeyGenerator {
         "",
         "yyyyMMddHH",
         "EST");
-    KeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
+    BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
     Assertions.assertEquals("2020040109", hk1.getPartitionPath());
 
@@ -339,11 +339,11 @@ public class TestTimestampBasedKeyGenerator {
         "",
         "yyyyMMddHH",
         "UTC");
-    KeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
-    Assertions.assertThrows(HoodieDeltaStreamerException.class, () -> keyGen.getKey(baseRecord));
+    BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
+    Assertions.assertThrows(HoodieKeyGeneratorException.class, () -> keyGen.getKey(baseRecord));
 
     baseRow = genericRecordToRow(baseRecord);
-    Assertions.assertThrows(HoodieDeltaStreamerException.class, () -> keyGen.getPartitionPath(baseRow));
+    Assertions.assertThrows(HoodieKeyGeneratorException.class, () -> keyGen.getPartitionPath(baseRow));
   }
 
   @Test
@@ -356,7 +356,7 @@ public class TestTimestampBasedKeyGenerator {
         "UTC",
         "MM/dd/yyyy",
         "UTC");
-    KeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
+    BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
     Assertions.assertEquals("04/01/2020", hk1.getPartitionPath());
 

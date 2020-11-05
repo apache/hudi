@@ -22,7 +22,6 @@ import java.time.LocalDate
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
-import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
 import org.apache.spark.sql.catalyst.expressions.GenericRow
 import org.scalatest.{FunSuite, Matchers}
 
@@ -43,7 +42,7 @@ class TestAvroConversionHelper extends FunSuite with Matchers {
 
   test("Logical type: date") {
     val schema = new Schema.Parser().parse(dateSchema)
-    val convertor = AvroConversionHelper.createConverterToRow(schema, convertAvroSchemaToStructType(schema))
+    val convertor = AvroConversionHelper.createConverterToRow(schema, AvroConversionUtils.convertAvroSchemaToStructType(schema))
 
     val dateOutputData = dateInputData.map(x => {
       val record = new GenericData.Record(schema) {{ put("date", x) }}
