@@ -51,6 +51,7 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   private final long maxMemoryForPendingCompaction;
   private final long maxMemoryForBootstrapBaseFile;
   private final long maxMemoryForReplaceFileGroups;
+  private final long maxMemoryForClusteringFileGroups;
   private final String baseStoreDir;
 
   public SpillableMapBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
@@ -60,6 +61,7 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
     this.maxMemoryForPendingCompaction = config.getMaxMemoryForPendingCompaction();
     this.maxMemoryForBootstrapBaseFile = config.getMaxMemoryForBootstrapBaseFile();
     this.maxMemoryForReplaceFileGroups = config.getMaxMemoryForReplacedFileGroups();
+    this.maxMemoryForClusteringFileGroups = config.getMaxMemoryForPendingClusteringFileGroups();
     this.baseStoreDir = config.getBaseStoreDir();
     init(metaClient, visibleActiveTimeline);
   }
@@ -124,6 +126,21 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
       Map<HoodieFileGroupId, HoodieInstant> pendingMap = new ExternalSpillableMap<>(
           maxMemoryForReplaceFileGroups, baseStoreDir, new DefaultSizeEstimator(), new DefaultSizeEstimator<>());
       pendingMap.putAll(replacedFileGroups);
+      return pendingMap;
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Override
+  protected Map<HoodieFileGroupId, HoodieInstant> createFileIdToPendingClusteringMap(final Map<HoodieFileGroupId, HoodieInstant> fileGroupsInClustering) {
+    try {
+      LOG.info("Creating file group id to clustering instant map using external spillable Map. Max Mem=" + maxMemoryForClusteringFileGroups
+          + ", BaseDir=" + baseStoreDir);
+      new File(baseStoreDir).mkdirs();
+      Map<HoodieFileGroupId, HoodieInstant> pendingMap = new ExternalSpillableMap<>(
+          maxMemoryForClusteringFileGroups, baseStoreDir, new DefaultSizeEstimator(), new DefaultSizeEstimator<>());
+      pendingMap.putAll(fileGroupsInClustering);
       return pendingMap;
     } catch (IOException e) {
       throw new RuntimeException(e);

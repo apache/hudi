@@ -412,6 +412,14 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     createFileInMetaPath(instant.getFileName(), content, overwrite);
   }
 
+  /**
+   * Saves content for inflight/requested REPLACE instant.
+   */
+  public void saveToPendingReplaceCommit(HoodieInstant instant, Option<byte[]> content) {
+    ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
+    createFileInMetaPath(instant.getFileName(), content, false);
+  }
+
   public void saveToCleanRequested(HoodieInstant instant, Option<byte[]> content) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
     ValidationUtils.checkArgument(instant.getState().equals(State.REQUESTED));
