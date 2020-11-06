@@ -22,6 +22,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -30,11 +31,14 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -331,5 +335,53 @@ public class TestAsyncCompaction extends CompactionTestBase {
           Arrays.asList(compactionInstantTime));
       executeCompaction(compactionInstantTime, client, hoodieTable, cfg, numRecs, true);
     }
+  }
+
+  @Test
+  public void testCompactionOnReplacedFiles() throws Exception {
+    // Schedule a compaction. Replace those file groups and ensure compaction completes successfully.
+    HoodieWriteConfig cfg = getConfig(true);
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg, true);) {
+      HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
+      String firstInstantTime = "001";
+      String secondInstantTime = "004";
+      String compactionInstantTime = "005";
+      String replaceInstantTime = "006";
+      String fourthInstantTime = "007";
+
+      int numRecs = 2000;
+
+      List<HoodieRecord> records = dataGen.generateInserts(firstInstantTime, numRecs);
+      runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
+          new ArrayList<>());
+
+      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
+      HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
+      scheduleCompaction(compactionInstantTime, client, cfg);
+      metaClient.reloadActiveTimeline();
+      HoodieInstant pendingCompactionInstant =
+          metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().get();
+      assertEquals(compactionInstantTime, pendingCompactionInstant.getTimestamp(), "Pending Compaction instant has expected instant time");
+
+      Set<HoodieFileGroupId> fileGroupsBeforeReplace = getAllFileGroups(hoodieTable, dataGen.getPartitionPaths());
+      // replace by using insertOverwrite
+      JavaRDD<HoodieRecord> replaceRecords = jsc.parallelize(dataGen.generateInserts(replaceInstantTime, numRecs), 1);
+      client.startCommitWithTime(replaceInstantTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
+      client.insertOverwrite(replaceRecords, replaceInstantTime);
+
+      metaClient.reloadActiveTimeline();
+      hoodieTable = getHoodieTable(metaClient, cfg);
+      Set<HoodieFileGroupId> newFileGroups = getAllFileGroups(hoodieTable, dataGen.getPartitionPaths());
+      // make sure earlier file groups are not visible
+      assertEquals(0, newFileGroups.stream().filter(fg -> fileGroupsBeforeReplace.contains(fg)).count());
+
+      // compaction should run with associated file groups are replaced
+      executeCompactionWithReplacedFiles(compactionInstantTime, client, hoodieTable, cfg, dataGen.getPartitionPaths(), fileGroupsBeforeReplace);
+    }
+  }
+
+  private Set<HoodieFileGroupId> getAllFileGroups(HoodieTable table, String[] partitions) {
+    return Arrays.stream(partitions).flatMap(partition -> table.getSliceView().getLatestFileSlices(partition)
+        .map(fg -> fg.getFileGroupId())).collect(Collectors.toSet());
   }
 }

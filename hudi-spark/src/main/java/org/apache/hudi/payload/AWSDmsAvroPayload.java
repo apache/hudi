@@ -50,7 +50,7 @@ public class AWSDmsAvroPayload extends OverwriteWithLatestAvroPayload {
   }
 
   public AWSDmsAvroPayload(Option<GenericRecord> record) {
-    this(record.get(), (record1) -> 0); // natural order
+    this(record.get(), 0); // natural order
   }
 
   /**

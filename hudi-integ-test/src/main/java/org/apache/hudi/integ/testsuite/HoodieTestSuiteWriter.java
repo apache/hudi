@@ -18,12 +18,6 @@
 
 package org.apache.hudi.integ.testsuite;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieReadClient;
@@ -38,15 +32,23 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob.HoodieTestSuiteConfig;
 import org.apache.hudi.integ.testsuite.dag.nodes.CleanNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.RollbackNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.ScheduleCompactNode;
-import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob.HoodieTestSuiteConfig;
+import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Operation;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 
 /**
  * A writer abstraction for the Hudi test suite. This class wraps different implementations of writers used to perform
@@ -66,6 +68,7 @@ public class HoodieTestSuiteWriter {
   private transient JavaSparkContext sparkContext;
   private static Set<String> VALID_DAG_NODES_TO_ALLOW_WRITE_CLIENT_IN_DELTASTREAMER_MODE = new HashSet<>(
       Arrays.asList(RollbackNode.class.getName(), CleanNode.class.getName(), ScheduleCompactNode.class.getName()));
+  private static final String GENERATED_DATA_PATH = "generated.data.path";
 
   public HoodieTestSuiteWriter(JavaSparkContext jsc, Properties props, HoodieTestSuiteConfig cfg, String schema) throws
       Exception {
@@ -181,12 +184,17 @@ public class HoodieTestSuiteWriter {
     }
   }
 
-  public void commit(JavaRDD<WriteStatus> records, Option<String> instantTime) {
+  public void commit(JavaRDD<WriteStatus> records, JavaRDD<DeltaWriteStats> generatedDataStats,
+                     Option<String> instantTime) {
     if (!cfg.useDeltaStreamer) {
       Map<String, String> extraMetadata = new HashMap<>();
       /** Store the checkpoint in the commit metadata just like
        * {@link HoodieDeltaStreamer#commit(SparkRDDWriteClient, JavaRDD, Option)} **/
       extraMetadata.put(HoodieDeltaStreamerWrapper.CHECKPOINT_KEY, lastCheckpoint.get());
+      if (generatedDataStats != null) {
+        // Just stores the path where this batch of data is generated to
+        extraMetadata.put(GENERATED_DATA_PATH, generatedDataStats.map(s -> s.getFilePath()).collect().get(0));
+      }
       writeClient.commit(instantTime.get(), records, Option.of(extraMetadata));
     }
   }
@@ -217,5 +225,9 @@ public class HoodieTestSuiteWriter {
 
   public JavaSparkContext getSparkContext() {
     return sparkContext;
+  }
+
+  public Option<String> getLastCheckpoint() {
+    return lastCheckpoint;
   }
 }

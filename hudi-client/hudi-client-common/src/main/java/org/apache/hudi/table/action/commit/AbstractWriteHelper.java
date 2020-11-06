@@ -32,7 +32,7 @@ import java.time.Instant;
 public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O, R> {
 
   public HoodieWriteMetadata<O> write(String instantTime,
-                                      I inputRecordsRDD,
+                                      I inputRecords,
                                       HoodieEngineContext context,
                                       HoodieTable<T, I, K, O> table,
                                       boolean shouldCombine,
@@ -42,7 +42,7 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
     try {
       // De-dupe/merge if needed
       I dedupedRecords =
-          combineOnCondition(shouldCombine, inputRecordsRDD, shuffleParallelism, table);
+          combineOnCondition(shouldCombine, inputRecords, shuffleParallelism, table);
 
       Instant lookupBegin = Instant.now();
       I taggedRecords = dedupedRecords;
@@ -79,7 +79,7 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
    *
    * @param records     hoodieRecords to deduplicate
    * @param parallelism parallelism or partitions to be used while reducing/deduplicating
-   * @return RDD of HoodieRecord already be deduplicated
+   * @return Collection of HoodieRecord already be deduplicated
    */
   public I deduplicateRecords(
       I records, HoodieTable<T, I, K, O> table, int parallelism) {

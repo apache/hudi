@@ -99,6 +99,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public static final String EMBEDDED_TIMELINE_SERVER_ENABLED = "hoodie.embed.timeline.server";
   public static final String DEFAULT_EMBEDDED_TIMELINE_SERVER_ENABLED = "true";
+  public static final String EMBEDDED_TIMELINE_SERVER_PORT = "hoodie.embed.timeline.server.port";
+  public static final String DEFAULT_EMBEDDED_TIMELINE_SERVER_PORT = "0";
 
   public static final String FAIL_ON_TIMELINE_ARCHIVING_ENABLED_PROP = "hoodie.fail.on.timeline.archiving";
   public static final String DEFAULT_FAIL_ON_TIMELINE_ARCHIVING_ENABLED = "true";
@@ -253,6 +255,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public boolean isEmbeddedTimelineServerEnabled() {
     return Boolean.parseBoolean(props.getProperty(EMBEDDED_TIMELINE_SERVER_ENABLED));
+  }
+
+  public int getEmbeddedTimelineServerPort() {
+    return Integer.parseInt(props.getProperty(EMBEDDED_TIMELINE_SERVER_PORT, DEFAULT_EMBEDDED_TIMELINE_SERVER_PORT));
   }
 
   public boolean isFailOnTimelineArchivingEnabled() {
@@ -477,6 +483,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
    */
   public int getHbaseIndexMaxQPSPerRegionServer() {
     return Integer.parseInt(props.getProperty(HoodieHBaseIndexConfig.HBASE_MAX_QPS_PER_REGION_SERVER_PROP));
+  }
+
+  public boolean getHbaseIndexUpdatePartitionPath() {
+    return Boolean.parseBoolean(props.getProperty(HoodieHBaseIndexConfig.HBASE_INDEX_UPDATE_PARTITION_PATH));
   }
 
   public int getBloomIndexParallelism() {
@@ -950,6 +960,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
     public Builder withEmbeddedTimelineServerEnabled(boolean enabled) {
       props.setProperty(EMBEDDED_TIMELINE_SERVER_ENABLED, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder withEmbeddedTimelineServerPort(int port) {
+      props.setProperty(EMBEDDED_TIMELINE_SERVER_PORT, String.valueOf(port));
       return this;
     }
 

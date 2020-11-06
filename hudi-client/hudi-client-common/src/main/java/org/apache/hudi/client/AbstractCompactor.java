@@ -38,4 +38,9 @@ public abstract class AbstractCompactor<T extends HoodieRecordPayload, I, K, O> 
   }
 
   public abstract void compact(HoodieInstant instant) throws IOException;
+
+  public void updateWriteClient(AbstractHoodieWriteClient<T, I, K, O> writeClient) {
+    this.compactionClient = writeClient;
+  }
+
 }

@@ -18,11 +18,13 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.avro.model.HoodieActionInstant;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -32,15 +34,21 @@ import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,11 +56,14 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -146,13 +157,14 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
 
     assertEquals(6, timeline.countInstants(), "Loaded 6 commits and the count should match");
 
-    HoodieTestUtils.createCleanFiles(metaClient, basePath, "100", wrapperFs.getConf());
-    HoodieTestUtils.createCleanFiles(metaClient, basePath, "101", wrapperFs.getConf());
-    HoodieTestUtils.createCleanFiles(metaClient, basePath, "102", wrapperFs.getConf());
-    HoodieTestUtils.createCleanFiles(metaClient, basePath, "103", wrapperFs.getConf());
-    HoodieTestUtils.createCleanFiles(metaClient, basePath, "104", wrapperFs.getConf());
-    HoodieTestUtils.createCleanFiles(metaClient, basePath, "105", wrapperFs.getConf());
-    HoodieTestUtils.createPendingCleanFiles(metaClient, "106", "107");
+    createCleanMetadata("100", false);
+    createCleanMetadata("101", false);
+    createCleanMetadata("102", false);
+    createCleanMetadata("103", false);
+    createCleanMetadata("104", false);
+    createCleanMetadata("105", false);
+    createCleanMetadata("106", true);
+    createCleanMetadata("107", true);
 
     // reload the timeline and get all the commmits before archive
     timeline = metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
@@ -227,7 +239,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     int numCommits = 4;
     int commitInstant = 100;
     for (int i = 0; i < numCommits; i++) {
-      createReplaceMetadata(commitInstant);
+      createReplaceMetadata(String.valueOf(commitInstant));
       commitInstant += 100;
     }
 
@@ -478,17 +490,34 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     assertEquals(expectedCommitMetadata.getOperationType(), WriteOperationType.INSERT.toString());
   }
 
-  private void createReplaceMetadata(int commitInstant) throws Exception {
-    String commitTime = "" + commitInstant;
-    String fileId1 = "file-" + commitInstant + "-1";
-    String fileId2 = "file-" + commitInstant + "-2";
+  private void createReplaceMetadata(String instantTime) throws Exception {
+    String fileId1 = "file-" + instantTime + "-1";
+    String fileId2 = "file-" + instantTime + "-2";
 
     // create replace instant to mark fileId1 as deleted
     HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
     replaceMetadata.addReplaceFileId(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1);
     replaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
-    HoodieTestTable testTable =  HoodieTestTable.of(metaClient);
-    testTable.addReplaceCommit(commitTime, replaceMetadata);
-    testTable.withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
+    HoodieTestTable.of(metaClient)
+        .addReplaceCommit(instantTime, replaceMetadata)
+        .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
+  }
+
+  private void createCleanMetadata(String instantTime, boolean inflightOnly) throws IOException {
+    HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""), "", new HashMap<>(),
+        CleanPlanV2MigrationHandler.VERSION, new HashMap<>());
+    if (inflightOnly) {
+      HoodieTestTable.of(metaClient).addInflightClean(instantTime, cleanerPlan);
+    } else {
+      HoodieCleanStat cleanStats = new HoodieCleanStat(
+          HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
+          HoodieTestUtils.DEFAULT_PARTITION_PATHS[new Random().nextInt(HoodieTestUtils.DEFAULT_PARTITION_PATHS.length)],
+          Collections.emptyList(),
+          Collections.emptyList(),
+          Collections.emptyList(),
+          instantTime);
+      HoodieCleanMetadata cleanMetadata = convertCleanMetadata(instantTime, Option.of(0L), Collections.singletonList(cleanStats));
+      HoodieTestTable.of(metaClient).addClean(instantTime, cleanerPlan, cleanMetadata);
+    }
   }
 }

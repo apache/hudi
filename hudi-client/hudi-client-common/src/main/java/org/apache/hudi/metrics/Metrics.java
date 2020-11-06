@@ -38,13 +38,15 @@ public class Metrics {
   private static final Logger LOG = LogManager.getLogger(Metrics.class);
 
   private static volatile boolean initialized = false;
-  private static Metrics metrics = null;
+  private static Metrics instance = null;
+
   private final MetricRegistry registry;
   private MetricsReporter reporter;
+  private final String commonMetricPrefix;
 
   private Metrics(HoodieWriteConfig metricConfig) {
     registry = new MetricRegistry();
-
+    commonMetricPrefix = metricConfig.getTableName();
     reporter = MetricsReporterFactory.createReporter(metricConfig, registry);
     if (reporter == null) {
       throw new RuntimeException("Cannot initialize Reporter.");
@@ -52,25 +54,40 @@ public class Metrics {
     reporter.start();
 
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-      try {
-        registerHoodieCommonMetrics();
-        reporter.report();
-        if (getReporter() != null) {
-          getReporter().close();
-        }
-      } catch (Exception e) {
-        LOG.warn("Error while closing reporter", e);
-      }
+      reportAndCloseReporter();
     }));
   }
 
+  private void reportAndCloseReporter() {
+    try {
+      registerHoodieCommonMetrics();
+      reporter.report();
+      if (getReporter() != null) {
+        getReporter().close();
+      }
+    } catch (Exception e) {
+      LOG.warn("Error while closing reporter", e);
+    }
+  }
+
+  private void reportAndFlushMetrics() {
+    try {
+      LOG.info("Reporting and flushing all metrics");
+      this.registerHoodieCommonMetrics();
+      this.reporter.report();
+      this.registry.getNames().forEach(this.registry::remove);
+    } catch (Exception e) {
+      LOG.error("Error while reporting and flushing metrics", e);
+    }
+  }
+
   private void registerHoodieCommonMetrics() {
-    registerGauges(Registry.getAllMetrics(true, true), Option.empty());
+    registerGauges(Registry.getAllMetrics(true, true), Option.of(commonMetricPrefix));
   }
 
   public static Metrics getInstance() {
     assert initialized;
-    return metrics;
+    return instance;
   }
 
   public static synchronized void init(HoodieWriteConfig metricConfig) {
@@ -78,11 +95,26 @@ public class Metrics {
       return;
     }
     try {
-      metrics = new Metrics(metricConfig);
+      instance = new Metrics(metricConfig);
     } catch (Exception e) {
       throw new HoodieException(e);
     }
     initialized = true;
+  }
+
+  public static synchronized void shutdown() {
+    if (!initialized) {
+      return;
+    }
+    instance.reportAndCloseReporter();
+    initialized = false;
+  }
+
+  public static synchronized void flush() {
+    if (!Metrics.initialized) {
+      return;
+    }
+    instance.reportAndFlushMetrics();
   }
 
   public static void registerGauges(Map<String, Long> metricsMap, Option<String> prefix) {

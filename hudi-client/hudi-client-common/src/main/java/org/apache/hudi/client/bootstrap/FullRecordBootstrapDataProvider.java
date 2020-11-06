@@ -45,7 +45,7 @@ public abstract class FullRecordBootstrapDataProvider<I> implements Serializable
   }
 
   /**
-   * Generates a list of input partition and files and returns a RDD representing source.
+   * Generates a list of input partition and files and returns a collection representing source.
    * @param tableName Hudi Table Name
    * @param sourceBasePath Source Base Path
    * @param partitionPaths Partition Paths

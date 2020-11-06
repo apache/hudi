@@ -35,7 +35,7 @@ public interface BulkInsertPartitioner<I> {
   I repartitionRecords(I records, int outputSparkPartitions);
 
   /**
-   * @return {@code true} if the records within a RDD partition are sorted; {@code false} otherwise.
+   * @return {@code true} if the records within a partition are sorted; {@code false} otherwise.
    */
   boolean arePartitionRecordsSorted();
 }

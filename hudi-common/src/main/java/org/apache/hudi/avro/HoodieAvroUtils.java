@@ -23,7 +23,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.SchemaCompatabilityException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
 
 import org.apache.avro.Conversions.DecimalConversion;
 import org.apache.avro.JsonProperties;
@@ -204,6 +204,7 @@ public class HoodieAvroUtils {
     List<Schema.Field> filteredFields = schema.getFields()
                                               .stream()
                                               .filter(field -> !HoodieRecord.HOODIE_META_COLUMNS.contains(field.name()))
+                                              .map(field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))
                                               .collect(Collectors.toList());
     Schema filteredSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false);
     filteredSchema.setFields(filteredFields);
@@ -321,7 +322,7 @@ public class HoodieAvroUtils {
       }
     }
     if (!GenericData.get().validate(newSchema, newRecord)) {
-      throw new SchemaCompatabilityException(
+      throw new SchemaCompatibilityException(
           "Unable to validate the rewritten record " + record + " against schema " + newSchema);
     }
     return newRecord;

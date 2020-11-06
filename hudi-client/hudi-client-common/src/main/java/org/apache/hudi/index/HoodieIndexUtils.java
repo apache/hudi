@@ -73,7 +73,7 @@ public class HoodieIndexUtils {
   public static HoodieRecord getTaggedRecord(HoodieRecord inputRecord, Option<HoodieRecordLocation> location) {
     HoodieRecord record = inputRecord;
     if (location.isPresent()) {
-      // When you have a record in multiple files in the same partition, then rowKeyRecordPairRDD
+      // When you have a record in multiple files in the same partition, then <row key, record> collection
       // will have 2 entries with the same exact in memory copy of the HoodieRecord and the 2
       // separate filenames that the record is found in. This will result in setting
       // currentLocation 2 times and it will fail the second time. So creating a new in memory

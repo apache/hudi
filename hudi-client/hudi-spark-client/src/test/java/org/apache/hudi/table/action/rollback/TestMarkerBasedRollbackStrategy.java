@@ -33,6 +33,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -58,10 +59,10 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     // given: wrote some base files and corresponding markers
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
     String f0 = testTable.addRequestedCommit("000")
-        .withBaseFilesInPartitions("partA").get("partA");
+        .getFileIdsWithBaseFilesInPartitions("partA").get("partA");
     String f1 = testTable.addCommit("001")
         .withBaseFilesInPartition("partA", f0)
-        .withBaseFilesInPartitions("partB").get("partB");
+        .getFileIdsWithBaseFilesInPartitions("partB").get("partB");
     String f2 = "f2";
     testTable.forCommit("001")
         .withMarkerFile("partA", f0, IOType.MERGE)
@@ -75,11 +76,11 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     // then: ensure files are deleted correctly, non-existent files reported as failed deletes
     assertEquals(2, stats.size());
 
-    List<FileStatus> partAFiles = testTable.listAllFiles("partA");
-    List<FileStatus> partBFiles = testTable.listAllFiles("partB");
+    FileStatus[] partAFiles = testTable.listAllFilesInPartition("partA");
+    FileStatus[] partBFiles = testTable.listAllFilesInPartition("partB");
 
-    assertEquals(0, partBFiles.size());
-    assertEquals(1, partAFiles.size());
+    assertEquals(0, partBFiles.length);
+    assertEquals(1, partAFiles.length);
     assertEquals(2, stats.stream().mapToInt(r -> r.getSuccessDeleteFiles().size()).sum());
     assertEquals(1, stats.stream().mapToInt(r -> r.getFailedDeleteFiles().size()).sum());
   }
@@ -89,10 +90,10 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     // given: wrote some base + log files and corresponding markers
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
     String f2 = testTable.addRequestedDeltaCommit("000")
-        .withBaseFilesInPartitions("partA").get("partA");
+        .getFileIdsWithBaseFilesInPartitions("partA").get("partA");
     String f1 = testTable.addDeltaCommit("001")
         .withLogFile("partA", f2)
-        .withBaseFilesInPartitions("partB").get("partB");
+        .getFileIdsWithBaseFilesInPartitions("partB").get("partB");
     String f3 = "f3";
     String f4 = "f4";
     testTable.forDeltaCommit("001")
@@ -108,15 +109,15 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     // then: ensure files are deleted, rollback block is appended (even if append does not exist)
     assertEquals(2, stats.size());
     // will have the log file
-    List<FileStatus> partBFiles = testTable.listAllFiles("partB");
-    assertEquals(1, partBFiles.size());
-    assertTrue(partBFiles.get(0).getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension()));
-    assertTrue(partBFiles.get(0).getLen() > 0);
+    FileStatus[] partBFiles = testTable.listAllFilesInPartition("partB");
+    assertEquals(1, partBFiles.length);
+    assertTrue(partBFiles[0].getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension()));
+    assertTrue(partBFiles[0].getLen() > 0);
 
-    List<FileStatus> partAFiles = testTable.listAllFiles("partA");
-    assertEquals(3, partAFiles.size());
-    assertEquals(2, partAFiles.stream().filter(s -> s.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())).count());
-    assertEquals(1, partAFiles.stream().filter(s -> s.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())).filter(f -> f.getLen() > 0).count());
+    FileStatus[] partAFiles = testTable.listAllFilesInPartition("partA");
+    assertEquals(3, partAFiles.length);
+    assertEquals(2, Stream.of(partAFiles).filter(s -> s.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())).count());
+    assertEquals(1, Stream.of(partAFiles).filter(s -> s.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())).filter(f -> f.getLen() > 0).count());
 
     // only partB/f1_001 will be deleted
     assertEquals(1, stats.stream().mapToInt(r -> r.getSuccessDeleteFiles().size()).sum());

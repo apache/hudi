@@ -99,24 +99,30 @@ public class HoodieDeltaStreamer implements Serializable {
 
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc) throws IOException {
     this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
-        jssc.hadoopConfiguration(), null);
+        jssc.hadoopConfiguration(), Option.empty());
   }
 
-  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, TypedProperties props) throws IOException {
+  public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, Option<TypedProperties> props) throws IOException {
     this(cfg, jssc, FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
         jssc.hadoopConfiguration(), props);
   }
 
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf) throws IOException {
-    this(cfg, jssc, fs, conf, null);
+    this(cfg, jssc, fs, conf, Option.empty());
   }
 
   public HoodieDeltaStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
-                             TypedProperties props) throws IOException {
+                             Option<TypedProperties> props) throws IOException {
     // Resolving the properties first in a consistent way
-    this.properties = props != null ? props : UtilHelpers.readConfig(
-        FSUtils.getFs(cfg.propsFilePath, jssc.hadoopConfiguration()),
-        new Path(cfg.propsFilePath), cfg.configs).getConfig();
+    if (props.isPresent()) {
+      this.properties = props.get();
+    } else if (cfg.propsFilePath.equals(Config.DEFAULT_DFS_SOURCE_PROPERTIES)) {
+      this.properties = UtilHelpers.getConfig(cfg.configs).getConfig();
+    } else {
+      this.properties = UtilHelpers.readConfig(
+          FSUtils.getFs(cfg.propsFilePath, jssc.hadoopConfiguration()),
+          new Path(cfg.propsFilePath), cfg.configs).getConfig();
+    }
 
     if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
       InitialCheckPointProvider checkPointProvider =
@@ -128,7 +134,7 @@ public class HoodieDeltaStreamer implements Serializable {
     this.bootstrapExecutor = Option.ofNullable(
         cfg.runBootstrap ? new BootstrapExecutor(cfg, jssc, fs, conf, this.properties) : null);
     this.deltaSyncService = Option.ofNullable(
-        cfg.runBootstrap ? null : new DeltaSyncService(cfg, jssc, fs, conf, this.properties));
+        cfg.runBootstrap ? null : new DeltaSyncService(cfg, jssc, fs, conf, Option.ofNullable(this.properties)));
   }
 
   public void shutdownGracefully() {
@@ -199,6 +205,8 @@ public class HoodieDeltaStreamer implements Serializable {
   }
 
   public static class Config implements Serializable {
+    public static final String DEFAULT_DFS_SOURCE_PROPERTIES = "file://" + System.getProperty("user.dir")
+        + "/src/test/resources/delta-streamer-config/dfs-source.properties";
 
     @Parameter(names = {"--target-base-path"},
         description = "base path for the target hoodie table. "
@@ -221,8 +229,7 @@ public class HoodieDeltaStreamer implements Serializable {
         + "used, but recommend use to provide basic things like metrics endpoints, hive configs etc. For sources, refer"
         + "to individual classes, for supported properties."
         + " Properties in this file can be overridden by \"--hoodie-conf\"")
-    public String propsFilePath =
-        "file://" + System.getProperty("user.dir") + "/src/test/resources/delta-streamer-config/dfs-source.properties";
+    public String propsFilePath = DEFAULT_DFS_SOURCE_PROPERTIES;
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
         + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
@@ -503,7 +510,7 @@ public class HoodieDeltaStreamer implements Serializable {
     /**
      * Async Compactor Service.
      */
-    private AsyncCompactService asyncCompactService;
+    private Option<AsyncCompactService> asyncCompactService;
 
     /**
      * Table Type.
@@ -516,10 +523,11 @@ public class HoodieDeltaStreamer implements Serializable {
     private transient DeltaSync deltaSync;
 
     public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
-                            TypedProperties properties) throws IOException {
+                            Option<TypedProperties> properties) throws IOException {
       this.cfg = cfg;
       this.jssc = jssc;
       this.sparkSession = SparkSession.builder().config(jssc.getConf()).getOrCreate();
+      this.asyncCompactService = Option.empty();
 
       if (fs.exists(new Path(cfg.targetBasePath))) {
         HoodieTableMetaClient meta =
@@ -547,7 +555,7 @@ public class HoodieDeltaStreamer implements Serializable {
       ValidationUtils.checkArgument(!cfg.filterDupes || cfg.operation != Operation.UPSERT,
           "'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed.");
 
-      this.props = properties;
+      this.props = properties.get();
       LOG.info("Creating delta streamer with configs : " + props.toString());
       this.schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
           UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc), props, jssc);
@@ -558,7 +566,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     public DeltaSyncService(HoodieDeltaStreamer.Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf)
         throws IOException {
-      this(cfg, jssc, fs, conf, null);
+      this(cfg, jssc, fs, conf, Option.empty());
     }
 
     public DeltaSync getDeltaSync() {
@@ -579,12 +587,12 @@ public class HoodieDeltaStreamer implements Serializable {
           while (!isShutdownRequested()) {
             try {
               long start = System.currentTimeMillis();
-              Pair<Option<String>, JavaRDD<WriteStatus>> scheduledCompactionInstantAndRDD = deltaSync.syncOnce();
-              if (null != scheduledCompactionInstantAndRDD && scheduledCompactionInstantAndRDD.getLeft().isPresent()) {
-                LOG.info("Enqueuing new pending compaction instant (" + scheduledCompactionInstantAndRDD.getLeft() + ")");
-                asyncCompactService.enqueuePendingCompaction(new HoodieInstant(State.REQUESTED,
-                    HoodieTimeline.COMPACTION_ACTION, scheduledCompactionInstantAndRDD.getLeft().get()));
-                asyncCompactService.waitTillPendingCompactionsReducesTo(cfg.maxPendingCompactions);
+              Option<Pair<Option<String>, JavaRDD<WriteStatus>>> scheduledCompactionInstantAndRDD = Option.ofNullable(deltaSync.syncOnce());
+              if (scheduledCompactionInstantAndRDD.isPresent() && scheduledCompactionInstantAndRDD.get().getLeft().isPresent()) {
+                LOG.info("Enqueuing new pending compaction instant (" + scheduledCompactionInstantAndRDD.get().getLeft() + ")");
+                asyncCompactService.get().enqueuePendingCompaction(new HoodieInstant(State.REQUESTED,
+                    HoodieTimeline.COMPACTION_ACTION, scheduledCompactionInstantAndRDD.get().getLeft().get()));
+                asyncCompactService.get().waitTillPendingCompactionsReducesTo(cfg.maxPendingCompactions);
               }
               long toSleepMs = cfg.minSyncIntervalSeconds * 1000 - (System.currentTimeMillis() - start);
               if (toSleepMs > 0) {
@@ -610,9 +618,9 @@ public class HoodieDeltaStreamer implements Serializable {
      */
     private void shutdownCompactor(boolean error) {
       LOG.info("Delta Sync shutdown. Error ?" + error);
-      if (asyncCompactService != null) {
+      if (asyncCompactService.isPresent()) {
         LOG.warn("Gracefully shutting down compactor");
-        asyncCompactService.shutdown(false);
+        asyncCompactService.get().shutdown(false);
       }
     }
 
@@ -624,21 +632,26 @@ public class HoodieDeltaStreamer implements Serializable {
      */
     protected Boolean onInitializingWriteClient(SparkRDDWriteClient writeClient) {
       if (cfg.isAsyncCompactionEnabled()) {
-        asyncCompactService = new SparkAsyncCompactService(new HoodieSparkEngineContext(jssc), writeClient);
-        // Enqueue existing pending compactions first
-        HoodieTableMetaClient meta =
-            new HoodieTableMetaClient(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath, true);
-        List<HoodieInstant> pending = CompactionUtils.getPendingCompactionInstantTimes(meta);
-        pending.forEach(hoodieInstant -> asyncCompactService.enqueuePendingCompaction(hoodieInstant));
-        asyncCompactService.start((error) -> {
-          // Shutdown DeltaSync
-          shutdown(false);
-          return true;
-        });
-        try {
-          asyncCompactService.waitTillPendingCompactionsReducesTo(cfg.maxPendingCompactions);
-        } catch (InterruptedException ie) {
-          throw new HoodieException(ie);
+        if (asyncCompactService.isPresent()) {
+          // Update the write client used by Async Compactor.
+          asyncCompactService.get().updateWriteClient(writeClient);
+        } else {
+          asyncCompactService = Option.ofNullable(new SparkAsyncCompactService(new HoodieSparkEngineContext(jssc), writeClient));
+          // Enqueue existing pending compactions first
+          HoodieTableMetaClient meta =
+              new HoodieTableMetaClient(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath, true);
+          List<HoodieInstant> pending = CompactionUtils.getPendingCompactionInstantTimes(meta);
+          pending.forEach(hoodieInstant -> asyncCompactService.get().enqueuePendingCompaction(hoodieInstant));
+          asyncCompactService.get().start((error) -> {
+            // Shutdown DeltaSync
+            shutdown(false);
+            return true;
+          });
+          try {
+            asyncCompactService.get().waitTillPendingCompactionsReducesTo(cfg.maxPendingCompactions);
+          } catch (InterruptedException ie) {
+            throw new HoodieException(ie);
+          }
         }
       }
       return true;
@@ -659,14 +672,6 @@ public class HoodieDeltaStreamer implements Serializable {
 
     public SparkSession getSparkSession() {
       return sparkSession;
-    }
-
-    public JavaSparkContext getJavaSparkContext() {
-      return jssc;
-    }
-
-    public AsyncCompactService getAsyncCompactService() {
-      return asyncCompactService;
     }
 
     public TypedProperties getProps() {
