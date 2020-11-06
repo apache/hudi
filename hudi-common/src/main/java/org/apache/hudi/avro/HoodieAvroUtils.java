@@ -204,6 +204,7 @@ public class HoodieAvroUtils {
     List<Schema.Field> filteredFields = schema.getFields()
                                               .stream()
                                               .filter(field -> !HoodieRecord.HOODIE_META_COLUMNS.contains(field.name()))
+                                              .map(field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))
                                               .collect(Collectors.toList());
     Schema filteredSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false);
     filteredSchema.setFields(filteredFields);
