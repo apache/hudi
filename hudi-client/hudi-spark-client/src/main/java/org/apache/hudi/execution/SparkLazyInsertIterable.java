@@ -19,6 +19,7 @@
 package org.apache.hudi.execution;
 
 import org.apache.avro.Schema;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -34,14 +35,18 @@ import java.util.List;
 
 public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends HoodieLazyInsertIterable<T> {
 
+  private boolean useWriterSchema;
+
   public SparkLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
                                  boolean areRecordsSorted,
                                  HoodieWriteConfig config,
                                  String instantTime,
                                  HoodieTable hoodieTable,
                                  String idPrefix,
-                                 TaskContextSupplier taskContextSupplier) {
+                                 TaskContextSupplier taskContextSupplier,
+                                 boolean useWriterSchema) {
     super(recordItr, areRecordsSorted, config, instantTime, hoodieTable, idPrefix, taskContextSupplier);
+    this.useWriterSchema = useWriterSchema;
   }
 
   public SparkLazyInsertIterable(Iterator<HoodieRecord<T>> recordItr,
@@ -53,6 +58,7 @@ public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
                                  TaskContextSupplier taskContextSupplier,
                                  WriteHandleFactory writeHandleFactory) {
     super(recordItr, areRecordsSorted, config, instantTime, hoodieTable, idPrefix, taskContextSupplier, writeHandleFactory);
+    this.useWriterSchema = false;
   }
 
   @Override
@@ -61,7 +67,10 @@ public class SparkLazyInsertIterable<T extends HoodieRecordPayload> extends Hood
     BoundedInMemoryExecutor<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> bufferedIteratorExecutor =
         null;
     try {
-      final Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
+      Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
+      if (useWriterSchema) {
+        schema = HoodieAvroUtils.addMetadataFields(schema);
+      }
       bufferedIteratorExecutor =
           new SparkBoundedInMemoryExecutor<>(hoodieConfig, inputItr, getInsertHandler(), getTransformFunction(schema));
       final List<WriteStatus> result = bufferedIteratorExecutor.execute();

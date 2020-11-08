@@ -24,6 +24,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -336,6 +337,27 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    */
   public abstract HoodieWriteMetadata<O> compact(HoodieEngineContext context,
                                               String compactionInstantTime);
+
+
+  /**
+   * Schedule clustering for the instant time.
+   *
+   * @param context HoodieEngineContext
+   * @param instantTime Instant Time for scheduling clustering
+   * @param extraMetadata additional metadata to write into plan
+   * @return HoodieClusteringPlan, if there is enough data for clustering.
+   */
+  public abstract Option<HoodieClusteringPlan> scheduleClustering(HoodieEngineContext context,
+                                                                  String instantTime,
+                                                                  Option<Map<String, String>> extraMetadata);
+
+  /**
+   * Execute Clustering on the table. Clustering re-arranges the data so that it is optimized for data access.
+   *
+   * @param context HoodieEngineContext
+   * @param clusteringInstantTime Instant Time
+   */
+  public abstract HoodieWriteMetadata<O> cluster(HoodieEngineContext context, String clusteringInstantTime);
 
   /**
    * Perform metadata/full bootstrap of a Hudi table.
