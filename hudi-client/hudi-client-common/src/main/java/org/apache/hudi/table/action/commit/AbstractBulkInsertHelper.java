@@ -27,8 +27,21 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 public abstract class AbstractBulkInsertHelper<T extends HoodieRecordPayload, I, K, O, R> {
 
+  /**
+   * Mark instant as inflight, write input records, update index and return result.
+   */
   public abstract HoodieWriteMetadata<O> bulkInsert(I inputRecords, String instantTime,
                                                     HoodieTable<T, I, K, O> table, HoodieWriteConfig config,
                                                     BaseCommitActionExecutor<T, I, K, O, R> executor, boolean performDedupe,
                                                     Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner);
+
+  /**
+   * Only write input records. Does not change timeline/index. Return information about new files created.
+   */
+  public abstract O bulkInsert(I inputRecords, String instantTime,
+                               HoodieTable<T, I, K, O> table, HoodieWriteConfig config,
+                               boolean performDedupe,
+                               Option<BulkInsertPartitioner<T>> userDefinedBulkInsertPartitioner,
+                               boolean addMetadataFields,
+                               int parallelism);
 }

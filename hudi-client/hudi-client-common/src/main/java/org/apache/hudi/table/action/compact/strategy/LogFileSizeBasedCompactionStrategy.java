@@ -20,14 +20,10 @@ package org.apache.hudi.table.action.compact.strategy;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -39,21 +35,6 @@ import java.util.stream.Collectors;
  */
 public class LogFileSizeBasedCompactionStrategy extends BoundedIOCompactionStrategy
     implements Comparator<HoodieCompactionOperation> {
-
-  private static final String TOTAL_LOG_FILE_SIZE = "TOTAL_LOG_FILE_SIZE";
-
-  @Override
-  public Map<String, Double> captureMetrics(HoodieWriteConfig config, Option<HoodieBaseFile> dataFile,
-      String partitionPath, List<HoodieLogFile> logFiles) {
-    Map<String, Double> metrics = super.captureMetrics(config, dataFile, partitionPath, logFiles);
-
-    // Total size of all the log files
-    Long totalLogFileSize = logFiles.stream().map(HoodieLogFile::getFileSize).filter(size -> size >= 0)
-        .reduce(Long::sum).orElse(0L);
-    // save the metrics needed during the order
-    metrics.put(TOTAL_LOG_FILE_SIZE, totalLogFileSize.doubleValue());
-    return metrics;
-  }
 
   @Override
   public List<HoodieCompactionOperation> orderAndFilter(HoodieWriteConfig writeConfig,

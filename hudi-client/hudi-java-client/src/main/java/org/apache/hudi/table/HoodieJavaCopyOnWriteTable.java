@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -133,6 +134,16 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
   public HoodieWriteMetadata<List<WriteStatus>> compact(HoodieEngineContext context,
                                                         String compactionInstantTime) {
     throw new HoodieNotSupportedException("Compact is not supported yet");
+  }
+
+  @Override
+  public Option<HoodieClusteringPlan> scheduleClustering(final HoodieEngineContext context, final String instantTime, final Option<Map<String, String>> extraMetadata) {
+    throw new HoodieNotSupportedException("Clustering is not supported yet");
+  }
+
+  @Override
+  public HoodieWriteMetadata<List<WriteStatus>> cluster(final HoodieEngineContext context, final String clusteringInstantTime) {
+    throw new HoodieNotSupportedException("Clustering is not supported yet");
   }
 
   @Override
