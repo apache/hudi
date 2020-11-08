@@ -213,6 +213,11 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
+  public HoodieWriteMetadata<List<WriteStatus>> cluster(final String clusteringInstant, final boolean shouldComplete) {
+    throw new HoodieNotSupportedException("Cluster is not supported in HoodieJavaClient");
+  }
+
+  @Override
   protected HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> getTableAndInitCtx(WriteOperationType operationType, String instantTime) {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     // new JavaUpgradeDowngrade(metaClient, config, context).run(metaClient, HoodieTableVersion.current(), config, context, instantTime);

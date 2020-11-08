@@ -76,6 +76,8 @@ public enum WriteOperationType {
         return INSERT_OVERWRITE;
       case "insert_overwrite_table":
         return INSERT_OVERWRITE_TABLE;
+      case "cluster":
+        return CLUSTER;
       default:
         throw new HoodieException("Invalid value of Type.");
     }
