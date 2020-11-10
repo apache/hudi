@@ -97,6 +97,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
   private int maxQpsPerRegionServer;
   private long totalNumInserts;
   private int numWriteStatusWithInserts;
+  private static transient Thread shutdownThread;
 
   /**
    * multiPutBatchSize will be computed and re-set in updateLocation if
@@ -155,13 +156,16 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
    * exits.
    */
   private void addShutDownHook() {
-    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-      try {
-        hbaseConnection.close();
-      } catch (Exception e) {
-        // fail silently for any sort of exception
-      }
-    }));
+    if (null == shutdownThread) {
+      shutdownThread = new Thread(() -> {
+        try {
+          hbaseConnection.close();
+        } catch (Exception e) {
+          // fail silently for any sort of exception
+        }
+      });
+      Runtime.getRuntime().addShutdownHook(shutdownThread);
+    }
   }
 
   /**
