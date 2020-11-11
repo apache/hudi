@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.exception.HoodieSerializationException;
-
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
@@ -72,7 +70,6 @@ public class SerializationUtils {
    * @param objectData the serialized object, must not be null
    * @return the deserialized object
    * @throws IllegalArgumentException if {@code objectData} is {@code null}
-   * @throws HoodieSerializationException (runtime) if the serialization fails
    */
   public static <T> T deserialize(final byte[] objectData) {
     if (objectData == null) {

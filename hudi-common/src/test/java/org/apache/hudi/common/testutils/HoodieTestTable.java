@@ -21,12 +21,19 @@ package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.util.CompactionUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -189,6 +196,20 @@ public class HoodieTestTable {
     return this;
   }
 
+  public HoodieTestTable addRequestedCompaction(String instantTime, HoodieCompactionPlan compactionPlan) throws IOException {
+    HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
+    metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
+        TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
+    return addRequestedCompaction(instantTime);
+  }
+
+  public HoodieTestTable addRequestedCompaction(String instantTime, FileSlice... fileSlices) throws IOException {
+    HoodieCompactionPlan plan = CompactionUtils
+        .buildFromFileSlices(Arrays.stream(fileSlices).map(fs -> Pair.of(fs.getPartitionPath(), fs))
+            .collect(Collectors.toList()), Option.empty(), Option.empty());
+    return addRequestedCompaction(instantTime, plan);
+  }
+
   public HoodieTestTable addCompaction(String instantTime) throws IOException {
     createRequestedCompaction(basePath, instantTime);
     createInflightCompaction(basePath, instantTime);
@@ -245,7 +266,7 @@ public class HoodieTestTable {
    *
    * @return A {@link Map} of partition and its newly inserted file's id.
    */
-  public Map<String, String> withBaseFilesInPartitions(String... partitions) throws Exception {
+  public Map<String, String> getFileIdsWithBaseFilesInPartitions(String... partitions) throws Exception {
     Map<String, String> partitionFileIdMap = new HashMap<>();
     for (String p : partitions) {
       String fileId = UUID.randomUUID().toString();
@@ -277,7 +298,7 @@ public class HoodieTestTable {
     return this;
   }
 
-  public String withLogFile(String partitionPath) throws Exception {
+  public String getFileIdWithLogFile(String partitionPath) throws Exception {
     String fileId = UUID.randomUUID().toString();
     withLogFile(partitionPath, fileId);
     return fileId;
@@ -287,8 +308,10 @@ public class HoodieTestTable {
     return withLogFile(partitionPath, fileId, 0);
   }
 
-  public HoodieTestTable withLogFile(String partitionPath, String fileId, int version) throws Exception {
-    FileCreateUtils.createLogFile(basePath, partitionPath, currentInstantTime, fileId, version);
+  public HoodieTestTable withLogFile(String partitionPath, String fileId, int... versions) throws Exception {
+    for (int version : versions) {
+      FileCreateUtils.createLogFile(basePath, partitionPath, currentInstantTime, fileId, version);
+    }
     return this;
   }
 

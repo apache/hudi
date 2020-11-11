@@ -50,6 +50,11 @@
       <version>${project.version}</version>
     </dependency>
 
+    <dependency>
+      <groupId>joda-time</groupId>
+      <artifactId>joda-time</artifactId>
+    </dependency>
+
     <!-- Logging -->
     <dependency>
       <groupId>log4j</groupId>

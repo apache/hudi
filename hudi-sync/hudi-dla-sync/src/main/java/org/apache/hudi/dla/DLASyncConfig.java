@@ -68,6 +68,9 @@ public class DLASyncConfig implements Serializable {
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;
 
+  @Parameter(names = {"--support-timestamp"}, description = "If true, converts int64(timestamp_micros) to timestamp type")
+  public Boolean supportTimestamp = false;
+
   public static DLASyncConfig copy(DLASyncConfig cfg) {
     DLASyncConfig newConfig = new DLASyncConfig();
     newConfig.databaseName = cfg.databaseName;
@@ -81,6 +84,7 @@ public class DLASyncConfig implements Serializable {
     newConfig.assumeDatePartitioning = cfg.assumeDatePartitioning;
     newConfig.skipROSuffix = cfg.skipROSuffix;
     newConfig.useDLASyncHiveStylePartitioning = cfg.useDLASyncHiveStylePartitioning;
+    newConfig.supportTimestamp = cfg.supportTimestamp;
     return newConfig;
   }
 

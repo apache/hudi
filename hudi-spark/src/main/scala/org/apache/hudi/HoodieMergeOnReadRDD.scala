@@ -23,7 +23,6 @@ import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder}
 import org.apache.hadoop.conf.Configuration
@@ -31,7 +30,7 @@ import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskCont
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.{AvroDeserializer, AvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeProjection, UnsafeRow}
+import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.vectorized.ColumnarBatch
 

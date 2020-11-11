@@ -78,6 +78,7 @@
                   <include>org.apache.hbase:hbase-server</include>
                   <include>org.apache.htrace:htrace-core</include>
                   <include>com.yammer.metrics:metrics-core</include>
+                  <include>com.google.guava:guava</include>
                 </includes>
               </artifactSet>
               <relocations>
@@ -102,18 +103,8 @@
                   <shadedPattern>org.apache.hudi.org.apache.avro.</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>org.apache.hadoop.hbase.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.hadoop.hbase.</shadedPattern>
-                  <excludes>
-                    <!-- Hive 2.3.3 brings in Hbase 1.1.1 which conflicts with our version even with shading -->
-                    <!-- Hbase Version check is implemented using a global runtime configuration hbase.defaults.for.version -->
-                    <!-- The above configuration is auto set by hbase version used by hive at load time which conflicts with our version. Hence, the below exclusion to skip this check -->
-                    <exclude>org.apache.hadoop.hbase.util.VersionInfo</exclude>
-                  </excludes>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.htrace.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.htrace.</shadedPattern>
+                  <pattern>com.google.common.</pattern>
+                  <shadedPattern>org.apache.hudi.com.google.common.</shadedPattern>
                 </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>

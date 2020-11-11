@@ -17,16 +17,9 @@
 
 package org.apache.hudi
 
-import com.google.common.collect.Lists
-import org.apache.avro.Schema
-import org.apache.hadoop.fs.GlobPattern
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.common.bootstrap.index.BootstrapIndex
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hadoop.fs.GlobPattern
@@ -36,7 +29,7 @@ import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 
 import scala.collection.JavaConversions._

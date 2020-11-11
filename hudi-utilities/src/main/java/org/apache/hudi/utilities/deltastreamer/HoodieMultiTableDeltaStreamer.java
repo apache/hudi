@@ -22,6 +22,7 @@ import com.beust.jcommander.Parameter;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -351,7 +352,7 @@ public class HoodieMultiTableDeltaStreamer {
   public void sync() {
     for (TableExecutionContext context : tableExecutionContexts) {
       try {
-        new HoodieDeltaStreamer(context.getConfig(), jssc, context.getProperties()).sync();
+        new HoodieDeltaStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties())).sync();
         successTables.add(Helpers.getTableWithDatabase(context));
       } catch (Exception e) {
         logger.error("error while running MultiTableDeltaStreamer for table: " + context.getTableName(), e);

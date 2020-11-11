@@ -17,7 +17,7 @@
 package org.apache.hudi
 
 import java.lang
-import java.util.function.{Function, Supplier}
+import java.util.function.Function
 
 import org.apache.hudi.async.{AsyncCompactService, SparkStreamingAsyncCompactService}
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -31,7 +31,7 @@ import org.apache.hudi.exception.HoodieCorruptedDataException
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.execution.streaming.Sink
-import org.apache.spark.sql.streaming.{OutputMode, StreamingQueryListener}
+import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
 
 import scala.util.{Failure, Success, Try}

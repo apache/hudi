@@ -94,7 +94,7 @@ public abstract class AbstractMergeHelper<T extends HoodieRecordPayload, I, K, O
                                                                                                Schema readSchema, boolean externalSchemaTransformation) throws IOException {
     Path externalFilePath = new Path(baseFile.getBootstrapBaseFile().get().getPath());
     Configuration bootstrapFileConfig = new Configuration(table.getHadoopConf());
-    HoodieFileReader<GenericRecord> bootstrapReader = HoodieFileReaderFactory.<T, GenericRecord>getFileReader(bootstrapFileConfig, externalFilePath);
+    HoodieFileReader<GenericRecord> bootstrapReader = HoodieFileReaderFactory.<GenericRecord>getFileReader(bootstrapFileConfig, externalFilePath);
     Schema bootstrapReadSchema;
     if (externalSchemaTransformation) {
       bootstrapReadSchema = bootstrapReader.getSchema();

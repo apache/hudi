@@ -18,11 +18,16 @@
 
 package org.apache.hudi.integ.testsuite.dag.nodes;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
+import org.apache.hudi.integ.testsuite.helpers.DFSTestSuitePathSelector;
+import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 
 /**
  * A rollback node in the DAG helps to perform rollback operations.
@@ -49,7 +54,12 @@ public class RollbackNode extends DagNode<Option<HoodieInstant>> {
     Option<HoodieInstant> lastInstant = metaClient.getActiveTimeline().getCommitsTimeline().lastInstant();
     if (lastInstant.isPresent()) {
       log.info("Rolling back last instant {}", lastInstant.get());
+      log.info("Cleaning up generated data for the instant being rolled back {}", lastInstant.get());
+      ValidationUtils.checkArgument(executionContext.getWriterContext().getProps().getOrDefault(DFSPathSelector.Config.SOURCE_INPUT_SELECTOR,
+          DFSPathSelector.class.getName()).toString().equalsIgnoreCase(DFSTestSuitePathSelector.class.getName()), "Test Suite only supports DFSTestSuitePathSelector");
       executionContext.getHoodieTestSuiteWriter().getWriteClient(this).rollback(lastInstant.get().getTimestamp());
+      metaClient.getFs().delete(new Path(executionContext.getWriterContext().getCfg().inputBasePath,
+          executionContext.getWriterContext().getHoodieTestSuiteWriter().getLastCheckpoint().orElse("")), true);
       this.result = lastInstant;
     }
   }

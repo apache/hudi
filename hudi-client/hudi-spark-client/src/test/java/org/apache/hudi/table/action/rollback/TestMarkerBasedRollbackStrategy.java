@@ -59,10 +59,10 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     // given: wrote some base files and corresponding markers
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
     String f0 = testTable.addRequestedCommit("000")
-        .withBaseFilesInPartitions("partA").get("partA");
+        .getFileIdsWithBaseFilesInPartitions("partA").get("partA");
     String f1 = testTable.addCommit("001")
         .withBaseFilesInPartition("partA", f0)
-        .withBaseFilesInPartitions("partB").get("partB");
+        .getFileIdsWithBaseFilesInPartitions("partB").get("partB");
     String f2 = "f2";
     testTable.forCommit("001")
         .withMarkerFile("partA", f0, IOType.MERGE)
@@ -90,10 +90,10 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     // given: wrote some base + log files and corresponding markers
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
     String f2 = testTable.addRequestedDeltaCommit("000")
-        .withBaseFilesInPartitions("partA").get("partA");
+        .getFileIdsWithBaseFilesInPartitions("partA").get("partA");
     String f1 = testTable.addDeltaCommit("001")
         .withLogFile("partA", f2)
-        .withBaseFilesInPartitions("partB").get("partB");
+        .getFileIdsWithBaseFilesInPartitions("partB").get("partB");
     String f3 = "f3";
     String f4 = "f4";
     testTable.forDeltaCommit("001")
