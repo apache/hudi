@@ -81,8 +81,8 @@ public class HoodieSparkMergeOnReadTable<T extends HoodieRecordPayload> extends 
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> upsert(HoodieEngineContext context, String instantTime,
                                                           JavaRDD<HoodieRecord<T>> records, Schema schema) {
-    return new SparkUpsertDeltaCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime
-                    , records, schema).execute();
+    return new SparkUpsertDeltaCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime,
+            records, schema).execute();
   }
 
   @Override
