@@ -24,7 +24,15 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
+/**
+ * HUDI-1343:Add standard schema postprocessor which would rewrite the schema using spark-avro conversion.
+ */
 public class SparkAvroPostProcessor extends SchemaPostProcessor {
+
+  public static class Config {
+    public static final String SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE =
+            "hoodie.deltastreamer.schemaprovider.spark_avro_post_processor.enable";
+  }
 
   public SparkAvroPostProcessor(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
