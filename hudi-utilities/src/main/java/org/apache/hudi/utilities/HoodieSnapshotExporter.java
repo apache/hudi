@@ -18,6 +18,8 @@
 
 package org.apache.hudi.utilities;
 
+import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -175,7 +177,8 @@ public class HoodieSnapshotExporter {
         ? defaultPartitioner
         : ReflectionUtils.loadClass(cfg.outputPartitioner);
 
-    jsc.setJobGroup(this.getClass().getSimpleName(), "Exporting as non-HUDI dataset");
+    HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
+    context.setJobStatus(this.getClass().getSimpleName(), "Exporting as non-HUDI dataset");
     final BaseFileOnlyView fsView = getBaseFileOnlyView(jsc, cfg);
     Iterator<String> exportingFilePaths = jsc
         .parallelize(partitions, partitions.size())
@@ -193,14 +196,16 @@ public class HoodieSnapshotExporter {
 
   private void exportAsHudi(JavaSparkContext jsc, Config cfg, List<String> partitions, String latestCommitTimestamp) throws IOException {
     final BaseFileOnlyView fsView = getBaseFileOnlyView(jsc, cfg);
-    final SerializableConfiguration serConf = new SerializableConfiguration(jsc.hadoopConfiguration());
-    jsc.setJobGroup(this.getClass().getSimpleName(), "Exporting as HUDI dataset");
-    jsc.parallelize(partitions, partitions.size()).flatMap(partition -> {
+
+    final HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
+    final SerializableConfiguration serConf = context.getHadoopConf();
+    context.setJobStatus(this.getClass().getSimpleName(), "Exporting as HUDI dataset");
+
+    List<Tuple2<String, String>> files = context.flatMap(partitions, partition -> {
       // Only take latest version files <= latestCommit.
       List<Tuple2<String, String>> filePaths = new ArrayList<>();
       Stream<HoodieBaseFile> dataFiles = fsView.getLatestBaseFilesBeforeOrOn(partition, latestCommitTimestamp);
       dataFiles.forEach(hoodieDataFile -> filePaths.add(new Tuple2<>(partition, hoodieDataFile.getPath())));
-
       // also need to copy over partition metadata
       Path partitionMetaFile =
           new Path(new Path(cfg.sourceBasePath, partition), HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE);
@@ -208,9 +213,10 @@ public class HoodieSnapshotExporter {
       if (fs.exists(partitionMetaFile)) {
         filePaths.add(new Tuple2<>(partition, partitionMetaFile.toString()));
       }
+      return filePaths.stream();
+    }, partitions.size());
 
-      return filePaths.iterator();
-    }).foreach(tuple -> {
+    context.foreach(files, tuple -> {
       String partition = tuple._1();
       Path sourceFilePath = new Path(tuple._2());
       Path toPartitionPath = new Path(cfg.targetOutputPath, partition);
@@ -221,7 +227,7 @@ public class HoodieSnapshotExporter {
       }
       FileUtil.copy(fs, sourceFilePath, fs, new Path(toPartitionPath, sourceFilePath.getName()), false,
           fs.getConf());
-    });
+    }, files.size());
 
     // Also copy the .commit files
     LOG.info(String.format("Copying .commit files which are no-late-than %s.", latestCommitTimestamp));

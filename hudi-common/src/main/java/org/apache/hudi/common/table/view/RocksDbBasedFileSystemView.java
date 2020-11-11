@@ -18,23 +18,23 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.BootstrapBaseFileMapping;
+import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.RocksDBSchemaHelper;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.RocksDBDAO;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -43,6 +43,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -130,6 +131,65 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
                   + opInstantPair.getValue().getFileGroupId());
           rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForPendingCompaction(),
               schemaHelper.getKeyForPendingCompactionLookup(opInstantPair.getValue().getFileGroupId()));
+        })
+    );
+  }
+
+  @Override
+  protected boolean isPendingClusteringScheduledForFileId(HoodieFileGroupId fgId) {
+    return getPendingClusteringInstant(fgId).isPresent();
+  }
+
+  @Override
+  protected Option<HoodieInstant> getPendingClusteringInstant(HoodieFileGroupId fgId) {
+    String lookupKey = schemaHelper.getKeyForFileGroupsInPendingClustering(fgId);
+    HoodieInstant pendingClusteringInstant =
+        rocksDB.get(schemaHelper.getColFamilyForFileGroupsInPendingClustering(), lookupKey);
+    return Option.ofNullable(pendingClusteringInstant);
+  }
+
+  @Override
+  public Stream<Pair<HoodieFileGroupId, HoodieInstant>> fetchFileGroupsInPendingClustering() {
+    return rocksDB.<Pair<HoodieFileGroupId, HoodieInstant>>prefixSearch(schemaHelper.getColFamilyForFileGroupsInPendingClustering(), "")
+        .map(Pair::getValue);
+  }
+
+  @Override
+  void resetFileGroupsInPendingClustering(Map<HoodieFileGroupId, HoodieInstant> fgIdToInstantMap) {
+    LOG.info("Resetting file groups in pending clustering to ROCKSDB based file-system view at "
+        + config.getRocksdbBasePath() + ", Total file-groups=" + fgIdToInstantMap.size());
+
+    // Delete all replaced file groups
+    rocksDB.prefixDelete(schemaHelper.getColFamilyForFileGroupsInPendingClustering(), "part=");
+    // Now add new entries
+    addFileGroupsInPendingClustering(fgIdToInstantMap.entrySet().stream().map(entry -> Pair.of(entry.getKey(), entry.getValue())));
+    LOG.info("Resetting replacedFileGroups to ROCKSDB based file-system view complete");
+  }
+
+  @Override
+  void addFileGroupsInPendingClustering(Stream<Pair<HoodieFileGroupId, HoodieInstant>> fileGroups) {
+    rocksDB.writeBatch(batch ->
+        fileGroups.forEach(fgIdToClusterInstant -> {
+          ValidationUtils.checkArgument(!isPendingClusteringScheduledForFileId(fgIdToClusterInstant.getLeft()),
+              "Duplicate FileGroupId found in pending compaction operations. FgId :"
+                  + fgIdToClusterInstant.getLeft());
+
+          rocksDB.putInBatch(batch, schemaHelper.getColFamilyForFileGroupsInPendingClustering(),
+              schemaHelper.getKeyForFileGroupsInPendingClustering(fgIdToClusterInstant.getKey()), fgIdToClusterInstant);
+        })
+    );
+  }
+
+  @Override
+  void removeFileGroupsInPendingClustering(Stream<Pair<HoodieFileGroupId, HoodieInstant>> fileGroups) {
+    rocksDB.writeBatch(batch ->
+        fileGroups.forEach(fgToPendingClusteringInstant -> {
+          ValidationUtils.checkArgument(
+              !isPendingClusteringScheduledForFileId(fgToPendingClusteringInstant.getLeft()),
+              "Trying to remove a FileGroupId which is not found in pending compaction operations. FgId :"
+                  + fgToPendingClusteringInstant.getLeft());
+          rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForFileGroupsInPendingClustering(),
+              schemaHelper.getKeyForFileGroupsInPendingClustering(fgToPendingClusteringInstant.getLeft()));
         })
     );
   }
@@ -369,6 +429,59 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   Option<HoodieFileGroup> fetchHoodieFileGroup(String partitionPath, String fileId) {
     return Option.fromJavaOptional(getFileGroups(rocksDB.<FileSlice>prefixSearch(schemaHelper.getColFamilyForView(),
         schemaHelper.getPrefixForSliceViewByPartitionFile(partitionPath, fileId)).map(Pair::getValue)).findFirst());
+  }
+
+  @Override
+  protected void resetReplacedFileGroups(final Map<HoodieFileGroupId, HoodieInstant> replacedFileGroups) {
+    LOG.info("Resetting replacedFileGroups to ROCKSDB based file-system view at "
+        + config.getRocksdbBasePath() + ", Total file-groups=" + replacedFileGroups.size());
+
+    // Delete all replaced file groups
+    rocksDB.prefixDelete(schemaHelper.getColFamilyForReplacedFileGroups(), "part=");
+    // Now add new entries
+    addReplacedFileGroups(replacedFileGroups);
+    LOG.info("Resetting replacedFileGroups to ROCKSDB based file-system view complete");
+  }
+
+  @Override
+  protected void addReplacedFileGroups(final Map<HoodieFileGroupId, HoodieInstant> replacedFileGroups) {
+    Map<String, List<Map.Entry<HoodieFileGroupId, HoodieInstant>>> partitionToReplacedFileGroups =
+        replacedFileGroups.entrySet().stream().collect(Collectors.groupingBy(e -> e.getKey().getPartitionPath()));
+    partitionToReplacedFileGroups.entrySet().stream().forEach(partitionToReplacedFileGroupsEntry -> {
+      String partitionPath = partitionToReplacedFileGroupsEntry.getKey();
+      List<Map.Entry<HoodieFileGroupId, HoodieInstant>> replacedFileGroupsInPartition = partitionToReplacedFileGroupsEntry.getValue();
+
+      // Now add them
+      rocksDB.writeBatch(batch ->
+          replacedFileGroupsInPartition.stream().forEach(fgToReplacedInstant -> {
+            rocksDB.putInBatch(batch, schemaHelper.getColFamilyForReplacedFileGroups(),
+                schemaHelper.getKeyForReplacedFileGroup(fgToReplacedInstant.getKey()), fgToReplacedInstant.getValue());
+          })
+      );
+
+      LOG.info("Finished adding replaced file groups to  partition (" + partitionPath + ") to ROCKSDB based view at "
+          + config.getRocksdbBasePath() + ", Total file-groups=" + partitionToReplacedFileGroupsEntry.getValue().size());
+    });
+  }
+
+  @Override
+  protected void removeReplacedFileIdsAtInstants(Set<String> instants) {
+    //TODO can we make this more efficient by storing reverse mapping (Instant -> FileGroupId) as well?
+    Stream<String> keysToDelete = rocksDB.<HoodieInstant>prefixSearch(schemaHelper.getColFamilyForReplacedFileGroups(), "")
+        .filter(entry -> instants.contains(entry.getValue().getTimestamp()))
+        .map(Pair::getKey);
+
+    rocksDB.writeBatch(batch ->
+        keysToDelete.forEach(key -> rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForReplacedFileGroups(), key))
+    );
+  }
+
+  @Override
+  protected Option<HoodieInstant> getReplaceInstant(final HoodieFileGroupId fileGroupId) {
+    String lookupKey = schemaHelper.getKeyForReplacedFileGroup(fileGroupId);
+    HoodieInstant replacedInstant =
+        rocksDB.get(schemaHelper.getColFamilyForReplacedFileGroups(), lookupKey);
+    return Option.ofNullable(replacedInstant);
   }
 
   private Stream<HoodieFileGroup> getFileGroups(Stream<FileSlice> sliceStream) {

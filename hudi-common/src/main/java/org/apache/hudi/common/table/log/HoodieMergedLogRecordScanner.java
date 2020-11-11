@@ -88,7 +88,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       LOG.info("Number of entries in DiskBasedMap in ExternalSpillableMap => " + records.getDiskBasedMapNumEntries());
       LOG.info("Size of file spilled to disk => " + records.getSizeOfFileOnDiskInBytes());
     } catch (IOException e) {
-      throw new HoodieIOException("IOException when reading log file ");
+      throw new HoodieIOException("IOException when reading log file ", e);
     }
   }
 

@@ -17,26 +17,19 @@
 
 package org.apache.hudi
 
-
-import com.google.common.collect.Lists
-import org.apache.avro.Schema
-import org.apache.hadoop.fs.GlobPattern
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.common.bootstrap.index.BootstrapIndex
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.table.HoodieTable
-
 import org.apache.hadoop.fs.GlobPattern
+import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.table.HoodieSparkTable
 import org.apache.log4j.LogManager
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 
 import scala.collection.JavaConversions._
@@ -55,7 +48,6 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   private val log = LogManager.getLogger(classOf[IncrementalRelation])
 
-
   val skeletonSchema: StructType = HoodieSparkUtils.getMetaSchema
   private val metaClient = new HoodieTableMetaClient(sqlContext.sparkContext.hadoopConfiguration, basePath, true)
 
@@ -64,8 +56,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
     throw new HoodieException("Incremental view not implemented yet, for merge-on-read tables")
   }
   // TODO : Figure out a valid HoodieWriteConfig
-  private val hoodieTable = HoodieTable.create(metaClient, HoodieWriteConfig.newBuilder().withPath(basePath).build(),
-    sqlContext.sparkContext.hadoopConfiguration)
+  private val hoodieTable = HoodieSparkTable.create(HoodieWriteConfig.newBuilder().withPath(basePath).build(),
+    new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
+    metaClient)
   private val commitTimeline = hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants()
   if (commitTimeline.empty()) {
     throw new HoodieException("No instants to incrementally pull")
@@ -75,6 +68,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
       s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY}")
   }
 
+  val useEndInstantSchema = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY,
+    DataSourceReadOptions.DEFAULT_INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_VAL).toBoolean
+
   private val lastInstant = commitTimeline.lastInstant().get()
 
   private val commitsToReturn = commitTimeline.findInstantsInRange(
@@ -82,11 +78,16 @@ class IncrementalRelation(val sqlContext: SQLContext,
     optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY, lastInstant.getTimestamp))
     .getInstants.iterator().toList
 
-  // use schema from a file produced in the latest instant
-  val latestSchema: StructType = {
+  // use schema from a file produced in the end/latest instant
+  val usedSchema: StructType = {
     log.info("Inferring schema..")
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val tableSchema = schemaResolver.getTableAvroSchemaWithoutMetadataFields
+    val tableSchema = if (useEndInstantSchema) {
+      if (commitsToReturn.isEmpty)  schemaResolver.getTableAvroSchemaWithoutMetadataFields() else
+        schemaResolver.getTableAvroSchemaWithoutMetadataFields(commitsToReturn.last)
+    } else {
+      schemaResolver.getTableAvroSchemaWithoutMetadataFields()
+    }
     val dataSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
     StructType(skeletonSchema.fields ++ dataSchema.fields)
   }
@@ -103,7 +104,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
     }
   }
 
-  override def schema: StructType = latestSchema
+  override def schema: StructType = usedSchema
 
   override def buildScan(): RDD[Row] = {
     val regularFileIdToFullPath = mutable.HashMap[String, String]()
@@ -147,12 +148,12 @@ class IncrementalRelation(val sqlContext: SQLContext,
     } else {
       log.info("Additional Filters to be applied to incremental source are :" + filters)
 
-      var df: DataFrame = sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], latestSchema)
+      var df: DataFrame = sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], usedSchema)
 
       if (metaBootstrapFileIdToFullPath.nonEmpty) {
         df = sqlContext.sparkSession.read
                .format("hudi")
-               .schema(latestSchema)
+               .schema(usedSchema)
                .option(DataSourceReadOptions.READ_PATHS_OPT_KEY, filteredMetaBootstrapFullPaths.mkString(","))
                .load()
       }
@@ -160,7 +161,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
       if (regularFileIdToFullPath.nonEmpty)
       {
         df = df.union(sqlContext.read.options(sOpts)
-                        .schema(latestSchema)
+                        .schema(usedSchema)
                         .parquet(filteredRegularFullPaths.toList: _*)
                         .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
                           commitsToReturn.head.getTimestamp))

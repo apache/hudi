@@ -18,6 +18,8 @@
 
 package org.apache.hudi.utilities;
 
+import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -97,8 +99,10 @@ public class HoodieSnapshotCopier implements Serializable {
         fs.delete(new Path(outputDir), true);
       }
 
-      jsc.setJobGroup(this.getClass().getSimpleName(), "Creating a snapshot");
-      jsc.parallelize(partitions, partitions.size()).flatMap(partition -> {
+      HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
+      context.setJobStatus(this.getClass().getSimpleName(), "Creating a snapshot");
+
+      List<Tuple2<String, String>> filesToCopy = context.flatMap(partitions, partition -> {
         // Only take latest version files <= latestCommit.
         FileSystem fs1 = FSUtils.getFs(baseDir, serConf.newCopy());
         List<Tuple2<String, String>> filePaths = new ArrayList<>();
@@ -112,8 +116,10 @@ public class HoodieSnapshotCopier implements Serializable {
           filePaths.add(new Tuple2<>(partition, partitionMetaFile.toString()));
         }
 
-        return filePaths.iterator();
-      }).foreach(tuple -> {
+        return filePaths.stream();
+      }, partitions.size());
+
+      context.foreach(filesToCopy, tuple -> {
         String partition = tuple._1();
         Path sourceFilePath = new Path(tuple._2());
         Path toPartitionPath = new Path(outputDir, partition);
@@ -124,8 +130,8 @@ public class HoodieSnapshotCopier implements Serializable {
         }
         FileUtil.copy(ifs, sourceFilePath, ifs, new Path(toPartitionPath, sourceFilePath.getName()), false,
             ifs.getConf());
-      });
-
+      }, filesToCopy.size());
+      
       // Also copy the .commit files
       LOG.info(String.format("Copying .commit files which are no-late-than %s.", latestCommitTimestamp));
       FileStatus[] commitFilesToCopy =

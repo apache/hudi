@@ -24,12 +24,15 @@ import org.apache.hudi.integ.testsuite.HoodieTestSuiteWriter;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 import org.apache.hudi.integ.testsuite.generator.DeltaGenerator;
+import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
 import org.apache.spark.api.java.JavaRDD;
 
 /**
  * An insert node in the DAG of operations for a workflow.
  */
 public class InsertNode extends DagNode<JavaRDD<WriteStatus>> {
+
+  protected JavaRDD<DeltaWriteStats> deltaWriteStatsRDD;
 
   public InsertNode(Config config) {
     this.config = config;
@@ -48,7 +51,7 @@ public class InsertNode extends DagNode<JavaRDD<WriteStatus>> {
       log.info("Inserting input data {}", this.getName());
       Option<String> commitTime = executionContext.getHoodieTestSuiteWriter().startCommit();
       JavaRDD<WriteStatus> writeStatus = ingest(executionContext.getHoodieTestSuiteWriter(), commitTime);
-      executionContext.getHoodieTestSuiteWriter().commit(writeStatus, commitTime);
+      executionContext.getHoodieTestSuiteWriter().commit(writeStatus, this.deltaWriteStatsRDD, commitTime);
       this.result = writeStatus;
     }
   }
@@ -56,7 +59,8 @@ public class InsertNode extends DagNode<JavaRDD<WriteStatus>> {
   protected void generate(DeltaGenerator deltaGenerator) throws Exception {
     if (!config.isDisableGenerate()) {
       log.info("Generating input data for node {}", this.getName());
-      deltaGenerator.writeRecords(deltaGenerator.generateInserts(config)).count();
+      this.deltaWriteStatsRDD = deltaGenerator.writeRecords(deltaGenerator.generateInserts(config));
+      this.deltaWriteStatsRDD.count();
     }
   }
 

@@ -18,12 +18,12 @@
 
 package org.apache.hudi.timeline.service.handlers;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hudi.common.table.timeline.dto.ClusteringOpDTO;
 import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
-
-import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -86,6 +86,17 @@ public class FileSliceHandler extends Handler {
 
   public List<FileGroupDTO> getAllFileGroups(String basePath, String partitionPath) {
     return viewManager.getFileSystemView(basePath).getAllFileGroups(partitionPath).map(FileGroupDTO::fromFileGroup)
+        .collect(Collectors.toList());
+  }
+
+  public List<FileGroupDTO> getReplacedFileGroupsBeforeOrOn(String basePath, String maxCommitTime, String partitionPath) {
+    return viewManager.getFileSystemView(basePath).getReplacedFileGroupsBeforeOrOn(maxCommitTime, partitionPath).map(FileGroupDTO::fromFileGroup)
+        .collect(Collectors.toList());
+  }
+
+  public List<ClusteringOpDTO> getFileGroupsInPendingClustering(String basePath) {
+    return viewManager.getFileSystemView(basePath).getFileGroupsInPendingClustering()
+        .map(fgInstant -> ClusteringOpDTO.fromClusteringOp(fgInstant.getLeft(), fgInstant.getRight()))
         .collect(Collectors.toList());
   }
 
