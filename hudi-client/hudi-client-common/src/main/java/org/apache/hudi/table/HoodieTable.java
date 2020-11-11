@@ -31,7 +31,6 @@ import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.common.TaskContextSupplier;
 import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
-import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;

@@ -63,7 +63,7 @@ public class SparkWriteHelper<T extends HoodieRecordPayload, R> extends Abstract
       T reducedData;
       //To prevent every records from parsing schema
       if (rec2.getData() instanceof UpdatePrecombineAvroPayload) {
-        reducedData = schema.getSchema()!=null ? (T) rec1.getData().preCombine(rec2.getData(), schema.getSchema())
+        reducedData = schema.getSchema() != null ? (T) rec1.getData().preCombine(rec2.getData(), schema.getSchema())
                 : (T) rec1.getData().preCombine(rec2.getData());
       } else {
         reducedData = (T) rec1.getData().preCombine(rec2.getData());
