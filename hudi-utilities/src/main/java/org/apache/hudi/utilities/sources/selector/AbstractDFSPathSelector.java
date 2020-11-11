@@ -27,7 +27,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
 
 @PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
-public abstract class AbstractDFSPathSelector{
+public abstract class AbstractDFSPathSelector {
 
   protected final TypedProperties props;
   protected final String inputPath;
