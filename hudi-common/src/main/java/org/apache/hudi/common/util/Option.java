@@ -98,6 +98,9 @@ public final class Option<T> implements Serializable {
   }
 
   public <U> Option<U> map(Function<? super T, ? extends U> mapper) {
+    if (null == mapper) {
+      throw new NullPointerException("mapper should not be null");
+    }
     if (!isPresent()) {
       return empty();
     } else {
@@ -140,6 +143,8 @@ public final class Option<T> implements Serializable {
 
   @Override
   public String toString() {
-    return "Option{val=" + val + '}';
+    return val != null
+            ? "Option{val=" + val + "}"
+            : "Optional.empty";
   }
 }

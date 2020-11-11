@@ -64,7 +64,7 @@ import static org.mockito.Mockito.when;
 public class TestUpsertPartitioner extends HoodieClientTestBase {
 
   private static final Logger LOG = LogManager.getLogger(TestUpsertPartitioner.class);
-  private static final Schema SCHEMA = getSchemaFromResource(TestUpsertPartitioner.class, "/exampleSchema.txt");
+  private static final Schema SCHEMA = getSchemaFromResource(TestUpsertPartitioner.class, "/exampleSchema.avsc");
 
   private UpsertPartitioner getUpsertPartitioner(int smallFileSize, int numInserts, int numUpdates, int fileSize,
       String testPartitionPath, boolean autoSplitInserts) throws Exception {

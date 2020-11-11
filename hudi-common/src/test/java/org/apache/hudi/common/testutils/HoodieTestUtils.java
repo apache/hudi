@@ -18,9 +18,6 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -28,27 +25,15 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.HoodieLogFormat;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.util.CompactionUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.JavaSerializer;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.util.StringUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -120,66 +105,6 @@ public class HoodieTestUtils {
     properties.putIfAbsent(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
     properties.putIfAbsent(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, HoodieAvroPayload.class.getName());
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
-  }
-
-  /**
-   * @deprecated Use {@link HoodieTestTable} instead.
-   */
-  public static void createCommitFiles(String basePath, String... instantTimes) throws IOException {
-    for (String instantTime : instantTimes) {
-      new File(
-          basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-              + HoodieTimeline.makeRequestedCommitFileName(instantTime)).createNewFile();
-      new File(
-          basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-              + HoodieTimeline.makeInflightCommitFileName(instantTime)).createNewFile();
-      new File(
-          basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeCommitFileName(instantTime))
-          .createNewFile();
-    }
-  }
-
-  /**
-   * @deprecated Use {@link HoodieTestTable} instead.
-   */
-  public static String createDataFile(String basePath, String partitionPath, String instantTime, String fileID)
-      throws IOException {
-    String folderPath = basePath + "/" + partitionPath + "/";
-    new File(folderPath).mkdirs();
-    new File(folderPath + FSUtils.makeDataFileName(instantTime, DEFAULT_WRITE_TOKEN, fileID)).createNewFile();
-    return fileID;
-  }
-
-  /**
-   * @deprecated Use {@link HoodieTestTable} instead.
-   */
-  public static String createNewLogFile(FileSystem fs, String basePath, String partitionPath, String instantTime,
-      String fileID, Option<Integer> version) throws IOException {
-    String folderPath = basePath + "/" + partitionPath + "/";
-    boolean makeDir = fs.mkdirs(new Path(folderPath));
-    if (!makeDir) {
-      throw new IOException("cannot create directory for path " + folderPath);
-    }
-    boolean createFile = fs.createNewFile(new Path(folderPath + FSUtils.makeLogFileName(fileID, ".log", instantTime,
-        version.orElse(DEFAULT_LOG_VERSION), HoodieLogFormat.UNKNOWN_WRITE_TOKEN)));
-    if (!createFile) {
-      throw new IOException(
-          StringUtils.format("cannot create data file for commit %s and fileId %s", instantTime, fileID));
-    }
-    return fileID;
-  }
-
-  /**
-   * TODO: incorporate into {@link HoodieTestTable}.
-   *
-   * @deprecated Use {@link HoodieTestTable} instead.
-   */
-  public static void createCompactionRequest(HoodieTableMetaClient metaClient, String instant,
-      List<Pair<String, FileSlice>> fileSliceList) throws IOException {
-    HoodieCompactionPlan plan = CompactionUtils.buildFromFileSlices(fileSliceList, Option.empty(), Option.empty());
-    HoodieInstant compactionInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instant);
-    metaClient.getActiveTimeline().saveToCompactionRequested(compactionInstant,
-        TimelineMetadataUtils.serializeCompactionPlan(plan));
   }
 
   public static <T extends Serializable> T serializeDeserialize(T object, Class<T> clazz) {

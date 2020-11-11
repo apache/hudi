@@ -41,6 +41,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -149,6 +150,39 @@ public class TestHiveSyncTool {
 
     schemaString = HiveSchemaUtil.generateSchemaString(schema);
     assertEquals("`map_list` ARRAY< MAP< string, int>>", schemaString);
+  }
+
+  @Test
+  public void testSchemaConvertTimestampMicros() throws IOException {
+    MessageType schema = Types.buildMessage().optional(PrimitiveType.PrimitiveTypeName.INT64)
+        .as(OriginalType.TIMESTAMP_MICROS).named("my_element").named("my_timestamp");
+    String schemaString = HiveSchemaUtil.generateSchemaString(schema);
+    // verify backward compability - int64 converted to bigint type
+    assertEquals("`my_element` bigint", schemaString);
+    // verify new functionality - int64 converted to timestamp type when 'supportTimestamp' is enabled
+    schemaString = HiveSchemaUtil.generateSchemaString(schema, Collections.emptyList(), true);
+    assertEquals("`my_element` TIMESTAMP", schemaString);
+  }
+
+  @Test
+  public void testSchemaDiffForTimestampMicros() {
+    MessageType schema = Types.buildMessage().optional(PrimitiveType.PrimitiveTypeName.INT64)
+        .as(OriginalType.TIMESTAMP_MICROS).named("my_element").named("my_timestamp");
+    // verify backward compability - int64 converted to bigint type
+    SchemaDifference schemaDifference = HiveSchemaUtil.getSchemaDifference(schema,
+        Collections.emptyMap(), Collections.emptyList(), false);
+    assertEquals("bigint", schemaDifference.getAddColumnTypes().get("`my_element`"));
+    schemaDifference = HiveSchemaUtil.getSchemaDifference(schema,
+        schemaDifference.getAddColumnTypes(), Collections.emptyList(), false);
+    assertTrue(schemaDifference.isEmpty());
+
+    // verify schema difference is calculated correctly when supportTimestamp is enabled
+    schemaDifference = HiveSchemaUtil.getSchemaDifference(schema,
+        Collections.emptyMap(), Collections.emptyList(), true);
+    assertEquals("TIMESTAMP", schemaDifference.getAddColumnTypes().get("`my_element`"));
+    schemaDifference = HiveSchemaUtil.getSchemaDifference(schema,
+        schemaDifference.getAddColumnTypes(), Collections.emptyList(), true);
+    assertTrue(schemaDifference.isEmpty());
   }
 
   @ParameterizedTest
