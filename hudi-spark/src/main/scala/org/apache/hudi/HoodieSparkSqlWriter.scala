@@ -29,7 +29,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.{SparkRDDWriteClient, HoodieWriteResult}
 import org.apache.hudi.client.{SparkRDDWriteClient, WriteStatus}
-import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.config.{SerializableSchema, TypedProperties}
 import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
@@ -176,7 +176,7 @@ private[hudi] object HoodieSparkSqlWriter {
             (true, common.util.Option.empty())
           }
           client.startCommitWithTime(instantTime, commitActionType)
-          val writeResult = DataSourceUtils.doWriteOperation(client, hoodieRecords, instantTime, operation)
+          val writeResult = DataSourceUtils.doWriteOperation(client, hoodieRecords, instantTime, operation, schema)
           (writeResult, client)
         } else {
           val structName = s"${tblName}_record"

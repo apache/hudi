@@ -31,6 +31,7 @@ import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.common.TaskContextSupplier;
 import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
@@ -123,7 +124,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata<O> upsert(HoodieEngineContext context, String instantTime,
-      I records);
+      I records, Schema schema);
 
   /**
    * Insert a batch of new records into Hoodie table at the supplied instantTime.

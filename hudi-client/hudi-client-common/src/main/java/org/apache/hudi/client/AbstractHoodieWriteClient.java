@@ -19,6 +19,7 @@
 package org.apache.hudi.client;
 
 import com.codahale.metrics.Timer;
+import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
@@ -29,6 +30,7 @@ import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.callback.util.HoodieCommitCallbackFactory;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -259,7 +261,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * @param instantTime Instant time of the commit
    * @return WriteStatus to inspect errors and counts
    */
-  public abstract O upsert(I records, final String instantTime);
+  public abstract O upsert(I records, final String instantTime, Schema schema);
 
   /**
    * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.

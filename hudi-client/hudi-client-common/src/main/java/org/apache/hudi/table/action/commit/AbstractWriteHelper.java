@@ -19,8 +19,8 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
@@ -41,7 +41,7 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
                                       BaseCommitActionExecutor<T, I, K, O, R> executor,
                                       boolean performTagging) {
     return write(instantTime, inputRecords, context, table, shouldCombine, shuffleParallelism,
-            Option.empty(), executor, performTagging);
+            null, executor, performTagging);
   }
 
   public HoodieWriteMetadata<O> write(String instantTime,
@@ -50,7 +50,7 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
                                       HoodieTable<T, I, K, O> table,
                                       boolean shouldCombine,
                                       int shuffleParallelism,
-                                      Option<String> schema,
+                                      SerializableSchema schema,
                                       BaseCommitActionExecutor<T, I, K, O, R> executor,
                                       boolean performTagging) {
     try {
@@ -84,7 +84,7 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
   }
 
   public I combineOnCondition(
-      boolean condition, I records, int parallelism, HoodieTable<T, I, K, O> table, Option<String> schema) {
+      boolean condition, I records, int parallelism, HoodieTable<T, I, K, O> table, SerializableSchema schema) {
     return condition ? deduplicateRecords(records, table, parallelism, schema) : records;
   }
 
@@ -96,10 +96,10 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
    * @return Collection of HoodieRecord already be deduplicated
    */
   public I deduplicateRecords(
-      I records, HoodieTable<T, I, K, O> table, int parallelism, Option<String> schema) {
+      I records, HoodieTable<T, I, K, O> table, int parallelism, SerializableSchema schema) {
     return deduplicateRecords(records, table.getIndex(), parallelism, schema);
   }
 
   public abstract I deduplicateRecords(
-      I records, HoodieIndex<T, I, K, O> index, int parallelism, Option<String> schema);
+      I records, HoodieIndex<T, I, K, O> index, int parallelism, SerializableSchema schema);
 }

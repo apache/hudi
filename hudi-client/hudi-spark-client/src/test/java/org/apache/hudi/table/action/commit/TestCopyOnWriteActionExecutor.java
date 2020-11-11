@@ -385,7 +385,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
 
     // Insert new records
     BaseSparkCommitActionExecutor actionExecutor = new SparkUpsertCommitActionExecutor(context, config, table,
-        instantTime, jsc.parallelize(records));
+        instantTime, jsc.parallelize(records), null);
     jsc.parallelize(Arrays.asList(1))
         .map(i -> actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator()))
         .map(Transformations::flatten).collect();
@@ -426,7 +426,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     String partitionPath = writeStatus.getPartitionPath();
     long numRecordsInPartition = updates.stream().filter(u -> u.getPartitionPath().equals(partitionPath)).count();
     BaseSparkCommitActionExecutor newActionExecutor = new SparkUpsertCommitActionExecutor(context, config, table,
-        instantTime, jsc.parallelize(updates));
+        instantTime, jsc.parallelize(updates), null);
     final List<List<WriteStatus>> updateStatus = jsc.parallelize(Arrays.asList(1)).map(x -> {
       return newActionExecutor.handleUpdate(partitionPath, fileId, updates.iterator());
     }).map(Transformations::flatten).collect();

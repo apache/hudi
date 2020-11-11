@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -52,7 +53,7 @@ public class SparkWriteHelper<T extends HoodieRecordPayload, R> extends Abstract
   @Override
   public JavaRDD<HoodieRecord<T>> deduplicateRecords(JavaRDD<HoodieRecord<T>> records,
                                                      HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> index,
-                                                     int parallelism, Option<String> schema) {
+                                                     int parallelism, SerializableSchema schema) {
     boolean isIndexingGlobal = index.isGlobal();
     return records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
@@ -64,7 +65,7 @@ public class SparkWriteHelper<T extends HoodieRecordPayload, R> extends Abstract
       T reducedData;
       //To prevent every records from parsing schema
       if (rec2.getData() instanceof UpdatePrecombineAvroPayload) {
-        reducedData = schema.isPresent() ? (T) rec1.getData().preCombine(rec2.getData(), new Schema.Parser().parse(schema.get()))
+        reducedData = schema.getSchema()!=null ? (T) rec1.getData().preCombine(rec2.getData(), schema.getSchema())
                 : (T) rec1.getData().preCombine(rec2.getData());
       } else {
         reducedData = (T) rec1.getData().preCombine(rec2.getData());

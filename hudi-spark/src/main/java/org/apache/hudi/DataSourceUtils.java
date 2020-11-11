@@ -18,6 +18,7 @@
 
 package org.apache.hudi;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -25,6 +26,7 @@ import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -199,7 +201,7 @@ public class DataSourceUtils {
   }
 
   public static HoodieWriteResult doWriteOperation(SparkRDDWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
-                                                   String instantTime, WriteOperationType operation) throws HoodieException {
+                                                   String instantTime, WriteOperationType operation, Schema schema) throws HoodieException {
     switch (operation) {
       case BULK_INSERT:
         Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner =
@@ -208,7 +210,7 @@ public class DataSourceUtils {
       case INSERT:
         return new HoodieWriteResult(client.insert(hoodieRecords, instantTime));
       case UPSERT:
-        return new HoodieWriteResult(client.upsert(hoodieRecords, instantTime));
+        return new HoodieWriteResult(client.upsert(hoodieRecords, instantTime, schema));
       case INSERT_OVERWRITE:
         return client.insertOverwrite(hoodieRecords, instantTime);
       default:

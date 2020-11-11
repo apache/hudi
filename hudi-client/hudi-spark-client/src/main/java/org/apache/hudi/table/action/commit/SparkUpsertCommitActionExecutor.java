@@ -18,8 +18,10 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -34,18 +36,21 @@ public class SparkUpsertCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseSparkCommitActionExecutor<T> {
 
   private JavaRDD<HoodieRecord<T>> inputRecordsRDD;
+  private SerializableSchema schema;
 
   public SparkUpsertCommitActionExecutor(HoodieSparkEngineContext context,
                                          HoodieWriteConfig config, HoodieTable table,
-                                         String instantTime, JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
+                                         String instantTime, JavaRDD<HoodieRecord<T>> inputRecordsRDD,
+                                         Schema schema) {
     super(context, config, table, instantTime, WriteOperationType.UPSERT);
     this.inputRecordsRDD = inputRecordsRDD;
+    this.schema = new SerializableSchema(schema);
   }
 
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> execute() {
     return SparkWriteHelper.newInstance().write(instantTime, inputRecordsRDD, context, table,
             config.shouldCombineBeforeUpsert(), config.getUpsertShuffleParallelism(),
-                    Option.of(config.getSchema()), this, true);
+                    schema, this, true);
   }
 }
