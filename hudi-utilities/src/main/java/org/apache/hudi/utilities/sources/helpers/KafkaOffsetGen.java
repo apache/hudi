@@ -142,7 +142,7 @@ public class KafkaOffsetGen {
    * Kafka reset offset strategies.
    */
   enum KafkaResetOffsetStrategies {
-    LATEST, EARLIEST
+    LATEST, EARLIEST, NONE
   }
 
   /**
