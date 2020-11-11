@@ -21,9 +21,10 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 
+import org.apache.hudi.utilities.sources.selector.AbstractDFSPathSelector;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
@@ -71,7 +72,7 @@ public class CsvDFSSource extends RowSource {
       "mode", "columnNameOfCorruptRecord", "multiLine"
   );
 
-  private final transient DFSPathSelector pathSelector;
+  private final transient AbstractDFSPathSelector pathSelector;
   private final StructType sourceSchema;
 
   public CsvDFSSource(TypedProperties props,
@@ -79,7 +80,7 @@ public class CsvDFSSource extends RowSource {
       SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    this.pathSelector = DFSPathSelector.createSourceSelector(props, sparkContext.hadoopConfiguration());
+    this.pathSelector = UtilHelpers.createSourceSelector(props, sparkContext.hadoopConfiguration());
     if (schemaProvider != null) {
       sourceSchema = (StructType) SchemaConverters.toSqlType(schemaProvider.getSourceSchema())
           .dataType();

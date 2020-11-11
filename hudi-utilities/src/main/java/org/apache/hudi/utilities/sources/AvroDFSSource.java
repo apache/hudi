@@ -21,13 +21,14 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.mapred.AvroKey;
 import org.apache.avro.mapreduce.AvroKeyInputFormat;
 import org.apache.hadoop.io.NullWritable;
+import org.apache.hudi.utilities.sources.selector.AbstractDFSPathSelector;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -40,13 +41,11 @@ import java.io.IOException;
  */
 public class AvroDFSSource extends AvroSource {
 
-  private final DFSPathSelector pathSelector;
-
+  private final AbstractDFSPathSelector pathSelector;
   public AvroDFSSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) throws IOException {
     super(props, sparkContext, sparkSession, schemaProvider);
-    this.pathSelector = DFSPathSelector
-        .createSourceSelector(props, sparkContext.hadoopConfiguration());
+    this.pathSelector = UtilHelpers.createSourceSelector(props, sparkContext.hadoopConfiguration());
   }
 
   @Override

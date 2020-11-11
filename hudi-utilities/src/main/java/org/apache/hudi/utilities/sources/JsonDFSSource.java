@@ -21,9 +21,10 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 
+import org.apache.hudi.utilities.sources.selector.AbstractDFSPathSelector;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -33,12 +34,12 @@ import org.apache.spark.sql.SparkSession;
  */
 public class JsonDFSSource extends JsonSource {
 
-  private final DFSPathSelector pathSelector;
+  private final AbstractDFSPathSelector pathSelector;
 
   public JsonDFSSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    this.pathSelector = DFSPathSelector.createSourceSelector(props, sparkContext.hadoopConfiguration());
+    this.pathSelector = UtilHelpers.createSourceSelector(props, sparkContext.hadoopConfiguration());
   }
 
   @Override

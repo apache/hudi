@@ -18,39 +18,41 @@
 
 package org.apache.hudi.integ.testsuite.helpers;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FsStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob;
-import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 
+import org.apache.hudi.utilities.sources.selector.AbstractDFSPathSelector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * A custom dfs path selector used only for the hudi test suite. To be used only if workload is not run inline.
  */
-public class DFSTestSuitePathSelector extends DFSPathSelector {
-  private static volatile Logger log = LoggerFactory.getLogger(HoodieTestSuiteJob.class);
+public class DFSTestSuitePathSelector extends AbstractDFSPathSelector {
+  private static volatile Logger LOG = LoggerFactory.getLogger(HoodieTestSuiteJob.class);
+  protected static final List<String> IGNORE_FILEPREFIX_LIST = Arrays.asList(".", "_");
+  protected final transient FileSystem fs;
 
   public DFSTestSuitePathSelector(TypedProperties props, Configuration hadoopConf) {
     super(props, hadoopConf);
+    this.fs = FSUtils.getFs(inputPath, hadoopConf);
   }
 
   @Override
@@ -70,7 +72,7 @@ public class DFSTestSuitePathSelector extends DFSPathSelector {
       // obtain all eligible files for the batch
       List<FileStatus> eligibleFiles = new ArrayList<>();
       FileStatus[] fileStatuses = fs.globStatus(
-          new Path(props.getString(Config.ROOT_INPUT_PATH_PROP), "*"));
+          new Path(inputPath, "*"));
       // Say input data is as follow input/1, input/2, input/5 since 3,4 was rolled back and 5 is new generated data
       // checkpoint from the latest commit metadata will be 2 since 3,4 has been rolled back. We need to set the
       // next batch id correctly as 5 instead of 3
@@ -81,7 +83,7 @@ public class DFSTestSuitePathSelector extends DFSPathSelector {
       if (correctBatchIdDueToRollback.isPresent() && Integer.parseInt(correctBatchIdDueToRollback.get()) > nextBatchId) {
         nextBatchId = Integer.parseInt(correctBatchIdDueToRollback.get());
       }
-      log.info("Using DFSTestSuitePathSelector, checkpoint: " + lastCheckpointStr + " sourceLimit: " + sourceLimit
+      LOG.info("Using DFSTestSuitePathSelector, checkpoint: " + lastCheckpointStr + " sourceLimit: " + sourceLimit
           + " lastBatchId: " + lastBatchId + " nextBatchId: " + nextBatchId);
       for (FileStatus fileStatus : fileStatuses) {
         if (!fileStatus.isDirectory() || IGNORE_FILEPREFIX_LIST.stream()
@@ -95,7 +97,7 @@ public class DFSTestSuitePathSelector extends DFSPathSelector {
         }
       }
 
-      log.info("Reading " + eligibleFiles.size() + " files. ");
+      LOG.info("Reading " + eligibleFiles.size() + " files. ");
       // no data to readAvro
       if (eligibleFiles.size() == 0) {
         return new ImmutablePair<>(Option.empty(),

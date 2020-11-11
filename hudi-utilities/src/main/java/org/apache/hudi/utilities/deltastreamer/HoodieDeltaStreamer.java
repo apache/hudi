@@ -44,6 +44,7 @@ import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.utilities.HiveIncrementalPuller;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
+import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.JsonDFSSource;
 
@@ -522,14 +523,18 @@ public class HoodieDeltaStreamer implements Serializable {
      */
     private transient DeltaSync deltaSync;
 
+    private final HoodieDeltaStreamerConfig deltaStreamerConfig;
+
     public DeltaSyncService(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                             Option<TypedProperties> properties) throws IOException {
+      this.props = properties.get();
       this.cfg = cfg;
       this.jssc = jssc;
       this.sparkSession = SparkSession.builder().config(jssc.getConf()).getOrCreate();
       this.asyncCompactService = Option.empty();
+      this.deltaStreamerConfig = new HoodieDeltaStreamerConfig(props);
 
-      if (fs.exists(new Path(cfg.targetBasePath))) {
+      if (fs.exists(new Path(cfg.targetBasePath)) && !deltaStreamerConfig.getFullOverwrite()) {
         HoodieTableMetaClient meta =
             new HoodieTableMetaClient(new Configuration(fs.getConf()), cfg.targetBasePath, false);
         tableType = meta.getTableType();
@@ -546,6 +551,9 @@ public class HoodieDeltaStreamer implements Serializable {
         cfg.baseFileFormat = meta.getTableConfig().getBaseFileFormat().toString();
         this.cfg.baseFileFormat = cfg.baseFileFormat;
       } else {
+        if (fs.exists(new Path(cfg.targetBasePath))) {
+          fs.delete(new Path(cfg.targetBasePath));
+        }
         tableType = HoodieTableType.valueOf(cfg.tableType);
         if (cfg.baseFileFormat == null) {
           cfg.baseFileFormat = "PARQUET"; // default for backward compatibility
@@ -555,7 +563,7 @@ public class HoodieDeltaStreamer implements Serializable {
       ValidationUtils.checkArgument(!cfg.filterDupes || cfg.operation != Operation.UPSERT,
           "'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed.");
 
-      this.props = properties.get();
+
       LOG.info("Creating delta streamer with configs : " + props.toString());
       this.schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
           UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc), props, jssc);

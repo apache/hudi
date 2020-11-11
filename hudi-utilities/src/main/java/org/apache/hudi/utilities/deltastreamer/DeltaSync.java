@@ -190,7 +190,6 @@ public class DeltaSync implements Serializable {
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
                    TypedProperties props, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                    Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
-
     this.cfg = cfg;
     this.jssc = jssc;
     this.sparkSession = sparkSession;

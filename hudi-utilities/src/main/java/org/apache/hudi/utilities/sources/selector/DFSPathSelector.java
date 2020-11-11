@@ -16,75 +16,37 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities.sources.helpers;
-
-import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.collection.ImmutablePair;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
+package org.apache.hudi.utilities.sources.selector;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ImmutablePair;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.stream.Collectors;
 
-public class DFSPathSelector {
+public class DFSPathSelector extends AbstractDFSPathSelector {
 
-  protected static volatile Logger log = LogManager.getLogger(DFSPathSelector.class);
-
-  /**
-   * Configs supported.
-   */
-  public static class Config {
-
-    public static final String ROOT_INPUT_PATH_PROP = "hoodie.deltastreamer.source.dfs.root";
-    public static final String SOURCE_INPUT_SELECTOR = "hoodie.deltastreamer.source.input.selector";
-  }
-
+  protected static volatile Logger LOG = LogManager.getLogger(DFSPathSelector.class);
   protected static final List<String> IGNORE_FILEPREFIX_LIST = Arrays.asList(".", "_");
-
   protected final transient FileSystem fs;
-  protected final TypedProperties props;
 
   public DFSPathSelector(TypedProperties props, Configuration hadoopConf) {
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.ROOT_INPUT_PATH_PROP));
-    this.props = props;
-    this.fs = FSUtils.getFs(props.getString(Config.ROOT_INPUT_PATH_PROP), hadoopConf);
-  }
-
-  /**
-   * Factory method for creating custom DFSPathSelector. Default selector
-   * to use is {@link DFSPathSelector}
-   */
-  public static DFSPathSelector createSourceSelector(TypedProperties props,
-                                                     Configuration conf) {
-    String sourceSelectorClass = props.getString(DFSPathSelector.Config.SOURCE_INPUT_SELECTOR,
-        DFSPathSelector.class.getName());
-    try {
-      DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(sourceSelectorClass,
-          new Class<?>[]{TypedProperties.class, Configuration.class},
-          props, conf);
-
-      log.info("Using path selector " + selector.getClass().getName());
-      return selector;
-    } catch (Exception e) {
-      throw new HoodieException("Could not load source selector class " + sourceSelectorClass, e);
-    }
+    super(props, hadoopConf);
+    this.fs = FSUtils.getFs(inputPath, hadoopConf);
   }
 
   /**
@@ -94,14 +56,15 @@ public class DFSPathSelector {
    * @param sourceLimit       max bytes to read each time
    * @return the list of files concatenated and their latest modified time
    */
+  @Override
   public Pair<Option<String>, String> getNextFilePathsAndMaxModificationTime(Option<String> lastCheckpointStr,
       long sourceLimit) {
 
     try {
       // obtain all eligible files under root folder.
-      log.info("Root path => " + props.getString(Config.ROOT_INPUT_PATH_PROP) + " source limit => " + sourceLimit);
+      LOG.info("Root path => " + inputPath + " source limit => " + sourceLimit);
       long lastCheckpointTime = lastCheckpointStr.map(Long::parseLong).orElse(Long.MIN_VALUE);
-      List<FileStatus> eligibleFiles = listEligibleFiles(fs, new Path(props.getString(Config.ROOT_INPUT_PATH_PROP)), lastCheckpointTime);
+      List<FileStatus> eligibleFiles = listEligibleFiles(fs, new Path(inputPath), lastCheckpointTime);
       // sort them by modification time.
       eligibleFiles.sort(Comparator.comparingLong(FileStatus::getModificationTime));
       // Filter based on checkpoint & input size, if needed

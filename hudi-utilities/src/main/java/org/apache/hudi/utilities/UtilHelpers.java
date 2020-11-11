@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -35,6 +36,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
+import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
@@ -45,6 +47,8 @@ import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
 import org.apache.hudi.utilities.sources.JsonKafkaSource;
 import org.apache.hudi.utilities.sources.Source;
+import org.apache.hudi.utilities.sources.selector.AbstractDFSPathSelector;
+import org.apache.hudi.utilities.sources.selector.OverwriteDFSPathSelector;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
@@ -152,8 +156,26 @@ public class UtilHelpers {
   }
 
   /**
-   *
+   * Factory method for creating custom DFSPathSelector.
    */
+  public static AbstractDFSPathSelector createSourceSelector(TypedProperties props, Configuration conf) {
+
+    HoodieDeltaStreamerConfig deltaStreamerConfig = new HoodieDeltaStreamerConfig(props);
+    String sourceSelectorClass;
+    if (deltaStreamerConfig.getFullOverwrite()) {
+      sourceSelectorClass = OverwriteDFSPathSelector.class.getName();
+    } else {
+      sourceSelectorClass = deltaStreamerConfig.getInputSelector();
+    }
+    try {
+      return StringUtils.isNullOrEmpty(sourceSelectorClass) ? null :
+              (AbstractDFSPathSelector) ReflectionUtils.loadClass(sourceSelectorClass,
+                      new Class<?>[]{TypedProperties.class, Configuration.class}, props, conf);
+    } catch (Exception e) {
+      throw new HoodieException("Could not load source selector class " + sourceSelectorClass, e);
+    }
+  }
+
   public static DFSPropertiesConfiguration readConfig(FileSystem fs, Path cfgPath, List<String> overriddenProps) {
     DFSPropertiesConfiguration conf;
     try {

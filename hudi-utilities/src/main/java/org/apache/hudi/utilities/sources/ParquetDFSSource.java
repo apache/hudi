@@ -21,9 +21,13 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 
+import org.apache.hudi.utilities.sources.selector.AbstractDFSPathSelector;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -34,12 +38,14 @@ import org.apache.spark.sql.SparkSession;
  */
 public class ParquetDFSSource extends RowSource {
 
-  private final DFSPathSelector pathSelector;
+  private static final Logger LOG = LogManager.getLogger(HoodieDeltaStreamer.class);
+
+  private final AbstractDFSPathSelector pathSelector;
 
   public ParquetDFSSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    this.pathSelector = DFSPathSelector.createSourceSelector(props, this.sparkContext.hadoopConfiguration());
+    this.pathSelector = UtilHelpers.createSourceSelector(props, this.sparkContext.hadoopConfiguration());
   }
 
   @Override
@@ -52,6 +58,10 @@ public class ParquetDFSSource extends RowSource {
   }
 
   private Dataset<Row> fromFiles(String pathStr) {
-    return sparkSession.read().parquet(pathStr.split(","));
+    LOG.error("-------------pathStr" + pathStr);
+    Dataset<Row> parquet = sparkSession.read().parquet(pathStr.split(","));
+    parquet.show(2000);
+    //return sparkSession.read().parquet(pathStr.split(","));
+    return parquet;
   }
 }
