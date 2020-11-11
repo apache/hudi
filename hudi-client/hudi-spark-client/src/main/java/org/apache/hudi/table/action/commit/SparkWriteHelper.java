@@ -18,14 +18,12 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.UpdatePrecombineAvroPayload;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.index.HoodieIndex;
 
 import org.apache.spark.api.java.JavaRDD;
