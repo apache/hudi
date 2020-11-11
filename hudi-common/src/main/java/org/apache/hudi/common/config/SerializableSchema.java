@@ -51,7 +51,7 @@ public class SerializableSchema implements Serializable {
         org.apache.hadoop.io.Text.writeString(out, field.doc() == null ? "" : field.doc());
         out.writeObject(field.defaultVal());
       }
-    }else {
+    } else {
       WritableUtils.writeVInt(out, 0);
     }
   }
