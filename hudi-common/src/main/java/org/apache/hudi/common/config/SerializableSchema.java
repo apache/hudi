@@ -42,7 +42,6 @@ public class SerializableSchema implements Serializable {
 
   private void writeObject(ObjectOutputStream out) throws IOException {
     out.defaultWriteObject();
-    WritableUtils.writeVInt(out, 0);
     if (schema != null) {
       List<Schema.Field> fields = schema.getFields();
       WritableUtils.writeVInt(out, fields.size());
@@ -52,6 +51,8 @@ public class SerializableSchema implements Serializable {
         org.apache.hadoop.io.Text.writeString(out, field.doc() == null ? "" : field.doc());
         out.writeObject(field.defaultVal());
       }
+    }else {
+      WritableUtils.writeVInt(out, 0);
     }
   }
 
