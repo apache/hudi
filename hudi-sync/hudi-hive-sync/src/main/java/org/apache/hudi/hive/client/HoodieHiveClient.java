@@ -41,9 +41,6 @@ import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
-import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
-import org.apache.hadoop.hive.ql.session.SessionState;
-import org.apache.hive.jdbc.HiveDriver;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -51,10 +48,6 @@ import org.apache.parquet.schema.MessageType;
 import org.apache.thrift.TException;
 
 import java.io.IOException;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -65,23 +58,12 @@ import java.util.stream.Collectors;
 public class HoodieHiveClient extends AbstractSyncHoodieClient {
 
   private static final String HOODIE_LAST_COMMIT_TIME_SYNC = "last_commit_time_sync";
-  // Make sure we have the hive JDBC driver in classpath
-  private static String driverName = HiveDriver.class.getName();
-
-  static {
-    try {
-      Class.forName(driverName);
-    } catch (ClassNotFoundException e) {
-      throw new IllegalStateException("Could not find " + driverName + " in classpath. ", e);
-    }
-  }
-
   private static final Logger LOG = LogManager.getLogger(HoodieHiveClient.class);
+
   protected final PartitionValueExtractor partitionValueExtractor;
   protected IMetaStoreClient client;
   protected HiveSyncConfig syncConfig;
   protected FileSystem fs;
-  protected Connection connection;
   protected HoodieTimeline activeTimeline;
   protected HiveConf configuration;
 
@@ -89,13 +71,8 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     super(cfg.basePath, cfg.assumeDatePartitioning, fs);
     this.syncConfig = cfg;
     this.fs = fs;
-
     this.configuration = configuration;
 
-    if (cfg.hiveClientClass.equals(HoodieHiveJDBCClient.class.getName())) {
-      LOG.info("Creating hive connection " + cfg.jdbcUrl);
-      createHiveConnection();
-    }
     try {
       this.client = Hive.get(configuration).getMSC();
     } catch (MetaException | HiveException e) {
@@ -219,11 +196,43 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   }
 
   public void updateTableDefinition(String tableName, MessageType newSchema) {
+    updateTableDefinitionUsingMetastoreClient(tableName, newSchema);
+  }
+
+  private void updateTableDefinitionUsingMetastoreClient(String tableName, MessageType newSchema) {
+    boolean useCascade = syncConfig.partitionFields.size() > 0;
+
+    Map<String, String> hiveSchema;
+    Table table;
     try {
-      String sql = HiveSchemaUtil.generateUpdateTableDefinitionDDL(tableName, newSchema, syncConfig);
-      updateHiveSQL(sql);
-    } catch (IOException e) {
-      throw new HoodieHiveSyncException("Failed to update table for " + tableName, e);
+      hiveSchema = HiveSchemaUtil.convertParquetSchemaToHiveSchema(newSchema, syncConfig.supportTimestamp, false);
+      table = client.getTable(syncConfig.databaseName, tableName);
+    } catch (IOException | TException e) {
+      throw new HoodieHiveSyncException("Failed to update table definition for " + tableName
+          + ". Table metadata was unable to be retrieved from metastore.", e);
+    }
+
+    List<FieldSchema> colList = new ArrayList<>();
+    List<FieldSchema> partColList = new ArrayList<>();
+    for (Map.Entry<String, String> entry : hiveSchema.entrySet()) {
+      if (!syncConfig.partitionFields.contains(entry.getKey())) {
+        colList.add(new FieldSchema(entry.getKey(), entry.getValue(), ""));
+      }
+    }
+    for (String partitionField : syncConfig.partitionFields) {
+      partColList.add(new FieldSchema(partitionField, HiveSchemaUtil.getPartitionKeyTypeForHiveThriftFormat(hiveSchema, partitionField), ""));
+    }
+    if (table.getSd() != null) {
+      table.getSd().setCols(colList);
+    } else {
+      throw new HoodieHiveSyncException("Hive Table retrieved from metastore is missing StorageDescriptor. Cannot modify columns.");
+    }
+    table.setPartitionKeys(partColList);
+
+    try {
+      client.alter_table(syncConfig.databaseName, tableName, table, useCascade);
+    } catch (TException e) {
+      throw new HoodieHiveSyncException("Failed to update table definition for " + tableName, e);
     }
   }
 
@@ -342,11 +351,8 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
         Hive.closeCurrent();
         client = null;
       }
-      if (connection != null) {
-        connection.close();
-      }
-    } catch (SQLException e) {
-      LOG.error("Could not close connection ", e);
+    } catch (Exception e) {   // TODO
+      LOG.error("Could not close Hive Client ", e);
     }
   }
 
@@ -365,108 +371,6 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to get update last commit time synced to " + lastCommitSynced, e);
     }
-  }
-
-  // TODO: can be removed after updateTableDefinition is supported by Hive Metastore
-  public void updateHiveSQL(String s) {
-    if (syncConfig.hiveClientClass.equals(HoodieHiveJDBCClient.class.getName())) {
-      Statement stmt = null;
-      try {
-        stmt = connection.createStatement();
-        LOG.info("Executing SQL " + s);
-        stmt.execute(s);
-      } catch (SQLException e) {
-        throw new HoodieHiveSyncException("Failed in executing SQL " + s, e);
-      } finally {
-        closeQuietly(null, stmt);
-      }
-    } else {
-      updateHiveSQLUsingHiveDriver(s);
-    }
-  }
-
-  /**
-   * Execute a update in hive using Hive Driver.
-   *
-   * @param sql SQL statement to execute
-   */
-  // TODO: can be removed after updateTableDefinition is supported by Hive Metastore
-  public CommandProcessorResponse updateHiveSQLUsingHiveDriver(String sql) {
-    List<CommandProcessorResponse> responses = updateHiveSQLs(Collections.singletonList(sql));
-    return responses.get(responses.size() - 1);
-  }
-
-  // TODO: can be removed after updateTableDefinition is supported by Hive Metastore
-  private List<CommandProcessorResponse> updateHiveSQLs(List<String> sqls) {
-    SessionState ss = null;
-    org.apache.hadoop.hive.ql.Driver hiveDriver = null;
-    List<CommandProcessorResponse> responses = new ArrayList<>();
-    try {
-      final long startTime = System.currentTimeMillis();
-      ss = SessionState.start(configuration);
-      ss.setCurrentDatabase(syncConfig.databaseName);
-      hiveDriver = new org.apache.hadoop.hive.ql.Driver(configuration);
-      final long endTime = System.currentTimeMillis();
-      LOG.info(String.format("Time taken to start SessionState and create Driver: %s ms", (endTime - startTime)));
-      for (String sql : sqls) {
-        final long start = System.currentTimeMillis();
-        responses.add(hiveDriver.run(sql));
-        final long end = System.currentTimeMillis();
-        LOG.info(String.format("Time taken to execute [%s]: %s ms", sql, (end - start)));
-      }
-    } catch (Exception e) {
-      throw new HoodieHiveSyncException("Failed in executing SQL", e);
-    } finally {
-      if (ss != null) {
-        try {
-          ss.close();
-        } catch (IOException ie) {
-          LOG.error("Error while closing SessionState", ie);
-        }
-      }
-      if (hiveDriver != null) {
-        try {
-          hiveDriver.close();
-        } catch (Exception e) {
-          LOG.error("Error while closing hiveDriver", e);
-        }
-      }
-    }
-    return responses;
-  }
-
-  // TODO: can be removed after updateTableDefinition is supported by Hive Metastore
-  private void createHiveConnection() {
-    if (connection == null) {
-      try {
-        Class.forName(HiveDriver.class.getCanonicalName());
-      } catch (ClassNotFoundException e) {
-        LOG.error("Unable to load Hive driver class", e);
-        return;
-      }
-
-      try {
-        this.connection = DriverManager.getConnection(syncConfig.jdbcUrl, syncConfig.hiveUser, syncConfig.hivePass);
-        LOG.info("Successfully established Hive connection to  " + syncConfig.jdbcUrl);
-      } catch (SQLException e) {
-        throw new HoodieHiveSyncException("Cannot create hive connection " + getHiveJdbcUrlWithDefaultDBName(), e);
-      }
-    }
-  }
-
-  // TODO: can be removed after updateTableDefinition is supported by Hive Metastore
-  private String getHiveJdbcUrlWithDefaultDBName() {
-    String hiveJdbcUrl = syncConfig.jdbcUrl;
-    String urlAppend = null;
-    // If the hive url contains addition properties like ;transportMode=http;httpPath=hs2
-    if (hiveJdbcUrl.contains(";")) {
-      urlAppend = hiveJdbcUrl.substring(hiveJdbcUrl.indexOf(";"));
-      hiveJdbcUrl = hiveJdbcUrl.substring(0, hiveJdbcUrl.indexOf(";"));
-    }
-    if (!hiveJdbcUrl.endsWith("/")) {
-      hiveJdbcUrl = hiveJdbcUrl + "/";
-    }
-    return hiveJdbcUrl + (urlAppend == null ? "" : urlAppend);
   }
 
   public void createHiveDatabase(String dbName) throws HiveException {

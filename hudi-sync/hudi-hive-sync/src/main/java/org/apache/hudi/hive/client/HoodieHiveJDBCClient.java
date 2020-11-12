@@ -24,12 +24,14 @@ import org.apache.hudi.hive.util.HiveSchemaUtil;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hive.jdbc.HiveDriver;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
+import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -41,10 +43,8 @@ import java.util.Map;
 
 public class HoodieHiveJDBCClient extends HoodieHiveClient {
 
-  // Make sure we have the hive JDBC driver in classpath
-
   private static final Logger LOG = LogManager.getLogger(HoodieHiveJDBCClient.class);
-  // private Connection connection;
+  private Connection connection;
 
   public HoodieHiveJDBCClient(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
     super(cfg, configuration, fs);
@@ -52,7 +52,7 @@ public class HoodieHiveJDBCClient extends HoodieHiveClient {
     // Support both JDBC and metastore based implementations for backwards compatiblity. Future users should
     // disable jdbc and depend on metastore client for all hive registrations
     LOG.info("Creating hive connection " + cfg.jdbcUrl);
-    // createHiveConnection();
+    createHiveConnection();
   }
 
   /**
@@ -206,5 +206,20 @@ public class HoodieHiveJDBCClient extends HoodieHiveClient {
   public void dropHiveTable(String dbName, String tableName) {
     LOG.info("Dropping table " + tableName);
     updateHiveSQLUsingJDBC("DROP TABLE IF EXISTS " + dbName + "." + tableName);
+  }
+
+  @Override
+  public void close() {
+    try {
+      if (connection != null) {
+        connection.close();
+      }
+      if (client != null) {
+        Hive.closeCurrent();
+        client = null;
+      }
+    } catch (SQLException e) {
+      LOG.error("Could not close connection ", e);
+    }
   }
 }
