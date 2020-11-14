@@ -158,6 +158,15 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   public abstract HoodieWriteMetadata<O> delete(HoodieEngineContext context, String instantTime, K keys);
 
   /**
+   * Deletes all data of partitions.
+   * @param context    HoodieEngineContext
+   * @param instantTime Instant Time for the action
+   * @param partitions   {@link List} of partition to be deleted
+   * @return HoodieWriteMetadata
+   */
+  public abstract HoodieWriteMetadata deletePartitions(HoodieEngineContext context, String instantTime, List<String> partitions);
+
+  /**
    * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.
    * <p>
    * This implementation requires that the input records are already tagged, and de-duped if needed.

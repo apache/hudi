@@ -908,7 +908,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
    * Test scenario of writing similar number file groups in partition.
    */
   @Test
-  public void testInsertOverwritePartitionHandlinWithSimilarNumberOfRecords() throws Exception {
+  public void testInsertOverwritePartitionHandlingWithSimilarNumberOfRecords() throws Exception {
     verifyInsertOverwritePartitionHandling(3000, 3000);
   }
 
@@ -947,6 +947,110 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     assertEquals(batch1Buckets, new HashSet<>(writeResult.getPartitionToReplaceFileIds().get(testPartitionPath)));
     verifyRecordsWritten(commitTime2, inserts2, statuses);
+  }
+
+  /**
+   * Test scenario of writing fewer file groups for first partition than second an third partition.
+   */
+  @Test
+  public void verifyDeletePartitionsHandlingWithFewerRecordsFirstPartition() throws Exception {
+    verifyDeletePartitionsHandling(1000, 3000, 3000);
+  }
+
+  /**
+   * Test scenario of writing similar number file groups in partition.
+   */
+  @Test
+  public void verifyDeletePartitionsHandlingWithSimilarNumberOfRecords() throws Exception {
+    verifyDeletePartitionsHandling(3000, 3000, 3000);
+  }
+
+  /**
+   * Test scenario of writing more file groups for first partition than second an third partition.
+   */
+  @Test
+  public void verifyDeletePartitionsHandlingHandlingWithFewerRecordsSecondThirdPartition() throws Exception {
+    verifyDeletePartitionsHandling(3000, 1000, 1000);
+  }
+
+  /**
+   *  1) Do write1 (upsert) with 'batch1RecordsCount' number of records for first partition.
+   *  2) Do write2 (upsert) with 'batch2RecordsCount' number of records for second partition.
+   *  3) Do write3 (upsert) with 'batch3RecordsCount' number of records for third partition.
+   *  4) delete first partition and check result.
+   *  5) delete second and third partition and check result.
+   *
+   */
+  private void verifyDeletePartitionsHandling(int batch1RecordsCount, int batch2RecordsCount, int batch3RecordsCount) throws Exception {
+    HoodieWriteConfig config = getSmallInsertWriteConfig(2000, false);
+    SparkRDDWriteClient client = getHoodieWriteClient(config, false);
+    dataGen = new HoodieTestDataGenerator();
+
+    // Do Inserts for DEFAULT_FIRST_PARTITION_PATH
+    String commitTime1 = "001";
+    client.startCommitWithTime(commitTime1);
+    List<HoodieRecord> inserts1 = dataGen.generateInsertsForPartition(commitTime1, batch1RecordsCount, DEFAULT_FIRST_PARTITION_PATH);
+    JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 2);
+    List<WriteStatus> statuses = client.upsert(insertRecordsRDD1, commitTime1).collect();
+    assertNoWriteErrors(statuses);
+    Set<String> batch1Buckets = statuses.stream().map(s -> s.getFileId()).collect(Collectors.toSet());
+    verifyRecordsWritten(commitTime1, inserts1, statuses);
+
+    // Do Inserts for DEFAULT_SECOND_PARTITION_PATH
+    String commitTime2 = "002";
+    client.startCommitWithTime(commitTime2);
+    List<HoodieRecord> inserts2 = dataGen.generateInsertsForPartition(commitTime2, batch2RecordsCount, DEFAULT_SECOND_PARTITION_PATH);
+    JavaRDD<HoodieRecord> insertRecordsRDD2 = jsc.parallelize(inserts2, 2);
+    statuses = client.upsert(insertRecordsRDD2, commitTime2).collect();
+    assertNoWriteErrors(statuses);
+    Set<String> batch2Buckets = statuses.stream().map(s -> s.getFileId()).collect(Collectors.toSet());
+    verifyRecordsWritten(commitTime2, inserts2, statuses);
+
+    // Do Inserts for DEFAULT_THIRD_PARTITION_PATH
+    String commitTime3 = "003";
+    client.startCommitWithTime(commitTime3);
+    List<HoodieRecord> inserts3 = dataGen.generateInsertsForPartition(commitTime3, batch3RecordsCount, DEFAULT_THIRD_PARTITION_PATH);
+    JavaRDD<HoodieRecord> insertRecordsRDD3 = jsc.parallelize(inserts3, 2);
+    statuses = client.upsert(insertRecordsRDD3, commitTime3).collect();
+    assertNoWriteErrors(statuses);
+    Set<String> batch3Buckets = statuses.stream().map(s -> s.getFileId()).collect(Collectors.toSet());
+    verifyRecordsWritten(commitTime3, inserts3, statuses);
+
+    // delete DEFAULT_FIRST_PARTITION_PATH
+    String commitTime4 = "004";
+    client.startCommitWithTime(commitTime4, HoodieTimeline.REPLACE_COMMIT_ACTION);
+    List<String> deletePartitions1 = new ArrayList<>();
+    deletePartitions1.add(DEFAULT_FIRST_PARTITION_PATH);
+    HoodieWriteResult writeResult = client.deletePartitions(deletePartitions1, commitTime4);
+    Set<String> deletePartitionReplaceFileIds = new HashSet<String>();
+    writeResult.getPartitionToReplaceFileIds().entrySet()
+        .forEach(entry -> deletePartitionReplaceFileIds.addAll(entry.getValue()));
+    assertEquals(batch1Buckets, deletePartitionReplaceFileIds);
+
+    List<HoodieBaseFile> baseFiles = HoodieClientTestUtils.getLatestBaseFiles(basePath, fs,
+        String.format("%s/%s/*", basePath, DEFAULT_FIRST_PARTITION_PATH));
+    assertEquals(0, baseFiles.size());
+
+    // delete DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH
+    String commitTime5 = "005";
+    client.startCommitWithTime(commitTime5, HoodieTimeline.REPLACE_COMMIT_ACTION);
+    List<String> deletePartitions2 = new ArrayList<>();
+    deletePartitions2.add(DEFAULT_SECOND_PARTITION_PATH);
+    deletePartitions2.add(DEFAULT_THIRD_PARTITION_PATH);
+    writeResult = client.deletePartitions(deletePartitions2, commitTime5);
+    Set<String> deletePartitionReplaceFileIds2 = new HashSet<>();
+    writeResult.getPartitionToReplaceFileIds().entrySet()
+        .forEach(entry -> deletePartitionReplaceFileIds2.addAll(entry.getValue()));
+    Set<String> expectedFileId = new HashSet<>();
+    expectedFileId.addAll(batch2Buckets);
+    expectedFileId.addAll(batch3Buckets);
+    assertEquals(expectedFileId, deletePartitionReplaceFileIds2);
+
+    baseFiles = HoodieClientTestUtils.getLatestBaseFiles(basePath, fs,
+        String.format("%s/%s/*", basePath, DEFAULT_FIRST_PARTITION_PATH),
+        String.format("%s/%s/*", basePath, DEFAULT_SECOND_PARTITION_PATH),
+        String.format("%s/%s/*", basePath, DEFAULT_THIRD_PARTITION_PATH));
+    assertEquals(0, baseFiles.size());
   }
 
   /**

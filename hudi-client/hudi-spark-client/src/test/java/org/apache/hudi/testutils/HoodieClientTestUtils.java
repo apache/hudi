@@ -147,6 +147,23 @@ public class HoodieClientTestUtils {
     }
   }
 
+
+  public static List<HoodieBaseFile> getLatestBaseFiles(String basePath, FileSystem fs,
+                                                String... paths) {
+    List<HoodieBaseFile> latestFiles = new ArrayList<>();
+    try {
+      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath, true);
+      for (String path : paths) {
+        BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(metaClient,
+            metaClient.getCommitsTimeline().filterCompletedInstants(), fs.globStatus(new Path(path)));
+        latestFiles.addAll(fileSystemView.getLatestBaseFiles().collect(Collectors.toList()));
+      }
+    } catch (Exception e) {
+      throw new HoodieException("Error reading hoodie table as a dataframe", e);
+    }
+    return latestFiles;
+  }
+
   /**
    * Reads the paths under the a hoodie table out as a DataFrame.
    */
@@ -154,14 +171,9 @@ public class HoodieClientTestUtils {
                                   String... paths) {
     List<String> filteredPaths = new ArrayList<>();
     try {
-      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath, true);
-      for (String path : paths) {
-        BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(metaClient,
-            metaClient.getCommitsTimeline().filterCompletedInstants(), fs.globStatus(new Path(path)));
-        List<HoodieBaseFile> latestFiles = fileSystemView.getLatestBaseFiles().collect(Collectors.toList());
-        for (HoodieBaseFile file : latestFiles) {
-          filteredPaths.add(file.getPath());
-        }
+      List<HoodieBaseFile> latestFiles = getLatestBaseFiles(basePath, fs, paths);
+      for (HoodieBaseFile file : latestFiles) {
+        filteredPaths.add(file.getPath());
       }
       return sqlContext.read().parquet(filteredPaths.toArray(new String[filteredPaths.size()]));
     } catch (Exception e) {

@@ -40,6 +40,8 @@ public enum WriteOperationType {
   BOOTSTRAP("bootstrap"),
   // insert overwrite
   INSERT_OVERWRITE("insert_overwrite"),
+  // delete partition
+  DELETE_PARTITION("delete_partition"),
   // used for old version
   UNKNOWN("unknown");
 
@@ -70,6 +72,8 @@ public enum WriteOperationType {
         return DELETE;
       case "insert_overwrite":
         return INSERT_OVERWRITE;
+      case "delete_partition":
+        return DELETE_PARTITION;
       default:
         throw new HoodieException("Invalid value of Type.");
     }
