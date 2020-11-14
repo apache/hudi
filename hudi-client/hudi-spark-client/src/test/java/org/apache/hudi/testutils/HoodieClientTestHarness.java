@@ -101,8 +101,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
    * Initializes resource group for the subclasses of {@link HoodieClientTestBase}.
    */
   public void initResources() throws IOException {
-    Properties properties = new Properties();
-    initResources(properties);
+    initResources(new Properties());
   }
 
   /**

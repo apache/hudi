@@ -35,7 +35,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.SparkHoodieIndex;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
@@ -170,11 +170,9 @@ public class BootstrapExecutor  implements Serializable {
       throw new HoodieException("target base path already exists at " + cfg.targetBasePath
           + ". Cannot bootstrap data on top of an existing table");
     }
-    SparkHoodieIndex index = SparkHoodieIndex.createIndex(bootstrapConfig);
     HoodieTableMetaClient.initTableTypeWithBootstrap(new Configuration(jssc.hadoopConfiguration()),
         cfg.targetBasePath, HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName,
-        cfg.baseFileFormat, cfg.bootstrapIndexClass, bootstrapBasePath, index.indexType().name());
-    index.close();
+        cfg.baseFileFormat, cfg.bootstrapIndexClass, bootstrapBasePath, HoodieIndexUtils.getIndexType(bootstrapConfig).name());
   }
 
   public HoodieWriteConfig getBootstrapConfig() {

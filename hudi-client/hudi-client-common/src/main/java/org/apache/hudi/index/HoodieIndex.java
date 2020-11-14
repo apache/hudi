@@ -101,9 +101,7 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implem
   /**
    * Get the index Type.
    */
-  public IndexType indexType() {
-    return IndexType.CUSTOM;
-  }
+  public abstract IndexType indexType();
 
   /**
    * Each index type should implement it's own logic to release any resources acquired during the process.

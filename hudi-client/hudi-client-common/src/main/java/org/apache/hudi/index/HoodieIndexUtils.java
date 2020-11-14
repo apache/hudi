@@ -24,8 +24,9 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.table.HoodieTable;
@@ -101,51 +102,46 @@ public class HoodieIndexUtils {
     boolean isTypeCompatible = false;
     switch (persistIndexType) {
       case GLOBAL_BLOOM:
-        if (writeIndexType.equals(IndexType.GLOBAL_BLOOM)
+        isTypeCompatible = writeIndexType.equals(IndexType.GLOBAL_BLOOM)
             || writeIndexType.equals(IndexType.BLOOM)
             || writeIndexType.equals(IndexType.SIMPLE)
-            || writeIndexType.equals(IndexType.GLOBAL_SIMPLE)) {
-          isTypeCompatible = true;
-        }
+            || writeIndexType.equals(IndexType.GLOBAL_SIMPLE);
         break;
       case GLOBAL_SIMPLE:
-        if (writeIndexType.equals(IndexType.GLOBAL_SIMPLE)
-            || writeIndexType.equals(IndexType.GLOBAL_BLOOM)) {
-          isTypeCompatible = true;
-        }
+        isTypeCompatible = writeIndexType.equals(IndexType.GLOBAL_SIMPLE)
+            || writeIndexType.equals(IndexType.GLOBAL_BLOOM)
+            || writeIndexType.equals(IndexType.BLOOM)
+            || writeIndexType.equals(IndexType.SIMPLE);
         break;
       case SIMPLE:
-        if (writeIndexType.equals(IndexType.SIMPLE)) {
-          isTypeCompatible = true;
-        }
+        isTypeCompatible = writeIndexType.equals(IndexType.SIMPLE)
+            || writeIndexType.equals(IndexType.BLOOM);
         break;
       case BLOOM:
-        if (writeIndexType.equals(IndexType.BLOOM)) {
-          isTypeCompatible = true;
-        }
+        isTypeCompatible = writeIndexType.equals(IndexType.BLOOM)
+            || writeIndexType.equals(IndexType.SIMPLE);
         break;
       case INMEMORY:
-        if (writeIndexType.equals(IndexType.INMEMORY)) {
-          isTypeCompatible = true;
-        }
+        isTypeCompatible = writeIndexType.equals(IndexType.INMEMORY);
         LOG.error("PersistIndexType INMEMORY can not be used in production");
         break;
       case HBASE:
-        if (writeIndexType.equals(IndexType.HBASE)) {
-          isTypeCompatible = true;
-        }
+        isTypeCompatible = writeIndexType.equals(IndexType.HBASE);
         break;
       case CUSTOM:
-        if (writeIndexType.equals(IndexType.CUSTOM)) {
-          isTypeCompatible = true;
-        }
+        isTypeCompatible = writeIndexType.equals(IndexType.CUSTOM);
         break;
       default:
-        throw new HoodieIndexException("Index type" + persistIndexType + " unspecified in  properties file");
+        throw new HoodieIndexException("Index type" + persistIndexType + " unspecified in properties file");
     }
     if (!isTypeCompatible) {
-      throw new HoodieException("The new write indextype " + writeIndexType
+      throw new HoodieIndexException("The new write indextype " + writeIndexType
             + " is not compatible with persistIndexType " + persistIndexType);
     }
+  }
+
+  public static IndexType getIndexType(HoodieWriteConfig config) {
+    // if have index class use CUSTOM for type.
+    return StringUtils.isNullOrEmpty(config.getIndexClass()) ? config.getIndexType() : IndexType.CUSTOM;
   }
 }

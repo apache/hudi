@@ -164,6 +164,11 @@ public class TestHoodieIndexConfigs {
     public boolean isImplicitWithStorage() {
       return false;
     }
+
+    @Override
+    public IndexType indexType() {
+      return IndexType.CUSTOM;
+    }
   }
 
   public static class IndexWithConstructor {
