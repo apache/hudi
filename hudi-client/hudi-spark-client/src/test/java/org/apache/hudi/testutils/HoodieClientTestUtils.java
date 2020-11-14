@@ -147,7 +147,6 @@ public class HoodieClientTestUtils {
     }
   }
 
-
   public static List<HoodieBaseFile> getLatestBaseFiles(String basePath, FileSystem fs,
                                                 String... paths) {
     List<HoodieBaseFile> latestFiles = new ArrayList<>();

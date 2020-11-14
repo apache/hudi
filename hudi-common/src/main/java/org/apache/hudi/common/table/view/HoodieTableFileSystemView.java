@@ -71,6 +71,11 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected Map<HoodieFileGroupId, HoodieInstant> fgIdToReplaceInstants;
 
   /**
+   * Track file groups in pending clustering.
+   */
+  protected Map<HoodieFileGroupId, HoodieInstant> fgIdToPendingClustering;
+
+  /**
    * Flag to determine if closed.
    */
   private boolean closed = false;
@@ -113,6 +118,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     this.partitionToFileGroupsMap = null;
     this.fgIdToBootstrapBaseFile = null;
     this.fgIdToReplaceInstants = null;
+    this.fgIdToPendingClustering = null;
   }
 
   protected Map<String, List<HoodieFileGroup>> createPartitionToFileGroups() {
@@ -132,6 +138,11 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected Map<HoodieFileGroupId, HoodieInstant> createFileIdToReplaceInstantMap(final Map<HoodieFileGroupId, HoodieInstant> replacedFileGroups) {
     Map<HoodieFileGroupId, HoodieInstant> replacedFileGroupsMap = new ConcurrentHashMap<>(replacedFileGroups);
     return replacedFileGroupsMap;
+  }
+
+  protected Map<HoodieFileGroupId, HoodieInstant> createFileIdToPendingClusteringMap(final Map<HoodieFileGroupId, HoodieInstant> fileGroupsInClustering) {
+    Map<HoodieFileGroupId, HoodieInstant> fgInpendingClustering = new ConcurrentHashMap<>(fileGroupsInClustering);
+    return fgInpendingClustering;
   }
 
   /**
@@ -186,6 +197,49 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
           "Trying to remove a FileGroupId which is not found in pending compaction operations. FgId :"
               + opInstantPair.getValue().getFileGroupId());
       fgIdToPendingCompaction.remove(opInstantPair.getValue().getFileGroupId());
+    });
+  }
+
+  @Override
+  protected boolean isPendingClusteringScheduledForFileId(HoodieFileGroupId fgId) {
+    return fgIdToPendingClustering.containsKey(fgId);
+  }
+
+  @Override
+  protected Option<HoodieInstant> getPendingClusteringInstant(HoodieFileGroupId fgId) {
+    return Option.ofNullable(fgIdToPendingClustering.get(fgId));
+  }
+
+  @Override
+  protected Stream<Pair<HoodieFileGroupId, HoodieInstant>> fetchFileGroupsInPendingClustering() {
+    return fgIdToPendingClustering.entrySet().stream().map(entry -> Pair.of(entry.getKey(), entry.getValue()));
+  }
+
+  @Override
+  void resetFileGroupsInPendingClustering(Map<HoodieFileGroupId, HoodieInstant> fgIdToInstantMap) {
+    fgIdToPendingClustering = createFileIdToPendingClusteringMap(fgIdToInstantMap);
+  }
+
+  @Override
+  void addFileGroupsInPendingClustering(Stream<Pair<HoodieFileGroupId, HoodieInstant>> fileGroups) {
+    fileGroups.forEach(fileGroupInstantPair -> {
+      ValidationUtils.checkArgument(fgIdToPendingClustering.containsKey(fileGroupInstantPair.getLeft()),
+          "Trying to add a FileGroupId which is already in pending clustering operation. FgId :"
+              + fileGroupInstantPair.getLeft() + ", new instant: " + fileGroupInstantPair.getRight() + ", existing instant "
+              + fgIdToPendingClustering.get(fileGroupInstantPair.getLeft()));
+
+      fgIdToPendingClustering.put(fileGroupInstantPair.getLeft(), fileGroupInstantPair.getRight());
+    });
+  }
+
+  @Override
+  void removeFileGroupsInPendingClustering(Stream<Pair<HoodieFileGroupId, HoodieInstant>> fileGroups) {
+    fileGroups.forEach(fileGroupInstantPair -> {
+      ValidationUtils.checkArgument(fgIdToPendingClustering.containsKey(fileGroupInstantPair.getLeft()),
+          "Trying to remove a FileGroupId which is not found in pending clustering operation. FgId :"
+              + fileGroupInstantPair.getLeft() + ", new instant: " + fileGroupInstantPair.getRight());
+
+      fgIdToPendingClustering.remove(fileGroupInstantPair.getLeft());
     });
   }
 

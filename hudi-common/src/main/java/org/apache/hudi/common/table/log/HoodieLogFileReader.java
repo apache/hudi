@@ -67,6 +67,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private long lastReverseLogFilePosition;
   private boolean reverseReader;
   private boolean closed = false;
+  private transient Thread shutdownThread = null;
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
       boolean readBlockLazily, boolean reverseReader) throws IOException {
@@ -108,14 +109,15 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
    * Close the inputstream if not closed when the JVM exits.
    */
   private void addShutDownHook() {
-    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+    shutdownThread = new Thread(() -> {
       try {
         close();
       } catch (Exception e) {
         LOG.warn("unable to close input stream for log file " + logFile, e);
         // fail silently for any sort of exception
       }
-    }));
+    });
+    Runtime.getRuntime().addShutdownHook(shutdownThread);
   }
 
   // TODO : convert content and block length to long by using ByteBuffer, raw byte [] allows
@@ -291,6 +293,9 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   public void close() throws IOException {
     if (!closed) {
       this.inputStream.close();
+      if (null != shutdownThread) {
+        Runtime.getRuntime().removeShutdownHook(shutdownThread);
+      }
       closed = true;
     }
   }
