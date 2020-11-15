@@ -51,7 +51,6 @@ class TestCOWDataSource extends HoodieClientTestBase {
     initPath()
     initSparkContexts()
     spark = sqlContext.sparkSession
-    println("hahahahah:" + spark.conf.get("spark.serializer"))
     initTestDataGenerator()
     initFileSystem()
   }
@@ -75,7 +74,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
   }
 
-    @Test def testCopyOnWriteStorage() {
+  @Test def testCopyOnWriteStorage() {
     // Insert Operation
     val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
@@ -231,6 +230,16 @@ class TestCOWDataSource extends HoodieClientTestBase {
     })
   }
 
+  @Test def testCopyOnWriteWithNotEnableDropPartitionColumnsOpt() {
+    val resultContainPartitionColumn = copyOnWriteTableSelect(false)
+    assertTrue(resultContainPartitionColumn)
+  }
+
+  @Test def testCopyOnWriteWithEnableDropPartitionColumnsOpt() {
+    val resultContainPartitionColumn = copyOnWriteTableSelect(true)
+    assertTrue(!resultContainPartitionColumn)
+  }
+
   def copyOnWriteTableSelect(enableDropPartitionColumns: Boolean): Boolean = {
     // Insert Operation
     val records1 = recordsToStrings(dataGen.generateInsertsContainsAllPartitions("000", 3)).toList
@@ -247,15 +256,5 @@ class TestCOWDataSource extends HoodieClientTestBase {
     snapshotDF1.registerTempTable("tmptable")
     val result = spark.sql("select * from tmptable limit 1").collect()(0)
     result.schema.contains(new StructField("partition", StringType, true))
-  }
-
-  @Test def testCopyOnWriteWithEnableDropPartitionColumnsOpt() {
-    val resultContainPartitionColumn = copyOnWriteTableSelect(false)
-    assertTrue(resultContainPartitionColumn)
-  }
-
-  @Test def testCopyOnWriteWithNotEnableDropPartitionColumnsOpt() {
-    val resultContainPartitionColumn = copyOnWriteTableSelect(true)
-    assertTrue(!resultContainPartitionColumn)
   }
 }

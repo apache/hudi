@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.hive.HiveSyncTool
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
 import org.apache.hudi.keygen.SimpleKeyGenerator
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.log4j.LogManager
 
 /**
@@ -213,14 +214,14 @@ object DataSourceWriteOptions {
     * the dot notation eg: `a.b.c`
     *
     */
-  val RECORDKEY_FIELD_OPT_KEY = "hoodie.datasource.write.recordkey.field"
+  val RECORDKEY_FIELD_OPT_KEY = KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY
   val DEFAULT_RECORDKEY_FIELD_OPT_VAL = "uuid"
 
   /**
     * Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`. Actual
     * value ontained by invoking .toString()
     */
-  val PARTITIONPATH_FIELD_OPT_KEY = "hoodie.datasource.write.partitionpath.field"
+  val PARTITIONPATH_FIELD_OPT_KEY = KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY
   val DEFAULT_PARTITIONPATH_FIELD_OPT_VAL = "partitionpath"
 
   /**
@@ -228,10 +229,10 @@ object DataSourceWriteOptions {
     * If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.
     * By default false (the names of partition folders are only partition values)
     */
-  val HIVE_STYLE_PARTITIONING_OPT_KEY = "hoodie.datasource.write.hive_style_partitioning"
-  val DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL = "false"
-  val URL_ENCODE_PARTITIONING_OPT_KEY = "hoodie.datasource.write.partitionpath.urlencode"
-  val DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL = "false"
+  val HIVE_STYLE_PARTITIONING_OPT_KEY = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY
+  val DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL = KeyGeneratorOptions.DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL
+  val URL_ENCODE_PARTITIONING_OPT_KEY = KeyGeneratorOptions.URL_ENCODE_PARTITIONING_OPT_KEY
+  val DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL = KeyGeneratorOptions.DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL
   /**
     * Key generator class, that implements will extract the key out of incoming record
     *

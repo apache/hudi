@@ -201,17 +201,15 @@ public class HoodieAvroUtils {
   }
 
   public static Schema removeMetadataFields(Schema schema) {
-    return removeFields(schema, HoodieRecord.HOODIE_META_COLUMNS, false);
+    return removeFields(schema, HoodieRecord.HOODIE_META_COLUMNS);
   }
 
-  public static Schema removeFields(Schema schema, List<String> fieldsToRemove, boolean resetPosition) {
-    List<Schema.Field> filteredFields = schema
-        .getFields()
-        .stream()
-        .filter(field -> !fieldsToRemove.contains(field.name()))
-        .map(field -> resetPosition ? new Field(field.name(), field.schema(), field.doc(), field.defaultValue()) : field)
-        .collect(Collectors.toList());
-
+  public static Schema removeFields(Schema schema, List<String> fieldsToRemove) {
+    List<Schema.Field> filteredFields = schema.getFields()
+                                              .stream()
+                                              .filter(field -> !fieldsToRemove.contains(field.name()))
+                                              .map(field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))
+                                              .collect(Collectors.toList());
     Schema filteredSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false);
     filteredSchema.setFields(filteredFields);
     return filteredSchema;

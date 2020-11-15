@@ -62,6 +62,8 @@ import org.junit.jupiter.api.TestMethodOrder;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -382,13 +384,98 @@ public class TestHBaseIndex extends FunctionalTestHarness {
     HoodieWriteConfig config = getConfig();
     SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
     final JavaRDD<WriteStatus> writeStatusRDD = jsc().parallelize(
-        Arrays.asList(getSampleWriteStatus(1, 2), getSampleWriteStatus(0, 3), getSampleWriteStatus(10, 0)), 10);
+        Arrays.asList(
+            getSampleWriteStatus(0, 2),
+            getSampleWriteStatus(2, 3),
+            getSampleWriteStatus(4, 3),
+            getSampleWriteStatus(6, 3),
+            getSampleWriteStatus(8, 0)),
+        10);
     final Tuple2<Long, Integer> tuple = index.getHBasePutAccessParallelism(writeStatusRDD);
     final int hbasePutAccessParallelism = Integer.parseInt(tuple._2.toString());
     final int hbaseNumPuts = Integer.parseInt(tuple._1.toString());
     assertEquals(10, writeStatusRDD.getNumPartitions());
-    assertEquals(2, hbasePutAccessParallelism);
-    assertEquals(11, hbaseNumPuts);
+    assertEquals(4, hbasePutAccessParallelism);
+    assertEquals(20, hbaseNumPuts);
+  }
+
+  @Test
+  public void testsWriteStatusPartitioner() {
+    HoodieWriteConfig config = getConfig();
+    SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
+    int parallelism = 4;
+    final JavaRDD<WriteStatus> writeStatusRDD = jsc().parallelize(
+        Arrays.asList(
+            getSampleWriteStatusWithFileId(0, 2),
+            getSampleWriteStatusWithFileId(2, 3),
+            getSampleWriteStatusWithFileId(4, 3),
+            getSampleWriteStatusWithFileId(0, 3),
+            getSampleWriteStatusWithFileId(11, 0)), parallelism);
+
+    final Map<String, Integer> fileIdPartitionMap = index.mapFileWithInsertsToUniquePartition(writeStatusRDD);
+    int numWriteStatusWithInserts = (int) index.getHBasePutAccessParallelism(writeStatusRDD)._2;
+    JavaRDD<WriteStatus> partitionedRDD = writeStatusRDD.mapToPair(w -> new Tuple2<>(w.getFileId(), w))
+                                              .partitionBy(new SparkHoodieHBaseIndex
+                                                                   .WriteStatusPartitioner(fileIdPartitionMap,
+                                                  numWriteStatusWithInserts)).map(w -> w._2());
+    assertEquals(numWriteStatusWithInserts, partitionedRDD.getNumPartitions());
+    int[] partitionIndexesBeforeRepartition = writeStatusRDD.partitions().stream().mapToInt(p -> p.index()).toArray();
+    assertEquals(parallelism, partitionIndexesBeforeRepartition.length);
+
+    int[] partitionIndexesAfterRepartition = partitionedRDD.partitions().stream().mapToInt(p -> p.index()).toArray();
+    // there should be 3 partitions after repartition, because only 3 writestatus has
+    // inserts (numWriteStatusWithInserts)
+    assertEquals(numWriteStatusWithInserts, partitionIndexesAfterRepartition.length);
+
+    List<WriteStatus>[] writeStatuses = partitionedRDD.collectPartitions(partitionIndexesAfterRepartition);
+    for (List<WriteStatus> list : writeStatuses) {
+      int count = 0;
+      for (WriteStatus w: list) {
+        if (w.getStat().getNumInserts() > 0)   {
+          count++;
+        }
+      }
+      assertEquals(1, count);
+    }
+  }
+
+  @Test
+  public void testsWriteStatusPartitionerWithNoInserts() {
+    HoodieWriteConfig config = getConfig();
+    SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
+    int parallelism = 3;
+    final JavaRDD<WriteStatus> writeStatusRDD = jsc().parallelize(
+        Arrays.asList(
+            getSampleWriteStatusWithFileId(0, 2),
+            getSampleWriteStatusWithFileId(0, 3),
+            getSampleWriteStatusWithFileId(0, 0)), parallelism);
+
+    final Map<String, Integer> fileIdPartitionMap = index.mapFileWithInsertsToUniquePartition(writeStatusRDD);
+    int numWriteStatusWithInserts = (int) index.getHBasePutAccessParallelism(writeStatusRDD)._2;
+    JavaRDD<WriteStatus> partitionedRDD = writeStatusRDD.mapToPair(w -> new Tuple2<>(w.getFileId(), w))
+                                              .partitionBy(new SparkHoodieHBaseIndex
+                                                                   .WriteStatusPartitioner(fileIdPartitionMap,
+                                                  numWriteStatusWithInserts)).map(w -> w._2());
+    assertEquals(numWriteStatusWithInserts, partitionedRDD.getNumPartitions());
+    int[] partitionIndexesBeforeRepartition = writeStatusRDD.partitions().stream().mapToInt(p -> p.index()).toArray();
+    assertEquals(parallelism, partitionIndexesBeforeRepartition.length);
+
+    int[] partitionIndexesAfterRepartition = partitionedRDD.partitions().stream().mapToInt(p -> p.index()).toArray();
+    // there should be 3 partitions after repartition, because only 3 writestatus has inserts
+    // (numWriteStatusWithInserts)
+    assertEquals(numWriteStatusWithInserts, partitionIndexesAfterRepartition.length);
+    assertEquals(partitionIndexesBeforeRepartition.length, parallelism);
+
+  }
+
+  private WriteStatus getSampleWriteStatusWithFileId(final int numInserts, final int numUpdateWrites) {
+    final WriteStatus writeStatus = new WriteStatus(false, 0.0);
+    HoodieWriteStat hoodieWriteStat = new HoodieWriteStat();
+    hoodieWriteStat.setNumInserts(numInserts);
+    hoodieWriteStat.setNumUpdateWrites(numUpdateWrites);
+    writeStatus.setStat(hoodieWriteStat);
+    writeStatus.setFileId(UUID.randomUUID().toString());
+    return writeStatus;
   }
 
   @Test

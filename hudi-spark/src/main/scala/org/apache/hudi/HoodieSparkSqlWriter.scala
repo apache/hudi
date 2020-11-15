@@ -59,7 +59,7 @@ private[hudi] object HoodieSparkSqlWriter {
     val fieldsToRemove =  new util.ArrayList[String]()
     partitionParam.split(",").map(partitionField => partitionField.trim)
       .filter(s => !s.isEmpty).map(field => fieldsToRemove.add(field))
-    HoodieAvroUtils.removeFields(oldSchema, fieldsToRemove, true)
+    HoodieAvroUtils.removeFields(oldSchema, fieldsToRemove)
   }
 
   def generateNewRecordForPartitionColumnsDrop(enableDropPartitionColumns: Boolean,
@@ -158,8 +158,8 @@ private[hudi] object HoodieSparkSqlWriter {
 
           // Convert to RDD[HoodieRecord]
           val keyGenerator = DataSourceUtils.createKeyGenerator(toProperties(parameters))
-          val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(df, structName, nameSpace)
-          val shouldCombine = parameters(INSERT_DROP_DUPS_OPT_KEY).toBoolean || operation.equals(WriteOperationType.UPSERT)
+          val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(df, schema, structName, nameSpace)
+          val shouldCombine = parameters(INSERT_DROP_DUPS_OPT_KEY).toBoolean || operation.equals(WriteOperationType.UPSERT);
           val hoodieAllIncomingRecords = genericRecords.map(gr => {
             val hoodieRecord = if (shouldCombine) {
               val orderingVal = HoodieAvroUtils.getNestedFieldVal(gr, parameters(PRECOMBINE_FIELD_OPT_KEY), false)
