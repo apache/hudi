@@ -185,7 +185,11 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
               + ", totalInsertBuckets => " + insertBuckets + ", recordsPerBucket => " + insertRecordsPerBucket);
           for (int b = 0; b < insertBuckets; b++) {
             bucketNumbers.add(totalBuckets);
-            recordsPerBucket.add(totalUnassignedInserts / insertBuckets);
+            if (b == insertBuckets - 1) {
+              recordsPerBucket.add(totalUnassignedInserts - (insertBuckets - 1) * insertRecordsPerBucket);
+            } else {
+              recordsPerBucket.add(insertRecordsPerBucket);
+            }
             BucketInfo bucketInfo = new BucketInfo();
             bucketInfo.bucketType = BucketType.INSERT;
             bucketInfo.partitionPath = partitionPath;
