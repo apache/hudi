@@ -44,6 +44,12 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
 
   private TypedProperties properties = new TypedProperties();
 
+  private static String ORIGINAL_SCHEMA = "{\"name\":\"t3_biz_operation_t_driver\",\"type\":\"record\",\"fields\":[{\"name\":\"ums_id_\",\"type\":[\"null\",\"string\"],\"default\":null},"
+                                              + "{\"name\":\"ums_ts_\",\"type\":[\"null\",\"string\"],\"default\":null}]}";
+
+  private static String RESULT_SCHEMA = "{\"type\":\"record\",\"name\":\"hoodie_source\",\"namespace\":\"hoodie.source\",\"fields\":[{\"name\":\"ums_id_\",\"type\":[\"string\",\"null\"]},"
+                                            + "{\"name\":\"ums_ts_\",\"type\":[\"string\",\"null\"]}]}";
+
   @Test
   public void testPostProcessor() throws IOException {
     properties.put(Config.SCHEMA_POST_PROCESSOR_PROP, DummySchemaPostProcessor.class.getName());
@@ -74,6 +80,14 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
     assertEquals(schema.getName(), "hoodie_source");
     assertEquals(schema.getNamespace(), "hoodie.source");
     assertNotNull(schema.getField("day"));
+  }
+
+  @Test
+  public void testSparkAvroSchema() throws IOException {
+    SparkAvroPostProcessor processor = new SparkAvroPostProcessor(properties, null);
+    Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
+    assertEquals(processor.processSchema(schema), RESULT_SCHEMA);
+
   }
 
   public static class DummySchemaPostProcessor extends SchemaPostProcessor {
