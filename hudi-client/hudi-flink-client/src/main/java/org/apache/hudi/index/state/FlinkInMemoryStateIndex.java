@@ -132,4 +132,9 @@ public class FlinkInMemoryStateIndex<T extends HoodieRecordPayload> extends Flin
   public boolean isImplicitWithStorage() {
     return false;
   }
+
+  @Override
+  public IndexType indexType() {
+    return IndexType.INMEMORY;
+  }
 }

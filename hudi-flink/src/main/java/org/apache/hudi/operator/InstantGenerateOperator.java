@@ -205,7 +205,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   private void initTable() throws IOException {
     if (!fs.exists(new Path(cfg.targetBasePath))) {
       HoodieTableMetaClient.initTableType(new Configuration(serializableHadoopConf.get()), cfg.targetBasePath,
-          HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName, 1);
+          HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName, 1, null);
       LOG.info("Table initialized");
     } else {
       LOG.info("Table already [{}/{}] exists, do nothing here", cfg.targetBasePath, cfg.targetTableName);
