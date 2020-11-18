@@ -25,11 +25,15 @@ import java.util.Set;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A lazy update payload generator to generate {@link GenericRecord}s lazily.
  */
 public class UpdateGeneratorIterator implements Iterator<GenericRecord> {
+
+  private static Logger LOG = LoggerFactory.getLogger(UpdateGeneratorIterator.class);
 
   // Use the full payload generator as default
   private GenericRecordFullPayloadGenerator generator;

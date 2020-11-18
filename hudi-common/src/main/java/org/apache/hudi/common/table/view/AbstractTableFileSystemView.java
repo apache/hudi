@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -107,6 +108,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     resetPendingCompactionOperations(CompactionUtils.getAllPendingCompactionOperations(metaClient).values().stream()
         .map(e -> Pair.of(e.getKey(), CompactionOperation.convertFromAvroRecordInstance(e.getValue()))));
     resetBootstrapBaseFileMapping(Stream.empty());
+    resetFileGroupsInPendingClustering(ClusteringUtils.getAllFileGroupsInPendingClusteringPlans(metaClient));
   }
 
   /**
@@ -678,6 +680,15 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     return getAllFileGroupsIncludingReplaced(partitionPath).filter(fg -> isFileGroupReplacedBeforeOrOn(fg.getFileGroupId(), maxCommitTime));
   }
 
+  @Override
+  public final Stream<Pair<HoodieFileGroupId, HoodieInstant>> getFileGroupsInPendingClustering() {
+    try {
+      readLock.lock();
+      return fetchFileGroupsInPendingClustering();
+    } finally {
+      readLock.unlock();
+    }
+  }
 
   // Fetch APIs to be implemented by concrete sub-classes
 
@@ -709,6 +720,40 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param operations Pending compaction operations to be removed
    */
   abstract void removePendingCompactionOperations(Stream<Pair<String, CompactionOperation>> operations);
+
+  /**
+   * Check if there is an outstanding clustering operation (requested/inflight) scheduled for this file.
+   *
+   * @param fgId File-Group Id
+   * @return true if there is a pending clustering, false otherwise
+   */
+  protected abstract boolean isPendingClusteringScheduledForFileId(HoodieFileGroupId fgId);
+
+  /**
+   *  Get pending clustering instant time for specified file group. Return None if file group is not in pending
+   *  clustering operation.
+   */
+  protected abstract Option<HoodieInstant> getPendingClusteringInstant(final HoodieFileGroupId fileGroupId);
+
+  /**
+   * Fetch all file groups in pending clustering.
+   */
+  protected abstract Stream<Pair<HoodieFileGroupId, HoodieInstant>> fetchFileGroupsInPendingClustering();
+
+  /**
+   * resets the pending clustering operation and overwrite with the new list.
+   */
+  abstract void resetFileGroupsInPendingClustering(Map<HoodieFileGroupId, HoodieInstant> fgIdToInstantMap);
+
+  /**
+   * Add metadata for file groups in pending clustering operations to the view.
+   */
+  abstract void addFileGroupsInPendingClustering(Stream<Pair<HoodieFileGroupId, HoodieInstant>> fileGroups);
+
+  /**
+   * Remove metadata for file groups in pending clustering operations from the view.
+   */
+  abstract void removeFileGroupsInPendingClustering(Stream<Pair<HoodieFileGroupId, HoodieInstant>> fileGroups);
 
   /**
    * Return pending compaction operation for a file-group.

@@ -68,7 +68,7 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
   }
 
   @Override
-  protected HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> getIndex(HoodieWriteConfig config) {
+  protected HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
     String persistIndexType = this.metaClient.getTableConfig().getProperties().getProperty(HoodieIndexConfig.INDEX_TYPE_PROP);
     HoodieIndex hoodieIndex = SparkHoodieIndex.createIndex(config);
     HoodieIndex.IndexType indexType = hoodieIndex.indexType();

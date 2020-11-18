@@ -152,6 +152,12 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterPendingCompactionTimeline();
 
   /**
+   * Filter this timeline to just include requested and inflight replacecommit instants.
+   */
+  HoodieTimeline filterPendingReplaceTimeline();
+
+
+  /**
    * Create a new Timeline with all the instants after startTs.
    */
   HoodieTimeline findInstantsAfterOrEquals(String commitTime, int numCommits);
