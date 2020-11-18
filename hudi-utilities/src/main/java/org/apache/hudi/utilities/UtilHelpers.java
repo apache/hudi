@@ -432,18 +432,4 @@ public class UtilHelpers {
     SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
     return wrapSchemaProviderWithPostProcessor(rowSchemaProvider, cfg, jssc, null);
   }
-
-
-  public static void main(String[] args) {
-
-    String SCHEMA1 = "{\"name\":\"t3_biz_operation_t_driver\",\"type\":\"record\",\"fields\":[{\"name\":\"ums_id_\",\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"ums_ts_\",\"type\":[\"null\",\"string\"],\"default\":null}]}";
-
-    TypedProperties properties = new TypedProperties();
-    SparkAvroPostProcessor processor = new SparkAvroPostProcessor(properties, null);
-    Schema schema = new Schema.Parser().parse(SCHEMA1);
-
-    System.out.println(processor.processSchema(schema));
-
-
-  }
 }

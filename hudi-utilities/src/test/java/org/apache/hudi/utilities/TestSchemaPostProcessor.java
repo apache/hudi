@@ -86,8 +86,7 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
   public void testSparkAvroSchema() throws IOException {
     SparkAvroPostProcessor processor = new SparkAvroPostProcessor(properties, null);
     Schema schema = new Schema.Parser().parse(ORIGINAL_SCHEMA);
-    assertEquals(processor.processSchema(schema), RESULT_SCHEMA);
-
+    assertEquals(processor.processSchema(schema).toString(), RESULT_SCHEMA);
   }
 
   public static class DummySchemaPostProcessor extends SchemaPostProcessor {
