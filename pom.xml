@@ -53,6 +53,8 @@
     <module>hudi-integ-test</module>
     <module>packaging/hudi-integ-test-bundle</module>
     <module>hudi-examples</module>
+    <module>hudi-flink</module>
+    <module>packaging/hudi-flink-bundle</module>
   </modules>
 
   <licenses>
@@ -100,6 +102,7 @@
     <prometheus.version>0.8.0</prometheus.version>
     <http.version>4.4.1</http.version>
     <spark.version>2.4.4</spark.version>
+    <flink.version>1.11.2</flink.version>
     <avro.version>1.8.2</avro.version>
     <scala.version>2.11.12</scala.version>
     <scala.binary.version>2.11</scala.binary.version>
@@ -494,6 +497,26 @@
         <groupId>org.apache.spark</groupId>
         <artifactId>spark-avro_${scala.binary.version}</artifactId>
         <version>${spark.version}</version>
+        <scope>provided</scope>
+      </dependency>
+
+      <!-- Flink -->
+      <dependency>
+        <groupId>org.apache.flink</groupId>
+        <artifactId>flink-streaming-java_${scala.binary.version}</artifactId>
+        <version>${flink.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.flink</groupId>
+        <artifactId>flink-clients_${scala.binary.version}</artifactId>
+        <version>${flink.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.flink</groupId>
+        <artifactId>flink-connector-kafka_${scala.binary.version}</artifactId>
+        <version>${flink.version}</version>
         <scope>provided</scope>
       </dependency>
 
@@ -992,7 +1015,7 @@
                 </goals>
               </execution>
             </executions>
- 	      </plugin>
+          </plugin>
         </plugins>
       </build>
     </profile>

@@ -20,7 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieEngineContext;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -29,19 +29,19 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.index.FlinkHoodieIndex;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.SparkHoodieIndex;
 
-import org.apache.spark.api.java.JavaRDD;
+import java.util.List;
 
-public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
-    extends HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
-
-  protected HoodieSparkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
+public  abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
+    extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
+  protected HoodieFlinkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
+  public static <T extends HoodieRecordPayload> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(
         context.getHadoopConf().get(),
         config.getBasePath(),
@@ -49,24 +49,24 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
         config.getConsistencyGuardConfig(),
         Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion()))
     );
-    return HoodieSparkTable.create(config, (HoodieSparkEngineContext) context, metaClient);
+    return HoodieFlinkTable.create(config, context, metaClient);
   }
 
-  public static <T extends HoodieRecordPayload> HoodieSparkTable<T> create(HoodieWriteConfig config,
-                                                                           HoodieSparkEngineContext context,
+  public static <T extends HoodieRecordPayload> HoodieFlinkTable<T> create(HoodieWriteConfig config,
+                                                                           HoodieFlinkEngineContext context,
                                                                            HoodieTableMetaClient metaClient) {
     switch (metaClient.getTableType()) {
       case COPY_ON_WRITE:
-        return new HoodieSparkCopyOnWriteTable<>(config, context, metaClient);
+        return new HoodieFlinkCopyOnWriteTable<>(config, context, metaClient);
       case MERGE_ON_READ:
-        return new HoodieSparkMergeOnReadTable<>(config, context, metaClient);
+        throw new HoodieNotSupportedException("MERGE_ON_READ is not supported yet");
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
     }
   }
 
   @Override
-  protected HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
-    return SparkHoodieIndex.createIndex(config);
+  protected HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
+    return FlinkHoodieIndex.createIndex((HoodieFlinkEngineContext) context, config);
   }
 }
