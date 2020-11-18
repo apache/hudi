@@ -49,6 +49,9 @@ import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
+/**
+ * Packs incoming records to be upserted, into buckets.
+ */
 public class UpsertPartitioner<T extends HoodieRecordPayload<T>> implements Partitioner  {
 
   private static final Logger LOG = LogManager.getLogger(UpsertPartitioner.class);

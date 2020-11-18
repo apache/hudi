@@ -18,7 +18,7 @@
 
 package org.apache.hudi.operator;
 
-import org.apache.hudi.HudiFlinkStreamer;
+import org.apache.hudi.HoodieFlinkStreamer;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -77,7 +77,7 @@ public class KeyedWriteProcessFunction extends KeyedProcessFunction<String, Hood
   /**
    * Job conf.
    */
-  private HudiFlinkStreamer.Config cfg;
+  private HoodieFlinkStreamer.Config cfg;
 
   /**
    * Write Client.
@@ -90,7 +90,7 @@ public class KeyedWriteProcessFunction extends KeyedProcessFunction<String, Hood
 
     indexOfThisSubtask = getRuntimeContext().getIndexOfThisSubtask();
 
-    cfg = (HudiFlinkStreamer.Config) getRuntimeContext().getExecutionConfig().getGlobalJobParameters();
+    cfg = (HoodieFlinkStreamer.Config) getRuntimeContext().getExecutionConfig().getGlobalJobParameters();
 
     HoodieFlinkEngineContext context =
         new HoodieFlinkEngineContext(new SerializableConfiguration(new org.apache.hadoop.conf.Configuration()), new FlinkTaskContextSupplier(getRuntimeContext()));

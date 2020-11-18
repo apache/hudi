@@ -30,10 +30,11 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.MarkerFiles;
-import scala.Tuple2;
 
 import java.util.List;
 import java.util.stream.Collectors;
+
+import scala.Tuple2;
 
 @SuppressWarnings("checkstyle:LineLength")
 public class FlinkMarkerBasedRollbackStrategy<T extends HoodieRecordPayload> extends AbstractMarkerBasedRollbackStrategy<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {

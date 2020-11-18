@@ -50,6 +50,9 @@ import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
+/**
+ * Performs Rollback of Hoodie Tables.
+ */
 public class ListingBasedRollbackHelper implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(ListingBasedRollbackHelper.class);

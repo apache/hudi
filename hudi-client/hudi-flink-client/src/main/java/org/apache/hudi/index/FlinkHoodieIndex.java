@@ -19,7 +19,6 @@
 package org.apache.hudi.index;
 
 import org.apache.hudi.ApiMaturityLevel;
-import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
@@ -31,6 +30,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.state.FlinkInMemoryStateIndex;
+import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.table.HoodieTable;
 
 import java.util.List;

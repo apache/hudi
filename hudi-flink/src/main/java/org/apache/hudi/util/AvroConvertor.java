@@ -18,10 +18,11 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.avro.MercifulJsonConverter;
+
 import com.twitter.bijection.Injection;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.avro.MercifulJsonConverter;
 
 import java.io.Serializable;
 
