@@ -38,8 +38,6 @@ import org.apache.spark.sql.SparkSession;
  */
 public class ParquetDFSSource extends RowSource {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieDeltaStreamer.class);
-
   private final AbstractDFSPathSelector pathSelector;
 
   public ParquetDFSSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
@@ -58,10 +56,6 @@ public class ParquetDFSSource extends RowSource {
   }
 
   private Dataset<Row> fromFiles(String pathStr) {
-    LOG.error("-------------pathStr" + pathStr);
-    Dataset<Row> parquet = sparkSession.read().parquet(pathStr.split(","));
-    parquet.show(2000);
-    //return sparkSession.read().parquet(pathStr.split(","));
-    return parquet;
+    return sparkSession.read().parquet(pathStr.split(","));
   }
 }
