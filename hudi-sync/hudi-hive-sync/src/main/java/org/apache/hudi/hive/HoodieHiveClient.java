@@ -205,7 +205,6 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     Map<String, String> paths = new HashMap<>();
     for (Partition tablePartition : tablePartitions) {
       List<String> hivePartitionValues = tablePartition.getValues();
-      Collections.sort(hivePartitionValues);
       String fullTablePartitionPath =
           Path.getPathWithoutSchemeAndAuthority(new Path(tablePartition.getSd().getLocation())).toUri().getPath();
       paths.put(String.join(", ", hivePartitionValues), fullTablePartitionPath);
@@ -217,7 +216,6 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
-      Collections.sort(storagePartitionValues);
       if (!storagePartitionValues.isEmpty()) {
         String storageValue = String.join(", ", storagePartitionValues);
         if (!paths.containsKey(storageValue)) {
