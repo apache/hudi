@@ -19,11 +19,12 @@
 package org.apache.hudi.client.common.function;
 
 import org.apache.hudi.exception.HoodieException;
-import scala.Tuple2;
 
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
+
+import scala.Tuple2;
 
 /**
  * Function wrapper util class, which catches the exception thrown by input function and return a similar function
