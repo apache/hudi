@@ -253,7 +253,9 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
         metrics.updateFinalizeWriteMetrics(result.getFinalizeDuration().get().toMillis(),
             result.getWriteStats().get().size());
       }
+
       postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime, Option.empty());
+      
       emitCommitMetrics(instantTime, result.getCommitMetadata().get(), hoodieTable.getMetaClient().getCommitActionType());
     }
     return result.getWriteStatuses();

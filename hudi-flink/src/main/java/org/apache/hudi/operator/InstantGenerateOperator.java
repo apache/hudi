@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.api.common.state.ListState;
@@ -206,7 +207,8 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   private void initTable() throws IOException {
     if (!fs.exists(new Path(cfg.targetBasePath))) {
       HoodieTableMetaClient.initTableType(new Configuration(serializableHadoopConf.get()), cfg.targetBasePath,
-          HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName, 1, null);
+          HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName,
+          1, HoodieIndexUtils.getIndexType(this.writeClient.getConfig()).name());
       LOG.info("Table initialized");
     } else {
       LOG.info("Table already [{}/{}] exists, do nothing here", cfg.targetBasePath, cfg.targetTableName);

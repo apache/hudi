@@ -40,7 +40,7 @@ public class TestIndexCompatibility extends HoodieClientTestBase {
   }
 
   private static Iterable<Object[]> indexTypeNotCompatibleParameter() {
-    return Arrays.asList(new Object[][] { { "SIMPLE", "BLOOM"}, { "SIMPLE", "GLOBAL_BLOOM"},
+    return Arrays.asList(new Object[][] { { "SIMPLE", "GLOBAL_BLOOM"},
         { "BLOOM", "GLOBAL_BLOOM"}, { "CUSTOM", "BLOOM"}, { "CUSTOM", "GLOBAL_BLOOM"}, { "CUSTOM", "HBASE"}});
   }
 
