@@ -18,11 +18,7 @@
 
 package org.apache.hudi.util;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.HudiFlinkStreamer;
+import org.apache.hudi.HoodieFlinkStreamer;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
@@ -37,6 +33,11 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,14 +52,14 @@ public class StreamerUtil {
 
   private static Logger LOG = LoggerFactory.getLogger(StreamerUtil.class);
 
-  public static Properties getKafkaProps(HudiFlinkStreamer.Config cfg) {
+  public static Properties getKafkaProps(HoodieFlinkStreamer.Config cfg) {
     Properties result = new Properties();
     result.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cfg.kafkaBootstrapServers);
     result.put(ConsumerConfig.GROUP_ID_CONFIG, cfg.kafkaGroupId);
     return result;
   }
 
-  public static TypedProperties getProps(HudiFlinkStreamer.Config cfg) {
+  public static TypedProperties getProps(HoodieFlinkStreamer.Config cfg) {
     return readConfig(
         FSUtils.getFs(cfg.propsFilePath, getHadoopConf()),
         new Path(cfg.propsFilePath), cfg.configs).getConfig();
@@ -130,7 +131,7 @@ public class StreamerUtil {
     }
   }
 
-  public static HoodieWriteConfig getHoodieClientConfig(HudiFlinkStreamer.Config cfg) {
+  public static HoodieWriteConfig getHoodieClientConfig(HoodieFlinkStreamer.Config cfg) {
     FileSystem fs = FSUtils.getFs(cfg.targetBasePath, getHadoopConf());
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder().withPath(cfg.targetBasePath).combineInput(cfg.filterDupes, true)
