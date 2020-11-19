@@ -25,6 +25,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -38,7 +39,6 @@ import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.RollbackNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.ScheduleCompactNode;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Operation;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -126,7 +126,7 @@ public class HoodieTestSuiteWriter {
 
   public JavaRDD<WriteStatus> upsert(Option<String> instantTime) throws Exception {
     if (cfg.useDeltaStreamer) {
-      return deltaStreamerWrapper.upsert(Operation.UPSERT);
+      return deltaStreamerWrapper.upsert(WriteOperationType.UPSERT);
     } else {
       Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
       lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
