@@ -18,8 +18,9 @@
 
 package org.apache.hudi.schema;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.common.config.TypedProperties;
+
+import org.apache.avro.Schema;
 
 import java.io.Serializable;
 

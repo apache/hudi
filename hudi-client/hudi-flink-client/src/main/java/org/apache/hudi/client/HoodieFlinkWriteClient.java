@@ -97,6 +97,11 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
+  public void bootstrap(Option<Map<String, String>> extraMetadata) {
+    throw new HoodieNotSupportedException("Bootstrap operation is not supported yet");
+  }
+
+  @Override
   public List<WriteStatus> upsert(List<HoodieRecord<T>> records, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         getTableAndInitCtx(WriteOperationType.UPSERT, instantTime);
