@@ -39,7 +39,7 @@ public abstract class HoodieEngineContext {
    */
   private SerializableConfiguration hadoopConf;
 
-  private TaskContextSupplier taskContextSupplier;
+  protected TaskContextSupplier taskContextSupplier;
 
   public HoodieEngineContext(SerializableConfiguration hadoopConf, TaskContextSupplier taskContextSupplier) {
     this.hadoopConf = hadoopConf;
