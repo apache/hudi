@@ -18,9 +18,7 @@
 
 package org.apache.hudi.source;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.flink.api.common.functions.MapFunction;
-import org.apache.hudi.HudiFlinkStreamer;
+import org.apache.hudi.HoodieFlinkStreamer;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -29,6 +27,9 @@ import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
 import org.apache.hudi.util.AvroConvertor;
 import org.apache.hudi.util.StreamerUtil;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.flink.api.common.functions.MapFunction;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,12 +43,12 @@ public class JsonStringToHoodieRecordMapFunction implements MapFunction<String, 
 
   private static Logger LOG = LoggerFactory.getLogger(JsonStringToHoodieRecordMapFunction.class);
 
-  private final HudiFlinkStreamer.Config cfg;
+  private final HoodieFlinkStreamer.Config cfg;
   private TypedProperties props;
   private KeyGenerator keyGenerator;
   private AvroConvertor avroConvertor;
 
-  public JsonStringToHoodieRecordMapFunction(HudiFlinkStreamer.Config cfg) {
+  public JsonStringToHoodieRecordMapFunction(HoodieFlinkStreamer.Config cfg) {
     this.cfg = cfg;
     init();
   }

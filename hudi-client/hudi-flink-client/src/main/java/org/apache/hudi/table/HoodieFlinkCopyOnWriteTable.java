@@ -46,6 +46,14 @@ import org.apache.hudi.table.action.rollback.FlinkCopyOnWriteRollbackActionExecu
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Implementation of a very heavily read-optimized Hoodie Table where, all data is stored in base files, with
+ * zero read amplification.
+ * <p>
+ * INSERTS - Produce new files, block aligned to desired size (or) Merge with the smallest existing file, to expand it
+ * <p>
+ * UPDATES - Produce a new version of the file, just replacing the updated records with new values
+ */
 public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends HoodieFlinkTable<T> {
 
   protected HoodieFlinkCopyOnWriteTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {

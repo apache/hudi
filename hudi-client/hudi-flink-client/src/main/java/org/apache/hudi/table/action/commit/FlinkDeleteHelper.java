@@ -94,7 +94,7 @@ public class FlinkDeleteHelper<R> extends
       List<HoodieRecord<EmptyHoodieRecordPayload>> dedupedRecords =
           dedupedKeys.stream().map(key -> new HoodieRecord<>(key, new EmptyHoodieRecordPayload())).collect(Collectors.toList());
       Instant beginTag = Instant.now();
-      // perform index loop up to get existing location of records
+      // perform index look up to get existing location of records
       List<HoodieRecord<EmptyHoodieRecordPayload>> taggedRecords =
           table.getIndex().tagLocation(dedupedRecords, context, table);
       Duration tagLocationDuration = Duration.between(beginTag, Instant.now());
