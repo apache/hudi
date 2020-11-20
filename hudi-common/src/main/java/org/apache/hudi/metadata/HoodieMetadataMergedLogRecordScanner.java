@@ -70,11 +70,6 @@ public class HoodieMetadataMergedLogRecordScanner extends HoodieMergedLogRecordS
    * @return {@code HoodieRecord} if key was found else {@code Option.empty()}
    */
   public Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key) {
-    HoodieRecord record = records.get(key);
-    if (record == null) {
-      return Option.empty();
-    }
-
-    return Option.of(record);
+    return Option.ofNullable((HoodieRecord) records.get(key));
   }
 }

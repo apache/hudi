@@ -47,9 +47,6 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
    */
   @Override
   protected FileStatus[] listPartition(Path partitionPath) throws IOException {
-    FileStatus[] statuses = hoodieTable.metadata().getAllFilesInPartition(metaClient.getHadoopConf(),
-        metaClient.getBasePath(), partitionPath);
-
-    return statuses;
+    return hoodieTable.metadata().getAllFilesInPartition(partitionPath);
   }
 }

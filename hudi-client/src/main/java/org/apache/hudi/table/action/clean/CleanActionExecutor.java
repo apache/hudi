@@ -256,7 +256,7 @@ public class CleanActionExecutor extends BaseActionExecutor<HoodieCleanMetadata>
           cleanStats
       );
 
-      table.metadata().update(jsc, cleanerPlan, cleanInstant.getTimestamp());
+      table.metadataWriter(jsc).update(cleanerPlan, cleanInstant.getTimestamp());
 
       table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant,
           TimelineMetadataUtils.serializeCleanMetadata(metadata));

@@ -93,7 +93,7 @@ public abstract class BaseRestoreActionExecutor extends BaseActionExecutor<Hoodi
     HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.convertRestoreMetadata(
         instantTime, durationInMs, instantsRolledBack, instantToMetadata);
 
-    table.metadata().update(jsc, restoreMetadata, instantTime);
+    table.metadataWriter(jsc).update(restoreMetadata, instantTime);
 
     table.getActiveTimeline().saveAsComplete(new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, instantTime),
         TimelineMetadataUtils.serializeRestoreMetadata(restoreMetadata));

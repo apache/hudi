@@ -112,7 +112,7 @@ public abstract class BaseRollbackActionExecutor extends BaseActionExecutor<Hood
         Collections.singletonList(instantToRollback),
         stats);
     if (!skipTimelinePublish) {
-      table.metadata().update(jsc, rollbackMetadata, instantTime);
+      table.metadataWriter(jsc).update(rollbackMetadata, instantTime);
       finishRollback(rollbackMetadata);
     }
 

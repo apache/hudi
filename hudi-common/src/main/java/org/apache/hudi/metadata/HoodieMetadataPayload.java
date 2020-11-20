@@ -40,8 +40,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.metadata.HoodieMetadataReader.METADATA_PARTITION_NAME;
-import static org.apache.hudi.metadata.HoodieMetadataReader.RECORDKEY_PARTITION_LIST;
+import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
 
 /**
  * This is a payload which saves information about a single entry in the Metadata Table.
@@ -100,7 +99,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>();
     partitions.forEach(partition -> fileInfo.put(partition, new HoodieMetadataFileInfo(0L,  false)));
 
-    HoodieKey key = new HoodieKey(RECORDKEY_PARTITION_LIST, METADATA_PARTITION_NAME);
+    HoodieKey key = new HoodieKey(RECORDKEY_PARTITION_LIST, MetadataPartitionType.FILES.partitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), PARTITION_LIST, fileInfo);
     return new HoodieRecord<>(key, payload);
   }
@@ -120,7 +119,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     filesDeleted.ifPresent(
         m -> m.forEach(filename -> fileInfo.put(filename, new HoodieMetadataFileInfo(0L,  true))));
 
-    HoodieKey key = new HoodieKey(partition, METADATA_PARTITION_NAME);
+    HoodieKey key = new HoodieKey(partition, MetadataPartitionType.FILES.partitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), FILE_LIST, fileInfo);
     return new HoodieRecord<>(key, payload);
   }
