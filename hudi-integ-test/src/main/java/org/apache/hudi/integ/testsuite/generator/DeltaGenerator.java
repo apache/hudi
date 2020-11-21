@@ -91,17 +91,15 @@ public class DeltaGenerator implements Serializable {
   private List<String> recordRowKeyFieldNames;
   private List<String> partitionPathFieldNames;
   private int batchId;
-  private String preCombineField;
 
   public DeltaGenerator(DFSDeltaConfig deltaOutputConfig, JavaSparkContext jsc, SparkSession sparkSession,
-      String schemaStr, BuiltinKeyGenerator keyGenerator, String preCombineField) {
+      String schemaStr, BuiltinKeyGenerator keyGenerator) {
     this.deltaOutputConfig = deltaOutputConfig;
     this.jsc = jsc;
     this.sparkSession = sparkSession;
     this.schemaStr = schemaStr;
     this.recordRowKeyFieldNames = keyGenerator.getRecordKeyFields();
     this.partitionPathFieldNames = keyGenerator.getPartitionPathFields();
-    this.preCombineField = preCombineField;
   }
 
   public JavaRDD<DeltaWriteStats> writeRecords(JavaRDD<GenericRecord> records) {
@@ -142,7 +140,7 @@ public class DeltaGenerator implements Serializable {
     JavaRDD<GenericRecord> inputBatch = jsc.parallelize(partitionIndexes, numPartitions)
         .mapPartitionsWithIndex((index, p) -> {
           return new LazyRecordGeneratorIterator(new FlexibleSchemaRecordGenerationIterator(recordsPerPartition,
-            minPayloadSize, schemaStr, partitionPathFieldNames, preCombineField, batchId, (Integer)index));
+            minPayloadSize, schemaStr, partitionPathFieldNames, (Integer)index));
         }, true);
 
     if (deltaOutputConfig.getInputParallelism() < numPartitions) {
@@ -186,7 +184,7 @@ public class DeltaGenerator implements Serializable {
         adjustedRDD = adjustedRDD.repartition(numPartition);
         log.info("Repartitioning records done for updates");
         UpdateConverter converter = new UpdateConverter(schemaStr, config.getRecordSize(),
-            partitionPathFieldNames, recordRowKeyFieldNames, preCombineField, batchId);
+            partitionPathFieldNames, recordRowKeyFieldNames);
         JavaRDD<GenericRecord> updates = converter.convert(adjustedRDD);
         updates.persist(StorageLevel.DISK_ONLY());
         if (inserts == null) {

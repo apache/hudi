@@ -73,7 +73,7 @@ public class WriterContext {
           new DFSDeltaConfig(DeltaOutputMode.valueOf(cfg.outputTypeName), DeltaInputType.valueOf(cfg.inputFormatName),
               new SerializableConfiguration(jsc.hadoopConfiguration()), cfg.inputBasePath, cfg.targetBasePath,
               schemaStr, cfg.limitFileSize, inputParallelism, cfg.deleteOldInput),
-          jsc, sparkSession, schemaStr, keyGenerator, cfg.preCombineField);
+          jsc, sparkSession, schemaStr, keyGenerator);
       log.info(String.format("Initialized writerContext with: %s", schemaStr));
     } catch (Exception e) {
       throw new HoodieException("Failed to reinitialize writerContext", e);

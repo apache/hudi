@@ -51,14 +51,10 @@ public class DagScheduler {
   private static Logger log = LoggerFactory.getLogger(DagScheduler.class);
   private WorkflowDag workflowDag;
   private ExecutionContext executionContext;
-  private int numRounds;
-  private int delayMins;
 
-  public DagScheduler(WorkflowDag workflowDag, WriterContext writerContext, JavaSparkContext jsc, int numRounds, int delayMins) {
+  public DagScheduler(WorkflowDag workflowDag, WriterContext writerContext, JavaSparkContext jsc) {
     this.workflowDag = workflowDag;
     this.executionContext = new ExecutionContext(jsc, writerContext);
-    this.numRounds = numRounds;
-    this.delayMins = delayMins;
   }
 
   /**
@@ -69,7 +65,7 @@ public class DagScheduler {
   public void schedule() throws Exception {
     ExecutorService service = Executors.newFixedThreadPool(2);
     try {
-      execute(service, workflowDag.getNodeList());
+      execute(service, workflowDag);
       service.shutdown();
     } finally {
       if (!service.isShutdown()) {
@@ -83,12 +79,13 @@ public class DagScheduler {
    * Method to start executing the nodes in workflow DAGs.
    *
    * @param service ExecutorService
-   * @param nodes Nodes to be executed
+   * @param workflowDag instance of workflow dag that needs to be executed
    * @throws Exception will be thrown if ant error occurred
    */
-  private void execute(ExecutorService service, List<DagNode> nodes) throws Exception {
+  private void execute(ExecutorService service, WorkflowDag workflowDag) throws Exception {
     // Nodes at the same level are executed in parallel
     log.info("Running workloads");
+    List<DagNode> nodes = workflowDag.getNodeList();
     int curRound = 1;
     do {
       log.warn("===================================================================");
@@ -116,13 +113,13 @@ public class DagScheduler {
         }
       } while (queue.size() > 0);
       log.info("Finished workloads for round num " + curRound);
-      if (curRound < numRounds) {
-        new DelayNode(delayMins).execute(executionContext);
+      if (curRound < workflowDag.getRounds()) {
+        new DelayNode(workflowDag.getIntermittentDelayMins()).execute(executionContext);
       }
 
       // After each level, report and flush the metrics
       Metrics.flush();
-    } while (curRound++ < numRounds);
+    } while (curRound++ < workflowDag.getRounds());
     log.info("Finished workloads");
   }
 
@@ -138,7 +135,6 @@ public class DagScheduler {
     try {
       int repeatCount = node.getConfig().getRepeatCount();
       while (repeatCount > 0) {
-        log.warn("executing node: \"" + node.getConfig().getOtherConfigs().get(CONFIG_NAME) + "\" of type: " + node.getClass() + " :: " + node.getConfig().toString());
         node.execute(executionContext);
         log.info("Finished executing {}", node.getName());
         repeatCount--;

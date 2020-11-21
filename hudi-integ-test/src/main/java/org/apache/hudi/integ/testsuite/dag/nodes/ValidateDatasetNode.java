@@ -18,9 +18,11 @@
 
 package org.apache.hudi.integ.testsuite.dag.nodes;
 
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
+import org.apache.hudi.integ.testsuite.schema.SchemaUtils;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -64,11 +66,12 @@ public class ValidateDatasetNode extends DagNode<Boolean> {
 
     SparkSession session = SparkSession.builder().sparkContext(context.getJsc().sc()).getOrCreate();
 
+    // todo: Fix partitioning schemes. For now, assumes data based partitioning.
     String inputPath = context.getHoodieTestSuiteWriter().getCfg().inputBasePath + "/*/*";
     String hudiPath = context.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/*/*/*";
     log.warn("ValidateDataset Node: Input path " + inputPath + ", hudi path " + hudiPath);
     // listing batches to be validated
-    String inputPathStr = context.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/../input/";
+    String inputPathStr = context.getHoodieTestSuiteWriter().getCfg().inputBasePath;
     FileSystem fs = new Path(inputPathStr)
         .getFileSystem(context.getHoodieTestSuiteWriter().getConfiguration());
     FileStatus[] fileStatuses = fs.listStatus(new Path(inputPathStr));
@@ -76,15 +79,17 @@ public class ValidateDatasetNode extends DagNode<Boolean> {
       log.debug("Listing all Micro batches to be validated :: " + fileStatus.getPath().toString());
     }
 
-    // fix hard coded fields from configs.
+    String recordKeyField = context.getWriterContext().getProps().getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY());
+    String partitionPathField = context.getWriterContext().getProps().getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY());
+    // todo: fix hard coded fields from configs.
     // read input and resolve insert, updates, etc.
     Dataset<Row> inputDf = session.read().format("avro").load(inputPath);
     ExpressionEncoder encoder = getEncoder(inputDf.schema());
     Dataset<Row> inputSnapshotDf = inputDf.groupByKey(
-        (MapFunction<Row, String>) value -> value.getAs("timestamp") + "+" + value.getAs("_row_key"), Encoders.STRING())
+        (MapFunction<Row, String>) value -> partitionPathField + "+" + recordKeyField, Encoders.STRING())
         .reduceGroups((ReduceFunction<Row>) (v1, v2) -> {
-          long ts1 = v1.getAs("ts");
-          long ts2 = v2.getAs("ts");
+          int ts1 = v1.getAs(SchemaUtils.SOURCE_ORDERING_FIELD);
+          int ts2 = v2.getAs(SchemaUtils.SOURCE_ORDERING_FIELD);
           if (ts1 > ts2) {
             return v1;
           } else {
@@ -103,10 +108,12 @@ public class ValidateDatasetNode extends DagNode<Boolean> {
     if (inputSnapshotDf.except(intersectionDf).count() != 0) {
       log.error("Data set validation failed. Total count in hudi " + trimmedDf.count() + ", input df count " + inputSnapshotDf.count());
       throw new AssertionError("Hudi contents does not match contents input data. ");
-    } 
+    }
 
-    log.warn("Validating hive table ");
-    Dataset<Row> cowDf = session.sql("SELECT * FROM testdb.table1");
+    String database = context.getWriterContext().getProps().getString("hoodie.datasource.hive_sync.database");
+    String tableName = context.getWriterContext().getProps().getString("hoodie.datasource.hive_sync.table");
+    log.warn("Validating hive table with db : " + database + " and table : " + tableName);
+    Dataset<Row> cowDf = session.sql("SELECT * FROM " + database + "." + tableName);
     Dataset<Row> trimmedCowDf = cowDf.drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
         .drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.FILENAME_METADATA_FIELD);
     intersectionDf = inputSnapshotDf.intersect(trimmedDf);
@@ -119,7 +126,7 @@ public class ValidateDatasetNode extends DagNode<Boolean> {
     // if delete input data is enabled, erase input data.
     if (config.isDeleteInputData()) {
       // clean up input data for current group of writes.
-      inputPathStr = context.getHoodieTestSuiteWriter().getCfg().targetBasePath + "/../input/";
+      inputPathStr = context.getHoodieTestSuiteWriter().getCfg().inputBasePath;
       fs = new Path(inputPathStr)
           .getFileSystem(context.getHoodieTestSuiteWriter().getConfiguration());
       fileStatuses = fs.listStatus(new Path(inputPathStr));

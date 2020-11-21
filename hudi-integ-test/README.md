@@ -216,7 +216,7 @@ spark-submit \
 --conf spark.sql.catalogImplementation=hive \
 --class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
 /opt/hudi-integ-test-bundle-0.6.1-SNAPSHOT.jar \
---source-ordering-field ts \
+--source-ordering-field test_suite_source_ordering_field \
 --use-deltastreamer \
 --target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \
 --input-base-path /user/hive/warehouse/hudi-integ-test-suite/input \
@@ -255,7 +255,7 @@ spark-submit \
 --conf spark.sql.catalogImplementation=hive \
 --class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
 /opt/hudi-integ-test-bundle-0.6.1-SNAPSHOT.jar \
---source-ordering-field ts \
+--source-ordering-field test_suite_source_ordering_field \
 --use-deltastreamer \
 --target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \
 --input-base-path /user/hive/warehouse/hudi-integ-test-suite/input \
@@ -278,7 +278,7 @@ If you have "ValidateDatasetNode" in your dag, do not replace hive jars as instr
 go well w/ hive2* jars. So, after running docker setup, just copy test.properties and your dag of interest and you are 
 good to go ahead. 
 
-For repeated runs, two additional configs need to be set. "--num-rounds N" and "--delay-between-rounds-mins Y". 
+For repeated runs, two additional configs need to be set. "dag_rounds" and "dag_intermittent_delay_mins". 
 This means that your dag will be repeated for N times w/ a delay of Y mins between each round.
 
 Also, ValidateDatasetNode can be configured in two ways. Either with "delete_input_data: true" set or not set. 
@@ -291,9 +291,9 @@ Example dag:
      ValidateDatasetNode with delete_input_data = true
 ```
 
-If above dag is run with "--num-rounds 10 --delay-between-rounds-mins 10", then this dag will run for 10 times with 10 
-mins delay between every run. At the end of every run, records written as part of this round will be validated. 
-At the end of validation, all contents of input are deleted.   
+If above dag is run with "dag_rounds" = 10 and "dag_intermittent_delay_mins" = 10, then this dag will run for 10 times 
+with 10 mins delay between every run. At the end of every run, records written as part of this round will be validated. 
+At the end of each validation, all contents of input are deleted.   
 For eg: incase of above dag, 
 ```
 Round1: 
@@ -383,8 +383,24 @@ Above dag was just an example for illustration purposes. But you can make it com
     Upsert
     Validate w/ deletion
 ```                        
-With this dag, you can set the two additional configs "--num-rounds N" and "--delay-between-rounds-mins Y" and have a long 
+With this dag, you can set the two additional configs "dag_rounds" and "dag_intermittent_delay_mins" and have a long 
 running test suite. 
+
+```
+dag_rounds: 1
+dag_intermittent_delay_mins: 10
+dag_content:
+    Insert
+    Upsert
+    Delete
+    Validate w/o deleting
+    Insert
+    Rollback
+    Validate w/o deleting
+    Upsert
+    Validate w/ deletion
+
+```
 
 Sample COW command with repeated runs. 
 ```
@@ -409,7 +425,7 @@ spark-submit \
 --conf spark.executor.extraClassPath=/var/demo/jars/* \
 --class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
 /opt/hudi-integ-test-bundle-0.6.1-SNAPSHOT.jar \
---source-ordering-field ts \
+--source-ordering-field test_suite_source_ordering_field \
 --use-deltastreamer \
 --target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \
 --input-base-path /user/hive/warehouse/hudi-integ-test-suite/input \
@@ -421,18 +437,14 @@ spark-submit \
 --workload-yaml-path file:/var/hoodie/ws/docker/demo/config/test-suite/complex-dag-cow.yaml \
 --workload-generator-classname org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator \
 --table-type COPY_ON_WRITE \
---compact-scheduling-minshare 1 \
---delay-between-rounds-mins 10 \
---num-rounds 4
+--compact-scheduling-minshare 1 
 ```
 
-Few ready to use dags are available under docker/demo/config/test-suite/ that could give you an idea for long running 
+A ready to use dag is available under docker/demo/config/test-suite/ that could give you an idea for long running 
 dags.
-cow-per-round-validate-once.yaml
-cow-validate-cumulative-multiple-rounds.yaml
 cow-per-round-mixed-validate.yaml
 
 As of now, "ValidateDatasetNode" uses spark data source and hive tables for comparison. Hence COW and real time view in 
-MOR works.
+MOR can be tested.
               
                         

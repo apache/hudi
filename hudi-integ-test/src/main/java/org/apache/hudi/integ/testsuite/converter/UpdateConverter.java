@@ -37,23 +37,19 @@ public class UpdateConverter implements Converter<GenericRecord, GenericRecord> 
   private final List<String> partitionPathFields;
   private final List<String> recordKeyFields;
   private final int minPayloadSize;
-  private final String preCombineField;
-  private final int preCombineFieldValue;
 
   public  UpdateConverter(String schemaStr, int minPayloadSize, List<String> partitionPathFields,
-      List<String> recordKeyFields, String preCombineField, int preCombineFieldValue) {
+      List<String> recordKeyFields) {
     this.schemaStr = schemaStr;
     this.partitionPathFields = partitionPathFields;
     this.recordKeyFields = recordKeyFields;
     this.minPayloadSize = minPayloadSize;
-    this.preCombineField = preCombineField;
-    this.preCombineFieldValue = preCombineFieldValue;
   }
 
   @Override
   public JavaRDD<GenericRecord> convert(JavaRDD<GenericRecord> inputRDD) {
     return inputRDD.mapPartitions(recordItr -> new LazyRecordGeneratorIterator(new UpdateGeneratorIterator(recordItr,
-        schemaStr, partitionPathFields, recordKeyFields, minPayloadSize, preCombineField, preCombineFieldValue)));
+        schemaStr, partitionPathFields, recordKeyFields, minPayloadSize)));
   }
 
 }

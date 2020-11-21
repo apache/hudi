@@ -40,19 +40,15 @@ public class UpdateGeneratorIterator implements Iterator<GenericRecord> {
   private Set<String> blackListedFields;
   // iterator
   private Iterator<GenericRecord> itr;
-  private final String preCombineField;
-  private final int preCombineFieldValue;
 
   public UpdateGeneratorIterator(Iterator<GenericRecord> itr, String schemaStr, List<String> partitionPathFieldNames,
-      List<String> recordKeyFieldNames, int minPayloadSize, String preCombineField, int preCombineFieldValue) {
+      List<String> recordKeyFieldNames, int minPayloadSize) {
     this.itr = itr;
     this.blackListedFields = new HashSet<>();
     this.blackListedFields.addAll(partitionPathFieldNames);
     this.blackListedFields.addAll(recordKeyFieldNames);
     Schema schema = new Schema.Parser().parse(schemaStr);
     this.generator = new GenericRecordFullPayloadGenerator(schema, minPayloadSize);
-    this.preCombineField = preCombineField;
-    this.preCombineFieldValue = preCombineFieldValue;
   }
 
   @Override
@@ -63,9 +59,7 @@ public class UpdateGeneratorIterator implements Iterator<GenericRecord> {
   @Override
   public GenericRecord next() {
     GenericRecord newRecord = itr.next();
-    GenericRecord toReturn = this.generator.randomize(newRecord, this.blackListedFields);
-    toReturn.put(preCombineField, new Long(preCombineFieldValue));
-    return toReturn;
+    return this.generator.randomize(newRecord, this.blackListedFields);
   }
 
 }

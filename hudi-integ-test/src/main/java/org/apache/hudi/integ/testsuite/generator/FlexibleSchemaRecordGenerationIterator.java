@@ -46,22 +46,17 @@ public class FlexibleSchemaRecordGenerationIterator implements Iterator<GenericR
   private GenericRecord lastRecord;
   // Partition path field name
   private Set<String> partitionPathFieldNames;
-  private final String preCombineField;
-  private final int preCombineFieldValue;
 
   public FlexibleSchemaRecordGenerationIterator(long maxEntriesToProduce, String schema) {
-    this(maxEntriesToProduce, GenericRecordFullPayloadGenerator.DEFAULT_PAYLOAD_SIZE, schema, null,
-        "ts", 0, 0);
+    this(maxEntriesToProduce, GenericRecordFullPayloadGenerator.DEFAULT_PAYLOAD_SIZE, schema, null, 0);
   }
 
   public FlexibleSchemaRecordGenerationIterator(long maxEntriesToProduce, int minPayloadSize, String schemaStr,
-      List<String> partitionPathFieldNames, String preCombineField, int preCombineFieldValue, int partitionIndex) {
+      List<String> partitionPathFieldNames, int partitionIndex) {
     this.counter = maxEntriesToProduce;
     this.partitionPathFieldNames = new HashSet<>(partitionPathFieldNames);
     Schema schema = new Schema.Parser().parse(schemaStr);
     this.generator = new GenericRecordFullPayloadGenerator(schema, minPayloadSize, partitionIndex);
-    this.preCombineField = preCombineField;
-    this.preCombineFieldValue = preCombineFieldValue;
   }
 
   @Override
@@ -75,12 +70,9 @@ public class FlexibleSchemaRecordGenerationIterator implements Iterator<GenericR
     if (lastRecord == null) {
       GenericRecord record = this.generator.getNewPayload(partitionPathFieldNames);
       lastRecord = record;
-      record.put(preCombineField, new Long(preCombineFieldValue));
       return record;
     } else {
-      GenericRecord toReturn = this.generator.randomize(lastRecord, this.partitionPathFieldNames);
-      toReturn.put(preCombineField, new Long(preCombineFieldValue));
-      return toReturn;
+      return this.generator.randomize(lastRecord, this.partitionPathFieldNames);
     }
   }
 }

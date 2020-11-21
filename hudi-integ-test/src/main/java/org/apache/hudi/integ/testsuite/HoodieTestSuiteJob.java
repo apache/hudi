@@ -147,7 +147,7 @@ public class HoodieTestSuiteJob {
       long startTime = System.currentTimeMillis();
       WriterContext writerContext = new WriterContext(jsc, props, cfg, keyGenerator, sparkSession);
       writerContext.initContext(jsc);
-      DagScheduler dagScheduler = new DagScheduler(workflowDag, writerContext, jsc, cfg.numRounds, cfg.delayMins);
+      DagScheduler dagScheduler = new DagScheduler(workflowDag, writerContext, jsc);
       dagScheduler.schedule();
       log.info("Finished scheduling all tasks, Time taken {}", System.currentTimeMillis() - startTime);
     } catch (Exception e) {
@@ -208,15 +208,5 @@ public class HoodieTestSuiteJob {
     @Parameter(names = {"--clean-output"}, description = "Clean the output folders and delete all files within it "
         + "before starting the Job")
     public Boolean cleanOutput = false;
-
-    @Parameter(names = {"--num-rounds"}, description = "Total number of rounds of test suite")
-    public int numRounds = 1;
-
-    @Parameter(names = {"--delay-between-rounds-mins"}, description = "Delay in mins between each round")
-    public int delayMins = 0;
-
-    @Parameter(names = {"--pre-combine-field"}, description = "Pre combine field to be used for updates. "
-        + "Monotonically increasing values will be used with one value per micro batch")
-    public String preCombineField = "ts";
   }
 }
