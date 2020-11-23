@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.util.jvm.MemoryLayoutSpecification
+import org.apache.hudi.common.util.jvm.MemoryLayoutSpecification;
 import org.apache.hudi.common.util.jvm.HotSpotMemoryLayoutSpecification32bit;
 import org.apache.hudi.common.util.jvm.HotSpotMemoryLayoutSpecification64bit;
 import org.apache.hudi.common.util.jvm.HotSpotMemoryLayoutSpecification64bitCompressed;
