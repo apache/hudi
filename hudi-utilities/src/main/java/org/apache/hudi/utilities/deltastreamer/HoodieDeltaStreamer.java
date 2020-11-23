@@ -551,9 +551,12 @@ public class HoodieDeltaStreamer implements Serializable {
         cfg.baseFileFormat = meta.getTableConfig().getBaseFileFormat().toString();
         this.cfg.baseFileFormat = cfg.baseFileFormat;
       } else {
-        if (fs.exists(new Path(cfg.targetBasePath))) {
-          fs.delete(new Path(cfg.targetBasePath));
+        if (fs.deleteOnExit(new Path(cfg.targetBasePath))) {
+          LOG.info("Delete history file successfully.");
+        } else {
+          LOG.warn("History file deletion failed, directory address is " + cfg.targetBasePath);
         }
+
         tableType = HoodieTableType.valueOf(cfg.tableType);
         if (cfg.baseFileFormat == null) {
           cfg.baseFileFormat = "PARQUET"; // default for backward compatibility

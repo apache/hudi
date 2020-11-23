@@ -23,6 +23,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.stream.Collectors;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -36,17 +38,14 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob;
-
 import org.apache.hudi.utilities.sources.selector.AbstractDFSPathSelector;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
 
 /**
  * A custom dfs path selector used only for the hudi test suite. To be used only if workload is not run inline.
  */
 public class DFSTestSuitePathSelector extends AbstractDFSPathSelector {
-  private static volatile Logger LOG = LoggerFactory.getLogger(HoodieTestSuiteJob.class);
+  private static volatile Logger LOG = LoggerFactory.getLogger(DFSTestSuitePathSelector.class);
   protected static final List<String> IGNORE_FILEPREFIX_LIST = Arrays.asList(".", "_");
   protected final transient FileSystem fs;
 
