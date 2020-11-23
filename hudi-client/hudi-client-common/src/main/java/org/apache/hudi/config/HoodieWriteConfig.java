@@ -31,6 +31,7 @@ import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
+import org.apache.hudi.table.action.clustering.update.UpdateStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -48,6 +49,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+
 
 /**
  * Class storing configs for the HoodieWriteClient.
@@ -379,6 +381,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public Boolean shouldCleanBootstrapBaseFile() {
     return Boolean.valueOf(props.getProperty(HoodieCompactionConfig.CLEANER_BOOTSTRAP_BASE_FILE_ENABLED));
+  }
+
+  public UpdateStrategy getClusteringUpdatesStrategy() {
+    return ReflectionUtils.loadClass(props.getProperty(HoodieClusteringConfig.CLUSTERING_UPDATES_STRATEGY_PROP));
   }
 
   /**
@@ -774,6 +780,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private boolean isIndexConfigSet = false;
     private boolean isStorageConfigSet = false;
     private boolean isCompactionConfigSet = false;
+    private boolean isClusteringConfigSet = false;
     private boolean isMetricsConfigSet = false;
     private boolean isBootstrapConfigSet = false;
     private boolean isMemoryConfigSet = false;
@@ -1038,6 +1045,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !isStorageConfigSet, HoodieStorageConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isCompactionConfigSet,
           HoodieCompactionConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isClusteringConfigSet,
+          HoodieClusteringConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isMetricsConfigSet, HoodieMetricsConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isBootstrapConfigSet,
           HoodieBootstrapConfig.newBuilder().fromProperties(props).build());

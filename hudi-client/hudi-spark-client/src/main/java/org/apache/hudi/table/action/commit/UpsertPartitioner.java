@@ -140,11 +140,21 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
     Map<String, List<SmallFile>> partitionSmallFilesMap =
         getSmallFilesForPartitions(new ArrayList<String>(partitionPaths), context);
 
+    // get the in pending clustering fileId for each partition path
+    Map<String, List<String>>  partitionPathToInPendingClusteringFileId =
+        table.getFileSystemView().getFileGroupsInPendingClustering()
+            .map(fileGroupIdAndInstantPair ->
+                Pair.of(fileGroupIdAndInstantPair.getKey().getPartitionPath(), fileGroupIdAndInstantPair.getKey().getFileId()))
+            .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toList())));
+
     for (String partitionPath : partitionPaths) {
       WorkloadStat pStat = profile.getWorkloadStat(partitionPath);
       if (pStat.getNumInserts() > 0) {
+        // exclude the small file in pending clustering, because in pending clustering file not support update now.
+        List<String> inPendingClusteringFileId = partitionPathToInPendingClusteringFileId.getOrDefault(partitionPath, Collections.emptyList());
+        List<SmallFile> smallFiles = partitionSmallFilesMap.get(partitionPath).stream()
+            .filter(smallFile -> !inPendingClusteringFileId.contains(smallFile.location.getFileId())).collect(Collectors.toList());
 
-        List<SmallFile> smallFiles = partitionSmallFilesMap.get(partitionPath);
         this.smallFiles.addAll(smallFiles);
 
         LOG.info("For partitionPath : " + partitionPath + " Small Files => " + smallFiles);

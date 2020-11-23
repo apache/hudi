@@ -106,6 +106,8 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
       saveWorkloadProfileMetadataToInflight(profile, instantTime);
     }
 
+    // use profile to check clustering update
+    this.clusteringUpdateCheck(profile);
     // partition using the insert partitioner
     final Partitioner partitioner = getPartitioner(profile);
     JavaRDD<HoodieRecord<T>> partitionedRecords = partition(inputRecordsRDD, partitioner);
