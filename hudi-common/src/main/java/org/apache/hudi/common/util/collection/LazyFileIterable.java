@@ -38,6 +38,8 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
   // Stores the key and corresponding value's latest metadata spilled to disk
   private final Map<T, DiskBasedMap.ValueMetadata> inMemoryMetadataOfSpilledData;
 
+  private transient Thread shutdownThread = null;
+
   public LazyFileIterable(String filePath, Map<T, DiskBasedMap.ValueMetadata> map) {
     this.filePath = filePath;
     this.inMemoryMetadataOfSpilledData = map;
@@ -103,6 +105,11 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
     }
 
     private void close() {
+      closeHandle();
+      Runtime.getRuntime().removeShutdownHook(shutdownThread);
+    }
+
+    private void closeHandle() {
       if (readOnlyFileHandle != null) {
         try {
           readOnlyFileHandle.close();
@@ -114,12 +121,8 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
     }
 
     private void addShutdownHook() {
-      Runtime.getRuntime().addShutdownHook(new Thread() {
-        @Override
-        public void run() {
-          close();
-        }
-      });
+      shutdownThread = new Thread(this::closeHandle);
+      Runtime.getRuntime().addShutdownHook(shutdownThread);
     }
   }
 }

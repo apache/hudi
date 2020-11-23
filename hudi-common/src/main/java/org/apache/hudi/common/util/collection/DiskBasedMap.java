@@ -74,6 +74,8 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
   private ThreadLocal<BufferedRandomAccessFile> randomAccessFile = new ThreadLocal<>();
   private Queue<BufferedRandomAccessFile> openedAccessFiles = new ConcurrentLinkedQueue<>();
 
+  private transient Thread shutdownThread = null;
+
   public DiskBasedMap(String baseFilePath) throws IOException {
     this.valueMetadataMap = new ConcurrentHashMap<>();
     this.writeOnlyFile = new File(baseFilePath, UUID.randomUUID().toString());
@@ -126,33 +128,8 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
    * (typically 4 KB) to disk.
    */
   private void addShutDownHook() {
-    Runtime.getRuntime().addShutdownHook(new Thread() {
-      @Override
-      public void run() {
-        try {
-          if (writeOnlyFileHandle != null) {
-            writeOnlyFileHandle.flush();
-            fileOutputStream.getChannel().force(false);
-            writeOnlyFileHandle.close();
-          }
-
-          while (!openedAccessFiles.isEmpty()) {
-            BufferedRandomAccessFile file = openedAccessFiles.poll();
-            if (null != file) {
-              try {
-                file.close();
-              } catch (IOException ioe) {
-                // skip exception
-              }
-            }
-          }
-          writeOnlyFile.delete();
-        } catch (Exception e) {
-          // delete the file for any sort of exception
-          writeOnlyFile.delete();
-        }
-      }
-    });
+    shutdownThread = new Thread(this::cleanup);
+    Runtime.getRuntime().addShutdownHook(shutdownThread);
   }
 
   private void flushToDisk() {
@@ -265,6 +242,39 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
     valueMetadataMap.clear();
     // Do not delete file-handles & file as there is no way to do it without synchronizing get/put(and
     // reducing concurrency). Instead, just clear the pointer map. The file will be removed on exit.
+  }
+
+  public void close() {
+    cleanup();
+    if (shutdownThread != null) {
+      Runtime.getRuntime().removeShutdownHook(shutdownThread);
+    }
+  }
+
+  private void cleanup() {
+    valueMetadataMap.clear();
+    try {
+      if (writeOnlyFileHandle != null) {
+        writeOnlyFileHandle.flush();
+        fileOutputStream.getChannel().force(false);
+        writeOnlyFileHandle.close();
+      }
+
+      while (!openedAccessFiles.isEmpty()) {
+        BufferedRandomAccessFile file = openedAccessFiles.poll();
+        if (null != file) {
+          try {
+            file.close();
+          } catch (IOException ioe) {
+            // skip exception
+          }
+        }
+      }
+      writeOnlyFile.delete();
+    } catch (Exception e) {
+      // delete the file for any sort of exception
+      writeOnlyFile.delete();
+    }
   }
 
   @Override
