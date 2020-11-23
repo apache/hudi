@@ -84,6 +84,11 @@
             <import>${basedir}/src/main/avro/HoodieBootstrapSourceFilePartitionInfo.avsc</import>
             <import>${basedir}/src/main/avro/HoodieBootstrapIndexInfo.avsc</import>
             <import>${basedir}/src/main/avro/HoodieBootstrapMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieSliceInfo.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieClusteringGroup.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieClusteringStrategy.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieClusteringPlan.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieRequestedReplaceMetadata.avsc</import>
           </imports>
         </configuration>
       </plugin>

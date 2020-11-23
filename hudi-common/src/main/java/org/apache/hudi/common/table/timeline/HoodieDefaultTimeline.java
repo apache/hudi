@@ -119,6 +119,12 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public HoodieTimeline filterPendingReplaceTimeline() {
+    return new HoodieDefaultTimeline(instants.stream().filter(
+        s -> s.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION) && !s.isCompleted()), details);
+  }
+
+  @Override
   public HoodieTimeline filterPendingCompactionTimeline() {
     return new HoodieDefaultTimeline(
         instants.stream().filter(s -> s.getAction().equals(HoodieTimeline.COMPACTION_ACTION)), details);

@@ -55,6 +55,8 @@ public class TestHoodieAvroUtils {
       + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
       + "{\"name\": \"pii_col\", \"type\": \"string\", \"column_category\": \"user_profile\"}]}";
 
+  private static int NUM_FIELDS_IN_EXAMPLE_SCHEMA = 4;
+
   private static String SCHEMA_WITH_METADATA_FIELD = "{\"type\": \"record\",\"name\": \"testrec2\",\"fields\": [ "
       + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
       + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
@@ -196,5 +198,13 @@ public class TestHoodieAvroUtils {
     assertNull(rec1.get("evolved_field"));
     //evolvedField5.defaultVal() returns null.
     assertNull(rec1.get("evolved_field1"));
+  }
+
+  @Test
+  public void testAddingAndRemovingMetadataFields() {
+    Schema schemaWithMetaCols = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(EXAMPLE_SCHEMA));
+    assertEquals(schemaWithMetaCols.getFields().size(), NUM_FIELDS_IN_EXAMPLE_SCHEMA + HoodieRecord.HOODIE_META_COLUMNS.size());
+    Schema schemaWithoutMetaCols = HoodieAvroUtils.removeMetadataFields(schemaWithMetaCols);
+    assertEquals(schemaWithoutMetaCols.getFields().size(), NUM_FIELDS_IN_EXAMPLE_SCHEMA);
   }
 }
