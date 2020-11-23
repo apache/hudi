@@ -18,6 +18,14 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.util.jvm.MemoryLayoutSpecification
+import org.apache.hudi.common.util.jvm.HotSpotMemoryLayoutSpecification32bit;
+import org.apache.hudi.common.util.jvm.HotSpotMemoryLayoutSpecification64bit;
+import org.apache.hudi.common.util.jvm.HotSpotMemoryLayoutSpecification64bitCompressed;
+import org.apache.hudi.common.util.jvm.OpenJ9MemoryLayoutSpecification32bit;
+import org.apache.hudi.common.util.jvm.OpenJ9MemoryLayoutSpecification64bit;
+import org.apache.hudi.common.util.jvm.OpenJ9MemoryLayoutSpecification64bitCompressed;
+
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryPoolMXBean;
 import java.lang.reflect.Array;
@@ -46,48 +54,6 @@ import java.util.Set;
  * @author Attila Szegedi
  */
 public class ObjectSizeCalculator {
-
-  /**
-   * Describes constant memory overheads for various constructs in a JVM implementation.
-   */
-  public interface MemoryLayoutSpecification {
-
-    /**
-     * Returns the fixed overhead of an array of any type or length in this JVM.
-     *
-     * @return the fixed overhead of an array.
-     */
-    int getArrayHeaderSize();
-
-    /**
-     * Returns the fixed overhead of for any {@link Object} subclass in this JVM.
-     *
-     * @return the fixed overhead of any object.
-     */
-    int getObjectHeaderSize();
-
-    /**
-     * Returns the quantum field size for a field owned by an object in this JVM.
-     *
-     * @return the quantum field size for an object.
-     */
-    int getObjectPadding();
-
-    /**
-     * Returns the fixed size of an object reference in this JVM.
-     *
-     * @return the size of all object references.
-     */
-    int getReferenceSize();
-
-    /**
-     * Returns the quantum field size for a field owned by one of an object's ancestor superclasses in this JVM.
-     *
-     * @return the quantum field size for a superclass field.
-     */
-    int getSuperclassFieldPadding();
-  }
-
   private static class CurrentLayout {
 
     private static final MemoryLayoutSpecification SPEC = getEffectiveMemoryLayoutSpecification();
@@ -338,32 +304,7 @@ public class ObjectSizeCalculator {
       final String dataModel = System.getProperty("sun.arch.data.model");
       if ("32".equals(dataModel)) {
         // Running with 32-bit data model
-        return new MemoryLayoutSpecification() {
-          @Override
-          public int getArrayHeaderSize() {
-            return 16;
-          }
-
-          @Override
-          public int getObjectHeaderSize() {
-            return 4;
-          }
-
-          @Override
-          public int getObjectPadding() {
-            return 4;
-          }
-
-          @Override
-          public int getReferenceSize() {
-            return 4;
-          }
-
-          @Override
-          public int getSuperclassFieldPadding() {
-            return 4;
-          }
-        };
+        return new OpenJ9MemoryLayoutSpecification32bit();
       } else if (!"64".equals(dataModel)) {
         throw new UnsupportedOperationException(
                 "Unrecognized value '" + dataModel + "' of sun.arch.data.model system property");
@@ -375,92 +316,17 @@ public class ObjectSizeCalculator {
       }
       if (maxMemory < 57L * 1024 * 1024 * 1024) {
         // OpenJ9 use compressed references below 57GB of RAM total
-        return new MemoryLayoutSpecification() {
-          @Override
-          public int getArrayHeaderSize() {
-            return 16;
-          }
-
-          @Override
-          public int getObjectHeaderSize() {
-            return 4;
-          }
-
-          @Override
-          public int getObjectPadding() {
-            return 4;
-          }
-
-          @Override
-          public int getReferenceSize() {
-            return 4;
-          }
-
-          @Override
-          public int getSuperclassFieldPadding() {
-            return 4;
-          }
-        };
+        return new OpenJ9MemoryLayoutSpecification64bitCompressed();
       } else {
         // it's a 64-bit uncompressed references object model
-        return new MemoryLayoutSpecification() {
-          @Override
-          public int getArrayHeaderSize() {
-            return 16;
-          }
-
-          @Override
-          public int getObjectHeaderSize() {
-            return 16;
-          }
-
-          @Override
-          public int getObjectPadding() {
-            return 8;
-          }
-
-          @Override
-          public int getReferenceSize() {
-            return 8;
-          }
-
-          @Override
-          public int getSuperclassFieldPadding() {
-            return 8;
-          }
-        };
+        return new OpenJ9MemoryLayoutSpecification64bit();
       }
     } else {
       // Support for HotSpot JVM
       final String dataModel = System.getProperty("sun.arch.data.model");
       if ("32".equals(dataModel)) {
         // Running with 32-bit data model
-        return new MemoryLayoutSpecification() {
-          @Override
-          public int getArrayHeaderSize() {
-            return 12;
-          }
-
-          @Override
-          public int getObjectHeaderSize() {
-            return 8;
-          }
-
-          @Override
-          public int getObjectPadding() {
-            return 8;
-          }
-
-          @Override
-          public int getReferenceSize() {
-            return 4;
-          }
-
-          @Override
-          public int getSuperclassFieldPadding() {
-            return 4;
-          }
-        };
+        return new HotSpotMemoryLayoutSpecification32bit();
       } else if (!"64".equals(dataModel)) {
         throw new UnsupportedOperationException(
                 "Unrecognized value '" + dataModel + "' of sun.arch.data.model system property");
@@ -475,62 +341,12 @@ public class ObjectSizeCalculator {
         if (maxMemory < 30L * 1024 * 1024 * 1024) {
           // HotSpot 17.0 and above use compressed OOPs below 30GB of RAM total
           // for all memory pools (yes, including code cache).
-          return new MemoryLayoutSpecification() {
-            @Override
-            public int getArrayHeaderSize() {
-              return 16;
-            }
-
-            @Override
-            public int getObjectHeaderSize() {
-              return 12;
-            }
-
-            @Override
-            public int getObjectPadding() {
-              return 8;
-            }
-
-            @Override
-            public int getReferenceSize() {
-              return 4;
-            }
-
-            @Override
-            public int getSuperclassFieldPadding() {
-              return 4;
-            }
-          };
+          return new HotSpotMemoryLayoutSpecification64bitCompressed();
         }
       }
 
       // In other cases, it's a 64-bit uncompressed OOPs object model
-      return new MemoryLayoutSpecification() {
-        @Override
-        public int getArrayHeaderSize() {
-          return 24;
-        }
-
-        @Override
-        public int getObjectHeaderSize() {
-          return 16;
-        }
-
-        @Override
-        public int getObjectPadding() {
-          return 8;
-        }
-
-        @Override
-        public int getReferenceSize() {
-          return 8;
-        }
-
-        @Override
-        public int getSuperclassFieldPadding() {
-          return 8;
-        }
-      };
+      return new HotSpotMemoryLayoutSpecification64bit();
     }
   }
 }
