@@ -204,7 +204,7 @@ public class ArchivedCommitsCommand implements CommandMarker {
       }
     } catch (Exception e) {
       e.printStackTrace();
-      return new Comparable[]{};;
+      return new Comparable[]{};
     }
   }
 }
