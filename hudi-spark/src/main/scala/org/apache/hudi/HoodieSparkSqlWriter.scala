@@ -221,7 +221,8 @@ private[hudi] object HoodieSparkSqlWriter {
                 mode: SaveMode,
                 parameters: Map[String, String],
                 df: DataFrame,
-                hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty): Boolean = {
+                hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty,
+                hoodieWriteClient: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty): Boolean = {
     val sparkContext = sqlContext.sparkContext
     val path = parameters.getOrElse("path", throw new HoodieException("'path' must be set."))
     val tableName = parameters.getOrElse(HoodieWriteConfig.TABLE_NAME,
@@ -263,8 +264,13 @@ private[hudi] object HoodieSparkSqlWriter {
     }
 
     val jsc = new JavaSparkContext(sqlContext.sparkContext)
-    val writeClient = DataSourceUtils.createHoodieClient(jsc, schema, path, tableName, mapAsJavaMap(parameters))
-    writeClient.bootstrap(org.apache.hudi.common.util.Option.empty())
+    val writeClient = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
+      schema, path, tableName, mapAsJavaMap(parameters)))
+    try {
+      writeClient.bootstrap(org.apache.hudi.common.util.Option.empty())
+    } finally {
+      writeClient.close()
+    }
     val metaSyncSuccess = metaSync(parameters, basePath, jsc.hadoopConfiguration)
     metaSyncSuccess
   }

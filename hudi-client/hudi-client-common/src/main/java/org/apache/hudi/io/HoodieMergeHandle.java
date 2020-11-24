@@ -273,7 +273,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
           insertRecordsWritten++;
         }
       }
-      keyToNewRecords.clear();
+
+      ((ExternalSpillableMap) keyToNewRecords).close();
       writtenRecordKeys.clear();
 
       if (fileWriter != null) {
