@@ -20,6 +20,8 @@ package org.apache.hudi.config;
 
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.DefaultHoodieConfig;
+import org.apache.hudi.common.model.EngineType;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 
 import javax.annotation.concurrent.Immutable;
@@ -36,7 +38,6 @@ import java.util.Properties;
 public class HoodieIndexConfig extends DefaultHoodieConfig {
 
   public static final String INDEX_TYPE_PROP = "hoodie.index.type";
-  public static final String DEFAULT_INDEX_TYPE = HoodieIndex.IndexType.BLOOM.name();
 
   public static final String INDEX_CLASS_PROP = "hoodie.index.class";
   public static final String DEFAULT_INDEX_CLASS = "";
@@ -103,17 +104,37 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String SIMPLE_INDEX_UPDATE_PARTITION_PATH = "hoodie.simple.index.update.partition.path";
   public static final String DEFAULT_SIMPLE_INDEX_UPDATE_PARTITION_PATH = "false";
 
+  /**
+   * Use Spark engine by default.
+   */
   private HoodieIndexConfig(Properties props) {
-    super(props);
+    this(EngineType.SPARK, props);
+  }
+
+  private HoodieIndexConfig(EngineType engineType, Properties props) {
+    super(engineType, props);
   }
 
   public static HoodieIndexConfig.Builder newBuilder() {
-    return new Builder();
+    return new Builder(EngineType.SPARK);
+  }
+
+  public static HoodieIndexConfig.Builder newBuilder(EngineType engineType) {
+    return new Builder(engineType);
   }
 
   public static class Builder {
 
+    private final EngineType engineType;
     private final Properties props = new Properties();
+
+    public Builder() {
+      this(EngineType.SPARK);
+    }
+
+    public Builder(EngineType engineType) {
+      this.engineType = engineType;
+    }
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
@@ -239,7 +260,7 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
 
     public HoodieIndexConfig build() {
       HoodieIndexConfig config = new HoodieIndexConfig(props);
-      setDefaultOnCondition(props, !props.containsKey(INDEX_TYPE_PROP), INDEX_TYPE_PROP, DEFAULT_INDEX_TYPE);
+      setDefaultOnCondition(props, !props.containsKey(INDEX_TYPE_PROP), INDEX_TYPE_PROP, getDefaultIndexType(engineType));
       setDefaultOnCondition(props, !props.containsKey(INDEX_CLASS_PROP), INDEX_CLASS_PROP, DEFAULT_INDEX_CLASS);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_FILTER_NUM_ENTRIES), BLOOM_FILTER_NUM_ENTRIES,
           DEFAULT_BLOOM_FILTER_NUM_ENTRIES);
@@ -277,6 +298,17 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
       // Throws IllegalArgumentException if the value set is not a known Hoodie Index Type
       HoodieIndex.IndexType.valueOf(props.getProperty(INDEX_TYPE_PROP));
       return config;
+    }
+
+    private String getDefaultIndexType(EngineType engineType) {
+      switch (engineType) {
+        case SPARK:
+          return HoodieIndex.IndexType.BLOOM.name();
+        case FLINK:
+          return HoodieIndex.IndexType.INMEMORY.name();
+        default:
+          throw new HoodieNotSupportedException("Unsupported engine " + engineType);
+      }
     }
   }
 }

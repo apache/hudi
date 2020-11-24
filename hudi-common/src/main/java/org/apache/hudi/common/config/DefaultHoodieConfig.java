@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.config;
 
+import org.apache.hudi.common.model.EngineType;
+
 import java.io.Serializable;
 import java.util.Properties;
 
@@ -26,10 +28,20 @@ import java.util.Properties;
  */
 public class DefaultHoodieConfig implements Serializable {
 
+  protected final EngineType engineType;
+
   protected final Properties props;
 
+  /**
+   * Use Spark engine by default.
+   */
   public DefaultHoodieConfig(Properties props) {
+    this(EngineType.SPARK, props);
+  }
+
+  public DefaultHoodieConfig(EngineType engineType, Properties props) {
     this.props = props;
+    this.engineType = engineType;
   }
 
   public static void setDefaultOnCondition(Properties props, boolean condition, String propName, String defaultValue) {
