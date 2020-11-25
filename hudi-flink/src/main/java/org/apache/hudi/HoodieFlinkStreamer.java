@@ -19,9 +19,11 @@
 package org.apache.hudi;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.config.HoodieDataSourceConfig;
 import org.apache.hudi.operator.InstantGenerateOperator;
 import org.apache.hudi.operator.KeyedWriteProcessFunction;
 import org.apache.hudi.operator.KeyedWriteProcessOperator;
@@ -42,11 +44,11 @@ import org.apache.flink.runtime.state.filesystem.FsStateBackend;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.Properties;
 
 /**
  * An Utility which can incrementally consume data from Kafka and apply it to the target table.
@@ -73,13 +75,21 @@ public class HoodieFlinkStreamer {
       env.setStateBackend(new FsStateBackend(cfg.flinkCheckPointPath));
     }
 
-    Properties kafkaProps = StreamerUtil.getKafkaProps(cfg);
+    TypedProperties props = StreamerUtil.getProps(cfg);
+
+    // add kafka config
+    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cfg.kafkaBootstrapServers);
+    props.put(ConsumerConfig.GROUP_ID_CONFIG, cfg.kafkaGroupId);
+
+    // add data source config
+    props.put(HoodieDataSourceConfig.WRITE_PAYLOAD_CLASS, cfg.payloadClassName);
+    props.put(HoodieDataSourceConfig.PRECOMBINE_FIELD_PROP, cfg.sourceOrderingField);
 
     // Read from kafka source
     DataStream<HoodieRecord> inputRecords =
-        env.addSource(new FlinkKafkaConsumer<>(cfg.kafkaTopic, new SimpleStringSchema(), kafkaProps))
+        env.addSource(new FlinkKafkaConsumer<>(cfg.kafkaTopic, new SimpleStringSchema(), props))
             .filter(Objects::nonNull)
-            .map(new JsonStringToHoodieRecordMapFunction(cfg))
+            .map(new JsonStringToHoodieRecordMapFunction(props))
             .name("kafka_to_hudi_record")
             .uid("kafka_to_hudi_record_uid");
 

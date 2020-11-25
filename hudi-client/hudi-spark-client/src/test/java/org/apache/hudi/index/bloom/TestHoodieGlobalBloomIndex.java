@@ -27,7 +27,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
-import org.apache.hudi.testutils.HoodieWriteableTestTable;
+import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -76,7 +76,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     SparkHoodieGlobalBloomIndex index = new SparkHoodieGlobalBloomIndex(config);
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    HoodieWriteableTestTable testTable = HoodieWriteableTestTable.of(hoodieTable, SCHEMA);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, SCHEMA);
 
     // Create some partitions, and put some files, along with the meta file
     // "2016/01/21": 0 file
@@ -180,7 +180,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     SparkHoodieGlobalBloomIndex index = new SparkHoodieGlobalBloomIndex(config);
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    HoodieWriteableTestTable testTable = HoodieWriteableTestTable.of(hoodieTable, SCHEMA);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, SCHEMA);
 
     // Create some partitions, and put some files, along with the meta file
     // "2016/01/21": 0 file
@@ -261,7 +261,7 @@ public class TestHoodieGlobalBloomIndex extends HoodieClientTestHarness {
         .build();
     SparkHoodieGlobalBloomIndex index = new SparkHoodieGlobalBloomIndex(config);
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    HoodieWriteableTestTable testTable = HoodieWriteableTestTable.of(hoodieTable, SCHEMA);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, SCHEMA);
     final String p1 = "2016/01/31";
     final String p2 = "2016/02/28";
 
