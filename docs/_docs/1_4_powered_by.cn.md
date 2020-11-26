@@ -68,6 +68,9 @@ Hudi在Yotpo有不少用途。首先，在他们的[开源ETL框架](https://git
 
 16. ["Panel Discussion on Presto Ecosystem"](https://www.youtube.com/watch?v=lsFSM2Z4kPs) - By Vinoth Chandar, Sep 2020, PrestoCon ["panel"](https://prestocon2020.sched.com/event/dgyw).
 
+17. ["Next Generation Data lakes using Apache Hudi"](https://docs.google.com/presentation/d/1y-ryRwCdTbqQHGr_bn3lxM_B8L1L5nsZOIXlJsDl_wU/edit?usp=sharing) - By Balaji Varadarajan and Sivabalan Narayanan, Sep 2020, ["ApacheCon"](https://www.apachecon.com/)
+
+18. ["Landing practice of Apache Hudi in T3go"](https://drive.google.com/file/d/1ULVPkjynaw-07wsutLcZm-4rVXf8E8N8/view?usp=sharing) - By VinoYang and XianghuWang, November 2020, Qcon.
 ## 文章
 
 You can check out [our blog pages](https://hudi.apache.org/blog.html) for content written by our committers/contributors.
