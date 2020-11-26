@@ -18,13 +18,19 @@
 
 package org.apache.hudi.hive;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import org.apache.hadoop.hive.ql.Driver;
+import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hive.testutils.HiveTestUtil;
-import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.hive.util.ConfigUtils;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent.PartitionEventType;
+import org.apache.hudi.hive.testutils.HiveTestUtil;
+import org.apache.hudi.hive.util.HiveSchemaUtil;
 
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.parquet.schema.MessageType;
@@ -248,6 +254,54 @@ public class TestHiveSyncTool {
     assertEquals(6, tablePartitions.size(), "The one partition we wrote should be added to hive");
     assertEquals(instantTime, hiveClient.getLastCommitTimeSynced(HiveTestUtil.hiveSyncConfig.tableName).get(),
         "The last commit that was synced should be 100");
+  }
+
+  @ParameterizedTest
+  @MethodSource({"useJdbcAndSchemaFromCommitMetadata"})
+  public void testSyncWithProperties(boolean useJdbc, boolean useSchemaFromCommitMetadata) throws Exception {
+    HiveSyncConfig hiveSyncConfig = HiveTestUtil.hiveSyncConfig;
+    Map<String, String> serdeProperties = new HashMap<String, String>() {
+      {
+        put("path", hiveSyncConfig.basePath);
+      }
+    };
+
+    Map<String, String> tableProperties = new HashMap<String, String>() {
+      {
+        put("tp_0", "p0");
+        put("tp_1", "p1");
+      }
+    };
+    hiveSyncConfig.useJdbc = useJdbc;
+    hiveSyncConfig.serdeProperties = ConfigUtils.configToString(serdeProperties);
+    hiveSyncConfig.tableProperties = ConfigUtils.configToString(tableProperties);
+    String instantTime = "100";
+    HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
+
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    tool.syncHoodieTable();
+
+    SessionState.start(HiveTestUtil.getHiveConf());
+    Driver hiveDriver = new org.apache.hadoop.hive.ql.Driver(HiveTestUtil.getHiveConf());
+    String dbTableName = hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName;
+    hiveDriver.run("SHOW TBLPROPERTIES " + dbTableName);
+    List<String> results = new ArrayList<>();
+    hiveDriver.getResults(results);
+
+    String tblPropertiesWithoutDdlTime = String.join("\n",
+        results.subList(0, results.size() - 1));
+    assertEquals(
+        "EXTERNAL\tTRUE\n"
+        + "last_commit_time_sync\t100\n"
+        + "tp_0\tp0\n"
+        + "tp_1\tp1", tblPropertiesWithoutDdlTime);
+    assertTrue(results.get(results.size() - 1).startsWith("transient_lastDdlTime"));
+
+    results.clear();
+    hiveDriver.run("SHOW CREATE TABLE " + dbTableName);
+    hiveDriver.getResults(results);
+    String ddl = String.join("\n", results);
+    assertTrue(ddl.contains("'path'='" + hiveSyncConfig.basePath + "'"));
   }
 
   @ParameterizedTest

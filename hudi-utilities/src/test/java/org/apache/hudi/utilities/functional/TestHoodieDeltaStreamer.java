@@ -236,6 +236,13 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     prepareParquetDFSFiles(PARQUET_NUM_RECORDS, PARQUET_SOURCE_ROOT);
   }
 
+  @AfterAll
+  public static void release() {
+    if (testUtils != null) {
+      testUtils.teardown();
+    }
+  }
+
   private static void populateInvalidTableConfigFilePathProps(TypedProperties props) {
     props.setProperty("hoodie.datasource.write.keygenerator.class", TestHoodieDeltaStreamer.TestGenerator.class.getName());
     props.setProperty("hoodie.deltastreamer.keygen.timebased.output.dateformat", "yyyyMMdd");
