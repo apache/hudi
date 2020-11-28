@@ -54,7 +54,7 @@ public class KeyedWriteProcessOperator extends KeyedProcessOperator<String, Hood
 
     // If there is no data flows in `writeProcessFunction`, it will never send anything downstream. so, in order to make
     // sure each subtask will send a write status downstream, we implement this operator`s snapshotState() to mock empty
-    // write status and send it downstream when there is no data flows in some subtasks.
+    // write status and send it downstream when there is no data flows in some subtask.
     super.snapshotState(context);
 
     // make up an empty result and send downstream
