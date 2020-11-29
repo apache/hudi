@@ -43,6 +43,10 @@ import static org.apache.hudi.client.common.function.FunctionWrapper.throwingMap
  */
 public class HoodieJavaEngineContext extends HoodieEngineContext {
 
+  public HoodieJavaEngineContext(Configuration conf) {
+    this(conf, new JavaTaskContextSupplier());
+  }
+
   public HoodieJavaEngineContext(Configuration conf, TaskContextSupplier taskContextSupplier) {
     super(new SerializableConfiguration(conf), taskContextSupplier);
   }
