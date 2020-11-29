@@ -70,6 +70,11 @@ public class KeyedWriteProcessFunction extends KeyedProcessFunction<String, Hood
   private String latestInstant;
 
   /**
+   * Tuple3<latestInstant, upsert result, indexOfThisSubtask>
+   */
+  private Tuple3<String, List<WriteStatus>, Integer> latestOutputResult;
+
+  /**
    * Flag indicate whether this subtask has records in.
    */
   private boolean hasRecordsIn;
@@ -123,7 +128,7 @@ public class KeyedWriteProcessFunction extends KeyedProcessFunction<String, Hood
           default:
             throw new HoodieFlinkStreamerException("Unknown operation : " + cfg.operation);
         }
-        output.collect(new Tuple3<>(instantTimestamp, writeStatus, indexOfThisSubtask));
+        latestOutputResult = new Tuple3<>(instantTimestamp, writeStatus, indexOfThisSubtask);
         bufferedRecords.clear();
       }
     } else {
@@ -153,6 +158,14 @@ public class KeyedWriteProcessFunction extends KeyedProcessFunction<String, Hood
 
   public String getLatestInstant() {
     return latestInstant;
+  }
+
+  public HoodieFlinkWriteClient getWriteClient() {
+    return writeClient;
+  }
+
+  public Tuple3<String, List<WriteStatus>, Integer> getLatestOutputResult() {
+    return latestOutputResult;
   }
 
   @Override
