@@ -56,6 +56,11 @@ public class TestHoodieFileWriterFactory extends HoodieClientTestBase {
         hfilePath, table, cfg, HoodieTestDataGenerator.AVRO_SCHEMA, supplier);
     assertTrue(hfileWriter instanceof HoodieHFileWriter);
 
+    final Path orcPath = new Path(basePath + "/partition/path/f1_1-0-1_000.orc");
+    HoodieFileWriter<IndexedRecord> orcFileWriter = HoodieFileWriterFactory.getFileWriter(instantTime,
+        orcPath, table, cfg, HoodieTestDataGenerator.AVRO_SCHEMA, supplier);
+    assertTrue(orcFileWriter instanceof HoodieOrcWriter);
+
     // other file format exception.
     final Path logPath = new Path(basePath + "/partition/path/f.b51192a8-574b-4a85-b246-bcfec03ac8bf_100.log.2_1-0-1");
     final Throwable thrown = assertThrows(UnsupportedOperationException.class, () -> {

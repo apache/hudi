@@ -16,24 +16,23 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.model;
+package org.apache.hudi.hadoop;
 
-/**
- * Hoodie file format.
- */
-public enum HoodieFileFormat {
-  PARQUET(".parquet"),
-  HOODIE_LOG(".log"),
-  HFILE(".hfile"),
-  ORC(".orc");
+import org.apache.hadoop.conf.Configurable;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hive.ql.io.orc.OrcInputFormat;
 
-  private final String extension;
+@UseFileSplitsFromInputFormat
+public class HoodieOrcInputFormat extends OrcInputFormat implements Configurable {
+  protected Configuration conf;
 
-  HoodieFileFormat(String extension) {
-    this.extension = extension;
+  @Override
+  public void setConf(Configuration conf) {
+    this.conf = conf;
   }
 
-  public String getFileExtension() {
-    return extension;
+  @Override
+  public Configuration getConf() {
+    return conf;
   }
 }
