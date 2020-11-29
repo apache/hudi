@@ -34,8 +34,7 @@ import org.apache.parquet.avro.AvroSchemaConverter;
 
 import java.io.IOException;
 
-import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
-import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
+import static org.apache.hudi.common.model.HoodieFileFormat.*;
 
 public class HoodieFileWriterFactory {
 
@@ -48,6 +47,9 @@ public class HoodieFileWriterFactory {
     }
     if (HFILE.getFileExtension().equals(extension)) {
       return newHFileFileWriter(instantTime, path, config, schema, hoodieTable, sparkTaskContextSupplier);
+    }
+    if (ORC.getFileExtension().equals(extension)) {
+      return newOrcFileWriter(instantTime, path, config, schema, hoodieTable, sparkTaskContextSupplier);
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
@@ -77,9 +79,16 @@ public class HoodieFileWriterFactory {
     return new HoodieHFileWriter<>(instantTime, path, hfileConfig, schema, sparkTaskContextSupplier);
   }
 
+  private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieFileWriter<R> newOrcFileWriter(
+      String instantTime, Path path, HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable,
+      SparkTaskContextSupplier sparkTaskContextSupplier) throws IOException {
+
+    return new HoodieOrcWriter<>(instantTime, path, config, hoodieTable.getHadoopConf(), sparkTaskContextSupplier);
+  }
+
   private static BloomFilter createBloomFilter(HoodieWriteConfig config) {
     return BloomFilterFactory.createBloomFilter(config.getBloomFilterNumEntries(), config.getBloomFilterFPP(),
-            config.getDynamicBloomFilterMaxNumEntries(),
-            config.getBloomFilterType());
+        config.getDynamicBloomFilterMaxNumEntries(),
+        config.getBloomFilterType());
   }
 }

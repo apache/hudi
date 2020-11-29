@@ -19,6 +19,7 @@
 package org.apache.hudi.config;
 
 import org.apache.hadoop.hbase.io.compress.Compression;
+
 import org.apache.hudi.client.HoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
@@ -28,6 +29,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.MetricsReporterType;
@@ -116,13 +118,25 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static final String MAX_CONSISTENCY_CHECKS_PROP = "hoodie.consistency.check.max_checks";
   public static int DEFAULT_MAX_CONSISTENCY_CHECKS = 7;
 
+
+  public static final String ORC_STRIPE_SIZE = "hoodie.hive.exec.orc.default.stripe.size";
+
+  public static final String DEFAULT_ORC_STRIPE_SIZE = String.valueOf(67108864);
+  public static final String ORC_BLOCK_SIZE = "hoodie.hive.exec.orc.default.block.size";
+  public static final String DEFAULT_ORC_BLOCK_SIZE = String.valueOf(268435456);
+  public static final String ORC_COLUMNS = "hoodie.orc.columns";
+  public static final String ORC_COLUMNS_TYPES = "hoodie.orc.columns.types";
+  public static final String ORC_BLOOM_FILTER_COLUMNS = "hoodie.orc.bloom.filter.columns";
+  public static final String ORC_BLOOM_FILTER_FPP = "hoodie.orc.bloom.filter.fpp";
+  public static final String DEFAULT_ORC_BLOOM_FILTER_FPP = String.valueOf(0.05);
+
   /**
    * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
    * multiple write operations (upsert/buk-insert/...) to be executed within a single commit.
-   *
+   * <p>
    * Given Hudi commit protocol, these are generally unsafe operations and user need to handle failure scenarios. It
    * only works with COW table. Hudi 0.5.x had stopped this behavior.
-   *
+   * <p>
    * Given the importance of supporting such cases for the user's migration to 0.5.x, we are proposing a safety flag
    * (disabled by default) which will allow this old behavior.
    */
@@ -572,6 +586,35 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   /**
+   * ORC configs .
+   */
+
+  // orc
+  public long getOrcStripeSize() {
+    return Long.valueOf(props.getProperty(ORC_STRIPE_SIZE));
+  }
+
+  public long getOrcBlockSize() {
+    return Long.valueOf(props.getProperty(ORC_BLOCK_SIZE));
+  }
+
+  public String getOrcColumns() {
+    return props.getProperty(ORC_COLUMNS);
+  }
+
+  public String getOrcColumnsTypes() {
+    return props.getProperty(ORC_COLUMNS_TYPES);
+  }
+
+  public String getOrcBloomFilterColumns() {
+    return props.getProperty(ORC_BLOOM_FILTER_COLUMNS);
+  }
+
+  public String getOrcBloomFilterFpp() {
+    return props.getProperty(ORC_BLOOM_FILTER_FPP);
+  }
+
+  /**
    * metrics properties.
    */
   public boolean isMetricsOn() {
@@ -672,7 +715,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public boolean getPushGatewayRandomJobNameSuffix() {
     return Boolean.parseBoolean(props.getProperty(HoodieMetricsPrometheusConfig.PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX));
   }
-  
+
   /**
    * memory configs.
    */
@@ -965,8 +1008,41 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    /**
+     * ORC Builder Methods ..
+     */
     public Builder withProperties(Properties properties) {
       this.props.putAll(properties);
+      return this;
+    }
+
+    public Builder orcStripeSize(long stripeSize) {
+      props.setProperty(ORC_STRIPE_SIZE, String.valueOf(stripeSize));
+      return this;
+    }
+
+    public Builder orcBlockSize(long blockSize) {
+      props.setProperty(ORC_BLOCK_SIZE, String.valueOf(blockSize));
+      return this;
+    }
+
+    public Builder orcColumns(String columns) {
+      props.setProperty(ORC_COLUMNS, columns);
+      return this;
+    }
+
+    public Builder orcColumnsTypes(String columnsTypes) {
+      props.setProperty(ORC_COLUMNS_TYPES, columnsTypes);
+      return this;
+    }
+
+    public Builder orcBloomFilterColumns(String bloomFilterColumns) {
+      props.setProperty(ORC_BLOOM_FILTER_COLUMNS, bloomFilterColumns);
+      return this;
+    }
+
+    public Builder orcBloomFilterFpp(String bloomFilterFpp) {
+      props.setProperty(ORC_BLOOM_FILTER_FPP, bloomFilterFpp);
       return this;
     }
 
@@ -1035,6 +1111,14 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION, DEFAULT_EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION);
       setDefaultOnCondition(props, !props.containsKey(TIMELINE_LAYOUT_VERSION), TIMELINE_LAYOUT_VERSION,
           String.valueOf(TimelineLayoutVersion.CURR_VERSION));
+
+      setDefaultOnCondition(props, !props.containsKey(ORC_STRIPE_SIZE),
+          ORC_STRIPE_SIZE, DEFAULT_ORC_STRIPE_SIZE);
+      setDefaultOnCondition(props, !props.containsKey(ORC_BLOCK_SIZE),
+          ORC_BLOCK_SIZE, DEFAULT_ORC_BLOCK_SIZE);
+      setDefaultOnCondition(props, !props.containsKey(ORC_BLOOM_FILTER_FPP),
+          ORC_BLOOM_FILTER_FPP, DEFAULT_ORC_BLOOM_FILTER_FPP);
+
     }
 
     private void validate() {
