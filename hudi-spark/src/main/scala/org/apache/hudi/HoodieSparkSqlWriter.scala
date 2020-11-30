@@ -120,7 +120,8 @@ private[hudi] object HoodieSparkSqlWriter {
 
       // short-circuit if bulk_insert via row is enabled.
       // scalastyle:off
-      if (parameters(ENABLE_ROW_WRITER_OPT_KEY).toBoolean) {
+      if (parameters(ENABLE_ROW_WRITER_OPT_KEY).toBoolean &&
+        operation == WriteOperationType.BULK_INSERT) {
         val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, parameters, df, tblName,
                                                                                 basePath, path, instantTime)
         return (success, commitTime, common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
