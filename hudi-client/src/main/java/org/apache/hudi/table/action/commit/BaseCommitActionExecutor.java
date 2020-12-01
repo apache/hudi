@@ -226,7 +226,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload<T>,
       HoodieCommitMetadata metadata = CommitUtils.buildMetadata(writeStats, result.getPartitionToReplaceFileIds(),
           extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());
 
-      table.metadata().update(jsc, metadata, instantTime);
+      table.metadataWriter(jsc).update(metadata, instantTime);
 
       activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));

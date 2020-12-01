@@ -53,6 +53,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -216,7 +217,7 @@ public class HoodieTimelineArchiveLog {
 
     // For metadata tables, ensure commits >= latest compaction commit are retained. This is required for
     // metadata table sync.
-    if (table.metadata().isMetadataTable(config.getBasePath())) {
+    if (HoodieTableMetadata.isMetadataTable(config.getBasePath())) {
       Option<HoodieInstant> latestCompactionInstant =
           table.getActiveTimeline().filterPendingCompactionTimeline().lastInstant();
       if (latestCompactionInstant.isPresent()) {

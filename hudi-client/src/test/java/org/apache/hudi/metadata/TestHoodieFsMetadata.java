@@ -21,6 +21,7 @@ package org.apache.hudi.metadata;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -39,6 +40,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.ClientUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieKey;
@@ -75,8 +77,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-public class TestHoodieMetadata extends HoodieClientTestHarness {
-  private static final Logger LOG = LogManager.getLogger(TestHoodieMetadata.class);
+public class TestHoodieFsMetadata extends HoodieClientTestHarness {
+  private static final Logger LOG = LogManager.getLogger(TestHoodieFsMetadata.class);
 
   @TempDir
   public java.nio.file.Path tempFolder;
@@ -100,10 +102,9 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       dfs.mkdirs(new Path(basePath));
     }
     initMetaClient();
-
     initTestDataGenerator();
 
-    metadataTableBasePath = HoodieMetadataReader.getMetadataTableBasePath(basePath);
+    metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
   }
 
   @AfterEach
@@ -159,15 +160,15 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
     try (HoodieWriteClient client = new HoodieWriteClient<>(jsc, getWriteConfig(true, true))) {
       client.startCommitWithTime("005");
 
-      List<String> partitions = metadata(client).getAllPartitionPaths(dfs, basePath, false);
+      List<String> partitions = metadataWriter(client).metadata().getAllPartitionPaths();
       assertFalse(partitions.contains(nonPartitionDirectory),
           "Must not contain the non-partition " + nonPartitionDirectory);
       assertTrue(partitions.contains("p1"), "Must contain partition p1");
       assertTrue(partitions.contains("p2"), "Must contain partition p2");
 
-      FileStatus[] statuses = metadata(client).getAllFilesInPartition(hadoopConf, basePath, new Path(basePath, "p1"));
+      FileStatus[] statuses = metadata(client).getAllFilesInPartition(new Path(basePath, "p1"));
       assertTrue(statuses.length == 2);
-      statuses = metadata(client).getAllFilesInPartition(hadoopConf, basePath, new Path(basePath, "p2"));
+      statuses = metadata(client).getAllFilesInPartition(new Path(basePath, "p2"));
       assertTrue(statuses.length == 5);
     }
   }
@@ -272,6 +273,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 20);
       client.startCommitWithTime(newCommitTime);
       List<WriteStatus> writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
+      assertNoWriteErrors(writeStatuses);
       validateMetadata(client);
 
       // Rollback of inserts
@@ -475,7 +477,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
    * Metadata Table should be automatically compacted as per config.
    */
   @ParameterizedTest
-  @ValueSource(booleans =  {true, false})
+  @ValueSource(booleans =  {false})
   public void testArchivingAndCompaction(boolean asyncClean) throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
 
@@ -600,7 +602,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       List<WriteStatus> writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), newCommitTime).collect();
       validateMetadata(client);
 
-      List<String> metadataPartitions = metadata(client).getAllPartitionPaths(dfs, basePath, false);
+      List<String> metadataPartitions = metadata(client).getAllPartitionPaths();
       assertTrue(metadataPartitions.contains(""), "Must contain empty partition");
     }
   }
@@ -622,9 +624,9 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
       validateMetadata(client);
 
       Registry metricsRegistry = Registry.getRegistry("HoodieMetadata");
-      assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataWriter.INITIALIZE_STR + ".count"));
-      assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataWriter.INITIALIZE_STR + ".totalDuration"));
-      assertEquals(metricsRegistry.getAllCounts().get(HoodieMetadataWriter.INITIALIZE_STR + ".count"), 1L);
+      assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataMetrics.INITIALIZE_STR + ".count"));
+      assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataMetrics.INITIALIZE_STR + ".totalDuration"));
+      assertEquals(metricsRegistry.getAllCounts().get(HoodieMetadataMetrics.INITIALIZE_STR + ".count"), 1L);
       assertTrue(metricsRegistry.getAllCounts().containsKey("basefile.size"));
       assertTrue(metricsRegistry.getAllCounts().containsKey("logfile.size"));
       assertTrue(metricsRegistry.getAllCounts().containsKey("basefile.count"));
@@ -639,8 +641,8 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
    */
   private void validateMetadata(HoodieWriteClient client) throws IOException {
     HoodieWriteConfig config = client.getConfig();
-    HoodieMetadataWriter metadata = metadata(client);
-    assertFalse(metadata == null, "MetadataWriter should have been initialized");
+    HoodieBackedTableMetadataWriter metadataWriter = metadataWriter(client);
+    assertNotNull(metadataWriter, "MetadataWriter should have been initialized");
     if (!config.useFileListingMetadata()) {
       return;
     }
@@ -648,16 +650,16 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
     HoodieTimer timer = new HoodieTimer().startTimer();
 
     // Validate write config for metadata table
-    HoodieWriteConfig metadataWriteConfig = metadata.getWriteConfig();
+    HoodieWriteConfig metadataWriteConfig = metadataWriter.getWriteConfig();
     assertFalse(metadataWriteConfig.useFileListingMetadata(), "No metadata table for metadata table");
     assertFalse(metadataWriteConfig.getFileListingMetadataVerify(), "No verify for metadata table");
 
     // Metadata table should be in sync with the dataset
-    assertTrue(metadata.isInSync());
+    assertTrue(metadata(client).isInSync());
 
     // Partitions should match
     List<String> fsPartitions = FSUtils.getAllFoldersWithPartitionMetaFile(dfs, basePath);
-    List<String> metadataPartitions = metadata.getAllPartitionPaths(dfs, basePath, false);
+    List<String> metadataPartitions = metadataWriter.metadata().getAllPartitionPaths();
 
     Collections.sort(fsPartitions);
     Collections.sort(metadataPartitions);
@@ -679,7 +681,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
           partitionPath = new Path(basePath, partition);
         }
         FileStatus[] fsStatuses = FSUtils.getAllDataFilesInPartition(dfs, partitionPath);
-        FileStatus[] metaStatuses = metadata.getAllFilesInPartition(hadoopConf, basePath, partitionPath);
+        FileStatus[] metaStatuses = metadataWriter.metadata().getAllFilesInPartition(partitionPath);
         List<String> fsFileNames = Arrays.stream(fsStatuses)
             .map(s -> s.getPath().getName()).collect(Collectors.toList());
         List<String> metadataFilenames = Arrays.stream(metaStatuses)
@@ -700,9 +702,9 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
         // FileSystemView should expose the same data
         List<HoodieFileGroup> fileGroups = tableView.getAllFileGroups(partition).collect(Collectors.toList());
 
-        fileGroups.stream().forEach(g -> LogManager.getLogger(TestHoodieMetadata.class).info(g));
-        fileGroups.stream().forEach(g -> g.getAllBaseFiles().forEach(b -> LogManager.getLogger(TestHoodieMetadata.class).info(b)));
-        fileGroups.stream().forEach(g -> g.getAllFileSlices().forEach(s -> LogManager.getLogger(TestHoodieMetadata.class).info(s)));
+        fileGroups.forEach(g -> LogManager.getLogger(TestHoodieFsMetadata.class).info(g));
+        fileGroups.forEach(g -> g.getAllBaseFiles().forEach(b -> LogManager.getLogger(TestHoodieFsMetadata.class).info(b)));
+        fileGroups.forEach(g -> g.getAllFileSlices().forEach(s -> LogManager.getLogger(TestHoodieFsMetadata.class).info(s)));
 
         long numFiles = fileGroups.stream()
             .mapToLong(g -> g.getAllBaseFiles().count() + g.getAllFileSlices().mapToLong(s -> s.getLogFiles().count()).sum())
@@ -718,7 +720,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
     HoodieTableMetaClient metadataMetaClient = new HoodieTableMetaClient(hadoopConf, metadataTableBasePath);
 
     // Metadata table should be in sync with the dataset
-    assertTrue(metadata.isInSync());
+    assertTrue(metadataWriter.metadata().isInSync());
 
     // Metadata table is MOR
     assertEquals(metadataMetaClient.getTableType(), HoodieTableType.MERGE_ON_READ, "Metadata Table should be MOR");
@@ -730,9 +732,9 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
     // Metadata table has a fixed number of partitions
     // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
     // in the .hoodie folder.
-    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(dfs, metadata.getMetadataTableBasePath(basePath),
+    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(dfs, HoodieTableMetadata.getMetadataTableBasePath(basePath),
         false);
-    assertEquals(HoodieMetadataWriter.METADATA_ALL_PARTITIONS.length, metadataTablePartitions.size());
+    assertEquals(MetadataPartitionType.values().length, metadataTablePartitions.size());
 
     // Metadata table should automatically compact and clean
     // versions are +1 as autoclean / compaction happens end of commits
@@ -747,6 +749,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
             "Should limit files to num versions configured");
       }
 
+      List<FileSlice> slices = fsView.getAllFileSlices(partition).collect(Collectors.toList());
       assertTrue(fsView.getAllFileSlices(partition).count() <= numFileVersions, "Should limit file slice to "
           + numFileVersions + " but was " + fsView.getAllFileSlices(partition).count());
     });
@@ -754,8 +757,14 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
     LOG.info("Validation time=" + timer.endTimer());
   }
 
-  private HoodieMetadataWriter metadata(HoodieWriteClient client) {
-    return HoodieMetadataWriter.create(hadoopConf, client.getConfig());
+  private HoodieBackedTableMetadataWriter metadataWriter(HoodieWriteClient client) {
+    return (HoodieBackedTableMetadataWriter) HoodieTableMetadataWriter.create(hadoopConf, client.getConfig(), jsc);
+  }
+
+  private HoodieBackedTableMetadata metadata(HoodieWriteClient client) {
+    HoodieWriteConfig clientConfig = client.getConfig();
+    return (HoodieBackedTableMetadata) HoodieTableMetadata.create(hadoopConf, clientConfig.getBasePath(), clientConfig.getSpillableMapBasePath(),
+        clientConfig.useFileListingMetadata(), clientConfig.getFileListingMetadataVerify(), false, clientConfig.shouldAssumeDatePartitioning());
   }
 
   // TODO: this can be moved to TestHarness after merge from master
@@ -774,7 +783,7 @@ public class TestHoodieMetadata extends HoodieClientTestHarness {
                                                           boolean enableMetrics) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2).withDeleteParallelism(2).withRollbackParallelism(2).withFinalizeWriteParallelism(2)
-        .withAutoCommit(autoCommit).withAssumeDatePartitioning(true)
+        .withAutoCommit(autoCommit).withAssumeDatePartitioning(false)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1)
             .withAutoClean(false).retainCommits(1).retainFileVersions(1).build())

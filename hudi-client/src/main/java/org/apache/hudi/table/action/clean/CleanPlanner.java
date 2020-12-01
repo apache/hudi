@@ -185,8 +185,7 @@ public class CleanPlanner<T extends HoodieRecordPayload<T>> implements Serializa
    */
   private List<String> getPartitionPathsForFullCleaning() throws IOException {
     // Go to brute force mode of scanning all partitions
-    return hoodieTable.metadata().getAllPartitionPaths(hoodieTable.getMetaClient().getFs(),
-        hoodieTable.getMetaClient().getBasePath(), config.shouldAssumeDatePartitioning());
+    return hoodieTable.metadata().getAllPartitionPaths();
   }
 
   /**
