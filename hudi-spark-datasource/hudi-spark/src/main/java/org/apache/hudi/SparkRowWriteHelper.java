@@ -57,9 +57,12 @@ public class SparkRowWriteHelper {
 
   public Dataset<Row> deduplicateRows(Dataset<Row> inputDf, PreCombineRow preCombineRow) {
     ExpressionEncoder encoder = getEncoder(inputDf.schema());
+
     return inputDf.groupByKey(
-        (MapFunction<Row, String>) value -> value.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD) + "+" + value.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD), Encoders.STRING())
-        .reduceGroups((ReduceFunction<Row>) (v1, v2) -> preCombineRow.combineTwoRows(v1, v2)).map((MapFunction<Tuple2<String, Row>, Row>) value -> value._2, encoder);
+        (MapFunction<Row, String>) value -> (value.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD) + "+" + value.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD)), Encoders.STRING())
+        .reduceGroups((ReduceFunction<Row>) (v1, v2) ->
+            preCombineRow.combineTwoRows(v1, v2)
+        ).map((MapFunction<Tuple2<String, Row>, Row>) value -> value._2, encoder);
   }
 
   private ExpressionEncoder getEncoder(StructType schema) {

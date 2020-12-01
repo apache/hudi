@@ -97,8 +97,8 @@ public class DataSourceTestUtils {
     List<Row> rows = new ArrayList<>();
     for (Row row : input) {
       Object[] values = new Object[3];
-      values[0] = row.getAs("partition");
-      values[1] = row.getAs("_row_key");
+      values[0] = row.getAs("_row_key");
+      values[1] = row.getAs("partition");
       values[2] = ((Long) row.getAs("ts")) + random.nextInt(1000);
       rows.add(RowFactory.create(values));
     }

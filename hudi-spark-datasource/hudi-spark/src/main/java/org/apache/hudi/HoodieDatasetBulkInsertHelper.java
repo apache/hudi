@@ -103,7 +103,7 @@ public class HoodieDatasetBulkInsertHelper {
     if (config.shouldCombineBeforeBulkInsert() && preCombineRowOpt.isPresent()) {
       dedupedDf = SparkRowWriteHelper.newInstance().deduplicateRows(rowDatasetWithHoodieColumns, preCombineRowOpt.get());
     } else if (config.shouldCombineBeforeBulkInsert()) {
-      throw new IllegalStateException("No PrecombineRow class set for BulkInsert but dedup config set");
+      throw new IllegalStateException("No PrecombineRow class set for BulkInsert but dedup config is set");
     }
 
     List<Column> orderedFields = Stream.concat(HoodieRecord.HOODIE_META_COLUMNS.stream().map(Column::new),

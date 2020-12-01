@@ -345,7 +345,7 @@ object HoodieSparkSqlWriter {
     }
     val arePartitionRecordsSorted = bulkInsertPartitionerRows.arePartitionRecordsSorted();
     parameters.updated(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED, arePartitionRecordsSorted.toString)
-    val preCombineRowOpt = DataSourceUtils.createBulkInsertPreCombineRow(writeConfig)
+    val preCombineRowOpt = DataSourceUtils.createBulkInsertPreCombineRow(writeConfig, parameters(PRECOMBINE_FIELD_OPT_KEY.key()))
     val hoodieDF = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, writeConfig, df, structName, nameSpace,
       bulkInsertPartitionerRows, preCombineRowOpt)
     if (SPARK_VERSION.startsWith("2.")) {

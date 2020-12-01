@@ -127,12 +127,13 @@ public class DataSourceUtils {
    *
    * @see HoodieWriteConfig#getBulkinsertPrecombimeRowClass() ()
    */
-  static Option<PreCombineRow> createBulkInsertPreCombineRow(HoodieWriteConfig config)
+  static Option<PreCombineRow> createBulkInsertPreCombineRow(HoodieWriteConfig config, String preCombineField)
       throws HoodieException {
     String preCombineRowClass = config.getBulkinsertPrecombimeRowClass();
     try {
       return StringUtils.isNullOrEmpty(preCombineRowClass)
-          ? Option.empty() :
+          ? Option.of((PreCombineRow) ReflectionUtils.loadClass(DefaultPreCombineRow.class.getName(),
+          new Class<?>[] {String.class}, preCombineField)) :
           Option.of((PreCombineRow) ReflectionUtils.loadClass(preCombineRowClass));
     } catch (Throwable e) {
       throw new HoodieException("Could not create PreCombineRow class " + preCombineRowClass, e);

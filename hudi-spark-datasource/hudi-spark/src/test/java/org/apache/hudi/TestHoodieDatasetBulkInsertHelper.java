@@ -36,7 +36,11 @@ import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
 import org.apache.spark.sql.catalyst.encoders.RowEncoder;
 import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.types.StructType;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -44,6 +48,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import scala.Tuple2;
 import scala.collection.JavaConversions;
@@ -59,11 +64,21 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
 
   private String schemaStr;
-  private Schema schema;
+  private transient Schema schema;
   private StructType structType;
 
   public TestHoodieDatasetBulkInsertHelper() throws IOException {
     init();
+  }
+
+  /**
+   * args for schema evolution test.
+   */
+  private static Stream<Arguments> providePreCombineArgs() {
+    return Stream.of(
+        Arguments.of(false, false),
+        Arguments.of(true, false),
+        Arguments.of(true, true));
   }
 
   private void init() throws IOException {
@@ -107,48 +122,51 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     assertTrue(dataset.except(trimmedOutput).count() == 0);
   }
 
-  @Test
-  public void testBulkInsertPreCombine() throws IOException {
-    boolean[] vals = {true};
-    for (Boolean preCombine : vals) {
-      HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(getPropsAllSet()).combineBulkInsertInput(preCombine).build();
-      List<Row> inserts = DataSourceTestUtils.generateRandomRows(10);
-      Dataset<Row> toUpdateDataset = sqlContext.createDataFrame(inserts.subList(0, 5), structType);
-      List<Row> updates = DataSourceTestUtils.updateRowsWithHigherTs(toUpdateDataset);
-      List<Row> rows = new ArrayList<>();
-      rows.addAll(inserts);
-      rows.addAll(updates);
-      Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
-      Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-          "testNamespace", new NonSortPartitionerWithRows(), Option.of(new TestPreCombineRow()));
-      StructType resultSchema = result.schema();
+  @ParameterizedTest
+  @MethodSource("providePreCombineArgs")
+  public void testBulkInsertPreCombineRow(boolean enablePreCombine, boolean useDefaultPreCombine) {
+    HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(getPropsAllSet()).combineBulkInsertInput(enablePreCombine).build();
+    List<Row> inserts = DataSourceTestUtils.generateRandomRows(10);
+    Dataset<Row> toUpdateDataset = sqlContext.createDataFrame(inserts.subList(0, 5), structType);
+    List<Row> updates = DataSourceTestUtils.updateRowsWithHigherTs(toUpdateDataset);
+    List<Row> rows = new ArrayList<>();
+    rows.addAll(inserts);
+    rows.addAll(updates);
+    Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
+    //Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
+    //  "testNamespace", Option.of(new TestPreCombineRow()));
+    Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
+        "testNamespace", new NonSortPartitionerWithRows(), enablePreCombine ? (useDefaultPreCombine ? Option.of(new DefaultPreCombineRow("ts")) :
+            Option.of(new TestUserDefinedPreCombineRow())) : Option.empty());
+    StructType resultSchema = result.schema();
 
-      assertEquals(result.count(), 10);
-      assertEquals(resultSchema.fieldNames().length, structType.fieldNames().length + HoodieRecord.HOODIE_META_COLUMNS.size());
+    assertEquals(result.count(), enablePreCombine ? 10 : 15);
+    assertEquals(resultSchema.fieldNames().length, structType.fieldNames().length + HoodieRecord.HOODIE_META_COLUMNS.size());
 
-      for (Map.Entry<String, Integer> entry : HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.entrySet()) {
-        assertTrue(resultSchema.fieldIndex(entry.getKey()) == entry.getValue());
-      }
+    for (Map.Entry<String, Integer> entry : HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.entrySet()) {
+      assertTrue(resultSchema.fieldIndex(entry.getKey()) == entry.getValue());
+    }
 
-      int metadataRecordKeyIndex = resultSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD);
-      int metadataParitionPathIndex = resultSchema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
-      int metadataCommitTimeIndex = resultSchema.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
-      int metadataCommitSeqNoIndex = resultSchema.fieldIndex(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD);
-      int metadataFilenameIndex = resultSchema.fieldIndex(HoodieRecord.FILENAME_METADATA_FIELD);
+    int metadataRecordKeyIndex = resultSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    int metadataParitionPathIndex = resultSchema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
+    int metadataCommitTimeIndex = resultSchema.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+    int metadataCommitSeqNoIndex = resultSchema.fieldIndex(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD);
+    int metadataFilenameIndex = resultSchema.fieldIndex(HoodieRecord.FILENAME_METADATA_FIELD);
 
-      result.toJavaRDD().foreach(entry -> {
-        assertTrue(entry.get(metadataRecordKeyIndex).equals(entry.getAs("_row_key")));
-        assertTrue(entry.get(metadataParitionPathIndex).equals(entry.getAs("partition")));
-        assertTrue(entry.get(metadataCommitSeqNoIndex).equals(""));
-        assertTrue(entry.get(metadataCommitTimeIndex).equals(""));
-        assertTrue(entry.get(metadataFilenameIndex).equals(""));
-      });
+    result.toJavaRDD().foreach(entry -> {
+      assertTrue(entry.get(metadataRecordKeyIndex).equals(entry.getAs("_row_key")));
+      assertTrue(entry.get(metadataParitionPathIndex).equals(entry.getAs("partition")));
+      assertTrue(entry.get(metadataCommitSeqNoIndex).equals(""));
+      assertTrue(entry.get(metadataCommitTimeIndex).equals(""));
+      assertTrue(entry.get(metadataFilenameIndex).equals(""));
+    });
 
-      Dataset<Row> trimmedOutput = result.drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
-          .drop(HoodieRecord.FILENAME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+    Dataset<Row> trimmedOutput = result.drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
+        .drop(HoodieRecord.FILENAME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
 
-      // find resolved input snapshot
-      ExpressionEncoder encoder = getEncoder(dataset.schema());
+    // find resolved input snapshot
+    ExpressionEncoder encoder = getEncoder(dataset.schema());
+    if (enablePreCombine) {
       Dataset<Row> inputSnapshotDf = dataset.groupByKey(
           (MapFunction<Row, String>) value -> value.getAs("partition") + "+" + value.getAs("_row_key"), Encoders.STRING())
           .reduceGroups((ReduceFunction<Row>) (v1, v2) -> {
@@ -163,11 +181,30 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
           .map((MapFunction<Tuple2<String, Row>, Row>) value -> value._2, encoder);
 
       assertTrue(inputSnapshotDf.except(trimmedOutput).count() == 0);
-
+    } else {
+      assertTrue(dataset.except(trimmedOutput).count() == 0);
     }
   }
 
-  class TestPreCombineRow implements PreCombineRow {
+  @Test
+  public void testNonExistantPreCombineField() {
+    HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(getPropsAllSet()).combineBulkInsertInput(true).build();
+    List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
+    Dataset<Row> toUpdateDataset = sqlContext.createDataFrame(rows.subList(0, 5), structType);
+    List<Row> updates = DataSourceTestUtils.updateRowsWithHigherTs(toUpdateDataset);
+    rows.addAll(updates);
+    Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
+    try {
+      Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
+          "testNamespace", new NonSortPartitionerWithRows(), Option.of(new DefaultPreCombineRow("ts1")));
+      result.count();
+      Assertions.fail("non existant preCombine field should have thrown exception");
+    } catch (Exception e) {
+      assertTrue(e.getCause() instanceof IllegalArgumentException);
+    }
+  }
+
+  class TestUserDefinedPreCombineRow implements PreCombineRow {
 
     @Override
     public Row combineTwoRows(Row v1, Row v2) {
