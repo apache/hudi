@@ -348,8 +348,8 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     try {
 
       val sqlContext = spark.sqlContext
-      val sc = spark.sparkContext
       val hoodieFooTableName = "hoodie_foo_tbl"
+      val sc = spark.sparkContext
 
       //create a new table
       val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
