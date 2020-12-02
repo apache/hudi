@@ -80,7 +80,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
   public CleanPlanner(HoodieTable<T, I, K, O> hoodieTable, HoodieWriteConfig config) {
     this.hoodieTable = hoodieTable;
     this.fileSystemView = hoodieTable.getHoodieView();
-    this.commitTimeline = hoodieTable.getCompletedCommitTimeline();
+    this.commitTimeline = hoodieTable.getCompletedCommitsTimeline();
     this.config = config;
     this.fgIdToPendingCompactionOperations =
         ((SyncableFileSystemView) hoodieTable.getSliceView()).getPendingCompactionOperations()
