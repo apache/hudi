@@ -19,6 +19,7 @@
 package org.apache.hudi.timeline.service.handlers;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hudi.common.table.timeline.dto.ClusteringOpDTO;
 import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
@@ -90,6 +91,12 @@ public class FileSliceHandler extends Handler {
 
   public List<FileGroupDTO> getReplacedFileGroupsBeforeOrOn(String basePath, String maxCommitTime, String partitionPath) {
     return viewManager.getFileSystemView(basePath).getReplacedFileGroupsBeforeOrOn(maxCommitTime, partitionPath).map(FileGroupDTO::fromFileGroup)
+        .collect(Collectors.toList());
+  }
+
+  public List<ClusteringOpDTO> getFileGroupsInPendingClustering(String basePath) {
+    return viewManager.getFileSystemView(basePath).getFileGroupsInPendingClustering()
+        .map(fgInstant -> ClusteringOpDTO.fromClusteringOp(fgInstant.getLeft(), fgInstant.getRight()))
         .collect(Collectors.toList());
   }
 
