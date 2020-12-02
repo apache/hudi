@@ -17,6 +17,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieClientTestBase
@@ -26,6 +27,8 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.functions.col
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.JavaConversions._
 
@@ -71,13 +74,16 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
   }
 
-  @Test def testCopyOnWriteStorage() {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testCopyOnWriteStorage(isMetadataEnabled: Boolean) {
     // Insert Operation
     val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP, isMetadataEnabled)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -85,7 +91,9 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
 
     // Snapshot query
-    val snapshotDF1 = spark.read.format("org.apache.hudi").load(basePath + "/*/*/*/*")
+    val snapshotDF1 = spark.read.format("org.apache.hudi")
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP, isMetadataEnabled)
+      .load(basePath + "/*/*/*/*")
     assertEquals(100, snapshotDF1.count())
 
     val records2 = recordsToStrings(dataGen.generateUpdates("001", 100)).toList
@@ -95,6 +103,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     // Upsert Operation
     inputDF2.write.format("org.apache.hudi")
       .options(commonOpts)
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP, isMetadataEnabled)
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -103,6 +112,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     // Snapshot Query
     val snapshotDF2 = spark.read.format("org.apache.hudi")
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP, isMetadataEnabled)
       .load(basePath + "/*/*/*/*")
     assertEquals(100, snapshotDF2.count()) // still 100, since we only updated
 
@@ -124,6 +134,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val emptyDF = spark.read.json(spark.sparkContext.parallelize(emptyRecords, 1))
     emptyDF.write.format("org.apache.hudi")
       .options(commonOpts)
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP, isMetadataEnabled)
       .mode(SaveMode.Append)
       .save(basePath)
 

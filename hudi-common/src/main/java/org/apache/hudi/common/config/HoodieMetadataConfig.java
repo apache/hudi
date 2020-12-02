@@ -16,9 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.config;
-
-import org.apache.hudi.common.config.DefaultHoodieConfig;
+package org.apache.hudi.common.config;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -31,13 +29,16 @@ import java.util.Properties;
  * Configurations used by the HUDI Metadata Table.
  */
 @Immutable
-public class HoodieMetadataConfig extends DefaultHoodieConfig {
+public final class HoodieMetadataConfig extends DefaultHoodieConfig {
 
   public static final String METADATA_PREFIX = "hoodie.metadata";
 
   // Enable the internal Metadata Table which saves file listings
   public static final String METADATA_ENABLE_PROP = METADATA_PREFIX + ".enable";
   public static final boolean DEFAULT_METADATA_ENABLE = false;
+  // We can set the default to true for readers, as it will internally default to listing from filesystem if metadata
+  // table is not found
+  public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = true;
 
   // Validate contents of Metadata Table on each access against the actual filesystem
   public static final String METADATA_VALIDATE_PROP = METADATA_PREFIX + ".validate";
@@ -74,7 +75,6 @@ public class HoodieMetadataConfig extends DefaultHoodieConfig {
   }
 
   public static class Builder {
-
     private final Properties props = new Properties();
 
     public Builder fromFile(File propertiesFile) throws IOException {
@@ -147,5 +147,4 @@ public class HoodieMetadataConfig extends DefaultHoodieConfig {
       return config;
     }
   }
-
 }
