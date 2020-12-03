@@ -191,7 +191,7 @@ public class DataSourceUtils {
   }
 
   public static String getCommitActionType(WriteOperationType operation, HoodieTableType tableType) {
-    if (operation == WriteOperationType.INSERT_OVERWRITE) {
+    if (operation == WriteOperationType.INSERT_OVERWRITE || operation == WriteOperationType.INSERT_OVERWRITE_TABLE) {
       return HoodieTimeline.REPLACE_COMMIT_ACTION;
     } else {
       return CommitUtils.getCommitActionType(tableType);
@@ -211,6 +211,8 @@ public class DataSourceUtils {
         return new HoodieWriteResult(client.upsert(hoodieRecords, instantTime));
       case INSERT_OVERWRITE:
         return client.insertOverwrite(hoodieRecords, instantTime);
+      case INSERT_OVERWRITE_TABLE:
+        return client.insertOverwriteTable(hoodieRecords, instantTime);
       default:
         throw new HoodieException("Not a valid operation type for doWriteOperation: " + operation.toString());
     }

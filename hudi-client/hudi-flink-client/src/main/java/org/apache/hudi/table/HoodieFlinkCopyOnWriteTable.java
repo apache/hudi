@@ -107,6 +107,11 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   }
 
   @Override
+  public HoodieWriteMetadata<List<WriteStatus>> insertOverwriteTable(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> records) {
+    throw new HoodieNotSupportedException("insertOverwriteTable is not supported yet");
+  }
+
+  @Override
   public Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
     throw new HoodieNotSupportedException("Compaction is not supported on a CopyOnWrite table");
   }
