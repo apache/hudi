@@ -123,7 +123,7 @@ public class HoodieIndexUtils {
         break;
       case INMEMORY:
         isTypeCompatible = writeIndexType.equals(IndexType.INMEMORY);
-        LOG.error("PersistIndexType INMEMORY can not be used in production");
+        LOG.warn("PersistIndexType INMEMORY can not be used in production");
         break;
       case HBASE:
         isTypeCompatible = writeIndexType.equals(IndexType.HBASE);

@@ -203,15 +203,13 @@ public class DeltaSync implements Serializable {
     this.props = props;
     this.userProvidedSchemaProvider = schemaProvider;
     this.processedSchema = new SchemaSet();
-
+    this.hoodieClientConfig = getHoodieClientConfig(this.schemaProvider);
     refreshTimeline();
     // Register User Provided schema first
     registerAvroSchemas(schemaProvider);
 
     this.transformer = UtilHelpers.createTransformer(cfg.transformerClassNames);
     this.keyGenerator = DataSourceUtils.createKeyGenerator(props);
-
-    this.hoodieClientConfig = getHoodieClientConfig(this.schemaProvider);
     this.metrics = new HoodieDeltaStreamerMetrics(this.hoodieClientConfig);
 
     this.formatAdapter = new SourceFormatAdapter(
@@ -242,7 +240,7 @@ public class DeltaSync implements Serializable {
       this.commitTimelineOpt = Option.empty();
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
           HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName, cfg.baseFileFormat,
-          HoodieIndexUtils.getIndexType(this.getHoodieClientConfig((Schema) null)).name());
+          HoodieIndexUtils.getIndexType(this.hoodieClientConfig).name());
     }
   }
 

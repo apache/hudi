@@ -93,6 +93,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   private transient HoodieWriteCommitCallback commitCallback;
   protected final boolean rollbackPending;
   protected transient AsyncCleanerService asyncCleanerService;
+  protected HoodieTableMetaClient metaClient;
 
   /**
    * Create a write client, without cleaning up failed/inflight commits.
@@ -128,6 +129,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     super(context, writeConfig, timelineService);
     this.metrics = new HoodieMetrics(config, config.getTableName());
     this.rollbackPending = rollbackPending;
+    this.metaClient = createMetaClient(false);
     this.index = createIndex(writeConfig);
   }
 
@@ -153,8 +155,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * Commit changes performed at the given instantTime marker.
    */
   public boolean commit(String instantTime, O writeStatuses, Option<Map<String, String>> extraMetadata) {
-    HoodieTableMetaClient metaClient = createMetaClient(false);
-    String actionType = metaClient.getCommitActionType();
+    String actionType = this.metaClient.getCommitActionType();
     return commit(instantTime, writeStatuses, extraMetadata, actionType, Collections.emptyMap());
   }
 
@@ -590,7 +591,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * @param instantTime Instant time to be generated
    */
   public void startCommitWithTime(String instantTime) {
-    HoodieTableMetaClient metaClient = createMetaClient(true);
+    this.metaClient.reloadActiveTimeline();
     startCommitWithTime(instantTime, metaClient.getCommitActionType(), metaClient);
   }
 
@@ -598,7 +599,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * Completes a new commit time for a write operation (insert/update/delete) with specified action.
    */
   public void startCommitWithTime(String instantTime, String actionType) {
-    HoodieTableMetaClient metaClient = createMetaClient(true);
+    this.metaClient.reloadActiveTimeline();
     startCommitWithTime(instantTime, actionType, metaClient);
   }
 
