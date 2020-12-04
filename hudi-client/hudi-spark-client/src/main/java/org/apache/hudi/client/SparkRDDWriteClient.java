@@ -205,6 +205,23 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     return new HoodieWriteResult(postWrite(result, instantTime, table), result.getPartitionToReplaceFileIds());
   }
 
+
+  /**
+   * Removes all existing records of the Hoodie table and inserts the given HoodieRecords, into the table.
+
+   * @param records HoodieRecords to insert
+   * @param instantTime Instant time of the commit
+   * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
+   */
+  public HoodieWriteResult insertOverwriteTable(JavaRDD<HoodieRecord<T>> records, final String instantTime) {
+    HoodieTable table = getTableAndInitCtx(WriteOperationType.INSERT_OVERWRITE_TABLE, instantTime);
+    table.validateInsertSchema();
+    setOperationType(WriteOperationType.INSERT_OVERWRITE_TABLE);
+    this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this, instantTime);
+    HoodieWriteMetadata result = table.insertOverwriteTable(context, instantTime, records);
+    return new HoodieWriteResult(postWrite(result, instantTime, table), result.getPartitionToReplaceFileIds());
+  }
+
   @Override
   public JavaRDD<WriteStatus> bulkInsert(JavaRDD<HoodieRecord<T>> records, String instantTime) {
     return bulkInsert(records, instantTime, Option.empty());

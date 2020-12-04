@@ -93,6 +93,13 @@ private[hudi] object HoodieSparkSqlWriter {
       operation = WriteOperationType.INSERT
     }
 
+    // If the mode is Overwrite, can set operation to INSERT_OVERWRITE_TABLE.
+    // Then in DataSourceUtils.doWriteOperation will use client.insertOverwriteTable to overwrite
+    // the table. This will replace the old fs.delete(tablepath) mode.
+    if (mode == SaveMode.Overwrite && operation !=  WriteOperationType.INSERT_OVERWRITE_TABLE) {
+      operation = WriteOperationType.INSERT_OVERWRITE_TABLE
+    }
+
     val jsc = new JavaSparkContext(sparkContext)
     val basePath = new Path(path.get)
     val instantTime = HoodieActiveTimeline.createNewInstantTime()
@@ -120,7 +127,8 @@ private[hudi] object HoodieSparkSqlWriter {
 
       // short-circuit if bulk_insert via row is enabled.
       // scalastyle:off
-      if (parameters(ENABLE_ROW_WRITER_OPT_KEY).toBoolean) {
+      if (parameters(ENABLE_ROW_WRITER_OPT_KEY).toBoolean &&
+        operation == WriteOperationType.BULK_INSERT) {
         val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, parameters, df, tblName,
                                                                                 basePath, path, instantTime)
         return (success, commitTime, common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
@@ -318,10 +326,6 @@ private[hudi] object HoodieSparkSqlWriter {
     if (operation != WriteOperationType.DELETE) {
       if (mode == SaveMode.ErrorIfExists && tableExists) {
         throw new HoodieException(s"hoodie table at $tablePath already exists.")
-      } else if (mode == SaveMode.Overwrite && tableExists) {
-        log.warn(s"hoodie table at $tablePath already exists. Deleting existing data & overwriting with new data.")
-        fs.delete(tablePath, true)
-        tableExists = false
       }
     } else {
       // Delete Operation only supports Append mode

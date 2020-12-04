@@ -59,10 +59,9 @@ public class SparkWriteHelper<T extends HoodieRecordPayload,R> extends AbstractW
     }).reduceByKey((rec1, rec2) -> {
       @SuppressWarnings("unchecked")
       T reducedData = (T) rec1.getData().preCombine(rec2.getData());
-      // we cannot allow the user to change the key or partitionPath, since that will affect
-      // everything
-      // so pick it from one of the records.
-      return new HoodieRecord<T>(rec1.getKey(), reducedData);
+      HoodieKey reducedKey = rec1.getData().equals(reducedData) ? rec1.getKey() : rec2.getKey();
+
+      return new HoodieRecord<T>(reducedKey, reducedData);
     }, parallelism).map(Tuple2::_2);
   }
 

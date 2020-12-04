@@ -39,6 +39,7 @@ import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
+import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
 
@@ -259,6 +260,22 @@ public class ParquetUtils {
       }
     }
     return records;
+  }
+
+  /**
+   * Returns the number of records in the parquet file.
+   *
+   * @param conf Configuration
+   * @param parquetFilePath path of the file
+   */
+  public static long getRowCount(Configuration conf, Path parquetFilePath) {
+    ParquetMetadata footer;
+    long rowCount = 0;
+    footer = readMetadata(conf, parquetFilePath);
+    for (BlockMetaData b : footer.getBlocks()) {
+      rowCount += b.getRowCount();
+    }
+    return rowCount;
   }
 
   static class RecordKeysFilterFunction implements Function<String, Boolean> {

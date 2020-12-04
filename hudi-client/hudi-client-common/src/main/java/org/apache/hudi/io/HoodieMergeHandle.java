@@ -34,8 +34,11 @@ import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.table.HoodieTable;
 
@@ -241,14 +244,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
 
     if (copyOldRecord) {
       // this should work as it is, since this is an existing record
-      String errMsg = "Failed to merge old record into new file for key " + key + " from old file " + getOldFilePath()
-          + " to new file " + newFilePath + " with writerSchema " + writerSchemaWithMetafields.toString(true);
       try {
         fileWriter.writeAvro(key, oldRecord);
-      } catch (ClassCastException e) {
-        LOG.debug("Old record is " + oldRecord);
-        throw new HoodieUpsertException(errMsg, e);
       } catch (IOException | RuntimeException e) {
+        String errMsg = String.format("Failed to merge old record into new file for key %s from old file %s to new file %s with writerSchema %s",
+                key, getOldFilePath(), newFilePath, writerSchemaWithMetafields.toString(true));
         LOG.debug("Old record is " + oldRecord);
         throw new HoodieUpsertException(errMsg, e);
       }
@@ -295,12 +295,36 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       runtimeStats.setTotalUpsertTime(timer.endTimer());
       stat.setRuntimeStats(runtimeStats);
 
+      performMergeDataValidationCheck(writeStatus);
+
       LOG.info(String.format("MergeHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
           stat.getFileId(), runtimeStats.getTotalUpsertTime()));
 
       return writeStatus;
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);
+    }
+  }
+
+  public void performMergeDataValidationCheck(WriteStatus writeStatus) {
+    if (!config.isMergeDataValidationCheckEnabled()) {
+      return;
+    }
+
+    long oldNumWrites = 0;
+    try {
+      HoodieFileReader reader = HoodieFileReaderFactory.getFileReader(hoodieTable.getHadoopConf(), oldFilePath);
+      oldNumWrites = reader.getTotalRecords();
+    } catch (IOException e) {
+      throw new HoodieUpsertException("Failed to check for merge data validation", e);
+    }
+
+    if ((writeStatus.getStat().getNumWrites() + writeStatus.getStat().getNumDeletes()) < oldNumWrites) {
+      throw new HoodieCorruptedDataException(
+          String.format("Record write count decreased for file: %s, Partition Path: %s (%s:%d + %d < %s:%d)",
+              writeStatus.getFileId(), writeStatus.getPartitionPath(),
+              instantTime, writeStatus.getStat().getNumWrites(), writeStatus.getStat().getNumDeletes(),
+              FSUtils.getCommitTime(oldFilePath.toString()), oldNumWrites));
     }
   }
 
