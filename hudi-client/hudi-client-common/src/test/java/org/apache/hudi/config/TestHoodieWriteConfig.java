@@ -18,7 +18,7 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.common.model.EngineType;
+import org.apache.hudi.client.common.EngineType;
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
 
 import org.apache.hudi.index.HoodieIndex;
@@ -60,15 +60,15 @@ public class TestHoodieWriteConfig {
   public void testDefaultIndexAccordingToEngineType() {
     // default bloom
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").build();
-    assertEquals(HoodieIndex.IndexType.BLOOM,writeConfig.getIndexType());
+    assertEquals(HoodieIndex.IndexType.BLOOM, writeConfig.getIndexType());
 
     // spark default bloom
     writeConfig = HoodieWriteConfig.newBuilder(EngineType.SPARK).withPath("/tmp").build();
-    assertEquals(HoodieIndex.IndexType.BLOOM,writeConfig.getIndexType());
+    assertEquals(HoodieIndex.IndexType.BLOOM, writeConfig.getIndexType());
 
     // flink default in-memory
     writeConfig = HoodieWriteConfig.newBuilder(EngineType.FLINK).withPath("/tmp").build();
-    assertEquals(HoodieIndex.IndexType.INMEMORY,writeConfig.getIndexType());
+    assertEquals(HoodieIndex.IndexType.INMEMORY, writeConfig.getIndexType());
   }
 
   private ByteArrayOutputStream saveParamsIntoOutputStream(Map<String, String> params) throws IOException {

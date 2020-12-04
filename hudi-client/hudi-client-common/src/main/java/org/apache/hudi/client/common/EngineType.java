@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.model;
+package org.apache.hudi.client.common;
 
 /**
  * Hoodie data processing engine. support only Apache Spark and Apache Flink for now.

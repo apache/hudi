@@ -20,7 +20,7 @@ package org.apache.hudi.config;
 
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.DefaultHoodieConfig;
-import org.apache.hudi.common.model.EngineType;
+import org.apache.hudi.client.common.EngineType;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 
@@ -104,6 +104,8 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String SIMPLE_INDEX_UPDATE_PARTITION_PATH = "hoodie.simple.index.update.partition.path";
   public static final String DEFAULT_SIMPLE_INDEX_UPDATE_PARTITION_PATH = "false";
 
+  private EngineType engineType;
+
   /**
    * Use Spark engine by default.
    */
@@ -112,7 +114,8 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   }
 
   private HoodieIndexConfig(EngineType engineType, Properties props) {
-    super(engineType, props);
+    super(props);
+    this.engineType = engineType;
   }
 
   public static HoodieIndexConfig.Builder newBuilder() {
@@ -309,6 +312,10 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
         default:
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);
       }
+    }
+
+    public EngineType getEngineType() {
+      return engineType;
     }
   }
 }

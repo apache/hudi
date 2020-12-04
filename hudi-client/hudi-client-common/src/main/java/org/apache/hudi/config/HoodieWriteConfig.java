@@ -23,7 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
-import org.apache.hudi.common.model.EngineType;
+import org.apache.hudi.client.common.EngineType;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -146,6 +146,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private final FileSystemViewStorageConfig clientSpecifiedViewStorageConfig;
   private FileSystemViewStorageConfig viewStorageConfig;
 
+  private EngineType engineType;
+
   /**
    * Use Spark engine by default.
    */
@@ -154,9 +156,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   protected HoodieWriteConfig(EngineType engineType, Properties props) {
-    super(engineType, props);
+    super(props);
     Properties newProps = new Properties();
     newProps.putAll(props);
+    this.engineType = engineType;
     this.consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().fromProperties(newProps).build();
     this.clientSpecifiedViewStorageConfig = FileSystemViewStorageConfig.newBuilder().fromProperties(newProps).build();
     this.viewStorageConfig = clientSpecifiedViewStorageConfig;
@@ -300,6 +303,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public boolean isMergeDataValidationCheckEnabled() {
     return Boolean.parseBoolean(props.getProperty(MERGE_DATA_VALIDATION_CHECK_ENABLED));
+  }
+
+  public EngineType getEngineType() {
+    return engineType;
   }
 
   /**
