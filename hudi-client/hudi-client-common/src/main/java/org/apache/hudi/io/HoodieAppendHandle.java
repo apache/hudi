@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieKey;
@@ -30,7 +31,6 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -61,6 +61,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 /**
  * IO Operation to append data onto an existing file.
@@ -87,6 +88,9 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   private long averageRecordSize = 0;
   private HoodieLogFile currentLogFile;
   private Writer writer;
+  private String filePath = "null";
+  private int logVersion = 0;
+  private long logOffset = 0;
   // Flag used to initialize some metadata
   private boolean doInit = true;
   // Total number of bytes written during this append phase (an estimation)
@@ -125,19 +129,26 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
       // Set the base commit time as the current instantTime for new inserts into log files
       String baseInstantTime;
+      String baseFile = "";
+      List<String> logFiles = new ArrayList<>();
       if (fileSlice.isPresent()) {
         baseInstantTime = fileSlice.get().getBaseInstantTime();
+        baseFile = fileSlice.get().getBaseFile().map(BaseFile::getFileName).orElse("");
+        logFiles = fileSlice.get().getLogFiles().map(HoodieLogFile::getFileName).collect(Collectors.toList());
       } else {
         baseInstantTime = instantTime;
         // This means there is no base data file, start appending to a new log file
         fileSlice = Option.of(new FileSlice(partitionPath, baseInstantTime, this.fileId));
         LOG.info("New InsertHandle for partition :" + partitionPath);
       }
-      writeStatus.getStat().setPrevCommit(baseInstantTime);
+      HoodieDeltaWriteStat deltaWriteStat = (HoodieDeltaWriteStat) writeStatus.getStat();
+      deltaWriteStat.setPrevCommit(baseInstantTime);
       writeStatus.setFileId(fileId);
       writeStatus.setPartitionPath(partitionPath);
-      writeStatus.getStat().setPartitionPath(partitionPath);
-      writeStatus.getStat().setFileId(fileId);
+      deltaWriteStat.setPartitionPath(partitionPath);
+      deltaWriteStat.setFileId(fileId);
+      deltaWriteStat.setBaseFile(baseFile);
+      deltaWriteStat.setLogFiles(logFiles);
       averageRecordSize = sizeEstimator.sizeEstimate(record);
       try {
         //save hoodie partition meta in the partition path
@@ -152,17 +163,13 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
         this.writer = createLogWriter(fileSlice, baseInstantTime);
         this.currentLogFile = writer.getLogFile();
-        ((HoodieDeltaWriteStat) writeStatus.getStat()).setLogVersion(currentLogFile.getLogVersion());
-        ((HoodieDeltaWriteStat) writeStatus.getStat()).setLogOffset(writer.getCurrentSize());
+        this.logOffset = this.currentLogFile.getFileSize();
       } catch (Exception e) {
         LOG.error("Error in update task at commit " + instantTime, e);
         writeStatus.setGlobalError(e);
         throw new HoodieUpsertException("Failed to initialize HoodieAppendHandle for FileId: " + fileId + " on commit "
             + instantTime + " on HDFS path " + hoodieTable.getMetaClient().getBasePath() + partitionPath, e);
       }
-      Path path = partitionPath.length() == 0 ? new Path(writer.getLogFile().getFileName())
-          : new Path(partitionPath, writer.getLogFile().getFileName());
-      writeStatus.getStat().setPath(path.toString());
       doInit = false;
     }
   }
@@ -258,13 +265,21 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       // flush any remaining records to disk
       doAppend(header);
 
+      String latestLogFile = "";
       if (writer != null) {
         sizeInBytes = writer.getCurrentSize();
+        latestLogFile = writer.getLogFile().getFileName();
+        filePath = partitionPath.length() == 0 ? new Path(latestLogFile).toString()
+            : new Path(partitionPath, latestLogFile).toString();
+        logVersion = writer.getLogFile().getLogVersion();
         writer.close();
       }
 
-      HoodieWriteStat stat = writeStatus.getStat();
+      HoodieDeltaWriteStat stat = (HoodieDeltaWriteStat) writeStatus.getStat();
       stat.setFileId(this.fileId);
+      stat.setPath(this.filePath);
+      stat.setLogVersion(logVersion);
+      stat.setLogOffset(logOffset);
       stat.setNumWrites(recordsWritten);
       stat.setNumUpdateWrites(updatedRecordsWritten);
       stat.setNumInserts(insertRecordsWritten);
@@ -272,6 +287,10 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       stat.setTotalWriteBytes(estimatedNumberOfBytesWritten);
       stat.setFileSizeInBytes(sizeInBytes);
       stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
+      // update total log file list if the latest log file was new
+      if (!stat.getLogFiles().contains(latestLogFile)) {
+        stat.appendLogFiles(latestLogFile);
+      }
       RuntimeStats runtimeStats = new RuntimeStats();
       runtimeStats.setTotalUpsertTime(timer.endTimer());
       stat.setRuntimeStats(runtimeStats);
@@ -303,6 +322,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         .onParentPath(FSUtils.getPartitionPath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
         .withFileId(fileId).overBaseCommit(baseCommitTime)
         .withLogVersion(latestLogFile.map(HoodieLogFile::getLogVersion).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))
+        .withFileSize(latestLogFile.map(HoodieLogFile::getFileSize).orElse(0L))
         .withSizeThreshold(config.getLogFileMaxSize()).withFs(fs)
         .withLogWriteToken(latestLogFile.map(x -> FSUtils.getWriteTokenFromLogPath(x.getPath())).orElse(writeToken))
         .withRolloverLogWriteToken(writeToken)

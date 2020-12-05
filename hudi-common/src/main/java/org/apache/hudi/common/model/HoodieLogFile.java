@@ -63,6 +63,12 @@ public class HoodieLogFile implements Serializable {
     this.fileLen = 0;
   }
 
+  public HoodieLogFile(Path logPath, Long fileLen) {
+    this.fileStatus = null;
+    this.pathStr = logPath.toString();
+    this.fileLen = fileLen;
+  }
+
   public HoodieLogFile(String logPathStr) {
     this.fileStatus = null;
     this.pathStr = logPathStr;

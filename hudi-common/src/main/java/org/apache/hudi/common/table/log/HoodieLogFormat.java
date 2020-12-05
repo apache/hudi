@@ -125,6 +125,8 @@ public interface HoodieLogFormat {
     // version number for this log file. If not specified, then the current version will be
     // computed by inspecting the file system
     private Integer logVersion;
+    // file len of this log file
+    private Long fileLen = 0L;
     // Location of the directory containing the log
     private Path parentPath;
     // Log File Write Token
@@ -182,6 +184,11 @@ public interface HoodieLogFormat {
       return this;
     }
 
+    public WriterBuilder withFileSize(long fileLen) {
+      this.fileLen = fileLen;
+      return this;
+    }
+
     public WriterBuilder onParentPath(Path parentPath) {
       this.parentPath = parentPath;
       return this;
@@ -229,13 +236,14 @@ public interface HoodieLogFormat {
       if (logWriteToken == null) {
         // This is the case where we have existing log-file with old format. rollover to avoid any conflicts
         logVersion += 1;
+        fileLen = 0L;
         logWriteToken = rolloverLogWriteToken;
       }
 
       Path logPath = new Path(parentPath,
           FSUtils.makeLogFileName(logFileId, fileExtension, instantTime, logVersion, logWriteToken));
       LOG.info("HoodieLogFile on path " + logPath);
-      HoodieLogFile logFile = new HoodieLogFile(logPath);
+      HoodieLogFile logFile = new HoodieLogFile(logPath, fileLen);
 
       if (bufferSize == null) {
         bufferSize = FSUtils.getDefaultBufferSize(fs);
