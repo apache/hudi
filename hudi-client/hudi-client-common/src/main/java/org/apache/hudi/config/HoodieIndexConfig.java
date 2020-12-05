@@ -119,25 +119,13 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   }
 
   public static HoodieIndexConfig.Builder newBuilder() {
-    return new Builder(EngineType.SPARK);
-  }
-
-  public static HoodieIndexConfig.Builder newBuilder(EngineType engineType) {
-    return new Builder(engineType);
+    return new Builder();
   }
 
   public static class Builder {
 
-    private final EngineType engineType;
+    private EngineType engineType = EngineType.SPARK;
     private final Properties props = new Properties();
-
-    public Builder() {
-      this(EngineType.SPARK);
-    }
-
-    public Builder(EngineType engineType) {
-      this.engineType = engineType;
-    }
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
@@ -261,8 +249,13 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withEngineType(EngineType engineType) {
+      this.engineType = engineType;
+      return this;
+    }
+
     public HoodieIndexConfig build() {
-      HoodieIndexConfig config = new HoodieIndexConfig(props);
+      HoodieIndexConfig config = new HoodieIndexConfig(engineType, props);
       setDefaultOnCondition(props, !props.containsKey(INDEX_TYPE_PROP), INDEX_TYPE_PROP, getDefaultIndexType(engineType));
       setDefaultOnCondition(props, !props.containsKey(INDEX_CLASS_PROP), INDEX_CLASS_PROP, DEFAULT_INDEX_CLASS);
       setDefaultOnCondition(props, !props.containsKey(BLOOM_FILTER_NUM_ENTRIES), BLOOM_FILTER_NUM_ENTRIES,

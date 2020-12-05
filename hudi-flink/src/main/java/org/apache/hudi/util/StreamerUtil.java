@@ -133,7 +133,7 @@ public class StreamerUtil {
   public static HoodieWriteConfig getHoodieClientConfig(HoodieFlinkStreamer.Config cfg) {
     FileSystem fs = FSUtils.getFs(cfg.targetBasePath, getHadoopConf());
     HoodieWriteConfig.Builder builder =
-        HoodieWriteConfig.newBuilder(EngineType.FLINK).withPath(cfg.targetBasePath).combineInput(cfg.filterDupes, true)
+        HoodieWriteConfig.newBuilder().withEngineType(EngineType.FLINK).withPath(cfg.targetBasePath).combineInput(cfg.filterDupes, true)
             .withCompactionConfig(HoodieCompactionConfig.newBuilder().withPayloadClass(cfg.payloadClassName).build())
             .forTable(cfg.targetTableName)
             .withAutoCommit(false)

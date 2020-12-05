@@ -166,11 +166,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public static HoodieWriteConfig.Builder newBuilder() {
-    return newBuilder(EngineType.SPARK);
-  }
-
-  public static HoodieWriteConfig.Builder newBuilder(EngineType engineType) {
-    return new Builder(engineType);
+    return new Builder();
   }
 
   /**
@@ -797,8 +793,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public static class Builder {
 
-    protected final EngineType engineType;
     protected final Properties props = new Properties();
+    protected EngineType engineType = EngineType.SPARK;
     private boolean isIndexConfigSet = false;
     private boolean isStorageConfigSet = false;
     private boolean isCompactionConfigSet = false;
@@ -809,12 +805,9 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private boolean isConsistencyGuardSet = false;
     private boolean isCallbackConfigSet = false;
 
-    public Builder() {
-      this(EngineType.SPARK);
-    }
-
-    public Builder(EngineType engineType) {
+    public Builder withEngineType(EngineType engineType) {
       this.engineType = engineType;
+      return this;
     }
 
     public Builder fromFile(File propertiesFile) throws IOException {
@@ -1077,7 +1070,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           MERGE_DATA_VALIDATION_CHECK_ENABLED, DEFAULT_MERGE_DATA_VALIDATION_CHECK_ENABLED);
 
       // Make sure the props is propagated
-      setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder(engineType).fromProperties(props).build());
+      setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().withEngineType(engineType).fromProperties(props).build());
       setDefaultOnCondition(props, !isStorageConfigSet, HoodieStorageConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isCompactionConfigSet,
           HoodieCompactionConfig.newBuilder().fromProperties(props).build());
@@ -1109,7 +1102,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaults();
       validate();
       // Build WriteConfig at the end
-      HoodieWriteConfig config = new HoodieWriteConfig(props);
+      HoodieWriteConfig config = new HoodieWriteConfig(engineType, props);
       return config;
     }
   }

@@ -63,11 +63,11 @@ public class TestHoodieWriteConfig {
     assertEquals(HoodieIndex.IndexType.BLOOM, writeConfig.getIndexType());
 
     // spark default bloom
-    writeConfig = HoodieWriteConfig.newBuilder(EngineType.SPARK).withPath("/tmp").build();
+    writeConfig = HoodieWriteConfig.newBuilder().withEngineType(EngineType.SPARK).withPath("/tmp").build();
     assertEquals(HoodieIndex.IndexType.BLOOM, writeConfig.getIndexType());
 
     // flink default in-memory
-    writeConfig = HoodieWriteConfig.newBuilder(EngineType.FLINK).withPath("/tmp").build();
+    writeConfig = HoodieWriteConfig.newBuilder().withEngineType(EngineType.FLINK).withPath("/tmp").build();
     assertEquals(HoodieIndex.IndexType.INMEMORY, writeConfig.getIndexType());
   }
 
