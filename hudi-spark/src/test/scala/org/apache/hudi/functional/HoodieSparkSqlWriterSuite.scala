@@ -24,8 +24,10 @@ import java.util.{Collections, Date, UUID}
 import org.apache.commons.io.FileUtils
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.{SparkRDDWriteClient, TestBootstrap}
-import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordPayload}
+import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordPayload, HoodieTableType}
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
+import org.apache.hudi.config.HoodieBootstrapConfig.DEFAULT_BOOTSTRAP_INDEX_CLASS
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
@@ -302,8 +304,11 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
           val recordsSeq = convertRowListToSeq(records)
           val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
 
+          val jsc = new JavaSparkContext(sc)
+          HoodieTableMetaClient.initTableType(jsc.hadoopConfiguration, path.toAbsolutePath.toString,
+            HoodieTableType.valueOf(tableType), hoodieFooTableName, "archived", null)
           val client = spy(DataSourceUtils.createHoodieClient(
-            new JavaSparkContext(sc),
+            jsc,
             schema.toString,
             path.toAbsolutePath.toString,
             hoodieFooTableName,
@@ -373,8 +378,13 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
             HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS -> classOf[NonpartitionedKeyGenerator].getCanonicalName)
           val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
 
+          val jsc = new JavaSparkContext(sc)
+          HoodieTableMetaClient.initTableTypeWithBootstrap(jsc.hadoopConfiguration, path.toAbsolutePath.toString, HoodieTableType.valueOf(tableType),
+            hoodieFooTableName, "archived", "",
+            "PARQUET", DEFAULT_BOOTSTRAP_INDEX_CLASS,
+            srcPath.toAbsolutePath.toString, null)
           val client = spy(DataSourceUtils.createHoodieClient(
-            new JavaSparkContext(sc),
+            jsc,
             null,
             path.toAbsolutePath.toString,
             hoodieFooTableName,
