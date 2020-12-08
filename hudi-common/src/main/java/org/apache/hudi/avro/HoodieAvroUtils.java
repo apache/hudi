@@ -58,6 +58,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -308,17 +309,81 @@ public class HoodieAvroUtils {
     return rewrite(record, new LinkedHashSet<>(newSchema.getFields()), newSchema);
   }
 
+  private static void setDefaultVal(GenericRecord newRecord, Schema.Field f) {
+    if (f.defaultVal() instanceof JsonProperties.Null) {
+      newRecord.put(f.name(), null);
+    } else {
+      newRecord.put(f.name(), f.defaultVal());
+    }
+  }
+
+  /*
+   * <pre>
+   *  OldRecord:                     NewRecord:
+   *      field1 : String                field1 : String
+   *      field2 : record                field2 : record
+   *         field_21 : string              field_21 : string
+   *         field_22 : Integer             field_22 : Integer
+   *      field3: Integer                   field_23 : String
+   *                                       field_24 : Integer
+   *                                     field3: Integer
+   * </pre>
+   * <p>
+   *  When a nested record has changed/evolved, newRecord.put(field2, oldRecord.get(field2)), is not sufficient.
+   *  Requires a deep-copy/rewrite of the evolved field.
+   */
+  private static Object rewriteEvolvedFields(Object datum, Schema newSchema) {
+    switch (newSchema.getType()) {
+      case RECORD:
+        if (!(datum instanceof GenericRecord)) {
+          return datum;
+        }
+        GenericRecord record = (GenericRecord) datum;
+        // if schema of the record being rewritten does not match
+        // with the new schema, some nested records with schema change
+        // will require rewrite.
+        if (!record.getSchema().equals(newSchema)) {
+          GenericRecord newRecord = new GenericData.Record(newSchema);
+          for (Schema.Field f : newSchema.getFields()) {
+            if (record.get(f.name()) == null) {
+              setDefaultVal(newRecord, f);
+            } else {
+              newRecord.put(f.name(), rewriteEvolvedFields(record.get(f.name()), f.schema()));
+            }
+          }
+          return newRecord;
+        }
+        return datum;
+      case UNION:
+        Integer idx = (newSchema.getTypes().get(0).getType() == Schema.Type.NULL) ? 1 : 0;
+        return rewriteEvolvedFields(datum, newSchema.getTypes().get(idx));
+      case ARRAY:
+        List<Object> arrayValue = (List)datum;
+        List<Object> arrayCopy = new GenericData.Array<Object>(
+            arrayValue.size(), newSchema);
+        for (Object obj : arrayValue) {
+          arrayCopy.add(rewriteEvolvedFields(obj, newSchema.getElementType()));
+        }
+        return arrayCopy;
+      case MAP:
+        Map<Object,Object> map = (Map<Object,Object>)datum;
+        Map<Object, Object> mapCopy = new HashMap<>(map.size());
+        for (Map.Entry<Object, Object> entry : map.entrySet()) {
+          mapCopy.put(entry.getKey(), rewriteEvolvedFields(entry.getValue(), newSchema.getValueType()));
+        }
+        return mapCopy;
+      default:
+        return datum;
+    }
+  }
+
   private static GenericRecord rewrite(GenericRecord record, LinkedHashSet<Field> fieldsToWrite, Schema newSchema) {
     GenericRecord newRecord = new GenericData.Record(newSchema);
     for (Schema.Field f : fieldsToWrite) {
       if (record.get(f.name()) == null) {
-        if (f.defaultVal() instanceof JsonProperties.Null) {
-          newRecord.put(f.name(), null);
-        } else {
-          newRecord.put(f.name(), f.defaultVal());
-        }
+        setDefaultVal(newRecord, f);
       } else {
-        newRecord.put(f.name(), record.get(f.name()));
+        newRecord.put(f.name(), rewriteEvolvedFields(record.get(f.name()), f.schema()));
       }
     }
     if (!GenericData.get().validate(newSchema, newRecord)) {
