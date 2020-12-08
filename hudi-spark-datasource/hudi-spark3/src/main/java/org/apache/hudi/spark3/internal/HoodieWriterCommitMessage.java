@@ -16,15 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.internal;
+package org.apache.hudi.spark3.internal;
 
 import org.apache.hudi.client.HoodieInternalWriteStatus;
-import org.apache.spark.sql.sources.v2.writer.WriterCommitMessage;
+import org.apache.hudi.internal.BaseWriterCommitMessage;
+import org.apache.spark.sql.connector.write.WriterCommitMessage;
 
 import java.util.List;
 
 /**
- * Hoodie's {@link WriterCommitMessage} used in datasource implementation.
+ * Hoodie's {@link WriterCommitMessage} used in datasource "hudi.spark3.internal" implementation.
  */
 public class HoodieWriterCommitMessage extends BaseWriterCommitMessage
     implements WriterCommitMessage {

@@ -16,19 +16,20 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.internal;
+package org.apache.hudi.spark3.internal;
 
 import org.apache.hudi.client.HoodieInternalWriteStatus;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.internal.DataSourceInternalWriterHelper;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.sources.v2.writer.DataSourceWriter;
-import org.apache.spark.sql.sources.v2.writer.DataWriterFactory;
-import org.apache.spark.sql.sources.v2.writer.WriterCommitMessage;
+import org.apache.spark.sql.connector.write.DataWriterFactory;
+import org.apache.spark.sql.connector.write.WriterCommitMessage;
+import org.apache.spark.sql.connector.write.BatchWrite;
+import org.apache.spark.sql.connector.write.PhysicalWriteInfo;
 import org.apache.spark.sql.types.StructType;
 
 import java.util.Arrays;
@@ -36,27 +37,27 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Implementation of {@link DataSourceWriter} for datasource "hudi.internal" to be used in datasource implementation
+ * Implementation of {@link BatchWrite} for datasource "hudi.spark3.internal" to be used in datasource implementation
  * of bulk insert.
  */
-public class HoodieDataSourceInternalWriter implements DataSourceWriter {
+public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
 
   private final String instantTime;
   private final HoodieWriteConfig writeConfig;
   private final StructType structType;
   private final DataSourceInternalWriterHelper dataSourceInternalWriterHelper;
 
-  public HoodieDataSourceInternalWriter(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
-                                        SparkSession sparkSession, Configuration configuration) {
+  public HoodieDataSourceInternalBatchWrite(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
+      SparkSession jss, Configuration hadoopConfiguration) {
     this.instantTime = instantTime;
     this.writeConfig = writeConfig;
     this.structType = structType;
     this.dataSourceInternalWriterHelper = new DataSourceInternalWriterHelper(instantTime, writeConfig, structType,
-        sparkSession, configuration);
+        jss, hadoopConfiguration);
   }
 
   @Override
-  public DataWriterFactory<InternalRow> createWriterFactory() {
+  public DataWriterFactory createBatchWriterFactory(PhysicalWriteInfo info) {
     dataSourceInternalWriterHelper.createInflightCommit();
     if (WriteOperationType.BULK_INSERT == dataSourceInternalWriterHelper.getWriteOperationType()) {
       return new HoodieBulkInsertDataInternalWriterFactory(dataSourceInternalWriterHelper.getHoodieTable(),
