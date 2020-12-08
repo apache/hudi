@@ -31,13 +31,13 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import scala.Tuple2;
 
 import java.io.IOException;
 import java.util.List;
@@ -96,7 +96,7 @@ public class SavepointActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
             TableFileSystemView.BaseFileOnlyView view = table.getBaseFileOnlyView();
             List<String> latestFiles = view.getLatestBaseFilesBeforeOrOn(partitionPath, instantTime)
                 .map(HoodieBaseFile::getFileName).collect(Collectors.toList());
-          return new Tuple2<>(partitionPath, latestFiles);
+          return new ImmutablePair<>(partitionPath, latestFiles);
         }, null);
       HoodieSavepointMetadata metadata = TimelineMetadataUtils.convertSavepointMetadata(user, comment, latestFilesMap);
       // Nothing to save in the savepoint

@@ -147,6 +147,7 @@ public class SparkHoodieSimpleIndex<T extends HoodieRecordPayload> extends Spark
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     int fetchParallelism = Math.max(1, Math.max(baseFiles.size(), parallelism));
     return jsc.parallelize(baseFiles, fetchParallelism)
-        .flatMapToPair(partitionPathBaseFile -> new HoodieKeyLocationFetchHandle(config, hoodieTable, partitionPathBaseFile).locations());
+        .flatMapToPair(partitionPathBaseFile -> new HoodieKeyLocationFetchHandle(config, hoodieTable, partitionPathBaseFile)
+                .locations().map(x -> Tuple2.apply(((Pair)x).getLeft(), ((Pair)x).getRight())).iterator());
   }
 }
