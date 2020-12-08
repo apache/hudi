@@ -36,6 +36,7 @@ import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -145,6 +146,18 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     for (HoodieKey entry : fetchedRows) {
       assertTrue(expected.contains(entry), "Record key must be in the given filter");
     }
+  }
+
+  @Test
+  public void testReadCounts() throws Exception {
+    String filePath = basePath + "/test.parquet";
+    List<String> rowKeys = new ArrayList<>();
+    for (int i = 0; i < 123; i++) {
+      rowKeys.add(UUID.randomUUID().toString());
+    }
+    writeParquetFile(BloomFilterTypeCode.SIMPLE.name(), filePath, rowKeys);
+
+    assertEquals(123, ParquetUtils.getRowCount(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath)));
   }
 
   private void writeParquetFile(String typeCode, String filePath, List<String> rowKeys) throws Exception {

@@ -102,11 +102,11 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     this.viewManager = FileSystemViewManager.createViewManager(hadoopConfiguration,
         config.getViewStorageConfig());
     this.metaClient = metaClient;
-    this.index = getIndex(config);
+    this.index = getIndex(config, context);
     this.taskContextSupplier = context.getTaskContextSupplier();
   }
 
-  protected abstract HoodieIndex<T, I, K, O> getIndex(HoodieWriteConfig config);
+  protected abstract HoodieIndex<T, I, K, O> getIndex(HoodieWriteConfig config, HoodieEngineContext context);
 
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
@@ -204,6 +204,17 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata<O> insertOverwrite(HoodieEngineContext context, String instantTime, I records);
+
+  /**
+   * Delete all the existing records of the Hoodie table and inserts the specified new records into Hoodie table at the supplied instantTime,
+   * for the partition paths contained in input records.
+   *
+   * @param context HoodieEngineContext
+   * @param instantTime Instant time for the replace action
+   * @param records input records
+   * @return HoodieWriteMetadata
+   */
+  public abstract HoodieWriteMetadata<O> insertOverwriteTable(HoodieEngineContext context, String instantTime, I records);
 
   public HoodieWriteConfig getConfig() {
     return config;

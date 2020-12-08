@@ -93,9 +93,11 @@ private[hudi] object HoodieSparkSqlWriter {
       operation = WriteOperationType.INSERT
     }
 
-    // If the mode is Overwrite, should use INSERT_OVERWRITE operation
-    if (mode == SaveMode.Overwrite && operation !=  WriteOperationType.INSERT_OVERWRITE) {
-      operation = WriteOperationType.INSERT_OVERWRITE
+    // If the mode is Overwrite, can set operation to INSERT_OVERWRITE_TABLE.
+    // Then in DataSourceUtils.doWriteOperation will use client.insertOverwriteTable to overwrite
+    // the table. This will replace the old fs.delete(tablepath) mode.
+    if (mode == SaveMode.Overwrite && operation !=  WriteOperationType.INSERT_OVERWRITE_TABLE) {
+      operation = WriteOperationType.INSERT_OVERWRITE_TABLE
     }
 
     val jsc = new JavaSparkContext(sparkContext)
@@ -125,7 +127,8 @@ private[hudi] object HoodieSparkSqlWriter {
 
       // short-circuit if bulk_insert via row is enabled.
       // scalastyle:off
-      if (parameters(ENABLE_ROW_WRITER_OPT_KEY).toBoolean) {
+      if (parameters(ENABLE_ROW_WRITER_OPT_KEY).toBoolean &&
+        operation == WriteOperationType.BULK_INSERT) {
         val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, parameters, df, tblName,
                                                                                 basePath, path, instantTime)
         return (success, commitTime, common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
@@ -145,7 +148,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
           // Convert to RDD[HoodieRecord]
           val keyGenerator = DataSourceUtils.createKeyGenerator(toProperties(parameters))
-          val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(df, structName, nameSpace)
+          val genericRecords: RDD[GenericRecord] = AvroConversionUtils.createRdd(df, schema, structName, nameSpace)
           val shouldCombine = parameters(INSERT_DROP_DUPS_OPT_KEY).toBoolean || operation.equals(WriteOperationType.UPSERT);
           val hoodieAllIncomingRecords = genericRecords.map(gr => {
             val hoodieRecord = if (shouldCombine) {
@@ -162,7 +165,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
           // Create a HoodieWriteClient & issue the write.
           val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc, schema.toString, path.get,
-            tblName, mapAsJavaMap(parameters)
+            tblName, mapAsJavaMap(parameters - HoodieWriteConfig.HOODIE_AUTO_COMMIT_PROP)
           )).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
 
           if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
@@ -202,7 +205,8 @@ private[hudi] object HoodieSparkSqlWriter {
           // Create a HoodieWriteClient & issue the delete.
           val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
             Schema.create(Schema.Type.NULL).toString, path.get, tblName,
-            mapAsJavaMap(parameters))).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
+            mapAsJavaMap(parameters - HoodieWriteConfig.HOODIE_AUTO_COMMIT_PROP)))
+            .asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
 
           if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
             asyncCompactionTriggerFn.get.apply(client)
@@ -226,7 +230,8 @@ private[hudi] object HoodieSparkSqlWriter {
                 mode: SaveMode,
                 parameters: Map[String, String],
                 df: DataFrame,
-                hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty): Boolean = {
+                hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty,
+                hoodieWriteClient: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty): Boolean = {
 
     val sparkContext = sqlContext.sparkContext
     val path = parameters.getOrElse("path", throw new HoodieException("'path' must be set."))
@@ -268,8 +273,13 @@ private[hudi] object HoodieSparkSqlWriter {
     }
 
     val jsc = new JavaSparkContext(sqlContext.sparkContext)
-    val writeClient = DataSourceUtils.createHoodieClient(jsc, schema, path, tableName, mapAsJavaMap(parameters))
-    writeClient.bootstrap(org.apache.hudi.common.util.Option.empty())
+    val writeClient = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
+      schema, path, tableName, mapAsJavaMap(parameters)))
+    try {
+      writeClient.bootstrap(org.apache.hudi.common.util.Option.empty())
+    } finally {
+      writeClient.close()
+    }
     val metaSyncSuccess = metaSync(parameters, basePath, jsc.hadoopConfiguration)
     metaSyncSuccess
   }

@@ -55,6 +55,8 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private final String rolloverLogWriteToken;
   private FSDataOutputStream output;
   private boolean closed = false;
+  private transient Thread shutdownThread = null;
+
   private static final String APPEND_UNAVAILABLE_EXCEPTION_MESSAGE = "not sufficiently replicated yet";
 
   /**
@@ -222,6 +224,13 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   @Override
   public void close() throws IOException {
+    if (null != shutdownThread) {
+      Runtime.getRuntime().removeShutdownHook(shutdownThread);
+    }
+    closeStream();
+  }
+
+  private void closeStream() throws IOException {
     if (output != null) {
       flush();
       output.close();
@@ -256,7 +265,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
    * Close the output stream when the JVM exits.
    */
   private void addShutDownHook() {
-    Runtime.getRuntime().addShutdownHook(new Thread() {
+    shutdownThread = new Thread() {
       public void run() {
         try {
           if (output != null) {
@@ -267,7 +276,8 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
           // fail silently for any sort of exception
         }
       }
-    });
+    };
+    Runtime.getRuntime().addShutdownHook(shutdownThread);
   }
 
   private void handleAppendExceptionOrRecoverLease(Path path, RemoteException e)
