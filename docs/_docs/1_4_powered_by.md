@@ -121,11 +121,18 @@ Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in 
 
 15. ["PrestoDB and Apache Hudi"](https://youtu.be/nA3rwOdmm3A) - By Bhavani Sudha Saktheeswaran and Brandon Scheller, Aug 2020, PrestoDB Community Meetup.
 
-16. ["Panel Discussion on Presto Ecosystem"](https://www.youtube.com/watch?v=lsFSM2Z4kPs) - By Vinoth Chandar, Sep 2020, PrestoCon ["panel"](https://prestocon2020.sched.com/event/dgyw).
+16. ["DC_THURS : Apache Hudi w/ Nishith Agarwal & Vinoth Chandar"](https://www.youtube.com/watch?v=hNxrsjhI-9w), Aug 2020, Online discussion/Q&A with DataCouncil Founder
 
-17. ["Next Generation Data lakes using Apache Hudi"](https://docs.google.com/presentation/d/1y-ryRwCdTbqQHGr_bn3lxM_B8L1L5nsZOIXlJsDl_wU/edit?usp=sharing) - By Balaji Varadarajan and Sivabalan Narayanan, Sep 2020, ["ApacheCon"](https://www.apachecon.com/)
+17. ["Panel Discussion on Presto Ecosystem"](https://www.youtube.com/watch?v=lsFSM2Z4kPs) - By Vinoth Chandar, Sep 2020, PrestoCon ["panel"](https://prestocon2020.sched.com/event/dgyw).
 
-18. ["Landing practice of Apache Hudi in T3go"](https://drive.google.com/file/d/1ULVPkjynaw-07wsutLcZm-4rVXf8E8N8/view?usp=sharing) - By VinoYang and XianghuWang, November 2020, Qcon.
+18. ["Next Generation Data lakes using Apache Hudi"](https://docs.google.com/presentation/d/1y-ryRwCdTbqQHGr_bn3lxM_B8L1L5nsZOIXlJsDl_wU/edit?usp=sharing) - By Balaji Varadarajan and Sivabalan Narayanan, Sep 2020, ["ApacheCon"](https://www.apachecon.com/)
+
+19. ["Building Large-Scale, Transactional Data Lakes using Apache Hudi"](https://www.dbta.com/DataSummit/Fall2020/Agenda.aspx) - By Nishith Agarwal, Data Summit 2020
+
+20. ["Landing practice of Apache Hudi in T3go"](https://drive.google.com/file/d/1ULVPkjynaw-07wsutLcZm-4rVXf8E8N8/view?usp=sharing) - By VinoYang and XianghuWang, November 2020, Qcon.
+
+21. ["Meetup talk by Nishith Agarwal"](https://www.meetup.com/UberEvents/events/274924537/) - Uber Data Platforms Meetup, Dec 2020
+
 ## Articles
 
 You can check out [our blog pages](https://hudi.apache.org/blog.html) for content written by our committers/contributors.
@@ -142,6 +149,10 @@ You can check out [our blog pages](https://hudi.apache.org/blog.html) for conten
 10. ["Data Lake Change Capture using Apache Hudi & Amazon AMS/EMR"](https://towardsdatascience.com/data-lake-change-data-capture-cdc-using-apache-hudi-on-amazon-emr-part-2-process-65e4662d7b4b) - Towards DataScience article, Oct 20
 11. ["How nClouds Helps Accelerate Data Delivery with Apache Hudi on Amazon EMR"](https://aws.amazon.com/blogs/apn/how-nclouds-helps-accelerate-data-delivery-with-apache-hudi-on-amazon-emr/) - published by nClouds in partnership with AWS 
 12. ["Apply record level changes from relational databases to Amazon S3 data lake using Apache Hudi on Amazon EMR and AWS Database Migration Service"](https://aws.amazon.com/blogs/big-data/apply-record-level-changes-from-relational-databases-to-amazon-s3-data-lake-using-apache-hudi-on-amazon-emr-and-aws-database-migration-service/) - AWS blog 
+13. ["Architecting Data Lakes for the Modern Enterprise at Data Summit Connect Fall 2020"](https://www.dbta.com/Editorial/News-Flashes/Architecting-Data-Lakes-for-the-Modern-Enterprise-at-Data-Summit-Connect-Fall-2020-143512.aspx)
+14. ["Can Big Data Solutions Be Affordable?"](https://www.analyticsinsight.net/can-big-data-solutions-be-affordable/)
+15. ["Building High-Performance Data Lake Using Apache Hudi and Alluxio at T3Go"](https://www.alluxio.io/blog/building-high-performance-data-lake-using-apache-hudi-and-alluxio-at-t3go/)
+16. ["Data Lake Change Capture using Apache Hudi & Amazon AMS/EMR Part 2"](https://towardsdatascience.com/data-lake-change-data-capture-cdc-using-apache-hudi-on-amazon-emr-part-2-process-65e4662d7b4b)
 
 ## Powered by
 
