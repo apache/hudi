@@ -1203,4 +1203,9 @@ var store = [{
         "excerpt":"This blog published by AWS shows how to build a CDC pipeline that captures data from an Amazon Relational Database Service (Amazon RDS) for MySQL database using AWS Database Migration Service (AWS DMS) and applies those changes to a dataset in Amazon S3 using Apache Hudi on Amazon EMR.  ","categories": ["blog"],
         "tags": [],
         "url": "https://hudi.apache.org/blog/hudi-meets-aws-emr-and-aws-dms/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Building High-Performance Data Lake Using Apache Hudi and Alluxio at T3Go",
+        "excerpt":"Building High-Performance Data Lake Using Apache Hudi and Alluxio at T3Go T3Go is China’s first platform for smart travel based on the Internet of Vehicles. In this article, Trevor Zhang and Vino Yang from T3Go describe the evolution of their data lake architecture, built on cloud-native or open-source technologies including...","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/high-perf-data-lake-with-hudi-and-alluxio-t3go/",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},]
