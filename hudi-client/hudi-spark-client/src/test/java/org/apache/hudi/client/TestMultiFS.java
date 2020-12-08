@@ -78,6 +78,9 @@ public class TestMultiFS extends HoodieClientTestHarness {
     HoodieTableMetaClient.initTableType(hadoopConf, dfsBasePath, HoodieTableType.valueOf(tableType),
         tableName, HoodieAvroPayload.class.getName(), null);
 
+    HoodieTableMetaClient.initTableType(hadoopConf, tablePath, HoodieTableType.valueOf(tableType),
+        tableName, HoodieAvroPayload.class.getName(), null);
+
     // Create write client to write some records in
     HoodieWriteConfig cfg = getHoodieWriteConfig(dfsBasePath);
     HoodieWriteConfig localConfig = getHoodieWriteConfig(tablePath);
