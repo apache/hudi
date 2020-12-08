@@ -224,7 +224,7 @@ object DataSourceWriteOptions {
 
   /**
     * Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`. Actual
-    * value ontained by invoking .toString()
+    * value obtained by invoking .toString()
     */
   val PARTITIONPATH_FIELD_OPT_KEY = KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY
   val DEFAULT_PARTITIONPATH_FIELD_OPT_VAL = "partitionpath"
