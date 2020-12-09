@@ -72,7 +72,7 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
   }
 
   @Test
-  public void testRowCreateHandle() throws IOException {
+  public void testRowCreateHandle() throws Exception {
     // init config and table
     HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath).build();
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
@@ -113,7 +113,7 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
    * should be thrown.
    */
   @Test
-  public void testGlobalFailure() throws IOException {
+  public void testGlobalFailure() throws Exception {
     // init config and table
     HoodieWriteConfig cfg = SparkDatasetTestUtils.getConfigBuilder(basePath).build();
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
@@ -179,7 +179,8 @@ public class TestHoodieRowCreateHandle extends HoodieClientTestHarness {
     }
   }
 
-  private HoodieInternalWriteStatus writeAndGetWriteStatus(Dataset<Row> inputRows, HoodieRowCreateHandle handle) throws IOException {
+  private HoodieInternalWriteStatus writeAndGetWriteStatus(Dataset<Row> inputRows, HoodieRowCreateHandle handle)
+      throws Exception {
     List<InternalRow> internalRows = SparkDatasetTestUtils.toInternalRows(inputRows, SparkDatasetTestUtils.ENCODER);
     // issue writes
     for (InternalRow internalRow : internalRows) {
