@@ -157,6 +157,10 @@
                   <shadedPattern>org.apache.hudi.com.codahale.metrics.</shadedPattern>
                 </relocation>
                 <relocation>
+                  <pattern>org.apache.commons.codec.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.commons.codec.</shadedPattern>
+                </relocation>
+                <relocation>
                   <pattern>org.eclipse.jetty.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.jetty.</shadedPattern>
                 </relocation>
