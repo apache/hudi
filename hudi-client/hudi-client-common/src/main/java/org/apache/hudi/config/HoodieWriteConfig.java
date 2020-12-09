@@ -122,6 +122,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String MERGE_DATA_VALIDATION_CHECK_ENABLED = "hoodie.merge.data.validation.enabled";
   private static final String DEFAULT_MERGE_DATA_VALIDATION_CHECK_ENABLED = "false";
 
+  // payload ordering field
+  private static final String PAYLOAD_ORDERING_FIELD_PROP = "hoodie.payload.ordering.field";
+  private static String DEFAULT_PAYLOAD_ORDERING_FIELD_VAL = "";
+
   /**
    * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
    * multiple write operations (upsert/buk-insert/...) to be executed within a single commit.
@@ -295,6 +299,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public BulkInsertSortMode getBulkInsertSortMode() {
     String sortMode = props.getProperty(BULKINSERT_SORT_MODE);
     return BulkInsertSortMode.valueOf(sortMode.toUpperCase());
+  }
+
+  public String getPayloadOrderingField() {
+    return props.getProperty(PAYLOAD_ORDERING_FIELD_PROP, DEFAULT_PAYLOAD_ORDERING_FIELD_VAL);
   }
 
   public boolean isMergeDataValidationCheckEnabled() {
@@ -1019,6 +1027,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
     public Builder withProperties(Properties properties) {
       this.props.putAll(properties);
+      return this;
+    }
+
+    public Builder withPayloadOrderingField(String fieldName) {
+      props.setProperty(PAYLOAD_ORDERING_FIELD_PROP, fieldName);
       return this;
     }
 

@@ -158,9 +158,16 @@ private[hudi] object HoodieSparkSqlWriter {
             val hoodieRecord = if (shouldCombine) {
               val orderingVal = HoodieAvroUtils.getNestedFieldVal(gr, parameters(PRECOMBINE_FIELD_OPT_KEY), false)
                 .asInstanceOf[Comparable[_]]
-              DataSourceUtils.createHoodieRecord(gr,
-                orderingVal, keyGenerator.getKey(gr),
-                parameters(PAYLOAD_CLASS_OPT_KEY))
+              val honorOrderingWhileMerging = parameters(HONOR_ORDERING_WHILE_MERGING_OPT_KEY).toBoolean
+              if(honorOrderingWhileMerging) {
+                DataSourceUtils.createHoodieRecord(gr,
+                  orderingVal, keyGenerator.getKey(gr),
+                  parameters(PAYLOAD_CLASS_OPT_KEY), parameters)
+              } else {
+                DataSourceUtils.createHoodieRecord(gr,
+                  orderingVal, keyGenerator.getKey(gr),
+                  parameters(PAYLOAD_CLASS_OPT_KEY))
+              }
             } else {
               DataSourceUtils.createHoodieRecord(gr, keyGenerator.getKey(gr), parameters(PAYLOAD_CLASS_OPT_KEY))
             }

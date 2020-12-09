@@ -143,6 +143,20 @@ public class DataSourceUtils {
   }
 
   /**
+   * Create a payload class via reflection, passing in an ordering/precombine value.
+   */
+  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Comparable orderingVal,
+      Map<String, String> props)
+      throws IOException {
+    try {
+      return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
+          new Class<?>[] {GenericRecord.class, Comparable.class}, record, orderingVal, props);
+    } catch (Throwable e) {
+      throw new IOException("Could not create payload for class: " + payloadClass, e);
+    }
+  }
+
+  /**
    * Create a payload class via reflection, do not ordering/precombine value.
    */
   public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record)
@@ -181,6 +195,7 @@ public class DataSourceUtils {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withPayloadClass(parameters.get(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY()))
             .withInlineCompaction(inlineCompact).build())
+        .withPayloadOrderingField(parameters.get(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY()))
         // override above with Hoodie configs specified as options.
         .withProps(parameters).build();
   }
@@ -226,6 +241,12 @@ public class DataSourceUtils {
   public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
       String payloadClass) throws IOException {
     HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal);
+    return new HoodieRecord<>(hKey, payload);
+  }
+
+  public static HoodieRecord createHoodieRecord(GenericRecord gr, Comparable orderingVal, HoodieKey hKey,
+      String payloadClass, Map<String, String> props) throws IOException {
+    HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr, orderingVal, props);
     return new HoodieRecord<>(hKey, payload);
   }
 
