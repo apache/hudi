@@ -20,7 +20,7 @@ package org.apache.hudi.integ.testsuite.reader;
 
 import java.util.List;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 import org.apache.spark.api.java.JavaRDD;
@@ -49,7 +49,7 @@ public class SparkBasedReader {
         .option(AVRO_SCHEMA_OPTION_KEY, schemaStr)
         .load(JavaConverters.asScalaIteratorConverter(listOfPaths.iterator()).asScala().toSeq());
 
-    return AvroConversionUtils
+    return HoodieSparkUtils
         .createRdd(dataSet.toDF(), structName.orElse(RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME),
             nameSpace.orElse(RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE))
         .toJavaRDD();
@@ -61,7 +61,7 @@ public class SparkBasedReader {
     Dataset<Row> dataSet = sparkSession.read()
         .parquet((JavaConverters.asScalaIteratorConverter(listOfPaths.iterator()).asScala().toSeq()));
 
-    return AvroConversionUtils
+    return HoodieSparkUtils
         .createRdd(dataSet.toDF(), structName.orElse(RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME),
             RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE)
         .toJavaRDD();
