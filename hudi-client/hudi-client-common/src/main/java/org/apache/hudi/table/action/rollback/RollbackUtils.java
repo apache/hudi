@@ -114,7 +114,15 @@ public class RollbackUtils {
     HoodieWriteConfig config = table.getConfig();
     List<String> partitions = FSUtils.getAllPartitionPaths(table.getMetaClient().getFs(), table.getMetaClient().getBasePath(),
         config.shouldAssumeDatePartitioning());
-    int sparkPartitions = Math.max(Math.min(partitions.size(), config.getRollbackParallelism()), 1);
+    int partSize = partitions.size();
+    if (partitions.size() <= 0) {
+      partSize = 1;
+    }
+    int rollParallelVal = config.getRollbackParallelism();
+    if (rollParallelVal <= 0) {
+      rollParallelVal = partSize;
+    }
+    int sparkPartitions = Math.min(partSize, rollParallelVal);
     context.setJobStatus(RollbackUtils.class.getSimpleName(), "Generate all rollback requests");
     return context.flatMap(partitions, partitionPath -> {
       HoodieActiveTimeline activeTimeline = table.getMetaClient().reloadActiveTimeline();
@@ -199,7 +207,7 @@ public class RollbackUtils {
           break;
       }
       return partitionRollbackRequests.stream();
-    }, Math.min(partitions.size(), sparkPartitions)).stream().filter(Objects::nonNull).collect(Collectors.toList());
+    }, sparkPartitions).stream().filter(Objects::nonNull).collect(Collectors.toList());
   }
 
   private static List<ListingBasedRollbackRequest> generateAppendRollbackBlocksAction(String partitionPath, HoodieInstant rollbackInstant,
