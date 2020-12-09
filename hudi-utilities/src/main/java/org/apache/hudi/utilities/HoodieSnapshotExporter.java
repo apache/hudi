@@ -208,7 +208,7 @@ public class HoodieSnapshotExporter {
       dataFiles.forEach(hoodieDataFile -> filePaths.add(new Tuple2<>(partition, hoodieDataFile.getPath())));
       // also need to copy over partition metadata
       Path partitionMetaFile =
-          new Path(new Path(cfg.sourceBasePath, partition), HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE);
+          new Path(FSUtils.getPartitionPath(cfg.sourceBasePath, partition), HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE);
       FileSystem fs = FSUtils.getFs(cfg.sourceBasePath, serConf.newCopy());
       if (fs.exists(partitionMetaFile)) {
         filePaths.add(new Tuple2<>(partition, partitionMetaFile.toString()));
@@ -219,7 +219,7 @@ public class HoodieSnapshotExporter {
     context.foreach(files, tuple -> {
       String partition = tuple._1();
       Path sourceFilePath = new Path(tuple._2());
-      Path toPartitionPath = new Path(cfg.targetOutputPath, partition);
+      Path toPartitionPath = FSUtils.getPartitionPath(cfg.targetOutputPath, partition);
       FileSystem fs = FSUtils.getFs(cfg.targetOutputPath, serConf.newCopy());
 
       if (!fs.exists(toPartitionPath)) {
