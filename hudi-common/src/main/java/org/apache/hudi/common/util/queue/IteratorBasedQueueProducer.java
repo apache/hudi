@@ -42,9 +42,10 @@ public class IteratorBasedQueueProducer<I> implements BoundedInMemoryQueueProduc
   @Override
   public void produce(BoundedInMemoryQueue<I, ?> queue) throws Exception {
     LOG.info("starting to buffer records");
+    long start = System.currentTimeMillis();
     while (inputIterator.hasNext()) {
       queue.insertRecord(inputIterator.next());
     }
-    LOG.info("finished buffering records");
+    LOG.info("finished buffering records, cost = " + ((System.currentTimeMillis() - start) / 1000));
   }
 }

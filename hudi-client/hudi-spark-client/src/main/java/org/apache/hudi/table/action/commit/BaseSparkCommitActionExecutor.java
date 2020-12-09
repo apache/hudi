@@ -101,6 +101,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
 
     WorkloadProfile profile = null;
     if (isWorkloadProfileNeeded()) {
+      context.setJobStatus(this.getClass().getSimpleName(), "Build workload profile");
       profile = new WorkloadProfile(buildProfile(inputRecordsRDD));
       LOG.info("Workload profile :" + profile);
       saveWorkloadProfileMetadataToInflight(profile, instantTime);
@@ -206,6 +207,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
 
   @Override
   protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<JavaRDD<WriteStatus>> result) {
+    context.setJobStatus(this.getClass().getSimpleName(), "Commit write status collect");
     commit(extraMetadata, result, result.getWriteStatuses().map(WriteStatus::getStat).collect());
   }
 

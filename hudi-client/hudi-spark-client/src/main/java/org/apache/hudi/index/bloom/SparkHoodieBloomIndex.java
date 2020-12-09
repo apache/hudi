@@ -123,7 +123,7 @@ public class SparkHoodieBloomIndex<T extends HoodieRecordPayload> extends SparkH
     // Step 3: Obtain a RDD, for each incoming record, that already exists, with the file id,
     // that contains it.
     Map<String, Long> comparisonsPerFileGroup =
-        computeComparisonsPerFileGroup(recordsPerPartition, partitionToFileInfo, partitionRecordKeyPairRDD);
+        computeComparisonsPerFileGroup(recordsPerPartition, partitionToFileInfo, partitionRecordKeyPairRDD, context);
     int inputParallelism = partitionRecordKeyPairRDD.partitions().size();
     int joinParallelism = Math.max(inputParallelism, config.getBloomIndexParallelism());
     LOG.info("InputParallelism: ${" + inputParallelism + "}, IndexParallelism: ${"
@@ -137,12 +137,14 @@ public class SparkHoodieBloomIndex<T extends HoodieRecordPayload> extends SparkH
    */
   private Map<String, Long> computeComparisonsPerFileGroup(final Map<String, Long> recordsPerPartition,
                                                            final Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
-                                                           JavaPairRDD<String, String> partitionRecordKeyPairRDD) {
+                                                           JavaPairRDD<String, String> partitionRecordKeyPairRDD,
+                                                           final HoodieEngineContext context) {
 
     Map<String, Long> fileToComparisons;
     if (config.getBloomIndexPruneByRanges()) {
       // we will just try exploding the input and then count to determine comparisons
       // FIX(vc): Only do sampling here and extrapolate?
+      context.setJobStatus(this.getClass().getSimpleName(), "Explode recordRDD with file comparisons");
       fileToComparisons = explodeRecordRDDWithFileComparisons(partitionToFileInfo, partitionRecordKeyPairRDD)
           .mapToPair(t -> t).countByKey();
     } else {

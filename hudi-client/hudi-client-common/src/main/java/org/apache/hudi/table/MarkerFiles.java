@@ -135,6 +135,7 @@ public class MarkerFiles implements Serializable {
     if (subDirectories.size() > 0) {
       parallelism = Math.min(subDirectories.size(), parallelism);
       SerializableConfiguration serializedConf = new SerializableConfiguration(fs.getConf());
+      context.setJobStatus(this.getClass().getSimpleName(), "MarkerFiles created and merged data paths");
       dataFiles.addAll(context.flatMap(subDirectories, directory -> {
         Path path = new Path(directory);
         FileSystem fileSystem = path.getFileSystem(serializedConf.get());
