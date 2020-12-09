@@ -22,14 +22,13 @@ import org.apache.hudi.HoodieFlinkStreamer;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.client.common.EngineType;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
@@ -134,10 +133,9 @@ public class StreamerUtil {
   public static HoodieWriteConfig getHoodieClientConfig(HoodieFlinkStreamer.Config cfg) {
     FileSystem fs = FSUtils.getFs(cfg.targetBasePath, getHadoopConf());
     HoodieWriteConfig.Builder builder =
-        HoodieWriteConfig.newBuilder().withPath(cfg.targetBasePath).combineInput(cfg.filterDupes, true)
+        HoodieWriteConfig.newBuilder().withEngineType(EngineType.FLINK).withPath(cfg.targetBasePath).combineInput(cfg.filterDupes, true)
             .withCompactionConfig(HoodieCompactionConfig.newBuilder().withPayloadClass(cfg.payloadClassName).build())
             .forTable(cfg.targetTableName)
-            .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
             .withAutoCommit(false)
             .withProps(readConfig(fs, new Path(cfg.propsFilePath), cfg.configs)
                 .getConfig());

@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.client.common.EngineType;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -117,13 +118,17 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static final String MAX_CONSISTENCY_CHECKS_PROP = "hoodie.consistency.check.max_checks";
   public static int DEFAULT_MAX_CONSISTENCY_CHECKS = 7;
 
+  // Data validation check performed during merges before actual commits
+  private static final String MERGE_DATA_VALIDATION_CHECK_ENABLED = "hoodie.merge.data.validation.enabled";
+  private static final String DEFAULT_MERGE_DATA_VALIDATION_CHECK_ENABLED = "false";
+
   /**
    * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
    * multiple write operations (upsert/buk-insert/...) to be executed within a single commit.
-   *
+   * <p>
    * Given Hudi commit protocol, these are generally unsafe operations and user need to handle failure scenarios. It
    * only works with COW table. Hudi 0.5.x had stopped this behavior.
-   *
+   * <p>
    * Given the importance of supporting such cases for the user's migration to 0.5.x, we are proposing a safety flag
    * (disabled by default) which will allow this old behavior.
    */
@@ -141,10 +146,20 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private final FileSystemViewStorageConfig clientSpecifiedViewStorageConfig;
   private FileSystemViewStorageConfig viewStorageConfig;
 
+  private EngineType engineType;
+
+  /**
+   * Use Spark engine by default.
+   */
   protected HoodieWriteConfig(Properties props) {
+    this(EngineType.SPARK, props);
+  }
+
+  protected HoodieWriteConfig(EngineType engineType, Properties props) {
     super(props);
     Properties newProps = new Properties();
     newProps.putAll(props);
+    this.engineType = engineType;
     this.consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().fromProperties(newProps).build();
     this.clientSpecifiedViewStorageConfig = FileSystemViewStorageConfig.newBuilder().fromProperties(newProps).build();
     this.viewStorageConfig = clientSpecifiedViewStorageConfig;
@@ -280,6 +295,14 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public BulkInsertSortMode getBulkInsertSortMode() {
     String sortMode = props.getProperty(BULKINSERT_SORT_MODE);
     return BulkInsertSortMode.valueOf(sortMode.toUpperCase());
+  }
+
+  public boolean isMergeDataValidationCheckEnabled() {
+    return Boolean.parseBoolean(props.getProperty(MERGE_DATA_VALIDATION_CHECK_ENABLED));
+  }
+
+  public EngineType getEngineType() {
+    return engineType;
   }
 
   /**
@@ -771,6 +794,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static class Builder {
 
     protected final Properties props = new Properties();
+    protected EngineType engineType = EngineType.SPARK;
     private boolean isIndexConfigSet = false;
     private boolean isStorageConfigSet = false;
     private boolean isCompactionConfigSet = false;
@@ -780,6 +804,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private boolean isViewConfigSet = false;
     private boolean isConsistencyGuardSet = false;
     private boolean isCallbackConfigSet = false;
+
+    public Builder withEngineType(EngineType engineType) {
+      this.engineType = engineType;
+      return this;
+    }
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
@@ -983,6 +1012,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withMergeDataValidationCheckEnabled(boolean enabled) {
+      props.setProperty(MERGE_DATA_VALIDATION_CHECK_ENABLED, String.valueOf(enabled));
+      return this;
+    }
+
     public Builder withProperties(Properties properties) {
       this.props.putAll(properties);
       return this;
@@ -1032,9 +1066,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(AVRO_SCHEMA_VALIDATE), AVRO_SCHEMA_VALIDATE, DEFAULT_AVRO_SCHEMA_VALIDATE);
       setDefaultOnCondition(props, !props.containsKey(BULKINSERT_SORT_MODE),
           BULKINSERT_SORT_MODE, DEFAULT_BULKINSERT_SORT_MODE);
+      setDefaultOnCondition(props, !props.containsKey(MERGE_DATA_VALIDATION_CHECK_ENABLED),
+          MERGE_DATA_VALIDATION_CHECK_ENABLED, DEFAULT_MERGE_DATA_VALIDATION_CHECK_ENABLED);
 
       // Make sure the props is propagated
-      setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().withEngineType(engineType).fromProperties(props).build());
       setDefaultOnCondition(props, !isStorageConfigSet, HoodieStorageConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isCompactionConfigSet,
           HoodieCompactionConfig.newBuilder().fromProperties(props).build());
@@ -1066,7 +1102,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaults();
       validate();
       // Build WriteConfig at the end
-      HoodieWriteConfig config = new HoodieWriteConfig(props);
+      HoodieWriteConfig config = new HoodieWriteConfig(engineType, props);
       return config;
     }
   }

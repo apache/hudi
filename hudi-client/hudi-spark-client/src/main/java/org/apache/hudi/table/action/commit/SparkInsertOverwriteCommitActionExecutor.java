@@ -44,7 +44,14 @@ public class SparkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayl
   public SparkInsertOverwriteCommitActionExecutor(HoodieEngineContext context,
                                                   HoodieWriteConfig config, HoodieTable table,
                                                   String instantTime, JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
-    super(context, config, table, instantTime, WriteOperationType.INSERT_OVERWRITE);
+    this(context, config, table, instantTime, inputRecordsRDD, WriteOperationType.INSERT_OVERWRITE);
+  }
+
+  public SparkInsertOverwriteCommitActionExecutor(HoodieEngineContext context,
+                                                  HoodieWriteConfig config, HoodieTable table,
+                                                  String instantTime, JavaRDD<HoodieRecord<T>> inputRecordsRDD,
+                                                  WriteOperationType writeOperationType) {
+    super(context, config, table, instantTime, writeOperationType);
     this.inputRecordsRDD = inputRecordsRDD;
   }
 

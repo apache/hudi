@@ -18,8 +18,10 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.client.common.EngineType;
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
 
+import org.apache.hudi.index.HoodieIndex;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -52,6 +54,21 @@ public class TestHoodieWriteConfig {
     HoodieWriteConfig config = builder.build();
     assertEquals(5, config.getMaxCommitsToKeep());
     assertEquals(2, config.getMinCommitsToKeep());
+  }
+
+  @Test
+  public void testDefaultIndexAccordingToEngineType() {
+    // default bloom
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").build();
+    assertEquals(HoodieIndex.IndexType.BLOOM, writeConfig.getIndexType());
+
+    // spark default bloom
+    writeConfig = HoodieWriteConfig.newBuilder().withEngineType(EngineType.SPARK).withPath("/tmp").build();
+    assertEquals(HoodieIndex.IndexType.BLOOM, writeConfig.getIndexType());
+
+    // flink default in-memory
+    writeConfig = HoodieWriteConfig.newBuilder().withEngineType(EngineType.FLINK).withPath("/tmp").build();
+    assertEquals(HoodieIndex.IndexType.INMEMORY, writeConfig.getIndexType());
   }
 
   private ByteArrayOutputStream saveParamsIntoOutputStream(Map<String, String> params) throws IOException {

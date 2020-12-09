@@ -38,12 +38,14 @@ public enum WriteOperationType {
   // delete
   DELETE("delete"),
   BOOTSTRAP("bootstrap"),
-  // insert overwrite
+  // insert overwrite with static partitioning
   INSERT_OVERWRITE("insert_overwrite"),
   // cluster
   CLUSTER("cluster"),
   // delete partition
   DELETE_PARTITION("delete_partition"),
+  // insert overwrite with dynamic partitioning
+  INSERT_OVERWRITE_TABLE("insert_overwrite_table"),
   // used for old version
   UNKNOWN("unknown");
 
@@ -76,6 +78,8 @@ public enum WriteOperationType {
         return INSERT_OVERWRITE;
       case "delete_partition":
         return DELETE_PARTITION;
+      case "insert_overwrite_table":
+        return INSERT_OVERWRITE_TABLE;
       default:
         throw new HoodieException("Invalid value of Type.");
     }
