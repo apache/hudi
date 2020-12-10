@@ -17,6 +17,8 @@ power_items:
   - img_path: /assets/images/powers/tathastu.png
   - img_path: /assets/images/powers/shunfeng.png
   - img_path: /assets/images/powers/lingyue.png
+  - img_path: /assets/images/powers/37.PNG
+  - img_path: /assets/images/powers/H3C.JPG
 ---
 
 ## Adoption
@@ -37,6 +39,11 @@ offering, providing means for AWS users to perform record-level updates/deletes 
 
 ### Grofers
 [Grofers](https://grofers.com) is a grocery delivery provider operating across APAC region. Grofers has [integrated hudi](https://lambda.grofers.com/origins-of-data-lake-at-grofers-6c011f94b86c) in its central pipelines for replicating backend database CDC into the warehouse.
+
+### H3C Digital Platform
+
+[H3C digital platform](http://www.h3c.com/) provides the whole process capability of data collection, storage, calculation and governance, and enables the construction of data center and data governance ability for medical, smart park, smart city and other industries;
+Apache Hudi is integrated in the digital platform to meet the real-time update needs of massive data
 
 ### Kyligence
 
@@ -80,6 +87,11 @@ Yields.io is the first FinTech platform that uses AI for automated model validat
 
 Using Hudi at Yotpo for several usages. Firstly, integrated Hudi as a writer in their open source ETL framework, [Metorikku](https://github.com/YotpoLtd/metorikku) and using as an output writer for a CDC pipeline, with events that are being generated from a database binlog streams to Kafka and then are written to S3. 
 
+### 37 Interactive Entertainment
+
+[37 Interactive Entertainment](https://www.37wan.net/) is a global Top20 listed game company, and a leading company on A-shares market of China.
+Apache Hudi is integrated into our Data Middle Platform offering real-time data warehouse and solving the problem of frequent changes of data.
+Meanwhile, we build a set of data access standards based on Hudi, which provides a guarantee for massive data queries in game operation scenarios.
 
 ## Talks & Presentations
 
