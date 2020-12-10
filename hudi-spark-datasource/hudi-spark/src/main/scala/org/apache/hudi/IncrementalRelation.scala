@@ -92,17 +92,8 @@ class IncrementalRelation(val sqlContext: SQLContext,
     StructType(skeletonSchema.fields ++ dataSchema.fields)
   }
 
-
-  private val filters = {
-    if (optParams.contains(DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS_OPT_KEY)) {
-      val filterStr = optParams.getOrElse(
-        DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS_OPT_KEY,
-        DataSourceReadOptions.DEFAULT_PUSH_DOWN_FILTERS_OPT_VAL)
-      filterStr.split(",").filter(!_.isEmpty)
-    } else {
-      Array[String]()
-    }
-  }
+  private val filters = optParams.getOrElse(DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS_OPT_KEY,
+    DataSourceReadOptions.DEFAULT_PUSH_DOWN_FILTERS_OPT_VAL).split(",").filter(!_.isEmpty)
 
   override def schema: StructType = usedSchema
 
