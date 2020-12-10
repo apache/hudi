@@ -111,7 +111,7 @@ public class HoodieSnapshotCopier implements Serializable {
 
         // also need to copy over partition metadata
         Path partitionMetaFile =
-            new Path(new Path(baseDir, partition), HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE);
+            new Path(FSUtils.getPartitionPath(baseDir, partition), HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE);
         if (fs1.exists(partitionMetaFile)) {
           filePaths.add(new Tuple2<>(partition, partitionMetaFile.toString()));
         }
@@ -122,7 +122,7 @@ public class HoodieSnapshotCopier implements Serializable {
       context.foreach(filesToCopy, tuple -> {
         String partition = tuple._1();
         Path sourceFilePath = new Path(tuple._2());
-        Path toPartitionPath = new Path(outputDir, partition);
+        Path toPartitionPath = FSUtils.getPartitionPath(outputDir, partition);
         FileSystem ifs = FSUtils.getFs(baseDir, serConf.newCopy());
 
         if (!ifs.exists(toPartitionPath)) {
