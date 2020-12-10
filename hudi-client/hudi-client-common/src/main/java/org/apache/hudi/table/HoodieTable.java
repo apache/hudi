@@ -403,6 +403,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
 
   private void deleteInvalidFilesByPartitions(HoodieEngineContext context, Map<String, List<Pair<String, String>>> invalidFilesByPartition) {
     // Now delete partially written files
+    context.setJobStatus(this.getClass().getSimpleName(), "Delete invalid files generated during the write operation");
     context.map(new ArrayList<>(invalidFilesByPartition.values()), partitionWithFileList -> {
       final FileSystem fileSystem = metaClient.getFs();
       LOG.info("Deleting invalid data files=" + partitionWithFileList);
