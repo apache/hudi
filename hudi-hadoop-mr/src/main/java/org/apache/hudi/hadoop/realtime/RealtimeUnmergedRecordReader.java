@@ -77,15 +77,22 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
         Option.empty(), x -> x, new DefaultSizeEstimator<>());
     // Consumer of this record reader
     this.iterator = this.executor.getQueue().iterator();
-    this.logRecordScanner = new HoodieUnMergedLogRecordScanner(FSUtils.getFs(split.getPath().toString(), this.jobConf),
-        split.getBasePath(), split.getDeltaLogPaths(), getReaderSchema(), split.getMaxCommitTime(),
-        Boolean.parseBoolean(this.jobConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)),
-        false, this.jobConf.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE), record -> {
+    this.logRecordScanner = HoodieUnMergedLogRecordScanner.newBuilder()
+        .withFileSystem(FSUtils.getFs(split.getPath().toString(), this.jobConf))
+        .withBasePath(split.getBasePath())
+        .withLogFilePaths(split.getDeltaLogPaths())
+        .withReaderSchema(getReaderSchema())
+        .withLatestInstantTime(split.getMaxCommitTime())
+        .withReadBlocksLazily(Boolean.parseBoolean(this.jobConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)))
+        .withReverseReader(false)
+        .withBufferSize(this.jobConf.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
+        .withLogRecordScannerCallback(record -> {
           // convert Hoodie log record to Hadoop AvroWritable and buffer
           GenericRecord rec = (GenericRecord) record.getData().getInsertValue(getReaderSchema()).get();
           ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(rec, getHiveSchema());
           this.executor.getQueue().insertRecord(aWritable);
-    });
+        })
+        .build();
     // Start reading and buffering
     this.executor.startProducers();
   }

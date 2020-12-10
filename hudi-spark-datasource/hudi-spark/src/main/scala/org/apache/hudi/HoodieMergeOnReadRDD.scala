@@ -255,19 +255,24 @@ private object HoodieMergeOnReadRDD {
 
   def scanLog(split: HoodieMergeOnReadFileSplit, logSchema: Schema, config: Configuration): HoodieMergedLogRecordScanner = {
     val fs = FSUtils.getFs(split.tablePath, config)
-    new HoodieMergedLogRecordScanner(
-      fs,
-      split.tablePath,
-      split.logPaths.get.asJava,
-      logSchema,
-      split.latestCommit,
-      split.maxCompactionMemoryInBytes,
-      Try(config.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP,
-        HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED).toBoolean).getOrElse(false),
-      false,
-      config.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP,
-        HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE),
-      config.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP,
-        HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
+    HoodieMergedLogRecordScanner.newBuilder()
+        .withFileSystem(fs)
+        .withBasePath(split.tablePath)
+        .withLogFilePaths(split.logPaths.get.asJava)
+        .withReaderSchema(logSchema)
+        .withLatestInstantTime(split.latestCommit)
+        .withReadBlocksLazily(
+          Try(config.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP,
+            HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED).toBoolean)
+              .getOrElse(false))
+        .withReverseReader(false)
+        .withBufferSize(
+          config.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP,
+            HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
+        .withMaxMemorySizeInBytes(split.maxCompactionMemoryInBytes)
+        .withSpillableMapBasePath(
+          config.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP,
+            HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
+        .build()
   }
 }
