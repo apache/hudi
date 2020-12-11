@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client.common.function;
 
-import scala.Tuple2;
+import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.Serializable;
 
@@ -27,5 +27,5 @@ import java.io.Serializable;
  */
 @FunctionalInterface
 public interface SerializablePairFunction<I, K, V> extends Serializable {
-  Tuple2<K, V> call(I t) throws Exception;
+  Pair<K, V> call(I t) throws Exception;
 }
