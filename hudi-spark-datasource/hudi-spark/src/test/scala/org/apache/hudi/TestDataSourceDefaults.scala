@@ -21,9 +21,10 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.model.{BaseAvroPayload, EmptyHoodieRecordPayload, HoodieKey, OverwriteWithLatestAvroPayload, OverwriteWithLatestAvroPayloadV1}
+import org.apache.hudi.common.model.{BaseAvroPayload, DefaultHoodieRecordPayload, EmptyHoodieRecordPayload, HoodieKey, HoodiePayloadProps, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.testutils.SchemaTestUtil
 import org.apache.hudi.common.util.Option
+import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.exception.{HoodieException, HoodieKeyException}
 import org.apache.hudi.keygen._
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities
@@ -573,7 +574,8 @@ class TestDataSourceDefaults {
   @Test def testOverwriteWithLatestAvroPayloadCombineAndGetUpdateValue() = {
     val baseOrderingVal: Object = baseRecord.get("favoriteIntNumber")
     val fieldSchema: Schema = baseRecord.getSchema().getField("favoriteIntNumber").schema()
-    val props = Map(BaseAvroPayload.ORDERING_FIELD_OPT_KEY -> "favoriteIntNumber")
+    val props = new TypedProperties()
+    props.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP, "favoriteIntNumber");
 
     val basePayload = new OverwriteWithLatestAvroPayload(baseRecord, HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, baseOrderingVal).asInstanceOf[Comparable[_]])
 
@@ -588,10 +590,11 @@ class TestDataSourceDefaults {
     assertEquals("field2", precombinedGR.get("field1").toString)
   }
 
-  @Test def testOverwriteWithLatestAvroPayloadV1CombineAndGetUpdateValue() = {
+  @Test def testDefaultHoodieRecordPayloadCombineAndGetUpdateValue() = {
     val baseOrderingVal: Object = baseRecord.get("favoriteIntNumber")
     val fieldSchema: Schema = baseRecord.getSchema().getField("favoriteIntNumber").schema()
-    val props = Map(BaseAvroPayload.ORDERING_FIELD_OPT_KEY -> "favoriteIntNumber")
+    val props = new TypedProperties()
+    props.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP, "favoriteIntNumber");
 
     val laterRecord = SchemaTestUtil
       .generateAvroRecordFromJson(schema, 2, "001", "f1")
@@ -601,11 +604,11 @@ class TestDataSourceDefaults {
       .generateAvroRecordFromJson(schema, 1, "000", "f1")
     val earlierOrderingVal: Object = earlierRecord.get("favoriteIntNumber")
 
-    val laterPayload = new OverwriteWithLatestAvroPayloadV1(laterRecord,
-      HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, laterOrderingVal).asInstanceOf[Comparable[_]], props.asJava)
+    val laterPayload = new DefaultHoodieRecordPayload(laterRecord,
+      HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, laterOrderingVal).asInstanceOf[Comparable[_]])
 
-    val earlierPayload = new OverwriteWithLatestAvroPayloadV1(earlierRecord,
-      HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, earlierOrderingVal).asInstanceOf[Comparable[_]], props.asJava)
+    val earlierPayload = new DefaultHoodieRecordPayload(earlierRecord,
+      HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, earlierOrderingVal).asInstanceOf[Comparable[_]])
 
     // it will provide the record with greatest combine value
     val preCombinedPayload = laterPayload.preCombine(earlierPayload)
@@ -613,10 +616,15 @@ class TestDataSourceDefaults {
     assertEquals("field2", precombinedGR.get("field1").toString)
     assertEquals(laterOrderingVal, precombinedGR.get("favoriteIntNumber"))
 
-    val updatedRecord = earlierPayload.combineAndGetUpdateValue(laterRecord, schema)
-    val updatedGR = updatedRecord.get().asInstanceOf[GenericRecord]
-    assertEquals("field2", updatedGR.get("field1").toString)
-    assertEquals(laterOrderingVal, updatedGR.get("favoriteIntNumber"))
+    val earlierWithLater = earlierPayload.combineAndGetUpdateValue(laterRecord, schema, props)
+    val earlierwithLaterGR = earlierWithLater.get().asInstanceOf[GenericRecord]
+    assertEquals("field2", earlierwithLaterGR.get("field1").toString)
+    assertEquals(laterOrderingVal, earlierwithLaterGR.get("favoriteIntNumber"))
+
+    val laterWithEarlier = laterPayload.combineAndGetUpdateValue(earlierRecord, schema, props)
+    val laterWithEarlierGR = laterWithEarlier.get().asInstanceOf[GenericRecord]
+    assertEquals("field2", laterWithEarlierGR.get("field1").toString)
+    assertEquals(laterOrderingVal, laterWithEarlierGR.get("favoriteIntNumber"))
   }
 
   @Test def testEmptyHoodieRecordPayload() = {

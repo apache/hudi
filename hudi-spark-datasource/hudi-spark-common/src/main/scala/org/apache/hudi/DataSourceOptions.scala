@@ -206,13 +206,6 @@ object DataSourceWriteOptions {
   val DEFAULT_PRECOMBINE_FIELD_OPT_VAL = "ts"
 
   /**
-   * Field when set to true, will honor ordering while merging two records. If not, incoming record will overwrite
-   * record in storage.
-   */
-  val HONOR_ORDERING_WHILE_MERGING_OPT_KEY = "hoodie.datasource.honor.ordering.while.merging"
-  val DEFAULT_HONOR_ORDERING_WHILE_MERGING_OPT_VAL = "false"
-
-  /**
     * Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.
     * This will render any value set for `PRECOMBINE_FIELD_OPT_VAL` in-effective
     */

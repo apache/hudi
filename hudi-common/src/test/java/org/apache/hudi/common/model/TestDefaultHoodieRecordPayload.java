@@ -24,22 +24,24 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import sun.java2d.loops.ProcessPath;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
- * Unit tests {@link OverwriteWithLatestAvroPayloadV1}.
+ * Unit tests {@link DefaultHoodieRecordPayload}.
  */
-public class TestOverwriteWithLatestAvroPayloadV1 {
+public class TestDefaultHoodieRecordPayload {
 
   private Schema schema;
-  private Map<String, String> props;
+  private Properties props;
 
   @BeforeEach
   public void setUp() throws Exception {
@@ -49,8 +51,8 @@ public class TestOverwriteWithLatestAvroPayloadV1 {
         new Schema.Field("ts", Schema.create(Schema.Type.LONG), "", null),
         new Schema.Field("_hoodie_is_deleted", Schema.create(Type.BOOLEAN), "", false)
     ));
-    props = new HashMap<>();
-    props.put(BaseAvroPayload.ORDERING_FIELD_OPT_KEY, "ts");
+    props = new Properties();
+    props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP, "ts");
   }
 
   @Test
@@ -67,16 +69,16 @@ public class TestOverwriteWithLatestAvroPayloadV1 {
     record2.put("ts", 1L);
     record2.put("_hoodie_is_deleted", false);
 
-    OverwriteWithLatestAvroPayloadV1 payload1 = new OverwriteWithLatestAvroPayloadV1(record1, 1, props);
-    OverwriteWithLatestAvroPayloadV1 payload2 = new OverwriteWithLatestAvroPayloadV1(record2, 2, props);
-    assertEquals(payload1.preCombine(payload2), payload2);
-    assertEquals(payload2.preCombine(payload1), payload2);
+    DefaultHoodieRecordPayload payload1 = new DefaultHoodieRecordPayload(record1, 1);
+    DefaultHoodieRecordPayload payload2 = new DefaultHoodieRecordPayload(record2, 2);
+    assertEquals(payload1.preCombine(payload2, props), payload2);
+    assertEquals(payload2.preCombine(payload1, props), payload2);
 
     assertEquals(record1, payload1.getInsertValue(schema).get());
     assertEquals(record2, payload2.getInsertValue(schema).get());
 
-    assertEquals(payload1.combineAndGetUpdateValue(record2, schema).get(), record2);
-    assertEquals(payload2.combineAndGetUpdateValue(record1, schema).get(), record2);
+    assertEquals(payload1.combineAndGetUpdateValue(record2, schema, props).get(), record2);
+    assertEquals(payload2.combineAndGetUpdateValue(record1, schema, props).get(), record2);
   }
 
   @Test
@@ -93,16 +95,16 @@ public class TestOverwriteWithLatestAvroPayloadV1 {
     delRecord1.put("ts", 1L);
     delRecord1.put("_hoodie_is_deleted", true);
 
-    OverwriteWithLatestAvroPayloadV1 payload1 = new OverwriteWithLatestAvroPayloadV1(record1, 1, props);
-    OverwriteWithLatestAvroPayloadV1 payload2 = new OverwriteWithLatestAvroPayloadV1(delRecord1, 2, props);
-    assertEquals(payload1.preCombine(payload2), payload2);
-    assertEquals(payload2.preCombine(payload1), payload2);
+    DefaultHoodieRecordPayload payload1 = new DefaultHoodieRecordPayload(record1, 1);
+    DefaultHoodieRecordPayload payload2 = new DefaultHoodieRecordPayload(delRecord1, 2);
+    assertEquals(payload1.preCombine(payload2, props), payload2);
+    assertEquals(payload2.preCombine(payload1, props), payload2);
 
     assertEquals(record1, payload1.getInsertValue(schema).get());
     assertFalse(payload2.getInsertValue(schema).isPresent());
 
-    assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema).get(), delRecord1);
-    assertFalse(payload2.combineAndGetUpdateValue(record1, schema).isPresent());
+    assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema, props).get(), delRecord1);
+    assertFalse(payload2.combineAndGetUpdateValue(record1, schema, props).isPresent());
   }
 
 }

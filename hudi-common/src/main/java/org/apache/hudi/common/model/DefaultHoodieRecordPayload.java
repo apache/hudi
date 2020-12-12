@@ -30,29 +30,27 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Properties;
 
 /**
  * Default payload used for delta streamer.
  * <p>
- * 1. preCombine - Picks the latest delta record for a key, based on an ordering field 2.
- * combineAndGetUpdateValue/getInsertValue - Simply overwrites storage with latest delta record
+ * 1. preCombine - Picks the latest delta record for a key, based on an ordering field
+ * 2. combineAndGetUpdateValue/getInsertValue - Chooses the latest record based on ordering field value.
  */
-public class OverwriteWithLatestAvroPayloadV1 extends BaseAvroPayload
-    implements HoodieRecordPayload<OverwriteWithLatestAvroPayloadV1> {
+public class DefaultHoodieRecordPayload extends BaseAvroPayload
+    implements HoodieRecordPayload<DefaultHoodieRecordPayload> {
 
-  private Map<String, String> props;
-
-  public OverwriteWithLatestAvroPayloadV1(GenericRecord record, Comparable orderingVal, Map<String, String> props) {
+  public DefaultHoodieRecordPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
-    this.props = props;
   }
 
-  public OverwriteWithLatestAvroPayloadV1(Option<GenericRecord> record) {
-    this(record.isPresent() ? record.get() : null, (record1) -> 0, Collections.EMPTY_MAP); // natural order
+  public DefaultHoodieRecordPayload(Option<GenericRecord> record) {
+    this(record.isPresent() ? record.get() : null, (record1) -> 0); // natural order
   }
 
   @Override
-  public OverwriteWithLatestAvroPayloadV1 preCombine(OverwriteWithLatestAvroPayloadV1 another) {
+  public DefaultHoodieRecordPayload preCombine(DefaultHoodieRecordPayload another) {
     // pick the payload with greatest ordering value
     if (another.orderingVal.compareTo(orderingVal) > 0) {
       return another;
@@ -75,7 +73,12 @@ public class OverwriteWithLatestAvroPayloadV1 extends BaseAvroPayload
   }
 
   @Override
-  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
+  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException{
+    return getInsertValue(schema);
+  }
+
+  @Override
+  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema, Properties properties) throws IOException {
     if (recordBytes.length == 0) {
       return Option.empty();
     }
@@ -89,8 +92,8 @@ public class OverwriteWithLatestAvroPayloadV1 extends BaseAvroPayload
      * NOTE: Deletes sent via EmptyHoodieRecordPayload and/or Delete operation type do not hit this code path
      * and need to be dealt with separately.
      */
-    Object persistedOrderingVal = getNestedFieldVal((GenericRecord) currentValue, props.get(ORDERING_FIELD_OPT_KEY), true);
-    Comparable incomingOrderingVal = (Comparable) getNestedFieldVal(incomingRecord, props.get(ORDERING_FIELD_OPT_KEY), false);
+    Object persistedOrderingVal = getNestedFieldVal((GenericRecord) currentValue, properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP), true);
+    Comparable incomingOrderingVal = (Comparable) getNestedFieldVal(incomingRecord, properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP), false);
 
     // Null check is needed here to support schema evolution. The record in storage may be from old schema where
     // the new ordering column might not be present and hence returns null.
