@@ -193,13 +193,25 @@ public class HoodieLogFileCommand implements CommandMarker {
     if (shouldMerge) {
       System.out.println("===========================> MERGING RECORDS <===================");
       HoodieMergedLogRecordScanner scanner =
-          new HoodieMergedLogRecordScanner(fs, client.getBasePath(), logFilePaths, readerSchema,
-              client.getActiveTimeline().getCommitTimeline().lastInstant().get().getTimestamp(),
-                  HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES,
-                  Boolean.parseBoolean(HoodieCompactionConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED),
-                  Boolean.parseBoolean(HoodieCompactionConfig.DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED),
-                  HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE,
-                  HoodieMemoryConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH);
+          HoodieMergedLogRecordScanner.newBuilder()
+              .withFileSystem(fs)
+              .withBasePath(client.getBasePath())
+              .withLogFilePaths(logFilePaths)
+              .withReaderSchema(readerSchema)
+              .withLatestInstantTime(
+                  client.getActiveTimeline()
+                      .getCommitTimeline().lastInstant().get().getTimestamp())
+              .withReadBlocksLazily(
+                  Boolean.parseBoolean(
+                      HoodieCompactionConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED))
+              .withReverseReader(
+                  Boolean.parseBoolean(
+                      HoodieCompactionConfig.DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED))
+              .withBufferSize(HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE)
+              .withMaxMemorySizeInBytes(
+                  HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
+              .withSpillableMapBasePath(HoodieMemoryConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH)
+              .build();
       for (HoodieRecord<? extends HoodieRecordPayload> hoodieRecord : scanner) {
         Option<IndexedRecord> record = hoodieRecord.getData().getInsertValue(readerSchema);
         if (allRecords.size() < limit) {
