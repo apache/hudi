@@ -99,11 +99,12 @@ public abstract class AbstractMergeHelper<T extends HoodieRecordPayload, I, K, O
     if (externalSchemaTransformation) {
       bootstrapReadSchema = bootstrapReader.getSchema();
     } else {
-      bootstrapReadSchema = mergeHandle.getWriterSchema();
+      bootstrapReadSchema = mergeHandle.getReaderSchema();
     }
 
     return new MergingIterator<>(reader.getRecordIterator(readSchema), bootstrapReader.getRecordIterator(bootstrapReadSchema),
-        (inputRecordPair) -> HoodieAvroUtils.stitchRecords(inputRecordPair.getLeft(), inputRecordPair.getRight(), mergeHandle.getWriterSchemaWithMetafields()));
+        (inputRecordPair) -> HoodieAvroUtils.stitchRecords(inputRecordPair.getLeft(),
+          inputRecordPair.getRight(), mergeHandle.getTableSchemaWithMetaFields()));
   }
 
   /**

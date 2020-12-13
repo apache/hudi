@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
@@ -55,8 +54,23 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
 
   private static final Logger LOG = LogManager.getLogger(HoodieWriteHandle.class);
 
-  protected final Schema writerSchema;
-  protected final Schema writerSchemaWithMetafields;
+  /**
+   * The table schema is the schema of the table which used to read/write record from table.
+   */
+  protected final Schema tableSchema;
+  /**
+   * The table schema with meta fields.
+   */
+  protected final Schema tableSchemaWithMetaFields;
+  /**
+   * The input schema is the input data schema which used to parse data from incoming record.
+   */
+  protected final Schema inputSchema;
+  /**
+   * The input schema with meta fields.
+   */
+  protected final Schema inputSchemaWithMetaFields;
+
   protected HoodieTimer timer;
   protected WriteStatus writeStatus;
   protected final String partitionPath;
@@ -64,38 +78,46 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   protected final String writeToken;
   protected final TaskContextSupplier taskContextSupplier;
 
-  public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
-                           String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
-    this(config, instantTime, partitionPath, fileId, hoodieTable,
-        getWriterSchemaIncludingAndExcludingMetadataPair(config), taskContextSupplier);
-  }
+  /**
+   *
+   * @param config the write config
+   * @param instantTime the instance time
+   * @param partitionPath the partition path
+   * @param fileId the file id
+   * @param hoodieTable the hoodie table
+   * @param schemaOption the option schema specified for HoodieBootstrapHandle
+   * @param taskContextSupplier
+   */
+  protected HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
+                           String fileId, HoodieTable<T, I, K, O> hoodieTable,
+                           Option<Schema> schemaOption,
+                           TaskContextSupplier taskContextSupplier) {
 
-  protected HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath, String fileId,
-                              HoodieTable<T, I, K, O> hoodieTable, Pair<Schema, Schema> writerSchemaIncludingAndExcludingMetadataPair,
-                              TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable);
     this.partitionPath = partitionPath;
     this.fileId = fileId;
-    this.writerSchema = writerSchemaIncludingAndExcludingMetadataPair.getKey();
-    this.writerSchemaWithMetafields = writerSchemaIncludingAndExcludingMetadataPair.getValue();
+    // If the schemaOption has specified,use it,otherwise load the schema from the table.
+    // The schemaOption will be specified only for HoodieBootstrapHandle.
+    this.tableSchema = schemaOption.orElseGet(() -> hoodieTable.getTableSchema(config, false));
+    this.tableSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(tableSchema);
+    this.inputSchema = schemaOption.orElseGet(() -> getInputSchema(config));
+    this.inputSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(inputSchema);
     this.timer = new HoodieTimer().startTimer();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
-        !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
+      !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
     this.taskContextSupplier = taskContextSupplier;
     this.writeToken = makeWriteToken();
   }
 
-  /**
-   * Returns writer schema pairs containing
-   *   (a) Writer Schema from client
-   *   (b) (a) with hoodie metadata fields.
-   * @param config Write Config
-   * @return
-   */
-  protected static Pair<Schema, Schema> getWriterSchemaIncludingAndExcludingMetadataPair(HoodieWriteConfig config) {
-    Schema originalSchema = new Schema.Parser().parse(config.getSchema());
-    Schema hoodieSchema = HoodieAvroUtils.addMetadataFields(originalSchema);
-    return Pair.of(originalSchema, hoodieSchema);
+  public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
+                              String fileId, HoodieTable<T, I, K, O> hoodieTable,
+                              TaskContextSupplier taskContextSupplier) {
+    this(config, instantTime, partitionPath, fileId, hoodieTable,
+        Option.empty(), taskContextSupplier);
+  }
+
+  private static Schema getInputSchema(HoodieWriteConfig config) {
+    return new Schema.Parser().parse(config.getSchema());
   }
 
   /**
@@ -127,8 +149,12 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
     markerFiles.create(partitionPath, dataFileName, getIOType());
   }
 
-  public Schema getWriterSchemaWithMetafields() {
-    return writerSchemaWithMetafields;
+  public Schema getTableSchemaWithMetaFields() {
+    return tableSchemaWithMetaFields;
+  }
+
+  public Schema getInputSchemaWithMetaFields() {
+    return inputSchemaWithMetaFields;
   }
 
   /**
@@ -166,7 +192,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
    * Rewrite the GenericRecord with the Schema containing the Hoodie Metadata fields.
    */
   protected GenericRecord rewriteRecord(GenericRecord record) {
-    return HoodieAvroUtils.rewriteRecord(record, writerSchemaWithMetafields);
+    return HoodieAvroUtils.rewriteRecord(record, inputSchemaWithMetaFields);
   }
 
   public abstract List<WriteStatus> close();

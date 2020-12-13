@@ -72,11 +72,11 @@ public class JavaMergeHelper<T extends HoodieRecordPayload> extends AbstractMerg
     if (externalSchemaTransformation || baseFile.getBootstrapBaseFile().isPresent()) {
       readSchema = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), mergeHandle.getOldFilePath()).getSchema();
       gWriter = new GenericDatumWriter<>(readSchema);
-      gReader = new GenericDatumReader<>(readSchema, mergeHandle.getWriterSchemaWithMetafields());
+      gReader = new GenericDatumReader<>(readSchema, mergeHandle.getTableSchemaWithMetaFields());
     } else {
       gReader = null;
       gWriter = null;
-      readSchema = mergeHandle.getWriterSchemaWithMetafields();
+      readSchema = mergeHandle.getTableSchemaWithMetaFields();
     }
 
     BoundedInMemoryExecutor<GenericRecord, GenericRecord, Void> wrapper = null;

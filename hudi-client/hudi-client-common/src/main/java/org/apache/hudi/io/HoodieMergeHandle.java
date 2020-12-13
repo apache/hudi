@@ -95,18 +95,14 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     init(fileId, this.partitionPath, dataFileToBeMerged);
   }
 
-  @Override
-  public Schema getWriterSchemaWithMetafields() {
-    return writerSchemaWithMetafields;
-  }
-
-  public Schema getWriterSchema() {
-    return writerSchema;
+  public Schema getReaderSchema() {
+    return tableSchema;
   }
 
   /**
    * Extract old file path, initialize StorageWriter and WriteStatus.
    */
+  @SuppressWarnings("unchecked")
   private void init(String fileId, String partitionPath, HoodieBaseFile baseFileToMerge) {
     LOG.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
     this.baseFileToMerge = baseFileToMerge;
@@ -139,7 +135,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       createMarkerFile(partitionPath, newFileName);
 
       // Create the writer for writing the new version file
-      fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config, writerSchemaWithMetafields, taskContextSupplier);
+      fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config,
+        tableSchemaWithMetaFields, taskContextSupplier);
     } catch (IOException io) {
       LOG.error("Error in update task at commit " + instantTime, io);
       writeStatus.setGlobalError(io);
@@ -157,7 +154,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       long memoryForMerge = IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config.getProps());
       LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
       this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
-          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(writerSchema));
+          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(inputSchema));
     } catch (IOException io) {
       throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
     }
@@ -218,6 +215,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   /**
    * Go through an old record. Here if we detect a newer version shows up, we write the new one to the file.
    */
+  @SuppressWarnings("unchecked")
   public void write(GenericRecord oldRecord) {
     String key = oldRecord.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
     boolean copyOldRecord = true;
@@ -227,8 +225,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       HoodieRecord<T> hoodieRecord = new HoodieRecord<>(keyToNewRecords.get(key));
       try {
         Option<IndexedRecord> combinedAvroRecord =
-            hoodieRecord.getData().combineAndGetUpdateValue(oldRecord, useWriterSchema ? writerSchemaWithMetafields : writerSchema,
-                config.getPayloadConfig().getProps());
+            hoodieRecord.getData().combineAndGetUpdateValue(oldRecord, useWriterSchema
+                   ? inputSchemaWithMetaFields : inputSchema, config.getPayloadConfig().getProps());
         if (writeUpdateRecord(hoodieRecord, combinedAvroRecord)) {
           /*
            * ONLY WHEN 1) we have an update for this key AND 2) We are able to successfully write the the combined new
@@ -251,7 +249,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
         fileWriter.writeAvro(key, oldRecord);
       } catch (IOException | RuntimeException e) {
         String errMsg = String.format("Failed to merge old record into new file for key %s from old file %s to new file %s with writerSchema %s",
-                key, getOldFilePath(), newFilePath, writerSchemaWithMetafields.toString(true));
+                key, getOldFilePath(), newFilePath, inputSchemaWithMetaFields.toString(true));
         LOG.debug("Old record is " + oldRecord);
         throw new HoodieUpsertException(errMsg, e);
       }
@@ -269,9 +267,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
         HoodieRecord<T> hoodieRecord = newRecordsItr.next();
         if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
           if (useWriterSchema) {
-            writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(writerSchemaWithMetafields));
+            writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(inputSchemaWithMetaFields));
           } else {
-            writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(writerSchema));
+            writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(inputSchema));
           }
           insertRecordsWritten++;
         }

@@ -181,7 +181,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   private Option<IndexedRecord> getIndexedRecord(HoodieRecord<T> hoodieRecord) {
     Option<Map<String, String>> recordMetadata = hoodieRecord.getData().getMetadata();
     try {
-      Option<IndexedRecord> avroRecord = hoodieRecord.getData().getInsertValue(writerSchema);
+      Option<IndexedRecord> avroRecord = hoodieRecord.getData().getInsertValue(inputSchema);
       if (avroRecord.isPresent()) {
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
         avroRecord = Option.of(rewriteRecord((GenericRecord) avroRecord.get()));
@@ -327,7 +327,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   private void appendDataAndDeleteBlocks(Map<HeaderMetadataType, String> header) {
     try {
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
-      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writerSchemaWithMetafields.toString());
+      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, inputSchemaWithMetaFields.toString());
       List<HoodieLogBlock> blocks = new ArrayList<>(2);
       if (recordList.size() > 0) {
         blocks.add(HoodieDataBlock.getBlock(hoodieTable.getLogDataBlockFormat(), recordList, header));

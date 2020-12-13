@@ -178,7 +178,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     HoodieTable table = createTable(config, hadoopConf);
 
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-    HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds, extraMetadata, operationType, config.getSchema(), commitActionType);
+    HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
+        extraMetadata, operationType, table.getTableSchema(config, false).toString(),
+        commitActionType);
     // Finalize write
     finalizeWrite(table, instantTime, stats);
 

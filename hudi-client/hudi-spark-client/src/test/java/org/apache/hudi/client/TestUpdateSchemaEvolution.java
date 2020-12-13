@@ -123,7 +123,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
       Executable executable = () -> {
         HoodieMergeHandle mergeHandle = new HoodieMergeHandle(updateTable.getConfig(), "101", updateTable,
             updateRecords.iterator(), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier);
-        AvroReadSupport.setAvroReadSchema(updateTable.getHadoopConf(), mergeHandle.getWriterSchemaWithMetafields());
+        AvroReadSupport.setAvroReadSchema(updateTable.getHadoopConf(), mergeHandle.getTableSchemaWithMetaFields());
         List<GenericRecord> oldRecords = ParquetUtils.readAvroRecords(updateTable.getHadoopConf(),
             new Path(updateTable.getConfig().getBasePath() + "/" + insertResult.getStat().getPath()));
         for (GenericRecord rec : oldRecords) {

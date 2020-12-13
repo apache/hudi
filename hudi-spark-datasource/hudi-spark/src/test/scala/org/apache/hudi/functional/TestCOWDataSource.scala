@@ -42,7 +42,7 @@ import scala.collection.JavaConversions._
  */
 
 class TestCOWDataSource extends HoodieClientTestBase {
-  var spark: SparkSession = null
+  var spark: SparkSession =_
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
@@ -347,5 +347,45 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .save(basePath)
 
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+  }
+
+  /**
+    * write a "Int" type to "Long" type
+    */
+  @Test def testWriteWithCompatibleType(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    // write 'Long' type to the field 'value'
+    val inputDf1 = (for (i <- 0 until 1) yield (i, 10L, i * 1000))
+      .toDF("id", "value", "timestamp")
+    inputDf1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "id")
+      .option(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE, "true")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    val readDf = _spark.read.format("org.apache.hudi")
+      .load(basePath + "/*")
+
+    val v = readDf.selectExpr("id", "value").take(1)(0).getLong(1)
+    assertEquals(10, v)
+
+    // write 'int' type to the field 'value'
+    val inputDf2 = (for (i <- 0 until 1) yield (i, 20, i * 1000 + 1))
+      .toDF("id", "value", "timestamp")
+    inputDf2.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "id")
+      .option(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE, "true")
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val readDf2 = _spark.read.format("org.apache.hudi")
+      .load(basePath + "/*")
+
+    val v2 = readDf2.selectExpr("id", "value").take(1)(0).getLong(1)
+    assertEquals(20, v2)
   }
 }

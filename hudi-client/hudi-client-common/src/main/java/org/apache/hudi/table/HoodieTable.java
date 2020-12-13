@@ -603,9 +603,8 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     Schema writerSchema;
     boolean isValid;
     try {
-      TableSchemaResolver schemaUtil = new TableSchemaResolver(getMetaClient());
       writerSchema = HoodieAvroUtils.createHoodieWriteSchema(config.getSchema());
-      tableSchema = HoodieAvroUtils.createHoodieWriteSchema(schemaUtil.getTableAvroSchemaWithoutMetadataFields());
+      tableSchema = getTableSchema(config, true);
       isValid = TableSchemaResolver.isSchemaCompatible(tableSchema, writerSchema);
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema/check compatibility for base path " + metaClient.getBasePath(), e);
@@ -675,5 +674,30 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
           config.shouldAssumeDatePartitioning());
     }
     return metadata;
+  }
+
+  /**
+   * Get the table schema from the table. If it hasn't already been committed,
+   * use the input data schema in the config as the table schema.
+   * @param config
+   * @param withMetaField
+   * @return
+   */
+  public Schema getTableSchema(HoodieWriteConfig config, boolean withMetaField) {
+    Schema tableSchema;
+    TableSchemaResolver schemaUtil = new TableSchemaResolver(getMetaClient());
+    try {
+      //  first try to load schema from table file or meta file
+      tableSchema = schemaUtil.getTableAvroSchemaWithoutMetadataFields();
+    } catch (Exception e) {
+      LOG.info("cannot to get schema from the table file, use the input schema in config");
+      // if cannot load from table, use the input data schema in config
+      tableSchema = new Schema.Parser().parse(config.getSchema());
+    }
+    if (withMetaField) {
+      return HoodieAvroUtils.addMetadataFields(tableSchema);
+    } else {
+      return tableSchema;
+    }
   }
 }
