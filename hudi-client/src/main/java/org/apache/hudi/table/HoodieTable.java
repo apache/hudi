@@ -64,7 +64,6 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.log4j.LogManager;
@@ -96,7 +95,6 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
   private SerializableConfiguration hadoopConfiguration;
   private transient FileSystemViewManager viewManager;
 
-  private HoodieTableMetadataWriter metadataWriter;
   private HoodieTableMetadata metadata;
 
   protected final SparkTaskContextSupplier sparkTaskContextSupplier = new SparkTaskContextSupplier();
@@ -641,12 +639,5 @@ public abstract class HoodieTable<T extends HoodieRecordPayload> implements Seri
           config.useFileListingMetadata(), config.getFileListingMetadataVerify(), config.isMetricsOn(), config.shouldAssumeDatePartitioning());
     }
     return metadata;
-  }
-
-  public HoodieTableMetadataWriter metadataWriter(JavaSparkContext jsc) {
-    if (metadataWriter == null) {
-      metadataWriter = HoodieTableMetadataWriter.create(hadoopConfiguration.get(), config, jsc);
-    }
-    return metadataWriter;
   }
 }

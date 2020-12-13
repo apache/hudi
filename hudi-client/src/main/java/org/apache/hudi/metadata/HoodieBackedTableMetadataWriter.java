@@ -119,8 +119,8 @@ public class HoodieBackedTableMetadataWriter implements HoodieTableMetadataWrite
       enabled = true;
 
       // Inline compaction and auto clean is required as we dont expose this table outside
-      ValidationUtils.checkArgument(this.metadataWriteConfig.isAutoClean(), "Auto clean is required for Metadata Compaction config");
-      ValidationUtils.checkArgument(this.metadataWriteConfig.isInlineCompaction(), "Inline compaction is required for Metadata Compaction config");
+      ValidationUtils.checkArgument(!this.metadataWriteConfig.isAutoClean(), "Cleaning is controlled internally for Metadata table.");
+      ValidationUtils.checkArgument(!this.metadataWriteConfig.isInlineCompaction(), "Compaction is controlled internally for metadata table.");
       // Metadata Table cannot have metadata listing turned on. (infinite loop, much?)
       ValidationUtils.checkArgument(this.metadataWriteConfig.shouldAutoCommit(), "Auto commit is required for Metadata Table");
       ValidationUtils.checkArgument(!this.metadataWriteConfig.useFileListingMetadata(), "File listing cannot be used for Metadata Table");
@@ -148,7 +148,7 @@ public class HoodieBackedTableMetadataWriter implements HoodieTableMetadataWrite
         // may have occurred on the table. Hence, calling this always ensures that the metadata is brought in sync
         // with the active timeline.
         HoodieTimer timer = new HoodieTimer().startTimer();
-        syncFromInstants(jsc, datasetMetaClient);
+        syncFromInstants(datasetMetaClient);
         metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.SYNC_STR, timer.endTimer()));
       }
     } else {
@@ -184,12 +184,14 @@ public class HoodieBackedTableMetadataWriter implements HoodieTableMetadataWrite
         .forTable(tableName)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withAsyncClean(writeConfig.isMetadataAsyncClean())
-            .withAutoClean(true)
+            // we will trigger cleaning manually, to control the instant times
+            .withAutoClean(false)
             .withCleanerParallelism(parallelism)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
             .retainCommits(writeConfig.getMetadataCleanerCommitsRetained())
             .archiveCommitsWith(writeConfig.getMetadataMinCommitsToKeep(), writeConfig.getMetadataMaxCommitsToKeep())
-            .withInlineCompaction(true)
+            // we will trigger compaction manually, to control the instant times
+            .withInlineCompaction(false)
             .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax()).build())
         .withParallelism(parallelism, parallelism)
         .withDeleteParallelism(parallelism)
@@ -376,7 +378,7 @@ public class HoodieBackedTableMetadataWriter implements HoodieTableMetadataWrite
    *
    * @param datasetMetaClient {@code HoodieTableMetaClient} for the dataset
    */
-  private void syncFromInstants(JavaSparkContext jsc, HoodieTableMetaClient datasetMetaClient) {
+  private void syncFromInstants(HoodieTableMetaClient datasetMetaClient) {
     ValidationUtils.checkState(enabled, "Metadata table cannot be synced as it is not enabled");
 
     try {
@@ -391,56 +393,35 @@ public class HoodieBackedTableMetadataWriter implements HoodieTableMetadataWrite
       final HoodieActiveTimeline timeline = datasetMetaClient.getActiveTimeline();
       for (HoodieInstant instant : instantsToSync) {
         LOG.info("Syncing instant " + instant + " to metadata table");
+        ValidationUtils.checkArgument(instant.isCompleted(), "Only completed instants can be synced.");
 
         switch (instant.getAction()) {
-          case HoodieTimeline.CLEAN_ACTION: {
-            // CLEAN is synced from the
-            // - inflight instant which contains the HoodieCleanerPlan, or
-            // - complete instant which contains the HoodieCleanMetadata
-            try {
-              HoodieInstant inflightCleanInstant = new HoodieInstant(true, instant.getAction(), instant.getTimestamp());
-              ValidationUtils.checkArgument(inflightCleanInstant.isInflight());
-              HoodieCleanerPlan cleanerPlan = CleanerUtils.getCleanerPlan(datasetMetaClient, inflightCleanInstant);
-              update(cleanerPlan, instant.getTimestamp());
-            } catch (HoodieIOException e) {
-              HoodieInstant cleanInstant = new HoodieInstant(false, instant.getAction(), instant.getTimestamp());
-              ValidationUtils.checkArgument(cleanInstant.isCompleted());
-              HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(datasetMetaClient, cleanInstant);
-              update(cleanMetadata, instant.getTimestamp());
-            }
+          case HoodieTimeline.CLEAN_ACTION:
+            HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(datasetMetaClient, instant);
+            update(cleanMetadata, instant.getTimestamp());
             break;
-          }
           case HoodieTimeline.DELTA_COMMIT_ACTION:
           case HoodieTimeline.COMMIT_ACTION:
-          case HoodieTimeline.COMPACTION_ACTION: {
-            ValidationUtils.checkArgument(instant.isCompleted());
+          case HoodieTimeline.COMPACTION_ACTION:
             HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
                 timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
             update(commitMetadata, instant.getTimestamp());
             break;
-          }
-          case HoodieTimeline.ROLLBACK_ACTION: {
-            ValidationUtils.checkArgument(instant.isCompleted());
+          case HoodieTimeline.ROLLBACK_ACTION:
             HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeHoodieRollbackMetadata(
                 timeline.getInstantDetails(instant).get());
             update(rollbackMetadata, instant.getTimestamp());
             break;
-          }
-          case HoodieTimeline.RESTORE_ACTION: {
-            ValidationUtils.checkArgument(instant.isCompleted());
+          case HoodieTimeline.RESTORE_ACTION:
             HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.deserializeHoodieRestoreMetadata(
                 timeline.getInstantDetails(instant).get());
             update(restoreMetadata, instant.getTimestamp());
             break;
-          }
-          case HoodieTimeline.SAVEPOINT_ACTION: {
-            ValidationUtils.checkArgument(instant.isCompleted());
+          case HoodieTimeline.SAVEPOINT_ACTION:
             // Nothing to be done here
             break;
-          }
-          default: {
+          default:
             throw new HoodieException("Unknown type of action " + instant.getAction());
-          }
         }
       }
       // re-init the table metadata, for any future writes.
@@ -472,8 +453,7 @@ public class HoodieBackedTableMetadataWriter implements HoodieTableMetadataWrite
       writeStats.forEach(hoodieWriteStat -> {
         String pathWithPartition = hoodieWriteStat.getPath();
         if (pathWithPartition == null) {
-          // Empty partition
-          return;
+          throw new HoodieMetadataException("Unable to find path in write stat to update metadata table " + hoodieWriteStat);
         }
 
         int offset = partition.equals(NON_PARTITIONED_NAME) ? 0 : partition.length() + 1;
@@ -506,13 +486,6 @@ public class HoodieBackedTableMetadataWriter implements HoodieTableMetadataWrite
   @Override
   public void update(HoodieCleanerPlan cleanerPlan, String instantTime) {
     if (!enabled) {
-      return;
-    }
-
-    HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
-    long cnt = timeline.filterCompletedInstants().getInstants().filter(i -> i.getTimestamp().equals(instantTime)).count();
-    if (cnt == 1) {
-      LOG.info("Ignoring update from cleaner plan for already completed instant " + instantTime);
       return;
     }
 
@@ -725,6 +698,13 @@ public class HoodieBackedTableMetadataWriter implements HoodieTableMetadataWrite
           throw new HoodieMetadataException("Failed to commit metadata table records at instant " + instantTime);
         }
       });
+      // trigger cleaning, compaction, with suffixes based on the same instant time. This ensures that any future
+      // delta commits synced over will not have an instant time lesser than the last completed instant on the
+      // metadata table.
+      writeClient.clean(instantTime + "001");
+      if (writeClient.scheduleCompactionAtInstant(instantTime + "002", Option.empty())) {
+        writeClient.compact(instantTime + "002");
+      }
     }
 
     // Update total size of the metadata and count of base/log files

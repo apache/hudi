@@ -36,8 +36,12 @@ public interface HoodieTableMetadata extends Serializable {
 
   // Table name suffix
   String METADATA_TABLE_NAME_SUFFIX = "_metadata";
-  // Timestamp for a commit when the base dataset had not had any commits yet.
-  String SOLO_COMMIT_TIMESTAMP = "00000000000000";
+  /**
+   * Timestamp for a commit when the base dataset had not had any commits yet. this is < than even
+   * {@link org.apache.hudi.common.table.timeline.HoodieTimeline#INIT_INSTANT_TS}, such that the metadata table
+   * can be prepped even before bootstrap is done.
+   */
+  String SOLO_COMMIT_TIMESTAMP = "0000000000000";
   // Key for the record which saves list of all partitions
   String RECORDKEY_PARTITION_LIST = "__all_partitions__";
   // The partition name used for non-partitioned tables
@@ -80,7 +84,10 @@ public interface HoodieTableMetadata extends Serializable {
    */
   List<String> getAllPartitionPaths() throws IOException;
 
-  Option<String> getLatestCompactionTimestamp();
+  /**
+   * Get the instant time to which the metadata is synced w.r.t data timeline.
+   */
+  Option<String> getSyncedInstantTime();
 
   boolean isInSync();
 }

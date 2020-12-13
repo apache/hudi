@@ -128,8 +128,6 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload> e
     finalizeWrite(table, instantTime, stats);
 
     try {
-      table.metadataWriter(jsc).update(metadata, instantTime);
-
       activeTimeline.saveAsComplete(new HoodieInstant(true, commitActionType, instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
       postCommit(table, metadata, instantTime, extraMetadata);

@@ -106,7 +106,6 @@ public class HoodieMetadataMetrics implements Serializable {
     if (detailed) {
       stats.put(HoodieMetadataMetrics.STAT_COUNT_PARTITION, String.valueOf(tableMetadata.getAllPartitionPaths().size()));
       stats.put(HoodieMetadataMetrics.STAT_IN_SYNC, String.valueOf(tableMetadata.isInSync()));
-      stats.put(HoodieMetadataMetrics.STAT_LAST_COMPACTION_TIMESTAMP, tableMetadata.getLatestCompactionTimestamp().orElseGet(() -> "none"));
     }
 
     return stats;
