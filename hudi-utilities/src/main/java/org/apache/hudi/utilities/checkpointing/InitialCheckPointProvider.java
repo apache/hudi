@@ -18,16 +18,21 @@
 
 package org.apache.hudi.utilities.checkpointing;
 
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.exception.HoodieException;
-
+import java.io.IOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.exception.HoodieException;
+
 /**
  * Provide the initial checkpoint for delta streamer.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public abstract class InitialCheckPointProvider {
   protected transient Path path;
   protected transient FileSystem fs;
@@ -51,10 +56,17 @@ public abstract class InitialCheckPointProvider {
    *
    * @param config Hadoop configuration
    */
-  public abstract void init(Configuration config) throws HoodieException;
+  public void init(Configuration config) throws HoodieException {
+    try {
+      this.fs = FileSystem.get(config);
+    } catch (IOException e) {
+      throw new HoodieException("CheckpointProvider initialization failed");
+    }
+  }
 
   /**
    * Get checkpoint string recognizable for delta streamer.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract String getCheckpoint() throws HoodieException;
 }

@@ -20,6 +20,7 @@ package org.apache.hudi.hadoop.utils;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.JobContext;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -27,6 +28,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -38,6 +40,9 @@ public class HoodieHiveUtils {
   public static final String HOODIE_CONSUME_MODE_PATTERN = "hoodie.%s.consume.mode";
   public static final String HOODIE_START_COMMIT_PATTERN = "hoodie.%s.consume.start.timestamp";
   public static final String HOODIE_MAX_COMMIT_PATTERN = "hoodie.%s.consume.max.commits";
+  public static final Set<String> VIRTUAL_COLUMN_NAMES = CollectionUtils.createImmutableSet(
+      "INPUT__FILE__NAME", "BLOCK__OFFSET__INSIDE__FILE", "ROW__OFFSET__INSIDE__BLOCK", "RAW__DATA__SIZE",
+      "ROW__ID", "GROUPING__ID");
   /*
    * Boolean property to stop incremental reader when there is a pending compaction.
    * This is needed to prevent certain race conditions with RO views of MOR tables. only applicable for RO views.

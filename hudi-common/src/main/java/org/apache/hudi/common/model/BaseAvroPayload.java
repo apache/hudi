@@ -20,11 +20,9 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.generic.GenericRecord;
 
-import java.io.IOException;
 import java.io.Serializable;
 
 /**
@@ -48,11 +46,7 @@ public abstract class BaseAvroPayload implements Serializable {
    * @param orderingVal {@link Comparable} to be used in pre combine.
    */
   public BaseAvroPayload(GenericRecord record, Comparable orderingVal) {
-    try {
-      this.recordBytes = record != null ? HoodieAvroUtils.avroToBytes(record) : new byte[0];
-    } catch (IOException io) {
-      throw new HoodieIOException("Cannot convert GenericRecord to bytes", io);
-    }
+    this.recordBytes = record != null ? HoodieAvroUtils.avroToBytes(record) : new byte[0];
     this.orderingVal = orderingVal;
     if (orderingVal == null) {
       throw new HoodieException("Ordering value is null for record: " + record);

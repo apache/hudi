@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
@@ -31,12 +34,14 @@ import java.util.Map;
  * Every Hoodie table has an implementation of the <code>HoodieRecordPayload</code> This abstracts out callbacks which
  * depend on record specific logic.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
 public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Serializable {
 
   /**
    * When more than one HoodieRecord have the same HoodieKey, this function combines them before attempting to
    * insert/upsert (if combining turned on in HoodieClientConfig).
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   T preCombine(T another);
 
   /**
@@ -50,6 +55,7 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
    * @param schema Schema used for record
    * @return new combined/merged value to be written back to storage. EMPTY to skip writing this record.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException;
 
   /**
@@ -57,6 +63,7 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
    * new value for the given HoodieKey, wherein there is no existing record in storage to be combined against. (i.e
    * insert) Return EMPTY to skip writing this record.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   Option<IndexedRecord> getInsertValue(Schema schema) throws IOException;
 
   /**
@@ -64,6 +71,7 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
    * {@code WriteStatus.markSuccess()} and {@code WriteStatus.markFailure()} in order to compute some aggregate metrics
    * using the metadata in the context of a write success or failure.
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   default Option<Map<String, String>> getMetadata() {
     return Option.empty();
   }

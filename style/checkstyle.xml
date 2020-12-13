@@ -46,10 +46,12 @@
         <property name="file" value="${checkstyle.suppressions.file}" default="checkstyle-suppressions.xml"/>
         <property name="optional" value="true"/>
     </module>
+    <module name="SuppressWarningsFilter" />
     <module name="TreeWalker">
         <module name="AvoidNestedBlocks">
             <property name="allowInSwitchCase" value="true"/>
         </module>
+        <module name="SuppressWarningsHolder"/>
         <module name="OuterTypeFilename"/>
         <module name="IllegalTokenText">
             <property name="tokens" value="STRING_LITERAL, CHAR_LITERAL"/>
@@ -267,7 +269,7 @@
             <property name="regexp" value="true"/>
             <property name="illegalPkgs" value="org\.apache\.commons, com\.google\.common"/>
             <property name="illegalClasses"
-              value="^java\.util\.Optional, ^org\.junit\.(?!jupiter|platform|contrib|Rule)(.*)"/>
+              value="^java\.util\.Optional, ^org\.junit\.(?!jupiter|platform|contrib|Rule|runner)(.*)"/>
         </module>
 
         <module name="EmptyStatement" />

@@ -35,6 +35,6 @@ public class ExampleDataSchemaProvider extends SchemaProvider {
 
   @Override
   public Schema getSourceSchema() {
-    return org.apache.hudi.examples.common.HoodieExampleDataGenerator.avroSchema;
+    return HoodieExampleDataGenerator.avroSchema;
   }
 }

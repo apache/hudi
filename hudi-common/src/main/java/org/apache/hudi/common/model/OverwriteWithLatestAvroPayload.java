@@ -29,22 +29,21 @@ import java.io.IOException;
 
 /**
  * Default payload used for delta streamer.
- * <p>
- * 1. preCombine - Picks the latest delta record for a key, based on an ordering field 2.
- * combineAndGetUpdateValue/getInsertValue - Simply overwrites storage with latest delta record
+ *
+ * <ol>
+ * <li> preCombine - Picks the latest delta record for a key, based on an ordering field;
+ * <li> combineAndGetUpdateValue/getInsertValue - Simply overwrites storage with latest delta record
+ * </ol>
  */
 public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
     implements HoodieRecordPayload<OverwriteWithLatestAvroPayload> {
 
-  /**
-   *
-   */
   public OverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
   }
 
   public OverwriteWithLatestAvroPayload(Option<GenericRecord> record) {
-    this(record.isPresent() ? record.get() : null, (record1) -> 0); // natural order
+    this(record.isPresent() ? record.get() : null, 0); // natural order
   }
 
   @Override
@@ -59,24 +58,35 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
 
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
-
-    Option<IndexedRecord> recordOption = getInsertValue(schema);
-    if (!recordOption.isPresent()) {
-      return Option.empty();
-    }
-
-    GenericRecord genericRecord = (GenericRecord) recordOption.get();
-    // combining strategy here trivially ignores currentValue on disk and writes this record
-    Object deleteMarker = genericRecord.get("_hoodie_is_deleted");
-    if (deleteMarker instanceof Boolean && (boolean) deleteMarker) {
-      return Option.empty();
-    } else {
-      return Option.of(genericRecord);
-    }
+    return getInsertValue(schema);
   }
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    return recordBytes.length == 0 ? Option.empty() : Option.of(HoodieAvroUtils.bytesToAvro(recordBytes, schema));
+    if (recordBytes.length == 0) {
+      return Option.empty();
+    }
+    IndexedRecord indexedRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
+    if (isDeleteRecord((GenericRecord) indexedRecord)) {
+      return Option.empty();
+    } else {
+      return Option.of(indexedRecord);
+    }
+  }
+
+  /**
+   * @param genericRecord instance of {@link GenericRecord} of interest.
+   * @returns {@code true} if record represents a delete record. {@code false} otherwise.
+   */
+  protected boolean isDeleteRecord(GenericRecord genericRecord) {
+    Object deleteMarker = genericRecord.get("_hoodie_is_deleted");
+    return (deleteMarker instanceof Boolean && (boolean) deleteMarker);
+  }
+
+  /**
+   * Return true if value equals defaultValue otherwise false.
+   */
+  public Boolean overwriteField(Object value, Object defaultValue) {
+    return defaultValue == null ? value == null : defaultValue.toString().equals(value.toString());
   }
 }

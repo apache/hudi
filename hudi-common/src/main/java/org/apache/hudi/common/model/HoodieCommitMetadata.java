@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.fs.FSUtils;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
@@ -47,9 +48,9 @@ public class HoodieCommitMetadata implements Serializable {
   protected Map<String, List<HoodieWriteStat>> partitionToWriteStats;
   protected Boolean compacted;
 
-  private Map<String, String> extraMetadata;
+  protected Map<String, String> extraMetadata;
 
-  private WriteOperationType operationType = WriteOperationType.UNKNOWN;
+  protected WriteOperationType operationType = WriteOperationType.UNKNOWN;
 
   // for ser/deser
   public HoodieCommitMetadata() {
@@ -124,6 +125,18 @@ public class HoodieCommitMetadata implements Serializable {
       fullPaths.put(entry.getKey(), fullPath);
     }
     return fullPaths;
+  }
+
+  public Map<HoodieFileGroupId, String> getFileGroupIdAndFullPaths(String basePath) {
+    Map<HoodieFileGroupId, String> fileGroupIdToFullPaths = new HashMap<>();
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : getPartitionToWriteStats().entrySet()) {
+      for (HoodieWriteStat stat : entry.getValue()) {
+        HoodieFileGroupId fileGroupId = new HoodieFileGroupId(stat.getPartitionPath(), stat.getFileId());
+        Path fullPath = new Path(basePath, stat.getPath());
+        fileGroupIdToFullPaths.put(fileGroupId, fullPath.toString());
+      }
+    }
+    return fileGroupIdToFullPaths;
   }
 
   public String toJsonString() throws IOException {
@@ -352,7 +365,9 @@ public class HoodieCommitMetadata implements Serializable {
 
   @Override
   public String toString() {
-    return "HoodieCommitMetadata{partitionToWriteStats=" + partitionToWriteStats + ", compacted=" + compacted
-        + ", extraMetadata=" + extraMetadata + '}';
+    return "HoodieCommitMetadata{" + "partitionToWriteStats=" + partitionToWriteStats
+        + ", compacted=" + compacted
+        + ", extraMetadata=" + extraMetadata
+        + ", operationType=" + operationType + '}';
   }
 }

@@ -18,6 +18,9 @@
 
 package org.apache.hudi.utilities.transform;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -28,6 +31,7 @@ import org.apache.spark.sql.SparkSession;
 /**
  * Transform source to target dataset before writing.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
 public interface Transformer {
 
   /**
@@ -39,5 +43,6 @@ public interface Transformer {
    * @param properties Config properties
    * @return Transformed Dataset
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   Dataset apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset, TypedProperties properties);
 }

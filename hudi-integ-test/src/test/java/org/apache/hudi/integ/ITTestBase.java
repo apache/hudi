@@ -18,6 +18,7 @@
 
 package org.apache.hudi.integ;
 
+import java.util.concurrent.TimeoutException;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -48,6 +49,9 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
+/**
+ * Base test class for IT Test helps to run command and generate data.
+ */
 public abstract class ITTestBase {
 
   public static final Logger LOG = LogManager.getLogger(ITTestBase.class);
@@ -58,6 +62,8 @@ public abstract class ITTestBase {
   protected static final String PRESTO_COORDINATOR = "/presto-coordinator-1";
   protected static final String HOODIE_WS_ROOT = "/var/hoodie/ws";
   protected static final String HOODIE_JAVA_APP = HOODIE_WS_ROOT + "/hudi-spark/run_hoodie_app.sh";
+  protected static final String HOODIE_GENERATE_APP = HOODIE_WS_ROOT + "/hudi-spark/run_hoodie_generate_app.sh";
+  protected static final String HOODIE_JAVA_STREAMING_APP = HOODIE_WS_ROOT + "/hudi-spark/run_hoodie_streaming_app.sh";
   protected static final String HUDI_HADOOP_BUNDLE =
       HOODIE_WS_ROOT + "/docker/hoodie/hadoop/hive_base/target/hoodie-hadoop-mr-bundle.jar";
   protected static final String HUDI_HIVE_SYNC_BUNDLE =
@@ -112,11 +118,9 @@ public abstract class ITTestBase {
   }
 
   static String getPrestoConsoleCommand(String commandFile) {
-    StringBuilder builder = new StringBuilder().append("presto --server " + PRESTO_COORDINATOR_URL)
+    return new StringBuilder().append("presto --server " + PRESTO_COORDINATOR_URL)
         .append(" --catalog hive --schema default")
-        .append(" -f " + commandFile);
-    System.out.println("Presto comamnd " + builder.toString());
-    return builder.toString();
+        .append(" -f " + commandFile).toString();
   }
 
   @BeforeEach
@@ -158,11 +162,26 @@ public abstract class ITTestBase {
     ExecCreateCmdResponse createCmdResponse = cmd.exec();
     TestExecStartResultCallback callback =
         new TestExecStartResultCallback(new ByteArrayOutputStream(), new ByteArrayOutputStream());
-    dockerClient.execStartCmd(createCmdResponse.getId()).withDetach(false).withTty(false).exec(callback)
-        .awaitCompletion();
+    // Each execution of command(s) in docker should not be more than 15 mins. Otherwise, it is deemed stuck. We will
+    // try to capture stdout and stderr of the stuck process.
+
+    boolean completed =
+      dockerClient.execStartCmd(createCmdResponse.getId()).withDetach(false).withTty(false).exec(callback)
+        .awaitCompletion(540, SECONDS);
+    if (!completed) {
+      callback.getStderr().flush();
+      callback.getStdout().flush();
+      LOG.error("\n\n ###### Timed Out Command : " +  Arrays.asList(command));
+      LOG.error("\n\n ###### Stderr of timed-out command #######\n" + callback.getStderr().toString());
+      LOG.error("\n\n ###### stdout of timed-out command #######\n" + callback.getStdout().toString());
+      throw new TimeoutException("Command " + command +  " has been running for more than 9 minutes. "
+        + "Killing and failing !!");
+    }
     int exitCode = dockerClient.inspectExecCmd(createCmdResponse.getId()).exec().getExitCode();
     LOG.info("Exit code for command : " + exitCode);
-    LOG.error("\n\n ###### Stdout #######\n" + callback.getStdout().toString());
+    if (exitCode != 0) {
+      LOG.error("\n\n ###### Stdout #######\n" + callback.getStdout().toString());
+    }
     LOG.error("\n\n ###### Stderr #######\n" + callback.getStderr().toString());
 
     if (expectedToSucceed) {
@@ -180,7 +199,7 @@ public abstract class ITTestBase {
     }
   }
 
-  TestExecStartResultCallback executeCommandStringInDocker(String containerName, String cmd, boolean expectedToSucceed)
+  protected TestExecStartResultCallback executeCommandStringInDocker(String containerName, String cmd, boolean expectedToSucceed)
       throws Exception {
     LOG.info("\n\n#################################################################################################");
     LOG.info("Container : " + containerName + ", Running command :" + cmd);
@@ -190,7 +209,7 @@ public abstract class ITTestBase {
     return executeCommandInDocker(containerName, cmdSplits, expectedToSucceed);
   }
 
-  Pair<String, String> executeHiveCommand(String hiveCommand) throws Exception {
+  protected Pair<String, String> executeHiveCommand(String hiveCommand) throws Exception {
 
     LOG.info("\n\n#################################################################################################");
     LOG.info("Running hive command :" + hiveCommand);
@@ -236,10 +255,13 @@ public abstract class ITTestBase {
     try {
       // save up the Hive log files for introspection
       String hiveLogStr =
-          executeCommandStringInDocker(HIVESERVER, "cat /tmp/root/hive.log", true).getStdout().toString();
+          executeCommandStringInDocker(HIVESERVER, "cat /tmp/root/hive.log |  grep -i exception -A 10 -B 5", false).getStdout().toString();
       String filePath = System.getProperty("java.io.tmpdir") + "/" + System.currentTimeMillis() + "-hive.log";
       FileIOUtils.writeStringToFile(hiveLogStr, filePath);
       LOG.info("Hive log saved up at  : " + filePath);
+      LOG.info("<===========  Full hive log ===============>\n"
+          + "\n" + hiveLogStr
+          + "\n <==========================================>");
     } catch (Exception e) {
       LOG.error("Unable to save up logs..", e);
     }
@@ -268,7 +290,7 @@ public abstract class ITTestBase {
       saveUpLogs();
     }
 
-    assertEquals(times, count, "Did not find output the expected number of times");
+    assertEquals(times, count, "Did not find output the expected number of times.");
   }
 
   public class TestExecStartResultCallback extends ExecStartResultCallback {

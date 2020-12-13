@@ -68,7 +68,7 @@ public class FileStatusDTO {
       dto.blockReplication = fileStatus.getReplication();
       dto.blocksize = fileStatus.getBlockSize();
       dto.modificationTime = fileStatus.getModificationTime();
-      dto.accessTime = fileStatus.getModificationTime();
+      dto.accessTime = fileStatus.getAccessTime();
       dto.symlink = fileStatus.isSymlink() ? FilePathDTO.fromPath(fileStatus.getSymlink()) : null;
       safeReadAndSetMetadata(dto, fileStatus);
     } catch (IOException ioe) {

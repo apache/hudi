@@ -88,8 +88,7 @@ public class TableCommand implements CommandMarker {
       @CliOption(key = {"archiveLogFolder"}, help = "Folder Name for storing archived timeline") String archiveFolder,
       @CliOption(key = {"layoutVersion"}, help = "Specific Layout Version to use") Integer layoutVersion,
       @CliOption(key = {"payloadClass"}, unspecifiedDefaultValue = "org.apache.hudi.common.model.HoodieAvroPayload",
-          help = "Payload Class") final String payloadClass)
-      throws IOException {
+          help = "Payload Class") final String payloadClass) throws IOException {
 
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);

@@ -28,3 +28,4 @@ github:
     - stream-processing
     - data-integration
     - apachespark
+    - apacheflink

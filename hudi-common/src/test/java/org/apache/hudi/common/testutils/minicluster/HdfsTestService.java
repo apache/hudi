@@ -31,6 +31,7 @@ import org.apache.log4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.BindException;
 import java.nio.file.Files;
 import java.util.Objects;
 
@@ -45,7 +46,7 @@ public class HdfsTestService {
    * Configuration settings.
    */
   private Configuration hadoopConf;
-  private String workDir;
+  private final String workDir;
 
   /**
    * Embedded HDFS cluster.
@@ -53,7 +54,7 @@ public class HdfsTestService {
   private MiniDFSCluster miniDfsCluster;
 
   public HdfsTestService() throws IOException {
-    workDir = Files.createTempDirectory("temp").toFile().getAbsolutePath();
+    workDir = Files.createTempDirectory("temp").toAbsolutePath().toString();
   }
 
   public Configuration getHadoopConf() {
@@ -72,20 +73,32 @@ public class HdfsTestService {
       FileIOUtils.deleteDirectory(file);
     }
 
-    int namenodeRpcPort = NetworkTestUtils.nextFreePort();
-    int datanodePort = NetworkTestUtils.nextFreePort();
-    int datanodeIpcPort = NetworkTestUtils.nextFreePort();
-    int datanodeHttpPort = NetworkTestUtils.nextFreePort();
+    int loop = 0;
+    while (true) {
+      try {
+        int namenodeRpcPort = NetworkTestUtils.nextFreePort();
+        int datanodePort = NetworkTestUtils.nextFreePort();
+        int datanodeIpcPort = NetworkTestUtils.nextFreePort();
+        int datanodeHttpPort = NetworkTestUtils.nextFreePort();
 
-    // Configure and start the HDFS cluster
-    // boolean format = shouldFormatDFSCluster(localDFSLocation, clean);
-    String bindIP = "127.0.0.1";
-    configureDFSCluster(hadoopConf, localDFSLocation, bindIP, namenodeRpcPort,
-        datanodePort, datanodeIpcPort, datanodeHttpPort);
-    miniDfsCluster = new MiniDFSCluster.Builder(hadoopConf).numDataNodes(1).format(format).checkDataNodeAddrConfig(true)
-        .checkDataNodeHostConfig(true).build();
-    LOG.info("HDFS Minicluster service started.");
-    return miniDfsCluster;
+        // Configure and start the HDFS cluster
+        // boolean format = shouldFormatDFSCluster(localDFSLocation, clean);
+        String bindIP = "127.0.0.1";
+        configureDFSCluster(hadoopConf, localDFSLocation, bindIP, namenodeRpcPort,
+            datanodePort, datanodeIpcPort, datanodeHttpPort);
+        miniDfsCluster = new MiniDFSCluster.Builder(hadoopConf).numDataNodes(1).format(format).checkDataNodeAddrConfig(true)
+            .checkDataNodeHostConfig(true).build();
+        LOG.info("HDFS Minicluster service started.");
+        return miniDfsCluster;
+      } catch (BindException ex) {
+        ++loop;
+        if (loop < 5) {
+          stop();
+        } else {
+          throw ex;
+        }
+      }
+    }
   }
 
   public void stop() {

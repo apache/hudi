@@ -19,29 +19,37 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 
 import java.io.IOException;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
+import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 
 public class HoodieFileReaderFactory {
 
-  public static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieFileReader<R> getFileReader(
-      Configuration conf, Path path) throws IOException {
+  public static <R extends IndexedRecord> HoodieFileReader<R> getFileReader(Configuration conf, Path path) throws IOException {
     final String extension = FSUtils.getFileExtension(path.toString());
     if (PARQUET.getFileExtension().equals(extension)) {
       return newParquetFileReader(conf, path);
     }
+    if (HFILE.getFileExtension().equals(extension)) {
+      return newHFileFileReader(conf, path);
+    }
+
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
-  private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieFileReader<R> newParquetFileReader(
-      Configuration conf, Path path) throws IOException {
+  private static <R extends IndexedRecord> HoodieFileReader<R> newParquetFileReader(Configuration conf, Path path) {
     return new HoodieParquetReader<>(conf, path);
+  }
+
+  private static <R extends IndexedRecord> HoodieFileReader<R> newHFileFileReader(Configuration conf, Path path) throws IOException {
+    CacheConfig cacheConfig = new CacheConfig(conf);
+    return new HoodieHFileReader<>(conf, path, cacheConfig);
   }
 }

@@ -18,12 +18,16 @@
 
 package org.apache.hudi.common.model;
 
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
 import java.util.List;
 import java.util.Objects;
+import org.apache.hudi.common.util.collection.Pair;
 
 /**
  * A Single Record managed by Hoodie.
@@ -39,6 +43,10 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
   public static final List<String> HOODIE_META_COLUMNS =
       CollectionUtils.createImmutableList(COMMIT_TIME_METADATA_FIELD, COMMIT_SEQNO_METADATA_FIELD,
           RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD, FILENAME_METADATA_FIELD);
+
+  public static final Map<String, Integer> HOODIE_META_COLUMNS_NAME_TO_POS =
+      IntStream.range(0, HOODIE_META_COLUMNS.size()).mapToObj(idx -> Pair.of(HOODIE_META_COLUMNS.get(idx), idx))
+          .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
   /**
    * Identifies the record across the table.

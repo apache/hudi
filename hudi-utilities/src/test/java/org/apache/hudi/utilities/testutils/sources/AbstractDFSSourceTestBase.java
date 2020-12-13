@@ -20,8 +20,8 @@ package org.apache.hudi.utilities.testutils.sources;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
@@ -175,5 +175,18 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
     InputBatch<JavaRDD<GenericRecord>> fetch5 = sourceFormatAdapter.fetchNewDataInAvroFormat(
         Option.empty(), Long.MAX_VALUE);
     assertEquals(10100, fetch5.getBatch().get().count());
+
+    // 6. Should skip files/directories whose names start with prefixes ("_", ".")
+    generateOneFile(".checkpoint/3", "002", 100);
+    generateOneFile("_checkpoint/3", "002", 100);
+    generateOneFile(".3", "002", 100);
+    generateOneFile("_3", "002", 100);
+    // also work with nested directory
+    generateOneFile("foo/.bar/3", "002", 1); // not ok
+    generateOneFile("foo/bar/3", "002", 1); // ok
+    // fetch everything from the beginning
+    InputBatch<JavaRDD<GenericRecord>> fetch6 = sourceFormatAdapter.fetchNewDataInAvroFormat(
+        Option.empty(), Long.MAX_VALUE);
+    assertEquals(10101, fetch6.getBatch().get().count());
   }
 }

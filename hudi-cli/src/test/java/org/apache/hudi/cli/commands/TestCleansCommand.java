@@ -33,10 +33,10 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.testutils.HoodieTestDataGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
@@ -62,7 +62,7 @@ public class TestCleansCommand extends AbstractShellIntegrationTest {
   private URL propsFilePath;
 
   @BeforeEach
-  public void init() throws IOException {
+  public void init() throws Exception {
     HoodieCLI.conf = jsc.hadoopConfiguration();
 
     String tableName = "test_table";

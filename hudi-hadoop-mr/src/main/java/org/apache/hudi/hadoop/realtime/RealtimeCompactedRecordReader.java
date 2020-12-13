@@ -48,7 +48,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
   protected final RecordReader<NullWritable, ArrayWritable> parquetReader;
   private final Map<String, HoodieRecord<? extends HoodieRecordPayload>> deltaRecordMap;
 
-  public RealtimeCompactedRecordReader(HoodieRealtimeFileSplit split, JobConf job,
+  public RealtimeCompactedRecordReader(RealtimeSplit split, JobConf job,
       RecordReader<NullWritable, ArrayWritable> realReader) throws IOException {
     super(split, job);
     this.parquetReader = realReader;
@@ -69,7 +69,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         split.getDeltaLogPaths(),
         usesCustomPayload ? getWriterSchema() : getReaderSchema(),
         split.getMaxCommitTime(),
-        getMaxCompactionMemoryInBytes(),
+        HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes(jobConf),
         Boolean.parseBoolean(jobConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)),
         false,
         jobConf.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE),
@@ -84,7 +84,8 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     if (!result) {
       // if the result is false, then there are no more records
       return false;
-    } else {
+    }
+    if (!deltaRecordMap.isEmpty()) {
       // TODO(VC): Right now, we assume all records in log, have a matching base record. (which
       // would be true until we have a way to index logs too)
       // return from delta records map if we have some match.
@@ -120,7 +121,10 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         }
         Writable[] originalValue = arrayWritable.get();
         try {
-          System.arraycopy(replaceValue, 0, originalValue, 0, originalValue.length);
+          // Sometime originalValue.length > replaceValue.length.
+          // This can happen when hive query is looking for pseudo parquet columns like BLOCK_OFFSET_INSIDE_FILE
+          System.arraycopy(replaceValue, 0, originalValue, 0,
+              Math.min(originalValue.length, replaceValue.length));
           arrayWritable.set(originalValue);
         } catch (RuntimeException re) {
           LOG.error("Got exception when doing array copy", re);
@@ -131,8 +135,8 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
           throw new RuntimeException(errMsg, re);
         }
       }
-      return true;
     }
+    return true;
   }
 
   @Override

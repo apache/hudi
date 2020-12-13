@@ -23,14 +23,12 @@ import org.apache.hadoop.mapred.FileSplit;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Filesplit that wraps the base split and a list of log files to merge deltas from.
  */
-public class HoodieRealtimeFileSplit extends FileSplit {
+public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit {
 
   private List<String> deltaLogPaths;
 
@@ -62,39 +60,28 @@ public class HoodieRealtimeFileSplit extends FileSplit {
     return basePath;
   }
 
-  private static void writeString(String str, DataOutput out) throws IOException {
-    byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
-    out.writeInt(bytes.length);
-    out.write(bytes);
+  public void setDeltaLogPaths(List<String> deltaLogPaths) {
+    this.deltaLogPaths = deltaLogPaths;
   }
 
-  private static String readString(DataInput in) throws IOException {
-    byte[] bytes = new byte[in.readInt()];
-    in.readFully(bytes);
-    return new String(bytes, StandardCharsets.UTF_8);
+  public void setMaxCommitTime(String maxCommitTime) {
+    this.maxCommitTime = maxCommitTime;
+  }
+
+  public void setBasePath(String basePath) {
+    this.basePath = basePath;
   }
 
   @Override
   public void write(DataOutput out) throws IOException {
     super.write(out);
-    writeString(basePath, out);
-    writeString(maxCommitTime, out);
-    out.writeInt(deltaLogPaths.size());
-    for (String logFilePath : deltaLogPaths) {
-      writeString(logFilePath, out);
-    }
+    writeToOutput(out);
   }
 
   @Override
   public void readFields(DataInput in) throws IOException {
     super.readFields(in);
-    basePath = readString(in);
-    maxCommitTime = readString(in);
-    int totalLogFiles = in.readInt();
-    deltaLogPaths = new ArrayList<>(totalLogFiles);
-    for (int i = 0; i < totalLogFiles; i++) {
-      deltaLogPaths.add(readString(in));
-    }
+    readFromInput(in);
   }
 
   @Override

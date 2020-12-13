@@ -213,7 +213,7 @@ public class CompactionCommand implements CommandMarker {
     if (exitCode != 0) {
       return "Failed to run compaction for " + compactionInstantTime;
     }
-    return "Compaction successfully completed for " + compactionInstantTime;
+    return "Attempted to schedule compaction for " + compactionInstantTime;
   }
 
   @CliCommand(value = "compaction run", help = "Run Compaction for given instant time")

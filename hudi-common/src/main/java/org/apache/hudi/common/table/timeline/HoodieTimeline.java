@@ -48,6 +48,7 @@ public interface HoodieTimeline extends Serializable {
   String CLEAN_ACTION = "clean";
   String ROLLBACK_ACTION = "rollback";
   String SAVEPOINT_ACTION = "savepoint";
+  String REPLACE_COMMIT_ACTION = "replacecommit";
   String INFLIGHT_EXTENSION = ".inflight";
   // With Async Compaction, compaction instant can be in 3 states :
   // (compaction-requested), (compaction-inflight), (completed)
@@ -57,7 +58,7 @@ public interface HoodieTimeline extends Serializable {
 
   String[] VALID_ACTIONS_IN_TIMELINE = {COMMIT_ACTION, DELTA_COMMIT_ACTION,
       CLEAN_ACTION, SAVEPOINT_ACTION, RESTORE_ACTION, ROLLBACK_ACTION,
-      COMPACTION_ACTION};
+      COMPACTION_ACTION, REPLACE_COMMIT_ACTION};
 
   String COMMIT_EXTENSION = "." + COMMIT_ACTION;
   String DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION;
@@ -78,8 +79,18 @@ public interface HoodieTimeline extends Serializable {
   String INFLIGHT_COMPACTION_EXTENSION = StringUtils.join(".", COMPACTION_ACTION, INFLIGHT_EXTENSION);
   String INFLIGHT_RESTORE_EXTENSION = "." + RESTORE_ACTION + INFLIGHT_EXTENSION;
   String RESTORE_EXTENSION = "." + RESTORE_ACTION;
+  String INFLIGHT_REPLACE_COMMIT_EXTENSION = "." + REPLACE_COMMIT_ACTION + INFLIGHT_EXTENSION;
+  String REQUESTED_REPLACE_COMMIT_EXTENSION = "." + REPLACE_COMMIT_ACTION + REQUESTED_EXTENSION;
+  String REPLACE_COMMIT_EXTENSION = "." + REPLACE_COMMIT_ACTION;
 
   String INVALID_INSTANT_TS = "0";
+
+  // Instant corresponding to pristine state of the table after its creation
+  String INIT_INSTANT_TS = "00000000000000";
+  // Instant corresponding to METADATA bootstrapping of table/partitions
+  String METADATA_BOOTSTRAP_INSTANT_TS = "00000000000001";
+  // Instant corresponding to full bootstrapping of table/partitions
+  String FULL_BOOTSTRAP_INSTANT_TS = "00000000000002";
 
   /**
    * Filter this timeline to just include the in-flights.
@@ -127,11 +138,29 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline getCommitsAndCompactionTimeline();
 
   /**
+   * Timeline to just include replace instants that have valid (commit/deltacommit) actions.
+   *
+   * @return
+   */
+  HoodieTimeline getCompletedReplaceTimeline();
+
+  /**
    * Filter this timeline to just include requested and inflight compaction instants.
    * 
    * @return
    */
   HoodieTimeline filterPendingCompactionTimeline();
+
+  /**
+   * Filter this timeline to just include requested and inflight replacecommit instants.
+   */
+  HoodieTimeline filterPendingReplaceTimeline();
+
+
+  /**
+   * Create a new Timeline with all the instants after startTs.
+   */
+  HoodieTimeline findInstantsAfterOrEquals(String commitTime, int numCommits);
 
   /**
    * Create a new Timeline with instants after startTs and before or on endTs.
@@ -346,6 +375,18 @@ public interface HoodieTimeline extends Serializable {
 
   static String makeInflightRestoreFileName(String instant) {
     return StringUtils.join(instant, HoodieTimeline.INFLIGHT_RESTORE_EXTENSION);
+  }
+
+  static String makeReplaceFileName(String instant) {
+    return StringUtils.join(instant, HoodieTimeline.REPLACE_COMMIT_EXTENSION);
+  }
+
+  static String makeInflightReplaceFileName(String instant) {
+    return StringUtils.join(instant, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION);
+  }
+
+  static String makeRequestedReplaceFileName(String instant) {
+    return StringUtils.join(instant, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION);
   }
 
   static String makeDeltaFileName(String instantTime) {

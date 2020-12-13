@@ -32,7 +32,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -42,8 +41,8 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
 
   private static final Logger LOG = LogManager.getLogger(FailSafeConsistencyGuard.class);
 
-  private final FileSystem fs;
-  private final ConsistencyGuardConfig consistencyGuardConfig;
+  protected final FileSystem fs;
+  protected final ConsistencyGuardConfig consistencyGuardConfig;
 
   public FailSafeConsistencyGuard(FileSystem fs, ConsistencyGuardConfig consistencyGuardConfig) {
     this.fs = fs;
@@ -73,7 +72,7 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
 
   /**
    * Helper function to wait for all files belonging to single directory to appear.
-   * 
+   *
    * @param dirPath Dir Path
    * @param files Files to appear/disappear
    * @param event Appear/Disappear
@@ -81,45 +80,19 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
    */
   public void waitForFilesVisibility(String dirPath, List<String> files, FileVisibility event) throws TimeoutException {
     Path dir = new Path(dirPath);
-    List<String> filesWithoutSchemeAndAuthority =
-        files.stream().map(f -> Path.getPathWithoutSchemeAndAuthority(new Path(f))).map(Path::toString)
-            .collect(Collectors.toList());
-
-    retryTillSuccess((retryNum) -> {
-      try {
-        LOG.info("Trying " + retryNum);
-        FileStatus[] entries = fs.listStatus(dir);
-        List<String> gotFiles = Arrays.stream(entries).map(e -> Path.getPathWithoutSchemeAndAuthority(e.getPath()))
-            .map(Path::toString).collect(Collectors.toList());
-        List<String> candidateFiles = new ArrayList<>(filesWithoutSchemeAndAuthority);
-        boolean altered = candidateFiles.removeAll(gotFiles);
-
-        switch (event) {
-          case DISAPPEAR:
-            LOG.info("Following files are visible" + candidateFiles);
-            // If no candidate files gets removed, it means all of them have disappeared
-            return !altered;
-          case APPEAR:
-          default:
-            // if all files appear, the list is empty
-            return candidateFiles.isEmpty();
-        }
-      } catch (IOException ioe) {
-        LOG.warn("Got IOException waiting for file event. Have tried " + retryNum + " time(s)", ioe);
-      }
-      return false;
-    }, "Timed out waiting for files to become visible");
+    List<String> filesWithoutSchemeAndAuthority = getFilesWithoutSchemeAndAuthority(files);
+    retryTillSuccess(dir, filesWithoutSchemeAndAuthority, event);
   }
 
   /**
    * Helper to check of file visibility.
-   * 
+   *
    * @param filePath File Path
    * @param visibility Visibility
    * @return true (if file visible in Path), false (otherwise)
    * @throws IOException -
    */
-  private boolean checkFileVisibility(Path filePath, FileVisibility visibility) throws IOException {
+  protected boolean checkFileVisibility(Path filePath, FileVisibility visibility) throws IOException {
     try {
       FileStatus status = fs.getFileStatus(filePath);
       switch (visibility) {
@@ -142,10 +115,8 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
 
   /**
    * Helper function to wait till file either appears/disappears.
-   * 
+   *
    * @param filePath File Path
-   * @param visibility
-   * @throws TimeoutException
    */
   private void waitForFileVisibility(Path filePath, FileVisibility visibility) throws TimeoutException {
     long waitMs = consistencyGuardConfig.getInitialConsistencyCheckIntervalMs();
@@ -169,17 +140,18 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
 
   /**
    * Retries the predicate for condfigurable number of times till we the predicate returns success.
-   * 
-   * @param predicate Predicate Function
-   * @param timedOutMessage Timed-Out message for logging
+   *
+   * @param dir directory of interest in which list of files are checked for visibility
+   * @param files List of files to check for visibility
+   * @param event {@link org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility} event of interest.
    * @throws TimeoutException when retries are exhausted
    */
-  private void retryTillSuccess(Function<Integer, Boolean> predicate, String timedOutMessage) throws TimeoutException {
+  private void retryTillSuccess(Path dir, List<String> files, FileVisibility event) throws TimeoutException {
     long waitMs = consistencyGuardConfig.getInitialConsistencyCheckIntervalMs();
     int attempt = 0;
     LOG.info("Max Attempts=" + consistencyGuardConfig.getMaxConsistencyChecks());
     while (attempt < consistencyGuardConfig.getMaxConsistencyChecks()) {
-      boolean success = predicate.apply(attempt);
+      boolean success = checkFilesVisibility(attempt, dir, files, event);
       if (success) {
         return;
       }
@@ -188,11 +160,55 @@ public class FailSafeConsistencyGuard implements ConsistencyGuard {
       waitMs = Math.min(waitMs, consistencyGuardConfig.getMaxConsistencyCheckIntervalMs());
       attempt++;
     }
-    throw new TimeoutException(timedOutMessage);
-
+    throw new TimeoutException("Timed out waiting for files to adhere to event " + event.name());
   }
 
-  void sleepSafe(long waitMs) {
+  /**
+   * Helper to check for file visibility based on {@link org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility} event.
+   *
+   * @param retryNum retry attempt count.
+   * @param dir directory of interest in which list of files are checked for visibility
+   * @param files List of files to check for visibility
+   * @param event {@link org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility} event of interest.
+   * @return {@code true} if condition succeeded. else {@code false}.
+   */
+  protected boolean checkFilesVisibility(int retryNum, Path dir, List<String> files, FileVisibility event) {
+    try {
+      LOG.info("Trying " + retryNum);
+      FileStatus[] entries = fs.listStatus(dir);
+      List<String> gotFiles = Arrays.stream(entries).map(e -> Path.getPathWithoutSchemeAndAuthority(e.getPath()))
+          .map(Path::toString).collect(Collectors.toList());
+      List<String> candidateFiles = new ArrayList<>(files);
+      boolean altered = candidateFiles.removeAll(gotFiles);
+
+      switch (event) {
+        case DISAPPEAR:
+          LOG.info("Following files are visible" + candidateFiles);
+          // If no candidate files gets removed, it means all of them have disappeared
+          return !altered;
+        case APPEAR:
+        default:
+          // if all files appear, the list is empty
+          return candidateFiles.isEmpty();
+      }
+    } catch (IOException ioe) {
+      LOG.warn("Got IOException waiting for file event. Have tried " + retryNum + " time(s)", ioe);
+    }
+    return false;
+  }
+
+  /**
+   * Generate file names without scheme and authority.
+   *
+   * @param files list of files of interest.
+   * @return the filenames without scheme and authority.
+   */
+  protected List<String> getFilesWithoutSchemeAndAuthority(List<String> files) {
+    return files.stream().map(f -> Path.getPathWithoutSchemeAndAuthority(new Path(f))).map(Path::toString)
+        .collect(Collectors.toList());
+  }
+
+  private void sleepSafe(long waitMs) {
     try {
       Thread.sleep(waitMs);
     } catch (InterruptedException e) {

@@ -37,6 +37,13 @@ public enum WriteOperationType {
   BULK_INSERT_PREPPED("bulk_insert_prepped"),
   // delete
   DELETE("delete"),
+  BOOTSTRAP("bootstrap"),
+  // insert overwrite with static partitioning
+  INSERT_OVERWRITE("insert_overwrite"),
+  // cluster
+  CLUSTER("cluster"),
+  // insert overwrite with dynamic partitioning
+  INSERT_OVERWRITE_TABLE("insert_overwrite_table"),
   // used for old version
   UNKNOWN("unknown");
 
@@ -65,9 +72,21 @@ public enum WriteOperationType {
         return BULK_INSERT_PREPPED;
       case "delete":
         return DELETE;
+      case "insert_overwrite":
+        return INSERT_OVERWRITE;
+      case "insert_overwrite_table":
+        return INSERT_OVERWRITE_TABLE;
       default:
         throw new HoodieException("Invalid value of Type.");
     }
+  }
+
+  /**
+   * Getter for value.
+   * @return string form of WriteOperationType
+   */
+  public String value() {
+    return value;
   }
 
   public static boolean isChangingRecords(WriteOperationType operationType) {

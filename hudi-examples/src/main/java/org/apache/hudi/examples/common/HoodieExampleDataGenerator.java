@@ -86,12 +86,12 @@ public class HoodieExampleDataGenerator<T extends HoodieRecordPayload<T>> {
    */
   @SuppressWarnings("unchecked")
   public T generateRandomValue(HoodieKey key, String commitTime) {
-    GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0.0);
+    GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
     return (T) new HoodieAvroPayload(Option.of(rec));
   }
 
   public GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
-                                             double timestamp) {
+                                             long timestamp) {
     GenericRecord rec = new GenericData.Record(avroSchema);
     rec.put("uuid", rowKey);
     rec.put("ts", timestamp);

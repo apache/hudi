@@ -77,6 +77,8 @@ public abstract class HoodieDataBlock extends HoodieLogBlock {
     switch (logDataBlockFormat) {
       case AVRO_DATA_BLOCK:
         return new HoodieAvroDataBlock(recordList, header);
+      case HFILE_DATA_BLOCK:
+        return new HoodieHFileDataBlock(recordList, header);
       default:
         throw new HoodieException("Data block format " + logDataBlockFormat + " not implemented");
     }

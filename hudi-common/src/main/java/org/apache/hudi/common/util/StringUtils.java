@@ -81,6 +81,10 @@ public class StringUtils {
     return string == null ? "" : string;
   }
 
+  public static String objToString(@Nullable Object obj) {
+    return obj == null ? null : obj.toString();
+  }
+
   /**
    * Returns the given string if it is nonempty; {@code null} otherwise.
    *

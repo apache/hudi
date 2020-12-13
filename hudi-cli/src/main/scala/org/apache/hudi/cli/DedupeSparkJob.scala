@@ -26,11 +26,10 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.exception.HoodieException
 import org.apache.log4j.Logger
-import org.apache.spark.sql.{DataFrame, SQLContext}
+import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 
 import scala.collection.JavaConversions._
-import scala.collection.mutable._
-
+import scala.collection.mutable.{Buffer, HashMap, HashSet, ListBuffer}
 
 /**
   * Spark job to de-duplicate data present in a partition path
@@ -39,8 +38,8 @@ class DedupeSparkJob(basePath: String,
                      duplicatedPartitionPath: String,
                      repairOutputPath: String,
                      sqlContext: SQLContext,
-                     fs: FileSystem) {
-
+                     fs: FileSystem,
+                     dedupeType: DeDupeType.Value) {
 
   val sparkHelper = new SparkHelper(sqlContext, fs)
   val LOG = Logger.getLogger(this.getClass)
@@ -98,33 +97,91 @@ class DedupeSparkJob(basePath: String,
         ON h.`_hoodie_record_key` = d.dupe_key
                       """
     val dupeMap = sqlContext.sql(dupeDataSql).collectAsList().groupBy(r => r.getString(0))
-    val fileToDeleteKeyMap = new HashMap[String, HashSet[String]]()
-
-    // Mark all files except the one with latest commits for deletion
-    dupeMap.foreach(rt => {
-      val (key, rows) = rt
-      var maxCommit = -1L
-
-      rows.foreach(r => {
-        val c = r(3).asInstanceOf[String].toLong
-        if (c > maxCommit)
-          maxCommit = c
-      })
-
-      rows.foreach(r => {
-        val c = r(3).asInstanceOf[String].toLong
-        if (c != maxCommit) {
-          val f = r(2).asInstanceOf[String].split("_")(0)
-          if (!fileToDeleteKeyMap.contains(f)) {
-            fileToDeleteKeyMap(f) = HashSet[String]()
-          }
-          fileToDeleteKeyMap(f).add(key)
-        }
-      })
-    })
-    fileToDeleteKeyMap
+    getDedupePlan(dupeMap)
   }
 
+  private def getDedupePlan(dupeMap: Map[String, Buffer[Row]]): HashMap[String, HashSet[String]] = {
+    val fileToDeleteKeyMap = new HashMap[String, HashSet[String]]()
+    dupeMap.foreach(rt => {
+      val (key, rows) = rt
+
+      dedupeType match {
+        case DeDupeType.UPDATE_TYPE =>
+          /*
+          This corresponds to the case where all duplicates have been updated at least once.
+          Once updated, duplicates are bound to have same commit time unless forcefully modified.
+          */
+          rows.init.foreach(r => {
+            val f = r(2).asInstanceOf[String].split("_")(0)
+            if (!fileToDeleteKeyMap.contains(f)) {
+              fileToDeleteKeyMap(f) = HashSet[String]()
+            }
+            fileToDeleteKeyMap(f).add(key)
+          })
+
+        case DeDupeType.INSERT_TYPE =>
+          /*
+          This corresponds to the case where duplicates got created due to INSERT and have never been updated.
+          */
+          var maxCommit = -1L
+
+          rows.foreach(r => {
+            val c = r(3).asInstanceOf[String].toLong
+            if (c > maxCommit)
+              maxCommit = c
+          })
+
+          rows.foreach(r => {
+            val c = r(3).asInstanceOf[String].toLong
+            if (c != maxCommit) {
+              val f = r(2).asInstanceOf[String].split("_")(0)
+              if (!fileToDeleteKeyMap.contains(f)) {
+                fileToDeleteKeyMap(f) = HashSet[String]()
+              }
+              fileToDeleteKeyMap(f).add(key)
+            }
+          })
+
+        case DeDupeType.UPSERT_TYPE =>
+          /*
+          This corresponds to the case where duplicates got created as a result of inserts as well as updates,
+          i.e few duplicate records have been updated, while others were never updated.
+           */
+          var maxCommit = -1L
+
+          rows.foreach(r => {
+            val c = r(3).asInstanceOf[String].toLong
+            if (c > maxCommit)
+              maxCommit = c
+          })
+          val rowsWithMaxCommit = new ListBuffer[Row]()
+          rows.foreach(r => {
+            val c = r(3).asInstanceOf[String].toLong
+            if (c != maxCommit) {
+              val f = r(2).asInstanceOf[String].split("_")(0)
+              if (!fileToDeleteKeyMap.contains(f)) {
+                fileToDeleteKeyMap(f) = HashSet[String]()
+              }
+              fileToDeleteKeyMap(f).add(key)
+            } else {
+              rowsWithMaxCommit += r
+            }
+          })
+
+          rowsWithMaxCommit.toList.init.foreach(r => {
+            val f = r(2).asInstanceOf[String].split("_")(0)
+            if (!fileToDeleteKeyMap.contains(f)) {
+              fileToDeleteKeyMap(f) = HashSet[String]()
+            }
+            fileToDeleteKeyMap(f).add(key)
+          })
+
+        case _ => throw new IllegalArgumentException("Please provide valid type for deduping!")
+      }
+    })
+    LOG.debug(s"fileToDeleteKeyMap size: ${fileToDeleteKeyMap.size}, map: $fileToDeleteKeyMap")
+    fileToDeleteKeyMap
+  }
 
   def fixDuplicates(dryRun: Boolean = true) = {
     val metadata = new HoodieTableMetaClient(fs.getConf, basePath)
@@ -152,7 +209,7 @@ class DedupeSparkJob(basePath: String,
       val newFilePath = new Path(s"$repairOutputPath/${fileNameToPathMap(fileName).getName}")
       LOG.info(" Skipping and writing new file for : " + fileName)
       SparkHelpers.skipKeysAndWriteNewFile(instantTime, fs, badFilePath, newFilePath, dupeFixPlan(fileName))
-      fs.delete(badFilePath, false)
+      fs.delete(badFilePath, true)
     }
 
     // 3. Check that there are no duplicates anymore.
@@ -174,7 +231,6 @@ class DedupeSparkJob(basePath: String,
       missedRecordKeysDF.show()
       throw new HoodieException("Some records in source are not found in fixed files. Inspect output!!")
     }
-
 
     println("No duplicates found & counts are in check!!!! ")
     // 4. Prepare to copy the fixed files back.

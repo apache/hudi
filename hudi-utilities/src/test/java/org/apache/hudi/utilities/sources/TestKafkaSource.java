@@ -20,8 +20,9 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
@@ -46,6 +47,7 @@ import java.util.HashMap;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.mock;
 
 /**
  * Tests against {@link AvroKafkaSource}.
@@ -56,6 +58,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
 
   private FilebasedSchemaProvider schemaProvider;
   private KafkaTestUtils testUtils;
+  private HoodieDeltaStreamerMetrics metrics = mock(HoodieDeltaStreamerMetrics.class);
 
   @BeforeAll
   public static void initClass() throws Exception {
@@ -101,7 +104,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     TypedProperties props = createPropsForJsonSource(null, "earliest");
 
-    Source jsonSource = new JsonKafkaSource(props, jsc, sparkSession, schemaProvider);
+    Source jsonSource = new JsonKafkaSource(props, jsc, sparkSession, schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
 
     // 1. Extract without any checkpoint => get all the data, respecting sourceLimit
@@ -149,11 +152,11 @@ public class TestKafkaSource extends UtilitiesTestBase {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
 
     TypedProperties earliestProps = createPropsForJsonSource(null, "earliest");
-    Source earliestJsonSource = new JsonKafkaSource(earliestProps, jsc, sparkSession, schemaProvider);
+    Source earliestJsonSource = new JsonKafkaSource(earliestProps, jsc, sparkSession, schemaProvider, metrics);
     SourceFormatAdapter earliestKafkaSource = new SourceFormatAdapter(earliestJsonSource);
 
     TypedProperties latestProps = createPropsForJsonSource(null, "latest");
-    Source latestJsonSource = new JsonKafkaSource(latestProps, jsc, sparkSession, schemaProvider);
+    Source latestJsonSource = new JsonKafkaSource(latestProps, jsc, sparkSession, schemaProvider, metrics);
     SourceFormatAdapter latestKafkaSource = new SourceFormatAdapter(latestJsonSource);
 
     // 1. Extract with a none data kafka checkpoint
@@ -181,7 +184,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     TypedProperties props = createPropsForJsonSource(Long.MAX_VALUE, "earliest");
 
-    Source jsonSource = new JsonKafkaSource(props, jsc, sparkSession, schemaProvider);
+    Source jsonSource = new JsonKafkaSource(props, jsc, sparkSession, schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
     Config.maxEventsFromKafkaSource = 500;
 
@@ -191,13 +194,45 @@ public class TestKafkaSource extends UtilitiesTestBase {
      */
     testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
-    assertEquals(500, fetch1.getBatch().get().count());
+    assertEquals(1000, fetch1.getBatch().get().count());
 
     // 2. Produce new data, extract new data based on sourceLimit
     testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("001", 1000)));
     InputBatch<Dataset<Row>> fetch2 =
         kafkaSource.fetchNewDataInRowFormat(Option.of(fetch1.getCheckpointForNextBatch()), 1500);
-    assertEquals(1500, fetch2.getBatch().get().count());
+    assertEquals(1000, fetch2.getBatch().get().count());
+
+    //reset the value back since it is a static variable
+    Config.maxEventsFromKafkaSource = Config.DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE;
+  }
+
+  @Test
+  public void testJsonKafkaSourceInsertRecordsLessSourceLimit() {
+    // topic setup.
+    testUtils.createTopic(TEST_TOPIC_NAME, 2);
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    TypedProperties props = createPropsForJsonSource(Long.MAX_VALUE, "earliest");
+
+    Source jsonSource = new JsonKafkaSource(props, jsc, sparkSession, schemaProvider, metrics);
+    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
+    Config.maxEventsFromKafkaSource = 500;
+
+    /*
+     1. maxEventsFromKafkaSourceProp set to more than generated insert records
+     and sourceLimit less than the generated insert records num.
+     */
+    testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 400)));
+    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 300);
+    assertEquals(300, fetch1.getBatch().get().count());
+
+    /*
+     2. Produce new data, extract new data based on sourceLimit
+     and sourceLimit less than the generated insert records num.
+     */
+    testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("001", 600)));
+    InputBatch<Dataset<Row>> fetch2 =
+            kafkaSource.fetchNewDataInRowFormat(Option.of(fetch1.getCheckpointForNextBatch()), 300);
+    assertEquals(300, fetch2.getBatch().get().count());
 
     //reset the value back since it is a static variable
     Config.maxEventsFromKafkaSource = Config.DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE;
@@ -210,7 +245,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     TypedProperties props = createPropsForJsonSource(500L, "earliest");
 
-    Source jsonSource = new JsonKafkaSource(props, jsc, sparkSession, schemaProvider);
+    Source jsonSource = new JsonKafkaSource(props, jsc, sparkSession, schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
 
     // 1. Extract without any checkpoint => get all the data, respecting sourceLimit

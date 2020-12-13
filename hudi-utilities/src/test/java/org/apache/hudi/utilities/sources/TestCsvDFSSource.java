@@ -42,7 +42,7 @@ public class TestCsvDFSSource extends AbstractDFSSourceTestBase {
     this.fileSuffix = ".json";
     this.useFlattenedSchema = true;
     this.schemaProvider = new FilebasedSchemaProvider(
-        Helpers.setupSchemaOnDFS("source-flattened.avsc"), jsc);
+        Helpers.setupSchemaOnDFS("delta-streamer-config", "source-flattened.avsc"), jsc);
   }
 
   @Override

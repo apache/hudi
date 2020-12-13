@@ -20,7 +20,6 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -39,14 +38,10 @@ public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload>
   private final byte[] recordBytes;
 
   public HoodieAvroPayload(Option<GenericRecord> record) {
-    try {
-      if (record.isPresent()) {
-        this.recordBytes = HoodieAvroUtils.avroToBytes(record.get());
-      } else {
-        this.recordBytes = new byte[0];
-      }
-    } catch (IOException io) {
-      throw new HoodieIOException("Cannot convert record to bytes", io);
+    if (record.isPresent()) {
+      this.recordBytes = HoodieAvroUtils.avroToBytes(record.get());
+    } else {
+      this.recordBytes = new byte[0];
     }
   }
 

@@ -21,6 +21,6 @@
   "name": "User",
   "fields": [
     {"name": "field1", "type": ["null", "string"], "default": null},
-    {"name": "createTime", "type": ["null", "string"], "default": null}
+    {"name": "createTime", "type": ["null", "long"], "default": null}
   ]
 }

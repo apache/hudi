@@ -21,6 +21,7 @@ package org.apache.hudi.common;
 import org.apache.hadoop.fs.FileStatus;
 
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -85,6 +86,15 @@ public class HoodieRollbackStat implements Serializable {
       return this;
     }
 
+    public Builder withDeletedFileResult(String fileName, boolean isDeleted) {
+      if (isDeleted) {
+        successDeleteFiles = Collections.singletonList(fileName);
+      } else {
+        failedDeleteFiles = Collections.singletonList(fileName);
+      }
+      return this;
+    }
+
     public Builder withRollbackBlockAppendResults(Map<FileStatus, Long> commandBlocksCount) {
       this.commandBlocksCount = commandBlocksCount;
       return this;
@@ -96,6 +106,15 @@ public class HoodieRollbackStat implements Serializable {
     }
 
     public HoodieRollbackStat build() {
+      if (successDeleteFiles == null) {
+        successDeleteFiles = Collections.EMPTY_LIST;
+      }
+      if (failedDeleteFiles == null) {
+        failedDeleteFiles = Collections.EMPTY_LIST;
+      }
+      if (commandBlocksCount == null) {
+        commandBlocksCount = Collections.EMPTY_MAP;
+      }
       return new HoodieRollbackStat(partitionPath, successDeleteFiles, failedDeleteFiles, commandBlocksCount);
     }
   }

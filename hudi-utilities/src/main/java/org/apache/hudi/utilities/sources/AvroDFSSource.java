@@ -33,6 +33,8 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 
+import java.io.IOException;
+
 /**
  * DFS Source that reads avro data.
  */
@@ -41,9 +43,10 @@ public class AvroDFSSource extends AvroSource {
   private final DFSPathSelector pathSelector;
 
   public AvroDFSSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
-      SchemaProvider schemaProvider) {
+      SchemaProvider schemaProvider) throws IOException {
     super(props, sparkContext, sparkSession, schemaProvider);
-    this.pathSelector = new DFSPathSelector(props, sparkContext.hadoopConfiguration());
+    this.pathSelector = DFSPathSelector
+        .createSourceSelector(props, sparkContext.hadoopConfiguration());
   }
 
   @Override
@@ -56,6 +59,7 @@ public class AvroDFSSource extends AvroSource {
   }
 
   private JavaRDD<GenericRecord> fromFiles(String pathStr) {
+    sparkContext.setJobGroup(this.getClass().getSimpleName(), "Fetch Avro data from files");
     JavaPairRDD<AvroKey, NullWritable> avroRDD = sparkContext.newAPIHadoopFile(pathStr, AvroKeyInputFormat.class,
         AvroKey.class, NullWritable.class, sparkContext.hadoopConfiguration());
     return avroRDD.keys().map(r -> ((GenericRecord) r.datum()));

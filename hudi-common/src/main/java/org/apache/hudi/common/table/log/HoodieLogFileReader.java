@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieCorruptBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
@@ -66,6 +67,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private long lastReverseLogFilePosition;
   private boolean reverseReader;
   private boolean closed = false;
+  private transient Thread shutdownThread = null;
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
       boolean readBlockLazily, boolean reverseReader) throws IOException {
@@ -107,14 +109,15 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
    * Close the inputstream if not closed when the JVM exits.
    */
   private void addShutDownHook() {
-    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+    shutdownThread = new Thread(() -> {
       try {
         close();
       } catch (Exception e) {
         LOG.warn("unable to close input stream for log file " + logFile, e);
         // fail silently for any sort of exception
       }
-    }));
+    });
+    Runtime.getRuntime().addShutdownHook(shutdownThread);
   }
 
   // TODO : convert content and block length to long by using ByteBuffer, raw byte [] allows
@@ -179,6 +182,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
     // 8. Read log block length, if present. This acts as a reverse pointer when traversing a
     // log file in reverse
+    @SuppressWarnings("unused")
     long logBlockLength = 0;
     if (nextBlockVersion.hasLogBlockLength()) {
       logBlockLength = inputStream.readLong();
@@ -196,6 +200,9 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
           return new HoodieAvroDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
               contentPosition, contentLength, blockEndPos, readerSchema, header, footer);
         }
+      case HFILE_DATA_BLOCK:
+        return new HoodieHFileDataBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
+              contentPosition, contentLength, blockEndPos, readerSchema, header, footer);
       case DELETE_BLOCK:
         return HoodieDeleteBlock.getBlock(logFile, inputStream, Option.ofNullable(content), readBlockLazily,
             contentPosition, contentLength, blockEndPos, header, footer);
@@ -286,6 +293,9 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   public void close() throws IOException {
     if (!closed) {
       this.inputStream.close();
+      if (null != shutdownThread) {
+        Runtime.getRuntime().removeShutdownHook(shutdownThread);
+      }
       closed = true;
     }
   }
@@ -314,7 +324,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       boolean hasMagic = hasNextMagic();
       if (!hasMagic) {
         throw new CorruptedLogFileException(
-            logFile + "could not be read. Did not find the magic bytes at the start of the block");
+            logFile + " could not be read. Did not find the magic bytes at the start of the block");
       }
       return hasMagic;
     } catch (EOFException e) {
