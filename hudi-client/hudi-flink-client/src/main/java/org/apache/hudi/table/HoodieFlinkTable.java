@@ -59,7 +59,7 @@ public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
       case COPY_ON_WRITE:
         return new HoodieFlinkCopyOnWriteTable<>(config, context, metaClient);
       case MERGE_ON_READ:
-        throw new HoodieNotSupportedException("MERGE_ON_READ is not supported yet");
+        return new HoodieFlinkMergeOnReadTable<>(config, context, metaClient);
       default:
         throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
     }

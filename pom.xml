@@ -50,11 +50,11 @@
     <module>packaging/hudi-utilities-bundle</module>
     <module>packaging/hudi-timeline-server-bundle</module>
     <module>docker/hoodie/hadoop</module>
-    <module>hudi-integ-test</module>
-    <module>packaging/hudi-integ-test-bundle</module>
     <module>hudi-examples</module>
     <module>hudi-flink</module>
     <module>packaging/hudi-flink-bundle</module>
+    <module>hudi-integ-test</module>
+    <module>packaging/hudi-integ-test-bundle</module>
   </modules>
 
   <licenses>
