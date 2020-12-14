@@ -249,14 +249,21 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
       return itr;
     } else {
       // If there is no data file, fall back to reading log files
-      HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(metaClient.getFs(),
-          metaClient.getBasePath(),
-          fileSlice.getLogFiles().map(l -> l.getPath().getName()).collect(Collectors.toList()),
-          new Schema.Parser().parse(schemaStr), metaClient.getActiveTimeline().getCommitsTimeline()
-          .filterCompletedInstants().lastInstant().get().getTimestamp(),
-          HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES, true, false,
-          HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE,
-          HoodieMemoryConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH);
+      HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
+          .withFileSystem(metaClient.getFs())
+          .withBasePath(metaClient.getBasePath())
+          .withLogFilePaths(
+              fileSlice.getLogFiles().map(l -> l.getPath().getName()).collect(Collectors.toList()))
+          .withReaderSchema(new Schema.Parser().parse(schemaStr))
+          .withLatestInstantTime(metaClient.getActiveTimeline().getCommitsTimeline()
+              .filterCompletedInstants().lastInstant().get().getTimestamp())
+          .withMaxMemorySizeInBytes(
+              HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
+          .withReadBlocksLazily(true)
+          .withReverseReader(false)
+          .withBufferSize(HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE)
+          .withSpillableMapBasePath(HoodieMemoryConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH)
+          .build();
       // readAvro log files
       Iterable<HoodieRecord<? extends HoodieRecordPayload>> iterable = () -> scanner.iterator();
       Schema schema = new Schema.Parser().parse(schemaStr);

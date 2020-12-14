@@ -21,40 +21,14 @@ package org.apache.hudi
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.common.model.HoodieKey
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.SchemaConverters
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
+import org.apache.spark.sql.{Dataset, Row, SparkSession}
 
 import scala.collection.JavaConverters._
 
 object AvroConversionUtils {
-
-  def createRdd(df: DataFrame, structName: String, recordNamespace: String): RDD[GenericRecord] = {
-    val avroSchema = convertStructTypeToAvroSchema(df.schema, structName, recordNamespace)
-    createRdd(df, avroSchema, structName, recordNamespace)
-  }
-
-  def createRdd(df: DataFrame, avroSchema: Schema, structName: String, recordNamespace: String)
-  : RDD[GenericRecord] = {
-    // Use the Avro schema to derive the StructType which has the correct nullability information
-    val dataType = SchemaConverters.toSqlType(avroSchema).dataType.asInstanceOf[StructType]
-    val encoder = RowEncoder.apply(dataType).resolveAndBind()
-    df.queryExecution.toRdd.map(encoder.fromRow)
-      .mapPartitions { records =>
-        if (records.isEmpty) Iterator.empty
-        else {
-          val convertor = AvroConversionHelper.createConverterToAvro(dataType, structName, recordNamespace)
-          records.map { x => convertor(x).asInstanceOf[GenericRecord] }
-        }
-      }
-  }
-
-  def createRddForDeletes(df: DataFrame, rowField: String, partitionField: String): RDD[HoodieKey] = {
-    df.rdd.map(row => new HoodieKey(row.getAs[String](rowField), row.getAs[String](partitionField)))
-  }
 
   def createDataFrame(rdd: RDD[GenericRecord], schemaStr: String, ss: SparkSession): Dataset[Row] = {
     if (rdd.isEmpty()) {

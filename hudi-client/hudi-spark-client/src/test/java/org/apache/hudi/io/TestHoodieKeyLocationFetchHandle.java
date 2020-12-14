@@ -95,9 +95,9 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
 
     for (Tuple2<String, HoodieBaseFile> entry : partitionPathFileIdPairs) {
       HoodieKeyLocationFetchHandle fetcherHandle = new HoodieKeyLocationFetchHandle(config, hoodieTable, Pair.of(entry._1, entry._2));
-      Iterator<Tuple2<HoodieKey, HoodieRecordLocation>> result = fetcherHandle.locations();
+      Iterator<Pair<HoodieKey, HoodieRecordLocation>> result = fetcherHandle.locations().iterator();
       List<Tuple2<HoodieKey, HoodieRecordLocation>> actualList = new ArrayList<>();
-      result.forEachRemaining(actualList::add);
+      result.forEachRemaining(x -> actualList.add(new Tuple2<>(x.getLeft(), x.getRight())));
       assertEquals(expectedList.get(new Tuple2<>(entry._1, entry._2.getFileId())), actualList);
     }
   }

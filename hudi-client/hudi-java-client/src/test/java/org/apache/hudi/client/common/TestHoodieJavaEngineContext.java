@@ -20,10 +20,9 @@ package org.apache.hudi.client.common;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.DummyTaskContextSupplier;
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Assertions;
-
-import scala.Tuple2;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -77,7 +76,7 @@ public class TestHoodieJavaEngineContext {
 
     Map<String, String> resultMap = context.mapToPair(mapList, x -> {
       String[] splits = x.split("_");
-      return Tuple2.apply(splits[0], splits[1]);
+      return new ImmutablePair<>(splits[0], splits[1]);
     }, 2);
 
     Assertions.assertNotNull(resultMap.get("hudi"));

@@ -18,8 +18,8 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -343,7 +343,7 @@ public class DeltaSync implements Serializable {
         // pass in the schema for the Row-to-Avro conversion
         // to avoid nullability mismatch between Avro schema and Row schema
         avroRDDOptional = transformed
-            .map(t -> AvroConversionUtils.createRdd(
+            .map(t -> HoodieSparkUtils.createRdd(
                 t, this.userProvidedSchemaProvider.getTargetSchema(),
                 HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD());
         schemaProvider = this.userProvidedSchemaProvider;
@@ -357,7 +357,7 @@ public class DeltaSync implements Serializable {
                     UtilHelpers.createRowBasedSchemaProvider(r.schema(), props, jssc)))
                 .orElse(dataAndCheckpoint.getSchemaProvider());
         avroRDDOptional = transformed
-            .map(t -> AvroConversionUtils.createRdd(
+            .map(t -> HoodieSparkUtils.createRdd(
                 t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD());
       }
     } else {
