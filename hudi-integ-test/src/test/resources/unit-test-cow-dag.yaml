@@ -16,17 +16,45 @@
 first_insert:
   config:
     record_size: 70000
-    num_insert_partitions: 1
-    repeat_count: 1
+    num_partitions_insert: 1
+    repeat_count: 2
     num_records_insert: 100
   type: InsertNode
   deps: none
+second_insert:
+  config:
+    record_size: 70000
+    num_partitions_insert: 1
+    repeat_count: 1
+    num_records_insert: 100
+  type: InsertNode
+  deps: first_insert
+first_rollback:
+  config:
+  deps: second_insert
+  type: RollbackNode
+third_insert:
+  config:
+    record_size: 70000
+    num_partitions_insert: 1
+    repeat_count: 1
+    num_records_insert: 100
+  type: InsertNode
+  deps: first_rollback
+first_upsert:
+  config:
+    record_size: 70000
+    num_partitions_upsert: 1
+    repeat_count: 1
+    num_records_upsert: 100
+  type: UpsertNode
+  deps: third_insert
 first_hive_sync:
   config:
     queue_name: "adhoc"
     engine: "mr"
   type: HiveSyncNode
-  deps: first_insert
+  deps: first_upsert
 first_hive_query:
   config:
     hive_props:
@@ -34,6 +62,8 @@ first_hive_query:
       prop3: "set hive.strict.checks.large.query=false"
       prop4: "set hive.stats.autogather=false"
     hive_queries:
+      query1: "select count(*) from testdb1.table1"
+      result1: 300
       query2: "select count(*) from testdb1.table1 group   by `_row_key` having count(*) > 1"
       result2: 0
   type: HiveQueryNode

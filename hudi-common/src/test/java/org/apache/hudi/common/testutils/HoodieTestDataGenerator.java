@@ -330,30 +330,42 @@ public class HoodieTestDataGenerator {
   }
 
   public static void createCommitFile(String basePath, String instantTime, Configuration configuration) {
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    createCommitFile(basePath, instantTime, configuration, commitMetadata);
+  }
+
+  public static void createCommitFile(String basePath, String instantTime, Configuration configuration, HoodieCommitMetadata commitMetadata) {
     Arrays.asList(HoodieTimeline.makeCommitFileName(instantTime), HoodieTimeline.makeInflightCommitFileName(instantTime),
         HoodieTimeline.makeRequestedCommitFileName(instantTime))
-        .forEach(f -> {
-          Path commitFile = new Path(
-              basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
-          FSDataOutputStream os = null;
-          try {
-            FileSystem fs = FSUtils.getFs(basePath, configuration);
-            os = fs.create(commitFile, true);
-            HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
-            // Write empty commit metadata
-            os.writeBytes(new String(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-          } catch (IOException ioe) {
-            throw new HoodieIOException(ioe.getMessage(), ioe);
-          } finally {
-            if (null != os) {
-              try {
-                os.close();
-              } catch (IOException e) {
-                throw new HoodieIOException(e.getMessage(), e);
-              }
-            }
-          }
-        });
+        .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
+  }
+
+  private static void createMetadataFile(String f, String basePath, Configuration configuration, HoodieCommitMetadata commitMetadata) {
+    Path commitFile = new Path(
+        basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
+    FSDataOutputStream os = null;
+    try {
+      FileSystem fs = FSUtils.getFs(basePath, configuration);
+      os = fs.create(commitFile, true);
+      // Write empty commit metadata
+      os.writeBytes(new String(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
+    } finally {
+      if (null != os) {
+        try {
+          os.close();
+        } catch (IOException e) {
+          throw new HoodieIOException(e.getMessage(), e);
+        }
+      }
+    }
+  }
+
+  public static void createReplaceFile(String basePath, String instantTime, Configuration configuration, HoodieCommitMetadata commitMetadata) {
+    Arrays.asList(HoodieTimeline.makeReplaceFileName(instantTime), HoodieTimeline.makeInflightReplaceFileName(instantTime),
+        HoodieTimeline.makeRequestedReplaceFileName(instantTime))
+        .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
   }
 
   public static void createEmptyCleanRequestedFile(String basePath, String instantTime, Configuration configuration)
@@ -382,9 +394,9 @@ public class HoodieTestDataGenerator {
         new Path(basePath + "/" + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + "/" + instant.getFileName());
     FileSystem fs = FSUtils.getFs(basePath, configuration);
     try (FSDataOutputStream os = fs.create(commitFile, true)) {
-      HoodieCompactionPlan workload = new HoodieCompactionPlan();
+      HoodieCompactionPlan workload = HoodieCompactionPlan.newBuilder().setVersion(1).build();
       // Write empty commit metadata
-      os.writeBytes(new String(TimelineMetadataUtils.serializeCompactionPlan(workload).get(), StandardCharsets.UTF_8));
+      os.write(TimelineMetadataUtils.serializeCompactionPlan(workload).get());
     }
   }
 
@@ -437,6 +449,10 @@ public class HoodieTestDataGenerator {
       throw new HoodieIOException("n must greater then partitionPaths length");
     }
     return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, true).collect(Collectors.toList());
+  }
+
+  public List<HoodieRecord> generateInsertsForPartition(String instantTime, Integer n, String partition) {
+    return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, false, () -> partition, () -> UUID.randomUUID().toString()).collect(Collectors.toList());
   }
 
   public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions) {

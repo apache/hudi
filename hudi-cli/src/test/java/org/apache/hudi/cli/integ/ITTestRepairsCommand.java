@@ -87,7 +87,7 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
     testTable.addCommit("20160401010101")
         .withInserts(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "1", hoodieRecords1)
         .withInserts(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, "2", hoodieRecords2)
-        .withLogFile(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
+        .getFileIdWithLogFile(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
 
     testTable.withInserts(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, "4", hoodieRecords1)
             .withInserts(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, "6", hoodieRecords1);

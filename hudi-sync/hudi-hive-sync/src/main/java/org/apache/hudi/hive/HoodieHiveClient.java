@@ -38,7 +38,6 @@ import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
-import org.apache.hive.jdbc.HiveDriver;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -62,17 +61,7 @@ import java.util.stream.Collectors;
 public class HoodieHiveClient extends AbstractSyncHoodieClient {
 
   private static final String HOODIE_LAST_COMMIT_TIME_SYNC = "last_commit_time_sync";
-  // Make sure we have the hive JDBC driver in classpath
-  private static String driverName = HiveDriver.class.getName();
   private static final String HIVE_ESCAPE_CHARACTER = HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
-
-  static {
-    try {
-      Class.forName(driverName);
-    } catch (ClassNotFoundException e) {
-      throw new IllegalStateException("Could not find " + driverName + " in classpath. ", e);
-    }
-  }
 
   private static final Logger LOG = LogManager.getLogger(HoodieHiveClient.class);
   private final PartitionValueExtractor partitionValueExtractor;
@@ -239,7 +228,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
 
   void updateTableDefinition(String tableName, MessageType newSchema) {
     try {
-      String newSchemaStr = HiveSchemaUtil.generateSchemaString(newSchema, syncConfig.partitionFields);
+      String newSchemaStr = HiveSchemaUtil.generateSchemaString(newSchema, syncConfig.partitionFields, syncConfig.supportTimestamp);
       // Cascade clause should not be present for non-partitioned tables
       String cascadeClause = syncConfig.partitionFields.size() > 0 ? " cascade" : "";
       StringBuilder sqlBuilder = new StringBuilder("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)
@@ -426,7 +415,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   private void createHiveConnection() {
     if (connection == null) {
       try {
-        Class.forName(HiveDriver.class.getCanonicalName());
+        Class.forName("org.apache.hive.jdbc.HiveDriver");
       } catch (ClassNotFoundException e) {
         LOG.error("Unable to load Hive driver class", e);
         return;

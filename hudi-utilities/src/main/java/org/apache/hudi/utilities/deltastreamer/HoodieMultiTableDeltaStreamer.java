@@ -22,6 +22,8 @@ import com.beust.jcommander.Parameter;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -68,7 +70,7 @@ public class HoodieMultiTableDeltaStreamer {
     this.jssc = jssc;
     String commonPropsFile = config.propsFilePath;
     String configFolder = config.configFolder;
-    ValidationUtils.checkArgument(!config.filterDupes || config.operation != HoodieDeltaStreamer.Operation.UPSERT,
+    ValidationUtils.checkArgument(!config.filterDupes || config.operation != WriteOperationType.UPSERT,
         "'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed.");
     FileSystem fs = FSUtils.getFs(commonPropsFile, jssc.hadoopConfiguration());
     configFolder = configFolder.charAt(configFolder.length() - 1) == '/' ? configFolder.substring(0, configFolder.length() - 1) : configFolder;
@@ -267,7 +269,7 @@ public class HoodieMultiTableDeltaStreamer {
 
     @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT (use when input "
         + "is purely new data/inserts to gain speed)", converter = HoodieDeltaStreamer.OperationConverter.class)
-    public HoodieDeltaStreamer.Operation operation = HoodieDeltaStreamer.Operation.UPSERT;
+    public WriteOperationType operation = WriteOperationType.UPSERT;
 
     @Parameter(names = {"--filter-dupes"},
         description = "Should duplicate records from source be dropped/filtered out before insert/bulk-insert")
@@ -351,7 +353,7 @@ public class HoodieMultiTableDeltaStreamer {
   public void sync() {
     for (TableExecutionContext context : tableExecutionContexts) {
       try {
-        new HoodieDeltaStreamer(context.getConfig(), jssc, context.getProperties()).sync();
+        new HoodieDeltaStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties())).sync();
         successTables.add(Helpers.getTableWithDatabase(context));
       } catch (Exception e) {
         logger.error("error while running MultiTableDeltaStreamer for table: " + context.getTableName(), e);

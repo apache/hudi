@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.hive.HiveSyncTool
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
 import org.apache.hudi.keygen.SimpleKeyGenerator
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.log4j.LogManager
 
 /**
@@ -80,9 +81,13 @@ object DataSourceReadOptions {
     val translation = Map(VIEW_TYPE_READ_OPTIMIZED_OPT_VAL -> QUERY_TYPE_SNAPSHOT_OPT_VAL,
                           VIEW_TYPE_INCREMENTAL_OPT_VAL -> QUERY_TYPE_INCREMENTAL_OPT_VAL,
                           VIEW_TYPE_REALTIME_OPT_VAL -> QUERY_TYPE_SNAPSHOT_OPT_VAL)
-    if (optParams.contains(VIEW_TYPE_OPT_KEY) && !optParams.contains(QUERY_TYPE_OPT_KEY)) {
-      log.warn(VIEW_TYPE_OPT_KEY + " is deprecated and will be removed in a later release. Please use " + QUERY_TYPE_OPT_KEY)
-      optParams ++ Map(QUERY_TYPE_OPT_KEY -> translation(optParams(VIEW_TYPE_OPT_KEY)))
+    if (!optParams.contains(QUERY_TYPE_OPT_KEY)) {
+      if (optParams.contains(VIEW_TYPE_OPT_KEY)) {
+        log.warn(VIEW_TYPE_OPT_KEY + " is deprecated and will be removed in a later release. Please use " + QUERY_TYPE_OPT_KEY)
+        optParams ++ Map(QUERY_TYPE_OPT_KEY -> translation(optParams(VIEW_TYPE_OPT_KEY)))
+      } else {
+        optParams ++ Map(QUERY_TYPE_OPT_KEY -> DEFAULT_QUERY_TYPE_OPT_VAL)
+      }
     } else {
       optParams
     }
@@ -107,6 +112,15 @@ object DataSourceReadOptions {
     *
     */
   val END_INSTANTTIME_OPT_KEY = "hoodie.datasource.read.end.instanttime"
+
+  /**
+    * If use the end instant schema when incrementally fetched data to.
+    *
+    * Default: false (use latest instant schema)
+    *
+    */
+  val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY = "hoodie.datasource.read.schema.use.end.instanttime"
+  val DEFAULT_INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_VAL = "false"
 
   /**
     * For use-cases like DeltaStreamer which reads from Hoodie Incremental table and applies opaque map functions,
@@ -142,6 +156,8 @@ object DataSourceWriteOptions {
   val UPSERT_OPERATION_OPT_VAL = WriteOperationType.UPSERT.value
   val DELETE_OPERATION_OPT_VAL = WriteOperationType.DELETE.value
   val BOOTSTRAP_OPERATION_OPT_VAL = WriteOperationType.BOOTSTRAP.value
+  val INSERT_OVERWRITE_OPERATION_OPT_VAL = WriteOperationType.INSERT_OVERWRITE.value
+  val INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL = WriteOperationType.INSERT_OVERWRITE_TABLE.value
   val DEFAULT_OPERATION_OPT_VAL = UPSERT_OPERATION_OPT_VAL
 
   /**
@@ -203,14 +219,14 @@ object DataSourceWriteOptions {
     * the dot notation eg: `a.b.c`
     *
     */
-  val RECORDKEY_FIELD_OPT_KEY = "hoodie.datasource.write.recordkey.field"
+  val RECORDKEY_FIELD_OPT_KEY = KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY
   val DEFAULT_RECORDKEY_FIELD_OPT_VAL = "uuid"
 
   /**
     * Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`. Actual
     * value ontained by invoking .toString()
     */
-  val PARTITIONPATH_FIELD_OPT_KEY = "hoodie.datasource.write.partitionpath.field"
+  val PARTITIONPATH_FIELD_OPT_KEY = KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY
   val DEFAULT_PARTITIONPATH_FIELD_OPT_VAL = "partitionpath"
 
   /**
@@ -218,10 +234,10 @@ object DataSourceWriteOptions {
     * If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.
     * By default false (the names of partition folders are only partition values)
     */
-  val HIVE_STYLE_PARTITIONING_OPT_KEY = "hoodie.datasource.write.hive_style_partitioning"
-  val DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL = "false"
-  val URL_ENCODE_PARTITIONING_OPT_KEY = "hoodie.datasource.write.partitionpath.urlencode"
-  val DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL = "false"
+  val HIVE_STYLE_PARTITIONING_OPT_KEY = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY
+  val DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL = KeyGeneratorOptions.DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL
+  val URL_ENCODE_PARTITIONING_OPT_KEY = KeyGeneratorOptions.URL_ENCODE_PARTITIONING_OPT_KEY
+  val DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL = KeyGeneratorOptions.DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL
   /**
     * Key generator class, that implements will extract the key out of incoming record
     *
@@ -292,6 +308,7 @@ object DataSourceWriteOptions {
   val HIVE_USE_JDBC_OPT_KEY = "hoodie.datasource.hive_sync.use_jdbc"
   val HIVE_AUTO_CREATE_DATABASE_OPT_KEY = "hoodie.datasource.hive_sync.auto_create_database"
   val HIVE_SKIP_RO_SUFFIX = "hoodie.datasource.hive_sync.skip_ro_suffix"
+  val HIVE_SUPPORT_TIMESTAMP = "hoodie.datasource.hive_sync.support_timestamp"
 
   // DEFAULT FOR HIVE SPECIFIC CONFIGS
   val DEFAULT_HIVE_SYNC_ENABLED_OPT_VAL = "false"
@@ -309,6 +326,7 @@ object DataSourceWriteOptions {
   val DEFAULT_HIVE_USE_JDBC_OPT_VAL = "true"
   val DEFAULT_HIVE_AUTO_CREATE_DATABASE_OPT_KEY = "true"
   val DEFAULT_HIVE_SKIP_RO_SUFFIX_VAL = "false"
+  val DEFAULT_HIVE_SUPPORT_TIMESTAMP = "false"
 
   // Async Compaction - Enabled by default for MOR
   val ASYNC_COMPACT_ENABLE_OPT_KEY = "hoodie.datasource.compaction.async.enable"

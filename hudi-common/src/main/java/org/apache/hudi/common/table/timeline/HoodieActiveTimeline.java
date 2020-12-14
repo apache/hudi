@@ -65,7 +65,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, REQUESTED_COMMIT_EXTENSION, DELTA_COMMIT_EXTENSION,
       INFLIGHT_DELTA_COMMIT_EXTENSION, REQUESTED_DELTA_COMMIT_EXTENSION, SAVEPOINT_EXTENSION,
       INFLIGHT_SAVEPOINT_EXTENSION, CLEAN_EXTENSION, REQUESTED_CLEAN_EXTENSION, INFLIGHT_CLEAN_EXTENSION,
-      INFLIGHT_COMPACTION_EXTENSION, REQUESTED_COMPACTION_EXTENSION, INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION));
+      INFLIGHT_COMPACTION_EXTENSION, REQUESTED_COMPACTION_EXTENSION, INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION,
+      REQUESTED_REPLACE_COMMIT_EXTENSION, INFLIGHT_REPLACE_COMMIT_EXTENSION, REPLACE_COMMIT_EXTENSION));
 
   private static final Logger LOG = LogManager.getLogger(HoodieActiveTimeline.class);
   protected HoodieTableMetaClient metaClient;
@@ -304,6 +305,22 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     return inflight;
   }
 
+  /**
+   * Transition Clean State from inflight to Committed.
+   *
+   * @param inflightInstant Inflight instant
+   * @param data Extra Metadata
+   * @return commit instant
+   */
+  public HoodieInstant transitionReplaceInflightToComplete(HoodieInstant inflightInstant, Option<byte[]> data) {
+    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
+    ValidationUtils.checkArgument(inflightInstant.isInflight());
+    HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, REPLACE_COMMIT_ACTION, inflightInstant.getTimestamp());
+    // Then write to timeline
+    transitionState(inflightInstant, commitInstant, data);
+    return commitInstant;
+  }
+
   private void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data) {
     transitionState(fromInstant, toInstant, data, false);
   }
@@ -393,6 +410,14 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     // Write workload to auxiliary folder
     createFileInAuxiliaryFolder(instant, content);
     createFileInMetaPath(instant.getFileName(), content, overwrite);
+  }
+
+  /**
+   * Saves content for inflight/requested REPLACE instant.
+   */
+  public void saveToPendingReplaceCommit(HoodieInstant instant, Option<byte[]> content) {
+    ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
+    createFileInMetaPath(instant.getFileName(), content, false);
   }
 
   public void saveToCleanRequested(HoodieInstant instant, Option<byte[]> content) {

@@ -38,7 +38,7 @@ public class JsonDFSSource extends JsonSource {
   public JsonDFSSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    this.pathSelector = new DFSPathSelector(props, sparkContext.hadoopConfiguration());
+    this.pathSelector = DFSPathSelector.createSourceSelector(props, sparkContext.hadoopConfiguration());
   }
 
   @Override
