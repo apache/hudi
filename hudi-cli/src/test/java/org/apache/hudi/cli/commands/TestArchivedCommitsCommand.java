@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
 
 import org.junit.jupiter.api.AfterEach;
@@ -54,7 +55,7 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
   private String tablePath;
 
   @BeforeEach
-  public void init() throws IOException {
+  public void init() throws Exception {
     initDFS();
     jsc.hadoopConfiguration().addResource(dfs.getConf());
     HoodieCLI.conf = dfs.getConf();
@@ -92,8 +93,9 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
     metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
 
     // archive
-    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, hadoopConf);
-    archiveLog.archiveIfRequired(jsc);
+    HoodieSparkTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
+    archiveLog.archiveIfRequired(context);
   }
 
   @AfterEach
@@ -156,7 +158,7 @@ public class TestArchivedCommitsCommand extends AbstractShellIntegrationTest {
    * Test for command: show archived commits.
    */
   @Test
-  public void testShowCommits() throws IOException {
+  public void testShowCommits() throws Exception {
     CommandResult cr = getShell().executeCommand("show archived commits");
     assertTrue(cr.isSuccess());
     final List<Comparable[]> rows = new ArrayList<>();

@@ -18,17 +18,17 @@
 
 package org.apache.hudi.common.table.view;
 
-import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hudi.common.model.BootstrapBaseFileMapping;
+import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -63,6 +64,16 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
    * PartitionPath + File-Id to bootstrap base File (Index Only bootstrapped).
    */
   protected Map<HoodieFileGroupId, BootstrapBaseFileMapping> fgIdToBootstrapBaseFile;
+
+  /**
+   * Track replace time for replaced file groups.
+   */
+  protected Map<HoodieFileGroupId, HoodieInstant> fgIdToReplaceInstants;
+
+  /**
+   * Track file groups in pending clustering.
+   */
+  protected Map<HoodieFileGroupId, HoodieInstant> fgIdToPendingClustering;
 
   /**
    * Flag to determine if closed.
@@ -106,6 +117,8 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
     this.fgIdToPendingCompaction = null;
     this.partitionToFileGroupsMap = null;
     this.fgIdToBootstrapBaseFile = null;
+    this.fgIdToReplaceInstants = null;
+    this.fgIdToPendingClustering = null;
   }
 
   protected Map<String, List<HoodieFileGroup>> createPartitionToFileGroups() {
@@ -120,6 +133,16 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   protected Map<HoodieFileGroupId, BootstrapBaseFileMapping> createFileIdToBootstrapBaseFileMap(
       Map<HoodieFileGroupId, BootstrapBaseFileMapping> fileGroupIdBootstrapBaseFileMap) {
     return fileGroupIdBootstrapBaseFileMap;
+  }
+
+  protected Map<HoodieFileGroupId, HoodieInstant> createFileIdToReplaceInstantMap(final Map<HoodieFileGroupId, HoodieInstant> replacedFileGroups) {
+    Map<HoodieFileGroupId, HoodieInstant> replacedFileGroupsMap = new ConcurrentHashMap<>(replacedFileGroups);
+    return replacedFileGroupsMap;
+  }
+
+  protected Map<HoodieFileGroupId, HoodieInstant> createFileIdToPendingClusteringMap(final Map<HoodieFileGroupId, HoodieInstant> fileGroupsInClustering) {
+    Map<HoodieFileGroupId, HoodieInstant> fgInpendingClustering = new ConcurrentHashMap<>(fileGroupsInClustering);
+    return fgInpendingClustering;
   }
 
   /**
@@ -174,6 +197,49 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
           "Trying to remove a FileGroupId which is not found in pending compaction operations. FgId :"
               + opInstantPair.getValue().getFileGroupId());
       fgIdToPendingCompaction.remove(opInstantPair.getValue().getFileGroupId());
+    });
+  }
+
+  @Override
+  protected boolean isPendingClusteringScheduledForFileId(HoodieFileGroupId fgId) {
+    return fgIdToPendingClustering.containsKey(fgId);
+  }
+
+  @Override
+  protected Option<HoodieInstant> getPendingClusteringInstant(HoodieFileGroupId fgId) {
+    return Option.ofNullable(fgIdToPendingClustering.get(fgId));
+  }
+
+  @Override
+  protected Stream<Pair<HoodieFileGroupId, HoodieInstant>> fetchFileGroupsInPendingClustering() {
+    return fgIdToPendingClustering.entrySet().stream().map(entry -> Pair.of(entry.getKey(), entry.getValue()));
+  }
+
+  @Override
+  void resetFileGroupsInPendingClustering(Map<HoodieFileGroupId, HoodieInstant> fgIdToInstantMap) {
+    fgIdToPendingClustering = createFileIdToPendingClusteringMap(fgIdToInstantMap);
+  }
+
+  @Override
+  void addFileGroupsInPendingClustering(Stream<Pair<HoodieFileGroupId, HoodieInstant>> fileGroups) {
+    fileGroups.forEach(fileGroupInstantPair -> {
+      ValidationUtils.checkArgument(fgIdToPendingClustering.containsKey(fileGroupInstantPair.getLeft()),
+          "Trying to add a FileGroupId which is already in pending clustering operation. FgId :"
+              + fileGroupInstantPair.getLeft() + ", new instant: " + fileGroupInstantPair.getRight() + ", existing instant "
+              + fgIdToPendingClustering.get(fileGroupInstantPair.getLeft()));
+
+      fgIdToPendingClustering.put(fileGroupInstantPair.getLeft(), fileGroupInstantPair.getRight());
+    });
+  }
+
+  @Override
+  void removeFileGroupsInPendingClustering(Stream<Pair<HoodieFileGroupId, HoodieInstant>> fileGroups) {
+    fileGroups.forEach(fileGroupInstantPair -> {
+      ValidationUtils.checkArgument(fgIdToPendingClustering.containsKey(fileGroupInstantPair.getLeft()),
+          "Trying to remove a FileGroupId which is not found in pending clustering operation. FgId :"
+              + fileGroupInstantPair.getLeft() + ", new instant: " + fileGroupInstantPair.getRight());
+
+      fgIdToPendingClustering.remove(fileGroupInstantPair.getLeft());
     });
   }
 
@@ -262,12 +328,33 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   }
 
   @Override
+  protected void resetReplacedFileGroups(final Map<HoodieFileGroupId, HoodieInstant> replacedFileGroups) {
+    fgIdToReplaceInstants = createFileIdToReplaceInstantMap(replacedFileGroups);
+  }
+
+  @Override
+  protected void addReplacedFileGroups(final Map<HoodieFileGroupId, HoodieInstant> replacedFileGroups) {
+    fgIdToReplaceInstants.putAll(replacedFileGroups);
+  }
+
+  @Override
+  protected void removeReplacedFileIdsAtInstants(Set<String> instants) {
+    fgIdToReplaceInstants.entrySet().removeIf(entry -> instants.contains(entry.getValue().getTimestamp()));
+  }
+
+  @Override
+  protected Option<HoodieInstant> getReplaceInstant(final HoodieFileGroupId fileGroupId) {
+    return Option.ofNullable(fgIdToReplaceInstants.get(fileGroupId));
+  }
+
+  @Override
   public void close() {
     closed = true;
     super.reset();
     partitionToFileGroupsMap = null;
     fgIdToPendingCompaction = null;
     fgIdToBootstrapBaseFile = null;
+    fgIdToReplaceInstants = null;
   }
 
   @Override

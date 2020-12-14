@@ -63,17 +63,18 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     // NOTE: HoodieCompactedLogRecordScanner will not return records for an in-flight commit
     // but can return records for completed commits > the commit we are trying to read (if using
     // readCommit() API)
-    return new HoodieMergedLogRecordScanner(
-        FSUtils.getFs(split.getPath().toString(), jobConf),
-        split.getBasePath(),
-        split.getDeltaLogPaths(),
-        usesCustomPayload ? getWriterSchema() : getReaderSchema(),
-        split.getMaxCommitTime(),
-        HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes(jobConf),
-        Boolean.parseBoolean(jobConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)),
-        false,
-        jobConf.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE),
-        jobConf.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP, HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH));
+    return HoodieMergedLogRecordScanner.newBuilder()
+        .withFileSystem(FSUtils.getFs(split.getPath().toString(), jobConf))
+        .withBasePath(split.getBasePath())
+        .withLogFilePaths(split.getDeltaLogPaths())
+        .withReaderSchema(usesCustomPayload ? getWriterSchema() : getReaderSchema())
+        .withLatestInstantTime(split.getMaxCommitTime())
+        .withMaxMemorySizeInBytes(HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes(jobConf))
+        .withReadBlocksLazily(Boolean.parseBoolean(jobConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)))
+        .withReverseReader(false)
+        .withBufferSize(jobConf.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
+        .withSpillableMapBasePath(jobConf.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP, HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
+        .build();
   }
 
   @Override
@@ -84,7 +85,8 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     if (!result) {
       // if the result is false, then there are no more records
       return false;
-    } else {
+    }
+    if (!deltaRecordMap.isEmpty()) {
       // TODO(VC): Right now, we assume all records in log, have a matching base record. (which
       // would be true until we have a way to index logs too)
       // return from delta records map if we have some match.
@@ -134,8 +136,8 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
           throw new RuntimeException(errMsg, re);
         }
       }
-      return true;
     }
+    return true;
   }
 
   @Override

@@ -29,17 +29,17 @@ public class BootstrapFileMapping implements Serializable, Comparable<BootstrapF
 
   private final String bootstrapBasePath;
   private final String bootstrapPartitionPath;
-  private final HoodieFileStatus boostrapFileStatus;
+  private final HoodieFileStatus bootstrapFileStatus;
 
   private final String partitionPath;
   private final String fileId;
 
   public BootstrapFileMapping(String bootstrapBasePath, String bootstrapPartitionPath, String partitionPath,
-                              HoodieFileStatus boostrapFileStatus, String fileId) {
+                              HoodieFileStatus bootstrapFileStatus, String fileId) {
     this.bootstrapBasePath = bootstrapBasePath;
     this.bootstrapPartitionPath = bootstrapPartitionPath;
     this.partitionPath = partitionPath;
-    this.boostrapFileStatus = boostrapFileStatus;
+    this.bootstrapFileStatus = bootstrapFileStatus;
     this.fileId = fileId;
   }
 
@@ -48,7 +48,7 @@ public class BootstrapFileMapping implements Serializable, Comparable<BootstrapF
     return "BootstrapFileMapping{"
         + "bootstrapBasePath='" + bootstrapBasePath + '\''
         + ", bootstrapPartitionPath='" + bootstrapPartitionPath + '\''
-        + ", boostrapFileStatus=" + boostrapFileStatus
+        + ", bootstrapFileStatus=" + bootstrapFileStatus
         + ", partitionPath='" + partitionPath + '\''
         + ", fileId='" + fileId + '\''
         + '}';
@@ -66,13 +66,13 @@ public class BootstrapFileMapping implements Serializable, Comparable<BootstrapF
     return Objects.equals(bootstrapBasePath, mapping.bootstrapBasePath)
         && Objects.equals(bootstrapPartitionPath, mapping.bootstrapPartitionPath)
         && Objects.equals(partitionPath, mapping.partitionPath)
-        && Objects.equals(boostrapFileStatus, mapping.boostrapFileStatus)
+        && Objects.equals(bootstrapFileStatus, mapping.bootstrapFileStatus)
         && Objects.equals(fileId, mapping.fileId);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(bootstrapBasePath, bootstrapPartitionPath, partitionPath, boostrapFileStatus, fileId);
+    return Objects.hash(bootstrapBasePath, bootstrapPartitionPath, partitionPath, bootstrapFileStatus, fileId);
   }
 
   public String getBootstrapBasePath() {
@@ -87,8 +87,8 @@ public class BootstrapFileMapping implements Serializable, Comparable<BootstrapF
     return partitionPath;
   }
 
-  public HoodieFileStatus getBoostrapFileStatus() {
-    return boostrapFileStatus;
+  public HoodieFileStatus getBootstrapFileStatus() {
+    return bootstrapFileStatus;
   }
 
   public String getFileId() {

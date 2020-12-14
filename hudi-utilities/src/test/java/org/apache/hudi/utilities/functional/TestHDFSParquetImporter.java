@@ -160,12 +160,12 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
 
     List<Row> readData = ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon").collectAsList();
     List<HoodieTripModel> result = readData.stream().map(row ->
-        new HoodieTripModel(row.getDouble(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
+        new HoodieTripModel(row.getLong(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
             row.getDouble(5), row.getDouble(6), row.getDouble(7)))
         .collect(Collectors.toList());
 
     List<HoodieTripModel> expected = insertData.stream().map(g ->
-        new HoodieTripModel(Double.parseDouble(g.get("timestamp").toString()),
+        new HoodieTripModel(Long.parseLong(g.get("timestamp").toString()),
             g.get("_row_key").toString(),
             g.get("rider").toString(),
             g.get("driver").toString(),
@@ -207,13 +207,13 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
 
     List<Row> readData = ds.select("timestamp", "_row_key", "rider", "driver", "begin_lat", "begin_lon", "end_lat", "end_lon").collectAsList();
     List<HoodieTripModel> result = readData.stream().map(row ->
-        new HoodieTripModel(row.getDouble(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
+        new HoodieTripModel(row.getLong(0), row.getString(1), row.getString(2), row.getString(3), row.getDouble(4),
             row.getDouble(5), row.getDouble(6), row.getDouble(7)))
         .collect(Collectors.toList());
 
     // get expected result.
     List<HoodieTripModel> expected = expectData.stream().map(g ->
-        new HoodieTripModel(Double.parseDouble(g.get("timestamp").toString()),
+        new HoodieTripModel(Long.parseLong(g.get("timestamp").toString()),
             g.get("_row_key").toString(),
             g.get("rider").toString(),
             g.get("driver").toString(),
@@ -336,7 +336,7 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
    */
   public static class HoodieTripModel {
 
-    double timestamp;
+    long timestamp;
     String rowKey;
     String rider;
     String driver;
@@ -345,7 +345,7 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
     double endLat;
     double endLon;
 
-    public HoodieTripModel(double timestamp, String rowKey, String rider, String driver, double beginLat,
+    public HoodieTripModel(long timestamp, String rowKey, String rider, String driver, double beginLat,
         double beginLon, double endLat, double endLon) {
       this.timestamp = timestamp;
       this.rowKey = rowKey;

@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
@@ -104,7 +105,6 @@ public abstract class AbstractHoodieLogRecordScanner {
   // Progress
   private float progress = 0.0f;
 
-  // TODO (NA) - Change this to a builder, this constructor is too long
   public AbstractHoodieLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
       String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize) {
     this.readerSchema = readerSchema;
@@ -242,9 +242,12 @@ public abstract class AbstractHoodieLogRecordScanner {
       }
       // Done
       progress = 1.0f;
+    } catch (IOException e) {
+      LOG.error("Got IOException when reading log file", e);
+      throw new HoodieIOException("IOException when reading log file ", e);
     } catch (Exception e) {
       LOG.error("Got exception when reading log file", e);
-      throw new HoodieIOException("IOException when reading log file ");
+      throw new HoodieException("Exception when reading log file ", e);
     } finally {
       try {
         if (null != logFormatReaderWrapper) {
@@ -353,5 +356,29 @@ public abstract class AbstractHoodieLogRecordScanner {
 
   public long getTotalCorruptBlocks() {
     return totalCorruptBlocks.get();
+  }
+
+  /**
+   * Builder used to build {@code AbstractHoodieLogRecordScanner}.
+   */
+  public abstract static class Builder {
+
+    public abstract Builder withFileSystem(FileSystem fs);
+
+    public abstract Builder withBasePath(String basePath);
+
+    public abstract Builder withLogFilePaths(List<String> logFilePaths);
+
+    public abstract Builder withReaderSchema(Schema schema);
+
+    public abstract Builder withLatestInstantTime(String latestInstantTime);
+
+    public abstract Builder withReadBlocksLazily(boolean readBlocksLazily);
+
+    public abstract Builder withReverseReader(boolean reverseReader);
+
+    public abstract Builder withBufferSize(int bufferSize);
+
+    public abstract AbstractHoodieLogRecordScanner build();
   }
 }

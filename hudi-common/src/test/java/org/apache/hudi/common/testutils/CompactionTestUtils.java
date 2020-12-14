@@ -20,7 +20,6 @@ package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -33,11 +32,12 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -49,6 +49,10 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createBaseFile;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createLogFile;
+import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -152,40 +156,36 @@ public class CompactionTestUtils {
         .transitionCompactionRequestedToInflight(new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, instantTime));
   }
 
-  public static HoodieCompactionPlan createCompactionPlan(HoodieTableMetaClient metaClient, String instantId,
-      String compactionInstantId, int numFileIds, boolean createDataFile, boolean deltaCommitsAfterCompactionRequests) {
+  public static HoodieCompactionPlan createCompactionPlan(HoodieTableMetaClient metaClient, String instantTime,
+      String compactionInstantTime, int numFileIds, boolean createDataFile, boolean deltaCommitsAfterCompactionRequests) {
     List<HoodieCompactionOperation> ops = IntStream.range(0, numFileIds).boxed().map(idx -> {
       try {
-        String fileId = UUID.randomUUID().toString();
+        final String basePath = metaClient.getBasePath();
+        final String partition = DEFAULT_PARTITION_PATHS[0];
+        final String fileId = UUID.randomUUID().toString();
         if (createDataFile) {
-          HoodieTestUtils.createDataFile(metaClient.getBasePath(), DEFAULT_PARTITION_PATHS[0], instantId, fileId);
+          createBaseFile(basePath, partition, instantTime, fileId);
         }
-        HoodieTestUtils.createNewLogFile(metaClient.getFs(), metaClient.getBasePath(), DEFAULT_PARTITION_PATHS[0],
-            instantId, fileId, Option.of(1));
-        HoodieTestUtils.createNewLogFile(metaClient.getFs(), metaClient.getBasePath(), DEFAULT_PARTITION_PATHS[0],
-            instantId, fileId, Option.of(2));
-        FileSlice slice = new FileSlice(DEFAULT_PARTITION_PATHS[0], instantId, fileId);
+        createLogFile(basePath, partition, instantTime, fileId, 1);
+        createLogFile(basePath, partition, instantTime, fileId, 2);
+        FileSlice slice = new FileSlice(partition, instantTime, fileId);
         if (createDataFile) {
-          slice.setBaseFile(new TestHoodieBaseFile(metaClient.getBasePath() + "/" + DEFAULT_PARTITION_PATHS[0] + "/"
-              + FSUtils.makeDataFileName(instantId, TEST_WRITE_TOKEN, fileId)));
+          slice.setBaseFile(new DummyHoodieBaseFile(Paths.get(basePath, partition,
+              baseFileName(instantTime, fileId)).toString()));
         }
-        String logFilePath1 = HoodieTestUtils.getLogFilePath(metaClient.getBasePath(), DEFAULT_PARTITION_PATHS[0],
-            instantId, fileId, Option.of(1));
-        String logFilePath2 = HoodieTestUtils.getLogFilePath(metaClient.getBasePath(), DEFAULT_PARTITION_PATHS[0],
-            instantId, fileId, Option.of(2));
+        String logFilePath1 = Paths.get(basePath, partition, logFileName(instantTime, fileId, 1)).toString();
+        String logFilePath2 = Paths.get(basePath, partition, logFileName(instantTime, fileId, 2)).toString();
         slice.addLogFile(new HoodieLogFile(new Path(logFilePath1)));
         slice.addLogFile(new HoodieLogFile(new Path(logFilePath2)));
         HoodieCompactionOperation op =
-            CompactionUtils.buildFromFileSlice(DEFAULT_PARTITION_PATHS[0], slice, Option.empty());
+            CompactionUtils.buildFromFileSlice(partition, slice, Option.empty());
         if (deltaCommitsAfterCompactionRequests) {
-          HoodieTestUtils.createNewLogFile(metaClient.getFs(), metaClient.getBasePath(), DEFAULT_PARTITION_PATHS[0],
-              compactionInstantId, fileId, Option.of(1));
-          HoodieTestUtils.createNewLogFile(metaClient.getFs(), metaClient.getBasePath(), DEFAULT_PARTITION_PATHS[0],
-              compactionInstantId, fileId, Option.of(2));
+          createLogFile(basePath, partition, compactionInstantTime, fileId, 1);
+          createLogFile(basePath, partition, compactionInstantTime, fileId, 2);
         }
         return op;
-      } catch (IOException e) {
-        throw new HoodieIOException(e.getMessage(), e);
+      } catch (Exception e) {
+        throw new HoodieException(e.getMessage(), e);
       }
     }).collect(Collectors.toList());
     return new HoodieCompactionPlan(ops.isEmpty() ? null : ops, new HashMap<>(),
@@ -195,11 +195,11 @@ public class CompactionTestUtils {
   /**
    * The hoodie data file for testing.
    */
-  public static class TestHoodieBaseFile extends HoodieBaseFile {
+  public static class DummyHoodieBaseFile extends HoodieBaseFile {
 
     private final String path;
 
-    public TestHoodieBaseFile(String path) {
+    public DummyHoodieBaseFile(String path) {
       super(path);
       this.path = path;
     }

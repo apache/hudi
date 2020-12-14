@@ -156,7 +156,7 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
           assertEquals(x.getFileId(), res.getFileId());
           assertEquals(x.getPartitionPath(), res.getPartitionPath());
           assertEquals(BOOTSTRAP_BASE_PATH, res.getBootstrapBasePath());
-          assertEquals(x.getBoostrapFileStatus(), res.getBoostrapFileStatus());
+          assertEquals(x.getBootstrapFileStatus(), res.getBootstrapFileStatus());
           assertEquals(x.getBootstrapPartitionPath(), res.getBootstrapPartitionPath());
         });
       });

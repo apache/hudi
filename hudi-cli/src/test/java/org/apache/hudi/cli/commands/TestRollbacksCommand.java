@@ -24,14 +24,14 @@ import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
-import org.apache.hudi.client.HoodieWriteClient;
+import org.apache.hudi.client.AbstractHoodieWriteClient;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -41,14 +41,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -59,39 +63,37 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestRollbacksCommand extends AbstractShellIntegrationTest {
 
   @BeforeEach
-  public void init() throws IOException {
+  public void init() throws Exception {
     String tableName = "test_table";
-    String tablePath = basePath + File.separator + tableName;
+    String tablePath = Paths.get(basePath, tableName).toString();
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.MERGE_ON_READ.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
-
+    metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
     //Create some commits files and parquet files
-    String commitTime1 = "100";
-    String commitTime2 = "101";
-    String commitTime3 = "102";
-    HoodieTestDataGenerator.writePartitionMetadata(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, tablePath);
-
-    // two commit files
-    HoodieTestUtils.createCommitFiles(tablePath, commitTime1, commitTime2);
-    // one .inflight commit file
-    HoodieTestUtils.createInflightCommitFiles(tablePath, commitTime3);
-
-    // generate commit files for commits
-    for (String commitTime : Arrays.asList(commitTime1, commitTime2, commitTime3)) {
-      HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, commitTime, "file-1");
-      HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH, commitTime, "file-2");
-      HoodieTestUtils.createDataFile(tablePath, HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, commitTime, "file-3");
-    }
-
+    Map<String, String> partitionAndFileId = new HashMap<String, String>() {
+      {
+        put(DEFAULT_FIRST_PARTITION_PATH, "file-1");
+        put(DEFAULT_SECOND_PARTITION_PATH, "file-2");
+        put(DEFAULT_THIRD_PARTITION_PATH, "file-3");
+      }
+    };
+    HoodieTestTable.of(metaClient)
+        .withPartitionMetaFiles(DEFAULT_PARTITION_PATHS)
+        .addCommit("100")
+        .withBaseFilesInPartitions(partitionAndFileId)
+        .addCommit("101")
+        .withBaseFilesInPartitions(partitionAndFileId)
+        .addInflightCommit("102")
+        .withBaseFilesInPartitions(partitionAndFileId);
     // generate two rollback
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
-    try (HoodieWriteClient client = getHoodieWriteClient(config)) {
+    try (AbstractHoodieWriteClient client = getHoodieWriteClient(config)) {
       // Rollback inflight commit3 and commit2
-      client.rollback(commitTime3);
-      client.rollback(commitTime2);
+      client.rollback("102");
+      client.rollback("101");
     }
   }
 

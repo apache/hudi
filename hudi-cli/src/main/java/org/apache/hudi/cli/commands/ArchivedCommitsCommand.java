@@ -25,10 +25,12 @@ import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -63,7 +65,7 @@ public class ArchivedCommitsCommand implements CommandMarker {
       throws IOException {
     System.out.println("===============> Showing only " + limit + " archived commits <===============");
     String basePath = HoodieCLI.getTableMetaClient().getBasePath();
-    Path archivePath = new Path(basePath + "/.hoodie/.commits_.archive*");
+    Path archivePath = new Path(HoodieCLI.getTableMetaClient().getArchivePath() + "/.commits_.archive*");
     if (folder != null && !folder.isEmpty()) {
       archivePath = new Path(basePath + "/.hoodie/" + folder);
     }
@@ -138,9 +140,11 @@ public class ArchivedCommitsCommand implements CommandMarker {
       throws IOException {
 
     System.out.println("===============> Showing only " + limit + " archived commits <===============");
-    String basePath = HoodieCLI.getTableMetaClient().getBasePath();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    String basePath = metaClient.getBasePath();
+    Path archivePath = new Path(metaClient.getArchivePath() + "/.commits_.archive*");
     FileStatus[] fsStatuses =
-        FSUtils.getFs(basePath, HoodieCLI.conf).globStatus(new Path(basePath + "/.hoodie/.commits_.archive*"));
+        FSUtils.getFs(basePath, HoodieCLI.conf).globStatus(archivePath);
     List<Comparable[]> allCommits = new ArrayList<>();
     for (FileStatus fs : fsStatuses) {
       // read the archived file
@@ -169,49 +173,38 @@ public class ArchivedCommitsCommand implements CommandMarker {
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending, limit, headerOnly, allCommits);
   }
 
-  private Comparable[] readCommit(GenericRecord record, boolean skipMetadata) {
+  private Comparable[] commitDetail(GenericRecord record, String metadataName,
+                                    boolean skipMetadata) {
     List<Object> commitDetails = new ArrayList<>();
+    commitDetails.add(record.get("commitTime"));
+    commitDetails.add(record.get("actionType").toString());
+    if (!skipMetadata) {
+      commitDetails.add(Option.ofNullable(record.get(metadataName)).orElse("{}").toString());
+    }
+    return commitDetails.toArray(new Comparable[commitDetails.size()]);
+  }
+
+  private Comparable[] readCommit(GenericRecord record, boolean skipMetadata) {
     try {
       switch (record.get("actionType").toString()) {
-        case HoodieTimeline.CLEAN_ACTION: {
-          commitDetails.add(record.get("commitTime"));
-          commitDetails.add(record.get("actionType").toString());
-          if (!skipMetadata) {
-            commitDetails.add(record.get("hoodieCleanMetadata").toString());
-          }
-          break;
-        }
+        case HoodieTimeline.CLEAN_ACTION:
+          return commitDetail(record, "hoodieCleanMetadata", skipMetadata);
         case HoodieTimeline.COMMIT_ACTION:
-        case HoodieTimeline.DELTA_COMMIT_ACTION: {
-          commitDetails.add(record.get("commitTime"));
-          commitDetails.add(record.get("actionType").toString());
-          if (!skipMetadata) {
-            commitDetails.add(record.get("hoodieCommitMetadata").toString());
-          }
-          break;
+        case HoodieTimeline.DELTA_COMMIT_ACTION:
+          return commitDetail(record, "hoodieCommitMetadata", skipMetadata);
+        case HoodieTimeline.ROLLBACK_ACTION:
+          return commitDetail(record, "hoodieRollbackMetadata", skipMetadata);
+        case HoodieTimeline.SAVEPOINT_ACTION:
+          return commitDetail(record, "hoodieSavePointMetadata", skipMetadata);
+        case HoodieTimeline.COMPACTION_ACTION:
+          return commitDetail(record, "hoodieCompactionMetadata", skipMetadata);
+        default: {
+          return new Comparable[]{};
         }
-        case HoodieTimeline.ROLLBACK_ACTION: {
-          commitDetails.add(record.get("commitTime"));
-          commitDetails.add(record.get("actionType").toString());
-          if (!skipMetadata) {
-            commitDetails.add(record.get("hoodieRollbackMetadata").toString());
-          }
-          break;
-        }
-        case HoodieTimeline.SAVEPOINT_ACTION: {
-          commitDetails.add(record.get("commitTime"));
-          commitDetails.add(record.get("actionType").toString());
-          if (!skipMetadata) {
-            commitDetails.add(record.get("hoodieSavePointMetadata").toString());
-          }
-          break;
-        }
-        default:
-          return commitDetails.toArray(new Comparable[commitDetails.size()]);
       }
     } catch (Exception e) {
       e.printStackTrace();
+      return new Comparable[]{};
     }
-    return commitDetails.toArray(new Comparable[commitDetails.size()]);
   }
 }

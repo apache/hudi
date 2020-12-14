@@ -175,9 +175,23 @@ public class TableSchemaResolver {
    * @throws Exception
    */
   public Schema getTableAvroSchemaWithoutMetadataFields() throws Exception {
-    Option<Schema> schemaFromCommitMetadata = getTableSchemaFromCommitMetadata(false);
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    Option<Schema> schemaFromCommitMetadata = getTableSchemaFromCommitMetadata(timeline.lastInstant().get(), false);
     return schemaFromCommitMetadata.isPresent() ? schemaFromCommitMetadata.get() :
            HoodieAvroUtils.removeMetadataFields(getTableAvroSchemaFromDataFile());
+  }
+
+  /**
+   * Gets users data schema for a hoodie table in Avro format of the instant.
+   *
+   * @param instant will get the instant data schema
+   * @return  Avro user data schema
+   * @throws Exception
+   */
+  public Schema getTableAvroSchemaWithoutMetadataFields(HoodieInstant instant) throws Exception {
+    Option<Schema> schemaFromCommitMetadata = getTableSchemaFromCommitMetadata(instant, false);
+    return schemaFromCommitMetadata.isPresent() ? schemaFromCommitMetadata.get() :
+        HoodieAvroUtils.removeMetadataFields(getTableAvroSchemaFromDataFile());
   }
 
   /**
@@ -186,9 +200,20 @@ public class TableSchemaResolver {
    * @return Avro schema for this table
    */
   private Option<Schema> getTableSchemaFromCommitMetadata(boolean includeMetadataFields) {
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    return getTableSchemaFromCommitMetadata(timeline.lastInstant().get(), includeMetadataFields);
+  }
+
+
+  /**
+   * Gets the schema for a hoodie table in Avro format from the HoodieCommitMetadata of the instant.
+   *
+   * @return Avro schema for this table
+   */
+  private Option<Schema> getTableSchemaFromCommitMetadata(HoodieInstant instant, boolean includeMetadataFields) {
     try {
       HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-      byte[] data = timeline.getInstantDetails(timeline.lastInstant().get()).get();
+      byte[] data = timeline.getInstantDetails(instant).get();
       HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
       String existingSchemaStr = metadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY);
 

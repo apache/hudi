@@ -225,6 +225,10 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
     currentInMemoryMapSize = 0L;
   }
 
+  public void close() {
+    getDiskBasedMap().close();
+  }
+
   @Override
   public Set<T> keySet() {
     Set<T> keySet = new HashSet<T>();

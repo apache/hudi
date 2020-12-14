@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
@@ -164,4 +165,14 @@ public interface TableFileSystemView {
    * Timeline corresponding to the view.
    */
   HoodieTimeline getTimeline();
+
+  /**
+   * Stream all the replaced file groups before maxCommitTime.
+   */
+  Stream<HoodieFileGroup> getReplacedFileGroupsBeforeOrOn(String maxCommitTime, String partitionPath);
+
+  /**
+   * Filegroups that are in pending clustering.
+   */
+  Stream<Pair<HoodieFileGroupId, HoodieInstant>> getFileGroupsInPendingClustering();
 }

@@ -27,7 +27,7 @@ import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
 
 import com.codahale.metrics.Histogram;
@@ -66,23 +66,26 @@ public class TestStatsCommand extends AbstractShellIntegrationTest {
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
+    metaClient = HoodieCLI.getTableMetaClient();
   }
 
   /**
    * Test case for command 'stats wa'.
    */
   @Test
-  public void testWriteAmplificationStats() {
+  public void testWriteAmplificationStats() throws Exception {
     // generate data and metadata
     Map<String, Integer[]> data = new LinkedHashMap<>();
     data.put("100", new Integer[] {15, 10});
     data.put("101", new Integer[] {20, 10});
     data.put("102", new Integer[] {15, 15});
 
-    data.forEach((key, value) -> {
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, key, jsc.hadoopConfiguration(),
-          Option.of(value[0]), Option.of(value[1]));
-    });
+    for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
+      String k = entry.getKey();
+      Integer[] v = entry.getValue();
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, k, jsc.hadoopConfiguration(),
+          Option.of(v[0]), Option.of(v[1]));
+    }
 
     CommandResult cr = getShell().executeCommand("stats wa");
     assertTrue(cr.isSuccess());
@@ -92,7 +95,7 @@ public class TestStatsCommand extends AbstractShellIntegrationTest {
     DecimalFormat df = new DecimalFormat("#.00");
     data.forEach((key, value) -> {
       // there are two partitions, so need to *2
-      rows.add(new Comparable[]{key, value[1] * 2, value[0] * 2, df.format((float) value[0] / value[1])});
+      rows.add(new Comparable[] {key, value[1] * 2, value[0] * 2, df.format((float) value[0] / value[1])});
     });
     int totalWrite = data.values().stream().map(integers -> integers[0] * 2).mapToInt(s -> s).sum();
     int totalUpdate = data.values().stream().map(integers -> integers[1] * 2).mapToInt(s -> s).sum();
@@ -112,7 +115,7 @@ public class TestStatsCommand extends AbstractShellIntegrationTest {
    * Test case for command 'stats filesizes'.
    */
   @Test
-  public void testFileSizeStats() throws IOException {
+  public void testFileSizeStats() throws Exception {
     String commit1 = "100";
     String commit2 = "101";
     Map<String, Integer[]> data = new LinkedHashMap<>();
@@ -124,18 +127,20 @@ public class TestStatsCommand extends AbstractShellIntegrationTest {
     String partition2 = HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
     String partition3 = HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
 
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
     Integer[] data1 = data.get(commit1);
     assertTrue(3 <= data1.length);
-    HoodieTestUtils.createNewDataFile(tablePath, partition1, commit1, data1[0]);
-    HoodieTestUtils.createNewDataFile(tablePath, partition2, commit1, data1[1]);
-    HoodieTestUtils.createNewDataFile(tablePath, partition3, commit1, data1[2]);
+    testTable.addCommit(commit1)
+        .withBaseFilesInPartition(partition1, data1[0])
+        .withBaseFilesInPartition(partition2, data1[1])
+        .withBaseFilesInPartition(partition3, data1[2]);
 
     Integer[] data2 = data.get(commit2);
     assertTrue(4 <= data2.length);
-    HoodieTestUtils.createNewDataFile(tablePath, partition1, commit2, data2[0]);
-    HoodieTestUtils.createNewDataFile(tablePath, partition2, commit2, data2[1]);
-    HoodieTestUtils.createNewDataFile(tablePath, partition2, commit2, data2[2]);
-    HoodieTestUtils.createNewDataFile(tablePath, partition3, commit2, data2[3]);
+    testTable.addCommit(commit2)
+        .withBaseFilesInPartition(partition1, data2[0])
+        .withBaseFilesInPartition(partition2, data2[1], data2[2])
+        .withBaseFilesInPartition(partition3, data2[3]);
 
     CommandResult cr = getShell().executeCommand("stats filesizes");
     assertTrue(cr.isSuccess());

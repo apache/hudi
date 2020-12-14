@@ -21,7 +21,7 @@
   "fields" : [
   {
     "name" : "timestamp",
-    "type" : "double"
+    "type" : "long"
   }, {
     "name" : "_row_key",
     "type" : "string"
@@ -46,6 +46,10 @@
   }, {
     "name" : "fare",
     "type" : "double"
+  }, {
+   "name" : "_hoodie_is_deleted",
+   "type" : "boolean",
+    "default" : false
   }, {
     "name" : "haversine_distance",
     "type" : "double"

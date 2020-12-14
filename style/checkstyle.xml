@@ -46,10 +46,12 @@
         <property name="file" value="${checkstyle.suppressions.file}" default="checkstyle-suppressions.xml"/>
         <property name="optional" value="true"/>
     </module>
+    <module name="SuppressWarningsFilter" />
     <module name="TreeWalker">
         <module name="AvoidNestedBlocks">
             <property name="allowInSwitchCase" value="true"/>
         </module>
+        <module name="SuppressWarningsHolder"/>
         <module name="OuterTypeFilename"/>
         <module name="IllegalTokenText">
             <property name="tokens" value="STRING_LITERAL, CHAR_LITERAL"/>
@@ -301,6 +303,11 @@
 
         <!-- Checks for simple boolean expressions. -->
         <module name="SimplifyBooleanExpression"/>
+
+        <module name="ImportControl">
+            <property name="file" value="style/import-control.xml"/>
+            <property name="path" value="^.*[\\/]hudi-client[\\/]hudi-client-common[\\/]src[\\/].*$"/>
+        </module>
 
     </module>
 </module>
