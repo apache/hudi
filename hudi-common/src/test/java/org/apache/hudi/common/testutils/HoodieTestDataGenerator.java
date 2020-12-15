@@ -124,7 +124,7 @@ public class HoodieTestDataGenerator {
       + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
 
   public static final String PARTIAL_TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"partialTripUberRec\",\"fields\":["
-          + "{\"name\":\"timestamp\",\"type\":\"double\"},{\"name\":\"_row_key\",\"type\":\"string\"}]}";
+          + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"}]}";
 
   public static final String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
   public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,double,double,double,double,int,bigint,float,binary,int,bigint,decimal(10,6),"
@@ -236,7 +236,7 @@ public class HoodieTestDataGenerator {
   }
 
   public PartialUpdatePayload generatePartialUpdatePayloadForPartialTripSchema(HoodieKey key, String commitTime) {
-    GenericRecord rec = generateRecordForPartialTripSchema(key.getRecordKey(), 1.0);
+    GenericRecord rec = generateRecordForPartialTripSchema(key.getRecordKey(), 1L);
     return new PartialUpdatePayload(rec, 0);
   }
 
@@ -332,7 +332,7 @@ public class HoodieTestDataGenerator {
     return rec;
   }
 
-  public GenericRecord generateRecordForPartialTripSchema(String rowKey, double timestamp) {
+  public GenericRecord generateRecordForPartialTripSchema(String rowKey, long timestamp) {
     GenericRecord rec = new GenericData.Record(PARTIAL_AVRO_TRIP_SCHEMA);
     rec.put("_row_key", rowKey);
     rec.put("timestamp", timestamp);

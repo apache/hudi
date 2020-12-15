@@ -78,7 +78,7 @@ public class TestHoodiePartialUpdate extends HoodieClientTestBase {
     for (GenericRecord record : records1) {
       assertEquals("rider-" + commitTime1, record.get("rider").toString());
       assertEquals("driver-" + commitTime1, record.get("driver").toString());
-      assertEquals(String.valueOf(1.0), record.get("timestamp").toString());
+      assertEquals(String.valueOf(1L), record.get("timestamp").toString());
     }
   }
 
