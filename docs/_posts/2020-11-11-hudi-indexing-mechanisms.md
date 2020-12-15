@@ -6,106 +6,75 @@ category: blog
 ---
 
 
-## 1. Introduction
-Hoodie employs index to find and update the location of incoming records during write operations. Hoodie index is a very critical piece in Hoodie as 
-it gives record level lookup support to Hudi for efficient write operations. This blog talks about different indices and when to use which one. 
+## Introduction
+Hudi employs index to find and update the location of incoming records during write operations. To be specific, index assist in differentiating 
+inserts vs updates. This blog talks about different indices and when to each of them.
 
-Hoodie dataset can be of two types in general, partitioned and non-partitioned. So, most index has two implementations one for partitioned 
-dataset and another for non-partitioned called as global index. 
+Hudi dataset can be of two types in general, partitioned and non-partitioned. So, most index has two implementations, one for partitioned dataset 
+and another for non-partitioned called as global index.
 
-These are the types of index supported by Hoodie as of now. 
+These are the types of index supported by Hudi as of now.
 
 - InMemory
 - Bloom
 - Simple
-- Hbase 
+- Hbase
 
-You could use “hoodie.index.type” to choose any of these indices. 
+You could use “hoodie.index.type” to choose any of these indices.
 
-### 1.1 Motivation
-Different workloads have different access patterns. Hudi supports different indexing schemes to cater to the needs of different workloads. 
-So depending on one’s use-case, indexing schema can be chosen.
-Each index goes over the use-case that it caters.
+## Different workloads
+Since data comes in at different volumes, velocity and has different access patterns, different indices could be used for different workloads. 
+Let’s walk through some of the typical workloads and see how to leverage Hudi index for such use-cases.
 
-Let's take a brief look at each of these indices.
+### Fact table
+These are typical primary table in a dimensional model. It contains measures or quantitative figures and is used for analysis and decision making. 
+For eg, trip tables in case of ride-sharing, user buying and selling of shares, or any other similar use-case can be categorized as fact tables. 
+These tables are usually ever growing with random updates on most recent data with long tail of older data. In other words, most updates go into 
+the latest partitions with few updates going to older ones.
 
-## 2. InMemory
-Stores an in memory hashmap of records to location mapping. Intended to be used for local testing. May no scale in a cluster as mapping is 
-stored in memory.
+![Fact table](/assets/images/blog/hudi-indexes/Hudi_Index_Blog_Fact_table.png)
+Figure showing the spread of updates for Fact table.
 
-## 3. Bloom
-Leverages bloom index stored with data files to find the location for the incoming records. This is the most commonly used Index in Hudi and is 
-the default one. On a high level, this does a range pruning followed by bloom look up. So, if the record keys are laid out such that it follows 
-some type of ordering like timestamps, then this will essentially cut down a lot of files to be looked up as bloom would have filtered out most 
-of the files. 
+Hudi "BLOOM" index is the way to go for these kinds of tables, since index look-up will prune a lot of data files. So, effectively actual look up will 
+happen only in a very few data files where the records are most likely present. This bloom index will also benefit a lot for use-cases where record 
+keys have some kind of ordering (timestamp) among them. File pruning will cut down a lot of data files to be looked up resulting in very fast look-up times.
+On a high level, bloom index does pruning based on ranges of data files, followed by bloom filter look up. Depending on the workload, this could 
+result in a lot of shuffling depending on the amount of data touched. Hudi is planning to support [record level indexing](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+08+%3A+Record+level+indexing+mechanisms+for+Hudi+datasets?src=contextnavpagetreemode) 
+which would support record level index look-ups. This will boost the index look up performance as it avoids these shuffling.
 
-For instance, consider a list of file slices in a partition with the following key ranges.
-```
-F1 : key_t0 to key_t10000
-F2 : key_t10001 to key_t20000
-F3 : key_t20001 to key_t30000
-F4 : key_t30001 to key_t40000
-F5 : key_t40001 to key_t50000
-```
+Many a times, users query using non-partitioned columns, and Hudi is looking to add support for [secondary indexes](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+15%3A+HUDI+File+Listing+and+Query+Planning+Improvements?src=contextnavpagetreemode) to cater 
+to such use-cases. Once this is available, queries based on secondary index should see a bump in their perf numbers.
 
-So, when looking up records ranging from key_t25000 to key_t28000, bloom will filter every file slice except F3 with range pruning. 
-First range pruning is done to cut down on files to be looked up, following which actual bloom look up is done. By default this is the index 
-type chosen.
+### Event table
+Events coming from kafka or similar message bus or event streams which is typically time series data and is huge in size. For eg, IoT event stream, click 
+streams, impressions etc. Inserts and updates span the last few partitions as these are mostly append only data. Also deduping is a common requirement 
+since events could come in from different sources. 
 
-It might be worth noting that range pruning is optional depending on your use-case. If your write batch is such that the records have no strict ordering in them 
-, but the pattern is such that mostly the recent partitions are updated with a long tail of updates/deletes to the older partitions, 
-then still bloom index speed up your write perf. So, better to turn off range pruning as it incurs the cost of checking w/o much benefit. 
+![Event table](/assets/images/blog/hudi-indexes/Hudi_Index_Blog_Event_table.png)
+Figure showing the spread of updates for Event table.
 
-## 4. Simple Index
-For a decent sized dataset with random ordering, Simple index comes in handy. In the bloom index discussed above, hoodie reads the file twice. 
-Once to load the file 
-range info and again to load the bloom filter. So, this simple index simplifies if the data is within reasonable size. 
+As you might have guessed, Hoodie "BLOOM" index is a good fit here as it could assist in pruning lot of data files to be looked up. And since hudi does support 
+deduping, such use-cases should find it beneficial to onboard to Hudi. As mentioned above, Hudi bloom index will do range lookup followed up bloom filter 
+lookup. As range lookup does incur latency to read all data file footers, Hudi is looking to leverage range information stored in [optimized 
+metadata](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+15%3A+HUDI+File+Listing+and+Query+Planning+Improvements) at O(1). Once this is integrated, 
+we expect the index lookups to be much more fast.
 
-Baisc idea here is that, all file slices will be read for interested fiedls (record key, partition path and location) and joined 
-with incoming records to find the tag location. 
+### Dimensions table
+These types of tables usually contain high dimensional data and hold reference data. These are high fidelity data and the updates are often small but also spread 
+across a lot of partitions and data files ranging across the dataset from old to new.
 
-Since we load only interested fields from files and join directly w/ incoming records, this works pretty well for small scale data even when 
-compared to bloom index. Since in bloom, we had to load the files twice. But at larger scale, this may deteriorate since all files are touched 
-w/o any upfront trimming. 
+![Dimensions table](/assets/images/blog/hudi-indexes/Hudi_Index_Blog_dimensions_table.png)
+Figure showing the spread of updates for Dimensions table.
 
-## 5. HBase
-Both bloom and simple index are implicit index. In other words, there is no explicit or external index files created/stored. But Hbase is an 
-external index where record locations are stored and retrieved. This is straightforward as fetch location will do a get on hbase table and 
-update location will update the records in hbase. 
+Since user information will be spread across different partitions and data files, "Simple" Index will be a good fit as it does not do any upfront pruning based 
+on index, but directly joins with interested fields from every data file. Hbase index could also be used as it supports record level lookups. As seen above, 
+Hudi has plans to support [record level indexing](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+08+%3A+Record+level+indexing+mechanisms+for+Hudi+datasets?src=contextnavpagetreemode)
+which will improve the index look-up time and will also avoid additional overhead of maintaining an external system like hbase. 
 
-// talk about hbase configs? 
+If your record keys are completely random, then most likely range filtering will be ineffective and can’t say much about the efficacy of HudiBloomIndex. 
+So, "SIMPLE" index could fit the bill in these cases too since it avoids making an attempt to prune with ranges which anyway could be in vain and does 
+direct join with interested fields.
 
-## 6. UserDefinedIndex
-Hoodie also supports user defined index. All you need to do is to implement “org.apache.hudi.index.SparkHoodieIndex”. You can use this config 
-to set the user defined class name. If this value is set, this will take precedence over “hoodie.index.type”.
-
-## 7. Global versions 
-// Talk about Global versions ? 
-
-// Talk about Simple vs Dynamic Bloom Filter ?? 
-
-## 8. Bloom index
-As far as actual bloom filter is concerned (which is stored along with data file), Hoodie has two types, namely Simple and Dynamic. This can be 
-configured using “hoodie.bloom.index.filter.type” config. 
-
-### 8.1. Simple
-Simple bloom filter is just the regular bloom filter as you might have seen elsewhere. Based on the input values set for "num of entries" and 
-"false positive probability", bloom allocates the bit size and proceeds accordingly. Configs of interest are “hoodie.index.bloom.num_entries” 
-and “hoodie.index.bloom.fpp”(fpp). You can check the formula used to determine the size and hash functions [here](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/bloom/BloomFilterUtils.java). 
-This bloom is static in the sense that the configured fpp will be honored if the entries added to bloom do not surpass the num entries set. 
-But if you keep adding more entries than what was configured, then fpp may not be honored since more entries fill up more buckets. 
-
-### 8.2. Dynamic
-Compared to simple, dynamic bloom as the name suggests is dynamic in nature. It grows relatively as the number of entries increases. Basically 
-users are expected to set two configs, namely “hoodie.index.bloom.num_entries” and “hoodie.bloom.index.filter.dynamic.max.entries” apart from 
-the fpp. Initially bloom is allocated only for “hoodie.index.bloom.num_entries”, but as the number of entries reaches this value, the bloom 
-grows to increase to 2x. This proceeds until “hoodie.bloom.index.filter.dynamic.max.entries” is reached. So until the max value is reached 
-fpp is guaranteed in this bloom type. Beyond that, fpp is not guaranteed similar to Simple bloom. In general this will be beneficial compared 
-to Simple as it may not allocate a larger sized bloom unless or otherwise required. Especially if you don’t have control over your incoming 
-traffic it may be an unnecessary overhead to allocate a larger sized bloom upfront and never get to add so many entries as configured. 
-Because, reading a larger sized bloom will have some impact on your index look up performance. 
-
- 
-// should we talk about hoodie.bloom.index.keys.per.bucket,  hoodie.bloom.index.bucketized.checking, etc. 
-
+Hopefully we were able to give you good enough context on what indices are supported by Hudi and which one to use depending on your use-case. Please feel free 
+to reach out to us if you have doubts on deciding which index to pick for your use-case.
 
