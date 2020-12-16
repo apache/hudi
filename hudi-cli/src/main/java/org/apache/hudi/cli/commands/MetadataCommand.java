@@ -131,18 +131,15 @@ public class MetadataCommand implements CommandMarker {
       throw new RuntimeException("Metadata directory (" + metadataPath.toString() + ") does not exist.");
     }
 
-    long t1 = System.currentTimeMillis();
-    if (readOnly) {
-      //HoodieMetadata.init(HoodieCLI.conf, HoodieCLI.basePath);
-    } else {
+    HoodieTimer timer = new HoodieTimer().startTimer();
+    if (!readOnly) {
       HoodieWriteConfig writeConfig = getWriteConfig();
       initJavaSparkContext();
       HoodieTableMetadataWriter.create(HoodieCLI.conf, writeConfig, jsc);
     }
-    long t2 = System.currentTimeMillis();
 
     String action = readOnly ? "Opened" : "Initialized";
-    return String.format(action + " Metadata Table in %s (duration=%.2fsec)", metadataPath, (t2 - t1) / 1000.0);
+    return String.format(action + " Metadata Table in %s (duration=%.2fsec)", metadataPath, (timer.endTimer()) / 1000.0);
   }
 
   @CliCommand(value = "metadata stats", help = "Print stats about the metadata")

@@ -93,8 +93,6 @@ public abstract class BaseRestoreActionExecutor extends BaseActionExecutor<Hoodi
     HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.convertRestoreMetadata(
         instantTime, durationInMs, instantsRolledBack, instantToMetadata);
 
-    table.metadataWriter(jsc).update(restoreMetadata, instantTime);
-
     table.getActiveTimeline().saveAsComplete(new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, instantTime),
         TimelineMetadataUtils.serializeRestoreMetadata(restoreMetadata));
     LOG.info("Commits " + instantsRolledBack + " rollback is complete. Restored table to " + restoreInstantTime);

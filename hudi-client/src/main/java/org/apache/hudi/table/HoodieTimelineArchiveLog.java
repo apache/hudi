@@ -53,7 +53,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -201,31 +200,16 @@ public class HoodieTimelineArchiveLog {
         .collect(Collectors.groupingBy(i -> Pair.of(i.getTimestamp(),
             HoodieInstant.getComparableAction(i.getAction()))));
 
-    // If metadata table is enabled, do not archive instants which are more recent that the latest compaction
-    // of the metadata table. This is required for metadata table sync.
+    // If metadata table is enabled, do not archive instants which are more recent that the latest synced
+    // instant on the metadata table. This is required for metadata table sync.
     if (config.useFileListingMetadata()) {
-      Option<String> latestCompaction = table.metadata().getLatestCompactionTimestamp();
-      if (latestCompaction.isPresent()) {
-        LOG.info("Limiting archiving of instants to last compaction on metadata table at " + latestCompaction.get());
+      Option<String> lastSyncedInstantTime = table.metadata().getSyncedInstantTime();
+      if (lastSyncedInstantTime.isPresent()) {
+        LOG.info("Limiting archiving of instants to last synced instant on metadata table at " + lastSyncedInstantTime.get());
         instants = instants.filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(), HoodieTimeline.LESSER_THAN,
-            latestCompaction.get()));
+            lastSyncedInstantTime.get()));
       } else {
-        LOG.info("Not archiving instants as there is no compaction yet of the metadata table");
-        instants = Stream.empty();
-      }
-    }
-
-    // For metadata tables, ensure commits >= latest compaction commit are retained. This is required for
-    // metadata table sync.
-    if (HoodieTableMetadata.isMetadataTable(config.getBasePath())) {
-      Option<HoodieInstant> latestCompactionInstant =
-          table.getActiveTimeline().filterPendingCompactionTimeline().lastInstant();
-      if (latestCompactionInstant.isPresent()) {
-        LOG.info("Limiting archiving of instants on metadata table to last compaction at " + latestCompactionInstant.get());
-        instants = instants.filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(), HoodieTimeline.LESSER_THAN,
-            latestCompactionInstant.get().getTimestamp()));
-      } else {
-        LOG.info("Not archiving instants on metdata table as there is no compaction yet");
+        LOG.info("Not archiving as there is no instants yet on the metadata table");
         instants = Stream.empty();
       }
     }

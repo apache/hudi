@@ -122,9 +122,7 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     super(jsc, index, writeConfig, timelineService);
     this.metrics = new HoodieMetrics(config, config.getTableName());
     this.rollbackPending = rollbackPending;
-
-    // Initialize Metadata Table
-    HoodieTableMetadataWriter.create(hadoopConf, writeConfig, jsc);
+    syncTableMetadata();
   }
 
   /**
@@ -179,7 +177,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       table.rollbackBootstrap(jsc, HoodieActiveTimeline.createNewInstantTime());
       LOG.info("Finished rolling back pending bootstrap");
     }
-
   }
 
   /**
@@ -384,7 +381,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
   @Override
   protected void postCommit(HoodieTable<?> table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata) {
     try {
-
       // Delete the marker directory for the instant.
       new MarkerFiles(table, instantTime).quietDeleteMarkerDir(jsc, config.getMarkersDeleteParallelism());
 
@@ -400,6 +396,8 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
       HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, hadoopConf);
       archiveLog.archiveIfRequired(jsc);
       autoCleanOnCommit(instantTime);
+
+      syncTableMetadata();
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
@@ -587,6 +585,11 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     return clean(HoodieActiveTimeline.createNewInstantTime());
   }
 
+  public void syncTableMetadata() {
+    // Open up the metadata table again, for syncing
+    HoodieTableMetadataWriter.create(hadoopConf, config, jsc);
+  }
+
   /**
    * Provides a new commit time for a write operation (insert/update/delete).
    */
@@ -700,8 +703,6 @@ public class HoodieWriteClient<T extends HoodieRecordPayload> extends AbstractHo
     List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
     finalizeWrite(table, compactionCommitTime, writeStats);
     LOG.info("Committing Compaction " + compactionCommitTime + ". Finished with result " + metadata);
-
-    table.metadataWriter(jsc).update(metadata, compactionCommitTime);
 
     CompactHelpers.completeInflightCompaction(table, compactionCommitTime, metadata);
 
