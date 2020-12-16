@@ -38,16 +38,15 @@ import java.util.Properties;
 public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Serializable {
 
   /**
-   * When more than one HoodieRecord have the same HoodieKey, this function combines them before attempting to insert/upsert (if combining turned on
-   * in HoodieClientConfig).
+   * This method is deprecated. Please use this {@link #preCombine(HoodieRecordPayload, Properties)} method.
    */
   @Deprecated
-  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
+  @PublicAPIMethod(maturity = ApiMaturityLevel.DEPRECATED)
   T preCombine(T another);
 
   /**
-   * When more than one HoodieRecord have the same HoodieKey, this function combines them before attempting to insert/upsert (if combining turned on
-   * in HoodieClientConfig) by taking in a property map. Implementation can leverage the property to decide their business logic to do preCombine.
+   * When more than one HoodieRecord have the same HoodieKey, this function combines them before attempting to insert/upsert by taking in a property map.
+   * Implementation can leverage the property to decide their business logic to do preCombine.
    * @param another instance of another {@link HoodieRecordPayload} to be combined with.
    * @param properties Payload related properties. For example pass the ordering field(s) name to extract from value in storage.
    * @return the combined value
@@ -58,27 +57,20 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   }
 
   /**
-   * This methods lets you write custom merging/combining logic to produce new values as a function of current value on storage and whats contained
-   * in this object.
-   * <p>
-   * eg: 1) You are updating counters, you may want to add counts to currentValue and write back updated counts 2) You may be reading DB redo logs,
-   * and merge them with current image for a database row on storage
-   *
-   * @param currentValue Current value in storage, to merge/combine this payload with
-   * @param schema Schema used for record
-   * @return new combined/merged value to be written back to storage. EMPTY to skip writing this record.
+   * This methods is deprecated. Please refer to {@link #combineAndGetUpdateValue(IndexedRecord, Schema, Properties)} for java docs.
    */
   @Deprecated
-  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
+  @PublicAPIMethod(maturity = ApiMaturityLevel.DEPRECATED)
   Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException;
 
   /**
    * This methods lets you write custom merging/combining logic to produce new values as a function of current value on storage and whats contained
-   * in this object. This method takes in a property map as an arg so that implementation can decide their business logic based
-   *    * on some properties set.
+   * in this object. Implementations can leverage properties if required.
    * <p>
-   * eg: 1) You are updating counters, you may want to add counts to currentValue and write back updated counts 2) You may be reading DB redo logs,
-   * and merge them with current image for a database row on storage
+   * eg:
+   * 1) You are updating counters, you may want to add counts to currentValue and write back updated counts
+   * 2) You may be reading DB redo logs, and merge them with current image for a database row on storage
+   * </p>
    *
    * @param currentValue Current value in storage, to merge/combine this payload with
    * @param schema Schema used for record
@@ -90,19 +82,18 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   }
 
   /**
-   * Generates an avro record out of the given HoodieRecordPayload, to be written out to storage. Called when writing a new value for the given
-   * HoodieKey, wherein there is no existing record in storage to be combined against. (i.e insert) Return EMPTY to skip writing this record.
+   * This method is deprecated. Refer to {@link #getInsertValue(Schema, Properties)} for java docs.
    * @param schema Schema used for record
    * @return the {@link IndexedRecord} to be inserted.
    */
   @Deprecated
-  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
+  @PublicAPIMethod(maturity = ApiMaturityLevel.DEPRECATED)
   Option<IndexedRecord> getInsertValue(Schema schema) throws IOException;
 
   /**
    * Generates an avro record out of the given HoodieRecordPayload, to be written out to storage. Called when writing a new value for the given
    * HoodieKey, wherein there is no existing record in storage to be combined against. (i.e insert) Return EMPTY to skip writing this record.
-   * This method takes in a property map as an arg so that implementation can decide their business logic based on some properties set.
+   * Implementations can leverage properties if required.
    * @param schema Schema used for record
    * @param properties Payload related properties. For example pass the ordering field(s) name to extract from value in storage.
    * @return the {@link IndexedRecord} to be inserted.

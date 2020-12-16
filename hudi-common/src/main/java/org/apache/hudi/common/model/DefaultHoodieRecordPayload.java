@@ -33,13 +33,12 @@ import java.io.IOException;
 import java.util.Properties;
 
 /**
- * Default payload used for delta streamer.
+ * {@link HoodieRecordPayload} impl that honors ordering field in both preCombine and combineAndGetUpdateValue.
  * <p>
  * 1. preCombine - Picks the latest delta record for a key, based on an ordering field
  * 2. combineAndGetUpdateValue/getInsertValue - Chooses the latest record based on ordering field value.
  */
-public class DefaultHoodieRecordPayload extends BaseAvroPayload
-    implements HoodieRecordPayload<DefaultHoodieRecordPayload> {
+public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
 
   public DefaultHoodieRecordPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
@@ -47,34 +46,6 @@ public class DefaultHoodieRecordPayload extends BaseAvroPayload
 
   public DefaultHoodieRecordPayload(Option<GenericRecord> record) {
     this(record.isPresent() ? record.get() : null, (record1) -> 0); // natural order
-  }
-
-  @Override
-  public DefaultHoodieRecordPayload preCombine(DefaultHoodieRecordPayload another) {
-    // pick the payload with greatest ordering value
-    if (another.orderingVal.compareTo(orderingVal) > 0) {
-      return another;
-    } else {
-      return this;
-    }
-  }
-
-  @Override
-  public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    if (recordBytes.length == 0) {
-      return Option.empty();
-    }
-    IndexedRecord indexedRecord = bytesToAvro(recordBytes, schema);
-    if (isDeleteRecord((GenericRecord) indexedRecord)) {
-      return Option.empty();
-    } else {
-      return Option.of(indexedRecord);
-    }
-  }
-
-  @Override
-  public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException{
-    return getInsertValue(schema);
   }
 
   @Override
@@ -110,14 +81,5 @@ public class DefaultHoodieRecordPayload extends BaseAvroPayload
     } else {
       return Option.of(incomingRecord);
     }
-  }
-
-  /**
-   * @param genericRecord instance of {@link GenericRecord} of interest.
-   * @returns {@code true} if record represents a delete record. {@code false} otherwise.
-   */
-  private boolean isDeleteRecord(GenericRecord genericRecord) {
-    Object deleteMarker = genericRecord.get("_hoodie_is_deleted");
-    return (deleteMarker instanceof Boolean && (boolean) deleteMarker);
   }
 }

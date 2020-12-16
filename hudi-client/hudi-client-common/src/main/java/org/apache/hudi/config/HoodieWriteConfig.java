@@ -746,7 +746,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return clientSpecifiedViewStorageConfig;
   }
 
-  public HoodiePayloadConfig getHoodiePayloadConfig() {
+  public HoodiePayloadConfig getPayloadConfig() {
     return hoodiePayloadConfig;
   }
 

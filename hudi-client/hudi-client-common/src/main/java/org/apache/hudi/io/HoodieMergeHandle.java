@@ -33,7 +33,6 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
-import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -227,7 +226,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       try {
         Option<IndexedRecord> combinedAvroRecord =
             hoodieRecord.getData().combineAndGetUpdateValue(oldRecord, useWriterSchema ? writerSchemaWithMetafields : writerSchema,
-                config.getHoodiePayloadConfig().getProps());
+                config.getPayloadConfig().getProps());
         if (writeUpdateRecord(hoodieRecord, combinedAvroRecord)) {
           /*
            * ONLY WHEN 1) we have an update for this key AND 2) We are able to successfully write the the combined new
