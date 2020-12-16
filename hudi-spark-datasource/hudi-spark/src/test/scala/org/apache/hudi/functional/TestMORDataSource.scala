@@ -47,6 +47,9 @@ class TestMORDataSource extends HoodieClientTestBase {
     HoodieWriteConfig.TABLE_NAME -> "hoodie_test"
   )
 
+  val verificationCol: String = "driver"
+  val updatedVerificationVal: String = "driver_update"
+
   @BeforeEach override def setUp() {
     initPath()
     initSparkContexts()
@@ -86,7 +89,7 @@ class TestMORDataSource extends HoodieClientTestBase {
     val insertCommitTimes = hudiRODF1.select("_hoodie_commit_time").distinct().collectAsList().map(r => r.getString(0)).toList
     assertEquals(List(insertCommitTime), insertCommitTimes)
 
-    // Upsert operation
+    // Upsert operation without Hudi metadata columns
     val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 100)).toList
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
@@ -101,6 +104,19 @@ class TestMORDataSource extends HoodieClientTestBase {
       .load(basePath + "/*/*/*/*")
     val updateCommitTimes = hudiSnapshotDF2.select("_hoodie_commit_time").distinct().collectAsList().map(r => r.getString(0)).toList
     assertEquals(List(updateCommitTime), updateCommitTimes)
+
+    // Upsert based on the written table with Hudi metadata columns
+    val verificationRowKey = hudiSnapshotDF2.limit(1).select("_row_key").first.getString(0)
+    val inputDF3 = hudiSnapshotDF2.filter(col("_row_key") === verificationRowKey).withColumn(verificationCol, lit(updatedVerificationVal))
+
+    inputDF3.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val hudiSnapshotDF3 = spark.read.format("hudi").load(basePath + "/*/*/*/*")
+    assertEquals(100, hudiSnapshotDF3.count())
+    assertEquals(updatedVerificationVal, hudiSnapshotDF3.filter(col("_row_key") === verificationRowKey).select(verificationCol).first.getString(0))
   }
 
   @Test def testCount() {
