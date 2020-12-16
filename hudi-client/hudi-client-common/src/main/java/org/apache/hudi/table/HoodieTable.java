@@ -461,7 +461,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
       if (!invalidDataPaths.isEmpty()) {
         LOG.info("Removing duplicate data files created due to spark retries before committing. Paths=" + invalidDataPaths);
         Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidDataPaths.stream()
-            .map(dp -> Pair.of(new Path(dp).getParent().toString(), new Path(basePath, dp).toString()))
+            .map(dp -> Pair.of(new Path(basePath, dp).getParent().toString(), new Path(basePath, dp).toString()))
             .collect(Collectors.groupingBy(Pair::getKey));
 
         // Ensure all files in delete list is actually present. This is mandatory for an eventually consistent FS.

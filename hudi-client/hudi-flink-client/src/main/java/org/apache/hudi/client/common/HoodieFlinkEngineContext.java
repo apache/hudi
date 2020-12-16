@@ -33,7 +33,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import scala.Tuple2;
+import org.apache.hudi.common.util.collection.Pair;
 
 import static org.apache.hudi.client.common.function.FunctionWrapper.throwingFlatMapWrapper;
 import static org.apache.hudi.client.common.function.FunctionWrapper.throwingForeachWrapper;
@@ -76,7 +76,7 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
 
   @Override
   public <I, K, V> Map<K, V> mapToPair(List<I> data, SerializablePairFunction<I, K, V> func, Integer parallelism) {
-    return data.stream().map(throwingMapToPairWrapper(func)).collect(Collectors.toMap(Tuple2::_1, Tuple2::_2));
+    return data.stream().map(throwingMapToPairWrapper(func)).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
   }
 
   @Override
