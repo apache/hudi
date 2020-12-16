@@ -23,7 +23,6 @@ import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -32,28 +31,23 @@ import org.apache.hudi.table.WorkloadStat;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import scala.Tuple2;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public class SparkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayload<T>>
-    extends BaseSparkCommitActionExecutor<T> {
+    extends SparkInsertOverwriteCommitActionExecutor<T> {
 
   private List<String> partitions;
   public SparkDeletePartitionCommitActionExecutor(HoodieEngineContext context,
                                                   HoodieWriteConfig config, HoodieTable table,
                                                   String instantTime, List<String> partitions) {
-    super(context, config, table, instantTime, WriteOperationType.DELETE_PARTITION);
+    super(context, config, table, instantTime,null, WriteOperationType.DELETE_PARTITION);
     this.partitions = partitions;
-  }
-
-  @Override
-  protected String getCommitActionType() {
-    return HoodieTimeline.REPLACE_COMMIT_ACTION;
   }
 
   @Override
@@ -63,10 +57,10 @@ public class SparkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
     HoodieWriteMetadata result = new HoodieWriteMetadata();
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(jsc.emptyRDD());
-    Map<String, List<String>> partitionToReplaceFileIds = partitions.stream()
-        .map(partition -> Pair.of(partition, table.getSliceView().getLatestFileSlices(partition)
-            .map(fileSlice -> fileSlice.getFileId()).collect(Collectors.toList())))
-        .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+
+    Map<String, List<String>> partitionToReplaceFileIds = jsc.parallelize(partitions, partitions.size()).distinct()
+        .mapToPair(partitionPath -> new Tuple2<>(partitionPath, getAllExistingFileIds(partitionPath))).collectAsMap();
+
     result.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
     this.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())), instantTime);
     this.commitOnAutoCommit(result);

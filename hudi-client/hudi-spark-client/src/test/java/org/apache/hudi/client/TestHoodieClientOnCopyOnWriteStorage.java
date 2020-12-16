@@ -1023,6 +1023,26 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     verifyDeletePartitionsHandling(3000, 1000, 1000);
   }
 
+  private Set<String> insertPartitionRecordsWithCommit(SparkRDDWriteClient client, int recordsCount, String commitTime1, String partitionPath) {
+    client.startCommitWithTime(commitTime1);
+    List<HoodieRecord> inserts1 = dataGen.generateInsertsForPartition(commitTime1, recordsCount, partitionPath);
+    JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 2);
+    List<WriteStatus> statuses = client.upsert(insertRecordsRDD1, commitTime1).collect();
+    assertNoWriteErrors(statuses);
+    Set<String> batchBuckets = statuses.stream().map(s -> s.getFileId()).collect(Collectors.toSet());
+    verifyRecordsWritten(commitTime1, inserts1, statuses);
+    return batchBuckets;
+  }
+
+  private Set<String> deletePartitionWithCommit(SparkRDDWriteClient client, String commitTime, List<String> deletePartitionPath) {
+    client.startCommitWithTime(commitTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
+    HoodieWriteResult writeResult = client.deletePartitions(deletePartitionPath, commitTime);
+    Set<String> deletePartitionReplaceFileIds =
+        writeResult.getPartitionToReplaceFileIds().entrySet()
+            .stream().flatMap(entry -> entry.getValue().stream()).collect(Collectors.toSet());
+    return deletePartitionReplaceFileIds;
+  }
+
   /**
    *  1) Do write1 (upsert) with 'batch1RecordsCount' number of records for first partition.
    *  2) Do write2 (upsert) with 'batch2RecordsCount' number of records for second partition.
@@ -1038,59 +1058,38 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // Do Inserts for DEFAULT_FIRST_PARTITION_PATH
     String commitTime1 = "001";
-    client.startCommitWithTime(commitTime1);
-    List<HoodieRecord> inserts1 = dataGen.generateInsertsForPartition(commitTime1, batch1RecordsCount, DEFAULT_FIRST_PARTITION_PATH);
-    JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 2);
-    List<WriteStatus> statuses = client.upsert(insertRecordsRDD1, commitTime1).collect();
-    assertNoWriteErrors(statuses);
-    Set<String> batch1Buckets = statuses.stream().map(s -> s.getFileId()).collect(Collectors.toSet());
-    verifyRecordsWritten(commitTime1, inserts1, statuses);
+    Set<String> batch1Buckets =
+        this.insertPartitionRecordsWithCommit(client, batch1RecordsCount, commitTime1, DEFAULT_FIRST_PARTITION_PATH);
 
     // Do Inserts for DEFAULT_SECOND_PARTITION_PATH
     String commitTime2 = "002";
-    client.startCommitWithTime(commitTime2);
-    List<HoodieRecord> inserts2 = dataGen.generateInsertsForPartition(commitTime2, batch2RecordsCount, DEFAULT_SECOND_PARTITION_PATH);
-    JavaRDD<HoodieRecord> insertRecordsRDD2 = jsc.parallelize(inserts2, 2);
-    statuses = client.upsert(insertRecordsRDD2, commitTime2).collect();
-    assertNoWriteErrors(statuses);
-    Set<String> batch2Buckets = statuses.stream().map(s -> s.getFileId()).collect(Collectors.toSet());
-    verifyRecordsWritten(commitTime2, inserts2, statuses);
+    Set<String> batch2Buckets =
+        this.insertPartitionRecordsWithCommit(client, batch2RecordsCount, commitTime2, DEFAULT_SECOND_PARTITION_PATH);
 
     // Do Inserts for DEFAULT_THIRD_PARTITION_PATH
     String commitTime3 = "003";
-    client.startCommitWithTime(commitTime3);
-    List<HoodieRecord> inserts3 = dataGen.generateInsertsForPartition(commitTime3, batch3RecordsCount, DEFAULT_THIRD_PARTITION_PATH);
-    JavaRDD<HoodieRecord> insertRecordsRDD3 = jsc.parallelize(inserts3, 2);
-    statuses = client.upsert(insertRecordsRDD3, commitTime3).collect();
-    assertNoWriteErrors(statuses);
-    Set<String> batch3Buckets = statuses.stream().map(s -> s.getFileId()).collect(Collectors.toSet());
-    verifyRecordsWritten(commitTime3, inserts3, statuses);
+    Set<String> batch3Buckets =
+        this.insertPartitionRecordsWithCommit(client, batch3RecordsCount, commitTime3, DEFAULT_THIRD_PARTITION_PATH);
 
     // delete DEFAULT_FIRST_PARTITION_PATH
     String commitTime4 = "004";
-    client.startCommitWithTime(commitTime4, HoodieTimeline.REPLACE_COMMIT_ACTION);
-    List<String> deletePartitions1 = new ArrayList<>();
-    deletePartitions1.add(DEFAULT_FIRST_PARTITION_PATH);
-    HoodieWriteResult writeResult = client.deletePartitions(deletePartitions1, commitTime4);
-    Set<String> deletePartitionReplaceFileIds = new HashSet<String>();
-    writeResult.getPartitionToReplaceFileIds().entrySet()
-        .forEach(entry -> deletePartitionReplaceFileIds.addAll(entry.getValue()));
-    assertEquals(batch1Buckets, deletePartitionReplaceFileIds);
-
+    Set<String> deletePartitionReplaceFileIds1 =
+        deletePartitionWithCommit(client, commitTime4, Arrays.asList(DEFAULT_FIRST_PARTITION_PATH));
+    assertEquals(batch1Buckets, deletePartitionReplaceFileIds1);
     List<HoodieBaseFile> baseFiles = HoodieClientTestUtils.getLatestBaseFiles(basePath, fs,
         String.format("%s/%s/*", basePath, DEFAULT_FIRST_PARTITION_PATH));
     assertEquals(0, baseFiles.size());
+    baseFiles = HoodieClientTestUtils.getLatestBaseFiles(basePath, fs,
+        String.format("%s/%s/*", basePath, DEFAULT_SECOND_PARTITION_PATH));
+    assertTrue(baseFiles.size() > 0);
+    baseFiles = HoodieClientTestUtils.getLatestBaseFiles(basePath, fs,
+        String.format("%s/%s/*", basePath, DEFAULT_THIRD_PARTITION_PATH));
+    assertTrue(baseFiles.size() > 0);
 
     // delete DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH
     String commitTime5 = "005";
-    client.startCommitWithTime(commitTime5, HoodieTimeline.REPLACE_COMMIT_ACTION);
-    List<String> deletePartitions2 = new ArrayList<>();
-    deletePartitions2.add(DEFAULT_SECOND_PARTITION_PATH);
-    deletePartitions2.add(DEFAULT_THIRD_PARTITION_PATH);
-    writeResult = client.deletePartitions(deletePartitions2, commitTime5);
-    Set<String> deletePartitionReplaceFileIds2 = new HashSet<>();
-    writeResult.getPartitionToReplaceFileIds().entrySet()
-        .forEach(entry -> deletePartitionReplaceFileIds2.addAll(entry.getValue()));
+    Set<String> deletePartitionReplaceFileIds2 =
+        deletePartitionWithCommit(client, commitTime5, Arrays.asList(DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH));
     Set<String> expectedFileId = new HashSet<>();
     expectedFileId.addAll(batch2Buckets);
     expectedFileId.addAll(batch3Buckets);
