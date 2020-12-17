@@ -55,7 +55,7 @@ public class DagUtils {
 
   public static int DEFAULT_DAG_ROUNDS = 1;
   public static int DEFAULT_INTERMITTENT_DELAY_MINS = 10;
-  public static String DEFAULT_DAG_NAME = "testDagName";
+  public static String DEFAULT_DAG_NAME = "TestDagName";
 
   static final ObjectMapper MAPPER = new ObjectMapper();
 

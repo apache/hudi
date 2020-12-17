@@ -96,7 +96,8 @@ public class ValidateDatasetNode extends DagNode<Boolean> {
             return v2;
           }
         })
-        .map((MapFunction<Tuple2<String, Row>, Row>) value -> value._2, encoder);
+        .map((MapFunction<Tuple2<String, Row>, Row>) value -> value._2, encoder)
+        .filter("_hoodie_is_deleted is NULL");
 
     // read from hudi and remove meta columns.
     Dataset<Row> hudiDf = session.read().format("hudi").load(hudiPath);
@@ -110,8 +111,8 @@ public class ValidateDatasetNode extends DagNode<Boolean> {
       throw new AssertionError("Hudi contents does not match contents input data. ");
     }
 
-    String database = context.getWriterContext().getProps().getString("hoodie.datasource.hive_sync.database");
-    String tableName = context.getWriterContext().getProps().getString("hoodie.datasource.hive_sync.table");
+    String database = context.getWriterContext().getProps().getString(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY());
+    String tableName = context.getWriterContext().getProps().getString(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY());
     log.warn("Validating hive table with db : " + database + " and table : " + tableName);
     Dataset<Row> cowDf = session.sql("SELECT * FROM " + database + "." + tableName);
     Dataset<Row> trimmedCowDf = cowDf.drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
