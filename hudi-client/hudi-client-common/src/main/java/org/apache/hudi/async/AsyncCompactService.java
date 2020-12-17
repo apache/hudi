@@ -53,7 +53,7 @@ public abstract class AsyncCompactService extends HoodieAsyncService {
 
   private final int maxConcurrentCompaction;
   private transient AbstractCompactor compactor;
-  private transient HoodieEngineContext context;
+  protected transient HoodieEngineContext context;
   private transient BlockingQueue<HoodieInstant> pendingCompactions = new LinkedBlockingQueue<>();
   private transient ReentrantLock queueLock = new ReentrantLock();
   private transient Condition consumed = queueLock.newCondition();
