@@ -121,9 +121,20 @@ public class QuickstartUtils {
      */
     public static OverwriteWithLatestAvroPayload generateRandomValue(HoodieKey key, String riderDriverSuffix)
         throws IOException {
+      // The timestamp generated is limited to range from 7 days before to now, to avoid generating too many
+      // partitionPaths when user use timestamp as partitionPath filed.
       GenericRecord rec =
-          generateGenericRecord(key.getRecordKey(), "rider-" + riderDriverSuffix, "driver-" + riderDriverSuffix, 0);
+          generateGenericRecord(key.getRecordKey(), "rider-" + riderDriverSuffix, "driver-"
+              + riderDriverSuffix, generateRangeRandomTimestamp(7));
       return new OverwriteWithLatestAvroPayload(Option.of(rec));
+    }
+
+    /**
+     * Generate timestamp range from {@param daysTillNow} before to now.
+     */
+    private static long generateRangeRandomTimestamp(int daysTillNow) {
+      long maxIntervalMillis = daysTillNow * 24 * 60 * 60 * 1000L;
+      return System.currentTimeMillis() - (long)(Math.random() * maxIntervalMillis);
     }
 
     /**
