@@ -44,7 +44,7 @@ public class JsonDFSSource extends JsonSource {
   @Override
   protected InputBatch<JavaRDD<String>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
     Pair<Option<String>, String> selPathsWithMaxModificationTime =
-        pathSelector.getNextFilePathsAndMaxModificationTime(lastCkptStr, sourceLimit);
+        pathSelector.getNextFilePathsAndMaxModificationTime(sparkContext, lastCkptStr, sourceLimit);
     return selPathsWithMaxModificationTime.getLeft()
         .map(pathStr -> new InputBatch<>(Option.of(fromFiles(pathStr)), selPathsWithMaxModificationTime.getRight()))
         .orElse(new InputBatch<>(Option.empty(), selPathsWithMaxModificationTime.getRight()));
