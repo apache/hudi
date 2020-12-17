@@ -78,13 +78,7 @@ public class HoodieTestSuiteWriter {
       Arrays.asList(RollbackNode.class.getName(), CleanNode.class.getName(), ScheduleCompactNode.class.getName()));
   private static final String GENERATED_DATA_PATH = "generated.data.path";
 
-  public HoodieTestSuiteWriter(JavaSparkContext jsc, Properties props, HoodieTestSuiteConfig cfg, String schema) throws
-      Exception {
-    this(jsc, props, cfg, schema, true);
-  }
-
-  public HoodieTestSuiteWriter(JavaSparkContext jsc, Properties props, HoodieTestSuiteConfig cfg, String schema,
-      boolean rollbackInflight) throws Exception {
+  public HoodieTestSuiteWriter(JavaSparkContext jsc, Properties props, HoodieTestSuiteConfig cfg, String schema) throws Exception {
     // We ensure that only 1 instance of HoodieWriteClient is instantiated for a HoodieTestSuiteWriter
     // This does not instantiate a HoodieWriteClient until a
     // {@link HoodieDeltaStreamer#commit(HoodieWriteClient, JavaRDD, Option)} is invoked.
@@ -93,7 +87,7 @@ public class HoodieTestSuiteWriter {
     this.hoodieReadClient = new HoodieReadClient(context, cfg.targetBasePath);
     this.writeConfig = getHoodieClientConfig(cfg, props, schema);
     if (!cfg.useDeltaStreamer) {
-      this.writeClient = new SparkRDDWriteClient(context, writeConfig, rollbackInflight);
+      this.writeClient = new SparkRDDWriteClient(context, writeConfig);
     }
     this.cfg = cfg;
     this.configuration = jsc.hadoopConfiguration();
@@ -234,7 +228,7 @@ public class HoodieTestSuiteWriter {
     }
     synchronized (this) {
       if (writeClient == null) {
-        this.writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(this.sparkContext), getHoodieClientConfig(cfg, props, schema), false);
+        this.writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(this.sparkContext), getHoodieClientConfig(cfg, props, schema));
       }
     }
     return writeClient;

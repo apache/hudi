@@ -60,7 +60,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
   public void testRollbackForInflightCompaction() throws Exception {
     // Rollback inflight compaction
     HoodieWriteConfig cfg = getConfig(false);
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg, true);) {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
       HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
       String firstInstantTime = "001";
       String secondInstantTime = "004";
@@ -120,7 +120,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
 
     int numRecs = 2000;
 
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg, true);) {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
       HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
       List<HoodieRecord> records = dataGen.generateInserts(firstInstantTime, numRecs);
       records = runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
@@ -162,7 +162,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
   public void testInflightCompaction() throws Exception {
     // There is inflight compaction. Subsequent compaction run must work correctly
     HoodieWriteConfig cfg = getConfig(true);
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg, true);) {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
       HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
       String firstInstantTime = "001";
       String secondInstantTime = "004";
@@ -195,7 +195,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
   public void testScheduleIngestionBeforePendingCompaction() throws Exception {
     // Case: Failure case. Latest pending compaction instant time must be earlier than this instant time
     HoodieWriteConfig cfg = getConfig(false);
-    SparkRDDWriteClient client = getHoodieWriteClient(cfg, true);
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
 
     String firstInstantTime = "001";
@@ -226,7 +226,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
     // Case: Failure case. Earliest ingestion inflight instant time must be later than compaction time
 
     HoodieWriteConfig cfg = getConfig(false);
-    SparkRDDWriteClient client = getHoodieWriteClient(cfg, true);
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
 
     String firstInstantTime = "001";
@@ -258,7 +258,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
     // Case: Failure case. Earliest ingestion inflight instant time must be later than compaction time
 
     HoodieWriteConfig cfg = getConfig(false);
-    SparkRDDWriteClient client = getHoodieWriteClient(cfg, true);
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
 
     final String firstInstantTime = "001";
@@ -293,7 +293,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
   public void testCompactionAfterTwoDeltaCommits() throws Exception {
     // No Delta Commits after compaction request
     HoodieWriteConfig cfg = getConfig(true);
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg, true);) {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
       HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
       String firstInstantTime = "001";
       String secondInstantTime = "004";
@@ -314,7 +314,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
   public void testInterleavedCompaction() throws Exception {
     // Case: Two delta commits before and after compaction schedule
     HoodieWriteConfig cfg = getConfig(true);
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg, true);) {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
       HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
       String firstInstantTime = "001";
       String secondInstantTime = "004";
@@ -342,7 +342,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
   public void testCompactionOnReplacedFiles() throws Exception {
     // Schedule a compaction. Replace those file groups and ensure compaction completes successfully.
     HoodieWriteConfig cfg = getConfig(true);
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg, true);) {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
       HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
       String firstInstantTime = "001";
       String secondInstantTime = "004";

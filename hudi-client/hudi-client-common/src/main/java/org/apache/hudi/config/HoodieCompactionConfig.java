@@ -20,6 +20,7 @@ package org.apache.hudi.config;
 
 import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
@@ -108,6 +109,9 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   public static final String COMPACTION_REVERSE_LOG_READ_ENABLED_PROP = "hoodie.compaction.reverse.log.read";
   public static final String DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED = "false";
   private static final String DEFAULT_CLEANER_POLICY = HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name();
+  public static final String FAILED_WRITES_CLEANER_POLICY_PROP = "hoodie.failed.writes.cleaner.policy";
+  private  static final String DEFAULT_FAILED_WRITES_CLEANER_POLICY =
+      HoodieFailedWritesCleaningPolicy.EAGER.name();
   private static final String DEFAULT_AUTO_CLEAN = "true";
   private static final String DEFAULT_ASYNC_CLEAN = "false";
   private static final String DEFAULT_INLINE_COMPACT = "false";
@@ -276,6 +280,11 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy failedWritesPolicy) {
+      props.setProperty(FAILED_WRITES_CLEANER_POLICY_PROP, failedWritesPolicy.name());
+      return this;
+    }
+
     public HoodieCompactionConfig build() {
       HoodieCompactionConfig config = new HoodieCompactionConfig(props);
       setDefaultOnCondition(props, !props.containsKey(AUTO_CLEAN_PROP), AUTO_CLEAN_PROP, DEFAULT_AUTO_CLEAN);
@@ -328,6 +337,8 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
           COMMITS_ARCHIVAL_BATCH_SIZE_PROP, DEFAULT_COMMITS_ARCHIVAL_BATCH_SIZE);
       setDefaultOnCondition(props, !props.containsKey(CLEANER_BOOTSTRAP_BASE_FILE_ENABLED),
           CLEANER_BOOTSTRAP_BASE_FILE_ENABLED, DEFAULT_CLEANER_BOOTSTRAP_BASE_FILE_ENABLED);
+      setDefaultOnCondition(props, !props.containsKey(FAILED_WRITES_CLEANER_POLICY_PROP),
+          FAILED_WRITES_CLEANER_POLICY_PROP, DEFAULT_FAILED_WRITES_CLEANER_POLICY);
 
       HoodieCleaningPolicy.valueOf(props.getProperty(CLEANER_POLICY_PROP));
 
