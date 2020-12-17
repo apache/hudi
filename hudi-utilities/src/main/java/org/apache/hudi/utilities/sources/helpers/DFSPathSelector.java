@@ -34,8 +34,10 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -43,7 +45,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class DFSPathSelector {
+public class DFSPathSelector implements Serializable {
 
   protected static volatile Logger log = LogManager.getLogger(DFSPathSelector.class);
 
@@ -90,13 +92,26 @@ public class DFSPathSelector {
   /**
    * Get the list of files changed since last checkpoint.
    *
+   * @param sparkContext JavaSparkContext to help parallelize certain operations
    * @param lastCheckpointStr the last checkpoint time string, empty if first run
    * @param sourceLimit       max bytes to read each time
    * @return the list of files concatenated and their latest modified time
    */
-  public Pair<Option<String>, String> getNextFilePathsAndMaxModificationTime(Option<String> lastCheckpointStr,
-      long sourceLimit) {
+  public Pair<Option<String>, String> getNextFilePathsAndMaxModificationTime(JavaSparkContext sparkContext, Option<String> lastCheckpointStr,
+                                                                             long sourceLimit) {
+    return getNextFilePathsAndMaxModificationTime(lastCheckpointStr, sourceLimit);
+  }
 
+  /**
+   * Get the list of files changed since last checkpoint.
+   *
+   * @param lastCheckpointStr the last checkpoint time string, empty if first run
+   * @param sourceLimit       max bytes to read each time
+   * @return the list of files concatenated and their latest modified time
+   */
+  @Deprecated
+  public Pair<Option<String>, String> getNextFilePathsAndMaxModificationTime(Option<String> lastCheckpointStr,
+                                                                             long sourceLimit) {
     try {
       // obtain all eligible files under root folder.
       log.info("Root path => " + props.getString(Config.ROOT_INPUT_PATH_PROP) + " source limit => " + sourceLimit);
@@ -136,7 +151,7 @@ public class DFSPathSelector {
   /**
    * List files recursively, filter out illegible files/directories while doing so.
    */
-  private List<FileStatus> listEligibleFiles(FileSystem fs, Path path, long lastCheckpointTime) throws IOException {
+  protected List<FileStatus> listEligibleFiles(FileSystem fs, Path path, long lastCheckpointTime) throws IOException {
     // skip files/dirs whose names start with (_, ., etc)
     FileStatus[] statuses = fs.listStatus(path, file ->
       IGNORE_FILEPREFIX_LIST.stream().noneMatch(pfx -> file.getName().startsWith(pfx)));
