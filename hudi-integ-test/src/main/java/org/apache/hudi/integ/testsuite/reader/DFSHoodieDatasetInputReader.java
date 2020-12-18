@@ -52,6 +52,7 @@ import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.parquet.avro.AvroParquetReader;
+import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -243,6 +244,9 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
 
   private Iterator<IndexedRecord> readParquetOrLogFiles(FileSlice fileSlice) throws IOException {
     if (fileSlice.getBaseFile().isPresent()) {
+      // Read the parquet files using the latest writer schema.
+      Schema schema = new Schema.Parser().parse(schemaStr);
+      AvroReadSupport.setAvroReadSchema(metaClient.getHadoopConf(), HoodieAvroUtils.addMetadataFields(schema));
       Iterator<IndexedRecord> itr =
           new ParquetReaderIterator<IndexedRecord>(AvroParquetReader.<IndexedRecord>builder(new
               Path(fileSlice.getBaseFile().get().getPath())).withConf(metaClient.getHadoopConf()).build());
