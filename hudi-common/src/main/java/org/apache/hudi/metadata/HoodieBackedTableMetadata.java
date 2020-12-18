@@ -85,7 +85,7 @@ public class HoodieBackedTableMetadata implements HoodieTableMetadata {
   private final String spillableMapDirectory;
 
   // Readers for the base and log file which store the metadata
-  private transient HoodieFileReader<GenericRecord> basefileReader;
+  private transient HoodieFileReader<GenericRecord> baseFileReader;
   private transient HoodieMetadataMergedLogRecordScanner logRecordScanner;
 
   public HoodieBackedTableMetadata(Configuration conf, String datasetBasePath, String spillableMapDirectory,
@@ -287,9 +287,9 @@ public class HoodieBackedTableMetadata implements HoodieTableMetadata {
 
     // Retrieve record from base file
     HoodieRecord<HoodieMetadataPayload> hoodieRecord = null;
-    if (basefileReader != null) {
+    if (baseFileReader != null) {
       HoodieTimer timer = new HoodieTimer().startTimer();
-      Option<GenericRecord> baseRecord = basefileReader.getRecordByKey(key);
+      Option<GenericRecord> baseRecord = baseFileReader.getRecordByKey(key);
       if (baseRecord.isPresent()) {
         hoodieRecord = SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(),
             metaClient.getTableConfig().getPayloadClass());
@@ -338,7 +338,7 @@ public class HoodieBackedTableMetadata implements HoodieTableMetadata {
     Option<HoodieBaseFile> basefile = latestSlices.get(0).getBaseFile();
     if (basefile.isPresent()) {
       String basefilePath = basefile.get().getPath();
-      basefileReader = HoodieFileReaderFactory.getFileReader(hadoopConf.get(), new Path(basefilePath));
+      baseFileReader = HoodieFileReaderFactory.getFileReader(hadoopConf.get(), new Path(basefilePath));
       LOG.info("Opened metadata base file from " + basefilePath + " at instant " + basefile.get().getCommitTime());
     }
 
@@ -365,9 +365,9 @@ public class HoodieBackedTableMetadata implements HoodieTableMetadata {
   }
 
   protected void closeReaders() {
-    if (basefileReader != null) {
-      basefileReader.close();
-      basefileReader = null;
+    if (baseFileReader != null) {
+      baseFileReader.close();
+      baseFileReader = null;
     }
     logRecordScanner = null;
   }

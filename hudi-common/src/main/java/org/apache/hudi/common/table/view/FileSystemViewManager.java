@@ -158,6 +158,21 @@ public class FileSystemViewManager {
     return new HoodieTableFileSystemView(metaClient, timeline, viewConf.isIncrementalTimelineSyncEnabled());
   }
 
+  public static HoodieTableFileSystemView createInMemoryFileSystemView(HoodieTableMetaClient metaClient,
+                                                                       boolean useFileListingFromMetadata,
+                                                                       boolean verifyListings) {
+    LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePath());
+    if (useFileListingFromMetadata) {
+      return new HoodieMetadataFileSystemView(metaClient,
+              metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
+              true,
+              verifyListings);
+    }
+
+    return new HoodieTableFileSystemView(metaClient,
+            metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
+  }
+
   /**
    * Create a remote file System view for a table.
    * 
