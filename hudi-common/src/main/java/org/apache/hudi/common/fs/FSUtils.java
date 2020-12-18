@@ -28,6 +28,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
@@ -248,12 +250,14 @@ public class FSUtils {
     }
   }
 
-  public static List<String> getAllPartitionPaths(FileSystem fs, String basePathStr, boolean assumeDatePartitioning)
-      throws IOException {
+  public static List<String> getAllPartitionPaths(FileSystem fs, String basePathStr, boolean useFileListingFromMetadata, boolean verifyListings,
+                                                  boolean assumeDatePartitioning) throws IOException {
     if (assumeDatePartitioning) {
       return getAllPartitionFoldersThreeLevelsDown(fs, basePathStr);
     } else {
-      return getAllFoldersWithPartitionMetaFile(fs, basePathStr);
+      HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(fs.getConf(), basePathStr, "/tmp/", useFileListingFromMetadata,
+          verifyListings, false, false);
+      return tableMetadata.getAllPartitionPaths();
     }
   }
 

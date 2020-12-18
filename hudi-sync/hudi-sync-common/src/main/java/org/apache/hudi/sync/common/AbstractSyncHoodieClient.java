@@ -46,12 +46,17 @@ public abstract class AbstractSyncHoodieClient {
   protected final FileSystem fs;
   private String basePath;
   private boolean assumeDatePartitioning;
+  private boolean useFileListingFromMetadata;
+  private boolean verifyMetadataFileListing;
 
-  public AbstractSyncHoodieClient(String basePath, boolean assumeDatePartitioning, FileSystem fs) {
+  public AbstractSyncHoodieClient(String basePath, boolean assumeDatePartitioning, boolean useFileListingFromMetadata,
+                                  boolean verifyMetadataFileListing, FileSystem fs) {
     this.metaClient = new HoodieTableMetaClient(fs.getConf(), basePath, true);
     this.tableType = metaClient.getTableType();
     this.basePath = basePath;
     this.assumeDatePartitioning = assumeDatePartitioning;
+    this.useFileListingFromMetadata = useFileListingFromMetadata;
+    this.verifyMetadataFileListing = verifyMetadataFileListing;
     this.fs = fs;
   }
 
@@ -120,7 +125,7 @@ public abstract class AbstractSyncHoodieClient {
     if (!lastCommitTimeSynced.isPresent()) {
       LOG.info("Last commit time synced is not known, listing all partitions in " + basePath + ",FS :" + fs);
       try {
-        return FSUtils.getAllPartitionPaths(fs, basePath, assumeDatePartitioning);
+        return FSUtils.getAllPartitionPaths(fs, basePath, useFileListingFromMetadata, verifyMetadataFileListing, assumeDatePartitioning);
       } catch (IOException e) {
         throw new HoodieIOException("Failed to list all partitions in " + basePath, e);
       }

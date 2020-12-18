@@ -89,7 +89,7 @@ public class SavepointActionExecutor extends BaseActionExecutor<HoodieSavepointM
 
       jsc.setJobGroup(this.getClass().getSimpleName(), "Collecting latest files for savepoint " + instantTime);
       Map<String, List<String>> latestFilesMap = jsc.parallelize(FSUtils.getAllPartitionPaths(table.getMetaClient().getFs(),
-          table.getMetaClient().getBasePath(), config.shouldAssumeDatePartitioning()))
+          table.getMetaClient().getBasePath(), config.useFileListingMetadata(), config.getFileListingMetadataVerify(), config.shouldAssumeDatePartitioning()))
           .mapToPair(partitionPath -> {
             // Scan all partitions files with this commit time
             LOG.info("Collecting latest files in partition path " + partitionPath);

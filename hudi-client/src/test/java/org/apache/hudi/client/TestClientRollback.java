@@ -99,8 +99,9 @@ public class TestClientRollback extends HoodieClientTestBase {
       statuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       // Verify there are no errors
       assertNoWriteErrors(statuses);
-      List<String> partitionPaths =
-          FSUtils.getAllPartitionPaths(fs, cfg.getBasePath(), getConfig().shouldAssumeDatePartitioning());
+      HoodieWriteConfig config = getConfig();
+      List<String> partitionPaths = FSUtils.getAllPartitionPaths(fs, cfg.getBasePath(), config.useFileListingMetadata(),
+          config.getFileListingMetadataVerify(), config.shouldAssumeDatePartitioning());
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieTable table = HoodieTable.create(metaClient, getConfig(), hadoopConf);
       final BaseFileOnlyView view1 = table.getBaseFileOnlyView();
