@@ -18,11 +18,6 @@
 
 package org.apache.hudi.common.model;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro;
-import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldVal;
-
-import java.util.Collections;
-import java.util.Map;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
@@ -32,11 +27,13 @@ import org.apache.avro.generic.IndexedRecord;
 import java.io.IOException;
 import java.util.Properties;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro;
+import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldVal;
+
 /**
  * {@link HoodieRecordPayload} impl that honors ordering field in both preCombine and combineAndGetUpdateValue.
  * <p>
- * 1. preCombine - Picks the latest delta record for a key, based on an ordering field
- * 2. combineAndGetUpdateValue/getInsertValue - Chooses the latest record based on ordering field value.
+ * 1. preCombine - Picks the latest delta record for a key, based on an ordering field 2. combineAndGetUpdateValue/getInsertValue - Chooses the latest record based on ordering field value.
  */
 public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
 
