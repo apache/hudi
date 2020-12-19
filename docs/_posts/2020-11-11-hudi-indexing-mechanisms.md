@@ -1,15 +1,15 @@
 ---
-title: "Employing the right indexes for fast updates, deletes"
+title: "Employing the right indexes for fast updates, deletes in Apache Hudi"
 excerpt: "Detailing different indexing mechanisms in Hudi and when to use each of them"
 author: sivabalan
 category: blog
 ---
 
-Apache Hudi employs an index to locate the file group, that an update/delete belong to. For Copy-On-Write tables, this enables
+Apache Hudi employs an index to locate the file group, that an update/delete belongs to. For Copy-On-Write tables, this enables
 fast upsert/delete operations, by avoiding the need to join against the entire dataset to determine which files to rewrite.
 For Merge-On-Read tables, this design allows Hudi to bound the amount of records any given base file needs to be merged against.
 Specifically, a given base file needs to merged only against updates for records that are part of that base file. In contrast,
-designs without an indexing component like [Apache Hive ACID](https://cwiki.apache.org/confluence/display/Hive/Hive+Transactions),
+designs without an indexing component (e.g: [Apache Hive ACID](https://cwiki.apache.org/confluence/display/Hive/Hive+Transactions)),
 could end up having to merge all the base files against all incoming updates/delete records.
 
 At a high level, an index maps a record key + an optional partition path to a file group ID on storage (explained
@@ -73,7 +73,7 @@ In the near future, we plan to introduce a much speedier version of the BLOOM in
 point lookups. This would avoid any current limitations around reading bloom filters/ranges from the base files themselves, to perform the lookup. (see 
 [RFC-15](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+15%3A+HUDI+File+Listing+and+Query+Planning+Improvements?src=contextnavpagetreemode) for the general design)
 
-## Workload: Duplicated records in event tables
+## Workload: De-Duplication in event tables
 
 Event Streaming is everywhere. Events coming from Apache Kafka or similar message bus are typically 10-100x the size of fact tables and often treat "time" (event's arrival time/processing 
 time) as a first class citizen. For eg, IoT event stream, click stream data, ad impressions etc. Inserts and updates only span the last few partitions as these are mostly append only data. 
@@ -87,7 +87,7 @@ costs would grow linear with number of events and thus can be prohibitively expe
 that time is often a first class citizen and construct a key such as `event_ts + event_id` such that the inserted records have monotonically increasing keys. This yields great returns
 by pruning large amounts of files even within the latest table partitions. 
 
-## Workload: Completely random updates/deletes to a dimension table
+## Workload: Random updates/deletes to a dimension table
 
 These types of tables usually contain high dimensional data and hold reference data e.g user profile, merchant information. These are high fidelity tables where the updates are often small but also spread 
 across a lot of partitions and data files ranging across the dataset from old to new. Often times, these tables are also un-partitioned, since there is also not a good way to partition these tables.
