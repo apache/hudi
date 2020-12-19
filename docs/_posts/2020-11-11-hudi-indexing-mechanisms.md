@@ -2,7 +2,7 @@
 title: "Employing the right indexes for fast updates, deletes"
 excerpt: "Detailing different indexing mechanisms in Hudi and when to use each of them"
 author: sivabalan
-category: blog, indexing, performance
+category: blog
 ---
 
 Apache Hudi employs an index to locate the file group, that an update/delete belong to. For Copy-On-Write tables, this enables
