@@ -1204,8 +1204,8 @@ var store = [{
         "tags": [],
         "url": "https://hudi.apache.org/blog/hudi-meets-aws-emr-and-aws-dms/",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
-        "title": "Employing the right indexes for fast updates, deletes",
-        "excerpt":"Apache Hudi employs an index to locate the file group, that an update/delete belong to. For Copy-On-Write tables, this enables fast upsert/delete operations, by avoiding the need to join against the entire dataset to determine which files to rewrite. For Merge-On-Read tables, this design allows Hudi to bound the amount...","categories": ["blog"],
+        "title": "Employing the right indexes for fast updates, deletes in Apache Hudi",
+        "excerpt":"Apache Hudi employs an index to locate the file group, that an update/delete belongs to. For Copy-On-Write tables, this enables fast upsert/delete operations, by avoiding the need to join against the entire dataset to determine which files to rewrite. For Merge-On-Read tables, this design allows Hudi to bound the amount...","categories": ["blog"],
         "tags": [],
         "url": "https://hudi.apache.org/blog/hudi-indexing-mechanisms/",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
