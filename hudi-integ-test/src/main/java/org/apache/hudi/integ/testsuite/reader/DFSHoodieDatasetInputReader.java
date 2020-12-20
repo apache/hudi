@@ -38,6 +38,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -79,7 +80,8 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
 
   protected List<String> getPartitions(Option<Integer> partitionsLimit) throws IOException {
     List<String> partitionPaths = FSUtils
-        .getAllPartitionPaths(metaClient.getFs(), metaClient.getBasePath(), false);
+        .getAllPartitionPaths(metaClient.getFs(), metaClient.getBasePath(), HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS,
+            HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE,false);
     // Sort partition so we can pick last N partitions by default
     Collections.sort(partitionPaths);
     if (!partitionPaths.isEmpty()) {

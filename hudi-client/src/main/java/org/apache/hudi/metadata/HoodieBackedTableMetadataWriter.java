@@ -312,15 +312,16 @@ public class HoodieBackedTableMetadataWriter implements HoodieTableMetadataWrite
 
     // List all partitions in the basePath of the containing dataset
     FileSystem fs = datasetMetaClient.getFs();
-    List<String> partitions = FSUtils.getAllPartitionPaths(fs, datasetWriteConfig.getBasePath(), datasetWriteConfig.shouldAssumeDatePartitioning());
+    FileSystemBackedTableMetadata fileSystemBackedTableMetadata = new FileSystemBackedTableMetadata(hadoopConf, datasetWriteConfig.getBasePath(),
+        datasetWriteConfig.shouldAssumeDatePartitioning());
+    List<String> partitions = fileSystemBackedTableMetadata.getAllPartitionPaths();
     LOG.info("Initializing metadata table by using file listings in " + partitions.size() + " partitions");
 
     // List all partitions in parallel and collect the files in them
     int parallelism =  Math.min(partitions.size(), jsc.defaultParallelism()) + 1; // +1 to prevent 0 parallelism
     JavaPairRDD<String, FileStatus[]> partitionFileListRDD = jsc.parallelize(partitions, parallelism)
         .mapToPair(partition -> {
-          FileSystem fsys = datasetMetaClient.getFs();
-          FileStatus[] statuses = FSUtils.getAllDataFilesInPartition(fsys, new Path(datasetWriteConfig.getBasePath(), partition));
+          FileStatus[] statuses = fileSystemBackedTableMetadata.getAllFilesInPartition(new Path(datasetWriteConfig.getBasePath(), partition));
           return new Tuple2<>(partition, statuses);
         });
 

@@ -89,7 +89,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
         List<ListingBasedRollbackRequest> rollbackRequests;
         if (table.getMetaClient().getTableType() == HoodieTableType.COPY_ON_WRITE) {
           rollbackRequests = RollbackUtils.generateRollbackRequestsByListingCOW(table.getMetaClient().getFs(), table.getMetaClient().getBasePath(),
-              table.getConfig().shouldAssumeDatePartitioning());
+              table.getConfig());
         } else {
           rollbackRequests = RollbackUtils.generateRollbackRequestsUsingFileListingMOR(commitInstantOpt.get(), table, jsc);
         }

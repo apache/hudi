@@ -100,7 +100,8 @@ public class HoodieGlobalSimpleIndex<T extends HoodieRecordPayload> extends Hood
   protected List<Pair<String, HoodieBaseFile>> getAllBaseFilesInTable(final JavaSparkContext jsc, final HoodieTable hoodieTable) {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     try {
-      List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(metaClient.getFs(), metaClient.getBasePath(), config.shouldAssumeDatePartitioning());
+      List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(metaClient.getFs(), metaClient.getBasePath(),
+          config.useFileListingMetadata(), config.getFileListingMetadataVerify(), config.shouldAssumeDatePartitioning());
       // Obtain the latest data files from all the partitions.
       return getLatestBaseFilesForAllPartitions(allPartitionPaths, jsc, hoodieTable);
     } catch (IOException e) {
