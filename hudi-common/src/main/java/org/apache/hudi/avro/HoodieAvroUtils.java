@@ -446,7 +446,7 @@ public class HoodieAvroUtils {
    * @param fieldValue avro field value
    * @return field value either converted (for certain data types) or as it is.
    */
-  private static Object convertValueForSpecificDataTypes(Schema fieldSchema, Object fieldValue) {
+  public static Object convertValueForSpecificDataTypes(Schema fieldSchema, Object fieldValue) {
     if (fieldSchema == null) {
       return fieldValue;
     }

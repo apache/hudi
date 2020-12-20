@@ -149,6 +149,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   // We keep track of original config and rewritten config
   private final FileSystemViewStorageConfig clientSpecifiedViewStorageConfig;
   private FileSystemViewStorageConfig viewStorageConfig;
+  private HoodiePayloadConfig hoodiePayloadConfig;
 
   private EngineType engineType;
 
@@ -167,6 +168,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     this.consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().fromProperties(newProps).build();
     this.clientSpecifiedViewStorageConfig = FileSystemViewStorageConfig.newBuilder().fromProperties(newProps).build();
     this.viewStorageConfig = clientSpecifiedViewStorageConfig;
+    this.hoodiePayloadConfig = HoodiePayloadConfig.newBuilder().fromProperties(newProps).build();
   }
 
   public static HoodieWriteConfig.Builder newBuilder() {
@@ -752,6 +754,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return clientSpecifiedViewStorageConfig;
   }
 
+  public HoodiePayloadConfig getPayloadConfig() {
+    return hoodiePayloadConfig;
+  }
+
   /**
    * Commit call back configs.
    */
@@ -812,6 +818,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private boolean isViewConfigSet = false;
     private boolean isConsistencyGuardSet = false;
     private boolean isCallbackConfigSet = false;
+    private boolean isPayloadConfigSet = false;
 
     public Builder withEngineType(EngineType engineType) {
       this.engineType = engineType;
@@ -949,6 +956,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     public Builder withBootstrapConfig(HoodieBootstrapConfig bootstrapConfig) {
       props.putAll(bootstrapConfig.getProps());
       isBootstrapConfigSet = true;
+      return this;
+    }
+
+    public Builder withPayloadConfig(HoodiePayloadConfig payloadConfig) {
+      props.putAll(payloadConfig.getProps());
+      isPayloadConfigSet = true;
       return this;
     }
 
@@ -1094,6 +1107,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           ConsistencyGuardConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isCallbackConfigSet,
           HoodieWriteCommitCallbackConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isPayloadConfigSet,
+          HoodiePayloadConfig.newBuilder().fromProperties(props).build());
 
       setDefaultOnCondition(props, !props.containsKey(EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION),
           EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION, DEFAULT_EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION);
