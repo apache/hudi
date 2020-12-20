@@ -205,7 +205,6 @@ object DataSourceWriteOptions {
   val PRECOMBINE_FIELD_OPT_KEY = "hoodie.datasource.write.precombine.field"
   val DEFAULT_PRECOMBINE_FIELD_OPT_VAL = "ts"
 
-
   /**
     * Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.
     * This will render any value set for `PRECOMBINE_FIELD_OPT_VAL` in-effective
