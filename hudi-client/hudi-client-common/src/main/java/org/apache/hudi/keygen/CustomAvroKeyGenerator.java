@@ -88,7 +88,7 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
           try {
             partitionPath.append(new TimestampBasedAvroKeyGenerator(config, partitionPathField).getPartitionPath(record));
           } catch (IOException e) {
-            throw new HoodieKeyGeneratorException("Unable to initialise TimestampBasedKeyGenerator class");
+            throw new HoodieKeyGeneratorException("Unable to initialise TimestampBasedKeyGenerator class", e);
           }
           break;
         default:
