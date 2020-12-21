@@ -48,7 +48,7 @@
               <goal>shade</goal>
             </goals>
             <configuration>
-              <createSourcesJar>true</createSourcesJar>
+              <createSourcesJar>${shadeSources}</createSourcesJar>
               <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml
               </dependencyReducedPomLocation>
               <transformers>
