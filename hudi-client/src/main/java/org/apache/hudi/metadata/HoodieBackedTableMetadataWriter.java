@@ -68,7 +68,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
@@ -82,8 +81,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import scala.Tuple2;
 
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
@@ -313,21 +310,7 @@ public class HoodieBackedTableMetadataWriter implements HoodieTableMetadataWrite
     initTableMetadata();
 
     // List all partitions in the basePath of the containing dataset
-    FileSystem fs = datasetMetaClient.getFs();
-    FileSystemBackedTableMetadata fileSystemBackedTableMetadata = new FileSystemBackedTableMetadata(hadoopConf, datasetWriteConfig.getBasePath(),
-        datasetWriteConfig.shouldAssumeDatePartitioning());
-    List<String> partitions = fileSystemBackedTableMetadata.getAllPartitionPaths();
-    LOG.info("Initializing metadata table by using file listings in " + partitions.size() + " partitions");
-
-    // List all partitions in parallel and collect the files in them
-    int parallelism =  Math.min(partitions.size(), jsc.defaultParallelism()) + 1; // +1 to prevent 0 parallelism
-    JavaPairRDD<String, FileStatus[]> partitionFileListRDD = jsc.parallelize(partitions, parallelism)
-        .mapToPair(partition -> {
-          FileStatus[] statuses = fileSystemBackedTableMetadata.getAllFilesInPartition(new Path(datasetWriteConfig.getBasePath(), partition));
-          return new Tuple2<>(partition, statuses);
-        });
     LOG.info("Initializing metadata table by using file listings in " + datasetWriteConfig.getBasePath());
-
     Map<String, List<FileStatus>> partitionToFileStatus = getPartitionsToFilesMapping(jsc, datasetMetaClient);
 
     // Create a HoodieCommitMetadata with writeStats for all discovered files
@@ -371,10 +354,11 @@ public class HoodieBackedTableMetadataWriter implements HoodieTableMetadataWrite
    * @param datasetMetaClient
    * @return Map of partition names to a list of FileStatus for all the files in the partition
    */
-  private Map<String, List<FileStatus>> getPartitionsToFilesMapping(JavaSparkContext jsc,
-      HoodieTableMetaClient datasetMetaClient) {
+  private Map<String, List<FileStatus>> getPartitionsToFilesMapping(JavaSparkContext jsc, HoodieTableMetaClient datasetMetaClient) {
+
     List<Path> pathsToList = new LinkedList<>();
     pathsToList.add(new Path(datasetWriteConfig.getBasePath()));
+
     Map<String, List<FileStatus>> partitionToFileStatus = new HashMap<>();
     final int fileListingParallelism = metadataWriteConfig.getFileListingParallelism();
     SerializableConfiguration conf = new SerializableConfiguration(datasetMetaClient.getHadoopConf());
