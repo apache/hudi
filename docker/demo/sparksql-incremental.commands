@@ -21,6 +21,7 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.spark.sql.SaveMode;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.HoodieDataSourceHelpers;
+import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hadoop.fs.FileSystem;
 
 val fs = FileSystem.get(spark.sparkContext.hadoopConfiguration)
@@ -49,6 +50,8 @@ spark.sql("select key, `_hoodie_partition_path` as datestr, symbol, ts, open, cl
     option(DataSourceWriteOptions.HIVE_PASS_OPT_KEY, "hive").
     option(DataSourceWriteOptions.HIVE_SYNC_ENABLED_OPT_KEY, "true").
     option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY, "datestr").
+    option(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY, classOf[MultiPartKeysValueExtractor].getCanonicalName).
+    option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY, "true").
     mode(SaveMode.Overwrite).
     save("/user/hive/warehouse/stock_ticks_derived_mor");
 
@@ -79,6 +82,8 @@ spark.sql("select key, `_hoodie_partition_path` as datestr, symbol, ts, open, cl
     option(DataSourceWriteOptions.HIVE_PASS_OPT_KEY, "hive").
     option(DataSourceWriteOptions.HIVE_SYNC_ENABLED_OPT_KEY, "true").
     option(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY, "datestr").
+    option(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY, classOf[MultiPartKeysValueExtractor].getCanonicalName).
+    option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY, "true").
     mode(SaveMode.Overwrite).
     save("/user/hive/warehouse/stock_ticks_derived_mor_bs");
 

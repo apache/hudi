@@ -364,6 +364,8 @@ private[hudi] object HoodieSparkSqlWriter {
     hiveSyncConfig.partitionValueExtractorClass = parameters(HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY)
     hiveSyncConfig.useJdbc = parameters(HIVE_USE_JDBC_OPT_KEY).toBoolean
     hiveSyncConfig.supportTimestamp = parameters.get(HIVE_SUPPORT_TIMESTAMP).exists(r => r.toBoolean)
+    hiveSyncConfig.decodePartition = parameters.getOrElse(URL_ENCODE_PARTITIONING_OPT_KEY,
+      DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL).toBoolean
     hiveSyncConfig
   }
 
