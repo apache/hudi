@@ -76,6 +76,7 @@ public class SparkRunCompactionActionExecutor<T extends HoodieRecordPayload> ext
       JavaRDD<WriteStatus> statuses = compactor.compact(context, compactionPlan, table, config, instantTime);
 
       statuses.persist(SparkMemoryUtils.getWriteStatusStorageLevel(config.getProps()));
+      context.setJobStatus(this.getClass().getSimpleName(), "Preparing compaction metadata");
       List<HoodieWriteStat> updateStatusMap = statuses.map(WriteStatus::getStat).collect();
       HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);
       for (HoodieWriteStat stat : updateStatusMap) {

@@ -18,13 +18,14 @@
 
 package org.apache.hudi.operator;
 
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.model.HoodieRecord;
+
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.runtime.state.StateSnapshotContext;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.model.HoodieRecord;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

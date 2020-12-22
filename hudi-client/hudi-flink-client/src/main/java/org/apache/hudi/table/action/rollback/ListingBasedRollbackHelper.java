@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -48,8 +49,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-import scala.Tuple2;
-
+/**
+ * Performs Rollback of Hoodie Tables.
+ */
 public class ListingBasedRollbackHelper implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(ListingBasedRollbackHelper.class);
@@ -103,13 +105,13 @@ public class ListingBasedRollbackHelper implements Serializable {
         case DELETE_DATA_FILES_ONLY: {
           final Map<FileStatus, Boolean> filesToDeletedStatus = deleteBaseFiles(metaClient, config, instantToRollback.getTimestamp(),
               rollbackRequest.getPartitionPath(), doDelete);
-          return new Tuple2<>(rollbackRequest.getPartitionPath(),
+          return new ImmutablePair<>(rollbackRequest.getPartitionPath(),
               HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
                   .withDeletedFileResults(filesToDeletedStatus).build());
         }
         case DELETE_DATA_AND_LOG_FILES: {
           final Map<FileStatus, Boolean> filesToDeletedStatus = deleteBaseAndLogFiles(metaClient, config, instantToRollback.getTimestamp(), rollbackRequest.getPartitionPath(), doDelete);
-          return new Tuple2<>(rollbackRequest.getPartitionPath(),
+          return new ImmutablePair<>(rollbackRequest.getPartitionPath(),
               HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
                   .withDeletedFileResults(filesToDeletedStatus).build());
         }
@@ -147,7 +149,7 @@ public class ListingBasedRollbackHelper implements Serializable {
               metaClient.getFs().getFileStatus(Objects.requireNonNull(writer).getLogFile().getPath()),
               1L
           );
-          return new Tuple2<>(rollbackRequest.getPartitionPath(),
+          return new ImmutablePair<>(rollbackRequest.getPartitionPath(),
               HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
                   .withRollbackBlockAppendResults(filesToNumBlocksRollback).build());
         }

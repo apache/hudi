@@ -18,6 +18,9 @@
 
 package org.apache.hudi.table.action.compact;
 
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
@@ -49,10 +52,6 @@ import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
-
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -129,10 +128,18 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
     List<String> logFiles = operation.getDeltaFileNames().stream().map(
         p -> new Path(FSUtils.getPartitionPath(metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
         .collect(toList());
-    HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs, metaClient.getBasePath(), logFiles,
-        readerSchema, maxInstantTime, maxMemoryPerCompaction, config.getCompactionLazyBlockReadEnabled(),
-        config.getCompactionReverseLogReadEnabled(), config.getMaxDFSStreamBufferSize(),
-        config.getSpillableMapBasePath());
+    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
+        .withFileSystem(fs)
+        .withBasePath(metaClient.getBasePath())
+        .withLogFilePaths(logFiles)
+        .withReaderSchema(readerSchema)
+        .withLatestInstantTime(maxInstantTime)
+        .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
+        .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
+        .withReverseReader(config.getCompactionReverseLogReadEnabled())
+        .withBufferSize(config.getMaxDFSStreamBufferSize())
+        .withSpillableMapBasePath(config.getSpillableMapBasePath())
+        .build();
     if (!scanner.iterator().hasNext()) {
       return new ArrayList<>();
     }
@@ -171,7 +178,8 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
   @Override
   public HoodieCompactionPlan generateCompactionPlan(HoodieEngineContext context,
                                                      HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable,
-                                                     HoodieWriteConfig config, String compactionCommitTime, Set<HoodieFileGroupId> fgIdsInPendingCompactions)
+                                                     HoodieWriteConfig config, String compactionCommitTime,
+                                                     Set<HoodieFileGroupId> fgIdsInPendingCompactionAndClustering)
       throws IOException {
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     totalLogFiles = new LongAccumulator();
@@ -205,7 +213,7 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
     List<HoodieCompactionOperation> operations = context.flatMap(partitionPaths, partitionPath -> {
       return fileSystemView
           .getLatestFileSlices(partitionPath)
-          .filter(slice -> !fgIdsInPendingCompactions.contains(slice.getFileGroupId()))
+          .filter(slice -> !fgIdsInPendingCompactionAndClustering.contains(slice.getFileGroupId()))
           .map(s -> {
             List<HoodieLogFile> logFiles =
                 s.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
@@ -216,7 +224,7 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
             // into meta files.
             Option<HoodieBaseFile> dataFile = s.getBaseFile();
             return new CompactionOperation(dataFile, partitionPath, logFiles,
-                config.getCompactionStrategy().captureMetrics(config, dataFile, partitionPath, logFiles));
+                config.getCompactionStrategy().captureMetrics(config, s));
           })
           .filter(c -> !c.getDeltaFileNames().isEmpty());
     }, partitionPaths.size()).stream().map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
@@ -231,9 +239,9 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
         CompactionUtils.getAllPendingCompactionPlans(metaClient).stream().map(Pair::getValue).collect(toList()));
     ValidationUtils.checkArgument(
         compactionPlan.getOperations().stream().noneMatch(
-            op -> fgIdsInPendingCompactions.contains(new HoodieFileGroupId(op.getPartitionPath(), op.getFileId()))),
+            op -> fgIdsInPendingCompactionAndClustering.contains(new HoodieFileGroupId(op.getPartitionPath(), op.getFileId()))),
         "Bad Compaction Plan. FileId MUST NOT have multiple pending compactions. "
-            + "Please fix your strategy implementation. FileIdsWithPendingCompactions :" + fgIdsInPendingCompactions
+            + "Please fix your strategy implementation. FileIdsWithPendingCompactions :" + fgIdsInPendingCompactionAndClustering
             + ", Selected workload :" + compactionPlan);
     if (compactionPlan.getOperations().isEmpty()) {
       LOG.warn("After filtering, Nothing to compact for " + metaClient.getBasePath());

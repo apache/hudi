@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -44,11 +45,14 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.SparkBootstrapCommitActionExecutor;
 import org.apache.hudi.table.action.clean.SparkCleanActionExecutor;
-import org.apache.hudi.table.action.commit.SparkInsertOverwriteCommitActionExecutor;
+import org.apache.hudi.table.action.cluster.SparkExecuteClusteringCommitActionExecutor;
+import org.apache.hudi.table.action.cluster.SparkClusteringPlanActionExecutor;
 import org.apache.hudi.table.action.commit.SparkBulkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkBulkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkDeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkInsertCommitActionExecutor;
+import org.apache.hudi.table.action.commit.SparkInsertOverwriteCommitActionExecutor;
+import org.apache.hudi.table.action.commit.SparkInsertOverwriteTableCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkMergeHelper;
 import org.apache.hudi.table.action.commit.SparkUpsertCommitActionExecutor;
@@ -56,7 +60,6 @@ import org.apache.hudi.table.action.commit.SparkUpsertPreppedCommitActionExecuto
 import org.apache.hudi.table.action.restore.SparkCopyOnWriteRestoreActionExecutor;
 import org.apache.hudi.table.action.rollback.SparkCopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -130,6 +133,11 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   }
 
   @Override
+  public HoodieWriteMetadata<JavaRDD<WriteStatus>> insertOverwriteTable(HoodieEngineContext context, String instantTime, JavaRDD<HoodieRecord<T>> records) {
+    return new SparkInsertOverwriteTableCommitActionExecutor(context, config, this, instantTime, records).execute();
+  }
+
+  @Override
   public Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
     throw new HoodieNotSupportedException("Compaction is not supported on a CopyOnWrite table");
   }
@@ -137,6 +145,19 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> compact(HoodieEngineContext context, String compactionInstantTime) {
     throw new HoodieNotSupportedException("Compaction is not supported on a CopyOnWrite table");
+  }
+
+  @Override
+  public Option<HoodieClusteringPlan> scheduleClustering(HoodieEngineContext context,
+                                                         String instantTime,
+                                                         Option<Map<String, String>> extraMetadata) {
+    return new SparkClusteringPlanActionExecutor<>(context, config,this, instantTime, extraMetadata).execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata<JavaRDD<WriteStatus>> cluster(HoodieEngineContext context,
+                                                           String clusteringInstantTime) {
+    return new SparkExecuteClusteringCommitActionExecutor<>(context, config, this, clusteringInstantTime).execute();
   }
 
   @Override

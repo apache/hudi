@@ -18,20 +18,22 @@
 
 package org.apache.hudi.client.common;
 
-import org.apache.flink.api.common.functions.RuntimeContext;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.common.function.SerializableConsumer;
 import org.apache.hudi.client.common.function.SerializableFunction;
 import org.apache.hudi.client.common.function.SerializablePairFunction;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.util.Option;
-import scala.Tuple2;
+
+import org.apache.flink.api.common.functions.RuntimeContext;
+import org.apache.hadoop.conf.Configuration;
 
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import org.apache.hudi.common.util.collection.Pair;
 
 import static org.apache.hudi.client.common.function.FunctionWrapper.throwingFlatMapWrapper;
 import static org.apache.hudi.client.common.function.FunctionWrapper.throwingForeachWrapper;
@@ -74,7 +76,7 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
 
   @Override
   public <I, K, V> Map<K, V> mapToPair(List<I> data, SerializablePairFunction<I, K, V> func, Integer parallelism) {
-    return data.stream().map(throwingMapToPairWrapper(func)).collect(Collectors.toMap(Tuple2::_1, Tuple2::_2));
+    return data.stream().map(throwingMapToPairWrapper(func)).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
   }
 
   @Override

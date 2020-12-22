@@ -29,6 +29,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
@@ -192,15 +193,11 @@ public class HoodieDeltaStreamer implements Serializable {
     return true;
   }
 
-  public enum Operation {
-    UPSERT, INSERT, BULK_INSERT
-  }
-
-  protected static class OperationConverter implements IStringConverter<Operation> {
+  protected static class OperationConverter implements IStringConverter<WriteOperationType> {
 
     @Override
-    public Operation convert(String value) throws ParameterException {
-      return Operation.valueOf(value);
+    public WriteOperationType convert(String value) throws ParameterException {
+      return WriteOperationType.valueOf(value);
     }
   }
 
@@ -272,7 +269,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
     @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT (use when input "
         + "is purely new data/inserts to gain speed)", converter = OperationConverter.class)
-    public Operation operation = Operation.UPSERT;
+    public WriteOperationType operation = WriteOperationType.UPSERT;
 
     @Parameter(names = {"--filter-dupes"},
         description = "Should duplicate records from source be dropped/filtered out before insert/bulk-insert")
@@ -552,13 +549,13 @@ public class HoodieDeltaStreamer implements Serializable {
         }
       }
 
-      ValidationUtils.checkArgument(!cfg.filterDupes || cfg.operation != Operation.UPSERT,
+      ValidationUtils.checkArgument(!cfg.filterDupes || cfg.operation != WriteOperationType.UPSERT,
           "'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed.");
 
       this.props = properties.get();
       LOG.info("Creating delta streamer with configs : " + props.toString());
       this.schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
-          UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc), props, jssc);
+          UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc), props, jssc, cfg.transformerClassNames);
 
       deltaSync = new DeltaSync(cfg, sparkSession, schemaProvider, props, jssc, fs, conf,
           this::onInitializingWriteClient);

@@ -299,6 +299,14 @@ public interface HoodieTimeline extends Serializable {
     return new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, timestamp);
   }
 
+  static HoodieInstant getReplaceCommitRequestedInstant(final String timestamp) {
+    return new HoodieInstant(State.REQUESTED, REPLACE_COMMIT_ACTION, timestamp);
+  }
+
+  static HoodieInstant getReplaceCommitInflightInstant(final String timestamp) {
+    return new HoodieInstant(State.INFLIGHT, REPLACE_COMMIT_ACTION, timestamp);
+  }
+
   /**
    * Returns the inflight instant corresponding to the instant being passed. Takes care of changes in action names
    * between inflight and completed instants (compaction <=> commit).

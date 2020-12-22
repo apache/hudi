@@ -18,10 +18,6 @@
 
 package org.apache.hudi.sink;
 
-import org.apache.flink.api.java.tuple.Tuple3;
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
-import org.apache.hudi.HudiFlinkStreamer;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -29,7 +25,12 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieFlinkStreamerException;
+import org.apache.hudi.HoodieFlinkStreamer;
 import org.apache.hudi.util.StreamerUtil;
+
+import org.apache.flink.api.java.tuple.Tuple3;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,7 +51,7 @@ public class CommitSink extends RichSinkFunction<Tuple3<String, List<WriteStatus
   /**
    * Job conf.
    */
-  private HudiFlinkStreamer.Config cfg;
+  private HoodieFlinkStreamer.Config cfg;
 
   /**
    * Write client.
@@ -71,7 +72,7 @@ public class CommitSink extends RichSinkFunction<Tuple3<String, List<WriteStatus
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
     // Get configs from runtimeContext
-    cfg = (HudiFlinkStreamer.Config) getRuntimeContext().getExecutionConfig().getGlobalJobParameters();
+    cfg = (HoodieFlinkStreamer.Config) getRuntimeContext().getExecutionConfig().getGlobalJobParameters();
 
     writeParallelSize = getRuntimeContext().getExecutionConfig().getParallelism();
 
@@ -81,7 +82,7 @@ public class CommitSink extends RichSinkFunction<Tuple3<String, List<WriteStatus
 
   @Override
   public void invoke(Tuple3<String, List<WriteStatus>, Integer> writeStatues, Context context) {
-    LOG.info("Receive records, instantTime = [{}], subtaskId = [{}], records size = [{}]", writeStatues.f0, writeStatues.f2, writeStatues.f1.size());
+    LOG.info("Receive records, instantTime = [{}], subtaskId = [{}], WriteStatus size = [{}]", writeStatues.f0, writeStatues.f2, writeStatues.f1.size());
     try {
       if (bufferedWriteStatus.containsKey(writeStatues.f0)) {
         bufferedWriteStatus.get(writeStatues.f0).add(writeStatues.f1);

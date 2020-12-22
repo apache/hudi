@@ -18,17 +18,7 @@
 
 package org.apache.hudi.operator;
 
-import org.apache.flink.api.common.state.ListState;
-import org.apache.flink.api.common.state.ListStateDescriptor;
-import org.apache.flink.runtime.state.StateInitializationContext;
-import org.apache.flink.runtime.state.StateSnapshotContext;
-import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
-import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
-import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.HudiFlinkStreamer;
+import org.apache.hudi.HoodieFlinkStreamer;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
@@ -41,6 +31,17 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.util.StreamerUtil;
+
+import org.apache.flink.api.common.state.ListState;
+import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.runtime.state.StateInitializationContext;
+import org.apache.flink.runtime.state.StateSnapshotContext;
+import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
+import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
+import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,7 +64,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   private static final Logger LOG = LoggerFactory.getLogger(InstantGenerateOperator.class);
   public static final String NAME = "InstantGenerateOperator";
 
-  private HudiFlinkStreamer.Config cfg;
+  private HoodieFlinkStreamer.Config cfg;
   private HoodieFlinkWriteClient writeClient;
   private SerializableConfiguration serializableHadoopConf;
   private transient FileSystem fs;
@@ -87,7 +88,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   public void open() throws Exception {
     super.open();
     // get configs from runtimeContext
-    cfg = (HudiFlinkStreamer.Config) getRuntimeContext().getExecutionConfig().getGlobalJobParameters();
+    cfg = (HoodieFlinkStreamer.Config) getRuntimeContext().getExecutionConfig().getGlobalJobParameters();
 
     // retry times
     retryTimes = Integer.valueOf(cfg.blockRetryTime);
@@ -195,7 +196,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
         return;
       }
     }
-    throw new InterruptedException("Last instant costs more than ten second, stop task now");
+    throw new InterruptedException(String.format("Last instant costs more than %s second, stop task now", retryTimes * retryInterval));
   }
 
 

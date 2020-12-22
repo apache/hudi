@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -46,6 +47,14 @@ import org.apache.hudi.table.action.rollback.FlinkCopyOnWriteRollbackActionExecu
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Implementation of a very heavily read-optimized Hoodie Table where, all data is stored in base files, with
+ * zero read amplification.
+ * <p>
+ * INSERTS - Produce new files, block aligned to desired size (or) Merge with the smallest existing file, to expand it
+ * <p>
+ * UPDATES - Produce a new version of the file, just replacing the updated records with new values
+ */
 public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends HoodieFlinkTable<T> {
 
   protected HoodieFlinkCopyOnWriteTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
@@ -99,6 +108,11 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   }
 
   @Override
+  public HoodieWriteMetadata<List<WriteStatus>> insertOverwriteTable(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> records) {
+    throw new HoodieNotSupportedException("insertOverwriteTable is not supported yet");
+  }
+
+  @Override
   public Option<HoodieCompactionPlan> scheduleCompaction(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
     throw new HoodieNotSupportedException("Compaction is not supported on a CopyOnWrite table");
   }
@@ -106,6 +120,16 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> compact(HoodieEngineContext context, String compactionInstantTime) {
     throw new HoodieNotSupportedException("Compaction is not supported on a CopyOnWrite table");
+  }
+
+  @Override
+  public Option<HoodieClusteringPlan> scheduleClustering(final HoodieEngineContext context, final String instantTime, final Option<Map<String, String>> extraMetadata) {
+    throw new HoodieNotSupportedException("Clustering is not supported on a Flink CopyOnWrite table");
+  }
+
+  @Override
+  public HoodieWriteMetadata<List<WriteStatus>> cluster(final HoodieEngineContext context, final String clusteringInstantTime) {
+    throw new HoodieNotSupportedException("Clustering is not supported on a Flink CopyOnWrite table");
   }
 
   @Override

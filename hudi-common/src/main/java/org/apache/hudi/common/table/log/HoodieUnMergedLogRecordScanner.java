@@ -41,6 +41,13 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
     this.callback = callback;
   }
 
+  /**
+   * Returns the builder for {@code HoodieUnMergedLogRecordScanner}.
+   */
+  public static HoodieUnMergedLogRecordScanner.Builder newBuilder() {
+    return new Builder();
+  }
+
   @Override
   protected void processNextRecord(HoodieRecord<? extends HoodieRecordPayload> hoodieRecord) throws Exception {
     // Just call callback without merging
@@ -59,5 +66,72 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
   public static interface LogRecordScannerCallback {
 
     public void apply(HoodieRecord<? extends HoodieRecordPayload> record) throws Exception;
+  }
+
+  /**
+   * Builder used to build {@code HoodieUnMergedLogRecordScanner}.
+   */
+  public static class Builder extends AbstractHoodieLogRecordScanner.Builder {
+    private FileSystem fs;
+    private String basePath;
+    private List<String> logFilePaths;
+    private Schema readerSchema;
+    private String latestInstantTime;
+    private boolean readBlocksLazily;
+    private boolean reverseReader;
+    private int bufferSize;
+    // specific configurations
+    private LogRecordScannerCallback callback;
+
+    public Builder withFileSystem(FileSystem fs) {
+      this.fs = fs;
+      return this;
+    }
+
+    public Builder withBasePath(String basePath) {
+      this.basePath = basePath;
+      return this;
+    }
+
+    public Builder withLogFilePaths(List<String> logFilePaths) {
+      this.logFilePaths = logFilePaths;
+      return this;
+    }
+
+    public Builder withReaderSchema(Schema schema) {
+      this.readerSchema = schema;
+      return this;
+    }
+
+    public Builder withLatestInstantTime(String latestInstantTime) {
+      this.latestInstantTime = latestInstantTime;
+      return this;
+    }
+
+    public Builder withReadBlocksLazily(boolean readBlocksLazily) {
+      this.readBlocksLazily = readBlocksLazily;
+      return this;
+    }
+
+    public Builder withReverseReader(boolean reverseReader) {
+      this.reverseReader = reverseReader;
+      return this;
+    }
+
+    public Builder withBufferSize(int bufferSize) {
+      this.bufferSize = bufferSize;
+      return this;
+    }
+
+    public Builder withLogRecordScannerCallback(LogRecordScannerCallback callback) {
+      this.callback = callback;
+      return this;
+    }
+
+    @Override
+    public HoodieUnMergedLogRecordScanner build() {
+      return new HoodieUnMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
+          latestInstantTime, readBlocksLazily, reverseReader, bufferSize, callback);
+    }
   }
 }

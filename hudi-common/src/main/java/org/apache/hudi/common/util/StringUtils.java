@@ -25,6 +25,8 @@ import javax.annotation.Nullable;
  */
 public class StringUtils {
 
+  public static final String EMPTY_STRING = "";
+
   /**
    * <p>
    * Joins the elements of the provided array into a single String containing the provided list of elements.

@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -49,6 +50,9 @@ import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
+/**
+ * Packs incoming records to be upserted, into buckets.
+ */
 public class UpsertPartitioner<T extends HoodieRecordPayload<T>> implements Partitioner  {
 
   private static final Logger LOG = LogManager.getLogger(UpsertPartitioner.class);
@@ -207,7 +211,8 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> implements Part
     Map<String, List<SmallFile>> partitionSmallFilesMap = new HashMap<>();
     if (partitionPaths != null && partitionPaths.size() > 0) {
       context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions");
-      partitionSmallFilesMap = context.mapToPair(partitionPaths, partitionPath -> new Tuple2<>(partitionPath, getSmallFiles(partitionPath)), 0);
+      partitionSmallFilesMap = context.mapToPair(partitionPaths,
+          partitionPath -> new ImmutablePair<>(partitionPath, getSmallFiles(partitionPath)), 0);
     }
     return partitionSmallFilesMap;
   }

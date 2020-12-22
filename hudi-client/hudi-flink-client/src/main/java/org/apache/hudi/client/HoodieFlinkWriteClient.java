@@ -97,6 +97,11 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
+  public void bootstrap(Option<Map<String, String>> extraMetadata) {
+    throw new HoodieNotSupportedException("Bootstrap operation is not supported yet");
+  }
+
+  @Override
   public List<WriteStatus> upsert(List<HoodieRecord<T>> records, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         getTableAndInitCtx(WriteOperationType.UPSERT, instantTime);
@@ -181,6 +186,11 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   @Override
   protected List<WriteStatus> compact(String compactionInstantTime, boolean shouldComplete) {
     throw new HoodieNotSupportedException("Compaction is not supported yet");
+  }
+
+  @Override
+  public HoodieWriteMetadata<List<WriteStatus>> cluster(final String clusteringInstant, final boolean shouldComplete) {
+    throw new HoodieNotSupportedException("Clustering is not supported yet");
   }
 
   @Override
