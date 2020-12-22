@@ -193,8 +193,12 @@ public class QuickstartUtils {
      * @return list of hoodie records to delete
      */
     public List<String> generateDeletes(List<Row> rows) {
-      return rows.stream().map(row ->
-          convertToString(row.getAs("uuid"), row.getAs("partitionpath"))).filter(os -> os.isPresent()).map(os -> os.get())
+      // if row.length() == 2, then the record contains "uuid" and "partitionpath" fields, otherwise,
+      // another field "ts" is available
+      return rows.stream().map(row -> row.length() == 2
+          ? convertToString(row.getAs("uuid"), row.getAs("partitionpath"), null) :
+          convertToString(row.getAs("uuid"), row.getAs("partitionpath"), row.getAs("ts"))
+      ).filter(os -> os.isPresent()).map(os -> os.get())
           .collect(Collectors.toList());
     }
 
@@ -215,10 +219,10 @@ public class QuickstartUtils {
     }
   }
 
-  private static Option<String> convertToString(String uuid, String partitionPath) {
+  private static Option<String> convertToString(String uuid, String partitionPath, Long ts) {
     StringBuffer stringBuffer = new StringBuffer();
     stringBuffer.append("{");
-    stringBuffer.append("\"ts\": 0.0,");
+    stringBuffer.append("\"ts\": \"" + (ts == null ? "0.0" : ts) + "\",");
     stringBuffer.append("\"uuid\": \"" + uuid + "\",");
     stringBuffer.append("\"partitionpath\": \"" + partitionPath + "\"");
     stringBuffer.append("}");
