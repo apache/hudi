@@ -91,6 +91,9 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
     // Get required schemas for column pruning
     var requiredDataSchema = StructType(Seq())
     var requiredSkeletonSchema = StructType(Seq())
+    // requiredColsSchema is the schema of requiredColumns, note that requiredColumns is in a random order
+    // so requiredColsSchema is not always equal to (requiredSkeletonSchema.fields ++ requiredDataSchema.fields)
+    var requiredColsSchema = StructType(Seq())
     requiredColumns.foreach(col => {
       var field = dataSchema.find(_.name == col)
       if (field.isDefined) {
@@ -99,6 +102,7 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
         field = skeletonSchema.find(_.name == col)
         requiredSkeletonSchema = requiredSkeletonSchema.add(field.get)
       }
+      requiredColsSchema = requiredColsSchema.add(field.get)
     })
 
     // Prepare readers for reading data file and skeleton files
@@ -129,7 +133,7 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
         sparkSession = _sqlContext.sparkSession,
         dataSchema = fullSchema,
         partitionSchema = StructType(Seq.empty),
-        requiredSchema = StructType(requiredSkeletonSchema.fields ++ requiredDataSchema.fields),
+        requiredSchema = requiredColsSchema,
         filters = filters,
         options = Map.empty,
         hadoopConf = _sqlContext.sparkSession.sessionState.newHadoopConf())
