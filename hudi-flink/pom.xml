@@ -174,7 +174,7 @@
       <version>0.9.7</version>
     </dependency>
 
-    <!-- Test -->
+    <!-- Junit Test Suite -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-api</artifactId>

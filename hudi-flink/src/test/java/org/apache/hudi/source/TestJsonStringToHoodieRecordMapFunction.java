@@ -22,7 +22,9 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
-import org.apache.hudi.config.HoodieDataSourceConfig;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
 
 import org.apache.avro.Schema;
@@ -40,7 +42,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHE
 
 public class TestJsonStringToHoodieRecordMapFunction extends HoodieFlinkClientTestHarness {
   @BeforeEach
-  public void init() throws Exception {
+  public void init() {
     initPath();
     initTestDataGenerator();
     initFileSystem();
@@ -63,25 +65,25 @@ public class TestJsonStringToHoodieRecordMapFunction extends HoodieFlinkClientTe
     Schema schema = AVRO_SCHEMA;
 
     TypedProperties props = new TypedProperties();
-    props.put(HoodieDataSourceConfig.WRITE_PAYLOAD_CLASS, OverwriteWithLatestAvroPayload.class.getName());
-    props.put(HoodieDataSourceConfig.PRECOMBINE_FIELD_PROP, "timestamp");
-    props.put(HoodieDataSourceConfig.RECORDKEY_FIELD_PROP, "_row_key");
-    props.put(HoodieDataSourceConfig.PARTITIONPATH_FIELD_PROP, "partitionPath");
+    props.put(HoodieWriteConfig.WRITE_PAYLOAD_CLASS, OverwriteWithLatestAvroPayload.class.getName());
+    props.put(HoodieWriteConfig.PRECOMBINE_FIELD_PROP, "timestamp");
+    props.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_row_key");
+    props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "partitionPath");
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
     env.setParallelism(2);
 
-    SimpleSink.valuesList.clear();
+    SimpleTestSinkFunction.valuesList.clear();
     env.fromCollection(recordStr)
-        .map(new JsonStringToHoodieRecordMapFunction(props, schema.toString()))
-        .addSink(new SimpleSink());
+        .map(new JsonStringToHoodieRecordMapFunction(props, Option.of(schema.toString())))
+        .addSink(new SimpleTestSinkFunction());
     env.execute();
 
     // input records all present in the sink
-    Assertions.assertEquals(10, SimpleSink.valuesList.size());
+    Assertions.assertEquals(10, SimpleTestSinkFunction.valuesList.size());
 
     // input keys all present in the sink
     Set<String> inputKeySet = records.stream().map(r -> r.getKey().getRecordKey()).collect(Collectors.toSet());
-    Assertions.assertEquals(10, SimpleSink.valuesList.stream()
+    Assertions.assertEquals(10, SimpleTestSinkFunction.valuesList.stream()
         .map(r -> inputKeySet.contains(r.getRecordKey())).filter(b -> b).count());
   }
 }

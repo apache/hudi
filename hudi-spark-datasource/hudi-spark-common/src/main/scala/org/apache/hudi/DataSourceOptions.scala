@@ -20,6 +20,7 @@ package org.apache.hudi
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
 import org.apache.hudi.common.model.WriteOperationType
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hive.HiveSyncTool
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
 import org.apache.hudi.keygen.SimpleKeyGenerator
@@ -202,14 +203,14 @@ object DataSourceWriteOptions {
     * key value, we will pick the one with the largest value for the precombine field,
     * determined by Object.compareTo(..)
     */
-  val PRECOMBINE_FIELD_OPT_KEY = "hoodie.datasource.write.precombine.field"
+  val PRECOMBINE_FIELD_OPT_KEY = HoodieWriteConfig.PRECOMBINE_FIELD_PROP
   val DEFAULT_PRECOMBINE_FIELD_OPT_VAL = "ts"
 
   /**
     * Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.
     * This will render any value set for `PRECOMBINE_FIELD_OPT_VAL` in-effective
     */
-  val PAYLOAD_CLASS_OPT_KEY = "hoodie.datasource.write.payload.class"
+  val PAYLOAD_CLASS_OPT_KEY = HoodieWriteConfig.WRITE_PAYLOAD_CLASS
   val DEFAULT_PAYLOAD_OPT_VAL = classOf[OverwriteWithLatestAvroPayload].getName
 
   /**
@@ -241,7 +242,7 @@ object DataSourceWriteOptions {
     * Key generator class, that implements will extract the key out of incoming record
     *
     */
-  val KEYGENERATOR_CLASS_OPT_KEY = "hoodie.datasource.write.keygenerator.class"
+  val KEYGENERATOR_CLASS_OPT_KEY = HoodieWriteConfig.KEYGENERATOR_CLASS_PROP
   val DEFAULT_KEYGENERATOR_CLASS_OPT_VAL = classOf[SimpleKeyGenerator].getName
 
   /**

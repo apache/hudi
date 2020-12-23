@@ -18,15 +18,12 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
@@ -34,8 +31,6 @@ import org.apache.flink.test.util.MiniClusterWithClientResource;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,15 +47,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
   private String testMethodName;
   protected transient Configuration hadoopConf = null;
   protected transient FileSystem fs;
-  protected transient HoodieFlinkWriteClient writeClient;
-  protected transient HoodieTableFileSystemView tableView;
   protected transient MiniClusterWithClientResource flinkCluster = null;
-
-  // dfs
-  protected String dfsBasePath;
-  protected transient HdfsTestService hdfsTestService;
-  protected transient MiniDFSCluster dfsCluster;
-  protected transient DistributedFileSystem dfs;
 
   @BeforeEach
   public void setTestMethodName(TestInfo testInfo) {
@@ -136,13 +123,13 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
     }
   }
 
-  public static class SimpleSink implements SinkFunction<HoodieRecord> {
+  public static class SimpleTestSinkFunction implements SinkFunction<HoodieRecord> {
 
     // must be static
     public static List<HoodieRecord> valuesList = new ArrayList<>();
 
     @Override
-    public synchronized void invoke(HoodieRecord value) throws Exception {
+    public synchronized void invoke(HoodieRecord value, Context context) throws Exception {
       valuesList.add(value);
     }
   }

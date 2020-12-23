@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.config.HoodieDataSourceConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.operator.InstantGenerateOperator;
 import org.apache.hudi.operator.KeyedWriteProcessFunction;
 import org.apache.hudi.operator.KeyedWriteProcessOperator;
@@ -82,8 +82,8 @@ public class HoodieFlinkStreamer {
     props.put(ConsumerConfig.GROUP_ID_CONFIG, cfg.kafkaGroupId);
 
     // add data source config
-    props.put(HoodieDataSourceConfig.WRITE_PAYLOAD_CLASS, cfg.payloadClassName);
-    props.put(HoodieDataSourceConfig.PRECOMBINE_FIELD_PROP, cfg.sourceOrderingField);
+    props.put(HoodieWriteConfig.WRITE_PAYLOAD_CLASS, cfg.payloadClassName);
+    props.put(HoodieWriteConfig.PRECOMBINE_FIELD_PROP, cfg.sourceOrderingField);
 
     // Read from kafka source
     DataStream<HoodieRecord> inputRecords =
