@@ -16,26 +16,33 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.action.clustering.update;
+package org.apache.hudi.table.action.cluster.strategy;
 
+import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileGroupId;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.table.WorkloadProfile;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 
-import java.util.List;
+import java.util.Set;
 
 /**
  * When file groups in clustering, write records to these file group need to check.
  */
-public interface UpdateStrategy  {
+public abstract class UpdateStrategy<T extends HoodieRecordPayload<T>, I> {
+
+  protected final HoodieEngineContext engineContext;
+  protected Set<HoodieFileGroupId> fileGroupsInPendingClustering;
+
+  protected UpdateStrategy(HoodieEngineContext engineContext, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
+    this.engineContext = engineContext;
+    this.fileGroupsInPendingClustering = fileGroupsInPendingClustering;
+  }
 
   /**
-   * check the update records to the file group in clustering.
-   * @param fileGroupsInPendingClustering
-   * @param workloadProfile workloadProfile have the records update info,
-   *                       just like BaseSparkCommitActionExecutor.getUpsertPartitioner use it.
+   * Check the update records to the file group in clustering.
+   * @param taggedRecordsRDD the records to write, tagged with target file id,
+   *                         future can update tagged records location to a different fileId.
+   * @return the recordsRDD strategy updated
    */
-  void apply(List<Pair<HoodieFileGroupId, HoodieInstant>> fileGroupsInPendingClustering, WorkloadProfile workloadProfile);
+  public abstract I handleUpdate(I taggedRecordsRDD);
 
 }

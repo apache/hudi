@@ -32,7 +32,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -50,7 +49,6 @@ import java.time.Instant;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I, K, O, R>
     extends BaseActionExecutor<T, I, K, O, R> {
@@ -68,15 +66,6 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     this.operationType = operationType;
     this.extraMetadata = extraMetadata;
     this.taskContextSupplier = context.getTaskContextSupplier();
-  }
-
-  protected void clusteringUpdateCheck(WorkloadProfile profile) {
-    if (profile == null) {
-      throw new HoodieException("Need workload profile to check clustering update now.");
-    }
-    // apply clustering update strategy.
-    config.getClusteringUpdatesStrategy()
-        .apply(table.getFileSystemView().getFileGroupsInPendingClustering().collect(Collectors.toList()), profile);
   }
 
   public abstract HoodieWriteMetadata<O> execute(I inputRecords);

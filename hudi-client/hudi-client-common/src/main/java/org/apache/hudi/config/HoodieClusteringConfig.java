@@ -19,8 +19,6 @@
 package org.apache.hudi.config;
 
 import org.apache.hudi.common.config.DefaultHoodieConfig;
-import org.apache.hudi.table.action.clustering.update.RejectUpdateStrategy;
-import org.apache.hudi.table.action.clustering.update.UpdateStrategy;
 
 import java.io.File;
 import java.io.FileReader;
@@ -75,11 +73,16 @@ public class HoodieClusteringConfig extends DefaultHoodieConfig {
   public static final String CLUSTERING_TARGET_FILE_MAX_BYTES = CLUSTERING_STRATEGY_PARAM_PREFIX + "target.file.max.bytes";
   public static final String DEFAULT_CLUSTERING_TARGET_FILE_MAX_BYTES = String.valueOf(1 * 1024 * 1024 * 1024L); // 1GB
   
-  // constants related to clustering that may be used by more than 1 strategy.
+  // Constants related to clustering that may be used by more than 1 strategy.
   public static final String CLUSTERING_SORT_COLUMNS_PROPERTY = HoodieClusteringConfig.CLUSTERING_STRATEGY_PARAM_PREFIX + "sort.columns";
-  
+
+  // When file groups is in clustering, need to handle the update to these file groups. Default strategy just reject the update
   public static final String CLUSTERING_UPDATES_STRATEGY_PROP = "hoodie.clustering.updates.strategy";
-  public static final String DEFAULT_CLUSTERING_UPDATES_STRATEGY = RejectUpdateStrategy.class.getName();
+  public static final String DEFAULT_CLUSTERING_UPDATES_STRATEGY = "org.apache.hudi.client.clustering.update.strategy.SparkRejectUpdateStrategy";
+
+  // Async clustering
+  public static final String ASYNC_CLUSTERING_ENABLE_OPT_KEY = "hoodie.clustering.async.enabled";
+  public static final String DEFAULT_ASYNC_CLUSTERING_ENABLE_OPT_VAL = "false";
 
   public HoodieClusteringConfig(Properties props) {
     super(props);
@@ -140,8 +143,8 @@ public class HoodieClusteringConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder withInlineClustering(Boolean inlineCompaction) {
-      props.setProperty(INLINE_CLUSTERING_PROP, String.valueOf(inlineCompaction));
+    public Builder withInlineClustering(Boolean inlineClustering) {
+      props.setProperty(INLINE_CLUSTERING_PROP, String.valueOf(inlineClustering));
       return this;
     }
 
@@ -155,8 +158,13 @@ public class HoodieClusteringConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder withClusteringUpdatesStrategy(UpdateStrategy updatesStrategy) {
-      props.setProperty(CLUSTERING_UPDATES_STRATEGY_PROP, updatesStrategy.getClass().getName());
+    public Builder withClusteringUpdatesStrategy(String updatesStrategyClass) {
+      props.setProperty(CLUSTERING_UPDATES_STRATEGY_PROP, updatesStrategyClass);
+      return this;
+    }
+
+    public Builder withAsyncClustering(Boolean asyncClustering) {
+      props.setProperty(ASYNC_CLUSTERING_ENABLE_OPT_KEY, String.valueOf(asyncClustering));
       return this;
     }
 
@@ -183,6 +191,8 @@ public class HoodieClusteringConfig extends DefaultHoodieConfig {
           DEFAULT_CLUSTERING_PLAN_SMALL_FILE_LIMIT);
       setDefaultOnCondition(props, !props.containsKey(CLUSTERING_UPDATES_STRATEGY_PROP), CLUSTERING_UPDATES_STRATEGY_PROP, 
           DEFAULT_CLUSTERING_UPDATES_STRATEGY);
+      setDefaultOnCondition(props, !props.containsKey(ASYNC_CLUSTERING_ENABLE_OPT_KEY), ASYNC_CLUSTERING_ENABLE_OPT_KEY,
+          DEFAULT_ASYNC_CLUSTERING_ENABLE_OPT_VAL);
       return config;
     }
   }

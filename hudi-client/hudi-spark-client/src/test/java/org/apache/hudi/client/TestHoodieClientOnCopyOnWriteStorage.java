@@ -95,6 +95,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.Properties;
 
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
 import static org.apache.hudi.common.testutils.FileCreateUtils.getBaseFileCountsForPaths;
@@ -106,6 +107,8 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAM
 import static org.apache.hudi.common.testutils.Transformations.randomSelectAsHoodieKeys;
 import static org.apache.hudi.common.testutils.Transformations.recordsToRecordKeySet;
 import static org.apache.hudi.common.util.ParquetUtils.readRowKeysFromParquet;
+import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE_OPT_KEY;
+import static org.apache.hudi.config.HoodieClusteringConfig.DEFAULT_CLUSTERING_EXECUTION_STRATEGY_CLASS;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -119,7 +122,6 @@ import static org.mockito.Mockito.when;
 public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
   private static final Logger LOG = LogManager.getLogger(TestHoodieClientOnCopyOnWriteStorage.class);
-  private static final String CLUSTERING_STRATEGY_CLASS = "org.apache.hudi.DefaultClusteringStrategy";
   private static final Map<String, String> STRATEGY_PARAMS = new HashMap<String, String>() {
     {
       put("sortColumn", "record_key");
@@ -697,7 +699,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }
   }
 
-  private Pair<List<WriteStatus>, List<HoodieRecord>> insertBatchRecords(SparkRDDWriteClient client, String commitTime, Integer recordNum, int expectStatueSize) {
+  private Pair<List<WriteStatus>, List<HoodieRecord>> insertBatchRecords(SparkRDDWriteClient client, String commitTime,
+                                                                         Integer recordNum, int expectStatueSize) {
     client.startCommitWithTime(commitTime);
     List<HoodieRecord> inserts1 = dataGen.generateInserts(commitTime, recordNum);
     JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 1);
@@ -711,14 +714,16 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   public void testUpdateRejectForClustering() throws IOException {
     final String testPartitionPath = "2016/09/26";
     dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
-    HoodieWriteConfig config = getSmallInsertWriteConfig(100);
+    Properties props = new Properties();
+    props.setProperty(ASYNC_CLUSTERING_ENABLE_OPT_KEY, "true");
+    HoodieWriteConfig config = getSmallInsertWriteConfig(100,
+        TRIP_EXAMPLE_SCHEMA, dataGen.getEstimatedFileSizeInBytes(150), props);
     SparkRDDWriteClient client = getHoodieWriteClient(config, false);
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
 
     //1. insert to generate 2 file group
     String commitTime1 = "001";
     Pair<List<WriteStatus>, List<HoodieRecord>> upsertResult = insertBatchRecords(client, commitTime1, 600, 2);
-    List<WriteStatus> statuses = upsertResult.getKey();
     List<HoodieRecord> inserts1 = upsertResult.getValue();
     List<String> fileGroupIds1 = table.getFileSystemView().getAllFileGroups(testPartitionPath)
         .map(fileGroup -> fileGroup.getFileGroupId().getFileId()).collect(Collectors.toList());
@@ -731,37 +736,32 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     List<FileSlice>[] fileSlices = (List<FileSlice>[])firstInsertFileSlicesList.toArray(new List[firstInsertFileSlicesList.size()]);
     createRequestedReplaceInstant(this.metaClient, commitTime2, fileSlices);
 
-
     // 3. insert one record with no updating reject exception, and not merge the small file, just generate a new file group
     String commitTime3 = "003";
-    statuses = insertBatchRecords(client, commitTime3, 1, 1).getKey();
+    insertBatchRecords(client, commitTime3, 1, 1).getKey();
     List<String> fileGroupIds2 = table.getFileSystemView().getAllFileGroups(testPartitionPath)
         .map(fileGroup -> fileGroup.getFileGroupId().getFileId()).collect(Collectors.toList());
     assertEquals(3, fileGroupIds2.size());
-
 
     // 4. update one record for the clustering two file groups, throw reject update exception
     String commitTime4 = "004";
     client.startCommitWithTime(commitTime4);
     List<HoodieRecord> insertsAndUpdates3 = new ArrayList<>();
     insertsAndUpdates3.addAll(dataGen.generateUpdates(commitTime4, inserts1));
-    assertNoWriteErrors(statuses);
     String assertMsg = String.format("Not allowed to update the clustering files in partition: %s "
         + "For pending clustering operations, we are not going to support update for now.", testPartitionPath);
     assertThrows(HoodieUpsertException.class, () -> {
       writeClient.upsert(jsc.parallelize(insertsAndUpdates3, 1), commitTime3).collect(); }, assertMsg);
 
-
     // 5. insert one record with no updating reject exception, will merge the small file
     String commitTime5 = "005";
-    statuses = insertBatchRecords(client, commitTime5, 1, 1).getKey();
+    List<WriteStatus> statuses = insertBatchRecords(client, commitTime5, 1, 1).getKey();
     fileGroupIds2.removeAll(fileGroupIds1);
     assertEquals(fileGroupIds2.get(0), statuses.get(0).getFileId());
     List<String> firstInsertFileGroupIds4 = table.getFileSystemView().getAllFileGroups(testPartitionPath)
         .map(fileGroup -> fileGroup.getFileGroupId().getFileId()).collect(Collectors.toList());
     assertEquals(3, firstInsertFileGroupIds4.size());
   }
-
 
   /**
    * Test scenario of new file-group getting added during upsert().
@@ -1549,8 +1549,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String schemaStr = useNullSchema ? NULL_SCHEMA : TRIP_EXAMPLE_SCHEMA;
     return getSmallInsertWriteConfig(insertSplitSize, schemaStr, smallFileSize);
   }
-  
+
   private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize) {
+    return getSmallInsertWriteConfig(insertSplitSize, schemaStr, smallFileSize, new Properties());
+  }
+  
+  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize, Properties props) {
     HoodieWriteConfig.Builder builder = getConfigBuilder(schemaStr);
     return builder
         .withCompactionConfig(
@@ -1561,12 +1565,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             HoodieStorageConfig.newBuilder()
                 .hfileMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200))
                 .parquetMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200)).build())
+        .withProps(props)
         .build();
   }
 
   protected HoodieInstant createRequestedReplaceInstant(HoodieTableMetaClient metaClient, String clusterTime, List<FileSlice>[] fileSlices) throws IOException {
     HoodieClusteringPlan clusteringPlan =
-        ClusteringUtils.createClusteringPlan(CLUSTERING_STRATEGY_CLASS, STRATEGY_PARAMS, fileSlices, Collections.emptyMap());
+        ClusteringUtils.createClusteringPlan(DEFAULT_CLUSTERING_EXECUTION_STRATEGY_CLASS, STRATEGY_PARAMS, fileSlices, Collections.emptyMap());
 
     HoodieInstant clusteringInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, clusterTime);
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()

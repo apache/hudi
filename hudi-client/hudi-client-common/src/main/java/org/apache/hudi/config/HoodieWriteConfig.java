@@ -32,7 +32,6 @@ import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
-import org.apache.hudi.table.action.clustering.update.UpdateStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -396,6 +395,15 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(HoodieClusteringConfig.INLINE_CLUSTERING_PROP));
   }
 
+  public boolean isAsyncClusteringEnabled() {
+    return Boolean.parseBoolean(props.getProperty(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE_OPT_KEY));
+  }
+
+  public boolean isClusteringEnabled() {
+    // TODO: future support async clustering
+    return isInlineClustering() || isAsyncClusteringEnabled();
+  }
+
   public int getInlineClusterMaxCommits() {
     return Integer.parseInt(props.getProperty(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMIT_PROP));
   }
@@ -416,8 +424,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.valueOf(props.getProperty(HoodieCompactionConfig.CLEANER_BOOTSTRAP_BASE_FILE_ENABLED));
   }
 
-  public UpdateStrategy getClusteringUpdatesStrategy() {
-    return ReflectionUtils.loadClass(props.getProperty(HoodieClusteringConfig.CLUSTERING_UPDATES_STRATEGY_PROP));
+  public String getClusteringUpdatesStrategyClass() {
+    return props.getProperty(HoodieClusteringConfig.CLUSTERING_UPDATES_STRATEGY_PROP);
   }
 
   /**
