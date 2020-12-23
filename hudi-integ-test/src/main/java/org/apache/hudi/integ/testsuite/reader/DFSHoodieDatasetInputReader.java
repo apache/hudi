@@ -52,6 +52,7 @@ import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.parquet.avro.AvroParquetReader;
+import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -243,20 +244,30 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
 
   private Iterator<IndexedRecord> readParquetOrLogFiles(FileSlice fileSlice) throws IOException {
     if (fileSlice.getBaseFile().isPresent()) {
+      // Read the parquet files using the latest writer schema.
+      Schema schema = new Schema.Parser().parse(schemaStr);
+      AvroReadSupport.setAvroReadSchema(metaClient.getHadoopConf(), HoodieAvroUtils.addMetadataFields(schema));
       Iterator<IndexedRecord> itr =
           new ParquetReaderIterator<IndexedRecord>(AvroParquetReader.<IndexedRecord>builder(new
               Path(fileSlice.getBaseFile().get().getPath())).withConf(metaClient.getHadoopConf()).build());
       return itr;
     } else {
       // If there is no data file, fall back to reading log files
-      HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(metaClient.getFs(),
-          metaClient.getBasePath(),
-          fileSlice.getLogFiles().map(l -> l.getPath().getName()).collect(Collectors.toList()),
-          new Schema.Parser().parse(schemaStr), metaClient.getActiveTimeline().getCommitsTimeline()
-          .filterCompletedInstants().lastInstant().get().getTimestamp(),
-          HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES, true, false,
-          HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE,
-          HoodieMemoryConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH);
+      HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
+          .withFileSystem(metaClient.getFs())
+          .withBasePath(metaClient.getBasePath())
+          .withLogFilePaths(
+              fileSlice.getLogFiles().map(l -> l.getPath().getName()).collect(Collectors.toList()))
+          .withReaderSchema(new Schema.Parser().parse(schemaStr))
+          .withLatestInstantTime(metaClient.getActiveTimeline().getCommitsTimeline()
+              .filterCompletedInstants().lastInstant().get().getTimestamp())
+          .withMaxMemorySizeInBytes(
+              HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
+          .withReadBlocksLazily(true)
+          .withReverseReader(false)
+          .withBufferSize(HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE)
+          .withSpillableMapBasePath(HoodieMemoryConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH)
+          .build();
       // readAvro log files
       Iterable<HoodieRecord<? extends HoodieRecordPayload>> iterable = () -> scanner.iterator();
       Schema schema = new Schema.Parser().parse(schemaStr);

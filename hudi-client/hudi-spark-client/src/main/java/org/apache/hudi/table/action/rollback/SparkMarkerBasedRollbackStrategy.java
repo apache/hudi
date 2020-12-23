@@ -52,6 +52,7 @@ public class SparkMarkerBasedRollbackStrategy<T extends HoodieRecordPayload> ext
       MarkerFiles markerFiles = new MarkerFiles(table, instantToRollback.getTimestamp());
       List<String> markerFilePaths = markerFiles.allMarkerFilePaths();
       int parallelism = Math.max(Math.min(markerFilePaths.size(), config.getRollbackParallelism()), 1);
+      jsc.setJobGroup(this.getClass().getSimpleName(), "Rolling back using marker files");
       return jsc.parallelize(markerFilePaths, parallelism)
           .map(markerFilePath -> {
             String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);

@@ -18,8 +18,8 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -41,6 +41,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
@@ -342,7 +343,7 @@ public class DeltaSync implements Serializable {
         // pass in the schema for the Row-to-Avro conversion
         // to avoid nullability mismatch between Avro schema and Row schema
         avroRDDOptional = transformed
-            .map(t -> AvroConversionUtils.createRdd(
+            .map(t -> HoodieSparkUtils.createRdd(
                 t, this.userProvidedSchemaProvider.getTargetSchema(),
                 HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD());
         schemaProvider = this.userProvidedSchemaProvider;
@@ -356,7 +357,7 @@ public class DeltaSync implements Serializable {
                     UtilHelpers.createRowBasedSchemaProvider(r.schema(), props, jssc)))
                 .orElse(dataAndCheckpoint.getSchemaProvider());
         avroRDDOptional = transformed
-            .map(t -> AvroConversionUtils.createRdd(
+            .map(t -> HoodieSparkUtils.createRdd(
                 t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD());
       }
     } else {
@@ -619,6 +620,8 @@ public class DeltaSync implements Serializable {
             .withCompactionConfig(HoodieCompactionConfig.newBuilder().withPayloadClass(cfg.payloadClassName)
                 // Inline compaction is disabled for continuous mode. otherwise enabled for MOR
                 .withInlineCompaction(cfg.isInlineCompactionEnabled()).build())
+            .withPayloadConfig(HoodiePayloadConfig.newBuilder().withPayloadOrderingField(cfg.sourceOrderingField)
+                .build())
             .forTable(cfg.targetTableName)
             .withAutoCommit(autoCommit).withProps(props);
 

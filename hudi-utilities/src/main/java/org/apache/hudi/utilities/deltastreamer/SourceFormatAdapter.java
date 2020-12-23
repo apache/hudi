@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
@@ -73,8 +74,8 @@ public final class SourceFormatAdapter {
                   // If the source schema is specified through Avro schema,
                   // pass in the schema for the Row-to-Avro conversion
                   // to avoid nullability mismatch between Avro schema and Row schema
-                  ? AvroConversionUtils.createRdd(rdd, r.getSchemaProvider().getSourceSchema(),
-                  HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD() : AvroConversionUtils.createRdd(rdd,
+                  ? HoodieSparkUtils.createRdd(rdd, r.getSchemaProvider().getSourceSchema(),
+                  HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD() : HoodieSparkUtils.createRdd(rdd,
                   HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD();
             })
             .orElse(null)), r.getCheckpointForNextBatch(), r.getSchemaProvider());

@@ -29,9 +29,7 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.Path;
 
-import java.util.Iterator;
-
-import scala.Tuple2;
+import java.util.stream.Stream;
 
 /**
  * {@link HoodieRecordLocation} fetch handle for all records from {@link HoodieBaseFile} of interest.
@@ -48,10 +46,10 @@ public class HoodieKeyLocationFetchHandle<T extends HoodieRecordPayload, I, K, O
     this.partitionPathBaseFilePair = partitionPathBaseFilePair;
   }
 
-  public Iterator<Tuple2<HoodieKey, HoodieRecordLocation>> locations() {
+  public Stream<Pair<HoodieKey, HoodieRecordLocation>> locations() {
     HoodieBaseFile baseFile = partitionPathBaseFilePair.getRight();
     return ParquetUtils.fetchRecordKeyPartitionPathFromParquet(hoodieTable.getHadoopConf(), new Path(baseFile.getPath())).stream()
-        .map(entry -> new Tuple2<>(entry,
-            new HoodieRecordLocation(baseFile.getCommitTime(), baseFile.getFileId()))).iterator();
+        .map(entry -> Pair.of(entry,
+            new HoodieRecordLocation(baseFile.getCommitTime(), baseFile.getFileId())));
   }
 }

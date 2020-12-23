@@ -21,6 +21,7 @@ package org.apache.hudi.client;
 import com.codahale.metrics.Timer;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -38,9 +39,12 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
@@ -88,6 +92,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
 
   protected transient Timer.Context writeTimer = null;
   protected transient Timer.Context compactionTimer;
+  protected transient Timer.Context clusteringTimer;
 
   private transient WriteOperationType operationType;
   private transient HoodieWriteCommitCallback commitCallback;
@@ -389,6 +394,16 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       } else {
         metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "false");
       }
+
+      // Do an inline clustering if enabled
+      if (config.isInlineClustering()) {
+        runAnyPendingClustering(table);
+        metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING_PROP, "true");
+        inlineCluster(extraMetadata);
+      } else {
+        metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING_PROP, "false");
+      }
+
       // We cannot have unbounded commit files. Archive commits if we have to archive
       HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);
       archiveLog.archiveIfRequired(context);
@@ -404,6 +419,16 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
           LOG.info("Running previously failed inflight compaction at instant " + instant);
           compact(instant.getTimestamp(), true);
         });
+  }
+
+  protected void runAnyPendingClustering(HoodieTable<T, I, K, O> table) {
+    table.getActiveTimeline().filterPendingReplaceTimeline().getInstants().forEach(instant -> {
+      Option<Pair<HoodieInstant, HoodieClusteringPlan>> instantPlan = ClusteringUtils.getClusteringPlan(table.getMetaClient(), instant);
+      if (instantPlan.isPresent()) {
+        LOG.info("Running pending clustering at instant " + instantPlan.get().getLeft());
+        cluster(instant.getTimestamp(), true);
+      }
+    });
   }
 
   /**
@@ -674,8 +699,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    */
   protected abstract void completeCompaction(HoodieCommitMetadata metadata, O writeStatuses,
                                              HoodieTable<T, I, K, O> table, String compactionCommitTime);
-
-
+  
   /**
    * Rollback failed compactions. Inflight rollbacks for compactions revert the .inflight file to the .requested file
    *
@@ -727,6 +751,54 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   }
 
   /**
+   * Schedules a new clustering instant.
+   *
+   * @param extraMetadata Extra Metadata to be stored
+   */
+  public Option<String> scheduleClustering(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
+    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    return scheduleClusteringAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
+  }
+
+  /**
+   * Schedules a new clustering instant with passed-in instant time.
+   *
+   * @param instantTime clustering Instant Time
+   * @param extraMetadata Extra Metadata to be stored
+   */
+  public boolean scheduleClusteringAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
+    LOG.info("Scheduling clustering at instant time :" + instantTime);
+    Option<HoodieClusteringPlan> plan = createTable(config, hadoopConf)
+        .scheduleClustering(context, instantTime, extraMetadata);
+    return plan.isPresent();
+  }
+
+  /**
+   * Ensures clustering instant is in expected state and performs clustering for the plan stored in metadata.
+   *
+   * @param clusteringInstant Clustering Instant Time
+   * @return Collection of Write Status
+   */
+  public abstract HoodieWriteMetadata<O> cluster(String clusteringInstant, boolean shouldComplete);
+
+  /**
+   * Executes a clustering plan on a table, serially before or after an insert/upsert action.
+   */
+  protected Option<String> inlineCluster(Option<Map<String, String>> extraMetadata) {
+    Option<String> clusteringInstantOpt = scheduleClustering(extraMetadata);
+    clusteringInstantOpt.ifPresent(clusteringInstant -> {
+      // inline cluster should auto commit as the user is never given control
+      cluster(clusteringInstant, true);
+    });
+    return clusteringInstantOpt;
+  }
+
+  protected void rollbackInflightClustering(HoodieInstant inflightInstant, HoodieTable<T, I, K, O> table) {
+    table.rollback(context, HoodieActiveTimeline.createNewInstantTime(), inflightInstant, false);
+    table.getActiveTimeline().revertReplaceCommitInflightToRequested(inflightInstant);
+  }
+
+  /**
    * Finalize Write operation.
    *
    * @param table HoodieTable
@@ -773,7 +845,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     try {
       HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
       Option<HoodieInstant> lastInstant =
-          activeTimeline.filterCompletedInstants().filter(s -> s.getAction().equals(metaClient.getCommitActionType()))
+          activeTimeline.filterCompletedInstants().filter(s -> s.getAction().equals(metaClient.getCommitActionType())
+          || s.getAction().equals(HoodieActiveTimeline.REPLACE_COMMIT_ACTION))
               .lastInstant();
       if (lastInstant.isPresent()) {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(

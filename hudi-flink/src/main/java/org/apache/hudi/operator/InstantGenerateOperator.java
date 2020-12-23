@@ -196,7 +196,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
         return;
       }
     }
-    throw new InterruptedException("Last instant costs more than ten second, stop task now");
+    throw new InterruptedException(String.format("Last instant costs more than %s second, stop task now", retryTimes * retryInterval));
   }
 
 

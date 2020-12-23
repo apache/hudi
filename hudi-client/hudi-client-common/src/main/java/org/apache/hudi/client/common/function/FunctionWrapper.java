@@ -18,13 +18,12 @@
 
 package org.apache.hudi.client.common.function;
 
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
-
-import scala.Tuple2;
 
 /**
  * Function wrapper util class, which catches the exception thrown by input function and return a similar function
@@ -62,7 +61,7 @@ public class FunctionWrapper {
     };
   }
 
-  public static <I, K, V> Function<I, Tuple2<K, V>> throwingMapToPairWrapper(SerializablePairFunction<I, K, V> throwingPairFunction) {
+  public static <I, K, V> Function<I, Pair<K, V>> throwingMapToPairWrapper(SerializablePairFunction<I, K, V> throwingPairFunction) {
     return v1 -> {
       try {
         return throwingPairFunction.call(v1);

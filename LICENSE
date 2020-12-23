@@ -246,6 +246,8 @@ This product includes code from Apache Spark
 
 * org.apache.hudi.AvroConversionHelper copied from classes in org/apache/spark/sql/avro package
 
+* org.apache.hudi.HoodieSparkUtils.scala copied some methods from org.apache.spark.deploy.SparkHadoopUtil.scala
+
 Copyright: 2014 and onwards The Apache Software Foundation
 Home page: http://spark.apache.org/
 License: http://www.apache.org/licenses/LICENSE-2.0

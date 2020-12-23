@@ -80,6 +80,8 @@ public enum WriteOperationType {
         return DELETE_PARTITION;
       case "insert_overwrite_table":
         return INSERT_OVERWRITE_TABLE;
+      case "cluster":
+        return CLUSTER;
       default:
         throw new HoodieException("Invalid value of Type.");
     }
