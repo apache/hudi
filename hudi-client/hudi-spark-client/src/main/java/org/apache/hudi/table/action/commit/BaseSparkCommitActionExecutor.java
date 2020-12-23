@@ -279,7 +279,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     return handleUpdateInternal(upsertHandle, fileId);
   }
 
-  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle upsertHandle, String fileId)
+  protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?,?,?,?> upsertHandle, String fileId)
       throws IOException {
     if (upsertHandle.getOldFilePath() == null) {
       throw new HoodieUpsertException(
@@ -289,11 +289,12 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     }
 
     // TODO(vc): This needs to be revisited
-    if (upsertHandle.getWriteStatus().getPartitionPath() == null) {
+    if (upsertHandle.getPartitionPath() == null) {
       LOG.info("Upsert Handle has partition path as null " + upsertHandle.getOldFilePath() + ", "
-          + upsertHandle.getWriteStatus());
+          + upsertHandle.writeStatuses());
     }
-    return Collections.singletonList(Collections.singletonList(upsertHandle.getWriteStatus())).iterator();
+
+    return Collections.singletonList(upsertHandle.writeStatuses()).iterator();
   }
 
   protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {

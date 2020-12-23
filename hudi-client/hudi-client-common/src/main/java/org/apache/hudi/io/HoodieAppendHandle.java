@@ -56,6 +56,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -260,7 +261,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   }
 
   @Override
-  public WriteStatus close() {
+  public List<WriteStatus> close() {
     try {
       // flush any remaining records to disk
       doAppend(header);
@@ -298,15 +299,10 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       LOG.info(String.format("AppendHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
           stat.getFileId(), runtimeStats.getTotalUpsertTime()));
 
-      return writeStatus;
+      return Collections.singletonList(writeStatus);
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);
     }
-  }
-
-  @Override
-  public WriteStatus getWriteStatus() {
-    return writeStatus;
   }
 
   @Override
