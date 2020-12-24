@@ -19,8 +19,6 @@
 package org.apache.hudi.metadata;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,17 +27,13 @@ import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.config.SerializableConfiguration;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -52,7 +46,6 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
@@ -65,23 +58,12 @@ import org.apache.log4j.Logger;
  * If the metadata table does not exist, RPC calls are used to retrieve file listings from the file system.
  * No updates are applied to the table and it is not synced.
  */
-public class HoodieBackedTableMetadata implements HoodieTableMetadata {
+public class HoodieBackedTableMetadata extends AbstractHoodieTableMetadata {
 
   private static final Logger LOG = LogManager.getLogger(HoodieBackedTableMetadata.class);
-  private static final long MAX_MEMORY_SIZE_IN_BYTES = 1024 * 1024 * 1024;
-  private static final int BUFFER_SIZE = 10 * 1024 * 1024;
 
-  private final SerializableConfiguration hadoopConf;
-  private final String datasetBasePath;
   private final String metadataBasePath;
-  private final Option<HoodieMetadataMetrics> metrics;
   private HoodieTableMetaClient metaClient;
-
-  private boolean enabled;
-  private final boolean validateLookups;
-  private final boolean assumeDatePartitioning;
-  // Directory used for Spillable Map when merging records
-  private final String spillableMapDirectory;
 
   // Readers for the base and log file which store the metadata
   private transient HoodieFileReader<GenericRecord> baseFileReader;
@@ -95,13 +77,8 @@ public class HoodieBackedTableMetadata implements HoodieTableMetadata {
   public HoodieBackedTableMetadata(Configuration conf, String datasetBasePath, String spillableMapDirectory,
                                    boolean enabled, boolean validateLookups, boolean enableMetrics,
                                    boolean assumeDatePartitioning) {
-    this.hadoopConf = new SerializableConfiguration(conf);
-    this.datasetBasePath = datasetBasePath;
+    super(conf, datasetBasePath, spillableMapDirectory, enabled, validateLookups, enableMetrics, assumeDatePartitioning);
     this.metadataBasePath = HoodieTableMetadata.getMetadataTableBasePath(datasetBasePath);
-    this.validateLookups = validateLookups;
-    this.spillableMapDirectory = spillableMapDirectory;
-    this.enabled = enabled;
-    this.assumeDatePartitioning = assumeDatePartitioning;
 
     if (enabled) {
       try {
@@ -116,164 +93,6 @@ public class HoodieBackedTableMetadata implements HoodieTableMetadata {
     } else {
       LOG.info("Metadata table is disabled.");
     }
-
-    if (enableMetrics) {
-      this.metrics = Option.of(new HoodieMetadataMetrics(Registry.getRegistry("HoodieMetadata")));
-    } else {
-      this.metrics = Option.empty();
-    }
-  }
-
-  /**
-   * Return the list of partitions in the dataset.
-   *
-   * If the Metadata Table is enabled, the listing is retrieved from the stored metadata. Otherwise, the list of
-   * partitions is retrieved directly from the underlying {@code FileSystem}.
-   *
-   * On any errors retrieving the listing from the metadata, defaults to using the file system listings.
-   *
-   */
-  @Override
-  public List<String> getAllPartitionPaths()
-      throws IOException {
-    if (enabled) {
-      try {
-        return fetchAllPartitionPaths();
-      } catch (Exception e) {
-        LOG.error("Failed to retrieve list of partition from metadata", e);
-      }
-    }
-
-    return new FileSystemBackedTableMetadata(hadoopConf, datasetBasePath, assumeDatePartitioning).getAllPartitionPaths();
-  }
-
-  /**
-   * Return the list of files in a partition.
-   *
-   * If the Metadata Table is enabled, the listing is retrieved from the stored metadata. Otherwise, the list of
-   * partitions is retrieved directly from the underlying {@code FileSystem}.
-   *
-   * On any errors retrieving the listing from the metadata, defaults to using the file system listings.
-   *
-   * @param partitionPath The absolute path of the partition to list
-   */
-  @Override
-  public FileStatus[] getAllFilesInPartition(Path partitionPath)
-      throws IOException {
-    if (enabled) {
-      try {
-        return fetchAllFilesInPartition(partitionPath);
-      } catch (Exception e) {
-        LOG.error("Failed to retrive files in partition " + partitionPath + " from metadata", e);
-      }
-    }
-
-    return FSUtils.getFs(partitionPath.toString(), hadoopConf.get()).listStatus(partitionPath);
-  }
-
-  /**
-   * Returns a list of all partitions.
-   */
-  protected List<String> fetchAllPartitionPaths() throws IOException {
-    HoodieTimer timer = new HoodieTimer().startTimer();
-    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getMergedRecordByKey(RECORDKEY_PARTITION_LIST);
-    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_PARTITIONS_STR, timer.endTimer()));
-
-    List<String> partitions = Collections.emptyList();
-    if (hoodieRecord.isPresent()) {
-      if (!hoodieRecord.get().getData().getDeletions().isEmpty()) {
-        throw new HoodieMetadataException("Metadata partition list record is inconsistent: "
-            + hoodieRecord.get().getData());
-      }
-
-      partitions = hoodieRecord.get().getData().getFilenames();
-      // Partition-less tables have a single empty partition
-      if (partitions.contains(NON_PARTITIONED_NAME)) {
-        partitions.remove(NON_PARTITIONED_NAME);
-        partitions.add("");
-      }
-    }
-
-    if (validateLookups) {
-      // Validate the Metadata Table data by listing the partitions from the file system
-      timer.startTimer();
-      FileSystemBackedTableMetadata fileSystemBackedTableMetadata = new FileSystemBackedTableMetadata(hadoopConf, datasetBasePath, assumeDatePartitioning);
-      List<String> actualPartitions = fileSystemBackedTableMetadata.getAllPartitionPaths();
-      metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.VALIDATE_PARTITIONS_STR, timer.endTimer()));
-
-      Collections.sort(actualPartitions);
-      Collections.sort(partitions);
-      if (!actualPartitions.equals(partitions)) {
-        LOG.error("Validation of metadata partition list failed. Lists do not match.");
-        LOG.error("Partitions from metadata: " + Arrays.toString(partitions.toArray()));
-        LOG.error("Partitions from file system: " + Arrays.toString(actualPartitions.toArray()));
-
-        metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.VALIDATE_ERRORS_STR, 0));
-      }
-
-      // Return the direct listing as it should be correct
-      partitions = actualPartitions;
-    }
-
-    LOG.info("Listed partitions from metadata: #partitions=" + partitions.size());
-    return partitions;
-  }
-
-  /**
-   * Return all the files from the partition.
-   *
-   * @param partitionPath The absolute path of the partition
-   */
-  FileStatus[] fetchAllFilesInPartition(Path partitionPath) throws IOException {
-    String partitionName = FSUtils.getRelativePartitionPath(new Path(datasetBasePath), partitionPath);
-    if (partitionName.isEmpty()) {
-      partitionName = NON_PARTITIONED_NAME;
-    }
-
-    HoodieTimer timer = new HoodieTimer().startTimer();
-    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getMergedRecordByKey(partitionName);
-    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
-
-    FileStatus[] statuses = {};
-    if (hoodieRecord.isPresent()) {
-      if (!hoodieRecord.get().getData().getDeletions().isEmpty()) {
-        throw new HoodieMetadataException("Metadata record for partition " + partitionName + " is inconsistent: "
-              + hoodieRecord.get().getData());
-      }
-      statuses = hoodieRecord.get().getData().getFileStatuses(partitionPath);
-    }
-
-    if (validateLookups) {
-      // Validate the Metadata Table data by listing the partitions from the file system
-      timer.startTimer();
-
-      // Ignore partition metadata file
-      FileStatus[] directStatuses = metaClient.getFs().listStatus(partitionPath,
-          p -> !p.getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE));
-      metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.VALIDATE_FILES_STR, timer.endTimer()));
-
-      List<String> directFilenames = Arrays.stream(directStatuses)
-          .map(s -> s.getPath().getName()).sorted()
-          .collect(Collectors.toList());
-
-      List<String> metadataFilenames = Arrays.stream(statuses)
-          .map(s -> s.getPath().getName()).sorted()
-          .collect(Collectors.toList());
-
-      if (!metadataFilenames.equals(directFilenames)) {
-        LOG.error("Validation of metadata file listing for partition " + partitionName + " failed.");
-        LOG.error("File list from metadata: " + Arrays.toString(metadataFilenames.toArray()));
-        LOG.error("File list from direct listing: " + Arrays.toString(directFilenames.toArray()));
-
-        metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.VALIDATE_ERRORS_STR, 0));
-      }
-
-      // Return the direct listing as it should be correct
-      statuses = directStatuses;
-    }
-
-    LOG.info("Listed file in partition from metadata: partition=" + partitionName + ", #files=" + statuses.length);
-    return statuses;
   }
 
   /**
@@ -281,7 +100,8 @@ public class HoodieBackedTableMetadata implements HoodieTableMetadata {
    *
    * @param key The key of the record
    */
-  private Option<HoodieRecord<HoodieMetadataPayload>> getMergedRecordByKey(String key) throws IOException {
+  @Override
+  protected Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKeyFromMetadata(String key) throws IOException {
     openBaseAndLogFiles();
 
     // Retrieve record from base file
@@ -314,7 +134,7 @@ public class HoodieBackedTableMetadata implements HoodieTableMetadata {
   /**
    * Open readers to the base and log files.
    */
-  private synchronized void openBaseAndLogFiles() throws IOException {
+  protected synchronized void openBaseAndLogFiles() throws IOException {
     if (logRecordScanner != null) {
       // Already opened
       return;
@@ -363,25 +183,14 @@ public class HoodieBackedTableMetadata implements HoodieTableMetadata {
     metrics.ifPresent(metrics -> metrics.updateMetrics(HoodieMetadataMetrics.SCAN_STR, timer.endTimer()));
   }
 
+  @Override
   protected void closeReaders() {
+    super.closeReaders();
     if (baseFileReader != null) {
       baseFileReader.close();
       baseFileReader = null;
     }
     logRecordScanner = null;
-  }
-
-  /**
-   * Return {@code True} if all Instants from the dataset have been synced with the Metadata Table.
-   */
-  @Override
-  public boolean isInSync() {
-    return enabled && findInstantsToSync().isEmpty();
-  }
-
-  private List<HoodieInstant> findInstantsToSync() {
-    HoodieTableMetaClient datasetMetaClient = new HoodieTableMetaClient(hadoopConf.get(), datasetBasePath);
-    return findInstantsToSync(datasetMetaClient);
   }
 
   /**
