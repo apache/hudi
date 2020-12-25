@@ -128,7 +128,7 @@ public class ListingBasedRollbackHelper implements Serializable {
             if (doDelete) {
               Map<HoodieLogBlock.HeaderMetadataType, String> header = generateHeader(instantToRollback.getTimestamp());
               // if update belongs to an existing log file
-              writer = writer.appendBlock(new HoodieCommandBlock(header));
+              writer.appendBlock(new HoodieCommandBlock(header));
             }
           } catch (IOException | InterruptedException io) {
             throw new HoodieRollbackException("Failed to rollback for instant " + instantToRollback, io);

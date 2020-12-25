@@ -58,7 +58,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   protected final Schema writerSchema;
   protected final Schema writerSchemaWithMetafields;
   protected HoodieTimer timer;
-  protected final WriteStatus writeStatus;
+  protected WriteStatus writeStatus;
   protected final String partitionPath;
   protected final String fileId;
   protected final String writeToken;

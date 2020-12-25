@@ -32,7 +32,7 @@ public class HoodieDeltaWriteStat extends HoodieWriteStat {
   private int logVersion;
   private long logOffset;
   private String baseFile;
-  private List<String> logFiles = new ArrayList();
+  private List<String> logFiles = new ArrayList<>();
 
   public void setLogVersion(int logVersion) {
     this.logVersion = logVersion;
@@ -62,7 +62,7 @@ public class HoodieDeltaWriteStat extends HoodieWriteStat {
     this.logFiles = logFiles;
   }
 
-  public void appendLogFiles(String logFile) {
+  public void addLogFiles(String logFile) {
     logFiles.add(logFile);
   }
 

@@ -38,8 +38,8 @@ public class TestHoodieDeltaWriteStat {
     String logFile2 = ".log2.log";
 
     writeStat.setBaseFile(baseFile);
-    writeStat.appendLogFiles(logFile1);
-    writeStat.appendLogFiles(logFile2);
+    writeStat.addLogFiles(logFile1);
+    writeStat.addLogFiles(logFile2);
     assertTrue(writeStat.getLogFiles().contains(logFile1));
     assertTrue(writeStat.getLogFiles().contains(logFile2));
     assertEquals(baseFile, writeStat.getBaseFile());
