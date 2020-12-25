@@ -29,6 +29,8 @@ public class HoodieKafkaAvroDeserializationConfig extends AbstractConfig {
   public static final boolean SPECIFIC_AVRO_READER_DEFAULT = false;
   public static final String SPECIFIC_AVRO_READER_DOC = "If true, tries to look up the SpecificRecord class ";
 
+  public static final String SCHEMA_PROVIDER_CLASS_PROP = "hoodie.deltastreamer.schemaprovider.class";
+
   private static ConfigDef config;
 
   static {

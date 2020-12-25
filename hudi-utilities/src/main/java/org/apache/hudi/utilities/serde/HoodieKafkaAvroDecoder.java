@@ -22,6 +22,8 @@ import org.apache.hudi.utilities.serde.config.HoodieKafkaAvroDeserializationConf
 
 import kafka.serializer.Decoder;
 import kafka.utils.VerifiableProperties;
+import org.apache.avro.Schema;
+import org.apache.kafka.common.errors.SerializationException;
 
 public class HoodieKafkaAvroDecoder extends AbstractHoodieKafkaAvroDeserializer implements Decoder<Object> {
 
@@ -33,5 +35,10 @@ public class HoodieKafkaAvroDecoder extends AbstractHoodieKafkaAvroDeserializer 
   @Override
   public Object fromBytes(byte[] bytes) {
     return deserialize(bytes);
+  }
+
+  @Override
+  protected Object deserialize(String topic, Boolean isKey, byte[] payload, Schema readerSchema) throws SerializationException {
+    return super.deserialize(topic, isKey, payload, readerSchema);
   }
 }

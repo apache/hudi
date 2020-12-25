@@ -40,9 +40,10 @@ public class FilebasedSchemaProvider extends SchemaProvider {
    * Configs supported.
    */
   public static class Config {
+
     public static final String SOURCE_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider.source.schema.file";
     private static final String TARGET_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider.target.schema.file";
-    public static final String SOURCE_SCHEMA_PROP = "hoodie.deltastreamer.schemaprovider.source.schema";
+    // public static final String SOURCE_SCHEMA_PROP = "hoodie.deltastreamer.schemaprovider.source.schema";
   }
 
   private final FileSystem fs;
@@ -60,7 +61,7 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     this.fs = FSUtils.getFs(sourceFile, jssc.hadoopConfiguration(), true);
     try {
       this.sourceSchema = new Schema.Parser().parse(this.fs.open(new Path(sourceFile)));
-      props.setProperty(Config.SOURCE_SCHEMA_PROP, sourceSchema.toString());
+      // props.setProperty(Config.SOURCE_SCHEMA_PROP, sourceSchema.toString());
       if (props.containsKey(Config.TARGET_SCHEMA_FILE_PROP)) {
         this.targetSchema =
             new Schema.Parser().parse(fs.open(new Path(props.getString(Config.TARGET_SCHEMA_FILE_PROP))));

@@ -19,8 +19,9 @@
 package org.apache.hudi.utilities.serde;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.utilities.UtilitiesTestBase;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.serde.config.HoodieKafkaAvroDeserializationConfig;
+import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -31,6 +32,7 @@ import kafka.utils.VerifiableProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -48,14 +50,18 @@ public class TestHoodieKafkaAvroDecoder extends UtilitiesTestBase {
 
   @BeforeAll
   public static void init() throws Exception {
-    UtilitiesTestBase.initClass();
+    try {
+      UtilitiesTestBase.initClass();
+    } catch (Exception e) {
+      System.out.println("Exception thrown " + e.getMessage() + " ... " + e.getCause());
+      throw e;
+    }
     Properties defaultConfig = new Properties();
     defaultConfig.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     SchemaRegistryClient schemaRegistryClient = new MockSchemaRegistryClient();
     avroDeserializer = new KafkaAvroDeserializer(schemaRegistryClient);
     avroSerializer = new KafkaAvroSerializer(schemaRegistryClient, new HashMap(defaultConfig));
     topic = "test_topic";
-
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/source_uber.avsc", dfs, dfsBasePath + "/source_uber.avsc");
   }
 
@@ -67,6 +73,11 @@ public class TestHoodieKafkaAvroDecoder extends UtilitiesTestBase {
   @AfterEach
   public void teardown() throws Exception {
     super.teardown();
+  }
+
+  @AfterAll
+  public static void cleanupClass() {
+    UtilitiesTestBase.cleanupClass();
   }
 
   private GenericRecord createAvroRecord(Schema schema) {
@@ -81,9 +92,10 @@ public class TestHoodieKafkaAvroDecoder extends UtilitiesTestBase {
   }
 
   @Test
-  public void testKafkaDeserializer() {
+  public void testKafkaAvroDecoder() {
     TypedProperties typedProperties = new TypedProperties();
     typedProperties.setProperty(FilebasedSchemaProvider.Config.SOURCE_SCHEMA_FILE_PROP, dfsBasePath + "/source_uber.avsc");
+    typedProperties.setProperty(HoodieKafkaAvroDeserializationConfig.SCHEMA_PROVIDER_CLASS_PROP, FilebasedSchemaProvider.class.getName());
     VerifiableProperties verifiableProperties = new VerifiableProperties(typedProperties);
     FilebasedSchemaProvider schemaProvider = new FilebasedSchemaProvider(typedProperties, jsc);
     byte[] bytes;
