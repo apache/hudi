@@ -65,16 +65,23 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   private HoodieTestDataGenerator dataGenEvolved = new HoodieTestDataGenerator();
   private HoodieTestDataGenerator dataGenDevolved = new HoodieTestDataGenerator();
 
-  public static final String EXTRA_FIELD_SCHEMA =
-      "{\"name\": \"new_field\", \"type\": \"boolean\", \"default\": false},";
+  public static final String EXTRA_FIELD_INT_SCHEMA =
+      "{\"name\": \"new_field\", \"type\": \"int\", \"default\": 0},";
+
+  public static final String EXTRA_FIELD_LONG_SCHEMA =
+      "{\"name\": \"new_field\", \"type\": \"long\", \"default\": 0},";
 
   // TRIP_EXAMPLE_SCHEMA with a new_field added
   public static final String TRIP_EXAMPLE_SCHEMA_EVOLVED = TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
-      + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + EXTRA_FIELD_SCHEMA + TRIP_SCHEMA_SUFFIX;
+      + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + EXTRA_FIELD_INT_SCHEMA + TRIP_SCHEMA_SUFFIX;
 
   // TRIP_EXAMPLE_SCHEMA with tip field removed
   public static final String TRIP_EXAMPLE_SCHEMA_DEVOLVED = TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
       + FARE_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
+
+  // TRIP_EXAMPLE_SCHEMA with a new_field added
+  public static final String TRIP_EXAMPLE_SCHEMA_EVOLVED_AGAIN = TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
+      + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + EXTRA_FIELD_LONG_SCHEMA + TRIP_SCHEMA_SUFFIX;
 
   @Test
   public void testSchemaCompatibilityBasic() throws Exception {
@@ -115,8 +122,11 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     assertTrue(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_EVOLVED),
         "Added field with default is compatible (Evolved Schema)");
 
+    assertTrue(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA_EVOLVED, TRIP_EXAMPLE_SCHEMA_EVOLVED_AGAIN),
+        "INT to LONG should be compatible");
+
     String multipleAddedFieldSchema = TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA
-        + TIP_NESTED_SCHEMA + EXTRA_FIELD_SCHEMA + EXTRA_FIELD_SCHEMA.replace("new_field", "new_new_field")
+        + TIP_NESTED_SCHEMA + EXTRA_FIELD_INT_SCHEMA + EXTRA_FIELD_INT_SCHEMA.replace("new_field", "new_new_field")
         + TRIP_SCHEMA_SUFFIX;
     assertTrue(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, multipleAddedFieldSchema),
         "Multiple added fields with defauls are compatible");
