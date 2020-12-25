@@ -145,6 +145,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   // We keep track of original config and rewritten config
   private final FileSystemViewStorageConfig clientSpecifiedViewStorageConfig;
   private FileSystemViewStorageConfig viewStorageConfig;
+  private HoodiePayloadConfig hoodiePayloadConfig;
 
   private EngineType engineType;
 
@@ -163,6 +164,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     this.consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().fromProperties(newProps).build();
     this.clientSpecifiedViewStorageConfig = FileSystemViewStorageConfig.newBuilder().fromProperties(newProps).build();
     this.viewStorageConfig = clientSpecifiedViewStorageConfig;
+    this.hoodiePayloadConfig = HoodiePayloadConfig.newBuilder().fromProperties(newProps).build();
   }
 
   public static HoodieWriteConfig.Builder newBuilder() {
@@ -388,6 +390,14 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.valueOf(props.getProperty(HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLED_PROP));
   }
 
+  public boolean isInlineClustering() {
+    return Boolean.parseBoolean(props.getProperty(HoodieClusteringConfig.INLINE_CLUSTERING_PROP));
+  }
+
+  public int getInlineClusterMaxCommits() {
+    return Integer.parseInt(props.getProperty(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMIT_PROP));
+  }
+
   public String getPayloadClass() {
     return props.getProperty(HoodieCompactionConfig.PAYLOAD_CLASS_PROP);
   }
@@ -402,6 +412,41 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public Boolean shouldCleanBootstrapBaseFile() {
     return Boolean.valueOf(props.getProperty(HoodieCompactionConfig.CLEANER_BOOTSTRAP_BASE_FILE_ENABLED));
+  }
+
+  /**
+   * Clustering properties.
+   */
+  public String getClusteringPlanStrategyClass() {
+    return props.getProperty(HoodieClusteringConfig.CLUSTERING_PLAN_STRATEGY_CLASS);
+  }
+
+  public String getClusteringExecutionStrategyClass() {
+    return props.getProperty(HoodieClusteringConfig.CLUSTERING_EXECUTION_STRATEGY_CLASS);
+  }
+
+  public long getClusteringMaxBytesInGroup() {
+    return Long.parseLong(props.getProperty(HoodieClusteringConfig.CLUSTERING_MAX_BYTES_PER_GROUP));
+  }
+  
+  public long getClusteringSmallFileLimit() {
+    return Long.parseLong(props.getProperty(HoodieClusteringConfig.CLUSTERING_PLAN_SMALL_FILE_LIMIT));
+  }
+
+  public int getClusteringMaxNumGroups() {
+    return Integer.parseInt(props.getProperty(HoodieClusteringConfig.CLUSTERING_MAX_NUM_GROUPS));
+  }
+
+  public long getClusteringTargetFileMaxBytes() {
+    return Long.parseLong(props.getProperty(HoodieClusteringConfig.CLUSTERING_TARGET_FILE_MAX_BYTES));
+  }
+
+  public int getTargetPartitionsForClustering() {
+    return Integer.parseInt(props.getProperty(HoodieClusteringConfig.CLUSTERING_TARGET_PARTITIONS));
+  }
+  
+  public String getClusteringSortColumns() {
+    return props.getProperty(HoodieClusteringConfig.CLUSTERING_SORT_COLUMNS_PROPERTY);
   }
 
   /**
@@ -744,6 +789,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return clientSpecifiedViewStorageConfig;
   }
 
+  public HoodiePayloadConfig getPayloadConfig() {
+    return hoodiePayloadConfig;
+  }
+
   /**
    * Commit call back configs.
    */
@@ -798,12 +847,14 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private boolean isIndexConfigSet = false;
     private boolean isStorageConfigSet = false;
     private boolean isCompactionConfigSet = false;
+    private boolean isClusteringConfigSet = false;
     private boolean isMetricsConfigSet = false;
     private boolean isBootstrapConfigSet = false;
     private boolean isMemoryConfigSet = false;
     private boolean isViewConfigSet = false;
     private boolean isConsistencyGuardSet = false;
     private boolean isCallbackConfigSet = false;
+    private boolean isPayloadConfigSet = false;
 
     public Builder withEngineType(EngineType engineType) {
       this.engineType = engineType;
@@ -926,6 +977,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withClusteringConfig(HoodieClusteringConfig clusteringConfig) {
+      props.putAll(clusteringConfig.getProps());
+      isClusteringConfigSet = true;
+      return this;
+    }
+
     public Builder withMetricsConfig(HoodieMetricsConfig metricsConfig) {
       props.putAll(metricsConfig.getProps());
       isMetricsConfigSet = true;
@@ -941,6 +998,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     public Builder withBootstrapConfig(HoodieBootstrapConfig bootstrapConfig) {
       props.putAll(bootstrapConfig.getProps());
       isBootstrapConfigSet = true;
+      return this;
+    }
+
+    public Builder withPayloadConfig(HoodiePayloadConfig payloadConfig) {
+      props.putAll(payloadConfig.getProps());
+      isPayloadConfigSet = true;
       return this;
     }
 
@@ -1074,6 +1137,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !isStorageConfigSet, HoodieStorageConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isCompactionConfigSet,
           HoodieCompactionConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isClusteringConfigSet,
+          HoodieClusteringConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isMetricsConfigSet, HoodieMetricsConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isBootstrapConfigSet,
           HoodieBootstrapConfig.newBuilder().fromProperties(props).build());
@@ -1084,6 +1149,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           ConsistencyGuardConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isCallbackConfigSet,
           HoodieWriteCommitCallbackConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isPayloadConfigSet,
+          HoodiePayloadConfig.newBuilder().fromProperties(props).build());
 
       setDefaultOnCondition(props, !props.containsKey(EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION),
           EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION, DEFAULT_EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION);

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -33,9 +34,12 @@ import java.io.IOException;
 public class HoodieSparkCompactor<T extends HoodieRecordPayload> extends AbstractCompactor<T,
     JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
   private static final Logger LOG = LogManager.getLogger(HoodieSparkCompactor.class);
+  private transient HoodieEngineContext context;
 
-  public HoodieSparkCompactor(AbstractHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> compactionClient) {
+  public HoodieSparkCompactor(AbstractHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> compactionClient,
+                              HoodieEngineContext context) {
     super(compactionClient);
+    this.context = context;
   }
 
   @Override
@@ -43,6 +47,7 @@ public class HoodieSparkCompactor<T extends HoodieRecordPayload> extends Abstrac
     LOG.info("Compactor executing compaction " + instant);
     SparkRDDWriteClient<T> writeClient = (SparkRDDWriteClient<T>)compactionClient;
     JavaRDD<WriteStatus> res = writeClient.compact(instant.getTimestamp());
+    this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status");
     long numWriteErrors = res.collect().stream().filter(WriteStatus::hasErrors).count();
     if (numWriteErrors != 0) {
       // We treat even a single error in compaction as fatal

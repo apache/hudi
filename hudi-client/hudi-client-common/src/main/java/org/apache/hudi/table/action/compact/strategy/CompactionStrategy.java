@@ -20,14 +20,13 @@ package org.apache.hudi.table.action.compact.strategy;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.util.CompactionUtils;
-import org.apache.hudi.common.util.Option;
+import org.apache.hudi.client.utils.FileSliceMetricUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,32 +49,14 @@ public abstract class CompactionStrategy implements Serializable {
    * Callback hook when a HoodieCompactionOperation is created. Individual strategies can capture the metrics they need
    * to decide on the priority.
    *
-   * @param dataFile - Base file to compact
-   * @param partitionPath - Partition path
-   * @param logFiles - List of log files to compact with the base file
+   * @param writeConfig write configuration.
+   * @param slice fileSlice to capture metrics for.
    * @return Map[String, Object] - metrics captured
    */
-  public Map<String, Double> captureMetrics(HoodieWriteConfig writeConfig, Option<HoodieBaseFile> dataFile,
-      String partitionPath, List<HoodieLogFile> logFiles) {
+  public Map<String, Double> captureMetrics(HoodieWriteConfig writeConfig, FileSlice slice) {
     Map<String, Double> metrics = new HashMap<>();
     long defaultMaxParquetFileSize = writeConfig.getParquetMaxFileSize();
-    // Total size of all the log files
-    Long totalLogFileSize = logFiles.stream().map(HoodieLogFile::getFileSize).filter(size -> size >= 0)
-        .reduce(Long::sum).orElse(0L);
-    // Total read will be the base file + all the log files
-    Long totalIORead =
-        FSUtils.getSizeInMB((dataFile.isPresent() ? dataFile.get().getFileSize() : 0L) + totalLogFileSize);
-    // Total write will be similar to the size of the base file
-    Long totalIOWrite =
-        FSUtils.getSizeInMB(dataFile.isPresent() ? dataFile.get().getFileSize() : defaultMaxParquetFileSize);
-    // Total IO will the the IO for read + write
-    long totalIO = totalIORead + totalIOWrite;
-    // Save these metrics and we will use during the filter
-    metrics.put(TOTAL_IO_READ_MB, totalIORead.doubleValue());
-    metrics.put(TOTAL_IO_WRITE_MB, totalIOWrite.doubleValue());
-    metrics.put(TOTAL_IO_MB, (double) totalIO);
-    metrics.put(TOTAL_LOG_FILE_SIZE, totalLogFileSize.doubleValue());
-    metrics.put(TOTAL_LOG_FILES, (double) logFiles.size());
+    FileSliceMetricUtils.addFileSliceCommonMetrics(Collections.singletonList(slice), metrics, defaultMaxParquetFileSize);
     return metrics;
   }
 

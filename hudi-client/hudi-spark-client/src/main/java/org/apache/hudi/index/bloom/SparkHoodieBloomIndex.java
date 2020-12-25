@@ -122,13 +122,15 @@ public class SparkHoodieBloomIndex<T extends HoodieRecordPayload> extends SparkH
 
     // Step 3: Obtain a RDD, for each incoming record, that already exists, with the file id,
     // that contains it.
+    JavaRDD<Tuple2<String, HoodieKey>> fileComparisonsRDD =
+        explodeRecordRDDWithFileComparisons(partitionToFileInfo, partitionRecordKeyPairRDD);
     Map<String, Long> comparisonsPerFileGroup =
-        computeComparisonsPerFileGroup(recordsPerPartition, partitionToFileInfo, partitionRecordKeyPairRDD);
+        computeComparisonsPerFileGroup(recordsPerPartition, partitionToFileInfo, fileComparisonsRDD, context);
     int inputParallelism = partitionRecordKeyPairRDD.partitions().size();
     int joinParallelism = Math.max(inputParallelism, config.getBloomIndexParallelism());
     LOG.info("InputParallelism: ${" + inputParallelism + "}, IndexParallelism: ${"
         + config.getBloomIndexParallelism() + "}");
-    return findMatchingFilesForRecordKeys(partitionToFileInfo, partitionRecordKeyPairRDD, joinParallelism, hoodieTable,
+    return findMatchingFilesForRecordKeys(fileComparisonsRDD, joinParallelism, hoodieTable,
         comparisonsPerFileGroup);
   }
 
@@ -137,14 +139,14 @@ public class SparkHoodieBloomIndex<T extends HoodieRecordPayload> extends SparkH
    */
   private Map<String, Long> computeComparisonsPerFileGroup(final Map<String, Long> recordsPerPartition,
                                                            final Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
-                                                           JavaPairRDD<String, String> partitionRecordKeyPairRDD) {
-
+                                                           final JavaRDD<Tuple2<String, HoodieKey>> fileComparisonsRDD,
+                                                           final HoodieEngineContext context) {
     Map<String, Long> fileToComparisons;
     if (config.getBloomIndexPruneByRanges()) {
       // we will just try exploding the input and then count to determine comparisons
       // FIX(vc): Only do sampling here and extrapolate?
-      fileToComparisons = explodeRecordRDDWithFileComparisons(partitionToFileInfo, partitionRecordKeyPairRDD)
-          .mapToPair(t -> t).countByKey();
+      context.setJobStatus(this.getClass().getSimpleName(), "Compute all comparisons needed between records and files");
+      fileToComparisons = fileComparisonsRDD.mapToPair(t -> t).countByKey();
     } else {
       fileToComparisons = new HashMap<>();
       partitionToFileInfo.forEach((key, value) -> {
@@ -252,11 +254,10 @@ public class SparkHoodieBloomIndex<T extends HoodieRecordPayload> extends SparkH
    * Make sure the parallelism is atleast the groupby parallelism for tagging location
    */
   JavaPairRDD<HoodieKey, HoodieRecordLocation> findMatchingFilesForRecordKeys(
-      final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
-      JavaPairRDD<String, String> partitionRecordKeyPairRDD, int shuffleParallelism, HoodieTable hoodieTable,
+      JavaRDD<Tuple2<String, HoodieKey>> fileComparisonsRDD,
+      int shuffleParallelism,
+      HoodieTable hoodieTable,
       Map<String, Long> fileGroupToComparisons) {
-    JavaRDD<Tuple2<String, HoodieKey>> fileComparisonsRDD =
-        explodeRecordRDDWithFileComparisons(partitionToFileIndexInfo, partitionRecordKeyPairRDD);
 
     if (config.useBloomIndexBucketizedChecking()) {
       Partitioner partitioner = new BucketizedBloomCheckPartitioner(shuffleParallelism, fileGroupToComparisons,

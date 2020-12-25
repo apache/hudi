@@ -93,7 +93,9 @@ public class DLASyncTool extends AbstractSyncTool {
           // sync a RO table for MOR
           syncHoodieTable(roTableTableName.get(), false);
           // sync a RT table for MOR
-          syncHoodieTable(snapshotTableName, true);
+          if (!cfg.skipRTSync) {
+            syncHoodieTable(snapshotTableName, true);
+          }
           break;
         default:
           LOG.error("Unknown table type " + hoodieDLAClient.getTableType());

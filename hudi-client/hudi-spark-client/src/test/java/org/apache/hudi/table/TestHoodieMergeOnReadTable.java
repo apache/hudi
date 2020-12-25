@@ -18,6 +18,11 @@
 
 package org.apache.hudi.table;
 
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapred.FileInputFormat;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -46,6 +51,8 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.Transformations;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
@@ -66,12 +73,6 @@ import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.HoodieWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
-
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapred.FileInputFormat;
-import org.apache.hadoop.mapred.JobConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -224,6 +225,81 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       assertTrue(HoodieTimeline.compareTimestamps("000", HoodieTimeline.LESSER_THAN, latestCompactionCommitTime));
 
       assertEquals(200, HoodieClientTestUtils.countRecordsSince(jsc, basePath, sqlContext, timeline, "000"),
+          "Must contain 200 records");
+    }
+  }
+
+  @Test
+  public void testSimpleClusteringNoUpdates() throws Exception {
+    testClustering(false);
+  }
+
+  @Test
+  public void testSimpleClusteringWithUpdates() throws Exception {
+    testClustering(true);
+  }
+
+  private void testClustering(boolean doUpdates) throws Exception {
+    // set low compaction small File Size to generate more file groups.
+    HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
+        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).build();
+    HoodieWriteConfig cfg = getConfigBuilder(true, 10L, clusteringConfig).build();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
+
+      /**
+       * Write 1 (only inserts)
+       */
+      String newCommitTime = "001";
+      client.startCommitWithTime(newCommitTime);
+
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 400);
+      insertAndGetFilePaths(records.subList(0, 200), client, cfg, newCommitTime);
+
+      /**
+       * Write 2 (more inserts to create new files)
+       */
+      // we already set small file size to small number to force inserts to go into new file.
+      newCommitTime = "002";
+      client.startCommitWithTime(newCommitTime);
+      insertAndGetFilePaths(records.subList(200, 400), client, cfg, newCommitTime);
+
+      if (doUpdates) {
+        /**
+         * Write 3 (updates)
+         */
+        newCommitTime = "003";
+        client.startCommitWithTime(newCommitTime);
+        records = dataGen.generateUpdates(newCommitTime, 100);
+        updateAndGetFilePaths(records, client, cfg, newCommitTime);
+      }
+
+      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context, metaClient);
+      FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
+      // expect 2 base files for each partition
+      assertEquals(dataGen.getPartitionPaths().length * 2, allFiles.length);
+
+      String clusteringCommitTime = client.scheduleClustering(Option.empty()).get().toString();
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      hoodieTable = HoodieSparkTable.create(cfg, context, metaClient);
+      // verify all files are included in clustering plan.
+      assertEquals(allFiles.length, hoodieTable.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getLeft).count());
+
+      // Do the clustering and validate
+      client.cluster(clusteringCommitTime, true);
+
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      final HoodieTable clusteredTable = HoodieSparkTable.create(cfg, context, metaClient);
+      Stream<HoodieBaseFile> dataFilesToRead = Arrays.stream(dataGen.getPartitionPaths())
+          .flatMap(p -> clusteredTable.getBaseFileOnlyView().getLatestBaseFiles(p));
+      // verify there should be only one base file per partition after clustering.
+      assertEquals(dataGen.getPartitionPaths().length, dataFilesToRead.count());
+
+      HoodieTimeline timeline = metaClient.getCommitTimeline().filterCompletedInstants();
+      assertEquals(1, timeline.findInstantsAfter("003", Integer.MAX_VALUE).countInstants(),
+          "Expecting a single commit.");
+      assertEquals(clusteringCommitTime, timeline.lastInstant().get().getTimestamp());
+      assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, timeline.lastInstant().get().getAction());
+      assertEquals(400, HoodieClientTestUtils.countRecordsSince(jsc, basePath, sqlContext, timeline, "000"),
           "Must contain 200 records");
     }
   }
@@ -1469,17 +1545,27 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     return getConfigBuilder(autoCommit, false, indexType);
   }
 
+  protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, long compactionSmallFileSize, HoodieClusteringConfig clusteringConfig) {
+    return getConfigBuilder(autoCommit, false, IndexType.BLOOM, compactionSmallFileSize, clusteringConfig);
+  }
+
   protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, Boolean rollbackUsingMarkers, HoodieIndex.IndexType indexType) {
+    return getConfigBuilder(autoCommit, rollbackUsingMarkers, indexType, 1024 * 1024 * 1024L, HoodieClusteringConfig.newBuilder().build());
+  }
+
+  protected HoodieWriteConfig.Builder getConfigBuilder(Boolean autoCommit, Boolean rollbackUsingMarkers, HoodieIndex.IndexType indexType,
+                                                       long compactionSmallFileSize, HoodieClusteringConfig clusteringConfig) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
         .withDeleteParallelism(2)
         .withAutoCommit(autoCommit).withAssumeDatePartitioning(true)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024 * 1024)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(compactionSmallFileSize)
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024 * 1024).parquetMaxFileSize(1024 * 1024 * 1024).build())
         .withEmbeddedTimelineServerEnabled(true).forTable("test-trip-table")
         .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
             .withEnableBackupForRemoteFileSystemView(false).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
+        .withClusteringConfig(clusteringConfig)
         .withRollbackUsingMarkers(rollbackUsingMarkers);
   }
 
