@@ -16,30 +16,30 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.internal;
+package org.apache.hudi.spark3.internal;
 
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.internal.BulkInsertDataInternalWriterHelper;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.sources.v2.writer.DataWriter;
-import org.apache.spark.sql.sources.v2.writer.WriterCommitMessage;
+import org.apache.spark.sql.connector.write.DataWriter;
+import org.apache.spark.sql.connector.write.WriterCommitMessage;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 
 /**
- * Hoodie's Implementation of {@link DataWriter<InternalRow>}. This is used in data source implementation for bulk insert.
+ * Hoodie's Implementation of {@link DataWriter<InternalRow>}. This is used in data source "hudi.spark3.internal" implementation for bulk insert.
  */
 public class HoodieBulkInsertDataInternalWriter implements DataWriter<InternalRow> {
 
   private final BulkInsertDataInternalWriterHelper bulkInsertWriterHelper;
 
   public HoodieBulkInsertDataInternalWriter(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
-      String instantTime, int taskPartitionId, long taskId, long taskEpochId,
-      StructType structType) {
+      String instantTime, int taskPartitionId, long taskId, StructType structType) {
     this.bulkInsertWriterHelper = new BulkInsertDataInternalWriterHelper(hoodieTable,
-        writeConfig, instantTime, taskPartitionId, taskId, taskEpochId, structType);
+        writeConfig, instantTime, taskPartitionId, taskId, 0, structType);
   }
 
   @Override
@@ -55,5 +55,10 @@ public class HoodieBulkInsertDataInternalWriter implements DataWriter<InternalRo
   @Override
   public void abort() {
     bulkInsertWriterHelper.abort();
+  }
+
+  @Override
+  public void close() throws IOException {
+    bulkInsertWriterHelper.close();
   }
 }
