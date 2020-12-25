@@ -115,7 +115,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     // Upsert Operation without Hudi metadata columns
     val records2 = recordsToStrings(dataGen.generateUpdates("001", 100)).toList
-    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2 , 2))
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     val uniqueKeyCnt = inputDF2.select("_row_key").distinct().count()
 
     inputDF2.write.format("org.apache.hudi")

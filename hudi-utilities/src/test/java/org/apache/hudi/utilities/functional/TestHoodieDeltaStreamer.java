@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -42,6 +43,7 @@ import org.apache.hudi.hive.HoodieHiveClient;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.utilities.DummySchemaProvider;
+import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.CsvDFSSource;
@@ -162,6 +164,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/invalid_hive_sync_uber_config.properties", dfs, dfsBasePath + "/config/invalid_hive_sync_uber_config.properties");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/uber_config.properties", dfs, dfsBasePath + "/config/uber_config.properties");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/short_trip_uber_config.properties", dfs, dfsBasePath + "/config/short_trip_uber_config.properties");
+    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/clusteringjob.properties", dfs, dfsBasePath + "/clusteringjob.properties");
 
     TypedProperties props = new TypedProperties();
     props.setProperty("include", "sql-transformer.properties");
@@ -403,6 +406,14 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
         return true;
       });
       res.get(timeoutInSecs, TimeUnit.SECONDS);
+    }
+
+    static void assertAtLeastNCommits(int minExpected, String tablePath, FileSystem fs) {
+      HoodieTableMetaClient meta = new HoodieTableMetaClient(fs.getConf(), tablePath);
+      HoodieTimeline timeline = meta.getActiveTimeline().filterCompletedInstants();
+      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
+      int numDeltaCommits = (int) timeline.getInstants().count();
+      assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
   }
 
@@ -653,7 +664,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       }
     });
 
-    TestHelpers.waitTillCondition(condition, 180);
+    TestHelpers.waitTillCondition(condition, 240);
     ds.shutdownGracefully();
     dsFuture.get();
   }
@@ -678,6 +689,54 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       int pendingReplaceSize = metaClient.getActiveTimeline().filterPendingReplaceTimeline().getInstants().toArray().length;
       int completeReplaceSize = metaClient.getActiveTimeline().getCompletedReplaceTimeline().getInstants().toArray().length;
       LOG.info("PendingReplaceSize=" + pendingReplaceSize + ",completeReplaceSize = " + completeReplaceSize);
+      return completeReplaceSize > 0;
+    });
+  }
+
+  private HoodieClusteringJob.Config buildHoodieClusteringUtilConfig(String basePath,
+                                                                  String clusteringInstantTime, boolean runSchedule) {
+    HoodieClusteringJob.Config config = new HoodieClusteringJob.Config();
+    config.basePath = basePath;
+    config.clusteringInstantTime = clusteringInstantTime;
+    config.schemaFile = dfsBasePath + "/target.avsc";
+    config.runSchedule = runSchedule;
+    config.propsFilePath = dfsBasePath + "/clusteringjob.properties";
+
+    return config;
+  }
+
+  @Test
+  public void testHoodieAsyncClusteringJob() throws Exception {
+    String tableBasePath = dfsBasePath + "/asyncClustering";
+    // Keep it higher than batch-size to test continuous mode
+    int totalRecords = 3000;
+
+    // Initial bulk insert
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
+    cfg.continuousMode = true;
+    cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
+    cfg.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
+    cfg.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN_PROP));
+
+    deltaStreamerTestRunner(cfg, (r) -> {
+      TestHelpers.assertAtLeastNCommits(3, tableBasePath, dfs);
+      String clusterInstantTime = HoodieActiveTimeline.createNewInstantTime();
+      HoodieClusteringJob.Config scheduleClusteringConfig = buildHoodieClusteringUtilConfig(tableBasePath,
+          clusterInstantTime, true);
+      HoodieClusteringJob scheduleClusteringJob = new HoodieClusteringJob(jsc, scheduleClusteringConfig);
+      int scheduleClusteringResult = scheduleClusteringJob.cluster(scheduleClusteringConfig.retry);
+      if (scheduleClusteringResult == 0) {
+        HoodieClusteringJob.Config clusterClusteringConfig = buildHoodieClusteringUtilConfig(tableBasePath,
+            clusterInstantTime, false);
+        HoodieClusteringJob clusterClusteringJob = new HoodieClusteringJob(jsc, clusterClusteringConfig);
+        clusterClusteringJob.cluster(clusterClusteringConfig.retry);
+      } else {
+        LOG.warn("Schedule clustering failed");
+      }
+      HoodieTableMetaClient metaClient =  new HoodieTableMetaClient(this.dfs.getConf(), tableBasePath, true);
+      int pendingReplaceSize = metaClient.getActiveTimeline().filterPendingReplaceTimeline().getInstants().toArray().length;
+      int completeReplaceSize = metaClient.getActiveTimeline().getCompletedReplaceTimeline().getInstants().toArray().length;
+      System.out.println("PendingReplaceSize=" + pendingReplaceSize + ",completeReplaceSize = " + completeReplaceSize);
       return completeReplaceSize > 0;
     });
   }
