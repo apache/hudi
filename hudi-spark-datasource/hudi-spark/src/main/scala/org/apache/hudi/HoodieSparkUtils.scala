@@ -89,6 +89,11 @@ object HoodieSparkUtils {
     new InMemoryFileIndex(sparkSession, globbedPaths, Map(), Option.empty, fileStatusCache)
   }
 
+  def createInMemoryFileIndex(sparkSession: SparkSession, userSpecifiedSchema: Option[StructType], parameters: Map[String, String], globbedPaths: Seq[Path]): InMemoryFileIndex = {
+    val fileStatusCache = FileStatusCache.getOrCreate(sparkSession)
+    new InMemoryFileIndex(sparkSession, globbedPaths, parameters, userSpecifiedSchema, fileStatusCache)
+  }
+
   def createRdd(df: DataFrame, structName: String, recordNamespace: String): RDD[GenericRecord] = {
     val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, recordNamespace)
     createRdd(df, avroSchema, structName, recordNamespace)

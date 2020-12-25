@@ -24,17 +24,18 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
-
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.mapred.JobConf
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
+import org.apache.spark.sql.execution.hudi.utils.PushDownUtils
 import org.apache.spark.sql.{Row, SQLContext}
-import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
+import org.apache.spark.sql.sources.{BaseRelation, CatalystScan, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.StructType
 
 import scala.collection.JavaConverters._
@@ -57,7 +58,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
                                   val userSchema: StructType,
                                   val globPaths: Seq[Path],
                                   val metaClient: HoodieTableMetaClient)
-  extends BaseRelation with PrunedFilteredScan with Logging {
+  extends BaseRelation with CatalystScan with Logging {
 
   private val conf = sqlContext.sparkContext.hadoopConfiguration
   private val jobConf = new JobConf(conf)
@@ -69,18 +70,20 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
     DataSourceReadOptions.REALTIME_MERGE_OPT_KEY,
     DataSourceReadOptions.DEFAULT_REALTIME_MERGE_OPT_VAL)
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
-  private val fileIndex = buildFileIndex()
+  private var fileIndex: List[HoodieMergeOnReadFileSplit] = _
 
   override def schema: StructType = tableStructSchema
 
   override def needConversion: Boolean = false
 
-  override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
+  override def buildScan(requiredColumns: Seq[Attribute], filters: Seq[Expression]): RDD[Row] = {
+    fileIndex = buildFileIndex(filters)
+    val pushedFilters  = PushDownUtils.transformFilter(this,filters)
     log.debug(s" buildScan requiredColumns = ${requiredColumns.mkString(",")}")
-    log.debug(s" buildScan filters = ${filters.mkString(",")}")
+    log.debug(s" buildScan filters = ${pushedFilters.mkString(",")}")
     var requiredStructSchema = StructType(Seq())
     requiredColumns.foreach(col => {
-      val field = tableStructSchema.find(_.name == col)
+      val field = tableStructSchema.find(_.name == col.name)
       if (field.isDefined) {
         requiredStructSchema = requiredStructSchema.add(field.get)
       }
@@ -108,7 +111,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
       dataSchema = tableStructSchema,
       partitionSchema = StructType(Nil),
       requiredSchema = requiredStructSchema,
-      filters = filters,
+      filters = pushedFilters,
       options = optParams,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
     )
@@ -123,9 +126,10 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
     rdd.asInstanceOf[RDD[Row]]
   }
 
-  def buildFileIndex(): List[HoodieMergeOnReadFileSplit] = {
-    val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sqlContext.sparkSession, globPaths)
-    val fileStatuses = inMemoryFileIndex.allFiles()
+  def buildFileIndex(filters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
+    val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sqlContext.sparkSession, Some(tableStructSchema), optParams, globPaths)
+    // current it is inconvenient to get partitionKeyFilters and dataFilters thought lower level spark class/api. just use the all filters
+    val fileStatuses = inMemoryFileIndex.listFiles(filters, filters).flatMap(_.files)
     if (fileStatuses.isEmpty) {
       throw new HoodieException("No files found for reading in user provided path.")
     }
