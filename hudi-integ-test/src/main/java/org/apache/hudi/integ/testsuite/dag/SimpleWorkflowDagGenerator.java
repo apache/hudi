@@ -18,8 +18,6 @@
 
 package org.apache.hudi.integ.testsuite.dag;
 
-import java.util.ArrayList;
-import java.util.List;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig;
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
@@ -27,9 +25,11 @@ import org.apache.hudi.integ.testsuite.dag.nodes.HiveQueryNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.InsertNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.UpsertNode;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * An example of how to generate a workflow dag programmatically. This is also used as the default workflow dag if
- * none is provided.
+ * An example of how to generate a workflow dag programmatically. This is also used as the default workflow dag if none is provided.
  */
 public class SimpleWorkflowDagGenerator implements WorkflowDagGenerator {
 

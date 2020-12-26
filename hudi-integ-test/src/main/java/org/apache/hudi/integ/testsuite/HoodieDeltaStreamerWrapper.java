@@ -25,13 +25,13 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.deltastreamer.DeltaSync;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
- * Extends the {@link HoodieDeltaStreamer} to expose certain operations helpful in running the Test Suite.
- * This is done to achieve 2 things 1) Leverage some components of {@link HoodieDeltaStreamer} 2)
- * Piggyback on the suite to test {@link HoodieDeltaStreamer}
+ * Extends the {@link HoodieDeltaStreamer} to expose certain operations helpful in running the Test Suite. This is done to achieve 2 things 1) Leverage some components of {@link HoodieDeltaStreamer}
+ * 2) Piggyback on the suite to test {@link HoodieDeltaStreamer}
  */
 public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
 
