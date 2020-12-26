@@ -236,7 +236,7 @@ public class HoodieInputFormatUtils {
           return false;
         })
         .collect(Collectors.joining(","));
-    return Option.of(incrementalInputPaths);
+    return StringUtils.isNullOrEmpty(incrementalInputPaths) ? Option.empty() : Option.of(incrementalInputPaths);
   }
 
   /**
