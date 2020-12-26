@@ -134,12 +134,16 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
   protected GenericRecord create(Schema schema, Set<String> partitionPathFieldNames) {
     GenericRecord result = new GenericData.Record(schema);
     for (Schema.Field f : schema.getFields()) {
-      if (isPartialLongField(f, partitionPathFieldNames)) {
-        // This is a long field used as partition field. Set it to seconds since epoch.
-        long value = TimeUnit.SECONDS.convert(partitionIndex, TimeUnit.DAYS);
-        result.put(f.name(), (long) value);
+      if (f.name().equals(DEFAULT_HOODIE_IS_DELETED_COL)) {
+        result.put(f.name(), false);
       } else {
-        result.put(f.name(), typeConvert(f));
+        if (isPartialLongField(f, partitionPathFieldNames)) {
+          // This is a long field used as partition field. Set it to seconds since epoch.
+          long value = TimeUnit.SECONDS.convert(partitionIndex, TimeUnit.DAYS);
+          result.put(f.name(), (long) value);
+        } else {
+          result.put(f.name(), typeConvert(f));
+        }
       }
     }
     return result;
