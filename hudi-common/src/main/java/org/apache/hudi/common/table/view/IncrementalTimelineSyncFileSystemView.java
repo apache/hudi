@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.view;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -40,6 +41,7 @@ import org.apache.hudi.common.table.timeline.TimelineDiffHelper;
 import org.apache.hudi.common.table.timeline.TimelineDiffHelper.TimelineDiffResult;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -108,9 +110,13 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
     LOG.info("Timeline Diff Result is :" + diffResult);
 
     // First remove pending compaction instants which were completed
-    diffResult.getFinishedCompactionInstants().stream().forEach(instant -> {
+    diffResult.getFinishedViewChangingInstants().stream().forEach(instant -> {
       try {
-        removePendingCompactionInstant(timeline, instant);
+        if (HoodieTimeline.COMPACTION_ACTION.equals(instant.getAction())) {
+          removePendingCompactionInstant(timeline, instant);
+        } else {
+          removePendingReplaceCommitInstant(timeline, instant);
+        }
       } catch (IOException e) {
         throw new HoodieException(e);
       }
@@ -118,7 +124,8 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
 
     // Add new completed instants found in the latest timeline
     diffResult.getNewlySeenInstants().stream()
-        .filter(instant -> instant.isCompleted() || instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION))
+        .filter(instant -> instant.isCompleted() || instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)
+            || instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION))
         .forEach(instant -> {
           try {
             if (instant.getAction().equals(HoodieTimeline.COMMIT_ACTION)
@@ -133,7 +140,11 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
             } else if (instant.getAction().equals(HoodieTimeline.ROLLBACK_ACTION)) {
               addRollbackInstant(timeline, instant);
             } else if (instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
-              addReplaceInstant(timeline, instant);
+              if (instant.isCompleted()) {
+                addReplaceInstant(timeline, instant);
+              } else {
+                addPendingReplaceInstant(timeline, instant);
+              }
             }
           } catch (IOException ioe) {
             throw new HoodieException(ioe);
@@ -153,6 +164,22 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
     removePendingCompactionOperations(CompactionUtils.getPendingCompactionOperations(instant, plan)
         .map(instantPair -> Pair.of(instantPair.getValue().getKey(),
             CompactionOperation.convertFromAvroRecordInstance(instantPair.getValue().getValue()))));
+  }
+
+  /**
+   * Remove Pending replacecommit instant.
+   *
+   * @param timeline New Hoodie Timeline
+   * @param instant replacecommit Instant to be removed
+   */
+  private void removePendingReplaceCommitInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
+    // check if there is a clustering operation for the instant and update file system view. 
+    // Note that other pending replacecommits (e.g. pending insert_overwrite) do not change view
+    Option<HoodieClusteringPlan> clusteringPlan = ClusteringUtils.getClusteringPlan(metaClient, instant).map(p -> p.getRight());
+    clusteringPlan.ifPresent(plan -> {
+      LOG.info("Removing pending clustering instant (" + instant + ")");
+      removeFileGroupsInPendingClustering(ClusteringUtils.getFileGroupsInPendingClusteringInstant(instant, plan));
+    });
   }
 
   /**
@@ -288,6 +315,22 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
 
       LOG.info("For partition (" + partition + ") of instant (" + instant + "), excluding " + replacedFileIds.size() + " file groups");
       addReplacedFileGroups(replacedFileIds);
+    });
+    LOG.info("Done Syncing REPLACE instant (" + instant + ")");
+  }
+
+
+  /**
+   * Add newly found pending REPLACE instant.
+   *
+   * @param timeline Hoodie Timeline
+   * @param instant pending REPLACE Instant
+   */
+  private void addPendingReplaceInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
+    LOG.info("Syncing replace instant (" + instant + ")");
+    ClusteringUtils.getClusteringPlan(timeline, instant).map(p -> p.getRight()).ifPresent(clusteringPlan -> {
+      LOG.info("Found clustering plan for replace instant (" + instant + "). ClusteringPlan groups count: " + clusteringPlan.getInputGroups().size());
+      addFileGroupsInPendingClustering(ClusteringUtils.getFileGroupsInPendingClusteringInstant(instant, clusteringPlan));
     });
     LOG.info("Done Syncing REPLACE instant (" + instant + ")");
   }

@@ -40,8 +40,8 @@ public class TimelineDiffHelper {
   public static TimelineDiffResult getNewInstantsForIncrementalSync(HoodieTimeline oldTimeline,
       HoodieTimeline newTimeline) {
 
-    HoodieTimeline oldT = oldTimeline.filterCompletedAndCompactionInstants();
-    HoodieTimeline newT = newTimeline.filterCompletedAndCompactionInstants();
+    HoodieTimeline oldT = oldTimeline.filterViewChangingInstants();
+    HoodieTimeline newT = newTimeline.filterViewChangingInstants();
 
     Option<HoodieInstant> lastSeenInstant = oldT.lastInstant();
     Option<HoodieInstant> firstInstantInNewTimeline = newT.firstInstant();
@@ -57,23 +57,24 @@ public class TimelineDiffHelper {
       List<HoodieInstant> newInstants = new ArrayList<>();
 
       // Check If any pending compaction is lost. If so, do not allow incremental timeline sync
-      List<Pair<HoodieInstant, HoodieInstant>> compactionInstants = getPendingCompactionTransitions(oldT, newT);
-      List<HoodieInstant> lostPendingCompactions = compactionInstants.stream()
+      List<Pair<HoodieInstant, HoodieInstant>> viewChangingInstants = getPendingActionTransitions(oldT, newT);
+      List<HoodieInstant> lostPendingActions = viewChangingInstants.stream()
           .filter(instantPair -> instantPair.getValue() == null).map(Pair::getKey).collect(Collectors.toList());
-      if (!lostPendingCompactions.isEmpty()) {
-        // If a compaction is unscheduled, fall back to complete refresh of fs view since some log files could have been
+      if (!lostPendingActions.isEmpty()) {
+        // If a compaction/clustering is unscheduled, fall back to complete refresh of fs view since some log files could have been
         // moved. Its unsafe to incrementally sync in that case.
-        LOG.warn("Some pending compactions are no longer in new timeline (unscheduled ?). They are :"
-            + lostPendingCompactions);
+        LOG.warn("Some pending view changing instants are no longer in new timeline (unscheduled ?). They are :"
+            + lostPendingActions);
         return TimelineDiffResult.UNSAFE_SYNC_RESULT;
       }
-      List<HoodieInstant> finishedCompactionInstants = compactionInstants.stream()
-          .filter(instantPair -> instantPair.getValue().getAction().equals(HoodieTimeline.COMMIT_ACTION)
-              && instantPair.getValue().isCompleted())
+      List<HoodieInstant> finishedViewChangingInstants = viewChangingInstants.stream()
+          .filter(instantPair -> instantPair.getValue().isCompleted()
+              && (HoodieTimeline.COMMIT_ACTION.equals(instantPair.getValue().getAction())
+              || HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instantPair.getValue().getAction())))
           .map(Pair::getKey).collect(Collectors.toList());
 
       newT.getInstants().filter(instant -> !oldTimelineInstants.contains(instant)).forEach(newInstants::add);
-      return new TimelineDiffResult(newInstants, finishedCompactionInstants, true);
+      return new TimelineDiffResult(newInstants, finishedViewChangingInstants, true);
     } else {
       // One or more timelines is empty
       LOG.warn("One or more timelines is empty");
@@ -81,11 +82,13 @@ public class TimelineDiffHelper {
     }
   }
 
-  private static List<Pair<HoodieInstant, HoodieInstant>> getPendingCompactionTransitions(HoodieTimeline oldTimeline,
-      HoodieTimeline newTimeline) {
+  private static List<Pair<HoodieInstant, HoodieInstant>> getPendingActionTransitions(HoodieTimeline oldTimeline,
+                                                                                      HoodieTimeline newTimeline) {
     Set<HoodieInstant> newTimelineInstants = newTimeline.getInstants().collect(Collectors.toSet());
+    
+    List<Pair<HoodieInstant, HoodieInstant>> allTransitions = new ArrayList<>();
 
-    return oldTimeline.filterPendingCompactionTimeline().getInstants().map(instant -> {
+    allTransitions.addAll(oldTimeline.filterPendingCompactionTimeline().getInstants().map(instant -> {
       if (newTimelineInstants.contains(instant)) {
         return Pair.of(instant, instant);
       } else {
@@ -96,7 +99,21 @@ public class TimelineDiffHelper {
         }
         return Pair.<HoodieInstant, HoodieInstant>of(instant, null);
       }
-    }).collect(Collectors.toList());
+    }).collect(Collectors.toList()));
+
+    allTransitions.addAll(oldTimeline.filterPendingReplaceTimeline().getInstants().map(instant -> {
+      if (newTimelineInstants.contains(instant)) {
+        return Pair.of(instant, instant);
+      } else {
+        HoodieInstant completedCommit = new HoodieInstant(State.COMPLETED, instant.getAction(), instant.getTimestamp());
+        if (newTimeline.containsInstant(completedCommit)) {
+          return Pair.of(instant, completedCommit);
+        }
+        return Pair.<HoodieInstant, HoodieInstant>of(instant, null);
+      }
+    }).collect(Collectors.toList()));
+    
+    return allTransitions;
   }
 
   /**
@@ -105,15 +122,15 @@ public class TimelineDiffHelper {
   public static class TimelineDiffResult {
 
     private final List<HoodieInstant> newlySeenInstants;
-    private final List<HoodieInstant> finishedCompactionInstants;
+    private final List<HoodieInstant> finishedViewChangingInstants;
     private final boolean canSyncIncrementally;
 
     public static final TimelineDiffResult UNSAFE_SYNC_RESULT = new TimelineDiffResult(null, null, false);
 
-    public TimelineDiffResult(List<HoodieInstant> newlySeenInstants, List<HoodieInstant> finishedCompactionInstants,
+    public TimelineDiffResult(List<HoodieInstant> newlySeenInstants, List<HoodieInstant> finishedViewChangingInstants,
         boolean canSyncIncrementally) {
       this.newlySeenInstants = newlySeenInstants;
-      this.finishedCompactionInstants = finishedCompactionInstants;
+      this.finishedViewChangingInstants = finishedViewChangingInstants;
       this.canSyncIncrementally = canSyncIncrementally;
     }
 
@@ -121,8 +138,8 @@ public class TimelineDiffHelper {
       return newlySeenInstants;
     }
 
-    public List<HoodieInstant> getFinishedCompactionInstants() {
-      return finishedCompactionInstants;
+    public List<HoodieInstant> getFinishedViewChangingInstants() {
+      return finishedViewChangingInstants;
     }
 
     public boolean canSyncIncrementally() {
@@ -132,7 +149,7 @@ public class TimelineDiffHelper {
     @Override
     public String toString() {
       return "TimelineDiffResult{newlySeenInstants=" + newlySeenInstants + ", finishedCompactionInstants="
-          + finishedCompactionInstants + ", canSyncIncrementally=" + canSyncIncrementally + '}';
+          + finishedViewChangingInstants + ", canSyncIncrementally=" + canSyncIncrementally + '}';
     }
   }
 }

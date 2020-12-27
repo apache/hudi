@@ -376,6 +376,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
       // make sure earlier file groups are not visible
       assertEquals(0, newFileGroups.stream().filter(fg -> fileGroupsBeforeReplace.contains(fg)).count());
 
+      assertTrue(newFileGroups.size() > 0, "Ensure latest file-slices are not empty");
       // compaction should run with associated file groups are replaced
       executeCompactionWithReplacedFiles(compactionInstantTime, client, hoodieTable, cfg, dataGen.getPartitionPaths(), fileGroupsBeforeReplace);
     }

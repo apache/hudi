@@ -69,7 +69,11 @@ public class ClusteringUtils {
         .filter(Option::isPresent).map(Option::get);
   }
 
-  public static Option<Pair<HoodieInstant, HoodieClusteringPlan>> getClusteringPlan(HoodieTableMetaClient metaClient, HoodieInstant pendingReplaceInstant) {
+  public static Option<Pair<HoodieInstant, HoodieClusteringPlan>> getClusteringPlan(HoodieTableMetaClient metaClient, HoodieInstant requestedReplaceInstant) {
+    return getClusteringPlan(metaClient.getActiveTimeline(), requestedReplaceInstant);
+  }
+
+  public static Option<Pair<HoodieInstant, HoodieClusteringPlan>> getClusteringPlan(HoodieTimeline timeline, HoodieInstant pendingReplaceInstant) {
     try {
       final HoodieInstant requestedInstant;
       if (!pendingReplaceInstant.isRequested()) {
@@ -80,7 +84,7 @@ public class ClusteringUtils {
       } else {
         requestedInstant = pendingReplaceInstant;
       }
-      Option<byte[]> content = metaClient.getActiveTimeline().getInstantDetails(requestedInstant);
+      Option<byte[]> content = timeline.getInstantDetails(requestedInstant);
       if (!content.isPresent() || content.get().length == 0) {
         // few operations create requested file without any content. Assume these are not clustering
         LOG.warn("No content found in requested file for instant " + pendingReplaceInstant);

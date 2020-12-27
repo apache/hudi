@@ -223,7 +223,7 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   @Override
   void addFileGroupsInPendingClustering(Stream<Pair<HoodieFileGroupId, HoodieInstant>> fileGroups) {
     fileGroups.forEach(fileGroupInstantPair -> {
-      ValidationUtils.checkArgument(fgIdToPendingClustering.containsKey(fileGroupInstantPair.getLeft()),
+      ValidationUtils.checkArgument(!fgIdToPendingClustering.containsKey(fileGroupInstantPair.getLeft()),
           "Trying to add a FileGroupId which is already in pending clustering operation. FgId :"
               + fileGroupInstantPair.getLeft() + ", new instant: " + fileGroupInstantPair.getRight() + ", existing instant "
               + fgIdToPendingClustering.get(fileGroupInstantPair.getLeft()));

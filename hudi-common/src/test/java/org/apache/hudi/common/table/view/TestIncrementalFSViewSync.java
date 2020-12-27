@@ -18,7 +18,9 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -44,14 +46,14 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -74,8 +76,10 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -311,7 +315,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
    * Tests FS View incremental syncing behavior when multiple instants gets committed.
    */
   @Test
-  public void testMultipleTransitions() throws IOException {
+  public void testMultipleCompactionTransitions() throws IOException {
 
     SyncableFileSystemView view1 = getFileSystemView(metaClient);
     view1.sync();
@@ -402,6 +406,25 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
       v.sync();
       areViewsConsistent(v, view1, partitions.size() * fileIdsPerPartition.size() * 3);
     });
+  }
+  
+  @Test
+  public void testReplaceTransitionsForClustering() throws IOException {
+    SyncableFileSystemView view1 = getFileSystemView(metaClient);
+    view1.sync();
+    Map<String, List<String>> instantsToFiles = testMultipleWriteSteps(view1, Arrays.asList("12", "13", "14"));
+    
+    /*
+     * Case where a clustering is scheduled and then 'canceled'.
+     */
+    scheduleClustering(view1, "15", partitions.get(0), view1.getLatestBaseFiles(partitions.get(0)).map(x -> x.getFileId()));
+    unscheduleClustering(view1, "15");
+
+    /*
+     * Case where a clustering is scheduled and completed.
+     */
+    scheduleClustering(view1, "16", partitions.get(0), view1.getLatestBaseFiles(partitions.get(0)).map(x -> x.getFileId()));
+    completeClustering(view1, "16", partitions.get(0));
   }
 
   /*
@@ -814,6 +837,10 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     Set<Pair<String, CompactionOperation>> ops1 = view1.getPendingCompactionOperations().collect(Collectors.toSet());
     Set<Pair<String, CompactionOperation>> ops2 = view2.getPendingCompactionOperations().collect(Collectors.toSet());
     assertEquals(ops1, ops2);
+    
+    Set<Pair<HoodieFileGroupId, HoodieInstant>> clusteringGroups1 = view1.getFileGroupsInPendingClustering().collect(Collectors.toSet());
+    Set<Pair<HoodieFileGroupId, HoodieInstant>> clusteringGroups2 = view2.getFileGroupsInPendingClustering().collect(Collectors.toSet());
+    assertEquals(clusteringGroups1, clusteringGroups2);
   }
 
   private List<Pair<String, HoodieWriteStat>> generateDataForInstant(String baseInstant, String instant, boolean deltaCommit) {
@@ -856,6 +883,87 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     return writeStats.stream().map(e -> e.getValue().getPath()).collect(Collectors.toList());
   }
 
+  /**
+   * Schedule clustering and ensure FileSystemView is updated with file groups in pending clustering.
+   */
+  private void scheduleClustering(SyncableFileSystemView fsView, String instantTime, String partitionPath1, Stream<String> fileIds) throws IOException {
+    int expectedFileSlices = partitions.stream().mapToInt(p -> (int) fsView.getAllBaseFiles(p).count()).sum();
+    List<FileSlice>[] fileSliceGroups = fileIds.map(fileId -> 
+        Collections.singletonList(fsView.getLatestFileSlice(partitionPath1, fileId).get())).toArray(List[]::new);
+
+    // create pending clustering operation - fileId1, fileId2 are being clustered in different groups
+    HoodieClusteringPlan plan = ClusteringUtils.createClusteringPlan("strategy", new HashMap<>(),
+        fileSliceGroups, Collections.emptyMap());
+
+    HoodieInstant requestedInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime);
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
+        .setClusteringPlan(plan).setOperationType(WriteOperationType.CLUSTER.name()).build();
+    metaClient.getActiveTimeline().saveToPendingReplaceCommit(requestedInstant, TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
+    fsView.sync();
+    SyncableFileSystemView snapshotView = getFileSystemView(metaClient.getActiveTimeline().reload(), false);
+    areViewsConsistent(fsView, snapshotView, expectedFileSlices);
+  }
+
+  /**
+   * Delete a clustering instant and validate incremental fs view.
+   */
+  private void completeClustering(SyncableFileSystemView view, String clusteringInstant, String partitionPath) throws IOException {
+    int expectedFileSlicesAfterClustering = (int) partitions.stream().flatMap(p -> view.getAllBaseFiles(p))
+        .filter(bf -> !bf.getPath().contains(partitionPath)).count();
+    
+    Map<String, List<String>> fileGroupsInClusteringInstant = view.getFileGroupsInPendingClustering()
+        .filter(p -> p.getRight().getTimestamp().equals(clusteringInstant)).map(p -> p.getLeft()).filter(fg -> fg.getPartitionPath().equals(partitionPath))
+        .collect(Collectors.groupingBy(fg -> fg.getPartitionPath(), Collectors.mapping(fg -> fg.getFileId(), Collectors.toList())));
+    
+    HoodieInstant requestedInstant = new HoodieInstant(State.REQUESTED, REPLACE_COMMIT_ACTION, clusteringInstant);
+    HoodieInstant inflightInstant = metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(requestedInstant, Option.empty());
+    
+    HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) CommitUtils.buildMetadata(Collections.emptyList(),
+        fileGroupsInClusteringInstant, Option.empty(), WriteOperationType.CLUSTER, "schema", REPLACE_COMMIT_ACTION);
+    metaClient.getActiveTimeline().transitionReplaceInflightToComplete(inflightInstant,
+        Option.of(replaceCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    view.sync();
+    
+    // verify no file groups are in pending clustering (because clustering is complete)
+    int fileGroupsInPendingClusteringCount = (int) view.getFileGroupsInPendingClustering().map(p -> p.getLeft())
+        .filter(p -> p.getPartitionPath().equals(partitionPath)).count();
+    assertEquals(0, fileGroupsInPendingClusteringCount);
+
+    // verify all file groups that were in pending clustering are moved to replaced file groups
+    Set<HoodieFileGroupId> fileGroupsReplaced = view.getReplacedFileGroupsBeforeOrOn(clusteringInstant, partitionPath)
+        .map(HoodieFileGroup::getFileGroupId).collect(Collectors.toSet());
+    fileGroupsInClusteringInstant.get(partitionPath).stream().forEach(fileId -> {
+      assertTrue(fileGroupsReplaced.contains(new HoodieFileGroupId(partitionPath, fileId)));
+    });
+    
+    // compare to snapshot view
+    SyncableFileSystemView snapshotView = getFileSystemView(metaClient.getActiveTimeline().reload(), false);
+    areViewsConsistent(view, snapshotView, expectedFileSlicesAfterClustering);
+  }
+  
+  /**
+   * Delete a clustering instant and validate incremental fs view.
+   */
+  private void unscheduleClustering(SyncableFileSystemView view, String clusteringInstant) throws IOException {
+    Set<HoodieFileGroupId> fileGroupsInClusteringInstant = view.getFileGroupsInPendingClustering()
+        .filter(p -> p.getRight().getTimestamp().equals(clusteringInstant)).map(p -> p.getLeft()).collect(Collectors.toSet());
+    // ensure there is at least one file group in clustering plan
+    assertTrue(fileGroupsInClusteringInstant.size() > 0);
+    
+    // delete requested clustering instant (if any)
+    HoodieInstant instant = new HoodieInstant(State.REQUESTED, REPLACE_COMMIT_ACTION, clusteringInstant);
+    boolean deleted = metaClient.getFs().delete(new Path(metaClient.getMetaPath(), instant.getFileName()), false);
+    ValidationUtils.checkArgument(deleted, "Unable to delete clustering instant.");
+
+    view.sync();
+    SyncableFileSystemView snapshotView = getFileSystemView(metaClient.getActiveTimeline().reload(), false);
+    int expectedFileSlices = partitions.stream().mapToInt(p -> (int) snapshotView.getAllBaseFiles(p).count()).sum();
+    areViewsConsistent(view, snapshotView, expectedFileSlices);
+    Set<HoodieFileGroupId> fgInPendingClusteringAfterRemovingClustering = view.getFileGroupsInPendingClustering()
+        .filter(p -> p.getRight().getTimestamp().equals(clusteringInstant)).map(p -> p.getLeft()).collect(Collectors.toSet());
+    assertEquals(0, fgInPendingClusteringAfterRemovingClustering.size());
+  }
+  
   private List<String> addReplaceInstant(HoodieTableMetaClient metaClient, String instant,
                                  List<Pair<String, HoodieWriteStat>> writeStats,
                                  Map<String, List<String>> partitionToReplaceFileIds) throws IOException {

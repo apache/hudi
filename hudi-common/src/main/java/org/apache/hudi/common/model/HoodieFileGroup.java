@@ -77,7 +77,7 @@ public class HoodieFileGroup implements Serializable {
     this.fileGroupId = fileGroupId;
     this.fileSlices = new TreeMap<>(HoodieFileGroup.getReverseCommitTimeComparator());
     this.timeline = timeline;
-    this.lastInstant = timeline.lastInstant();
+    this.lastInstant = timeline.filterCompletedAndCompactionInstants().lastInstant();
   }
 
   /**

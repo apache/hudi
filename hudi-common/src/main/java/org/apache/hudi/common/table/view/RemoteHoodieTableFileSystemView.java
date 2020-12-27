@@ -161,7 +161,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
     // Adding mandatory parameters - Last instants affecting file-slice
     timeline.lastInstant().ifPresent(instant -> builder.addParameter(LAST_INSTANT_TS, instant.getTimestamp()));
-    builder.addParameter(TIMELINE_HASH, timeline.getTimelineHash());
+    builder.addParameter(TIMELINE_HASH, timeline.filterCompletedAndCompactionInstants().getTimelineHash());
 
     String url = builder.toString();
     LOG.info("Sending request : (" + url + ")");

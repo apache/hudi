@@ -395,6 +395,16 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         .forEach(i -> assertTrue(t1.containsInstant(i)));
     sup.get().filter(i -> !(states.contains(i.getState()) || actions.contains(i.getAction())))
         .forEach(i -> assertFalse(t1.containsInstant(i)));
+    
+    // filterViewChangingInstants
+    // This cannot be done using checkFilter as it involves both states and actions
+    final HoodieTimeline t11 = timeline.filterViewChangingInstants();
+    final Set<State> states11 = CollectionUtils.createSet(State.COMPLETED);
+    final Set<String> actions11 = CollectionUtils.createSet(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION);
+    sup.get().filter(i -> states11.contains(i.getState()) || actions11.contains(i.getAction()))
+        .forEach(i -> assertTrue(t11.containsInstant(i)));
+    sup.get().filter(i -> !(states11.contains(i.getState()) || actions11.contains(i.getAction())))
+        .forEach(i -> assertFalse(t11.containsInstant(i)));
 
     // filterPendingCompactionTimeline
     final HoodieTimeline t2 = timeline.filterPendingCompactionTimeline();

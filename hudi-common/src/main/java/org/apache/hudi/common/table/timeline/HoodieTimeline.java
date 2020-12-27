@@ -129,6 +129,19 @@ public interface HoodieTimeline extends Serializable {
    * @return New instance of HoodieTimeline with just completed instants
    */
   HoodieTimeline filterCompletedAndCompactionInstants();
+  
+  /**
+   *  Filter this timeline to just include the instants that are important for FileSystemViews. These include
+   *  a) all complete commits
+   *  b) pending compaction instants
+   *  c) pending replace commits
+   *  
+   *  A RT file-system view for reading must then merge the file-slices before and after pending 
+   *  compaction instant so that all delta-commits are read.
+   *  
+   * @return New instance of HoodieTimeline with just completed instants
+   */
+  HoodieTimeline filterViewChangingInstants();
 
   /**
    * Timeline to just include commits (commit/deltacommit) and compaction actions.
