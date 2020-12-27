@@ -46,8 +46,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class GenericRecordFullPayloadGenerator implements Serializable {
 
-  private static Logger LOG = LoggerFactory.getLogger(GenericRecordFullPayloadGenerator.class);
-
+  private static final Logger LOG = LoggerFactory.getLogger(GenericRecordFullPayloadGenerator.class);
   public static final int DEFAULT_PAYLOAD_SIZE = 1024 * 10; // 10 KB
   public static final int DEFAULT_NUM_DATE_PARTITIONS = 50;
   public static final String DEFAULT_HOODIE_IS_DELETED_COL = "_hoodie_is_deleted";
@@ -70,14 +69,7 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
   // The index of partition for which records are being generated
   private int partitionIndex = 0;
   // The size of a full record where every field of a generic record created contains 1 random value
-<<<<<<< HEAD
-  private final int estimatedFullPayloadSize;
-
-=======
   private int estimatedFullPayloadSize;
-  // Index to cycle through numDatePartitions, for timestamp generation.
-  private long partitionIndex = 0;
->>>>>>> 666d71d5... merge conflicts
   // LogicalTypes in Avro 1.8.2
   private static final String DECIMAL = "decimal";
   private static final String UUID_NAME = "uuid";
@@ -104,10 +96,9 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
     if (estimatedFullPayloadSize < minPayloadSize) {
       int numberOfComplexFields = sizeInfo.getRight();
       if (numberOfComplexFields < 1) {
-        LOG.warn("The schema does not have any collections/complex fields. "
-            + "Cannot achieve minPayloadSize => " + minPayloadSize);
+        LOG.warn("The schema does not have any collections/complex fields. Cannot achieve minPayloadSize : {}",
+            minPayloadSize);
       }
-
       determineExtraEntriesRequired(numberOfComplexFields, minPayloadSize - estimatedFullPayloadSize);
     }
   }

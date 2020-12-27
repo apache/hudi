@@ -33,8 +33,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
-
-import org.junit.Assert;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -164,10 +162,10 @@ public class TestGenericRecordPayloadGenerator {
       updateTimeStamps.add((Long) record.get("timestamp"));
     });
     // The row keys from insert payloads should match all the row keys from the update payloads
-    Assert.assertTrue(insertRowKeys.containsAll(updateRowKeys));
+    assertTrue(insertRowKeys.containsAll(updateRowKeys));
     // The timestamp field for the insert payloads should not all match with the update payloads
-    Assert.assertFalse(insertTimeStamps.containsAll(updateTimeStamps));
+    assertFalse(insertTimeStamps.containsAll(updateTimeStamps));
     Long currentMillis = System.currentTimeMillis();
-    Assert.assertTrue(insertTimeStamps.stream().allMatch(t -> t >= startMillis  && t <= currentMillis));
+    assertTrue(insertTimeStamps.stream().allMatch(t -> t >= startMillis  && t <= currentMillis));
   }
 }

@@ -66,14 +66,15 @@ public class FlexibleSchemaRecordGenerationIterator implements Iterator<GenericR
   @Override
   public GenericRecord next() {
     this.counter--;
+    boolean partitionPathsNonEmpty = partitionPathFieldNames != null && partitionPathFieldNames.size() > 0;
     if (lastRecord == null) {
-      GenericRecord record = this.partitionPathFieldNames != null && this.partitionPathFieldNames.size() > 0
-          ? this.generator.getNewPayloadWithTimestamp(firstPartitionPathField)
+      GenericRecord record = partitionPathsNonEmpty
+          ? this.generator.getNewPayloadWithTimestamp(this.firstPartitionPathField)
           : this.generator.getNewPayload();
       lastRecord = record;
       return record;
     } else {
-      return this.partitionPathFieldNames != null && this.partitionPathFieldNames.size() > 0
+      return partitionPathsNonEmpty
           ? this.generator.getUpdatePayloadWithTimestamp(lastRecord,
           this.partitionPathFieldNames, firstPartitionPathField)
           : this.generator.getUpdatePayload(lastRecord, this.partitionPathFieldNames);
