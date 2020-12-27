@@ -23,6 +23,7 @@ import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -34,7 +35,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import scala.Tuple2;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,15 +53,14 @@ public class SparkDeletePartitionCommitActionExecutor<T extends HoodieRecordPayl
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> execute() {
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
-    Instant indexStartTime = Instant.now();
-    HoodieWriteMetadata result = new HoodieWriteMetadata();
-    result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
-    result.setWriteStatuses(jsc.emptyRDD());
-
+    HoodieTimer timer = new HoodieTimer().startTimer();
     Map<String, List<String>> partitionToReplaceFileIds = jsc.parallelize(partitions, partitions.size()).distinct()
         .mapToPair(partitionPath -> new Tuple2<>(partitionPath, getAllExistingFileIds(partitionPath))).collectAsMap();
-
+    HoodieWriteMetadata result = new HoodieWriteMetadata();
     result.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
+    result.setIndexUpdateDuration(Duration.ofMillis(timer.endTimer()));
+
+    result.setWriteStatuses(jsc.emptyRDD());
     this.saveWorkloadProfileMetadataToInflight(new WorkloadProfile(Pair.of(new HashMap<>(), new WorkloadStat())), instantTime);
     this.commitOnAutoCommit(result);
     return result;
