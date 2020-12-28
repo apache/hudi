@@ -46,6 +46,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -89,6 +90,11 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     initDFS();
     initTestDataGenerator();
     initDFSMetaClient();
+  }
+
+  @AfterEach
+  public void cleanUp() throws Exception {
+    cleanupResources();
   }
 
   @Test

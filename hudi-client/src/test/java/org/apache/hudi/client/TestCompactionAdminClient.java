@@ -37,6 +37,7 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -68,6 +69,11 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     initSparkContexts();
     metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath, MERGE_ON_READ);
     client = new CompactionAdminClient(jsc, basePath);
+  }
+
+  @AfterEach
+  public void cleanUp() throws Exception {
+    cleanupResources();
   }
 
   @Test
