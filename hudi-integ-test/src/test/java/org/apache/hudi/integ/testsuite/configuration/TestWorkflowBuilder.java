@@ -18,17 +18,18 @@
 
 package org.apache.hudi.integ.testsuite.configuration;
 
-import static junit.framework.Assert.assertTrue;
-import static junit.framework.TestCase.assertEquals;
+import org.apache.hudi.integ.testsuite.dag.WorkflowDag;
+import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
+import org.apache.hudi.integ.testsuite.dag.nodes.InsertNode;
+import org.apache.hudi.integ.testsuite.dag.nodes.UpsertNode;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
-import org.apache.hudi.integ.testsuite.dag.nodes.InsertNode;
-import org.apache.hudi.integ.testsuite.dag.nodes.UpsertNode;
-import org.apache.hudi.integ.testsuite.dag.WorkflowDag;
-import org.junit.jupiter.api.Test;
+import static junit.framework.Assert.assertTrue;
+import static junit.framework.TestCase.assertEquals;
 
 /**
  * Unit test for the build process of {@link DagNode} and {@link WorkflowDag}.

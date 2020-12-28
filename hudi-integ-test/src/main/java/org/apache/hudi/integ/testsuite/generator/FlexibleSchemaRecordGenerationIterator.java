@@ -20,6 +20,11 @@ package org.apache.hudi.integ.testsuite.generator;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Iterator;
+import java.util.List;
 
 import java.util.HashSet;
 import java.util.Iterator;
@@ -67,7 +72,7 @@ public class FlexibleSchemaRecordGenerationIterator implements Iterator<GenericR
       lastRecord = record;
       return record;
     } else {
-      return this.generator.randomize(lastRecord, partitionPathFieldNames);
+      return this.generator.randomize(lastRecord, this.partitionPathFieldNames);
     }
   }
 }
