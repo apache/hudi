@@ -90,26 +90,26 @@ public class HoodieTestDataGenerator {
       {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH};
   public static final int DEFAULT_PARTITION_DEPTH = 3;
   public static final String TRIP_SCHEMA_PREFIX = "{\"type\": \"record\"," + "\"name\": \"triprec\"," + "\"fields\": [ "
-                                                      + "{\"name\": \"timestamp\",\"type\": \"long\"}," + "{\"name\": \"_row_key\", \"type\": \"string\"},"
-                                                      + "{\"name\": \"rider\", \"type\": \"string\"}," + "{\"name\": \"driver\", \"type\": \"string\"},"
-                                                      + "{\"name\": \"begin_lat\", \"type\": \"double\"}," + "{\"name\": \"begin_lon\", \"type\": \"double\"},"
-                                                      + "{\"name\": \"end_lat\", \"type\": \"double\"}," + "{\"name\": \"end_lon\", \"type\": \"double\"},";
+      + "{\"name\": \"timestamp\",\"type\": \"long\"}," + "{\"name\": \"_row_key\", \"type\": \"string\"},"
+      + "{\"name\": \"rider\", \"type\": \"string\"}," + "{\"name\": \"driver\", \"type\": \"string\"},"
+      + "{\"name\": \"begin_lat\", \"type\": \"double\"}," + "{\"name\": \"begin_lon\", \"type\": \"double\"},"
+      + "{\"name\": \"end_lat\", \"type\": \"double\"}," + "{\"name\": \"end_lon\", \"type\": \"double\"},";
   public static final String TRIP_SCHEMA_SUFFIX = "{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false} ]}";
   public static final String FARE_NESTED_SCHEMA = "{\"name\": \"fare\",\"type\": {\"type\":\"record\", \"name\":\"fare\",\"fields\": ["
-                                                      + "{\"name\": \"amount\",\"type\": \"double\"},{\"name\": \"currency\", \"type\": \"string\"}]}},";
+      + "{\"name\": \"amount\",\"type\": \"double\"},{\"name\": \"currency\", \"type\": \"string\"}]}},";
   public static final String FARE_FLATTENED_SCHEMA = "{\"name\": \"fare\", \"type\": \"double\"},"
-                                                         + "{\"name\": \"currency\", \"type\": \"string\"},";
+      + "{\"name\": \"currency\", \"type\": \"string\"},";
   public static final String TIP_NESTED_SCHEMA = "{\"name\": \"tip_history\", \"default\": null, \"type\": {\"type\": "
-                                                     + "\"array\", \"items\": {\"type\": \"record\", \"default\": null, \"name\": \"tip_history\", \"fields\": ["
-                                                     + "{\"name\": \"amount\", \"type\": \"double\"}, {\"name\": \"currency\", \"type\": \"string\"}]}}},";
+      + "\"array\", \"items\": {\"type\": \"record\", \"default\": null, \"name\": \"tip_history\", \"fields\": ["
+      + "{\"name\": \"amount\", \"type\": \"double\"}, {\"name\": \"currency\", \"type\": \"string\"}]}}},";
   public static final String MAP_TYPE_SCHEMA = "{\"name\": \"city_to_state\", \"type\": {\"type\": \"map\", \"values\": \"string\"}},";
   public static final String EXTRA_TYPE_SCHEMA = "{\"name\": \"distance_in_meters\", \"type\": \"int\"},"
-                                                     + "{\"name\": \"seconds_since_epoch\", \"type\": \"long\"},"
-                                                     + "{\"name\": \"weight\", \"type\": \"float\"},"
-                                                     + "{\"name\": \"nation\", \"type\": \"bytes\"},"
-                                                     + "{\"name\":\"current_date\",\"type\": {\"type\": \"int\", \"logicalType\": \"date\"}},"
-                                                     + "{\"name\":\"current_ts\",\"type\": {\"type\": \"long\"}},"
-                                                     + "{\"name\":\"height\",\"type\":{\"type\":\"fixed\",\"name\":\"abc\",\"size\":5,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":6}},";
+      + "{\"name\": \"seconds_since_epoch\", \"type\": \"long\"},"
+      + "{\"name\": \"weight\", \"type\": \"float\"},"
+      + "{\"name\": \"nation\", \"type\": \"bytes\"},"
+      + "{\"name\":\"current_date\",\"type\": {\"type\": \"int\", \"logicalType\": \"date\"}},"
+      + "{\"name\":\"current_ts\",\"type\": {\"type\": \"long\"}},"
+      + "{\"name\":\"height\",\"type\":{\"type\":\"fixed\",\"name\":\"abc\",\"size\":5,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":6}},";
 
   public static final String TRIP_EXAMPLE_SCHEMA =
       TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
@@ -117,21 +117,21 @@ public class HoodieTestDataGenerator {
       TRIP_SCHEMA_PREFIX + FARE_FLATTENED_SCHEMA + TRIP_SCHEMA_SUFFIX;
 
   public static final String TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"tripUberRec\",\"fields\":["
-                                               + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
-                                               + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", "
-                                               + "\"default\": false}]}";
+      + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
+      + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", "
+      + "\"default\": false}]}";
 
   public static final String PARTIAL_TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"tripUberRec\",\"fields\":[{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},"
-                                                       + "{\"name\":\"rider\",\"type\":\"string\"},{\"name\":\"driver\",\"type\":\"string\"}]}";
+      + "{\"name\":\"rider\",\"type\":\"string\"},{\"name\":\"driver\",\"type\":\"string\"}]}";
 
   public static final String SHORT_TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"shortTripRec\",\"fields\":["
-                                                     + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
-                                                     + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", "
-                                                     + "\"default\": false}]}";
+      + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
+      + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", "
+      + "\"default\": false}]}";
 
   public static final String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
   public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,double,double,double,double,int,bigint,float,binary,int,bigint,decimal(10,6),"
-                                                          + "map<string,string>,struct<amount:double,currency:string>,array<struct<amount:double,currency:string>>,boolean";
+      + "map<string,string>,struct<amount:double,currency:string>,array<struct<amount:double,currency:string>>,boolean";
 
 
   public static final Schema AVRO_SCHEMA = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
@@ -404,14 +404,14 @@ public class HoodieTestDataGenerator {
   public static void createEmptyCleanRequestedFile(String basePath, String instantTime, Configuration configuration)
       throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-                                   + HoodieTimeline.makeRequestedCleanerFileName(instantTime));
+        + HoodieTimeline.makeRequestedCleanerFileName(instantTime));
     createEmptyFile(basePath, commitFile, configuration);
   }
 
   public static void createCompactionRequestedFile(String basePath, String instantTime, Configuration configuration)
       throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-                                   + HoodieTimeline.makeRequestedCompactionFileName(instantTime));
+        + HoodieTimeline.makeRequestedCompactionFileName(instantTime));
     createEmptyFile(basePath, commitFile, configuration);
   }
 
@@ -436,7 +436,7 @@ public class HoodieTestDataGenerator {
   public static void createSavepointFile(String basePath, String instantTime, Configuration configuration)
       throws IOException {
     Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-                                   + HoodieTimeline.makeSavePointFileName(instantTime));
+        + HoodieTimeline.makeSavePointFileName(instantTime));
     FileSystem fs = FSUtils.getFs(basePath, configuration);
     try (FSDataOutputStream os = fs.create(commitFile, true)) {
       HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
@@ -860,7 +860,7 @@ public class HoodieTestDataGenerator {
     List<GenericRecord> list = new ArrayList<>();
     IntStream.range(0, numRecords).forEach(i -> {
       list.add(generateGenericRecord(UUID.randomUUID().toString(), UUID.randomUUID().toString(), UUID.randomUUID()
-                                                                                                     .toString(), RAND.nextLong()));
+          .toString(), RAND.nextLong()));
     });
     return list;
   }

@@ -100,8 +100,6 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
     return getConfigBuilder(HoodieTestDataGenerator.TRIP_SCHEMA).build();
   }
 
-
-
   /**
    * Get Config builder with default configs set.
    *
