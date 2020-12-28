@@ -27,6 +27,8 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -70,8 +72,6 @@ public class HoodieClusteringJob {
     public String clusteringInstantTime = null;
     @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert", required = false)
     public int parallelism = 1;
-    @Parameter(names = {"--schema-file", "-sf"}, description = "path for Avro schema file", required = true)
-    public String schemaFile = null;
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
@@ -120,19 +120,28 @@ public class HoodieClusteringJob {
     try {
       do {
         if (cfg.runSchedule) {
+          LOG.info("Do schedule");
           ret = doSchedule(jsc);
         } else {
+          LOG.info("Do cluster");
           ret = doCluster(jsc);
         }
       } while (ret != 0 && retry-- > 0);
     } catch (Throwable t) {
-      LOG.error(t);
+      LOG.error("Cluster failed", t);
     }
     return ret;
   }
 
+  private String getSchemaFromLatestInstant() throws Exception {
+    HoodieTableMetaClient metaClient =  new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.basePath, true);
+    TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
+    Schema schema = schemaUtil.getTableAvroSchema(false);
+    return schema.toString();
+  }
+
   private int doCluster(JavaSparkContext jsc) throws Exception {
-    String schemaStr = new Schema.Parser().parse(fs.open(new Path(cfg.schemaFile))).toString();
+    String schemaStr = getSchemaFromLatestInstant();
     SparkRDDWriteClient client =
         UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props);
     JavaRDD<WriteStatus> writeResponse =
@@ -141,7 +150,7 @@ public class HoodieClusteringJob {
   }
 
   private int doSchedule(JavaSparkContext jsc) throws Exception {
-    String schemaStr = new Schema.Parser().parse(fs.open(new Path(cfg.schemaFile))).toString();
+    String schemaStr = getSchemaFromLatestInstant();
     SparkRDDWriteClient client =
         UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props);
     return client.scheduleClusteringAtInstant(cfg.clusteringInstantTime, Option.empty()) ? 0 : -1;

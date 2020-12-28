@@ -88,6 +88,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Properties;
 import java.util.Random;
@@ -640,8 +641,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     cfg.tableType = tableType.name();
     cfg.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     cfg.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN_PROP));
-
-    deltaStreamerTestRunner(cfg, (r) -> {
+    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
+    deltaStreamerTestRunner(ds, cfg, (r) -> {
       if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {
         TestHelpers.assertAtleastNDeltaCommits(5, tableBasePath, dfs);
         TestHelpers.assertAtleastNCompactionCommits(2, tableBasePath, dfs);
@@ -654,8 +655,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     });
   }
 
-  private void deltaStreamerTestRunner(HoodieDeltaStreamer.Config cfg, Function<Boolean, Boolean> condition) throws Exception {
-    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
+  private void deltaStreamerTestRunner(HoodieDeltaStreamer ds, HoodieDeltaStreamer.Config cfg, Function<Boolean, Boolean> condition) throws Exception {
     Future dsFuture = Executors.newSingleThreadExecutor().submit(() -> {
       try {
         ds.sync();
@@ -683,8 +683,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     cfg.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN_PROP));
     cfg.configs.add(String.format("%s=%s", HoodieClusteringConfig.INLINE_CLUSTERING_PROP, "true"));
     cfg.configs.add(String.format("%s=%s", HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMIT_PROP, "2"));
-
-    deltaStreamerTestRunner(cfg, (r) -> {
+    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
+    deltaStreamerTestRunner(ds, cfg, (r) -> {
       HoodieTableMetaClient metaClient =  new HoodieTableMetaClient(this.dfs.getConf(), tableBasePath, true);
       int pendingReplaceSize = metaClient.getActiveTimeline().filterPendingReplaceTimeline().getInstants().toArray().length;
       int completeReplaceSize = metaClient.getActiveTimeline().getCompletedReplaceTimeline().getInstants().toArray().length;
@@ -698,10 +698,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     HoodieClusteringJob.Config config = new HoodieClusteringJob.Config();
     config.basePath = basePath;
     config.clusteringInstantTime = clusteringInstantTime;
-    config.schemaFile = dfsBasePath + "/target.avsc";
     config.runSchedule = runSchedule;
     config.propsFilePath = dfsBasePath + "/clusteringjob.properties";
-
     return config;
   }
 
@@ -717,19 +715,25 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
     cfg.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
     cfg.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN_PROP));
-
-    deltaStreamerTestRunner(cfg, (r) -> {
-      TestHelpers.assertAtLeastNCommits(3, tableBasePath, dfs);
-      String clusterInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    cfg.configs.add(String.format("%s=true", HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE_OPT_KEY));
+    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
+    deltaStreamerTestRunner(ds, cfg, (r) -> {
+      TestHelpers.assertAtLeastNCommits(2, tableBasePath, dfs);
+      // for not confiict with delta streamer commit, just add 3600s
+      String clusterInstantTime = HoodieActiveTimeline.COMMIT_FORMATTER
+          .format(new Date(System.currentTimeMillis() + 3600 * 1000));
+      LOG.info("Cluster instant time " + clusterInstantTime);
       HoodieClusteringJob.Config scheduleClusteringConfig = buildHoodieClusteringUtilConfig(tableBasePath,
           clusterInstantTime, true);
       HoodieClusteringJob scheduleClusteringJob = new HoodieClusteringJob(jsc, scheduleClusteringConfig);
       int scheduleClusteringResult = scheduleClusteringJob.cluster(scheduleClusteringConfig.retry);
       if (scheduleClusteringResult == 0) {
+        LOG.info("Schedule clustering success, now cluster");
         HoodieClusteringJob.Config clusterClusteringConfig = buildHoodieClusteringUtilConfig(tableBasePath,
             clusterInstantTime, false);
         HoodieClusteringJob clusterClusteringJob = new HoodieClusteringJob(jsc, clusterClusteringConfig);
         clusterClusteringJob.cluster(clusterClusteringConfig.retry);
+        LOG.info("Cluster success");
       } else {
         LOG.warn("Schedule clustering failed");
       }
