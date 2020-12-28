@@ -50,6 +50,7 @@ import java.util.Properties;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+
 /**
  * Class storing configs for the HoodieWriteClient.
  */
@@ -403,6 +404,15 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(HoodieClusteringConfig.INLINE_CLUSTERING_PROP));
   }
 
+  public boolean isAsyncClusteringEnabled() {
+    return Boolean.parseBoolean(props.getProperty(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE_OPT_KEY));
+  }
+
+  public boolean isClusteringEnabled() {
+    // TODO: future support async clustering
+    return isInlineClustering() || isAsyncClusteringEnabled();
+  }
+
   public int getInlineClusterMaxCommits() {
     return Integer.parseInt(props.getProperty(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMIT_PROP));
   }
@@ -421,6 +431,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public Boolean shouldCleanBootstrapBaseFile() {
     return Boolean.valueOf(props.getProperty(HoodieCompactionConfig.CLEANER_BOOTSTRAP_BASE_FILE_ENABLED));
+  }
+
+  public String getClusteringUpdatesStrategyClass() {
+    return props.getProperty(HoodieClusteringConfig.CLUSTERING_UPDATES_STRATEGY_PROP);
   }
 
   /**
