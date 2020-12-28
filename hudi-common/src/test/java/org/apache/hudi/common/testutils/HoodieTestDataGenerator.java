@@ -186,8 +186,9 @@ public class HoodieTestDataGenerator {
       return generatePayloadForTripSchema(key, commitTime);
     } else if (SHORT_TRIP_SCHEMA.equals(schemaStr)) {
       return generatePayloadForShortTripSchema(key, commitTime);
+    } else if (PARTIAL_TRIP_SCHEMA.equals(schemaStr)) {
+      return generatePayloadForPartialUpdateTripSchema(key, commitTime);
     }
-
     return null;
   }
 
@@ -227,6 +228,11 @@ public class HoodieTestDataGenerator {
   public RawTripTestPayload generatePayloadForTripSchema(HoodieKey key, String commitTime) throws IOException {
     GenericRecord rec = generateRecordForTripSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
     return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_SCHEMA);
+  }
+
+  public RawTripTestPayload generatePayloadForPartialUpdateTripSchema(HoodieKey key, String commitTime) throws IOException {
+    GenericRecord rec = generateRecordForTripSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
+    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), PARTIAL_TRIP_SCHEMA);
   }
 
   public RawTripTestPayload generatePayloadForShortTripSchema(HoodieKey key, String commitTime) throws IOException {
@@ -489,9 +495,8 @@ public class HoodieTestDataGenerator {
   }
 
   public Stream<HoodieRecord> generatePartialUpdateInsertsStream(String commitTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions) {
-    return generateInsertsStream(commitTime, n, isFlattened, schemaStr, containsAllPartitions,
-        () -> partitionPaths[RAND.nextInt(partitionPaths.length)],
-        () -> UUID.randomUUID().toString());
+    return generatePartialUpdateInsertsStream(commitTime, n, isFlattened, schemaStr, containsAllPartitions,
+        () -> partitionPaths[RAND.nextInt(partitionPaths.length)]);
   }
 
   /**

@@ -78,10 +78,10 @@ public class TestHoodiePartialUpdate extends HoodieClientTestBase {
       assertTrue(parquetFieldNames.contains(name));
     }
 
-    List<GenericRecord> records1 = readAvroRecords(hadoopConf, new Path(basePath, writeStatus.getStat().getPath()));
-    for (GenericRecord record : records1) {
-      assertEquals("rider-" + commitTime1, record.get("rider").toString());
-      assertEquals("driver-" + commitTime1, record.get("driver").toString());
+    List<GenericRecord> records = readAvroRecords(hadoopConf, new Path(basePath, writeStatus.getStat().getPath()));
+    for (GenericRecord record : records) {
+      assertEquals("rider-" + commitTime2, record.get("rider").toString());
+      assertEquals("driver-" + commitTime2, record.get("driver").toString());
       assertEquals(String.valueOf(1L), record.get("timestamp").toString());
     }
   }
