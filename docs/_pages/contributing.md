@@ -251,7 +251,41 @@ Discussion about contributing code to Hudi happens on the [dev@ mailing list](co
   * `packaging` : Poms for building out bundles for easier drop in to Spark, Hive, Presto, Utilities
   * `style`  : Code formatting, checkstyle files
 
+## Code WalkThrough
 
+This Quick Video will give a code walkthrough to start with [watch](https://www.youtube.com/watch?v=N2eDfU_rQ_U).
+
+## Docker Setup
+
+We encourage you to test your code on docker cluster please follow this for [docker setup](https://hudi.apache.org/docs/docker_demo.html).
+
+## Remote Debugging 
+
+if your code fails on docker cluster you can remotely debug your code please follow the below steps.
+
+Step 1 :- Run your Delta Streamer Job with --conf as defined this will ensure to wait till you attach your intellij with Remote Debugging on port 4044
+
+```scala
+spark-submit \
+  --conf spark.driver.extraJavaOptions="-Dconfig.resource=myapp.conf  -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=4044" \
+  --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer $HUDI_UTILITIES_BUNDLE \
+  --table-type COPY_ON_WRITE \
+  --source-class org.apache.hudi.utilities.sources.JsonKafkaSource \
+  --source-ordering-field ts  \
+  --base-file-format parquet \
+  --target-base-path /user/hive/warehouse/stock_ticks_cow \
+  --target-table stock_ticks_cow --props /var/demo/config/kafka-source.properties \
+  --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider
+```
+
+Step 2 :- Attaching Intellij (tested on Intellij Version > 2019. this steps may change acc. to intellij version)
+
+- Come to Intellij --> Edit Configurations -> Remote -> Add Remote - > Put Below Configs -> Apply & Save -> Put Debug Point -> Start. <br/>
+- Name : Hudi Remote <br/>
+- Port : 4044 <br/>
+- Command Line Args for Remote JVM : -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=4044 <br/>
+- Use Module ClassPath : select hudi <br/>
+ 
 ## Website
 
 [Apache Hudi site](https://hudi.apache.org) is hosted on a special `asf-site` branch. Please follow the `README` file under `docs` on that branch for
