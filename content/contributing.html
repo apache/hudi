@@ -209,6 +209,9 @@
   <li><a href="#releases">Releases</a></li>
   <li><a href="#communication">Communication</a></li>
   <li><a href="#code--project-structure">Code &amp; Project Structure</a></li>
+  <li><a href="#code-walkthrough">Code WalkThrough</a></li>
+  <li><a href="#docker-setup">Docker Setup</a></li>
+  <li><a href="#remote-debugging">Remote Debugging</a></li>
   <li><a href="#website">Website</a></li>
 </ul>
           </nav>
@@ -554,6 +557,42 @@ Discussion about contributing code to Hudi happens on the <a href="community.htm
   <li><code class="highlighter-rouge">hudi-utilities</code> : Houses tools like DeltaStreamer, SnapshotCopier</li>
   <li><code class="highlighter-rouge">packaging</code> : Poms for building out bundles for easier drop in to Spark, Hive, Presto, Utilities</li>
   <li><code class="highlighter-rouge">style</code>  : Code formatting, checkstyle files</li>
+</ul>
+
+<h2 id="code-walkthrough">Code WalkThrough</h2>
+
+<p>This Quick Video will give a code walkthrough to start with <a href="https://www.youtube.com/watch?v=N2eDfU_rQ_U">watch</a>.</p>
+
+<h2 id="docker-setup">Docker Setup</h2>
+
+<p>We encourage you to test your code on docker cluster please follow this for <a href="https://hudi.apache.org/docs/docker_demo.html">docker setup</a>.</p>
+
+<h2 id="remote-debugging">Remote Debugging</h2>
+
+<p>if your code fails on docker cluster you can remotely debug your code please follow the below steps.</p>
+
+<p>Step 1 :- Run your Delta Streamer Job with –conf as defined this will ensure to wait till you attach your intellij with Remote Debugging on port 4044</p>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">spark</span><span class="o">-</span><span class="n">submit</span> <span class="o">\</span>
+  <span class="o">--</span><span class="n">conf</span> <span class="nv">spark</span><span class="o">.</span><span class="py">driver</span><span class="o">.</span><span class="py">extraJavaOptions</span><span class="o">=</span><span class="s">"-Dconfig.resource=myapp.conf  -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=4044"</span> <span class="o">\</span>
+  <span class="o">--</span><span class="k">class</span> <span class="nc">org</span><span class="o">.</span><span class="py">apache</span><span class="o">.</span><span class="py">hudi</span><span class="o">.</span><span class="py">utilities</span><span class="o">.</span><span class="py">deltastreamer</span><span class="o">.</span><span class="py">HoodieDeltaStreamer</span> <span class="nc">$HUDI_UTILITIES_BUNDLE</span> <span class="o">\</span>
+  <span class="o">--</span><span class="n">table</span><span class="o">-</span><span class="k">type</span> <span class="kt">COPY_ON_WRITE</span> <span class="kt">\</span>
+  <span class="kt">--source-class</span> <span class="kt">org.apache.hudi.utilities.sources.JsonKafkaSource</span> <span class="kt">\</span>
+  <span class="kt">--source-ordering-field</span> <span class="kt">ts</span>  <span class="kt">\</span>
+  <span class="kt">--base-file-format</span> <span class="kt">parquet</span> <span class="kt">\</span>
+  <span class="kt">--target-base-path</span> <span class="kt">/user/hive/warehouse/stock_ticks_cow</span> <span class="kt">\</span>
+  <span class="kt">--target-table</span> <span class="kt">stock_ticks_cow</span> <span class="kt">--props</span> <span class="kt">/var/demo/config/kafka-source.properties</span> <span class="kt">\</span>
+  <span class="kt">--schemaprovider-class</span> <span class="kt">org.apache.hudi.utilities.schema.FilebasedSchemaProvider</span>
+</code></pre></div></div>
+
+<p>Step 2 :- Attaching Intellij (tested on Intellij Version &gt; 2019. this steps may change acc. to intellij version)</p>
+
+<ul>
+  <li>Come to Intellij –&gt; Edit Configurations -&gt; Remote -&gt; Add Remote - &gt; Put Below Configs -&gt; Apply &amp; Save -&gt; Put Debug Point -&gt; Start. <br /></li>
+  <li>Name : Hudi Remote <br /></li>
+  <li>Port : 4044 <br /></li>
+  <li>Command Line Args for Remote JVM : -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=4044 <br /></li>
+  <li>Use Module ClassPath : select hudi <br /></li>
 </ul>
 
 <h2 id="website">Website</h2>
