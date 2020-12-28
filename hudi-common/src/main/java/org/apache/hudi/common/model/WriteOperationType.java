@@ -42,6 +42,8 @@ public enum WriteOperationType {
   INSERT_OVERWRITE("insert_overwrite"),
   // cluster
   CLUSTER("cluster"),
+  // delete partition
+  DELETE_PARTITION("delete_partition"),
   // insert overwrite with dynamic partitioning
   INSERT_OVERWRITE_TABLE("insert_overwrite_table"),
   // used for old version
@@ -74,6 +76,8 @@ public enum WriteOperationType {
         return DELETE;
       case "insert_overwrite":
         return INSERT_OVERWRITE;
+      case "delete_partition":
+        return DELETE_PARTITION;
       case "insert_overwrite_table":
         return INSERT_OVERWRITE_TABLE;
       case "cluster":

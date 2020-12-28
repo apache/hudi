@@ -85,6 +85,11 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   }
 
   @Override
+  public HoodieWriteMetadata deletePartitions(HoodieEngineContext context, String instantTime, List<String> partitions) {
+    throw new HoodieNotSupportedException("DeletePartitions is not supported yet");
+  }
+
+  @Override
   public HoodieWriteMetadata<List<WriteStatus>> upsertPrepped(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> preppedRecords) {
     return new FlinkUpsertPreppedCommitActionExecutor<>(context, config, this, instantTime, preppedRecords).execute();
   }

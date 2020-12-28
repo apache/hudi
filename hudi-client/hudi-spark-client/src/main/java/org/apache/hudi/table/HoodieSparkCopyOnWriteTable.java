@@ -50,6 +50,7 @@ import org.apache.hudi.table.action.cluster.SparkClusteringPlanActionExecutor;
 import org.apache.hudi.table.action.commit.SparkBulkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkBulkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkDeleteCommitActionExecutor;
+import org.apache.hudi.table.action.commit.SparkDeletePartitionCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkInsertOverwriteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkInsertOverwriteTableCommitActionExecutor;
@@ -106,6 +107,11 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> delete(HoodieEngineContext context, String instantTime, JavaRDD<HoodieKey> keys) {
     return new SparkDeleteCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, keys).execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata deletePartitions(HoodieEngineContext context, String instantTime, List<String> partitions) {
+    return new SparkDeletePartitionCommitActionExecutor(context, config, this, instantTime, partitions).execute();
   }
 
   @Override
