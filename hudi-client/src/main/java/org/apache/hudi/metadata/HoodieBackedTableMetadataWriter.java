@@ -374,7 +374,8 @@ public class HoodieBackedTableMetadataWriter implements HoodieTableMetadataWrite
 
         if (p.getRight().length > filesInDir.size()) {
           // Is a partition. Add all data files to result.
-          partitionToFileStatus.put(p.getLeft().getName(), filesInDir);
+          String partitionName = FSUtils.getRelativePartitionPath(new Path(datasetMetaClient.getBasePath()), p.getLeft());
+          partitionToFileStatus.put(partitionName, filesInDir);
         } else {
           // Add sub-dirs to the queue
           pathsToList.addAll(Arrays.stream(p.getRight())
