@@ -20,17 +20,18 @@ package org.apache.hudi.integ.testsuite;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.deltastreamer.DeltaSync;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 /**
- * Extends the {@link HoodieDeltaStreamer} to expose certain operations helpful in running the Test Suite.
- * This is done to achieve 2 things 1) Leverage some components of {@link HoodieDeltaStreamer} 2)
- * Piggyback on the suite to test {@link HoodieDeltaStreamer}
+ * Extends the {@link HoodieDeltaStreamer} to expose certain operations helpful in running the Test Suite. This is done to achieve 2 things 1) Leverage some components of {@link HoodieDeltaStreamer}
+ * 2) Piggyback on the suite to test {@link HoodieDeltaStreamer}
  */
 public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
 
@@ -38,30 +39,30 @@ public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
     super(cfg, jssc);
   }
 
-  public JavaRDD<WriteStatus> upsert(Operation operation) throws Exception {
+  public JavaRDD<WriteStatus> upsert(WriteOperationType operation) throws Exception {
     cfg.operation = operation;
     return deltaSyncService.get().getDeltaSync().syncOnce().getRight();
   }
 
   public JavaRDD<WriteStatus> insert() throws Exception {
-    return upsert(Operation.INSERT);
+    return upsert(WriteOperationType.INSERT);
   }
 
   public JavaRDD<WriteStatus> bulkInsert() throws
       Exception {
-    return upsert(Operation.BULK_INSERT);
+    return upsert(WriteOperationType.BULK_INSERT);
   }
 
   public void scheduleCompact() throws Exception {
     // Since we don't support scheduleCompact() operation in delta-streamer, assume upsert without any data that will
     // trigger scheduling compaction
-    upsert(Operation.UPSERT);
+    upsert(WriteOperationType.UPSERT);
   }
 
   public JavaRDD<WriteStatus> compact() throws Exception {
     // Since we don't support compact() operation in delta-streamer, assume upsert without any data that will trigger
     // inline compaction
-    return upsert(Operation.UPSERT);
+    return upsert(WriteOperationType.UPSERT);
   }
 
   public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {

@@ -105,6 +105,13 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     return numMergedRecordsInLog;
   }
 
+  /**
+   * Returns the builder for {@code HoodieMergedLogRecordScanner}.
+   */
+  public static HoodieMergedLogRecordScanner.Builder newBuilder() {
+    return new Builder();
+  }
+
   @Override
   protected void processNextRecord(HoodieRecord<? extends HoodieRecordPayload> hoodieRecord) throws IOException {
     String key = hoodieRecord.getRecordKey();
@@ -127,6 +134,80 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
 
   public long getTotalTimeTakenToReadAndMergeBlocks() {
     return totalTimeTakenToReadAndMergeBlocks;
+  }
+
+  /**
+   * Builder used to build {@code HoodieUnMergedLogRecordScanner}.
+   */
+  public static class Builder extends AbstractHoodieLogRecordScanner.Builder {
+    private FileSystem fs;
+    private String basePath;
+    private List<String> logFilePaths;
+    private Schema readerSchema;
+    private String latestInstantTime;
+    private boolean readBlocksLazily;
+    private boolean reverseReader;
+    private int bufferSize;
+    // specific configurations
+    private Long maxMemorySizeInBytes;
+    private String spillableMapBasePath;
+
+    public Builder withFileSystem(FileSystem fs) {
+      this.fs = fs;
+      return this;
+    }
+
+    public Builder withBasePath(String basePath) {
+      this.basePath = basePath;
+      return this;
+    }
+
+    public Builder withLogFilePaths(List<String> logFilePaths) {
+      this.logFilePaths = logFilePaths;
+      return this;
+    }
+
+    public Builder withReaderSchema(Schema schema) {
+      this.readerSchema = schema;
+      return this;
+    }
+
+    public Builder withLatestInstantTime(String latestInstantTime) {
+      this.latestInstantTime = latestInstantTime;
+      return this;
+    }
+
+    public Builder withReadBlocksLazily(boolean readBlocksLazily) {
+      this.readBlocksLazily = readBlocksLazily;
+      return this;
+    }
+
+    public Builder withReverseReader(boolean reverseReader) {
+      this.reverseReader = reverseReader;
+      return this;
+    }
+
+    public Builder withBufferSize(int bufferSize) {
+      this.bufferSize = bufferSize;
+      return this;
+    }
+
+    public Builder withMaxMemorySizeInBytes(Long maxMemorySizeInBytes) {
+      this.maxMemorySizeInBytes = maxMemorySizeInBytes;
+      return this;
+    }
+
+    public Builder withSpillableMapBasePath(String spillableMapBasePath) {
+      this.spillableMapBasePath = spillableMapBasePath;
+      return this;
+    }
+
+    @Override
+    public HoodieMergedLogRecordScanner build() {
+      return new HoodieMergedLogRecordScanner(fs, basePath, logFilePaths, readerSchema,
+          latestInstantTime, maxMemorySizeInBytes, readBlocksLazily, reverseReader,
+          bufferSize, spillableMapBasePath);
+    }
   }
 }
 

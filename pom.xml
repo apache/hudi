@@ -39,7 +39,7 @@
     <module>hudi-cli</module>
     <module>hudi-client</module>
     <module>hudi-hadoop-mr</module>
-    <module>hudi-spark</module>
+    <module>hudi-spark-datasource</module>
     <module>hudi-timeline-service</module>
     <module>hudi-utilities</module>
     <module>hudi-sync</module>
@@ -53,6 +53,8 @@
     <module>hudi-integ-test</module>
     <module>packaging/hudi-integ-test-bundle</module>
     <module>hudi-examples</module>
+    <module>hudi-flink</module>
+    <module>packaging/hudi-flink-bundle</module>
   </modules>
 
   <licenses>
@@ -82,6 +84,10 @@
 
     <java.version>1.8</java.version>
     <fasterxml.version>2.6.7</fasterxml.version>
+    <fasterxml.jackson.databind.version>2.6.7.3</fasterxml.jackson.databind.version>
+    <fasterxml.jackson.module.scala.version>2.6.7.1</fasterxml.jackson.module.scala.version>
+    <fasterxml.jackson.dataformat.yaml.version>2.7.4</fasterxml.jackson.dataformat.yaml.version>
+    <fasterxml.spark3.version>2.10.0</fasterxml.spark3.version>
     <kafka.version>2.0.0</kafka.version>
     <glassfish.version>2.17</glassfish.version>
     <parquet.version>1.10.1</parquet.version>
@@ -100,9 +106,13 @@
     <prometheus.version>0.8.0</prometheus.version>
     <http.version>4.4.1</http.version>
     <spark.version>2.4.4</spark.version>
+    <flink.version>1.11.2</flink.version>
+    <spark2.version>2.4.4</spark2.version>
+    <spark3.version>3.0.0</spark3.version>
     <avro.version>1.8.2</avro.version>
     <scala.version>2.11.12</scala.version>
     <scala.binary.version>2.11</scala.binary.version>
+    <scala12.version>2.12.10</scala12.version>
     <apache-rat-plugin.version>0.12</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
     <scalatest.version>3.0.1</scalatest.version>
@@ -429,7 +439,7 @@
       <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>
         <artifactId>jackson-databind</artifactId>
-        <version>${fasterxml.version}.3</version>
+        <version>${fasterxml.jackson.databind.version}</version>
       </dependency>
       <dependency>
         <groupId>com.fasterxml.jackson.datatype</groupId>
@@ -439,7 +449,7 @@
       <dependency>
         <groupId>com.fasterxml.jackson.module</groupId>
         <artifactId>jackson-module-scala_${scala.binary.version}</artifactId>
-        <version>${fasterxml.version}.1</version>
+        <version>${fasterxml.jackson.module.scala.version}</version>
       </dependency>
 
       <!-- Glassfish -->
@@ -494,6 +504,26 @@
         <groupId>org.apache.spark</groupId>
         <artifactId>spark-avro_${scala.binary.version}</artifactId>
         <version>${spark.version}</version>
+        <scope>provided</scope>
+      </dependency>
+
+      <!-- Flink -->
+      <dependency>
+        <groupId>org.apache.flink</groupId>
+        <artifactId>flink-streaming-java_${scala.binary.version}</artifactId>
+        <version>${flink.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.flink</groupId>
+        <artifactId>flink-clients_${scala.binary.version}</artifactId>
+        <version>${flink.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.flink</groupId>
+        <artifactId>flink-connector-kafka_${scala.binary.version}</artifactId>
+        <version>${flink.version}</version>
         <scope>provided</scope>
       </dependency>
 
@@ -980,7 +1010,7 @@
                 </goals>
               </execution>
             </executions>
- 	      </plugin>
+          </plugin>
         </plugins>
       </build>
     </profile>
@@ -1283,7 +1313,7 @@
     <profile>
       <id>scala-2.12</id>
       <properties>
-        <scala.version>2.12.10</scala.version>
+        <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
       </properties>
       <activation>
@@ -1317,6 +1347,25 @@
           </plugin>
         </plugins>
       </build>
+    </profile>
+
+    <profile>
+      <id>spark3</id>
+      <properties>
+        <spark.version>${spark3.version}</spark.version>
+        <scala.version>${scala12.version}</scala.version>
+        <scala.binary.version>2.12</scala.binary.version>
+        <kafka.version>2.4.1</kafka.version>
+        <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
+        <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
+        <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
+        <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
+      </properties>
+      <activation>
+        <property>
+          <name>spark3</name>
+        </property>
+      </activation>
     </profile>
   </profiles>
 

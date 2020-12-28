@@ -20,6 +20,7 @@ package org.apache.hudi.index.hbase;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -119,6 +120,8 @@ public class TestHBaseIndex extends FunctionalTestHarness {
   public void setUp() throws Exception {
     hadoopConf = jsc().hadoopConfiguration();
     hadoopConf.addResource(utility.getConfiguration());
+    // reInit the context here to keep the hadoopConf the same with that in this class
+    context = new HoodieSparkEngineContext(jsc());
     metaClient = getHoodieMetaClient(hadoopConf, basePath());
     dataGen = new HoodieTestDataGenerator();
   }

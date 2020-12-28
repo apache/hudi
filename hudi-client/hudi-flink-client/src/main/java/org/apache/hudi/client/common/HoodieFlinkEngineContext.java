@@ -18,18 +18,22 @@
 
 package org.apache.hudi.client.common;
 
-import org.apache.hadoop.conf.Configuration;
+import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.common.function.SerializableConsumer;
 import org.apache.hudi.client.common.function.SerializableFunction;
 import org.apache.hudi.client.common.function.SerializablePairFunction;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.util.Option;
 
-import java.util.HashMap;
+import org.apache.flink.api.common.functions.RuntimeContext;
+import org.apache.hadoop.conf.Configuration;
+
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import org.apache.hudi.common.util.collection.Pair;
 
 import static org.apache.hudi.client.common.function.FunctionWrapper.throwingFlatMapWrapper;
 import static org.apache.hudi.client.common.function.FunctionWrapper.throwingForeachWrapper;
@@ -40,6 +44,7 @@ import static org.apache.hudi.client.common.function.FunctionWrapper.throwingMap
  * A flink engine implementation of HoodieEngineContext.
  */
 public class HoodieFlinkEngineContext extends HoodieEngineContext {
+  private RuntimeContext runtimeContext;
 
   public HoodieFlinkEngineContext(TaskContextSupplier taskContextSupplier) {
     this(new SerializableConfiguration(new Configuration()), taskContextSupplier);
@@ -47,6 +52,11 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
 
   public HoodieFlinkEngineContext(SerializableConfiguration hadoopConf, TaskContextSupplier taskContextSupplier) {
     super(hadoopConf, taskContextSupplier);
+    this.runtimeContext = ((FlinkTaskContextSupplier) taskContextSupplier).getFlinkRuntimeContext();
+  }
+
+  public RuntimeContext getRuntimeContext() {
+    return this.runtimeContext;
   }
 
   @Override
@@ -66,9 +76,7 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
 
   @Override
   public <I, K, V> Map<K, V> mapToPair(List<I> data, SerializablePairFunction<I, K, V> func, Integer parallelism) {
-    Map<K, V> map = new HashMap<>();
-    data.stream().map(throwingMapToPairWrapper(func)).forEach(x -> map.put(x._1, x._2));
-    return map;
+    return data.stream().map(throwingMapToPairWrapper(func)).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
   }
 
   @Override

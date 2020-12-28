@@ -18,18 +18,18 @@
 
 package org.apache.hudi.client.common;
 
-import org.apache.hudi.common.util.Option;
+import org.apache.hudi.client.FlinkTaskContextSupplier;
+
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import scala.Tuple2;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
 
 /**
  * Unit test against HoodieFlinkEngineContext.
@@ -39,7 +39,7 @@ public class TestHoodieFlinkEngineContext {
 
   @BeforeEach
   public void init() {
-    context = new HoodieFlinkEngineContext(new DummyTaskContextSupplier());
+    context = new HoodieFlinkEngineContext(new FlinkTaskContextSupplier(null));
   }
 
   @Test
@@ -80,36 +80,14 @@ public class TestHoodieFlinkEngineContext {
 
   @Test
   public void testMapToPair() {
-    List<String> mapList = Arrays.asList("hudi_flink", "hudi_spark");
+    List<String> mapList = Arrays.asList("spark_hudi", "flink_hudi");
 
     Map<String, String> resultMap = context.mapToPair(mapList, x -> {
       String[] splits = x.split("_");
-      return Tuple2.apply(splits[0], splits[1]);
+      return new ImmutablePair<>(splits[0], splits[1]);
     }, 2);
 
-    Assertions.assertNotNull(resultMap.get("hudi"));
+    Assertions.assertEquals(resultMap.get("spark"), resultMap.get("flink"));
   }
 
-  public static class DummyTaskContextSupplier extends TaskContextSupplier {
-
-    @Override
-    public Supplier<Integer> getPartitionIdSupplier() {
-      return null;
-    }
-
-    @Override
-    public Supplier<Integer> getStageIdSupplier() {
-      return null;
-    }
-
-    @Override
-    public Supplier<Long> getAttemptIdSupplier() {
-      return null;
-    }
-
-    @Override
-    public Option<String> getProperty(EngineProperty prop) {
-      return null;
-    }
-  }
 }

@@ -306,7 +306,23 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
-   * Transition Clean State from inflight to Committed.
+   * Transition replace requested file to replace inflight.
+   *
+   * @param requestedInstant Requested instant
+   * @param data Extra Metadata
+   * @return inflight instant
+   */
+  public HoodieInstant transitionReplaceRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data) {
+    ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
+    ValidationUtils.checkArgument(requestedInstant.isRequested());
+    HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, REPLACE_COMMIT_ACTION, requestedInstant.getTimestamp());
+    // Then write to timeline
+    transitionState(requestedInstant, inflightInstant, data);
+    return inflightInstant;
+  }
+
+  /**
+   * Transition replace inflight to Committed.
    *
    * @param inflightInstant Inflight instant
    * @param data Extra Metadata
@@ -319,6 +335,26 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     // Then write to timeline
     transitionState(inflightInstant, commitInstant, data);
     return commitInstant;
+  }
+
+  /**
+   * Revert replace requested State from inflight to requested.
+   *
+   * @param inflightInstant Inflight Instant
+   * @return requested instant
+   */
+  public HoodieInstant revertReplaceCommitInflightToRequested(HoodieInstant inflightInstant) {
+    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
+    ValidationUtils.checkArgument(inflightInstant.isInflight());
+    HoodieInstant requestedInstant =
+        new HoodieInstant(State.REQUESTED, REPLACE_COMMIT_ACTION, inflightInstant.getTimestamp());
+    if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
+      // Pass empty data since it is read from the corresponding .aux/.compaction instant file
+      transitionState(inflightInstant, requestedInstant, Option.empty());
+    } else {
+      deleteInflight(inflightInstant);
+    }
+    return requestedInstant;
   }
 
   private void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data) {

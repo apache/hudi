@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.client.common.EngineType;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -69,6 +70,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static final String INSERT_PARALLELISM = "hoodie.insert.shuffle.parallelism";
   public static final String BULKINSERT_PARALLELISM = "hoodie.bulkinsert.shuffle.parallelism";
   public static final String BULKINSERT_USER_DEFINED_PARTITIONER_CLASS = "hoodie.bulkinsert.user.defined.partitioner.class";
+  public static final String BULKINSERT_INPUT_DATA_SCHEMA_DDL = "hoodie.bulkinsert.schema.ddl";
   public static final String UPSERT_PARALLELISM = "hoodie.upsert.shuffle.parallelism";
   public static final String DELETE_PARALLELISM = "hoodie.delete.shuffle.parallelism";
   public static final String DEFAULT_ROLLBACK_PARALLELISM = "100";
@@ -117,13 +119,17 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static final String MAX_CONSISTENCY_CHECKS_PROP = "hoodie.consistency.check.max_checks";
   public static int DEFAULT_MAX_CONSISTENCY_CHECKS = 7;
 
+  // Data validation check performed during merges before actual commits
+  private static final String MERGE_DATA_VALIDATION_CHECK_ENABLED = "hoodie.merge.data.validation.enabled";
+  private static final String DEFAULT_MERGE_DATA_VALIDATION_CHECK_ENABLED = "false";
+
   /**
    * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
    * multiple write operations (upsert/buk-insert/...) to be executed within a single commit.
-   *
+   * <p>
    * Given Hudi commit protocol, these are generally unsafe operations and user need to handle failure scenarios. It
    * only works with COW table. Hudi 0.5.x had stopped this behavior.
-   *
+   * <p>
    * Given the importance of supporting such cases for the user's migration to 0.5.x, we are proposing a safety flag
    * (disabled by default) which will allow this old behavior.
    */
@@ -140,14 +146,26 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   // We keep track of original config and rewritten config
   private final FileSystemViewStorageConfig clientSpecifiedViewStorageConfig;
   private FileSystemViewStorageConfig viewStorageConfig;
+  private HoodiePayloadConfig hoodiePayloadConfig;
 
+  private EngineType engineType;
+
+  /**
+   * Use Spark engine by default.
+   */
   protected HoodieWriteConfig(Properties props) {
+    this(EngineType.SPARK, props);
+  }
+
+  protected HoodieWriteConfig(EngineType engineType, Properties props) {
     super(props);
     Properties newProps = new Properties();
     newProps.putAll(props);
+    this.engineType = engineType;
     this.consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().fromProperties(newProps).build();
     this.clientSpecifiedViewStorageConfig = FileSystemViewStorageConfig.newBuilder().fromProperties(newProps).build();
     this.viewStorageConfig = clientSpecifiedViewStorageConfig;
+    this.hoodiePayloadConfig = HoodiePayloadConfig.newBuilder().fromProperties(newProps).build();
   }
 
   public static HoodieWriteConfig.Builder newBuilder() {
@@ -282,6 +300,14 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return BulkInsertSortMode.valueOf(sortMode.toUpperCase());
   }
 
+  public boolean isMergeDataValidationCheckEnabled() {
+    return Boolean.parseBoolean(props.getProperty(MERGE_DATA_VALIDATION_CHECK_ENABLED));
+  }
+
+  public EngineType getEngineType() {
+    return engineType;
+  }
+
   /**
    * compaction properties.
    */
@@ -365,6 +391,14 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.valueOf(props.getProperty(HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLED_PROP));
   }
 
+  public boolean isInlineClustering() {
+    return Boolean.parseBoolean(props.getProperty(HoodieClusteringConfig.INLINE_CLUSTERING_PROP));
+  }
+
+  public int getInlineClusterMaxCommits() {
+    return Integer.parseInt(props.getProperty(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMIT_PROP));
+  }
+
   public String getPayloadClass() {
     return props.getProperty(HoodieCompactionConfig.PAYLOAD_CLASS_PROP);
   }
@@ -379,6 +413,41 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public Boolean shouldCleanBootstrapBaseFile() {
     return Boolean.valueOf(props.getProperty(HoodieCompactionConfig.CLEANER_BOOTSTRAP_BASE_FILE_ENABLED));
+  }
+
+  /**
+   * Clustering properties.
+   */
+  public String getClusteringPlanStrategyClass() {
+    return props.getProperty(HoodieClusteringConfig.CLUSTERING_PLAN_STRATEGY_CLASS);
+  }
+
+  public String getClusteringExecutionStrategyClass() {
+    return props.getProperty(HoodieClusteringConfig.CLUSTERING_EXECUTION_STRATEGY_CLASS);
+  }
+
+  public long getClusteringMaxBytesInGroup() {
+    return Long.parseLong(props.getProperty(HoodieClusteringConfig.CLUSTERING_MAX_BYTES_PER_GROUP));
+  }
+  
+  public long getClusteringSmallFileLimit() {
+    return Long.parseLong(props.getProperty(HoodieClusteringConfig.CLUSTERING_PLAN_SMALL_FILE_LIMIT));
+  }
+
+  public int getClusteringMaxNumGroups() {
+    return Integer.parseInt(props.getProperty(HoodieClusteringConfig.CLUSTERING_MAX_NUM_GROUPS));
+  }
+
+  public long getClusteringTargetFileMaxBytes() {
+    return Long.parseLong(props.getProperty(HoodieClusteringConfig.CLUSTERING_TARGET_FILE_MAX_BYTES));
+  }
+
+  public int getTargetPartitionsForClustering() {
+    return Integer.parseInt(props.getProperty(HoodieClusteringConfig.CLUSTERING_TARGET_PARTITIONS));
+  }
+  
+  public String getClusteringSortColumns() {
+    return props.getProperty(HoodieClusteringConfig.CLUSTERING_SORT_COLUMNS_PROPERTY);
   }
 
   /**
@@ -721,6 +790,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return clientSpecifiedViewStorageConfig;
   }
 
+  public HoodiePayloadConfig getPayloadConfig() {
+    return hoodiePayloadConfig;
+  }
+
   /**
    * Commit call back configs.
    */
@@ -771,15 +844,23 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static class Builder {
 
     protected final Properties props = new Properties();
+    protected EngineType engineType = EngineType.SPARK;
     private boolean isIndexConfigSet = false;
     private boolean isStorageConfigSet = false;
     private boolean isCompactionConfigSet = false;
+    private boolean isClusteringConfigSet = false;
     private boolean isMetricsConfigSet = false;
     private boolean isBootstrapConfigSet = false;
     private boolean isMemoryConfigSet = false;
     private boolean isViewConfigSet = false;
     private boolean isConsistencyGuardSet = false;
     private boolean isCallbackConfigSet = false;
+    private boolean isPayloadConfigSet = false;
+
+    public Builder withEngineType(EngineType engineType) {
+      this.engineType = engineType;
+      return this;
+    }
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
@@ -897,6 +978,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withClusteringConfig(HoodieClusteringConfig clusteringConfig) {
+      props.putAll(clusteringConfig.getProps());
+      isClusteringConfigSet = true;
+      return this;
+    }
+
     public Builder withMetricsConfig(HoodieMetricsConfig metricsConfig) {
       props.putAll(metricsConfig.getProps());
       isMetricsConfigSet = true;
@@ -912,6 +999,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     public Builder withBootstrapConfig(HoodieBootstrapConfig bootstrapConfig) {
       props.putAll(bootstrapConfig.getProps());
       isBootstrapConfigSet = true;
+      return this;
+    }
+
+    public Builder withPayloadConfig(HoodiePayloadConfig payloadConfig) {
+      props.putAll(payloadConfig.getProps());
+      isPayloadConfigSet = true;
       return this;
     }
 
@@ -983,6 +1076,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withMergeDataValidationCheckEnabled(boolean enabled) {
+      props.setProperty(MERGE_DATA_VALIDATION_CHECK_ENABLED, String.valueOf(enabled));
+      return this;
+    }
+
     public Builder withProperties(Properties properties) {
       this.props.putAll(properties);
       return this;
@@ -1032,12 +1130,16 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(AVRO_SCHEMA_VALIDATE), AVRO_SCHEMA_VALIDATE, DEFAULT_AVRO_SCHEMA_VALIDATE);
       setDefaultOnCondition(props, !props.containsKey(BULKINSERT_SORT_MODE),
           BULKINSERT_SORT_MODE, DEFAULT_BULKINSERT_SORT_MODE);
+      setDefaultOnCondition(props, !props.containsKey(MERGE_DATA_VALIDATION_CHECK_ENABLED),
+          MERGE_DATA_VALIDATION_CHECK_ENABLED, DEFAULT_MERGE_DATA_VALIDATION_CHECK_ENABLED);
 
       // Make sure the props is propagated
-      setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().withEngineType(engineType).fromProperties(props).build());
       setDefaultOnCondition(props, !isStorageConfigSet, HoodieStorageConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isCompactionConfigSet,
           HoodieCompactionConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isClusteringConfigSet,
+          HoodieClusteringConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isMetricsConfigSet, HoodieMetricsConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isBootstrapConfigSet,
           HoodieBootstrapConfig.newBuilder().fromProperties(props).build());
@@ -1048,6 +1150,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           ConsistencyGuardConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isCallbackConfigSet,
           HoodieWriteCommitCallbackConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isPayloadConfigSet,
+          HoodiePayloadConfig.newBuilder().fromProperties(props).build());
 
       setDefaultOnCondition(props, !props.containsKey(EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION),
           EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION, DEFAULT_EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION);
@@ -1066,7 +1170,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaults();
       validate();
       // Build WriteConfig at the end
-      HoodieWriteConfig config = new HoodieWriteConfig(props);
+      HoodieWriteConfig config = new HoodieWriteConfig(engineType, props);
       return config;
     }
   }

@@ -41,20 +41,22 @@ public class BulkInsertMapFunction<T extends HoodieRecordPayload>
   private HoodieWriteConfig config;
   private HoodieTable hoodieTable;
   private List<String> fileIDPrefixes;
+  private boolean useWriterSchema;
 
   public BulkInsertMapFunction(String instantTime, boolean areRecordsSorted,
                                HoodieWriteConfig config, HoodieTable hoodieTable,
-                               List<String> fileIDPrefixes) {
+                               List<String> fileIDPrefixes, boolean useWriterSchema) {
     this.instantTime = instantTime;
     this.areRecordsSorted = areRecordsSorted;
     this.config = config;
     this.hoodieTable = hoodieTable;
     this.fileIDPrefixes = fileIDPrefixes;
+    this.useWriterSchema = useWriterSchema;
   }
 
   @Override
   public Iterator<List<WriteStatus>> call(Integer partition, Iterator<HoodieRecord<T>> recordItr) {
     return new SparkLazyInsertIterable<>(recordItr, areRecordsSorted, config, instantTime, hoodieTable,
-        fileIDPrefixes.get(partition), hoodieTable.getTaskContextSupplier());
+        fileIDPrefixes.get(partition), hoodieTable.getTaskContextSupplier(), useWriterSchema);
   }
 }

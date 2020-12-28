@@ -45,7 +45,7 @@ public class ParquetDFSSource extends RowSource {
   @Override
   public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
     Pair<Option<String>, String> selectPathsWithMaxModificationTime =
-        pathSelector.getNextFilePathsAndMaxModificationTime(lastCkptStr, sourceLimit);
+        pathSelector.getNextFilePathsAndMaxModificationTime(sparkContext, lastCkptStr, sourceLimit);
     return selectPathsWithMaxModificationTime.getLeft()
         .map(pathStr -> Pair.of(Option.of(fromFiles(pathStr)), selectPathsWithMaxModificationTime.getRight()))
         .orElseGet(() -> Pair.of(Option.empty(), selectPathsWithMaxModificationTime.getRight()));

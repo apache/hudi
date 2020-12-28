@@ -41,6 +41,10 @@ import org.apache.hudi.integ.testsuite.configuration.DFSDeltaConfig;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.converter.Converter;
 import org.apache.hudi.integ.testsuite.converter.DeleteConverter;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.integ.testsuite.configuration.DFSDeltaConfig;
+import org.apache.hudi.integ.testsuite.configuration.DeltaConfig;
+import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.converter.UpdateConverter;
 import org.apache.hudi.integ.testsuite.reader.DFSAvroDeltaInputReader;
 import org.apache.hudi.integ.testsuite.reader.DFSHoodieDatasetInputReader;
@@ -51,6 +55,7 @@ import org.apache.hudi.integ.testsuite.writer.DeltaWriterAdapter;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriterFactory;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -58,6 +63,17 @@ import org.apache.spark.storage.StorageLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.io.Serializable;
+import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.StreamSupport;
 
 import scala.Tuple2;
 
@@ -77,7 +93,7 @@ public class DeltaGenerator implements Serializable {
   private int batchId;
 
   public DeltaGenerator(DFSDeltaConfig deltaOutputConfig, JavaSparkContext jsc, SparkSession sparkSession,
-                        String schemaStr, BuiltinKeyGenerator keyGenerator) {
+      String schemaStr, BuiltinKeyGenerator keyGenerator) {
     this.deltaOutputConfig = deltaOutputConfig;
     this.jsc = jsc;
     this.sparkSession = sparkSession;
@@ -167,7 +183,6 @@ public class DeltaGenerator implements Serializable {
         log.info("Repartitioning records into " + numPartition + " partitions for updates");
         adjustedRDD = adjustedRDD.repartition(numPartition);
         log.info("Repartitioning records done for updates");
-
         UpdateConverter converter = new UpdateConverter(schemaStr, config.getRecordSize(),
             partitionPathFieldNames, recordRowKeyFieldNames);
         JavaRDD<GenericRecord> updates = converter.convert(adjustedRDD);
