@@ -96,6 +96,12 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
     return getConfigBuilder(indexType).build();
   }
 
+  public HoodieWriteConfig getPartialUpdateConfig() {
+    return getConfigBuilder(HoodieTestDataGenerator.TRIP_SCHEMA).build();
+  }
+
+
+
   /**
    * Get Config builder with default configs set.
    *
