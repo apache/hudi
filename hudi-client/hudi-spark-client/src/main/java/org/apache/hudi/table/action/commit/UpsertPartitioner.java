@@ -129,6 +129,34 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
     return bucket;
   }
 
+  /**
+   * Get the in pending clustering fileId for each partition path.
+   * @return partition path to pending clustering file groups id
+   */
+  private Map<String, Set<String>> getPartitionPathToPendingClusteringFileGroupsId() {
+    Map<String, Set<String>>  partitionPathToInPendingClusteringFileId =
+        table.getFileSystemView().getFileGroupsInPendingClustering()
+            .map(fileGroupIdAndInstantPair ->
+                Pair.of(fileGroupIdAndInstantPair.getKey().getPartitionPath(), fileGroupIdAndInstantPair.getKey().getFileId()))
+            .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toSet())));
+    return partitionPathToInPendingClusteringFileId;
+  }
+
+  /**
+   * Exclude small file handling for clustering since update path is not supported.
+   * @param pendingClusteringFileGroupsId  pending clustering file groups id of partition
+   * @param smallFiles small files of partition
+   * @return smallFiles not in clustering
+   */
+  private List<SmallFile> filterSmallFilesInClustering(final Set<String> pendingClusteringFileGroupsId, final List<SmallFile> smallFiles) {
+    if (this.config.isClusteringEnabled()) {
+      return smallFiles.stream()
+          .filter(smallFile -> !pendingClusteringFileGroupsId.contains(smallFile.location.getFileId())).collect(Collectors.toList());
+    } else {
+      return smallFiles;
+    }
+  }
+
   private void assignInserts(WorkloadProfile profile, HoodieEngineContext context) {
     // for new inserts, compute buckets depending on how many records we have for each partition
     Set<String> partitionPaths = profile.getPartitionPaths();
@@ -140,11 +168,16 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
     Map<String, List<SmallFile>> partitionSmallFilesMap =
         getSmallFilesForPartitions(new ArrayList<String>(partitionPaths), context);
 
+    Map<String, Set<String>> partitionPathToPendingClusteringFileGroupsId = getPartitionPathToPendingClusteringFileGroupsId();
+
     for (String partitionPath : partitionPaths) {
       WorkloadStat pStat = profile.getWorkloadStat(partitionPath);
       if (pStat.getNumInserts() > 0) {
 
-        List<SmallFile> smallFiles = partitionSmallFilesMap.get(partitionPath);
+        List<SmallFile> smallFiles =
+            filterSmallFilesInClustering(partitionPathToPendingClusteringFileGroupsId.getOrDefault(partitionPath, Collections.emptySet()),
+                partitionSmallFilesMap.get(partitionPath));
+
         this.smallFiles.addAll(smallFiles);
 
         LOG.info("For partitionPath : " + partitionPath + " Small Files => " + smallFiles);
