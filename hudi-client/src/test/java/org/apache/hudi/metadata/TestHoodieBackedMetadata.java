@@ -73,7 +73,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
@@ -406,6 +405,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   //@ParameterizedTest
   //@EnumSource(HoodieTableType.class)
   //public void testSync(HoodieTableType tableType) throws Exception {
+  @Test
   public void testSync() throws Exception {
     //FIXME(metadata): This is broken for MOR, until HUDI-1434 is fixed
     init(HoodieTableType.COPY_ON_WRITE);
