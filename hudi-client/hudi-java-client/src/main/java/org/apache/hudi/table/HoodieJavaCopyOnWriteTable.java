@@ -85,6 +85,11 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
   }
 
   @Override
+  public HoodieWriteMetadata deletePartitions(HoodieEngineContext context, String instantTime, List<String> partitions) {
+    throw new HoodieNotSupportedException("Delete partitions is not supported yet");
+  }
+
+  @Override
   public HoodieWriteMetadata<List<WriteStatus>> upsertPrepped(HoodieEngineContext context,
                                                               String instantTime,
                                                               List<HoodieRecord<T>> preppedRecords) {

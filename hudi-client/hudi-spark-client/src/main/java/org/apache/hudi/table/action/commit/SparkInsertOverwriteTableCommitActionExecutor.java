@@ -36,7 +36,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public class SparkInsertOverwriteTableCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends SparkInsertOverwriteCommitActionExecutor<T> {
@@ -45,11 +44,6 @@ public class SparkInsertOverwriteTableCommitActionExecutor<T extends HoodieRecor
                                                        HoodieWriteConfig config, HoodieTable table,
                                                        String instantTime, JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
     super(context, config, table, instantTime, inputRecordsRDD, WriteOperationType.INSERT_OVERWRITE_TABLE);
-  }
-
-  protected List<String> getAllExistingFileIds(String partitionPath) {
-    return table.getSliceView().getLatestFileSlices(partitionPath)
-        .map(fg -> fg.getFileId()).distinct().collect(Collectors.toList());
   }
 
   @Override

@@ -245,6 +245,13 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     return postWrite(result, instantTime, table);
   }
 
+  public HoodieWriteResult deletePartitions(List<String> partitions, String instantTime) {
+    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table = getTableAndInitCtx(WriteOperationType.DELETE_PARTITION, instantTime);
+    setOperationType(WriteOperationType.DELETE_PARTITION);
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> result = table.deletePartitions(context,instantTime, partitions);
+    return new HoodieWriteResult(postWrite(result, instantTime, table), result.getPartitionToReplaceFileIds());
+  }
+
   @Override
   protected JavaRDD<WriteStatus> postWrite(HoodieWriteMetadata<JavaRDD<WriteStatus>> result,
                                            String instantTime,
