@@ -129,7 +129,7 @@ public class DeltaGenerator implements Serializable {
 
   public JavaRDD<GenericRecord> generateInserts(Config operation) {
     int numPartitions = operation.getNumInsertPartitions();
-    long recordsPerPartition = operation.getNumRecordsInsert() / numPartitions;
+    long recordsPerPartition = operation.getNumRecordsInsert();
     int minPayloadSize = operation.getRecordSize();
     int startPartition = operation.getStartPartition();
 
@@ -140,7 +140,7 @@ public class DeltaGenerator implements Serializable {
     JavaRDD<GenericRecord> inputBatch = jsc.parallelize(partitionIndexes, numPartitions)
         .mapPartitionsWithIndex((index, p) -> {
           return new LazyRecordGeneratorIterator(new FlexibleSchemaRecordGenerationIterator(recordsPerPartition,
-            minPayloadSize, schemaStr, partitionPathFieldNames, (Integer)index));
+              minPayloadSize, schemaStr, partitionPathFieldNames, numPartitions));
         }, true);
 
     if (deltaOutputConfig.getInputParallelism() < numPartitions) {
