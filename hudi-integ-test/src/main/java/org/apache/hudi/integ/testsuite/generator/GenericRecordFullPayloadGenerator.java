@@ -55,21 +55,15 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
   private final transient Schema baseSchema;
   // Used to validate a generic record
   private final transient GenericData genericData = new GenericData();
+  // The index of partition for which records are being generated
+  private int partitionIndex = 0;
+  // The size of a full record where every field of a generic record created contains 1 random value
+  private int estimatedFullPayloadSize;
   // Number of extra entries to add in a complex/collection field to achieve the desired record size
   Map<String, Integer> extraEntriesMap = new HashMap<>();
 
   // The number of unique dates to create
   private int numDatePartitions = DEFAULT_NUM_DATE_PARTITIONS;
-  // Number of more bytes to add based on the estimated full record payload size and min payload size
-  private int numberOfBytesToAdd;
-  // If more elements should be packed to meet the minPayloadSize
-  private boolean shouldAddMore;
-  // How many complex fields have we visited that can help us pack more entries and increase the size of the record
-  private int numberOfComplexFields;
-  // The index of partition for which records are being generated
-  private int partitionIndex = 0;
-  // The size of a full record where every field of a generic record created contains 1 random value
-  private int estimatedFullPayloadSize;
   // LogicalTypes in Avro 1.8.2
   private static final String DECIMAL = "decimal";
   private static final String UUID_NAME = "uuid";
