@@ -49,9 +49,16 @@ public class PartialUpdatePayload extends OverwriteWithLatestAvroPayload {
     if (recordOption.isPresent()) {
       IndexedRecord record = recordOption.get();
       GenericRecord current = (GenericRecord) record;
-
       List<Schema.Field> fieldList = writeSchema.getFields();
-      GenericRecord last = (GenericRecord) currentValue;
+
+      GenericRecord last;
+      if (writeSchema.getFields().size() >= schema.getFields().size()) {
+        last = current;
+        return Option.ofNullable(last);
+      } else {
+        last = (GenericRecord) currentValue;
+      }
+
       for (Schema.Field field : fieldList) {
         last.put(field.name(), current.get(field.name()));
       }

@@ -121,8 +121,9 @@ public class HoodieTestDataGenerator {
       + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", "
       + "\"default\": false}]}";
 
-  public static final String PARTIAL_TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"tripUberRec\",\"fields\":[{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},"
-      + "{\"name\":\"rider\",\"type\":\"string\"},{\"name\":\"driver\",\"type\":\"string\"}]}";
+  public static final String PARTIAL_TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"tripUberRec\",\"fields\":[{\"name\":\"timestamp\","
+      + "\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"}, {\"name\":\"rider\",\"type\":\"string\"},{\"name\":\"driver\","
+      + "\"type\":\"string\"}]}";
 
   public static final String SHORT_TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"shortTripRec\",\"fields\":["
       + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
@@ -494,7 +495,8 @@ public class HoodieTestDataGenerator {
         () -> UUID.randomUUID().toString());
   }
 
-  public Stream<HoodieRecord> generatePartialUpdateInsertsStream(String commitTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions) {
+  public Stream<HoodieRecord> generatePartialUpdateInsertsStream(String commitTime, Integer n,
+                                                                 boolean isFlattened, String schemaStr, boolean containsAllPartitions) {
     return generatePartialUpdateInsertsStream(commitTime, n, isFlattened, schemaStr, containsAllPartitions,
         () -> partitionPaths[RAND.nextInt(partitionPaths.length)]);
   }
@@ -524,8 +526,8 @@ public class HoodieTestDataGenerator {
     });
   }
 
-  public Stream<HoodieRecord> generatePartialUpdateInsertsStream(String instantTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions,
-                                                    Supplier<String> partitionPathSupplier) {
+  public Stream<HoodieRecord> generatePartialUpdateInsertsStream(String instantTime, Integer n, boolean isFlattened,
+                                                                 String schemaStr, boolean containsAllPartitions, Supplier<String> partitionPathSupplier) {
     int currSize = getNumExistingKeys(schemaStr);
     return IntStream.range(0, n).boxed().map(i -> {
       String partitionPath = partitionPathSupplier.get();
