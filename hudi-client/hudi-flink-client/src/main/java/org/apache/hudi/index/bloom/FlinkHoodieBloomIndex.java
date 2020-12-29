@@ -19,7 +19,6 @@
 package org.apache.hudi.index.bloom;
 
 import com.beust.jcommander.internal.Lists;
-import com.google.common.collect.Maps;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
@@ -44,9 +43,10 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
-import static java.util.stream.Collectors.*;
+import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.mapping;
+import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.index.HoodieIndexUtils.getLatestBaseFilesForAllPartitions;
 
 /**
@@ -64,8 +64,6 @@ public class FlinkHoodieBloomIndex<T extends HoodieRecordPayload> extends FlinkH
   @Override
   public List<HoodieRecord<T>> tagLocation(List<HoodieRecord<T>> records, HoodieEngineContext context,
                                            HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> hoodieTable) {
-
-
     // Step 1: Extract out thinner Map of (partitionPath, recordKey)
     Map<String, List<String>> partitionRecordKeyMap = new HashMap<>();
     records.forEach(record -> {
@@ -102,7 +100,7 @@ public class FlinkHoodieBloomIndex<T extends HoodieRecordPayload> extends FlinkH
       final HoodieTable hoodieTable) {
     // Obtain records per partition, in the incoming records
     Map<String, Long> recordsPerPartition = new HashMap<>();
-    partitionRecordKeyMap.keySet().forEach( k -> recordsPerPartition.put(k, Long.valueOf(partitionRecordKeyMap.get(k).size())));
+    partitionRecordKeyMap.keySet().forEach(k -> recordsPerPartition.put(k, Long.valueOf(partitionRecordKeyMap.get(k).size())));
     List<String> affectedPartitionPathList = new ArrayList<>(recordsPerPartition.keySet());
 
     // Step 2: Load all involved files as <Partition, filename> pairs
@@ -194,9 +192,9 @@ public class FlinkHoodieBloomIndex<T extends HoodieRecordPayload> extends FlinkH
             : new ListBasedIndexFileFilter(partitionToFileIndexInfo);
 
     List<Tuple2<String, HoodieKey>> ans = new ArrayList<>();
-    partitionRecordKeyMap.keySet().forEach( partitionPath ->  {
+    partitionRecordKeyMap.keySet().forEach(partitionPath ->  {
       List<String> hoodieRecordKeys = partitionRecordKeyMap.get(partitionPath);
-      hoodieRecordKeys.forEach( hoodieRecordKey -> {
+      hoodieRecordKeys.forEach(hoodieRecordKey -> {
         indexFileFilter.getMatchingFilesAndPartition(partitionPath, hoodieRecordKey).forEach(partitionFileIdPair -> {
           ans.add(new Tuple2<>(partitionFileIdPair.getRight(),
                   new HoodieKey(hoodieRecordKey, partitionPath)));
@@ -229,7 +227,7 @@ public class FlinkHoodieBloomIndex<T extends HoodieRecordPayload> extends FlinkH
 
     Map<HoodieKey, HoodieRecordLocation> hoodieRecordLocationMap = new HashMap<>();
 
-    keyLookupResults = keyLookupResults.stream().filter(lr -> lr.getMatchingRecordKeys().size() > 0).collect(Collectors.toList());
+    keyLookupResults = keyLookupResults.stream().filter(lr -> lr.getMatchingRecordKeys().size() > 0).collect(toList());
     keyLookupResults.forEach(lookupResult -> {
       lookupResult.getMatchingRecordKeys().forEach(r -> {
         hoodieRecordLocationMap.put(new HoodieKey(r, lookupResult.getPartitionPath()), new HoodieRecordLocation(lookupResult.getBaseInstantTime(), lookupResult.getFileId()));
@@ -245,7 +243,7 @@ public class FlinkHoodieBloomIndex<T extends HoodieRecordPayload> extends FlinkH
    */
   protected List<HoodieRecord<T>> tagLocationBacktoRecords(
           Map<HoodieKey, HoodieRecordLocation> keyFilenamePair, List<HoodieRecord<T>> records) {
-    Map<HoodieKey, HoodieRecord<T>> keyRecordPairMap= Maps.newHashMap();
+    Map<HoodieKey, HoodieRecord<T>> keyRecordPairMap = new HashMap<>();
     records.forEach(r -> keyRecordPairMap.put(r.getKey(), r));
     // Here as the recordRDD might have more data than rowKeyRDD (some rowKeys' fileId is null),
     // so we do left outer join.
