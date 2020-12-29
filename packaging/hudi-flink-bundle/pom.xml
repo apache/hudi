@@ -105,7 +105,6 @@
                   <include>io.prometheus:simpleclient_common</include>
                   <include>com.yammer.metrics:metrics-core</include>
                   <include>org.apache.flink:flink-connector-kafka_${scala.binary.version}</include>
-                  <include>org.apache.flink:flink-connector-kafka-base_${scala.binary.version}</include>
                   <include>org.apache.kafka:kafka_${scala.binary.version}</include>
                   <include>com.101tec:zkclient</include>
                   <include>org.apache.kafka:kafka-clients</include>
@@ -189,12 +188,6 @@
     <dependency>
       <groupId>org.apache.flink</groupId>
       <artifactId>flink-connector-kafka_${scala.binary.version}</artifactId>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.flink</groupId>
-      <artifactId>flink-connector-kafka-base_${scala.binary.version}</artifactId>
-      <version>${flink.version}</version>
       <scope>compile</scope>
     </dependency>
 
