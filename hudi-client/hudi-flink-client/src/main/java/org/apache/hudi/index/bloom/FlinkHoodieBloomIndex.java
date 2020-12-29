@@ -222,13 +222,9 @@ public class FlinkHoodieBloomIndex<T extends HoodieRecordPayload> extends FlinkH
 
     List<HoodieKeyLookupHandle.KeyLookupResult> keyLookupResults = new ArrayList<>();
 
-    for (Tuple2<String, HoodieKey> re : fileComparisons) {
-      List<Tuple2<String, HoodieKey>> list = new ArrayList<>();
-      list.add(re);
-      Iterator<List<HoodieKeyLookupHandle.KeyLookupResult>> iterator = new HoodieFlinkBloomIndexCheckFunction(hoodieTable, config).apply(list.iterator());
-      while (iterator.hasNext()) {
-        keyLookupResults.addAll(iterator.next());
-      }
+    Iterator<List<HoodieKeyLookupHandle.KeyLookupResult>> iterator = new HoodieFlinkBloomIndexCheckFunction(hoodieTable, config).apply(fileComparisons.iterator());
+    while (iterator.hasNext()) {
+      keyLookupResults.addAll(iterator.next());
     }
 
     Map<HoodieKey, HoodieRecordLocation> hoodieRecordLocationMap = new HashMap<>();
