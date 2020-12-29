@@ -64,8 +64,8 @@ public class HoodieFlinkBloomIndexCheckFunction
     return null;
   }
 
-
   class LazyKeyCheckIterator extends LazyIterableIterator<Tuple2<String, HoodieKey>, List<KeyLookupResult>> {
+
     private HoodieKeyLookupHandle keyLookupHandle;
 
     LazyKeyCheckIterator(Iterator<Tuple2<String, HoodieKey>> filePartitionRecordKeyTripletItr) {
