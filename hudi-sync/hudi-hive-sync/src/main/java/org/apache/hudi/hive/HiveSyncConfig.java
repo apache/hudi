@@ -84,6 +84,9 @@ public class HiveSyncConfig implements Serializable {
       + "Disabled by default for backward compatibility.")
   public Boolean supportTimestamp = false;
 
+  @Parameter(names = {"--decode-partition"}, description = "Decode the partition value if the partition has encoded during writing")
+  public Boolean decodePartition = false;
+
   public static HiveSyncConfig copy(HiveSyncConfig cfg) {
     HiveSyncConfig newConfig = new HiveSyncConfig();
     newConfig.basePath = cfg.basePath;
@@ -97,15 +100,30 @@ public class HiveSyncConfig implements Serializable {
     newConfig.tableName = cfg.tableName;
     newConfig.usePreApacheInputFormat = cfg.usePreApacheInputFormat;
     newConfig.supportTimestamp = cfg.supportTimestamp;
+    newConfig.decodePartition = cfg.decodePartition;
     return newConfig;
   }
 
   @Override
   public String toString() {
-    return "HiveSyncConfig{databaseName='" + databaseName + '\'' + ", tableName='" + tableName + '\''
-        + ", hiveUser='" + hiveUser + '\'' + ", hivePass='" + hivePass + '\'' + ", jdbcUrl='" + jdbcUrl + '\''
-        + ", basePath='" + basePath + '\'' + ", partitionFields=" + partitionFields + ", partitionValueExtractorClass='"
-        + partitionValueExtractorClass + '\'' + ", assumeDatePartitioning=" + assumeDatePartitioning + '\'' + ", supportTimestamp='" + supportTimestamp + '\''
-        + ", usePreApacheInputFormat=" + usePreApacheInputFormat + ", useJdbc=" + useJdbc + ", help=" + help + '}';
+    return "HiveSyncConfig{"
+      + "databaseName='" + databaseName + '\''
+      + ", tableName='" + tableName + '\''
+      + ", baseFileFormat='" + baseFileFormat + '\''
+      + ", hiveUser='" + hiveUser + '\''
+      + ", hivePass='" + hivePass + '\''
+      + ", jdbcUrl='" + jdbcUrl + '\''
+      + ", basePath='" + basePath + '\''
+      + ", partitionFields=" + partitionFields
+      + ", partitionValueExtractorClass='" + partitionValueExtractorClass + '\''
+      + ", assumeDatePartitioning=" + assumeDatePartitioning
+      + ", usePreApacheInputFormat=" + usePreApacheInputFormat
+      + ", useJdbc=" + useJdbc
+      + ", autoCreateDatabase=" + autoCreateDatabase
+      + ", skipROSuffix=" + skipROSuffix
+      + ", help=" + help
+      + ", supportTimestamp=" + supportTimestamp
+      + ", decodePartition=" + decodePartition
+      + '}';
   }
 }
