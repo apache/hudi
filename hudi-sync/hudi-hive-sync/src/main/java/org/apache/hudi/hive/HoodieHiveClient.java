@@ -18,6 +18,9 @@
 
 package org.apache.hudi.hive;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Partition;
@@ -162,7 +165,17 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
             + ". Check partition strategy. ");
     List<String> partBuilder = new ArrayList<>();
     for (int i = 0; i < syncConfig.partitionFields.size(); i++) {
-      partBuilder.add("`" + syncConfig.partitionFields.get(i) + "`='" + partitionValues.get(i) + "'");
+      String partitionValue = partitionValues.get(i);
+      // decode the partition before sync to hive to prevent multiple escapes of HIVE
+      if (syncConfig.decodePartition) {
+        try {
+          // This is a decode operator for encode in KeyGenUtils#getRecordPartitionPath
+          partitionValue = URLDecoder.decode(partitionValue, StandardCharsets.UTF_8.toString());
+        } catch (UnsupportedEncodingException e) {
+          throw new HoodieHiveSyncException("error in decode partition: " + partitionValue, e);
+        }
+      }
+      partBuilder.add("`" + syncConfig.partitionFields.get(i) + "`='" + partitionValue + "'");
     }
     return String.join(",", partBuilder);
   }
