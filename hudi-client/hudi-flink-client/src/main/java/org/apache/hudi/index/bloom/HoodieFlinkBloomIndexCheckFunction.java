@@ -78,7 +78,6 @@ public class HoodieFlinkBloomIndexCheckFunction
 
     @Override
     protected List<KeyLookupResult> computeNext() {
-
       List<KeyLookupResult> ret = new ArrayList<>();
       try {
         // process one file in each go.
@@ -116,7 +115,6 @@ public class HoodieFlinkBloomIndexCheckFunction
         }
         throw new HoodieIndexException("Error checking bloom filter index. ", e);
       }
-
       return ret;
     }
 
