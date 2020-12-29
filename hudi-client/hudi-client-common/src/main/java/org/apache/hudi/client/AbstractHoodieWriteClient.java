@@ -599,11 +599,6 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * Provides a new commit time for a write operation (insert/update/delete).
    */
   public String startCommit() {
-    // NOTE : Need to ensure that rollback is done before a new commit is started
-    if (rollbackPending) {
-      // Only rollback pending commit/delta-commits. Do not touch compaction commits
-      rollbackPendingCommits();
-    }
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
     startCommitWithTime(instantTime);
     return instantTime;
