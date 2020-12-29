@@ -355,7 +355,6 @@ public class TestHBaseIndex extends FunctionalTestHarness {
   /*
    * Test case to verify that taglocation() uses the commit timeline to validate the commitTS stored in hbase.
    * When CheckIfValidCommit() in HbaseIndex uses the incorrect timeline filtering, this test would fail.
-   * Note: Not catching this issue earlier resulted in Dupes in Hbase indexed tables, twice.
    */
   @Test
   public void testEnsureTagLocationUsesCommitTimeline() throws Exception {
@@ -370,11 +369,8 @@ public class TestHBaseIndex extends FunctionalTestHarness {
     // rollback the commit - leaves a clean file in timeline.
     writeClient.rollback(commitTime1);
 
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    assert (metaClient.getActiveTimeline().getCleanerTimeline().firstInstant().isPresent());
-    assert (metaClient.getActiveTimeline().getCleanerTimeline().firstInstant().get().getTimestamp().equals(commitTime1));
-
     // create a second commit with 20 records
+    metaClient = HoodieTableMetaClient.reload(metaClient);
     generateAndCommitRecords(writeClient, 20);
 
     // Now tagLocation for the first set of rolledback records, hbaseIndex should tag them
