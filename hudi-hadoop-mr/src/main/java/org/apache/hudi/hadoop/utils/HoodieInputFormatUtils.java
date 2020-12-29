@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
@@ -61,6 +62,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_ENABLE_PROP;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_VALIDATE_PROP;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE;
 
 public class HoodieInputFormatUtils {
 
@@ -391,27 +397,48 @@ public class HoodieInputFormatUtils {
     return grouped;
   }
 
+  public static Map<HoodieTableMetaClient, List<Path>> groupSnapshotPathsByMetaClient(
+          Collection<HoodieTableMetaClient> metaClientList,
+          List<Path> snapshotPaths
+  ) {
+    Map<HoodieTableMetaClient, List<Path>> grouped = new HashMap<>();
+    metaClientList.forEach(metaClient -> grouped.put(metaClient, new ArrayList<>()));
+    for (Path path : snapshotPaths) {
+      // Find meta client associated with the input path
+      metaClientList.stream().filter(metaClient -> path.toString().contains(metaClient.getBasePath()))
+              .forEach(metaClient -> grouped.get(metaClient).add(path));
+    }
+    return grouped;
+  }
+
   /**
-   * Filters data files for a snapshot queried table.
+   * Filters data files under @param paths for a snapshot queried table.
    * @param job
-   * @param metadata
-   * @param fileStatuses
+   * @param metaClient
+   * @param paths
    * @return
    */
   public static List<FileStatus> filterFileStatusForSnapshotMode(
-      JobConf job, HoodieTableMetaClient metadata, List<FileStatus> fileStatuses) throws IOException {
-    FileStatus[] statuses = fileStatuses.toArray(new FileStatus[0]);
+          JobConf job, HoodieTableMetaClient metaClient, List<Path> paths) throws IOException {
     if (LOG.isDebugEnabled()) {
-      LOG.debug("Hoodie Metadata initialized with completed commit Ts as :" + metadata);
+      LOG.debug("Hoodie Metadata initialized with completed commit Ts as :" + metaClient);
     }
-    // Get all commits, delta commits, compactions, as all of them produce a base parquet file today
-    HoodieTimeline timeline = metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    TableFileSystemView.BaseFileOnlyView roView = new HoodieTableFileSystemView(metadata, timeline, statuses);
-    // filter files on the latest commit found
-    List<HoodieBaseFile> filteredFiles = roView.getLatestBaseFiles().collect(Collectors.toList());
-    LOG.info("Total paths to process after hoodie filter " + filteredFiles.size());
+
+    boolean useFileListingFromMetadata = job.getBoolean(METADATA_ENABLE_PROP, DEFAULT_METADATA_ENABLE_FOR_READERS);
+    boolean verifyFileListing = job.getBoolean(METADATA_VALIDATE_PROP, DEFAULT_METADATA_VALIDATE);
+    HoodieTableFileSystemView fsView = FileSystemViewManager.createInMemoryFileSystemView(metaClient,
+            useFileListingFromMetadata, verifyFileListing);
+
+    List<HoodieBaseFile> filteredBaseFiles = new ArrayList<>();
+    for (Path p : paths) {
+      String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), p);
+      List<HoodieBaseFile> matched = fsView.getLatestBaseFiles(relativePartitionPath).collect(Collectors.toList());
+      filteredBaseFiles.addAll(matched);
+    }
+
+    LOG.info("Total paths to process after hoodie filter " + filteredBaseFiles.size());
     List<FileStatus> returns = new ArrayList<>();
-    for (HoodieBaseFile filteredFile : filteredFiles) {
+    for (HoodieBaseFile filteredFile : filteredBaseFiles) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Processing latest hoodie file - " + filteredFile.getPath());
       }
