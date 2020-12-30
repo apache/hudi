@@ -107,10 +107,33 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     assertFalse(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, swappedFieldSchema),
         "Swapped fields are not compatible");
 
-    String typeChangeSchema = TRIP_SCHEMA_PREFIX + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA
+    String typeChangeSchemaDisallowed = TRIP_SCHEMA_PREFIX + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA
         + TIP_NESTED_SCHEMA.replace("string", "boolean") + TRIP_SCHEMA_SUFFIX;
-    assertFalse(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, typeChangeSchema),
-        "Field type change is not compatible");
+    assertFalse(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, typeChangeSchemaDisallowed),
+        "Incompatible field type change is not allowed");
+
+    // Array of allowed schema field type transitions
+    String[][] allowedFieldChanges = {
+        {"string", "bytes"}, {"bytes", "string"},
+        {"int", "long"}, {"int", "float"}, {"long", "float"},
+        {"int", "double"}, {"float", "double"}, {"long", "double"}};
+    for (String[] fieldChange : allowedFieldChanges) {
+      String fromSchema = TRIP_SCHEMA_PREFIX + EXTRA_FIELD_SCHEMA.replace("string", fieldChange[0]) + TRIP_SCHEMA_SUFFIX;
+      String toSchema = TRIP_SCHEMA_PREFIX + EXTRA_FIELD_SCHEMA.replace("string", fieldChange[1]) + TRIP_SCHEMA_SUFFIX;
+      assertTrue(TableSchemaResolver.isSchemaCompatible(fromSchema, toSchema),
+          "Compatible field type change is not allowed");
+      if (!fieldChange[0].equals("byte") && fieldChange[1].equals("byte")) {
+        assertFalse(TableSchemaResolver.isSchemaCompatible(toSchema, fromSchema),
+            "Incompatible field type change is allowed");
+      }
+    }
+
+    // Names and aliases should match
+    String fromSchema = TRIP_SCHEMA_PREFIX + EXTRA_FIELD_SCHEMA + TRIP_SCHEMA_SUFFIX;
+    String toSchema = TRIP_SCHEMA_PREFIX.replace("triprec", "new_triprec") + EXTRA_FIELD_SCHEMA + TRIP_SCHEMA_SUFFIX;
+    assertFalse(TableSchemaResolver.isSchemaCompatible(fromSchema, toSchema), "Field names should match");
+    assertFalse(TableSchemaResolver.isSchemaCompatible(toSchema, fromSchema), "Field names should match");
+
 
     assertTrue(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_EVOLVED),
         "Added field with default is compatible (Evolved Schema)");
@@ -474,6 +497,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
         .build();
   }
 
+  @Override
   protected HoodieTableType getTableType() {
     return tableType;
   }
