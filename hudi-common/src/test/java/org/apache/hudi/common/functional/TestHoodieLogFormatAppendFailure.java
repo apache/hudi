@@ -110,7 +110,7 @@ public class TestHoodieLogFormatAppendFailure {
         .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION).withFileId("commits.archive")
         .overBaseCommit("").withFs(fs).build();
 
-    writer = writer.appendBlock(dataBlock);
+    writer.appendBlock(dataBlock);
     // get the current log file version to compare later
     int logFileVersion = writer.getLogFile().getLogVersion();
     Path logFilePath = writer.getLogFile().getPath();
