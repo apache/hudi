@@ -21,10 +21,11 @@ modules=(
   hudi-client
   hudi-common
   hudi-examples
+  hudi-flink
   hudi-hadoop-mr
-  hudi-hive-sync
   hudi-integ-test
-  hudi-spark
+  hudi-spark-datasource
+  hudi-sync
   hudi-timeline-service
   hudi-utilities
 )
