@@ -104,7 +104,7 @@ public class TestHoodieLogFileCommand extends AbstractShellIntegrationTest {
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, INSTANT_TIME);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
       dataBlock = new HoodieAvroDataBlock(records, header);
-      writer = writer.appendBlock(dataBlock);
+      writer.appendBlock(dataBlock);
     } finally {
       if (writer != null) {
         writer.close();
@@ -183,7 +183,7 @@ public class TestHoodieLogFileCommand extends AbstractShellIntegrationTest {
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, INSTANT_TIME);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
       HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1, header);
-      writer = writer.appendBlock(dataBlock);
+      writer.appendBlock(dataBlock);
     } finally {
       if (writer != null) {
         writer.close();
