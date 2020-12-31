@@ -30,7 +30,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
@@ -85,7 +84,7 @@ public class HoodieBackedTableMetadata implements HoodieTableMetadata {
   private final String spillableMapDirectory;
 
   // Readers for the base and log file which store the metadata
-  private transient HoodieFileReader<GenericRecord> basefileReader;
+  private transient HoodieFileReader<GenericRecord> baseFileReader;
   private transient HoodieMetadataMergedLogRecordScanner logRecordScanner;
 
   public HoodieBackedTableMetadata(Configuration conf, String datasetBasePath, String spillableMapDirectory,
@@ -108,7 +107,7 @@ public class HoodieBackedTableMetadata implements HoodieTableMetadata {
       try {
         this.metaClient = new HoodieTableMetaClient(hadoopConf.get(), metadataBasePath);
       } catch (TableNotFoundException e) {
-        LOG.error("Metadata table was not found at path " + metadataBasePath);
+        LOG.warn("Metadata table was not found at path " + metadataBasePath);
         this.enabled = false;
       } catch (Exception e) {
         LOG.error("Failed to initialize metadata table at path " + metadataBasePath, e);
@@ -144,9 +143,7 @@ public class HoodieBackedTableMetadata implements HoodieTableMetadata {
         LOG.error("Failed to retrieve list of partition from metadata", e);
       }
     }
-
-    FileSystem fs = FSUtils.getFs(datasetBasePath, hadoopConf.get());
-    return FSUtils.getAllPartitionPaths(fs, datasetBasePath, assumeDatePartitioning);
+    return new FileSystemBackedTableMetadata(hadoopConf, datasetBasePath, assumeDatePartitioning).getAllPartitionPaths();
   }
 
   /**
@@ -199,7 +196,8 @@ public class HoodieBackedTableMetadata implements HoodieTableMetadata {
     if (validateLookups) {
       // Validate the Metadata Table data by listing the partitions from the file system
       timer.startTimer();
-      List<String> actualPartitions  = FSUtils.getAllPartitionPaths(metaClient.getFs(), datasetBasePath, false);
+      FileSystemBackedTableMetadata fileSystemBackedTableMetadata = new FileSystemBackedTableMetadata(hadoopConf, datasetBasePath, assumeDatePartitioning);
+      List<String> actualPartitions = fileSystemBackedTableMetadata.getAllPartitionPaths();
       metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.VALIDATE_PARTITIONS_STR, timer.endTimer()));
 
       Collections.sort(actualPartitions);
@@ -287,9 +285,9 @@ public class HoodieBackedTableMetadata implements HoodieTableMetadata {
 
     // Retrieve record from base file
     HoodieRecord<HoodieMetadataPayload> hoodieRecord = null;
-    if (basefileReader != null) {
+    if (baseFileReader != null) {
       HoodieTimer timer = new HoodieTimer().startTimer();
-      Option<GenericRecord> baseRecord = basefileReader.getRecordByKey(key);
+      Option<GenericRecord> baseRecord = baseFileReader.getRecordByKey(key);
       if (baseRecord.isPresent()) {
         hoodieRecord = SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(),
             metaClient.getTableConfig().getPayloadClass());
@@ -338,7 +336,7 @@ public class HoodieBackedTableMetadata implements HoodieTableMetadata {
     Option<HoodieBaseFile> basefile = latestSlices.get(0).getBaseFile();
     if (basefile.isPresent()) {
       String basefilePath = basefile.get().getPath();
-      basefileReader = HoodieFileReaderFactory.getFileReader(hadoopConf.get(), new Path(basefilePath));
+      baseFileReader = HoodieFileReaderFactory.getFileReader(hadoopConf.get(), new Path(basefilePath));
       LOG.info("Opened metadata base file from " + basefilePath + " at instant " + basefile.get().getCommitTime());
     }
 
@@ -365,9 +363,9 @@ public class HoodieBackedTableMetadata implements HoodieTableMetadata {
   }
 
   public void closeReaders() {
-    if (basefileReader != null) {
-      basefileReader.close();
-      basefileReader = null;
+    if (baseFileReader != null) {
+      baseFileReader.close();
+      baseFileReader = null;
     }
     logRecordScanner = null;
   }
