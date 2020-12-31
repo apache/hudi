@@ -24,19 +24,30 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.table.HoodieTable;
 
 /**
  * {@code HoodieTableFileSystemView} implementation that retrieved partition listings from the Metadata Table.
  */
 public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
-  private HoodieTable hoodieTable;
 
-  public HoodieMetadataFileSystemView(HoodieTableMetaClient metaClient, HoodieTable table,
+  private final HoodieTableMetadata tableMetadata;
+
+  public HoodieMetadataFileSystemView(HoodieTableMetaClient metaClient, HoodieTableMetadata tableMetadata,
                                       HoodieTimeline visibleActiveTimeline, boolean enableIncrementalTimelineSync) {
     super(metaClient, visibleActiveTimeline, enableIncrementalTimelineSync);
-    this.hoodieTable = table;
+    this.tableMetadata = tableMetadata;
+  }
+
+  public HoodieMetadataFileSystemView(HoodieTableMetaClient metaClient,
+                                      HoodieTimeline visibleActiveTimeline,
+                                      boolean useFileListingFromMetadata,
+                                      boolean verifyListings) {
+    super(metaClient, visibleActiveTimeline);
+    this.tableMetadata = HoodieTableMetadata.create(metaClient.getHadoopConf(), metaClient.getBasePath(),
+        FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR, useFileListingFromMetadata, verifyListings,
+        false, false);
   }
 
   /**
@@ -47,6 +58,6 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
    */
   @Override
   protected FileStatus[] listPartition(Path partitionPath) throws IOException {
-    return hoodieTable.metadata().getAllFilesInPartition(partitionPath);
+    return tableMetadata.getAllFilesInPartition(partitionPath);
   }
 }

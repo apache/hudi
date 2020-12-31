@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.perf;
 
 import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -85,7 +86,8 @@ public class TimelineServerPerf implements Serializable {
 
   public void run() throws IOException {
 
-    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(timelineServer.getFs(), cfg.basePath, true);
+    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(timelineServer.getFs(), cfg.basePath, cfg.useFileListingFromMetadata,
+        cfg.verifyMetadataFileListing, true);
     Collections.shuffle(allPartitionPaths);
     List<String> selected = allPartitionPaths.stream().filter(p -> !p.contains("error")).limit(cfg.maxPartitions)
         .collect(Collectors.toList());
@@ -293,6 +295,12 @@ public class TimelineServerPerf implements Serializable {
 
     @Parameter(names = {"--wait-for-manual-queries", "-ww"})
     public Boolean waitForManualQueries = false;
+
+    @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")
+    public Boolean useFileListingFromMetadata = HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
+
+    @Parameter(names = {"--verify-metadata-file-listing"}, description = "Verify file listing from Hudi's metadata against file system")
+    public Boolean verifyMetadataFileListing = HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE;
 
     @Parameter(names = {"--help", "-h"})
     public Boolean help = false;

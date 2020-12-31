@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.functional;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -67,7 +68,9 @@ public class TestHoodieSnapshotCopier extends FunctionalTestHarness {
 
     // Do the snapshot
     HoodieSnapshotCopier copier = new HoodieSnapshotCopier();
-    copier.snapshot(jsc(), basePath, outputPath, true);
+    copier.snapshot(jsc(), basePath, outputPath, true,
+        HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS,
+        HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE);
 
     // Nothing changed; we just bail out
     assertEquals(fs.listStatus(new Path(basePath)).length, 1);
@@ -120,7 +123,8 @@ public class TestHoodieSnapshotCopier extends FunctionalTestHarness {
 
     // Do a snapshot copy
     HoodieSnapshotCopier copier = new HoodieSnapshotCopier();
-    copier.snapshot(jsc(), basePath, outputPath, false);
+    copier.snapshot(jsc(), basePath, outputPath, false, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS,
+        HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE);
 
     // Check results
     assertTrue(fs.exists(new Path(outputPath + "/2016/05/01/" + file11.getName())));
