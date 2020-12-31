@@ -277,7 +277,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   private SyncableFileSystemView getFileSystemViewInternal(HoodieTimeline timeline) {
     if (config.useFileListingMetadata()) {
       FileSystemViewStorageConfig viewConfig = config.getViewStorageConfig();
-      return new HoodieMetadataFileSystemView(metaClient, this.metadata, timeline, viewConfig.isIncrementalTimelineSyncEnabled());
+      return new HoodieMetadataFileSystemView(metaClient, this.metadata(), timeline, viewConfig.isIncrementalTimelineSyncEnabled());
     } else {
       return getViewManager().getFileSystemView(metaClient);
     }
