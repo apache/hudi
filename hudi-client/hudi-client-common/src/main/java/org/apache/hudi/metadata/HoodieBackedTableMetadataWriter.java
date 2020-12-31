@@ -274,44 +274,19 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     initTableMetadata();
 
     // List all partitions in the basePath of the containing dataset
-    FileSystem fs = datasetMetaClient.getFs();
-    FileSystemBackedTableMetadata fileSystemBackedTableMetadata = new FileSystemBackedTableMetadata(hadoopConf, datasetWriteConfig.getBasePath(),
-        datasetWriteConfig.shouldAssumeDatePartitioning());
-    List<String> partitions = fileSystemBackedTableMetadata.getAllPartitionPaths();
-    LOG.info("Initializing metadata table by using file listings in " + partitions.size() + " partitions");
-
-    // List all partitions in parallel and collect the files in them
-    int parallelism =  Math.max(partitions.size(), 1);
-    List<Pair<String, FileStatus[]>> partitionFileList = engineContext.map(partitions, partition -> {
-      FileStatus[] statuses = fileSystemBackedTableMetadata.getAllFilesInPartition(new Path(datasetWriteConfig.getBasePath(), partition));
-      return Pair.of(partition, statuses);
-    }, parallelism);
+    LOG.info("Initializing metadata table by using file listings in " + datasetWriteConfig.getBasePath());
+    Map<String, List<FileStatus>> partitionToFileStatus = getPartitionsToFilesMapping(datasetMetaClient);
 
     // Create a HoodieCommitMetadata with writeStats for all discovered files
     int[] stats = {0};
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
 
-    partitionFileList.forEach(t -> {
-      final String partition = t.getKey();
-      try {
-        if (!fs.exists(new Path(datasetWriteConfig.getBasePath(), partition + Path.SEPARATOR + HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE))) {
-          return;
-        }
-      } catch (IOException e) {
-        throw new HoodieMetadataException("Failed to check partition " + partition, e);
-      }
-
+    partitionToFileStatus.forEach((partition, statuses) -> {
       // Filter the statuses to only include files which were created before or on createInstantTime
-      Arrays.stream(t.getValue()).filter(status -> {
+      statuses.stream().filter(status -> {
         String filename = status.getPath().getName();
-        if (filename.equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE)) {
-          return false;
-        }
-        if (HoodieTimeline.compareTimestamps(FSUtils.getCommitTime(filename), HoodieTimeline.GREATER_THAN,
-            createInstantTime)) {
-          return false;
-        }
-        return true;
+        return !HoodieTimeline.compareTimestamps(FSUtils.getCommitTime(filename), HoodieTimeline.GREATER_THAN,
+            createInstantTime);
       }).forEach(status -> {
         HoodieWriteStat writeStat = new HoodieWriteStat();
         writeStat.setPath(partition + Path.SEPARATOR + status.getPath().getName());
@@ -329,8 +304,54 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       }
     });
 
-    LOG.info("Committing " + partitionFileList.size() + " partitions and " + stats[0] + " files to metadata");
+    LOG.info("Committing " + partitionToFileStatus.size() + " partitions and " + stats[0] + " files to metadata");
     update(commitMetadata, createInstantTime);
+  }
+
+  /**
+   * Function to find hoodie partitions and list files in them in parallel.
+   *
+   * @param datasetMetaClient
+   * @return Map of partition names to a list of FileStatus for all the files in the partition
+   */
+  private Map<String, List<FileStatus>> getPartitionsToFilesMapping(HoodieTableMetaClient datasetMetaClient) {
+    List<Path> pathsToList = new LinkedList<>();
+    pathsToList.add(new Path(datasetWriteConfig.getBasePath()));
+
+    Map<String, List<FileStatus>> partitionToFileStatus = new HashMap<>();
+    final int fileListingParallelism = metadataWriteConfig.getFileListingParallelism();
+    SerializableConfiguration conf = new SerializableConfiguration(datasetMetaClient.getHadoopConf());
+
+    while (!pathsToList.isEmpty()) {
+      int listingParallelism = Math.min(fileListingParallelism, pathsToList.size());
+      // List all directories in parallel
+      List<Pair<Path, FileStatus[]>> dirToFileListing = engineContext.map(pathsToList, path -> {
+        FileSystem fs = path.getFileSystem(conf.get());
+        return Pair.of(path, fs.listStatus(path));
+      }, listingParallelism);
+      pathsToList.clear();
+
+      // If the listing reveals a directory, add it to queue. If the listing reveals a hoodie partition, add it to
+      // the results.
+      dirToFileListing.forEach(p -> {
+        List<FileStatus> filesInDir = Arrays.stream(p.getRight()).parallel()
+            .filter(fs -> !fs.getPath().getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE))
+            .collect(Collectors.toList());
+
+        if (p.getRight().length > filesInDir.size()) {
+          // Is a partition. Add all data files to result.
+          partitionToFileStatus.put(p.getLeft().getName(), filesInDir);
+        } else {
+          // Add sub-dirs to the queue
+          pathsToList.addAll(Arrays.stream(p.getRight())
+              .filter(fs -> fs.isDirectory() && !fs.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME))
+              .map(fs -> fs.getPath())
+              .collect(Collectors.toList()));
+        }
+      });
+    }
+
+    return partitionToFileStatus;
   }
 
   /**
@@ -413,7 +434,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       writeStats.forEach(hoodieWriteStat -> {
         String pathWithPartition = hoodieWriteStat.getPath();
         if (pathWithPartition == null) {
-          throw new HoodieMetadataException("Unable to find path in write stat to update metadata table " + hoodieWriteStat);
+          // Empty partition
+          LOG.warn("Unable to find path in write stat to update metadata table " + hoodieWriteStat);
+          return;
         }
 
         int offset = partition.equals(NON_PARTITIONED_NAME) ? 0 : partition.length() + 1;
