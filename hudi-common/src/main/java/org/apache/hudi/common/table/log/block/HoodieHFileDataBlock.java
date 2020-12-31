@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.log4j.LogManager;
@@ -118,6 +119,8 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         recordKey = record.get(keyField.pos()).toString();
       }
       byte[] recordBytes = HoodieAvroUtils.indexedRecordToBytes(record);
+      ValidationUtils.checkState(!sortedRecordsMap.containsKey(recordKey),
+          "Writing multiple records with same key not supported for " + this.getClass().getName());
       sortedRecordsMap.put(recordKey, recordBytes);
     }
 

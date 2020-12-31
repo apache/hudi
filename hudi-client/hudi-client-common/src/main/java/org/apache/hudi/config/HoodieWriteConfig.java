@@ -697,6 +697,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(HoodieMetricsConfig.METRICS_ON));
   }
 
+  public boolean isExecutorMetricsEnabled() {
+    return Boolean.parseBoolean(props.getProperty(HoodieMetricsConfig.ENABLE_EXECUTOR_METRICS, "false"));
+  }
+
   public MetricsReporterType getMetricsReporterType() {
     return MetricsReporterType.valueOf(props.getProperty(HoodieMetricsConfig.METRICS_REPORTER_TYPE));
   }
@@ -882,6 +886,41 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Long.valueOf(props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE_PROP));
   }
 
+  /**
+   * File listing metadata configs.
+   */
+  public boolean useFileListingMetadata() {
+    return Boolean.parseBoolean(props.getProperty(HoodieMetadataConfig.METADATA_ENABLE_PROP));
+  }
+
+  public boolean getFileListingMetadataVerify() {
+    return Boolean.parseBoolean(props.getProperty(HoodieMetadataConfig.METADATA_VALIDATE_PROP));
+  }
+
+  public int getMetadataInsertParallelism() {
+    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.METADATA_INSERT_PARALLELISM_PROP));
+  }
+
+  public int getMetadataCompactDeltaCommitMax() {
+    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.METADATA_COMPACT_NUM_DELTA_COMMITS_PROP));
+  }
+
+  public boolean isMetadataAsyncClean() {
+    return Boolean.parseBoolean(props.getProperty(HoodieMetadataConfig.METADATA_ASYNC_CLEAN_PROP));
+  }
+
+  public int getMetadataMaxCommitsToKeep() {
+    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.MAX_COMMITS_TO_KEEP_PROP));
+  }
+
+  public int getMetadataMinCommitsToKeep() {
+    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.MIN_COMMITS_TO_KEEP_PROP));
+  }
+
+  public int getMetadataCleanerCommitsRetained() {
+    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED_PROP));
+  }
+
   public static class Builder {
 
     protected final Properties props = new Properties();
@@ -897,6 +936,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private boolean isConsistencyGuardSet = false;
     private boolean isCallbackConfigSet = false;
     private boolean isPayloadConfigSet = false;
+    private boolean isMetadataConfigSet = false;
 
     public Builder withEngineType(EngineType engineType) {
       this.engineType = engineType;
@@ -1064,6 +1104,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withMetadataConfig(HoodieMetadataConfig metadataConfig) {
+      props.putAll(metadataConfig.getProps());
+      isMetadataConfigSet = true;
+      return this;
+    }
+
     public Builder withAutoCommit(boolean autoCommit) {
       props.setProperty(HOODIE_AUTO_COMMIT_PROP, String.valueOf(autoCommit));
       return this;
@@ -1214,6 +1260,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           HoodieWriteCommitCallbackConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isPayloadConfigSet,
           HoodiePayloadConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isMetadataConfigSet,
+          HoodieMetadataConfig.newBuilder().fromProperties(props).build());
 
       setDefaultOnCondition(props, !props.containsKey(EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION),
           EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION, DEFAULT_EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION);

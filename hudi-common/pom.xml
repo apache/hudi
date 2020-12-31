@@ -89,6 +89,7 @@
             <import>${basedir}/src/main/avro/HoodieClusteringStrategy.avsc</import>
             <import>${basedir}/src/main/avro/HoodieClusteringPlan.avsc</import>
             <import>${basedir}/src/main/avro/HoodieRequestedReplaceMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieMetadata.avsc</import>
           </imports>
         </configuration>
       </plugin>
