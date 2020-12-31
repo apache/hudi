@@ -51,7 +51,8 @@ public class SparkInsertOverwriteTableCommitActionExecutor<T extends HoodieRecor
     Map<String, List<String>> partitionToExistingFileIds = new HashMap<>();
     try {
       List<String> partitionPaths = FSUtils.getAllPartitionPaths(table.getMetaClient().getFs(),
-          table.getMetaClient().getBasePath(), false);
+          table.getMetaClient().getBasePath(), config.useFileListingMetadata(), config.getFileListingMetadataVerify(),
+          false);
       JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
       if (partitionPaths != null && partitionPaths.size() > 0) {
         context.setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of all partitions");

@@ -66,8 +66,10 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
     try {
       HoodieTableMetaClient metaClient = getHoodieTable().getMetaClient();
       LOG.info("Scheduling clustering for " + metaClient.getBasePath());
+      HoodieWriteConfig config = getWriteConfig();
       List<String> partitionPaths = FSUtils.getAllPartitionPaths(metaClient.getFs(), metaClient.getBasePath(),
-          getWriteConfig().shouldAssumeDatePartitioning());
+          config.useFileListingMetadata(), config.getFileListingMetadataVerify(),
+          config.shouldAssumeDatePartitioning());
 
       // filter the partition paths if needed to reduce list status
       partitionPaths = filterPartitionPaths(partitionPaths);

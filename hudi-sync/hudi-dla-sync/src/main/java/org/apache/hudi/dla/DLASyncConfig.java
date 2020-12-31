@@ -19,6 +19,8 @@
 package org.apache.hudi.dla;
 
 import com.beust.jcommander.Parameter;
+
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 
 import java.io.Serializable;
@@ -68,6 +70,12 @@ public class DLASyncConfig implements Serializable {
   @Parameter(names = {"--hive-style-partitioning"}, description = "Use DLA hive style partitioning, true if like the following style: field1=value1/field2=value2")
   public Boolean useDLASyncHiveStylePartitioning = false;
 
+  @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")
+  public Boolean useFileListingFromMetadata = HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
+
+  @Parameter(names = {"--verify-metadata-file-listing"}, description = "Verify file listing from Hudi's metadata against file system")
+  public Boolean verifyMetadataFileListing = HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE;
+
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;
 
@@ -88,6 +96,8 @@ public class DLASyncConfig implements Serializable {
     newConfig.skipROSuffix = cfg.skipROSuffix;
     newConfig.skipRTSync = cfg.skipRTSync;
     newConfig.useDLASyncHiveStylePartitioning = cfg.useDLASyncHiveStylePartitioning;
+    newConfig.useFileListingFromMetadata = cfg.useFileListingFromMetadata;
+    newConfig.verifyMetadataFileListing = cfg.verifyMetadataFileListing;
     newConfig.supportTimestamp = cfg.supportTimestamp;
     return newConfig;
   }
@@ -99,6 +109,8 @@ public class DLASyncConfig implements Serializable {
         + ", basePath='" + basePath + '\'' + ", partitionFields=" + partitionFields + ", partitionValueExtractorClass='"
         + partitionValueExtractorClass + '\'' + ", assumeDatePartitioning=" + assumeDatePartitioning
         + ", useDLASyncHiveStylePartitioning=" + useDLASyncHiveStylePartitioning
+        + ", useFileListingFromMetadata=" + useFileListingFromMetadata
+        + ", verifyMetadataFileListing=" + verifyMetadataFileListing
         + ", help=" + help + '}';
   }
 }

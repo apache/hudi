@@ -36,6 +36,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -89,15 +90,18 @@ public class SavepointActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
           "Could not savepoint commit " + instantTime + " as this is beyond the lookup window " + lastCommitRetained);
 
       context.setJobStatus(this.getClass().getSimpleName(), "Collecting latest files for savepoint " + instantTime);
-      Map<String, List<String>> latestFilesMap = context.mapToPair(FSUtils.getAllPartitionPaths(table.getMetaClient().getFs(),
-          table.getMetaClient().getBasePath(), config.shouldAssumeDatePartitioning()), partitionPath -> {
-            // Scan all partitions files with this commit time
-            LOG.info("Collecting latest files in partition path " + partitionPath);
-            TableFileSystemView.BaseFileOnlyView view = table.getBaseFileOnlyView();
-            List<String> latestFiles = view.getLatestBaseFilesBeforeOrOn(partitionPath, instantTime)
-                .map(HoodieBaseFile::getFileName).collect(Collectors.toList());
-          return new ImmutablePair<>(partitionPath, latestFiles);
-        }, null);
+      List<String> partitions = FSUtils.getAllPartitionPaths(table.getMetaClient().getFs(),
+          table.getMetaClient().getBasePath(), config.useFileListingMetadata(), config.getFileListingMetadataVerify(),
+          config.shouldAssumeDatePartitioning()
+      );
+      Map<String, List<String>> latestFilesMap = context.mapToPair(partitions, partitionPath -> {
+        // Scan all partitions files with this commit time
+        LOG.info("Collecting latest files in partition path " + partitionPath);
+        TableFileSystemView.BaseFileOnlyView view = table.getBaseFileOnlyView();
+        List<String> latestFiles = view.getLatestBaseFilesBeforeOrOn(partitionPath, instantTime)
+            .map(HoodieBaseFile::getFileName).collect(Collectors.toList());
+        return new ImmutablePair<>(partitionPath, latestFiles);
+      }, null);
       HoodieSavepointMetadata metadata = TimelineMetadataUtils.convertSavepointMetadata(user, comment, latestFilesMap);
       // Nothing to save in the savepoint
       table.getActiveTimeline().createNewInstant(

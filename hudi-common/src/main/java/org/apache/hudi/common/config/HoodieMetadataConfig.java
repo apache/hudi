@@ -16,12 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.config;
-
-import org.apache.hudi.common.config.DefaultHoodieConfig;
+package org.apache.hudi.common.config;
 
 import javax.annotation.concurrent.Immutable;
-
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -31,7 +28,7 @@ import java.util.Properties;
  * Configurations used by the HUDI Metadata Table.
  */
 @Immutable
-public class HoodieMetadataConfig extends DefaultHoodieConfig {
+public final class HoodieMetadataConfig extends DefaultHoodieConfig {
 
   public static final String METADATA_PREFIX = "hoodie.metadata";
 
@@ -64,6 +61,10 @@ public class HoodieMetadataConfig extends DefaultHoodieConfig {
   // Cleaner commits retained
   public static final String CLEANER_COMMITS_RETAINED_PROP = METADATA_PREFIX + ".cleaner.commits.retained";
   public static final int DEFAULT_CLEANER_COMMITS_RETAINED = 3;
+
+  // We can set the default to true for readers, as it will internally default to listing from filesystem if metadata
+  // table is not found
+  public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = true;
 
   private HoodieMetadataConfig(Properties props) {
     super(props);
