@@ -88,6 +88,11 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
   private final HoodieTable<T, I, K, O> table;
   private final HoodieTableMetaClient metaClient;
 
+  /*
+  public HoodieTimelineArchiveLog(HoodieWriteConfig config, Configuration configuration) {
+    this(config, HoodieTable.create(config, configuration));
+  }*/
+
   public HoodieTimelineArchiveLog(HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     this.config = config;
     this.table = table;
@@ -194,6 +199,20 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     Map<Pair<String, String>, List<HoodieInstant>> groupByTsAction = rawActiveTimeline.getInstants()
         .collect(Collectors.groupingBy(i -> Pair.of(i.getTimestamp(),
             HoodieInstant.getComparableAction(i.getAction()))));
+
+    // If metadata table is enabled, do not archive instants which are more recent that the latest synced
+    // instant on the metadata table. This is required for metadata table sync.
+    if (config.useFileListingMetadata()) {
+      Option<String> lastSyncedInstantTime = table.metadata().getSyncedInstantTime();
+      if (lastSyncedInstantTime.isPresent()) {
+        LOG.info("Limiting archiving of instants to last synced instant on metadata table at " + lastSyncedInstantTime.get());
+        instants = instants.filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(), HoodieTimeline.LESSER_THAN,
+            lastSyncedInstantTime.get()));
+      } else {
+        LOG.info("Not archiving as there is no instants yet on the metadata table");
+        instants = Stream.empty();
+      }
+    }
 
     return instants.flatMap(hoodieInstant ->
         groupByTsAction.get(Pair.of(hoodieInstant.getTimestamp(),
