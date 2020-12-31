@@ -18,9 +18,11 @@
 
 package org.apache.hudi.exception;
 
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 
 /**
@@ -39,16 +41,14 @@ public class TableNotFoundException extends HoodieException {
   }
 
   public static void checkTableValidity(FileSystem fs, Path basePathDir, Path metaPathDir) {
-    // Check if the base path is found
+    // Check if the base and meta paths are found
     try {
-      if (!fs.exists(basePathDir) || !fs.isDirectory(basePathDir)) {
-        throw new TableNotFoundException(basePathDir.toString());
-      }
-      // Check if the meta path is found
-      if (!fs.exists(metaPathDir) || !fs.isDirectory(metaPathDir)) {
+      // Since metaPath is within the basePath, it is enough to check the metaPath exists
+      FileStatus status = fs.getFileStatus(metaPathDir);
+      if (!status.isDirectory()) {
         throw new TableNotFoundException(metaPathDir.toString());
       }
-    } catch (IllegalArgumentException e) {
+    } catch (FileNotFoundException | IllegalArgumentException e) {
       // if the base path is file:///, then we have a IllegalArgumentException
       throw new TableNotFoundException(metaPathDir.toString());
     } catch (IOException e) {

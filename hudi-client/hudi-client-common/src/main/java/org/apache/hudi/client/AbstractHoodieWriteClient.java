@@ -134,6 +134,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     this.metrics = new HoodieMetrics(config, config.getTableName());
     this.rollbackPending = rollbackPending;
     this.index = createIndex(writeConfig);
+    syncTableMetadata();
   }
 
   protected abstract HoodieIndex<T, I, K, O> createIndex(HoodieWriteConfig writeConfig);
@@ -218,6 +219,10 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime
           + "Instant time is not of valid format", e);
     }
+  }
+
+  protected void syncTableMetadata() {
+    // no-op
   }
 
   /**
@@ -407,7 +412,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       // We cannot have unbounded commit files. Archive commits if we have to archive
       HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);
       archiveLog.archiveIfRequired(context);
-      autoCleanOnCommit(instantTime);
+      autoCleanOnCommit();
+
+      syncTableMetadata();
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
@@ -434,9 +441,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   /**
    * Handle auto clean during commit.
    *
-   * @param instantTime
    */
-  protected void autoCleanOnCommit(String instantTime) {
+  protected void autoCleanOnCommit() {
     if (config.isAutoClean()) {
       // Call clean to cleanup if there is anything to cleanup after the commit,
       if (config.isAsyncClean()) {
@@ -444,8 +450,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
         AsyncCleanerService.waitForCompletion(asyncCleanerService);
         LOG.info("Cleaner has finished");
       } else {
+        // Do not reuse instantTime for clean as metadata table requires all changes to have unique instant timestamps.
         LOG.info("Auto cleaning is enabled. Running cleaner now");
-        clean(instantTime);
+        clean();
       }
     }
   }
@@ -599,8 +606,14 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * Provides a new commit time for a write operation (insert/update/delete).
    */
   public String startCommit() {
+    // NOTE : Need to ensure that rollback is done before a new commit is started
+    if (rollbackPending) {
+      // Only rollback pending commit/delta-commits. Do not touch compaction commits
+      rollbackPendingCommits();
+    }
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
-    startCommitWithTime(instantTime);
+    HoodieTableMetaClient metaClient = createMetaClient(true);
+    startCommit(instantTime, metaClient.getCommitActionType(), metaClient);
     return instantTime;
   }
 
