@@ -21,10 +21,8 @@ package org.apache.hudi.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.client.SparkTaskContextSupplier;
+import org.apache.hudi.client.common.TaskContextSupplier;
 import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.bloom.BloomFilterFactory;
-import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -37,7 +35,6 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.io.storage.HoodieAvroParquetConfig;
 import org.apache.hudi.io.storage.HoodieParquetWriter;
-import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -57,7 +54,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
@@ -65,33 +61,13 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
 public class HoodieWriteableTestTable extends HoodieTestTable {
   private static final Logger LOG = LogManager.getLogger(HoodieWriteableTestTable.class);
 
-  private final Schema schema;
-  private final BloomFilter filter;
+  protected final Schema schema;
+  protected final BloomFilter filter;
 
-  private HoodieWriteableTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter) {
+  protected HoodieWriteableTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter) {
     super(basePath, fs, metaClient);
     this.schema = schema;
     this.filter = filter;
-  }
-
-  public static HoodieWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter) {
-    return new HoodieWriteableTestTable(metaClient.getBasePath(), metaClient.getRawFs(), metaClient, schema, filter);
-  }
-
-  public static HoodieWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema) {
-    BloomFilter filter = BloomFilterFactory
-        .createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
-    return of(metaClient, schema, filter);
-  }
-
-  public static HoodieWriteableTestTable of(HoodieTable hoodieTable, Schema schema) {
-    HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
-    return of(metaClient, schema);
-  }
-
-  public static HoodieWriteableTestTable of(HoodieTable hoodieTable, Schema schema, BloomFilter filter) {
-    HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
-    return of(metaClient, schema, filter);
   }
 
   @Override
@@ -104,29 +80,7 @@ public class HoodieWriteableTestTable extends HoodieTestTable {
     return (HoodieWriteableTestTable) super.forCommit(instantTime);
   }
 
-  public String getFileIdWithInserts(String partition) throws Exception {
-    return getFileIdWithInserts(partition, new HoodieRecord[0]);
-  }
-
-  public String getFileIdWithInserts(String partition, HoodieRecord... records) throws Exception {
-    return getFileIdWithInserts(partition, Arrays.asList(records));
-  }
-
-  public String getFileIdWithInserts(String partition, List<HoodieRecord> records) throws Exception {
-    String fileId = UUID.randomUUID().toString();
-    withInserts(partition, fileId, records);
-    return fileId;
-  }
-
-  public HoodieWriteableTestTable withInserts(String partition, String fileId) throws Exception {
-    return withInserts(partition, fileId, new HoodieRecord[0]);
-  }
-
-  public HoodieWriteableTestTable withInserts(String partition, String fileId, HoodieRecord... records) throws Exception {
-    return withInserts(partition, fileId, Arrays.asList(records));
-  }
-
-  public HoodieWriteableTestTable withInserts(String partition, String fileId, List<HoodieRecord> records) throws Exception {
+  public HoodieWriteableTestTable withInserts(String partition, String fileId, List<HoodieRecord> records, TaskContextSupplier contextSupplier) throws Exception {
     FileCreateUtils.createPartitionMetaFile(basePath, partition);
     String fileName = baseFileName(currentInstantTime, fileId);
 
@@ -138,7 +92,7 @@ public class HoodieWriteableTestTable extends HoodieTestTable {
     try (HoodieParquetWriter writer = new HoodieParquetWriter(
         currentInstantTime,
         new Path(Paths.get(basePath, partition, fileName).toString()),
-        config, schema, new SparkTaskContextSupplier())) {
+        config, schema, contextSupplier)) {
       int seqId = 1;
       for (HoodieRecord record : records) {
         GenericRecord avroRecord = (GenericRecord) record.getData().getInsertValue(schema).get();

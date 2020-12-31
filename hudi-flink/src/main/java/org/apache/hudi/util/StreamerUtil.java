@@ -38,7 +38,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,18 +45,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.List;
-import java.util.Properties;
 
 public class StreamerUtil {
 
   private static Logger LOG = LoggerFactory.getLogger(StreamerUtil.class);
-
-  public static Properties getKafkaProps(HoodieFlinkStreamer.Config cfg) {
-    Properties result = new Properties();
-    result.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cfg.kafkaBootstrapServers);
-    result.put(ConsumerConfig.GROUP_ID_CONFIG, cfg.kafkaGroupId);
-    return result;
-  }
 
   public static TypedProperties getProps(HoodieFlinkStreamer.Config cfg) {
     return readConfig(

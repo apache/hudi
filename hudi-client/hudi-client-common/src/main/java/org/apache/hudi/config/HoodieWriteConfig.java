@@ -18,22 +18,24 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.client.common.EngineType;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
+import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import javax.annotation.concurrent.Immutable;
@@ -60,6 +62,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final long serialVersionUID = 0L;
 
   public static final String TABLE_NAME = "hoodie.table.name";
+  public static final String PRECOMBINE_FIELD_PROP = "hoodie.datasource.write.precombine.field";
+  public static final String WRITE_PAYLOAD_CLASS = "hoodie.datasource.write.payload.class";
+  public static final String DEFAULT_WRITE_PAYLOAD_CLASS = OverwriteWithLatestAvroPayload.class.getName();
+  public static final String KEYGENERATOR_CLASS_PROP = "hoodie.datasource.write.keygenerator.class";
+  public static final String DEFAULT_KEYGENERATOR_CLASS = SimpleAvroKeyGenerator.class.getName();
   public static final String DEFAULT_ROLLBACK_USING_MARKERS = "false";
   public static final String ROLLBACK_USING_MARKERS = "hoodie.rollback.using.markers";
   public static final String TIMELINE_LAYOUT_VERSION = "hoodie.timeline.layout.version";
@@ -198,6 +205,18 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public String getTableName() {
     return props.getProperty(TABLE_NAME);
+  }
+
+  public String getPreCombineField() {
+    return props.getProperty(PRECOMBINE_FIELD_PROP);
+  }
+
+  public String getWritePayloadClass() {
+    return props.getProperty(WRITE_PAYLOAD_CLASS);
+  }
+
+  public String getKeyGeneratorClass() {
+    return props.getProperty(KEYGENERATOR_CLASS_PROP);
   }
 
   public Boolean shouldAutoCommit() {
@@ -925,6 +944,21 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withPreCombineField(String preCombineField) {
+      props.setProperty(PRECOMBINE_FIELD_PROP, preCombineField);
+      return this;
+    }
+
+    public Builder withWritePayLoad(String payload) {
+      props.setProperty(WRITE_PAYLOAD_CLASS, payload);
+      return this;
+    }
+
+    public Builder withKeyGenerator(String keyGeneratorClass) {
+      props.setProperty(KEYGENERATOR_CLASS_PROP, keyGeneratorClass);
+      return this;
+    }
+
     public Builder withTimelineLayoutVersion(int version) {
       props.setProperty(TIMELINE_LAYOUT_VERSION, String.valueOf(version));
       return this;
@@ -1117,6 +1151,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(DELETE_PARALLELISM), DELETE_PARALLELISM, DEFAULT_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(ROLLBACK_PARALLELISM), ROLLBACK_PARALLELISM,
           DEFAULT_ROLLBACK_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(KEYGENERATOR_CLASS_PROP),
+          KEYGENERATOR_CLASS_PROP, DEFAULT_KEYGENERATOR_CLASS);
+      setDefaultOnCondition(props, !props.containsKey(WRITE_PAYLOAD_CLASS),
+          WRITE_PAYLOAD_CLASS, DEFAULT_WRITE_PAYLOAD_CLASS);
       setDefaultOnCondition(props, !props.containsKey(ROLLBACK_USING_MARKERS), ROLLBACK_USING_MARKERS,
           DEFAULT_ROLLBACK_USING_MARKERS);
       setDefaultOnCondition(props, !props.containsKey(COMBINE_BEFORE_INSERT_PROP), COMBINE_BEFORE_INSERT_PROP,

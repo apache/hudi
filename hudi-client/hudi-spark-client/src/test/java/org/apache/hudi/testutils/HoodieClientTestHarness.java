@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.util.Option;
@@ -72,7 +71,6 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected transient Configuration hadoopConf = null;
   protected transient SQLContext sqlContext;
   protected transient FileSystem fs;
-  protected transient HoodieTestDataGenerator dataGen = null;
   protected transient ExecutorService executorService;
   protected transient HoodieTableMetaClient metaClient;
   protected transient SparkRDDWriteClient writeClient;
@@ -234,24 +232,6 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     if (tableView != null) {
       tableView.close();
       tableView = null;
-    }
-  }
-
-  /**
-   * Initializes a test data generator which used to generate test datas.
-   *
-   */
-  protected void initTestDataGenerator() {
-    dataGen = new HoodieTestDataGenerator();
-  }
-
-  /**
-   * Cleanups test data generator.
-   *
-   */
-  protected void cleanupTestDataGenerator() {
-    if (dataGen != null) {
-      dataGen = null;
     }
   }
 

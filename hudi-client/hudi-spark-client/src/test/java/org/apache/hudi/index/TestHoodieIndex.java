@@ -39,7 +39,7 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.Assertions;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
-import org.apache.hudi.testutils.HoodieWriteableTestTable;
+import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.avro.Schema;
@@ -280,7 +280,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     }
 
     // We create three parquet file, each having one record. (two different partitions)
-    HoodieWriteableTestTable testTable = HoodieWriteableTestTable.of(hoodieTable, SCHEMA);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, SCHEMA);
     String fileId1 = testTable.addCommit("001").getFileIdWithInserts(p1, record1);
     String fileId2 = testTable.addCommit("002").getFileIdWithInserts(p1, record2);
     String fileId3 = testTable.addCommit("003").getFileIdWithInserts(p2, record4);
@@ -337,7 +337,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     writeClient = getHoodieWriteClient(config);
     index = writeClient.getIndex();
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    HoodieWriteableTestTable testTable = HoodieWriteableTestTable.of(hoodieTable, SCHEMA);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, SCHEMA);
     final String p1 = "2016/01/31";
     final String p2 = "2016/02/28";
 
