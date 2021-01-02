@@ -480,15 +480,54 @@ public class TestHiveSyncTool {
     // Lets do the sync
     HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     tool.syncHoodieTable();
+    assertEquals(5, hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size(),
+        "Table partitions should match the number of partitions we wrote");
+    assertEquals(instantTime, hiveClient.getLastCommitTimeSynced(hiveSyncConfig.tableName).get(),
+        "The last commit that was sycned should be updated in the TBLPROPERTIES");
+
+    // Now lets create partition "2010/01/02" and followed by "2010/02/01". HoodieHiveClient had a bug where partition vals were sorted
+    // and stored as keys in a map. The following tests this particular case.
+    String commitTime2 = "101";
+    HiveTestUtil.addCOWPartition("2010/01/02", true, true, commitTime2);
+    //HiveTestUtil.getCreatedTablesSet().add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName);
+
+    hiveClient = new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    List<String> writtenPartitionsSince = hiveClient.getPartitionsWrittenToSince(Option.of(instantTime));
+    assertEquals(1, writtenPartitionsSince.size(), "We should have one partition written after 100 commit");
+    List<Partition> hivePartitions = hiveClient.scanTablePartitions(hiveSyncConfig.tableName);
+    List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince);
+    assertEquals(1, partitionEvents.size(), "There should be only one paritition event");
+    assertEquals(PartitionEventType.ADD, partitionEvents.iterator().next().eventType, "The one partition event must of type ADD");
+
+    tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    tool.syncHoodieTable();
+
+    // Sync should add the one partition
+    assertEquals(6, hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size(),
+        "The one partition we wrote should be added to hive");
+    assertEquals(commitTime2, hiveClient.getLastCommitTimeSynced(hiveSyncConfig.tableName).get(),
+        "The last commit that was sycned should be 101");
+
+    // create partition "2010/02/01" and ensure sync works
+    String commitTime3 = "102";
+    HiveTestUtil.addCOWPartition("2010/02/01", true, true, commitTime3);
+    HiveTestUtil.getCreatedTablesSet().add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName);
+
+    hiveClient = new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+
+    tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    tool.syncHoodieTable();
+
     assertTrue(hiveClient.doesTableExist(hiveSyncConfig.tableName),
         "Table " + hiveSyncConfig.tableName + " should exist after sync completes");
     assertEquals(hiveClient.getTableSchema(hiveSyncConfig.tableName).size(),
         hiveClient.getDataSchema().getColumns().size() + 3,
         "Hive Schema should match the table schema + partition fields");
-    assertEquals(5, hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size(),
+    assertEquals(7, hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size(),
         "Table partitions should match the number of partitions we wrote");
-    assertEquals(instantTime, hiveClient.getLastCommitTimeSynced(hiveSyncConfig.tableName).get(),
+    assertEquals(commitTime3, hiveClient.getLastCommitTimeSynced(hiveSyncConfig.tableName).get(),
         "The last commit that was sycned should be updated in the TBLPROPERTIES");
+    assertEquals(1, hiveClient.getPartitionsWrittenToSince(Option.of(commitTime2)).size());
   }
 
   @ParameterizedTest
