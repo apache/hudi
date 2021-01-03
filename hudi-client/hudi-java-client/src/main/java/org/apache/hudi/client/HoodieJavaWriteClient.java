@@ -167,7 +167,11 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
   @Override
   public List<WriteStatus> delete(List<HoodieKey> keys,
                                   String instantTime) {
-    throw new HoodieNotSupportedException("Delete is not supported in HoodieJavaClient");
+    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
+        getTableAndInitCtx(WriteOperationType.DELETE, instantTime);
+    setOperationType(WriteOperationType.DELETE);
+    HoodieWriteMetadata<List<WriteStatus>> result = table.delete(context,instantTime, keys);
+    return postWrite(result, instantTime, table);
   }
 
   @Override
