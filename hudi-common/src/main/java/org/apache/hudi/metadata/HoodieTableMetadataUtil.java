@@ -238,13 +238,20 @@ public class HoodieTableMetadataUtil {
                                               Option<String> lastSyncTs) {
 
     rollbackMetadata.getPartitionMetadata().values().forEach(pm -> {
+      // Has this rollback produced new files?
+      boolean hasAppendFiles = pm.getAppendFiles().values().stream().mapToLong(Long::longValue).sum() > 0;
       // If commit being rolled back has not been synced to metadata table yet then there is no need to update metadata
-      if (lastSyncTs.isPresent() && HoodieTimeline.compareTimestamps(rollbackMetadata.getCommitsRollback().get(0), HoodieTimeline.GREATER_THAN, lastSyncTs.get())) {
+      boolean shouldSkip = lastSyncTs.isPresent()
+          && HoodieTimeline.compareTimestamps(rollbackMetadata.getCommitsRollback().get(0), HoodieTimeline.GREATER_THAN, lastSyncTs.get());
+
+      if (!hasAppendFiles && shouldSkip) {
+        LOG.info(String.format("Skipping syncing of rollbackMetadata at %s, given metadata table is already synced upto to %s",
+            rollbackMetadata.getCommitsRollback().get(0), lastSyncTs.get()));
         return;
       }
 
       final String partition = pm.getPartitionPath();
-      if (!pm.getSuccessDeleteFiles().isEmpty()) {
+      if (!pm.getSuccessDeleteFiles().isEmpty() && !shouldSkip) {
         if (!partitionToDeletedFiles.containsKey(partition)) {
           partitionToDeletedFiles.put(partition, new ArrayList<>());
         }

@@ -18,24 +18,6 @@
 
 package org.apache.hudi.metadata;
 
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.stream.Collectors;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -66,10 +48,12 @@ import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.metrics.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -77,7 +61,23 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   private static final Logger LOG = LogManager.getLogger(TestHoodieBackedMetadata.class);
@@ -172,13 +172,10 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   /**
    * Test various table operations sync to Metadata Table correctly.
    */
-  //@ParameterizedTest
-  //@EnumSource(HoodieTableType.class)
-  //public void testTableOperations(HoodieTableType tableType) throws Exception {
-  @Test
-  public void testTableOperations() throws Exception {
-    //FIXME(metadata): This is broken for MOR, until HUDI-1434 is fixed
-    init(HoodieTableType.COPY_ON_WRITE);
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testTableOperations(HoodieTableType tableType) throws Exception {
+    init(tableType);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
@@ -281,7 +278,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       assertNoWriteErrors(writeStatuses);
       validateMetadata(client);
 
-      // Rollback of inserts
+      // Write 2 (inserts) + Rollback of inserts
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
       records = dataGen.generateInserts(newCommitTime, 20);
@@ -292,7 +289,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       client.syncTableMetadata();
       validateMetadata(client);
 
-      // Rollback of updates
+      // Write 3 (updates) + Rollback of updates
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
       records = dataGen.generateUniqueUpdates(newCommitTime, 20);
@@ -341,7 +338,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       client.rollback(newCommitTime);
       client.syncTableMetadata();
       validateMetadata(client);
-
     }
 
     // Rollback of partial commits
@@ -411,13 +407,10 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   /**
    * Test sync of table operations.
    */
-  //@ParameterizedTest
-  //@EnumSource(HoodieTableType.class)
-  //public void testSync(HoodieTableType tableType) throws Exception {
-  @Test
-  public void testSync() throws Exception {
-    //FIXME(metadata): This is broken for MOR, until HUDI-1434 is fixed
-    init(HoodieTableType.COPY_ON_WRITE);
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testSync(HoodieTableType tableType) throws Exception {
+    init(tableType);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     String newCommitTime;
@@ -453,6 +446,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     }
 
     // Various table operations without metadata table enabled
+    String restoreToInstant;
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, false))) {
       // updates
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
@@ -479,7 +473,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       }
 
       // Savepoint
-      String savepointInstant = newCommitTime;
+      restoreToInstant = newCommitTime;
       if (metaClient.getTableType() == HoodieTableType.COPY_ON_WRITE) {
         client.savepoint("hoodie", "metadata test");
         assertFalse(metadata(client).isInSync());
@@ -505,21 +499,20 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
       assertFalse(metadata(client).isInSync());
-
-      client.restoreToInstant(savepointInstant);
-      assertFalse(metadata(client).isInSync());
     }
-
 
     // Enable metadata table and ensure it is synced
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
+      // Restore cannot be done until the metadata table is in sync. See HUDI-1502 for details
+      client.restoreToInstant(restoreToInstant);
+      assertFalse(metadata(client).isInSync());
+
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
 
       validateMetadata(client);
       assertTrue(metadata(client).isInSync());
     }
-
   }
 
   /**
@@ -673,8 +666,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   /**
    * Test when reading from metadata table which is out of sync with dataset that results are still consistent.
    */
-  //  @ParameterizedTest
-  //  @EnumSource(HoodieTableType.class)
   @Test
   public void testMetadataOutOfSync() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);

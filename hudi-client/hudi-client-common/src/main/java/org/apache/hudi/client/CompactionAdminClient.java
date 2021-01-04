@@ -481,11 +481,6 @@ public class CompactionAdminClient extends AbstractHoodieClient {
     throw new HoodieException("FileGroupId " + fgId + " not in pending compaction");
   }
 
-  @Override
-  protected void initWrapperFSMetrics() {
-    // no-op
-  }
-
   /**
    * Holds Operation result for Renaming.
    */
