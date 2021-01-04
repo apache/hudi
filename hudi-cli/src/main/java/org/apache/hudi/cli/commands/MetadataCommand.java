@@ -29,7 +29,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.metrics.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.springframework.shell.core.CommandMarker;
@@ -117,7 +117,7 @@ public class MetadataCommand implements CommandMarker {
       // Metadata directory does not exist
     }
 
-    return String.format("Removed Metdata Table from %s", metadataPath);
+    return String.format("Removed Metadata Table from %s", metadataPath);
   }
 
   @CliCommand(value = "metadata init", help = "Update the metadata table from commits since the creation")

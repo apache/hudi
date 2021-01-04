@@ -171,7 +171,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * Returns the list of filenames deleted as part of this record.
    */
   public List<String> getDeletions() {
-    return filterFileInfoEntries(true).map(e -> e.getKey()).sorted().collect(Collectors.toList());
+    return filterFileInfoEntries(true).map(Map.Entry::getKey).sorted().collect(Collectors.toList());
   }
 
   /**

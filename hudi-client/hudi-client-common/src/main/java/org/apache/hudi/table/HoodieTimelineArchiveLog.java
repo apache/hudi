@@ -88,11 +88,6 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
   private final HoodieTable<T, I, K, O> table;
   private final HoodieTableMetaClient metaClient;
 
-  /*
-  public HoodieTimelineArchiveLog(HoodieWriteConfig config, Configuration configuration) {
-    this(config, HoodieTable.create(config, configuration));
-  }*/
-
   public HoodieTimelineArchiveLog(HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     this.config = config;
     this.table = table;

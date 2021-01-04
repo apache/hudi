@@ -270,10 +270,10 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     }
 
     HoodieTableMetaClient datasetMetaClient = new HoodieTableMetaClient(hadoopConf.get(), datasetBasePath);
-    List<HoodieInstant> unsyncedInstants = findInstantsToSync(datasetMetaClient);
+    List<HoodieInstant> unSyncedInstants = findInstantsToSync(datasetMetaClient);
     Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
     timelineRecordScanner =
-        new HoodieMetadataMergedInstantRecordScanner(datasetMetaClient, unsyncedInstants, getSyncedInstantTime(), schema, MAX_MEMORY_SIZE_IN_BYTES, spillableMapDirectory, null);
+        new HoodieMetadataMergedInstantRecordScanner(datasetMetaClient, unSyncedInstants, getSyncedInstantTime(), schema, MAX_MEMORY_SIZE_IN_BYTES, spillableMapDirectory, null);
   }
 
   protected List<HoodieInstant> findInstantsToSync() {
