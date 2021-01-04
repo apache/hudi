@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
@@ -68,21 +69,30 @@ public class ClusteringUtils {
         .filter(Option::isPresent).map(Option::get);
   }
 
-  public static Option<Pair<HoodieInstant, HoodieClusteringPlan>> getClusteringPlan(HoodieTableMetaClient metaClient, HoodieInstant requestedReplaceInstant) {
+  public static Option<Pair<HoodieInstant, HoodieClusteringPlan>> getClusteringPlan(HoodieTableMetaClient metaClient, HoodieInstant pendingReplaceInstant) {
     try {
-      Option<byte[]> content = metaClient.getActiveTimeline().getInstantDetails(requestedReplaceInstant);
+      final HoodieInstant requestedInstant;
+      if (!pendingReplaceInstant.isRequested()) {
+        // inflight replacecommit files don't have clustering plan.
+        // This is because replacecommit inflight can have workload profile for 'insert_overwrite'.
+        // Get the plan from corresponding requested instant.
+        requestedInstant = HoodieTimeline.getReplaceCommitRequestedInstant(pendingReplaceInstant.getTimestamp());
+      } else {
+        requestedInstant = pendingReplaceInstant;
+      }
+      Option<byte[]> content = metaClient.getActiveTimeline().getInstantDetails(requestedInstant);
       if (!content.isPresent() || content.get().length == 0) {
         // few operations create requested file without any content. Assume these are not clustering
-        LOG.warn("No content found in requested file for instant " + requestedReplaceInstant);
+        LOG.warn("No content found in requested file for instant " + pendingReplaceInstant);
         return Option.empty();
       }
       HoodieRequestedReplaceMetadata requestedReplaceMetadata = TimelineMetadataUtils.deserializeRequestedReplaceMetadta(content.get());
       if (WriteOperationType.CLUSTER.name().equals(requestedReplaceMetadata.getOperationType())) {
-        return Option.of(Pair.of(requestedReplaceInstant, requestedReplaceMetadata.getClusteringPlan()));
+        return Option.of(Pair.of(pendingReplaceInstant, requestedReplaceMetadata.getClusteringPlan()));
       }
       return Option.empty();
     } catch (IOException e) {
-      throw new HoodieIOException("Error reading clustering plan " + requestedReplaceInstant.getTimestamp(), e);
+      throw new HoodieIOException("Error reading clustering plan " + pendingReplaceInstant.getTimestamp(), e);
     }
   }
 
