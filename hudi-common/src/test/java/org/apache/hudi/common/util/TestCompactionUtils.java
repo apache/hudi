@@ -186,7 +186,7 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     scheduleCompaction(metaClient, "001", plan1);
     scheduleCompaction(metaClient, "003", plan2);
     // schedule similar plan again so that there will be duplicates
-    plan1.getOperations().get(0).setBaseFilePath("bla");
+    plan1.getOperations().get(0).setDataFilePath("bla");
     scheduleCompaction(metaClient, "005", plan1);
     metaClient = new HoodieTableMetaClient(metaClient.getHadoopConf(), basePath, true);
     assertThrows(IllegalStateException.class, () -> {
@@ -253,7 +253,7 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     if (slice.getBaseFile().isPresent()) {
       HoodieBaseFile bf = slice.getBaseFile().get();
       assertEquals(version == COMPACTION_METADATA_VERSION_1 ? bf.getPath() : bf.getFileName(),
-          op.getBaseFilePath(), "Same base-file");
+          op.getDataFilePath(), "Same base-file");
     }
     List<String> paths = slice.getLogFiles().map(l -> l.getPath().toString()).collect(Collectors.toList());
     IntStream.range(0, paths.size()).boxed().forEach(idx -> assertEquals(

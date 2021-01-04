@@ -41,10 +41,10 @@
                      "default": null
                   },
                   {
-                     "name":"baseFilePath",
+                     "name":"dataFilePath",
                      "type":["null","string"],
                      "default": null,
-                     "aliases": ["dataFilePath"]
+                     "aliases": ["baseFilePath"]
                   },
                   {
                      "name":"fileId",

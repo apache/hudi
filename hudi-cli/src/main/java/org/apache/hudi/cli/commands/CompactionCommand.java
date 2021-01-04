@@ -370,7 +370,7 @@ public class CompactionCommand implements CommandMarker {
     List<Comparable[]> rows = new ArrayList<>();
     if ((null != compactionPlan) && (null != compactionPlan.getOperations())) {
       for (HoodieCompactionOperation op : compactionPlan.getOperations()) {
-        rows.add(new Comparable[]{op.getPartitionPath(), op.getFileId(), op.getBaseInstantTime(), op.getBaseFilePath(),
+        rows.add(new Comparable[]{op.getPartitionPath(), op.getFileId(), op.getBaseInstantTime(), op.getDataFilePath(),
                 op.getDeltaFilePaths().size(), op.getMetrics() == null ? "" : op.getMetrics().toString()});
       }
     }

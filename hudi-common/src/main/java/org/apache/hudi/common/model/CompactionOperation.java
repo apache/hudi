@@ -136,7 +136,7 @@ public class CompactionOperation implements Serializable {
   public static CompactionOperation convertFromAvroRecordInstance(HoodieCompactionOperation operation) {
     CompactionOperation op = new CompactionOperation();
     op.baseInstantTime = operation.getBaseInstantTime();
-    op.baseFileName = Option.ofNullable(operation.getBaseFilePath());
+    op.baseFileName = Option.ofNullable(operation.getDataFilePath());
     op.baseFileCommitTime = op.baseFileName.map(p -> FSUtils.getCommitTime(new Path(p).getName()));
     op.deltaFileNames = new ArrayList<>(operation.getDeltaFilePaths());
     op.id = new HoodieFileGroupId(operation.getPartitionPath(), operation.getFileId());

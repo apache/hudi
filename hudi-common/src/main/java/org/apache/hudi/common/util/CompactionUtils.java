@@ -72,7 +72,7 @@ public class CompactionUtils {
     builder.setBaseInstantTime(fileSlice.getBaseInstantTime());
     builder.setDeltaFilePaths(fileSlice.getLogFiles().map(lf -> lf.getPath().getName()).collect(Collectors.toList()));
     if (fileSlice.getBaseFile().isPresent()) {
-      builder.setBaseFilePath(fileSlice.getBaseFile().get().getFileName());
+      builder.setDataFilePath(fileSlice.getBaseFile().get().getFileName());
       builder.setBootstrapFilePath(fileSlice.getBaseFile().get().getBootstrapBaseFile().map(BaseFile::getPath)
           .orElse(null));
     }
@@ -110,7 +110,7 @@ public class CompactionUtils {
     return HoodieCompactionOperation.newBuilder().setFileId(op.getFileId()).setBaseInstantTime(op.getBaseInstantTime())
         .setPartitionPath(op.getPartitionPath())
         .setBootstrapFilePath(op.getBootstrapFilePath().orElse(null))
-        .setBaseFilePath(op.getBaseFileName().isPresent() ? op.getBaseFileName().get() : null)
+        .setDataFilePath(op.getBaseFileName().isPresent() ? op.getBaseFileName().get() : null)
         .setDeltaFilePaths(op.getDeltaFileNames()).setMetrics(op.getMetrics()).build();
   }
 
