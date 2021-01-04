@@ -206,7 +206,7 @@ public class FSUtils {
   public static List<String> getAllFoldersWithPartitionMetaFile(FileSystem fs, String basePathStr) throws IOException {
     // If the basePathStr is a folder within the .hoodie directory then we are listing partitions within an
     // internal table.
-    final boolean isMetadataTable = basePathStr.contains(HoodieTableMetaClient.METAFOLDER_NAME);
+    final boolean isMetadataTable = HoodieTableMetadata.isMetadataTable(basePathStr);
     final Path basePath = new Path(basePathStr);
     final List<String> partitions = new ArrayList<>();
     processFiles(fs, basePathStr, (locatedFileStatus) -> {
