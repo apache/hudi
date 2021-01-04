@@ -79,6 +79,7 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
   @Override
   public void close() {
     stopEmbeddedServerView(true);
+    this.context.setJobStatus("", "");
   }
 
   private synchronized void stopEmbeddedServerView(boolean resetViewStorageConfig) {

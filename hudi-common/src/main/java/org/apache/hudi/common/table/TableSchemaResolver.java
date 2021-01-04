@@ -296,7 +296,7 @@ public class TableSchemaResolver {
   public static boolean isSchemaCompatible(Schema oldSchema, Schema newSchema) {
     if (oldSchema.getType() == newSchema.getType() && newSchema.getType() == Schema.Type.RECORD) {
       // record names must match:
-      if (!SchemaCompatibility.schemaNameEquals(oldSchema, newSchema)) {
+      if (!SchemaCompatibility.schemaNameEquals(newSchema, oldSchema)) {
         return false;
       }
 
@@ -329,9 +329,11 @@ public class TableSchemaResolver {
       // All fields in the newSchema record can be populated from the oldSchema record
       return true;
     } else {
-      // Use the checks implemented by
+      // Use the checks implemented by Avro
+      // newSchema is the schema which will be used to read the records written earlier using oldSchema. Hence, in the
+      // check below, use newSchema as the reader schema and oldSchema as the writer schema.
       org.apache.avro.SchemaCompatibility.SchemaPairCompatibility compatResult =
-          org.apache.avro.SchemaCompatibility.checkReaderWriterCompatibility(oldSchema, newSchema);
+          org.apache.avro.SchemaCompatibility.checkReaderWriterCompatibility(newSchema, oldSchema);
       return compatResult.getType() == org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
     }
   }

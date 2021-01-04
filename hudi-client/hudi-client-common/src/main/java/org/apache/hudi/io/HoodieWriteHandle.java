@@ -45,6 +45,8 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Base class for all write operations logically performed at the file group level.
@@ -56,7 +58,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   protected final Schema writerSchema;
   protected final Schema writerSchemaWithMetafields;
   protected HoodieTimer timer;
-  protected final WriteStatus writeStatus;
+  protected WriteStatus writeStatus;
   protected final String partitionPath;
   protected final String fileId;
   protected final String writeToken;
@@ -167,9 +169,15 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
     return HoodieAvroUtils.rewriteRecord(record, writerSchemaWithMetafields);
   }
 
-  public abstract WriteStatus close();
+  public abstract List<WriteStatus> close();
 
-  public abstract WriteStatus getWriteStatus();
+  public List<WriteStatus> writeStatuses() {
+    return Collections.singletonList(writeStatus);
+  }
+
+  public String getPartitionPath() {
+    return partitionPath;
+  }
 
   public abstract IOType getIOType();
 

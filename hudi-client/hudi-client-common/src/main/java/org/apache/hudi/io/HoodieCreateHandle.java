@@ -44,7 +44,9 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
@@ -163,11 +165,6 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
   }
 
   @Override
-  public WriteStatus getWriteStatus() {
-    return writeStatus;
-  }
-
-  @Override
   public IOType getIOType() {
     return IOType.CREATE;
   }
@@ -176,9 +173,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
    * Performs actions to durably, persist the current changes and returns a WriteStatus object.
    */
   @Override
-  public WriteStatus close() {
-    LOG
-        .info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
+  public List<WriteStatus> close() {
+    LOG.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
     try {
 
       fileWriter.close();
@@ -203,7 +199,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
       LOG.info(String.format("CreateHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
           stat.getFileId(), runtimeStats.getTotalCreateTime()));
 
-      return writeStatus;
+      return Collections.singletonList(writeStatus);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to close the Insert Handle for path " + path, e);
     }

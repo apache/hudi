@@ -22,14 +22,14 @@ import org.apache.hudi.HoodieFlinkStreamer;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.client.common.EngineType;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
@@ -38,7 +38,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,18 +45,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.List;
-import java.util.Properties;
 
 public class StreamerUtil {
 
   private static Logger LOG = LoggerFactory.getLogger(StreamerUtil.class);
-
-  public static Properties getKafkaProps(HoodieFlinkStreamer.Config cfg) {
-    Properties result = new Properties();
-    result.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cfg.kafkaBootstrapServers);
-    result.put(ConsumerConfig.GROUP_ID_CONFIG, cfg.kafkaGroupId);
-    return result;
-  }
 
   public static TypedProperties getProps(HoodieFlinkStreamer.Config cfg) {
     return readConfig(
@@ -134,10 +125,11 @@ public class StreamerUtil {
   public static HoodieWriteConfig getHoodieClientConfig(HoodieFlinkStreamer.Config cfg) {
     FileSystem fs = FSUtils.getFs(cfg.targetBasePath, getHadoopConf());
     HoodieWriteConfig.Builder builder =
-        HoodieWriteConfig.newBuilder().withPath(cfg.targetBasePath).combineInput(cfg.filterDupes, true)
+        HoodieWriteConfig.newBuilder().withEngineType(EngineType.FLINK).withPath(cfg.targetBasePath).combineInput(cfg.filterDupes, true)
             .withCompactionConfig(HoodieCompactionConfig.newBuilder().withPayloadClass(cfg.payloadClassName).build())
+            .withPayloadConfig(HoodiePayloadConfig.newBuilder().withPayloadOrderingField(cfg.sourceOrderingField)
+                .build())
             .forTable(cfg.targetTableName)
-            .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
             .withAutoCommit(false)
             .withProps(readConfig(fs, new Path(cfg.propsFilePath), cfg.configs)
                 .getConfig());

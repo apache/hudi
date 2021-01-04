@@ -92,7 +92,7 @@ public class CsvDFSSource extends RowSource {
   protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr,
       long sourceLimit) {
     Pair<Option<String>, String> selPathsWithMaxModificationTime =
-        pathSelector.getNextFilePathsAndMaxModificationTime(lastCkptStr, sourceLimit);
+        pathSelector.getNextFilePathsAndMaxModificationTime(sparkContext, lastCkptStr, sourceLimit);
     return Pair.of(fromFiles(
         selPathsWithMaxModificationTime.getLeft()), selPathsWithMaxModificationTime.getRight());
   }

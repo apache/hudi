@@ -49,7 +49,7 @@
               <goal>shade</goal>
             </goals>
             <configuration>
-              <createSourcesJar>true</createSourcesJar>
+              <createSourcesJar>${shadeSources}</createSourcesJar>
               <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml
               </dependencyReducedPomLocation>
               <transformers>
@@ -69,7 +69,10 @@
                   <include>org.apache.hudi:hudi-client-common</include>
                   <include>org.apache.hudi:hudi-spark-client</include>
                   <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
+                  <include>org.apache.hudi:hudi-spark-common</include>
                   <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
+                  <include>org.apache.hudi:hudi-spark2_${scala.binary.version}</include>
+                  <include>org.apache.hudi:hudi-spark3_2.12</include>
                   <include>org.apache.hudi:hudi-hive-sync</include>
                   <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
@@ -105,6 +108,7 @@
                   <include>io.prometheus:simpleclient_common</include>
                   <include>com.yammer.metrics:metrics-core</include>
                   <include>org.apache.spark:spark-streaming-kafka-0-10_${scala.binary.version}</include>
+                  <include>org.apache.spark:spark-token-provider-kafka-0-10_${scala.binary.version}</include>
                   <include>org.apache.kafka:kafka_${scala.binary.version}</include>
                   <include>com.101tec:zkclient</include>
                   <include>org.apache.kafka:kafka-clients</include>
@@ -229,7 +233,22 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-spark-common</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark_${scala.binary.version}</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-spark2_${scala.binary.version}</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-spark3_2.12</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>

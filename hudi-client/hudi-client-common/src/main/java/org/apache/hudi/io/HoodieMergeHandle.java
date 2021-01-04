@@ -50,8 +50,10 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -225,7 +227,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       HoodieRecord<T> hoodieRecord = new HoodieRecord<>(keyToNewRecords.get(key));
       try {
         Option<IndexedRecord> combinedAvroRecord =
-            hoodieRecord.getData().combineAndGetUpdateValue(oldRecord, useWriterSchema ? writerSchemaWithMetafields : writerSchema);
+            hoodieRecord.getData().combineAndGetUpdateValue(oldRecord, useWriterSchema ? writerSchemaWithMetafields : writerSchema,
+                config.getPayloadConfig().getProps());
         if (writeUpdateRecord(hoodieRecord, combinedAvroRecord)) {
           /*
            * ONLY WHEN 1) we have an update for this key AND 2) We are able to successfully write the the combined new
@@ -257,7 +260,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   }
 
   @Override
-  public WriteStatus close() {
+  public List<WriteStatus> close() {
     try {
       // write out any pending records (this can happen when inserts are turned into updates)
       Iterator<HoodieRecord<T>> newRecordsItr = (keyToNewRecords instanceof ExternalSpillableMap)
@@ -300,7 +303,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       LOG.info(String.format("MergeHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
           stat.getFileId(), runtimeStats.getTotalUpsertTime()));
 
-      return writeStatus;
+      return Collections.singletonList(writeStatus);
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);
     }
@@ -330,11 +333,6 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
 
   public Path getOldFilePath() {
     return oldFilePath;
-  }
-
-  @Override
-  public WriteStatus getWriteStatus() {
-    return writeStatus;
   }
 
   @Override

@@ -106,7 +106,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
       } else {
         return this.writer;
       }
-    } catch (InterruptedException | IOException e) {
+    } catch (IOException e) {
       throw new HoodieException("Unable to initialize HoodieLogFormat writer", e);
     }
   }
@@ -335,7 +335,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
       Map<HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, wrapperSchema.toString());
       HoodieAvroDataBlock block = new HoodieAvroDataBlock(records, header);
-      this.writer = writer.appendBlock(block);
+      writer.appendBlock(block);
       records.clear();
     }
   }

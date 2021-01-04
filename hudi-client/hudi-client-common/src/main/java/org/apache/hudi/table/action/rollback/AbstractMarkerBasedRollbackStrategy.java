@@ -108,7 +108,7 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
       // generate metadata
       Map<HoodieLogBlock.HeaderMetadataType, String> header = RollbackUtils.generateHeader(instantToRollback.getTimestamp(), instantTime);
       // if update belongs to an existing log file
-      writer = writer.appendBlock(new HoodieCommandBlock(header));
+      writer.appendBlock(new HoodieCommandBlock(header));
     } finally {
       try {
         if (writer != null) {

@@ -25,7 +25,7 @@ import org.apache.hudi.client.common.function.SerializablePairFunction;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.util.Option;
 
-import scala.Tuple2;
+import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.List;
 import java.util.Map;
@@ -42,6 +42,10 @@ import static org.apache.hudi.client.common.function.FunctionWrapper.throwingMap
  * A java engine implementation of HoodieEngineContext.
  */
 public class HoodieJavaEngineContext extends HoodieEngineContext {
+
+  public HoodieJavaEngineContext(Configuration conf) {
+    this(conf, new JavaTaskContextSupplier());
+  }
 
   public HoodieJavaEngineContext(Configuration conf, TaskContextSupplier taskContextSupplier) {
     super(new SerializableConfiguration(conf), taskContextSupplier);
@@ -65,7 +69,7 @@ public class HoodieJavaEngineContext extends HoodieEngineContext {
   @Override
   public <I, K, V> Map<K, V> mapToPair(List<I> data, SerializablePairFunction<I, K, V> func, Integer parallelism) {
     return data.stream().map(throwingMapToPairWrapper(func)).collect(
-        Collectors.toMap(Tuple2::_1, Tuple2::_2, (oldVal, newVal) -> newVal)
+        Collectors.toMap(Pair::getLeft, Pair::getRight, (oldVal, newVal) -> newVal)
     );
   }
 

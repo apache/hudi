@@ -18,13 +18,6 @@
 
 package org.apache.hudi.integ.testsuite;
 
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
-import java.io.IOException;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
@@ -35,23 +28,30 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.integ.testsuite.dag.DagUtils;
 import org.apache.hudi.integ.testsuite.dag.WorkflowDag;
 import org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator;
+import org.apache.hudi.integ.testsuite.dag.WriterContext;
 import org.apache.hudi.integ.testsuite.dag.scheduler.DagScheduler;
 import org.apache.hudi.integ.testsuite.reader.DeltaInputType;
 import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
-import org.apache.hudi.integ.testsuite.dag.WriterContext;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
-import org.apache.hudi.utilities.schema.SchemaProvider;
+
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+
 /**
- * This is the entry point for running a Hudi Test Suite. Although this class has similarities with
- * {@link HoodieDeltaStreamer} this class does not extend it since do not want to create a dependency on the changes in
- * DeltaStreamer.
+ * This is the entry point for running a Hudi Test Suite. Although this class has similarities with {@link HoodieDeltaStreamer} this class does not extend it since do not want to create a dependency
+ * on the changes in DeltaStreamer.
  */
 public class HoodieTestSuiteJob {
 
@@ -133,10 +133,10 @@ public class HoodieTestSuiteJob {
 
   public WorkflowDag createWorkflowDag() throws IOException {
     WorkflowDag workflowDag = this.cfg.workloadYamlPath == null ? ((WorkflowDagGenerator) ReflectionUtils
-      .loadClass((this.cfg).workloadDagGenerator)).build()
-      : DagUtils.convertYamlPathToDag(
-          FSUtils.getFs(this.cfg.workloadYamlPath, jsc.hadoopConfiguration(), true),
-          this.cfg.workloadYamlPath);
+        .loadClass((this.cfg).workloadDagGenerator)).build()
+        : DagUtils.convertYamlPathToDag(
+            FSUtils.getFs(this.cfg.workloadYamlPath, jsc.hadoopConfiguration(), true),
+            this.cfg.workloadYamlPath);
     return workflowDag;
   }
 
@@ -147,7 +147,7 @@ public class HoodieTestSuiteJob {
       long startTime = System.currentTimeMillis();
       WriterContext writerContext = new WriterContext(jsc, props, cfg, keyGenerator, sparkSession);
       writerContext.initContext(jsc);
-      DagScheduler dagScheduler = new DagScheduler(workflowDag, writerContext);
+      DagScheduler dagScheduler = new DagScheduler(workflowDag, writerContext, jsc);
       dagScheduler.schedule();
       log.info("Finished scheduling all tasks, Time taken {}", System.currentTimeMillis() - startTime);
     } catch (Exception e) {

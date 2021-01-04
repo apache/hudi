@@ -113,7 +113,7 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
               partitionPath.append(new TimestampBasedKeyGenerator(config, partitionPathField).getPartitionPath(row.get()));
             }
           } catch (IOException ioe) {
-            throw new HoodieKeyGeneratorException("Unable to initialise TimestampBasedKeyGenerator class");
+            throw new HoodieKeyGeneratorException("Unable to initialise TimestampBasedKeyGenerator class", ioe);
           }
           break;
         default:

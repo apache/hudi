@@ -46,9 +46,9 @@ public class FilebasedSchemaProvider extends SchemaProvider {
 
   private final FileSystem fs;
 
-  private final Schema sourceSchema;
+  protected Schema sourceSchema;
 
-  private Schema targetSchema;
+  protected Schema targetSchema;
 
   public FilebasedSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);

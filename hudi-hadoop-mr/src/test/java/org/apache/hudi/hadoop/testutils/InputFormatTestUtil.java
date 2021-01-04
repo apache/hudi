@@ -215,7 +215,7 @@ public class InputFormatTestUtil {
                                                      String newCommit, String rolledBackInstant, int logVersion)
       throws InterruptedException, IOException {
     HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionDir.getPath())).withFileId(fileId)
-        .overBaseCommit(baseCommit).withFs(fs).withLogVersion(logVersion).withLogWriteToken("1-0-1")
+        .overBaseCommit(baseCommit).withFs(fs).withLogVersion(logVersion).withRolloverLogWriteToken("1-0-1")
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
     // generate metadata
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
@@ -224,7 +224,7 @@ public class InputFormatTestUtil {
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
         String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
     // if update belongs to an existing log file
-    writer = writer.appendBlock(new HoodieCommandBlock(header));
+    writer.appendBlock(new HoodieCommandBlock(header));
     return writer;
   }
 
@@ -234,7 +234,7 @@ public class InputFormatTestUtil {
       throws InterruptedException, IOException {
     HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder().onParentPath(new Path(partitionDir.getPath()))
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId).withLogVersion(logVersion)
-        .withLogWriteToken("1-0-1").overBaseCommit(baseCommit).withFs(fs).build();
+        .withRolloverLogWriteToken("1-0-1").overBaseCommit(baseCommit).withFs(fs).build();
     List<IndexedRecord> records = new ArrayList<>();
     for (int i = offset; i < offset + numberOfRecords; i++) {
       records.add(SchemaTestUtil.generateAvroRecordFromJson(schema, i, newCommit, "fileid0"));
@@ -244,7 +244,7 @@ public class InputFormatTestUtil {
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, newCommit);
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchema.toString());
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header);
-    writer = writer.appendBlock(dataBlock);
+    writer.appendBlock(dataBlock);
     return writer;
   }
 
@@ -263,7 +263,7 @@ public class InputFormatTestUtil {
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
         String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
     HoodieCommandBlock rollbackBlock = new HoodieCommandBlock(header);
-    writer = writer.appendBlock(rollbackBlock);
+    writer.appendBlock(rollbackBlock);
     return writer;
   }
 

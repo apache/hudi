@@ -304,5 +304,10 @@
         <!-- Checks for simple boolean expressions. -->
         <module name="SimplifyBooleanExpression"/>
 
+        <module name="ImportControl">
+            <property name="file" value="style/import-control.xml"/>
+            <property name="path" value="^.*[\\/]hudi-client[\\/]hudi-client-common[\\/]src[\\/].*$"/>
+        </module>
+
     </module>
 </module>

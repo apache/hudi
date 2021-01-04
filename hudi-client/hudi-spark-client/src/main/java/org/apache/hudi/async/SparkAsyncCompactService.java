@@ -31,6 +31,6 @@ public class SparkAsyncCompactService extends AsyncCompactService {
 
   @Override
   protected AbstractCompactor createCompactor(AbstractHoodieWriteClient client) {
-    return new HoodieSparkCompactor(client);
+    return new HoodieSparkCompactor(client, this.context);
   }
 }

@@ -18,21 +18,24 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.client.common.EngineType;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
+import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import javax.annotation.concurrent.Immutable;
@@ -49,6 +52,7 @@ import java.util.Properties;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+
 /**
  * Class storing configs for the HoodieWriteClient.
  */
@@ -58,6 +62,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final long serialVersionUID = 0L;
 
   public static final String TABLE_NAME = "hoodie.table.name";
+  public static final String PRECOMBINE_FIELD_PROP = "hoodie.datasource.write.precombine.field";
+  public static final String WRITE_PAYLOAD_CLASS = "hoodie.datasource.write.payload.class";
+  public static final String DEFAULT_WRITE_PAYLOAD_CLASS = OverwriteWithLatestAvroPayload.class.getName();
+  public static final String KEYGENERATOR_CLASS_PROP = "hoodie.datasource.write.keygenerator.class";
+  public static final String DEFAULT_KEYGENERATOR_CLASS = SimpleAvroKeyGenerator.class.getName();
   public static final String DEFAULT_ROLLBACK_USING_MARKERS = "false";
   public static final String ROLLBACK_USING_MARKERS = "hoodie.rollback.using.markers";
   public static final String TIMELINE_LAYOUT_VERSION = "hoodie.timeline.layout.version";
@@ -69,6 +78,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static final String INSERT_PARALLELISM = "hoodie.insert.shuffle.parallelism";
   public static final String BULKINSERT_PARALLELISM = "hoodie.bulkinsert.shuffle.parallelism";
   public static final String BULKINSERT_USER_DEFINED_PARTITIONER_CLASS = "hoodie.bulkinsert.user.defined.partitioner.class";
+  public static final String BULKINSERT_INPUT_DATA_SCHEMA_DDL = "hoodie.bulkinsert.schema.ddl";
   public static final String UPSERT_PARALLELISM = "hoodie.upsert.shuffle.parallelism";
   public static final String DELETE_PARALLELISM = "hoodie.delete.shuffle.parallelism";
   public static final String DEFAULT_ROLLBACK_PARALLELISM = "100";
@@ -124,10 +134,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   /**
    * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
    * multiple write operations (upsert/buk-insert/...) to be executed within a single commit.
-   *
+   * <p>
    * Given Hudi commit protocol, these are generally unsafe operations and user need to handle failure scenarios. It
    * only works with COW table. Hudi 0.5.x had stopped this behavior.
-   *
+   * <p>
    * Given the importance of supporting such cases for the user's migration to 0.5.x, we are proposing a safety flag
    * (disabled by default) which will allow this old behavior.
    */
@@ -144,14 +154,26 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   // We keep track of original config and rewritten config
   private final FileSystemViewStorageConfig clientSpecifiedViewStorageConfig;
   private FileSystemViewStorageConfig viewStorageConfig;
+  private HoodiePayloadConfig hoodiePayloadConfig;
 
+  private EngineType engineType;
+
+  /**
+   * Use Spark engine by default.
+   */
   protected HoodieWriteConfig(Properties props) {
+    this(EngineType.SPARK, props);
+  }
+
+  protected HoodieWriteConfig(EngineType engineType, Properties props) {
     super(props);
     Properties newProps = new Properties();
     newProps.putAll(props);
+    this.engineType = engineType;
     this.consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().fromProperties(newProps).build();
     this.clientSpecifiedViewStorageConfig = FileSystemViewStorageConfig.newBuilder().fromProperties(newProps).build();
     this.viewStorageConfig = clientSpecifiedViewStorageConfig;
+    this.hoodiePayloadConfig = HoodiePayloadConfig.newBuilder().fromProperties(newProps).build();
   }
 
   public static HoodieWriteConfig.Builder newBuilder() {
@@ -179,6 +201,18 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public String getTableName() {
     return props.getProperty(TABLE_NAME);
+  }
+
+  public String getPreCombineField() {
+    return props.getProperty(PRECOMBINE_FIELD_PROP);
+  }
+
+  public String getWritePayloadClass() {
+    return props.getProperty(WRITE_PAYLOAD_CLASS);
+  }
+
+  public String getKeyGeneratorClass() {
+    return props.getProperty(KEYGENERATOR_CLASS_PROP);
   }
 
   public Boolean shouldAutoCommit() {
@@ -290,6 +324,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(MERGE_DATA_VALIDATION_CHECK_ENABLED));
   }
 
+  public EngineType getEngineType() {
+    return engineType;
+  }
+
   /**
    * compaction properties.
    */
@@ -373,6 +411,23 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.valueOf(props.getProperty(HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLED_PROP));
   }
 
+  public boolean isInlineClustering() {
+    return Boolean.parseBoolean(props.getProperty(HoodieClusteringConfig.INLINE_CLUSTERING_PROP));
+  }
+
+  public boolean isAsyncClusteringEnabled() {
+    return Boolean.parseBoolean(props.getProperty(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE_OPT_KEY));
+  }
+
+  public boolean isClusteringEnabled() {
+    // TODO: future support async clustering
+    return isInlineClustering() || isAsyncClusteringEnabled();
+  }
+
+  public int getInlineClusterMaxCommits() {
+    return Integer.parseInt(props.getProperty(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMIT_PROP));
+  }
+
   public String getPayloadClass() {
     return props.getProperty(HoodieCompactionConfig.PAYLOAD_CLASS_PROP);
   }
@@ -387,6 +442,45 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public Boolean shouldCleanBootstrapBaseFile() {
     return Boolean.valueOf(props.getProperty(HoodieCompactionConfig.CLEANER_BOOTSTRAP_BASE_FILE_ENABLED));
+  }
+
+  public String getClusteringUpdatesStrategyClass() {
+    return props.getProperty(HoodieClusteringConfig.CLUSTERING_UPDATES_STRATEGY_PROP);
+  }
+
+  /**
+   * Clustering properties.
+   */
+  public String getClusteringPlanStrategyClass() {
+    return props.getProperty(HoodieClusteringConfig.CLUSTERING_PLAN_STRATEGY_CLASS);
+  }
+
+  public String getClusteringExecutionStrategyClass() {
+    return props.getProperty(HoodieClusteringConfig.CLUSTERING_EXECUTION_STRATEGY_CLASS);
+  }
+
+  public long getClusteringMaxBytesInGroup() {
+    return Long.parseLong(props.getProperty(HoodieClusteringConfig.CLUSTERING_MAX_BYTES_PER_GROUP));
+  }
+  
+  public long getClusteringSmallFileLimit() {
+    return Long.parseLong(props.getProperty(HoodieClusteringConfig.CLUSTERING_PLAN_SMALL_FILE_LIMIT));
+  }
+
+  public int getClusteringMaxNumGroups() {
+    return Integer.parseInt(props.getProperty(HoodieClusteringConfig.CLUSTERING_MAX_NUM_GROUPS));
+  }
+
+  public long getClusteringTargetFileMaxBytes() {
+    return Long.parseLong(props.getProperty(HoodieClusteringConfig.CLUSTERING_TARGET_FILE_MAX_BYTES));
+  }
+
+  public int getTargetPartitionsForClustering() {
+    return Integer.parseInt(props.getProperty(HoodieClusteringConfig.CLUSTERING_TARGET_PARTITIONS));
+  }
+  
+  public String getClusteringSortColumns() {
+    return props.getProperty(HoodieClusteringConfig.CLUSTERING_SORT_COLUMNS_PROPERTY);
   }
 
   /**
@@ -729,6 +823,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return clientSpecifiedViewStorageConfig;
   }
 
+  public HoodiePayloadConfig getPayloadConfig() {
+    return hoodiePayloadConfig;
+  }
+
   /**
    * Commit call back configs.
    */
@@ -779,15 +877,23 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static class Builder {
 
     protected final Properties props = new Properties();
+    protected EngineType engineType = EngineType.SPARK;
     private boolean isIndexConfigSet = false;
     private boolean isStorageConfigSet = false;
     private boolean isCompactionConfigSet = false;
+    private boolean isClusteringConfigSet = false;
     private boolean isMetricsConfigSet = false;
     private boolean isBootstrapConfigSet = false;
     private boolean isMemoryConfigSet = false;
     private boolean isViewConfigSet = false;
     private boolean isConsistencyGuardSet = false;
     private boolean isCallbackConfigSet = false;
+    private boolean isPayloadConfigSet = false;
+
+    public Builder withEngineType(EngineType engineType) {
+      this.engineType = engineType;
+      return this;
+    }
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
@@ -827,6 +933,21 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
     public Builder forTable(String tableName) {
       props.setProperty(TABLE_NAME, tableName);
+      return this;
+    }
+
+    public Builder withPreCombineField(String preCombineField) {
+      props.setProperty(PRECOMBINE_FIELD_PROP, preCombineField);
+      return this;
+    }
+
+    public Builder withWritePayLoad(String payload) {
+      props.setProperty(WRITE_PAYLOAD_CLASS, payload);
+      return this;
+    }
+
+    public Builder withKeyGenerator(String keyGeneratorClass) {
+      props.setProperty(KEYGENERATOR_CLASS_PROP, keyGeneratorClass);
       return this;
     }
 
@@ -905,6 +1026,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withClusteringConfig(HoodieClusteringConfig clusteringConfig) {
+      props.putAll(clusteringConfig.getProps());
+      isClusteringConfigSet = true;
+      return this;
+    }
+
     public Builder withMetricsConfig(HoodieMetricsConfig metricsConfig) {
       props.putAll(metricsConfig.getProps());
       isMetricsConfigSet = true;
@@ -920,6 +1047,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     public Builder withBootstrapConfig(HoodieBootstrapConfig bootstrapConfig) {
       props.putAll(bootstrapConfig.getProps());
       isBootstrapConfigSet = true;
+      return this;
+    }
+
+    public Builder withPayloadConfig(HoodiePayloadConfig payloadConfig) {
+      props.putAll(payloadConfig.getProps());
+      isPayloadConfigSet = true;
       return this;
     }
 
@@ -1010,6 +1143,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaultOnCondition(props, !props.containsKey(DELETE_PARALLELISM), DELETE_PARALLELISM, DEFAULT_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(ROLLBACK_PARALLELISM), ROLLBACK_PARALLELISM,
           DEFAULT_ROLLBACK_PARALLELISM);
+      setDefaultOnCondition(props, !props.containsKey(KEYGENERATOR_CLASS_PROP),
+          KEYGENERATOR_CLASS_PROP, DEFAULT_KEYGENERATOR_CLASS);
+      setDefaultOnCondition(props, !props.containsKey(WRITE_PAYLOAD_CLASS),
+          WRITE_PAYLOAD_CLASS, DEFAULT_WRITE_PAYLOAD_CLASS);
       setDefaultOnCondition(props, !props.containsKey(ROLLBACK_USING_MARKERS), ROLLBACK_USING_MARKERS,
           DEFAULT_ROLLBACK_USING_MARKERS);
       setDefaultOnCondition(props, !props.containsKey(COMBINE_BEFORE_INSERT_PROP), COMBINE_BEFORE_INSERT_PROP,
@@ -1049,10 +1186,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           MERGE_DATA_VALIDATION_CHECK_ENABLED, DEFAULT_MERGE_DATA_VALIDATION_CHECK_ENABLED);
 
       // Make sure the props is propagated
-      setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().withEngineType(engineType).fromProperties(props).build());
       setDefaultOnCondition(props, !isStorageConfigSet, HoodieStorageConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isCompactionConfigSet,
           HoodieCompactionConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isClusteringConfigSet,
+          HoodieClusteringConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isMetricsConfigSet, HoodieMetricsConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isBootstrapConfigSet,
           HoodieBootstrapConfig.newBuilder().fromProperties(props).build());
@@ -1063,6 +1202,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           ConsistencyGuardConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isCallbackConfigSet,
           HoodieWriteCommitCallbackConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isPayloadConfigSet,
+          HoodiePayloadConfig.newBuilder().fromProperties(props).build());
 
       setDefaultOnCondition(props, !props.containsKey(EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION),
           EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION, DEFAULT_EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION);
@@ -1081,7 +1222,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       setDefaults();
       validate();
       // Build WriteConfig at the end
-      HoodieWriteConfig config = new HoodieWriteConfig(props);
+      HoodieWriteConfig config = new HoodieWriteConfig(engineType, props);
       return config;
     }
   }
