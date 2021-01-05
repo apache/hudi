@@ -83,7 +83,7 @@ inputDF.write()
   <span style="color:grey">如果设置为true，则生成基于Hive格式的partition目录：<partition_column_name>=<partition_value></span>
 
 #### KEYGENERATOR_CLASS_OPT_KEY {#KEYGENERATOR_CLASS_OPT_KEY}
-  属性：`hoodie.datasource.write.keygenerator.class`, 默认值：`org.apache.hudi.SimpleKeyGenerator` <br/>
+  属性：`hoodie.datasource.write.keygenerator.class`, 默认值：`org.apache.hudi.keygen.SimpleKeyGenerator` <br/>
   <span style="color:grey">键生成器类，实现从输入的`Row`对象中提取键</span>
   
 #### COMMIT_METADATA_KEYPREFIX_OPT_KEY {#COMMIT_METADATA_KEYPREFIX_OPT_KEY}
