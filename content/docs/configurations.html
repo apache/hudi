@@ -459,7 +459,7 @@ Actual value ontained by invoking .toString()</span></p>
   <span style="color:grey">When set to true, partition folder names follow the format of Hive partitions: <partition_column_name>=<partition_value>&lt;/span&gt;</partition_value></partition_column_name></span></p>
 
 <h4 id="KEYGENERATOR_CLASS_OPT_KEY">KEYGENERATOR_CLASS_OPT_KEY</h4>
-<p>Property: <code class="highlighter-rouge">hoodie.datasource.write.keygenerator.class</code>, Default: <code class="highlighter-rouge">org.apache.hudi.SimpleKeyGenerator</code> <br />
+<p>Property: <code class="highlighter-rouge">hoodie.datasource.write.keygenerator.class</code>, Default: <code class="highlighter-rouge">org.apache.hudi.keygen.SimpleKeyGenerator</code> <br />
   <span style="color:grey">Key generator class, that implements will extract the key out of incoming <code class="highlighter-rouge">Row</code> object</span></p>
 
 <h4 id="COMMIT_METADATA_KEYPREFIX_OPT_KEY">COMMIT_METADATA_KEYPREFIX_OPT_KEY</h4>
