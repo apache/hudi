@@ -99,7 +99,7 @@ import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_REC
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 
 /**
- * Sync's one batch of data to hoodie table.
+ * Sync's  one batch of data to hoodie table.
  */
 public class DeltaSync implements Serializable {
 
