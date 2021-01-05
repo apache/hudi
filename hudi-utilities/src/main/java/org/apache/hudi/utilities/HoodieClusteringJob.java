@@ -30,10 +30,12 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.jetbrains.annotations.TestOnly;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -68,7 +70,8 @@ public class HoodieClusteringJob {
     public String basePath = null;
     @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
     public String tableName = null;
-    @Parameter(names = {"--instant-time", "-it"}, description = "Clustering Instant time", required = true)
+    @Parameter(names = {"--instant-time", "-it"}, description = "Clustering Instant time, only need when cluster. "
+        + "And schedule clustering can generate it.", required = false)
     public String clusteringInstantTime = null;
     @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert", required = false)
     public int parallelism = 1;
@@ -97,15 +100,15 @@ public class HoodieClusteringJob {
   public static void main(String[] args) {
     final Config cfg = new Config();
     JCommander cmd = new JCommander(cfg, null, args);
-    if (cfg.help || args.length == 0) {
+    if (cfg.help || args.length == 0 || (!cfg.runSchedule && cfg.clusteringInstantTime == null)) {
       cmd.usage();
       System.exit(1);
     }
     final JavaSparkContext jsc = UtilHelpers.buildSparkContext("clustering-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
     HoodieClusteringJob clusteringJob = new HoodieClusteringJob(jsc, cfg);
     int result = clusteringJob.cluster(cfg.retry);
-    String resultMsg = String.format("Clustering with basePath: %s, tableName: %s, runSchedule: %s, clusteringInstantTime: %s",
-        cfg.basePath, cfg.tableName, cfg.runSchedule, cfg.clusteringInstantTime);
+    String resultMsg = String.format("Clustering with basePath: %s, tableName: %s, runSchedule: %s",
+        cfg.basePath, cfg.tableName, cfg.runSchedule);
     if (result == -1) {
       LOG.error(resultMsg + " failed");
     } else {
@@ -116,26 +119,29 @@ public class HoodieClusteringJob {
 
   public int cluster(int retry) {
     this.fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
-    int ret = -1;
-    try {
-      do {
-        if (cfg.runSchedule) {
-          LOG.info("Do schedule");
-          ret = doSchedule(jsc);
-        } else {
-          LOG.info("Do cluster");
-          ret = doCluster(jsc);
+    int ret = UtilHelpers.retry(retry, () -> {
+      if (cfg.runSchedule) {
+        LOG.info("Do schedule");
+        Option<String> instantTime = doSchedule(jsc);
+        int result = instantTime.isPresent() ? 0 : -1;
+        if (result == 0) {
+          LOG.info("The schedule instant time is " + instantTime.get());
         }
-      } while (ret != 0 && retry-- > 0);
-    } catch (Throwable t) {
-      LOG.error("Cluster failed", t);
-    }
+        return result;
+      } else {
+        LOG.info("Do cluster");
+        return doCluster(jsc);
+      }
+    }, "Cluster failed");
     return ret;
   }
 
   private String getSchemaFromLatestInstant() throws Exception {
     HoodieTableMetaClient metaClient =  new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.basePath, true);
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
+    if (metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
+      throw new HoodieException("Cannot run clustering without any completed commits");
+    }
     Schema schema = schemaUtil.getTableAvroSchema(false);
     return schema.toString();
   }
@@ -149,11 +155,16 @@ public class HoodieClusteringJob {
     return UtilHelpers.handleErrors(jsc, cfg.clusteringInstantTime, writeResponse);
   }
 
-  private int doSchedule(JavaSparkContext jsc) throws Exception {
+  @TestOnly
+  public Option<String> doSchedule() throws Exception {
+    return this.doSchedule(jsc);
+  }
+
+  private Option<String> doSchedule(JavaSparkContext jsc) throws Exception {
     String schemaStr = getSchemaFromLatestInstant();
     SparkRDDWriteClient client =
         UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props);
-    return client.scheduleClusteringAtInstant(cfg.clusteringInstantTime, Option.empty()) ? 0 : -1;
+    return client.scheduleClustering(Option.empty());
   }
 
 }

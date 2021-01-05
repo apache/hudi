@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -88,7 +87,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Date;
 import java.util.List;
 import java.util.Properties;
 import java.util.Random;
@@ -691,6 +689,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       LOG.info("PendingReplaceSize=" + pendingReplaceSize + ",completeReplaceSize = " + completeReplaceSize);
       return completeReplaceSize > 0;
     });
+    HoodieTableMetaClient metaClient =  new HoodieTableMetaClient(this.dfs.getConf(), tableBasePath, true);
+    assertEquals(1, metaClient.getActiveTimeline().getCompletedReplaceTimeline().getInstants().toArray().length);
   }
 
   private HoodieClusteringJob.Config buildHoodieClusteringUtilConfig(String basePath,
@@ -710,7 +710,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     int totalRecords = 3000;
 
     // Initial bulk insert
-    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT);
     cfg.continuousMode = true;
     cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
     cfg.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
@@ -719,18 +719,20 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamerTestRunner(ds, cfg, (r) -> {
       TestHelpers.assertAtLeastNCommits(2, tableBasePath, dfs);
-      // for not confiict with delta streamer commit, just add 3600s
-      String clusterInstantTime = HoodieActiveTimeline.COMMIT_FORMATTER
-          .format(new Date(System.currentTimeMillis() + 3600 * 1000));
-      LOG.info("Cluster instant time " + clusterInstantTime);
       HoodieClusteringJob.Config scheduleClusteringConfig = buildHoodieClusteringUtilConfig(tableBasePath,
-          clusterInstantTime, true);
+          null, true);
       HoodieClusteringJob scheduleClusteringJob = new HoodieClusteringJob(jsc, scheduleClusteringConfig);
-      int scheduleClusteringResult = scheduleClusteringJob.cluster(scheduleClusteringConfig.retry);
-      if (scheduleClusteringResult == 0) {
-        LOG.info("Schedule clustering success, now cluster");
+      Option<String> scheduleClusteringInstantTime = Option.empty();
+      try {
+        scheduleClusteringInstantTime = scheduleClusteringJob.doSchedule();
+      } catch (Exception e) {
+        LOG.warn("Schedule clustering failed", e);
+        return false;
+      }
+      if (scheduleClusteringInstantTime.isPresent()) {
+        LOG.info("Schedule clustering success, now cluster with instant time " + scheduleClusteringInstantTime.get());
         HoodieClusteringJob.Config clusterClusteringConfig = buildHoodieClusteringUtilConfig(tableBasePath,
-            clusterInstantTime, false);
+            scheduleClusteringInstantTime.get(), false);
         HoodieClusteringJob clusterClusteringJob = new HoodieClusteringJob(jsc, clusterClusteringConfig);
         clusterClusteringJob.cluster(clusterClusteringConfig.retry);
         LOG.info("Cluster success");
@@ -743,6 +745,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       System.out.println("PendingReplaceSize=" + pendingReplaceSize + ",completeReplaceSize = " + completeReplaceSize);
       return completeReplaceSize > 0;
     });
+    HoodieTableMetaClient metaClient =  new HoodieTableMetaClient(this.dfs.getConf(), tableBasePath, true);
+    assertEquals(1, metaClient.getActiveTimeline().getCompletedReplaceTimeline().getInstants().toArray().length);
   }
 
   /**
