@@ -110,9 +110,10 @@
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.0.0</spark3.version>
     <avro.version>1.8.2</avro.version>
-    <scala.version>2.11.12</scala.version>
+    <scala-11.version>2.11.12</scala-11.version>
+    <scala-12.version>2.12.10</scala-12.version>
+    <scala.version>${scala-11.version}</scala.version>
     <scala.binary.version>2.11</scala.binary.version>
-    <scala12.version>2.12.10</scala12.version>
     <apache-rat-plugin.version>0.12</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
     <scalatest.version>3.0.1</scalatest.version>
@@ -140,6 +141,7 @@
     <presto.bundle.bootstrap.scope>compile</presto.bundle.bootstrap.scope>
     <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>
     <shadeSources>true</shadeSources>
+    <skip.hudi-spark2.unit.tests>false</skip.hudi-spark2.unit.tests>
   </properties>
 
   <scm>
@@ -1314,7 +1316,7 @@
     <profile>
       <id>scala-2.12</id>
       <properties>
-        <scala.version>${scala12.version}</scala.version>
+        <scala.version>${scala-12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
       </properties>
       <activation>
@@ -1354,13 +1356,14 @@
       <id>spark3</id>
       <properties>
         <spark.version>${spark3.version}</spark.version>
-        <scala.version>${scala12.version}</scala.version>
+        <scala.version>${scala-12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
         <kafka.version>2.4.1</kafka.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
+        <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
       </properties>
       <activation>
         <property>
