@@ -432,10 +432,12 @@ public class HoodieAvroUtils {
 
     if (returnNullIfNotFound) {
       return null;
-    } else {
+    } else if (valueNode.getSchema().getField(parts[i]) == null) {
       throw new HoodieException(
           fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
               + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
+    } else {
+      throw new HoodieException("The value of " + parts[i] + " can not be null");
     }
   }
 
