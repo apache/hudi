@@ -210,6 +210,14 @@ public class HiveTestUtil {
     createCommitFile(commitMetadata, instantTime);
   }
 
+  public static void addCOWPartition(String partitionPath, boolean isParquetSchemaSimple,
+      boolean useSchemaFromCommitMetadata, String instantTime) throws IOException, URISyntaxException {
+    HoodieCommitMetadata commitMetadata =
+        createPartition(partitionPath, isParquetSchemaSimple, useSchemaFromCommitMetadata, instantTime);
+    createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName);
+    createCommitFile(commitMetadata, instantTime);
+  }
+
   public static void addMORPartitions(int numberOfPartitions, boolean isParquetSchemaSimple, boolean isLogSchemaSimple,
       boolean useSchemaFromCommitMetadata, DateTime startFrom, String instantTime, String deltaCommitTime)
       throws IOException, URISyntaxException, InterruptedException {
@@ -262,6 +270,18 @@ public class HiveTestUtil {
       startFrom = startFrom.minusDays(1);
       writeStats.forEach(s -> commitMetadata.addWriteStat(partitionPath, s));
     }
+    addSchemaToCommitMetadata(commitMetadata, isParquetSchemaSimple, useSchemaFromCommitMetadata);
+    return commitMetadata;
+  }
+
+  private static HoodieCommitMetadata createPartition(String partitionPath, boolean isParquetSchemaSimple,
+      boolean useSchemaFromCommitMetadata, String instantTime) throws IOException, URISyntaxException {
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    Path partPath = new Path(hiveSyncConfig.basePath + "/" + partitionPath);
+    fileSystem.makeQualified(partPath);
+    fileSystem.mkdirs(partPath);
+    List<HoodieWriteStat> writeStats = createTestData(partPath, isParquetSchemaSimple, instantTime);
+    writeStats.forEach(s -> commitMetadata.addWriteStat(partitionPath, s));
     addSchemaToCommitMetadata(commitMetadata, isParquetSchemaSimple, useSchemaFromCommitMetadata);
     return commitMetadata;
   }
