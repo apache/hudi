@@ -22,7 +22,7 @@ import org.apache.hudi.HoodieFlinkStreamer;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.client.common.EngineType;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;

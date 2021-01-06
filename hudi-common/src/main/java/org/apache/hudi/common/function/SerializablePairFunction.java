@@ -16,16 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.common.function;
+package org.apache.hudi.common.function;
+
+import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.Serializable;
 
 /**
- * A wrapped {@link java.util.function.Consumer} which can be serialized.
- *
- * @param <I> input type
+ * A function that returns key-value pairs (Tuple2&lt;K, V&gt;).
  */
 @FunctionalInterface
-public interface SerializableConsumer<I> extends Serializable {
-  void accept(I t) throws Exception;
+public interface SerializablePairFunction<I, K, V> extends Serializable {
+  Pair<K, V> call(I t) throws Exception;
 }

@@ -19,7 +19,7 @@
 
 package org.apache.hudi.testutils.providers;
 
-import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 
 public interface HoodieEngineContextProvider {
   HoodieEngineContext context();

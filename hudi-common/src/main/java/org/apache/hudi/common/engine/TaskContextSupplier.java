@@ -16,17 +16,23 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.common.function;
+package org.apache.hudi.common.engine;
+
+import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
+import java.util.function.Supplier;
 
 /**
- * A wrapped {@link java.util.function.Function} which can be serialized.
- *
- * @param <I> input data type
- * @param <O> output data type
+ * Base task context supplier.
  */
-@FunctionalInterface
-public interface SerializableFunction<I, O> extends Serializable {
-  O apply(I v1) throws Exception;
+public abstract class TaskContextSupplier implements Serializable {
+
+  public abstract Supplier<Integer> getPartitionIdSupplier();
+
+  public abstract Supplier<Integer> getStageIdSupplier();
+
+  public abstract Supplier<Long> getAttemptIdSupplier();
+
+  public abstract Option<String> getProperty(EngineProperty prop);
 }
