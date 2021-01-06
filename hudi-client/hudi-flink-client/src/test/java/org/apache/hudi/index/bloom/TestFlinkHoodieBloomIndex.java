@@ -36,9 +36,9 @@ import static java.util.Arrays.asList;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.*;
 
-public class TestHoodieFlinkBloomIndex extends org.apache.hudi.testutils.HoodieFlinkClientTestHarness {
+public class TestFlinkHoodieBloomIndex extends org.apache.hudi.testutils.FlinkHoodieClientTestHarness {
 
-  private static final org.apache.avro.Schema SCHEMA = getSchemaFromResource(TestHoodieFlinkBloomIndex.class, "/exampleSchema.avsc", true);
+  private static final org.apache.avro.Schema SCHEMA = getSchemaFromResource(TestFlinkHoodieBloomIndex.class, "/exampleSchema.avsc", true);
   private static final String TEST_NAME_WITH_PARAMS = "[{index}] Test with rangePruning={0}, treeFiltering={1}, bucketizedChecking={2}";
 
   public static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> configParams() {

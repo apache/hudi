@@ -29,9 +29,9 @@ import java.util.Map;
 /**
  * The test harness for resource initialization and cleanup.
  */
-public abstract class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implements java.io.Serializable {
+public abstract class FlinkHoodieClientTestHarness extends HoodieCommonTestHarness implements java.io.Serializable {
 
-  private static final org.apache.log4j.Logger LOG = org.apache.log4j.LogManager.getLogger(org.apache.hudi.testutils.HoodieFlinkClientTestHarness.class);
+  private static final org.apache.log4j.Logger LOG = org.apache.log4j.LogManager.getLogger(org.apache.hudi.testutils.FlinkHoodieClientTestHarness.class);
 
   private String testMethodName;
   protected transient org.apache.hudi.client.common.HoodieFlinkEngineContext context = null;
