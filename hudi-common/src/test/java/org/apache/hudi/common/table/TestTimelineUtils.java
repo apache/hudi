@@ -23,8 +23,10 @@ import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -58,6 +60,43 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     initMetaClient();
   }
 
+  @Test
+  public void testGetPartitionsWithReplaceCommits() throws IOException {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    HoodieTimeline activeCommitTimeline = activeTimeline.getCommitTimeline();
+    assertTrue(activeCommitTimeline.empty());
+
+    String ts1 = "1";
+    String replacePartition = "2021/01/01";
+    String newFilePartition = "2021/01/02";
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, ts1);
+    activeTimeline.createNewInstant(instant1);
+    // create replace metadata only with replaced file Ids (no new files created)
+    activeTimeline.saveAsComplete(instant1, 
+        Option.of(getReplaceCommitMetadata(basePath, ts1, replacePartition,2, newFilePartition,0, Collections.emptyMap())));
+    metaClient.reloadActiveTimeline();
+
+    List<String> partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("0", 10));
+    assertEquals(1, partitions.size());
+    assertEquals(replacePartition, partitions.get(0));
+
+    String ts2 = "2";
+    HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, ts2);
+    activeTimeline.createNewInstant(instant2);
+    // create replace metadata only with replaced file Ids (no new files created)
+    activeTimeline.saveAsComplete(instant2,
+        Option.of(getReplaceCommitMetadata(basePath, ts2, replacePartition,0, newFilePartition,3, Collections.emptyMap())));
+    metaClient.reloadActiveTimeline();
+    partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
+    assertEquals(1, partitions.size());
+    assertEquals(newFilePartition, partitions.get(0));
+
+    partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("0", 10));
+    assertEquals(2, partitions.size());
+    assertTrue(partitions.contains(replacePartition));
+    assertTrue(partitions.contains(newFilePartition));
+  }
+  
   @Test
   public void testGetPartitions() throws IOException {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
@@ -218,6 +257,31 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
       stat.setPath(commitTs + "." + i + ".parquet");
       commit.addWriteStat(partition, stat);
     }
+    for (Map.Entry<String, String> extraEntries : extraMetadata.entrySet()) {
+      commit.addMetadata(extraEntries.getKey(), extraEntries.getValue());
+    }
+    return commit.toJsonString().getBytes(StandardCharsets.UTF_8);
+  }
+
+  private byte[] getReplaceCommitMetadata(String basePath, String commitTs, String replacePartition, int replaceCount,
+                                          String newFilePartition, int newFileCount, Map<String, String> extraMetadata)
+      throws IOException {
+    HoodieReplaceCommitMetadata commit = new HoodieReplaceCommitMetadata();
+    for (int i = 1; i <= newFileCount; i++) {
+      HoodieWriteStat stat = new HoodieWriteStat();
+      stat.setFileId(i + "");
+      stat.setPartitionPath(Paths.get(basePath, newFilePartition).toString());
+      stat.setPath(commitTs + "." + i + ".parquet");
+      commit.addWriteStat(newFilePartition, stat);
+    }
+    Map<String, List<String>> partitionToReplaceFileIds = new HashMap<>();
+    if (replaceCount > 0) {
+      partitionToReplaceFileIds.put(replacePartition, new ArrayList<>());
+    }
+    for (int i = 1; i <= replaceCount; i++) {
+      partitionToReplaceFileIds.get(replacePartition).add(FSUtils.createNewFileIdPfx());
+    }
+    commit.setPartitionToReplaceFileIds(partitionToReplaceFileIds);
     for (Map.Entry<String, String> extraEntries : extraMetadata.entrySet()) {
       commit.addMetadata(extraEntries.getKey(), extraEntries.getValue());
     }
