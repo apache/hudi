@@ -30,7 +30,15 @@
         "fields": [
             {"name": "partitionPath", "type": "string"},
             {"name": "successDeleteFiles", "type": {"type": "array", "items": "string"}},
-            {"name": "failedDeleteFiles", "type": {"type": "array", "items": "string"}}
+            {"name": "failedDeleteFiles", "type": {"type": "array", "items": "string"}},
+            {"name": "appendFiles", "type": {
+                "type": "map",
+                "doc": "Files to which append blocks were written",
+                "values": {
+                    "type": "long",
+                    "doc": "Size of this file in bytes"
+                }
+            }}
         ]
      }
      }

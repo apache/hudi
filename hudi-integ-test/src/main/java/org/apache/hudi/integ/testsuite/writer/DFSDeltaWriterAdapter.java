@@ -18,6 +18,8 @@
 
 package org.apache.hudi.integ.testsuite.writer;
 
+import org.apache.hudi.integ.testsuite.schema.SchemaUtils;
+
 import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
@@ -30,22 +32,29 @@ import java.util.List;
  */
 public class DFSDeltaWriterAdapter implements DeltaWriterAdapter<GenericRecord> {
 
-  private DeltaInputWriter deltaInputGenerator;
+  private DeltaInputWriter deltaInputWriter;
   private List<DeltaWriteStats> metrics = new ArrayList<>();
+  private int preCombineFieldVal = 0;
 
-  public DFSDeltaWriterAdapter(DeltaInputWriter<GenericRecord> deltaInputGenerator) {
-    this.deltaInputGenerator = deltaInputGenerator;
+  public DFSDeltaWriterAdapter(DeltaInputWriter<GenericRecord> deltaInputWriter, int preCombineFieldVal) {
+    this.deltaInputWriter = deltaInputWriter;
+    this.preCombineFieldVal = preCombineFieldVal;
+  }
+
+  public DFSDeltaWriterAdapter(DeltaInputWriter<GenericRecord> deltaInputWriter) {
+    this.deltaInputWriter = deltaInputWriter;
   }
 
   @Override
   public List<DeltaWriteStats> write(Iterator<GenericRecord> input) throws IOException {
     while (input.hasNext()) {
       GenericRecord next = input.next();
-      if (this.deltaInputGenerator.canWrite()) {
-        this.deltaInputGenerator.writeData(next);
-      } else if (input.hasNext()) {
+      next.put(SchemaUtils.SOURCE_ORDERING_FIELD, preCombineFieldVal);
+      if (this.deltaInputWriter.canWrite()) {
+        this.deltaInputWriter.writeData(next);
+      } else {
         rollOver();
-        this.deltaInputGenerator.writeData(next);
+        this.deltaInputWriter.writeData(next);
       }
     }
     close();
@@ -54,11 +63,11 @@ public class DFSDeltaWriterAdapter implements DeltaWriterAdapter<GenericRecord> 
 
   public void rollOver() throws IOException {
     close();
-    this.deltaInputGenerator = this.deltaInputGenerator.getNewWriter();
+    this.deltaInputWriter = this.deltaInputWriter.getNewWriter();
   }
 
   private void close() throws IOException {
-    this.deltaInputGenerator.close();
-    this.metrics.add(this.deltaInputGenerator.getDeltaWriteStats());
+    this.deltaInputWriter.close();
+    this.metrics.add(this.deltaInputWriter.getDeltaWriteStats());
   }
 }

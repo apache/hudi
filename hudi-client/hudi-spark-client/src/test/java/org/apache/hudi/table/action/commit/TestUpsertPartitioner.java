@@ -186,6 +186,21 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
   }
 
   @Test
+  public void testUpsertPartitionerWithRecordsPerBucket() throws Exception {
+    final String testPartitionPath = "2016/09/26";
+    // Inserts + Updates... Check all updates go together & inserts subsplit
+    UpsertPartitioner partitioner = getUpsertPartitioner(0, 250, 100, 1024, testPartitionPath, false);
+    List<InsertBucketCumulativeWeightPair> insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
+    int insertSplitSize = partitioner.config.getCopyOnWriteInsertSplitSize();
+    int remainedInsertSize = 250 - 2 * insertSplitSize;
+    // will assigned 3 insertBuckets. 100, 100, 50 each
+    assertEquals(3, insertBuckets.size(), "Total of 3 insert buckets");
+    assertEquals(0.4, insertBuckets.get(0).getLeft().weight, "insert " + insertSplitSize + " records");
+    assertEquals(0.4, insertBuckets.get(1).getLeft().weight, "insert " + insertSplitSize + " records");
+    assertEquals(0.2, insertBuckets.get(2).getLeft().weight, "insert " + remainedInsertSize + " records");
+  }
+
+  @Test
   public void testPartitionWeight() throws Exception {
     final String testPartitionPath = "2016/09/26";
     int totalInsertNum = 2000;
@@ -286,8 +301,8 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
         "Bucket 3 is INSERT");
     assertEquals(4, insertBuckets.size(), "Total of 4 insert buckets");
 
-    weights = new Double[] { 0.08, 0.31, 0.31, 0.31};
-    cumulativeWeights = new Double[] { 0.08, 0.39, 0.69, 1.0};
+    weights = new Double[] { 0.08, 0.42, 0.42, 0.08};
+    cumulativeWeights = new Double[] { 0.08, 0.5, 0.92, 1.0};
     assertInsertBuckets(weights, cumulativeWeights, insertBuckets);
   }
 

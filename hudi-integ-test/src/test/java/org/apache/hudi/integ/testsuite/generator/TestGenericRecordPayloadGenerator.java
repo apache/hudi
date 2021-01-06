@@ -27,6 +27,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -133,4 +134,38 @@ public class TestGenericRecordPayloadGenerator {
     assertTrue(HoodieAvroUtils.avroToBytes(record).length < minPayloadSize + 0.1 * minPayloadSize);
   }
 
+  @Test
+  public void testUpdatePayloadGeneratorWithTimestamp() throws IOException {
+    Schema schema = new Schema.Parser().parse(UtilitiesTestBase.Helpers
+        .readFileFromAbsolutePath(System.getProperty("user.dir") + "/.." + SOURCE_SCHEMA_DOCKER_DEMO_RELATIVE_PATH));
+    GenericRecordFullPayloadGenerator payloadGenerator = new GenericRecordFullPayloadGenerator(schema);
+    List<String> insertRowKeys = new ArrayList<>();
+    List<String> updateRowKeys = new ArrayList<>();
+    List<Long> insertTimeStamps = new ArrayList<>();
+    List<Long> updateTimeStamps = new ArrayList<>();
+    List<GenericRecord> records = new ArrayList<>();
+    Long startMillis = System.currentTimeMillis() - TimeUnit.MILLISECONDS
+        .convert(GenericRecordFullPayloadGenerator.DEFAULT_NUM_DATE_PARTITIONS, TimeUnit.DAYS);
+
+    // Generate 10 new records
+    IntStream.range(0, 10).forEach(a -> {
+      GenericRecord record = payloadGenerator.getNewPayloadWithTimestamp("timestamp");
+      records.add(record);
+      insertRowKeys.add(record.get("_row_key").toString());
+      insertTimeStamps.add((Long) record.get("timestamp"));
+    });
+    Set<String> blacklistFields = new HashSet<>(Arrays.asList("_row_key"));
+    records.stream().forEach(a -> {
+      // Generate 10 updated records
+      GenericRecord record = payloadGenerator.getUpdatePayloadWithTimestamp(a, blacklistFields, "timestamp");
+      updateRowKeys.add(record.get("_row_key").toString());
+      updateTimeStamps.add((Long) record.get("timestamp"));
+    });
+    // The row keys from insert payloads should match all the row keys from the update payloads
+    assertTrue(insertRowKeys.containsAll(updateRowKeys));
+    // The timestamp field for the insert payloads should not all match with the update payloads
+    assertFalse(insertTimeStamps.containsAll(updateTimeStamps));
+    Long currentMillis = System.currentTimeMillis();
+    assertTrue(insertTimeStamps.stream().allMatch(t -> t >= startMillis  && t <= currentMillis));
+  }
 }

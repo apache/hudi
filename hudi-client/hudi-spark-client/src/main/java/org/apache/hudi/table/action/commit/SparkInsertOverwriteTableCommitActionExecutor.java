@@ -36,7 +36,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public class SparkInsertOverwriteTableCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends SparkInsertOverwriteCommitActionExecutor<T> {
@@ -47,17 +46,13 @@ public class SparkInsertOverwriteTableCommitActionExecutor<T extends HoodieRecor
     super(context, config, table, instantTime, inputRecordsRDD, WriteOperationType.INSERT_OVERWRITE_TABLE);
   }
 
-  protected List<String> getAllExistingFileIds(String partitionPath) {
-    return table.getSliceView().getLatestFileSlices(partitionPath)
-        .map(fg -> fg.getFileId()).distinct().collect(Collectors.toList());
-  }
-
   @Override
   protected Map<String, List<String>> getPartitionToReplacedFileIds(JavaRDD<WriteStatus> writeStatuses) {
     Map<String, List<String>> partitionToExistingFileIds = new HashMap<>();
     try {
       List<String> partitionPaths = FSUtils.getAllPartitionPaths(table.getMetaClient().getFs(),
-          table.getMetaClient().getBasePath(), false);
+          table.getMetaClient().getBasePath(), config.useFileListingMetadata(), config.getFileListingMetadataVerify(),
+          false);
       JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
       if (partitionPaths != null && partitionPaths.size() > 0) {
         context.setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of all partitions");
