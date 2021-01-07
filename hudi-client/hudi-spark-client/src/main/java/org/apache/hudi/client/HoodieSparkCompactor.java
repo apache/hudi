@@ -45,7 +45,7 @@ public class HoodieSparkCompactor<T extends HoodieRecordPayload> extends Abstrac
   @Override
   public void compact(HoodieInstant instant) throws IOException {
     LOG.info("Compactor executing compaction " + instant);
-    SparkRDDWriteClient<T> writeClient = (SparkRDDWriteClient<T>)compactionClient;
+    SparkRDDWriteClient<T> writeClient = (SparkRDDWriteClient<T>) compactionClient;
     JavaRDD<WriteStatus> res = writeClient.compact(instant.getTimestamp());
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status");
     long numWriteErrors = res.collect().stream().filter(WriteStatus::hasErrors).count();

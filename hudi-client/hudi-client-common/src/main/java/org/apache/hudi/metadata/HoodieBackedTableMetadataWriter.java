@@ -36,7 +36,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -365,7 +364,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       LOG.info("Syncing " + instantsToSync.size() + " instants to metadata table: " + instantsToSync);
 
       // Read each instant in order and sync it to metadata table
-      final HoodieActiveTimeline timeline = datasetMetaClient.getActiveTimeline();
       for (HoodieInstant instant : instantsToSync) {
         LOG.info("Syncing instant " + instant + " to metadata table");
 
