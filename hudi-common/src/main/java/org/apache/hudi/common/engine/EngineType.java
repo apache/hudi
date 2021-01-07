@@ -16,23 +16,11 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.common;
-
-import org.apache.hudi.common.util.Option;
-
-import java.io.Serializable;
-import java.util.function.Supplier;
+package org.apache.hudi.common.engine;
 
 /**
- * Base task context supplier.
+ * Hoodie data processing engine. support only Apache Spark and Apache Flink for now.
  */
-public abstract class TaskContextSupplier implements Serializable {
-
-  public abstract Supplier<Integer> getPartitionIdSupplier();
-
-  public abstract Supplier<Integer> getStageIdSupplier();
-
-  public abstract Supplier<Long> getAttemptIdSupplier();
-
-  public abstract Option<String> getProperty(EngineProperty prop);
+public enum EngineType {
+  SPARK, FLINK
 }

@@ -18,8 +18,8 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.client.common.EngineProperty;
-import org.apache.hudi.client.common.TaskContextSupplier;
+import org.apache.hudi.common.engine.EngineProperty;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 

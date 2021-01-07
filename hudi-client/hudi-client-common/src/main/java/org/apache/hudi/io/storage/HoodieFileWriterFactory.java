@@ -19,9 +19,9 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.client.common.TaskContextSupplier;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
