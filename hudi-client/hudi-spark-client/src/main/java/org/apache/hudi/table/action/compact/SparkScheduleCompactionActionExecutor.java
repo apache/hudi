@@ -25,7 +25,9 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -37,6 +39,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
+import java.text.ParseException;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -60,17 +63,32 @@ public class SparkScheduleCompactionActionExecutor<T extends HoodieRecordPayload
     LOG.info("Checking if compaction needs to be run on " + config.getBasePath());
     Option<HoodieInstant> lastCompaction = table.getActiveTimeline().getCommitTimeline()
         .filterCompletedInstants().lastInstant();
-    String lastCompactionTs = "0";
+    HoodieTimeline deltaCommits = table.getActiveTimeline().getDeltaCommitTimeline();
+    String lastCompactionTs;
+    int deltaCommitsSinceLastCompaction;
     if (lastCompaction.isPresent()) {
       lastCompactionTs = lastCompaction.get().getTimestamp();
+      deltaCommitsSinceLastCompaction = deltaCommits.findInstantsAfter(lastCompactionTs, Integer.MAX_VALUE).countInstants();
+    } else {
+      lastCompactionTs = deltaCommits.firstInstant().get().getTimestamp();
+      deltaCommitsSinceLastCompaction = deltaCommits.findInstantsAfterOrEquals(lastCompactionTs, Integer.MAX_VALUE).countInstants();
     }
-
-    int deltaCommitsSinceLastCompaction = table.getActiveTimeline().getDeltaCommitTimeline()
-        .findInstantsAfter(lastCompactionTs, Integer.MAX_VALUE).countInstants();
-    if (config.getInlineCompactDeltaCommitMax() > deltaCommitsSinceLastCompaction) {
-      LOG.info("Not scheduling compaction as only " + deltaCommitsSinceLastCompaction
-          + " delta commits was found since last compaction " + lastCompactionTs + ". Waiting for "
-          + config.getInlineCompactDeltaCommitMax());
+    // judge if we need to compact according to num delta commits and time elapsed
+    boolean numCommitEnabled = config.getInlineCompactDeltaNumCommitEnabled();
+    boolean timeEnabled = config.getInlineCompactDeltaElapsedEnabled();
+    boolean compactable;
+    if (numCommitEnabled && !timeEnabled) {
+      compactable = config.getInlineCompactDeltaCommitMax() > deltaCommitsSinceLastCompaction;
+    } else if (!numCommitEnabled && timeEnabled) {
+      compactable = parseToTimestamp(lastCompactionTs) + config.getInlineCompactDeltaElapsedTimeMax() > parseToTimestamp(instantTime);
+    } else {
+      compactable = config.getInlineCompactDeltaCommitMax() > deltaCommitsSinceLastCompaction
+          && parseToTimestamp(lastCompactionTs) + config.getInlineCompactDeltaElapsedTimeMax() > parseToTimestamp(instantTime);
+    }
+    if (compactable) {
+      LOG.info(String.format("Not scheduling compaction as only %s delta commits was found since last compaction %s."
+              + "Waiting for %s,or %sms elapsed time need since last compaction %s.", deltaCommitsSinceLastCompaction,
+          lastCompactionTs, config.getInlineCompactDeltaCommitMax(), config.getInlineCompactDeltaElapsedTimeMax(), lastCompactionTs));
       return new HoodieCompactionPlan();
     }
 
@@ -90,4 +108,13 @@ public class SparkScheduleCompactionActionExecutor<T extends HoodieRecordPayload
     }
   }
 
+  public Long parseToTimestamp(String time) {
+    long timestamp;
+    try {
+      timestamp = HoodieActiveTimeline.COMMIT_FORMATTER.parse(time).getTime() / 1000;
+    } catch (ParseException e) {
+      throw new HoodieCompactionException(e.getMessage(), e);
+    }
+    return timestamp;
+  }
 }

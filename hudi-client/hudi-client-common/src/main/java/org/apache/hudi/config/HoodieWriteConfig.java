@@ -18,6 +18,7 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.common.config.DefaultHoodieConfig;
@@ -36,7 +37,6 @@ import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
-import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import javax.annotation.concurrent.Immutable;
@@ -397,8 +397,20 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_PROP));
   }
 
+  public boolean getInlineCompactDeltaElapsedEnabled() {
+    return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_ELAPSED_TIME_ENABLED_PROP));
+  }
+
+  public boolean getInlineCompactDeltaNumCommitEnabled() {
+    return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_ENABLED_PROP));
+  }
+
   public int getInlineCompactDeltaCommitMax() {
     return Integer.parseInt(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP));
+  }
+
+  public int getInlineCompactDeltaElapsedTimeMax() {
+    return Integer.parseInt(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_ELAPSED_TIME_PROP));
   }
 
   public CompactionStrategy getCompactionStrategy() {
@@ -468,7 +480,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public long getClusteringMaxBytesInGroup() {
     return Long.parseLong(props.getProperty(HoodieClusteringConfig.CLUSTERING_MAX_BYTES_PER_GROUP));
   }
-  
+
   public long getClusteringSmallFileLimit() {
     return Long.parseLong(props.getProperty(HoodieClusteringConfig.CLUSTERING_PLAN_SMALL_FILE_LIMIT));
   }
@@ -484,7 +496,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public int getTargetPartitionsForClustering() {
     return Integer.parseInt(props.getProperty(HoodieClusteringConfig.CLUSTERING_TARGET_PARTITIONS));
   }
-  
+
   public String getClusteringSortColumns() {
     return props.getProperty(HoodieClusteringConfig.CLUSTERING_SORT_COLUMNS_PROPERTY);
   }
