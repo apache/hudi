@@ -18,10 +18,7 @@
 package org.apache.hudi.functional
 
 import java.sql.{Date, Timestamp}
-import java.util.function.Supplier
-import java.util.stream.Stream
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant

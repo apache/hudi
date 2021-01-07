@@ -221,8 +221,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   protected abstract void initialize(HoodieEngineContext engineContext, HoodieTableMetaClient datasetMetaClient);
 
   private void initTableMetadata() {
-    this.metadata = new HoodieBackedTableMetadata(hadoopConf.get(), datasetWriteConfig.getBasePath(), datasetWriteConfig.getSpillableMapBasePath(),
-        datasetWriteConfig.useFileListingMetadata(), datasetWriteConfig.getFileListingMetadataVerify(), false,
+    this.metadata = new HoodieBackedTableMetadata(engineContext, datasetWriteConfig.getBasePath(),
+        datasetWriteConfig.getSpillableMapBasePath(), datasetWriteConfig.useFileListingMetadata(),
+        datasetWriteConfig.getFileListingMetadataVerify(), false,
         datasetWriteConfig.shouldAssumeDatePartitioning());
     this.metaClient = metadata.getMetaClient();
   }

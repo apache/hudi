@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -81,9 +82,9 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
       // for each partition path obtain the data & log file groupings, then map back to inputsplits
       HoodieTableMetaClient metaClient = partitionsToMetaClient.get(partitionPath);
       if (!fsCache.containsKey(metaClient)) {
-
-        HoodieTableFileSystemView fsView = FileSystemViewManager.createInMemoryFileSystemView(metaClient,
-                useFileListingFromMetadata, verifyFileListing);
+        HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(conf);
+        HoodieTableFileSystemView fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
+            metaClient, useFileListingFromMetadata, verifyFileListing);
         fsCache.put(metaClient, fsView);
       }
       HoodieTableFileSystemView fsView = fsCache.get(metaClient);

@@ -21,6 +21,8 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -70,15 +72,15 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private transient HoodieFileReader<GenericRecord> baseFileReader;
   private transient HoodieMetadataMergedLogRecordScanner logRecordScanner;
 
-  public HoodieBackedTableMetadata(Configuration conf, String datasetBasePath, String spillableMapDirectory,
-                                   boolean enabled, boolean validateLookups, boolean assumeDatePartitioning) {
-    this(conf, datasetBasePath, spillableMapDirectory, enabled, validateLookups, false, assumeDatePartitioning);
+  public HoodieBackedTableMetadata(Configuration conf, String datasetBasePath, String spillableMapDirectory, boolean enabled,
+                                   boolean validateLookups, boolean assumeDatePartitioning) {
+    this(new HoodieLocalEngineContext(conf), datasetBasePath, spillableMapDirectory, enabled, validateLookups,
+        false, assumeDatePartitioning);
   }
 
-  public HoodieBackedTableMetadata(Configuration conf, String datasetBasePath, String spillableMapDirectory,
-                                   boolean enabled, boolean validateLookups, boolean enableMetrics,
-                                   boolean assumeDatePartitioning) {
-    super(conf, datasetBasePath, spillableMapDirectory, enabled, validateLookups, enableMetrics, assumeDatePartitioning);
+  public HoodieBackedTableMetadata(HoodieEngineContext engineContext, String datasetBasePath, String spillableMapDirectory,
+                                   boolean enabled, boolean validateLookups, boolean enableMetrics, boolean assumeDatePartitioning) {
+    super(engineContext, datasetBasePath, spillableMapDirectory, enabled, validateLookups, enableMetrics, assumeDatePartitioning);
     this.metadataBasePath = HoodieTableMetadata.getMetadataTableBasePath(datasetBasePath);
     if (enabled) {
       try {
