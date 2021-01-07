@@ -36,8 +36,10 @@ import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
 import org.apache.hudi.testutils.HoodieFlinkWriteableTestTable;
+
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+
 import scala.Tuple2;
 
 import java.util.ArrayList;
@@ -55,6 +57,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Unit test against FlinkHoodieBloomIndex.
+ */
 public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
 
   private static final Schema SCHEMA = getSchemaFromResource(TestFlinkHoodieBloomIndex.class, "/exampleSchema.avsc", true);
@@ -168,10 +173,10 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     Map<String, List<String>> partitionRecordKeyMap = new HashMap<>();
     asList(new Tuple2<>("2017/10/22", "003"), new Tuple2<>("2017/10/22", "002"),
             new Tuple2<>("2017/10/22", "005"), new Tuple2<>("2017/10/22", "004"))
-            .forEach( t -> {
-                List<String> recordKeyList = partitionRecordKeyMap.getOrDefault(t._1, new ArrayList<>());
-                recordKeyList.add(t._2);
-                partitionRecordKeyMap.put(t._1, recordKeyList);
+            .forEach(t -> {
+              List<String> recordKeyList = partitionRecordKeyMap.getOrDefault(t._1, new ArrayList<>());
+              recordKeyList.add(t._2);
+              partitionRecordKeyMap.put(t._1, recordKeyList);
             });
 
     List<scala.Tuple2<String, HoodieKey>> comparisonKeyList =
@@ -372,7 +377,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
                 ? Option.of(Pair.of(taggedRecord.getPartitionPath(), taggedRecord.getCurrentLocation().getFileId()))
                 : Option.empty());
     }
-      // Should not find any files
+    // Should not find any files
     for (Option<Pair<String, String>> record : recordLocations.values()) {
       assertTrue(!record.isPresent());
     }
@@ -387,7 +392,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     hoodieTable = HoodieFlinkTable.create(config, context, metaClient);
     List<HoodieRecord> toTagRecords1 = new ArrayList<>();
     for (HoodieKey key : keys) {
-        taggedRecords.add(new HoodieRecord(key, null));
+      taggedRecords.add(new HoodieRecord(key, null));
     }
 
     taggedRecords = bloomIndex.tagLocation(toTagRecords1, context, hoodieTable);
@@ -398,7 +403,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
                 : Option.empty());
     }
 
-      // Check results
+    // Check results
     for (Map.Entry<HoodieKey, Option<Pair<String, String>>> record : recordLocations.entrySet()) {
       if (record.getKey().getRecordKey().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")) {
         assertTrue(record.getValue().isPresent());
@@ -427,11 +432,9 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
 
     // We write record1 to a parquet file, using a bloom filter having both records
     RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
-    HoodieRecord record1 =
-        new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
+    HoodieRecord record1 = new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
     RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
-    HoodieRecord record2 =
-        new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
+    HoodieRecord record2 = new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
 
     BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
     filter.add(record2.getRecordKey());

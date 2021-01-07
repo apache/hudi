@@ -40,8 +40,10 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.index.bloom.TestFlinkHoodieBloomIndex;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 
@@ -51,6 +53,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 
+/**
+ * The test harness for resource initialization and cleanup.
+ */
 public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implements Serializable {
 
   protected static final Logger LOG = LogManager.getLogger(HoodieFlinkClientTestHarness.class);
