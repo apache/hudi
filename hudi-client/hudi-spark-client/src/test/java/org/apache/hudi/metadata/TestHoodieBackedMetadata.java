@@ -32,7 +32,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -62,7 +61,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -125,9 +123,10 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       assertThrows(TableNotFoundException.class, () -> new HoodieTableMetaClient(hadoopConf, metadataTableBasePath));
     }
 
-    // Metadata table created when enabled by config
+    // Metadata table created when enabled by config & sync is called
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true), true)) {
       client.startCommitWithTime("001");
+      client.syncTableMetadata();
       assertTrue(fs.exists(new Path(metadataTableBasePath)));
       validateMetadata(client);
     }
@@ -504,11 +503,13 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     // Enable metadata table and ensure it is synced
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
       // Restore cannot be done until the metadata table is in sync. See HUDI-1502 for details
+      client.syncTableMetadata();
       client.restoreToInstant(restoreToInstant);
       assertFalse(metadata(client).isInSync());
 
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime);
+      client.syncTableMetadata();
 
       validateMetadata(client);
       assertTrue(metadata(client).isInSync());
@@ -519,9 +520,8 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
    * Instants on Metadata Table should be archived as per config.
    * Metadata Table should be automatically compacted as per config.
    */
-  @ParameterizedTest
-  @ValueSource(booleans =  {false})
-  public void testCleaningArchivingAndCompaction(boolean asyncClean) throws Exception {
+  @Test
+  public void testCleaningArchivingAndCompaction() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
@@ -530,8 +530,9 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
             .archiveCommitsWith(6, 8).retainCommits(1)
             .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommitsBeforeCompaction).build())
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 3)
-            .retainCommits(1).retainFileVersions(1).withAutoClean(true).withAsyncClean(asyncClean).build())
+        // don't archive the data timeline at all.
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(Integer.MAX_VALUE - 1, Integer.MAX_VALUE)
+            .retainCommits(1).retainFileVersions(1).withAutoClean(true).withAsyncClean(true).build())
         .build();
 
     List<HoodieRecord> records;
@@ -551,17 +552,16 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     }
 
     HoodieTableMetaClient metadataMetaClient = new HoodieTableMetaClient(hadoopConf, metadataTableBasePath);
+    HoodieTableMetaClient datasetMetaClient = new HoodieTableMetaClient(hadoopConf, config.getBasePath());
     HoodieActiveTimeline metadataTimeline = metadataMetaClient.getActiveTimeline();
-    // check that there are 2 compactions.
-    assertEquals(2, metadataTimeline.getCommitTimeline().filterCompletedInstants().countInstants());
-    // check that cleaning has, once after each compaction. There will be more instances on the timeline, since it's less aggressively archived
-    assertEquals(4, metadataTimeline.getCleanerTimeline().filterCompletedInstants().countInstants());
+    // check that there are compactions.
+    assertTrue(metadataTimeline.getCommitTimeline().filterCompletedInstants().countInstants() > 0);
+    // check that cleaning has, once after each compaction.
+    assertTrue(metadataTimeline.getCleanerTimeline().filterCompletedInstants().countInstants() > 0);
     // ensure archiving has happened
-    List<HoodieInstant> instants = metadataTimeline.getCommitsAndCompactionTimeline()
-        .getInstants().collect(Collectors.toList());
-    Collections.reverse(instants);
-    long numDeltaCommits = instants.stream().filter(instant -> instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)).count();
-    assertEquals(5, numDeltaCommits);
+    long numDataCompletedInstants = datasetMetaClient.getActiveTimeline().filterCompletedInstants().countInstants();
+    long numDeltaCommits = metadataTimeline.getDeltaCommitTimeline().filterCompletedInstants().countInstants();
+    assertTrue(numDeltaCommits < numDataCompletedInstants, "Must have less delta commits than total completed instants on data timeline.");
   }
 
   /**
