@@ -70,10 +70,10 @@ public class TimelineMetadataUtils {
     Map<String, HoodieRollbackPartitionMetadata> partitionMetadataBuilder = new HashMap<>();
     int totalDeleted = 0;
     for (HoodieRollbackStat stat : rollbackStats) {
-      Map<String, Long> appendFiles = stat.getCommandBlocksCount().keySet().stream()
+      Map<String, Long> rollbackLogFiles = stat.getCommandBlocksCount().keySet().stream()
           .collect(Collectors.toMap(f -> f.getPath().toString(), FileStatus::getLen));
       HoodieRollbackPartitionMetadata metadata = new HoodieRollbackPartitionMetadata(stat.getPartitionPath(),
-          stat.getSuccessDeleteFiles(), stat.getFailedDeleteFiles(), appendFiles);
+          stat.getSuccessDeleteFiles(), stat.getFailedDeleteFiles(), rollbackLogFiles, Collections.EMPTY_MAP);
       partitionMetadataBuilder.put(stat.getPartitionPath(), metadata);
       totalDeleted += stat.getSuccessDeleteFiles().size();
     }

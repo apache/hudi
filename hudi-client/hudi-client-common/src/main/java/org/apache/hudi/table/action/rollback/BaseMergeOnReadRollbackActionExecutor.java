@@ -57,7 +57,7 @@ public abstract class BaseMergeOnReadRollbackActionExecutor<T extends HoodieReco
   }
 
   @Override
-  protected List<HoodieRollbackStat> executeRollback() throws IOException {
+  protected List<HoodieRollbackStat> executeRollback() {
     HoodieTimer rollbackTimer = new HoodieTimer();
     rollbackTimer.startTimer();
 

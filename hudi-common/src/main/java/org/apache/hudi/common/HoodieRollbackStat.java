@@ -38,6 +38,7 @@ public class HoodieRollbackStat implements Serializable {
   private final List<String> failedDeleteFiles;
   // Count of HoodieLogFile to commandBlocks written for a particular rollback
   private final Map<FileStatus, Long> commandBlocksCount;
+  private final Map<FileStatus, Long> logFilesWrittenToSize;
 
   public HoodieRollbackStat(String partitionPath, List<String> successDeleteFiles, List<String> failedDeleteFiles,
       Map<FileStatus, Long> commandBlocksCount) {

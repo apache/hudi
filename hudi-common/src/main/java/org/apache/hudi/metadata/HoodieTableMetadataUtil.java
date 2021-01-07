@@ -239,7 +239,7 @@ public class HoodieTableMetadataUtil {
 
     rollbackMetadata.getPartitionMetadata().values().forEach(pm -> {
       // Has this rollback produced new files?
-      boolean hasAppendFiles = pm.getAppendFiles().values().stream().mapToLong(Long::longValue).sum() > 0;
+      boolean hasAppendFiles = pm.getRollbackLogFiles().values().stream().mapToLong(Long::longValue).sum() > 0;
       // If commit being rolled back has not been synced to metadata table yet then there is no need to update metadata
       boolean shouldSkip = lastSyncTs.isPresent()
           && HoodieTimeline.compareTimestamps(rollbackMetadata.getCommitsRollback().get(0), HoodieTimeline.GREATER_THAN, lastSyncTs.get());
@@ -262,13 +262,13 @@ public class HoodieTableMetadataUtil {
         partitionToDeletedFiles.get(partition).addAll(deletedFiles);
       }
 
-      if (!pm.getAppendFiles().isEmpty()) {
+      if (!pm.getRollbackLogFiles().isEmpty()) {
         if (!partitionToAppendedFiles.containsKey(partition)) {
           partitionToAppendedFiles.put(partition, new HashMap<>());
         }
 
         // Extract appended file name from the absolute paths saved in getAppendFiles()
-        pm.getAppendFiles().forEach((path, size) -> {
+        pm.getRollbackLogFiles().forEach((path, size) -> {
           partitionToAppendedFiles.get(partition).merge(new Path(path).getName(), size, (oldSize, newSizeCopy) -> {
             return size + oldSize;
           });
