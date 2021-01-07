@@ -18,11 +18,13 @@
 
 package org.apache.hudi.integ.testsuite.converter;
 
-import java.util.List;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.integ.testsuite.generator.LazyRecordGeneratorIterator;
 import org.apache.hudi.integ.testsuite.generator.UpdateGeneratorIterator;
+
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
+
+import java.util.List;
 
 /**
  * This converter creates an update {@link GenericRecord} from an existing {@link GenericRecord}.
@@ -36,7 +38,7 @@ public class UpdateConverter implements Converter<GenericRecord, GenericRecord> 
   private final List<String> recordKeyFields;
   private final int minPayloadSize;
 
-  public UpdateConverter(String schemaStr, int minPayloadSize, List<String> partitionPathFields,
+  public  UpdateConverter(String schemaStr, int minPayloadSize, List<String> partitionPathFields,
       List<String> recordKeyFields) {
     this.schemaStr = schemaStr;
     this.partitionPathFields = partitionPathFields;

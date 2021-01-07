@@ -291,7 +291,7 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
                                                        HoodieFileStatus srcFileStatus, KeyGeneratorInterface keyGenerator) {
 
     Path sourceFilePath = FileStatusUtils.toPath(srcFileStatus.getPath());
-    HoodieBootstrapHandle bootstrapHandle = new HoodieBootstrapHandle(config, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS,
+    HoodieBootstrapHandle<?,?,?,?> bootstrapHandle = new HoodieBootstrapHandle(config, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS,
         table, partitionPath, FSUtils.createNewFileIdPfx(), table.getTaskContextSupplier());
     Schema avroSchema = null;
     try {
@@ -329,7 +329,8 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);
     }
-    BootstrapWriteStatus writeStatus = (BootstrapWriteStatus)bootstrapHandle.getWriteStatus();
+
+    BootstrapWriteStatus writeStatus = (BootstrapWriteStatus) bootstrapHandle.writeStatuses().get(0);
     BootstrapFileMapping bootstrapFileMapping = new BootstrapFileMapping(
         config.getBootstrapSourceBasePath(), srcPartitionPath, partitionPath,
         srcFileStatus, writeStatus.getFileId());

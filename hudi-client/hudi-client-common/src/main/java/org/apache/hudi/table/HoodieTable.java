@@ -49,6 +49,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
@@ -61,6 +62,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.log4j.LogManager;
@@ -94,6 +97,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
 
   private SerializableConfiguration hadoopConfiguration;
   private transient FileSystemViewManager viewManager;
+  private HoodieTableMetadata metadata;
 
   protected final TaskContextSupplier taskContextSupplier;
 
@@ -157,6 +161,15 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * @return HoodieWriteMetadata
    */
   public abstract HoodieWriteMetadata<O> delete(HoodieEngineContext context, String instantTime, K keys);
+
+  /**
+   * Deletes all data of partitions.
+   * @param context    HoodieEngineContext
+   * @param instantTime Instant Time for the action
+   * @param partitions   {@link List} of partition to be deleted
+   * @return HoodieWriteMetadata
+   */
+  public abstract HoodieWriteMetadata deletePartitions(HoodieEngineContext context, String instantTime, List<String> partitions);
 
   /**
    * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.
@@ -233,28 +246,41 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * Get the view of the file system for this table.
    */
   public TableFileSystemView getFileSystemView() {
-    return new HoodieTableFileSystemView(metaClient, getCompletedCommitsTimeline());
+    if (config.useFileListingMetadata()) {
+      return getFileSystemViewInternal(getCompletedCommitsTimeline());
+    } else {
+      return new HoodieTableFileSystemView(metaClient, getCompletedCommitsTimeline());
+    }
   }
 
   /**
    * Get the base file only view of the file system for this table.
    */
   public BaseFileOnlyView getBaseFileOnlyView() {
-    return getViewManager().getFileSystemView(metaClient);
+    return getFileSystemViewInternal(metaClient.getActiveTimeline().filterCompletedAndCompactionInstants());
   }
 
   /**
    * Get the full view of the file system for this table.
    */
   public SliceView getSliceView() {
-    return getViewManager().getFileSystemView(metaClient);
+    return getFileSystemViewInternal(metaClient.getActiveTimeline().filterCompletedAndCompactionInstants());
   }
 
   /**
    * Get complete view of the file system for this table with ability to force sync.
    */
   public SyncableFileSystemView getHoodieView() {
-    return getViewManager().getFileSystemView(metaClient);
+    return getFileSystemViewInternal(metaClient.getActiveTimeline().filterCompletedAndCompactionInstants());
+  }
+
+  private SyncableFileSystemView getFileSystemViewInternal(HoodieTimeline timeline) {
+    if (config.useFileListingMetadata()) {
+      FileSystemViewStorageConfig viewConfig = config.getViewStorageConfig();
+      return new HoodieMetadataFileSystemView(metaClient, this.metadata(), timeline, viewConfig.isIncrementalTimelineSyncEnabled());
+    } else {
+      return getViewManager().getFileSystemView(metaClient);
+    }
   }
 
   /**
@@ -630,5 +656,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
 
   public boolean requireSortedRecords() {
     return getBaseFileFormat() == HoodieFileFormat.HFILE;
+  }
+
+  public HoodieTableMetadata metadata() {
+    if (metadata == null) {
+      metadata = HoodieTableMetadata.create(hadoopConfiguration.get(), config.getBasePath(), config.getSpillableMapBasePath(),
+          config.useFileListingMetadata(), config.getFileListingMetadataVerify(), config.isMetricsOn(), config.shouldAssumeDatePartitioning());
+    }
+    return metadata;
   }
 }

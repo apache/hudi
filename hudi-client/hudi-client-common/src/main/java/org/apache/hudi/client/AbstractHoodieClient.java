@@ -71,6 +71,7 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
     this.timelineServer = timelineServer;
     shouldStopTimelineServer = !timelineServer.isPresent();
     startEmbeddedServerView();
+    initWrapperFSMetrics();
   }
 
   /**
@@ -116,6 +117,10 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
 
   public HoodieWriteConfig getConfig() {
     return config;
+  }
+
+  protected void initWrapperFSMetrics() {
+    // no-op.
   }
 
   protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {

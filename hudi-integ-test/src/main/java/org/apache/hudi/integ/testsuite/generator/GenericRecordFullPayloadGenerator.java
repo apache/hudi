@@ -46,9 +46,9 @@ import java.util.concurrent.TimeUnit;
  */
 public class GenericRecordFullPayloadGenerator implements Serializable {
 
-  private static Logger LOG = LoggerFactory.getLogger(GenericRecordFullPayloadGenerator.class);
-
+  private static final Logger LOG = LoggerFactory.getLogger(GenericRecordFullPayloadGenerator.class);
   public static final int DEFAULT_PAYLOAD_SIZE = 1024 * 10; // 10 KB
+  public static final int DEFAULT_NUM_DATE_PARTITIONS = 50;
   public static final String DEFAULT_HOODIE_IS_DELETED_COL = "_hoodie_is_deleted";
   protected final Random random = new Random();
   // The source schema used to generate a payload
@@ -58,10 +58,12 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
   // The index of partition for which records are being generated
   private int partitionIndex = 0;
   // The size of a full record where every field of a generic record created contains 1 random value
-  private final int estimatedFullPayloadSize;
+  private int estimatedFullPayloadSize;
   // Number of extra entries to add in a complex/collection field to achieve the desired record size
   Map<String, Integer> extraEntriesMap = new HashMap<>();
 
+  // The number of unique dates to create
+  private int numDatePartitions = DEFAULT_NUM_DATE_PARTITIONS;
   // LogicalTypes in Avro 1.8.2
   private static final String DECIMAL = "decimal";
   private static final String UUID_NAME = "uuid";
@@ -75,6 +77,11 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
     this(schema, DEFAULT_PAYLOAD_SIZE);
   }
 
+  public GenericRecordFullPayloadGenerator(Schema schema, int minPayloadSize, int numDatePartitions) {
+    this(schema, minPayloadSize);
+    this.numDatePartitions = numDatePartitions;
+  }
+
   public GenericRecordFullPayloadGenerator(Schema schema, int minPayloadSize) {
     Pair<Integer, Integer> sizeInfo = new GenericRecordFullPayloadSizeEstimator(schema)
         .typeEstimateAndNumComplexFields();
@@ -83,17 +90,11 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
     if (estimatedFullPayloadSize < minPayloadSize) {
       int numberOfComplexFields = sizeInfo.getRight();
       if (numberOfComplexFields < 1) {
-        LOG.warn("The schema does not have any collections/complex fields. "
-            + "Cannot achieve minPayloadSize => " + minPayloadSize);
+        LOG.warn("The schema does not have any collections/complex fields. Cannot achieve minPayloadSize : {}",
+            minPayloadSize);
       }
-
       determineExtraEntriesRequired(numberOfComplexFields, minPayloadSize - estimatedFullPayloadSize);
     }
-  }
-
-  public GenericRecordFullPayloadGenerator(Schema schema, int minPayloadSize, int partitionIndex) {
-    this(schema, minPayloadSize);
-    this.partitionIndex = partitionIndex;
   }
 
   protected static boolean isPrimitive(Schema localSchema) {
@@ -131,15 +132,28 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
     return create(baseSchema, partitionPathFieldNames);
   }
 
+  public GenericRecord getNewPayloadWithTimestamp(String tsFieldName) {
+    return updateTimestamp(create(baseSchema, null), tsFieldName);
+  }
+
+  public GenericRecord getUpdatePayloadWithTimestamp(GenericRecord record, Set<String> blacklistFields,
+                                                     String tsFieldName) {
+    return updateTimestamp(randomize(record, blacklistFields), tsFieldName);
+  }
+
   protected GenericRecord create(Schema schema, Set<String> partitionPathFieldNames) {
     GenericRecord result = new GenericData.Record(schema);
     for (Schema.Field f : schema.getFields()) {
-      if (isPartialLongField(f, partitionPathFieldNames)) {
-        // This is a long field used as partition field. Set it to seconds since epoch.
-        long value = TimeUnit.SECONDS.convert(partitionIndex, TimeUnit.DAYS);
-        result.put(f.name(), (long) value);
+      if (f.name().equals(DEFAULT_HOODIE_IS_DELETED_COL)) {
+        result.put(f.name(), false);
       } else {
-        result.put(f.name(), typeConvert(f));
+        if (isPartialLongField(f, partitionPathFieldNames)) {
+          // This is a long field used as partition field. Set it to seconds since epoch.
+          long value = TimeUnit.SECONDS.convert(partitionIndex, TimeUnit.DAYS);
+          result.put(f.name(), (long) value);
+        } else {
+          result.put(f.name(), typeConvert(f));
+        }
       }
     }
     return result;
@@ -308,6 +322,17 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
    */
   public boolean validate(GenericRecord record) {
     return genericData.validate(baseSchema, record);
+  }
+
+  /*
+   * Generates a sequential timestamp (daily increment), and updates the timestamp field of the record.
+   * Note: When generating records, number of records to be generated must be more than numDatePartitions * parallelism,
+   * to guarantee that at least numDatePartitions are created.
+   */
+  public GenericRecord updateTimestamp(GenericRecord record, String fieldName) {
+    long delta = TimeUnit.MILLISECONDS.convert(++partitionIndex % numDatePartitions, TimeUnit.DAYS);
+    record.put(fieldName, System.currentTimeMillis() - delta);
+    return record;
   }
 
   /**

@@ -18,20 +18,6 @@
 
 package org.apache.hudi.integ.testsuite.helpers;
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FsStatus;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -40,13 +26,26 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob;
 import org.apache.hudi.utilities.sources.helpers.DFSPathSelector;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * A custom dfs path selector used only for the hudi test suite. To be used only if workload is not run inline.
  */
 public class DFSTestSuitePathSelector extends DFSPathSelector {
+
   private static volatile Logger log = LoggerFactory.getLogger(HoodieTestSuiteJob.class);
 
   public DFSTestSuitePathSelector(TypedProperties props, Configuration hadoopConf) {
@@ -67,6 +66,7 @@ public class DFSTestSuitePathSelector extends DFSPathSelector {
         lastBatchId = 0;
         nextBatchId = 1;
       }
+
       // obtain all eligible files for the batch
       List<FileStatus> eligibleFiles = new ArrayList<>();
       FileStatus[] fileStatuses = fs.globStatus(
@@ -87,7 +87,8 @@ public class DFSTestSuitePathSelector extends DFSPathSelector {
         if (!fileStatus.isDirectory() || IGNORE_FILEPREFIX_LIST.stream()
             .anyMatch(pfx -> fileStatus.getPath().getName().startsWith(pfx))) {
           continue;
-        } else if (fileStatus.getPath().getName().compareTo(lastBatchId.toString()) > 0) {
+        } else if (Integer.parseInt(fileStatus.getPath().getName()) > lastBatchId && Integer.parseInt(fileStatus.getPath()
+            .getName()) <= nextBatchId) {
           RemoteIterator<LocatedFileStatus> files = fs.listFiles(fileStatus.getPath(), true);
           while (files.hasNext()) {
             eligibleFiles.add(files.next());
@@ -95,7 +96,6 @@ public class DFSTestSuitePathSelector extends DFSPathSelector {
         }
       }
 
-      log.info("Reading " + eligibleFiles.size() + " files. ");
       // no data to readAvro
       if (eligibleFiles.size() == 0) {
         return new ImmutablePair<>(Option.empty(),

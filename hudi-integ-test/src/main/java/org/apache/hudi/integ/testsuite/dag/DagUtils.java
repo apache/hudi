@@ -48,6 +48,15 @@ import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
  */
 public class DagUtils {
 
+  public static final String DAG_NAME = "dag_name";
+  public static final String DAG_ROUNDS = "dag_rounds";
+  public static final String DAG_INTERMITTENT_DELAY_MINS = "dag_intermittent_delay_mins";
+  public static final String DAG_CONTENT = "dag_content";
+
+  public static int DEFAULT_DAG_ROUNDS = 1;
+  public static int DEFAULT_INTERMITTENT_DELAY_MINS = 10;
+  public static String DEFAULT_DAG_NAME = "TestDagName";
+
   static final ObjectMapper MAPPER = new ObjectMapper();
 
   /**
@@ -62,15 +71,38 @@ public class DagUtils {
    * Converts a YAML representation to {@link WorkflowDag}.
    */
   public static WorkflowDag convertYamlToDag(String yaml) throws IOException {
+    int dagRounds = DEFAULT_DAG_ROUNDS;
+    int intermittentDelayMins = DEFAULT_INTERMITTENT_DELAY_MINS;
+    String dagName = DEFAULT_DAG_NAME;
     Map<String, DagNode> allNodes = new HashMap<>();
     final ObjectMapper yamlReader = new ObjectMapper(new YAMLFactory());
     final JsonNode jsonNode = yamlReader.readTree(yaml);
     Iterator<Entry<String, JsonNode>> itr = jsonNode.fields();
     while (itr.hasNext()) {
       Entry<String, JsonNode> dagNode = itr.next();
-      allNodes.put(dagNode.getKey(), convertJsonToDagNode(allNodes, dagNode.getKey(), dagNode.getValue()));
+      String key = dagNode.getKey();
+      switch (key) {
+        case DAG_NAME:
+          dagName = dagNode.getValue().asText();
+          break;
+        case DAG_ROUNDS:
+          dagRounds = dagNode.getValue().asInt();
+          break;
+        case DAG_INTERMITTENT_DELAY_MINS:
+          intermittentDelayMins = dagNode.getValue().asInt();
+          break;
+        case DAG_CONTENT:
+          JsonNode dagContent = dagNode.getValue();
+          Iterator<Entry<String, JsonNode>> contentItr = dagContent.fields();
+          while(contentItr.hasNext()) {
+            Entry<String, JsonNode> dagContentNode = contentItr.next();
+            allNodes.put(dagContentNode.getKey(), convertJsonToDagNode(allNodes, dagContentNode.getKey(), dagContentNode.getValue()));
+          }
+        default:
+          break;
+      }
     }
-    return new WorkflowDag(findRootNodes(allNodes));
+    return new WorkflowDag(dagName, dagRounds, intermittentDelayMins, findRootNodes(allNodes));
   }
 
   /**

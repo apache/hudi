@@ -71,7 +71,7 @@ public class HoodieWriteStat implements Serializable {
   private long numInserts;
 
   /**
-   * Total size of file written.
+   * Total number of bytes written.
    */
   private long totalWriteBytes;
 

@@ -19,6 +19,8 @@
 package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -65,15 +67,56 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   public static final String HOODIE_SCHEME_PREFIX = "hoodie-";
 
-  private enum MetricName {
-    create, rename, delete, listStatus, mkdirs, getFileStatus, globStatus, listFiles
+  protected enum MetricName {
+    create, rename, delete, listStatus, mkdirs, getFileStatus, globStatus, listFiles, read, write
   }
+
+  private static Registry METRICS_REGISTRY_DATA;
+  private static Registry METRICS_REGISTRY_META;
+
+  public static void setMetricsRegistry(Registry registry, Registry registryMeta) {
+    METRICS_REGISTRY_DATA = registry;
+    METRICS_REGISTRY_META = registryMeta;
+  }
+
 
   private ConcurrentMap<String, SizeAwareFSDataOutputStream> openStreams = new ConcurrentHashMap<>();
   private FileSystem fileSystem;
   private URI uri;
   private ConsistencyGuard consistencyGuard = new NoOpConsistencyGuard();
-  private Registry metricsRegistry = Registry.getRegistry(this.getClass().getSimpleName());
+
+  @FunctionalInterface
+  public interface CheckedFunction<R> {
+    R get() throws IOException;
+  }
+
+  private static Registry getMetricRegistryForPath(Path p) {
+    return ((p != null) && (p.toString().contains(HoodieTableMetaClient.METAFOLDER_NAME)))
+        ? METRICS_REGISTRY_META : METRICS_REGISTRY_DATA;
+  }
+
+  protected static <R> R executeFuncWithTimeMetrics(String metricName, Path p, CheckedFunction<R> func) throws IOException {
+    HoodieTimer timer = new HoodieTimer().startTimer();
+    R res = func.get();
+
+    Registry registry = getMetricRegistryForPath(p);
+    if (registry != null) {
+      registry.increment(metricName);
+      registry.add(metricName + ".totalDuration", timer.endTimer());
+    }
+
+    return res;
+  }
+
+  protected static <R> R executeFuncWithTimeAndByteMetrics(String metricName, Path p, long byteCount,
+                                                           CheckedFunction<R> func) throws IOException {
+    Registry registry = getMetricRegistryForPath(p);
+    if (registry != null) {
+      registry.add(metricName + ".totalBytes", byteCount);
+    }
+
+    return executeFuncWithTimeMetrics(metricName, p, func);
+  }
 
   public HoodieWrapperFileSystem() {}
 
@@ -140,16 +183,17 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FSDataInputStream open(Path f, int bufferSize) throws IOException {
-    return fileSystem.open(convertToDefaultPath(f), bufferSize);
+    return wrapInputStream(f, fileSystem.open(convertToDefaultPath(f), bufferSize));
   }
 
   @Override
   public FSDataOutputStream create(Path f, FsPermission permission, boolean overwrite, int bufferSize,
-      short replication, long blockSize, Progressable progress) throws IOException {
-    this.metricsRegistry.increment(MetricName.create.name());
-    final Path translatedPath = convertToDefaultPath(f);
-    return wrapOutputStream(f,
-        fileSystem.create(translatedPath, permission, overwrite, bufferSize, replication, blockSize, progress));
+                                   short replication, long blockSize, Progressable progress) throws IOException {
+    return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
+      final Path translatedPath = convertToDefaultPath(f);
+      return wrapOutputStream(f,
+          fileSystem.create(translatedPath, permission, overwrite, bufferSize, replication, blockSize, progress));
+    });
   }
 
   private FSDataOutputStream wrapOutputStream(final Path path, FSDataOutputStream fsDataOutputStream)
@@ -164,79 +208,97 @@ public class HoodieWrapperFileSystem extends FileSystem {
     return os;
   }
 
+  private FSDataInputStream wrapInputStream(final Path path, FSDataInputStream fsDataInputStream) throws IOException {
+    if (fsDataInputStream instanceof TimedFSDataInputStream) {
+      return fsDataInputStream;
+    }
+    return new TimedFSDataInputStream(path, fsDataInputStream);
+  }
+
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite) throws IOException {
-    this.metricsRegistry.increment(MetricName.create.name());
-    return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), overwrite));
+    return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
+      return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), overwrite));
+    });
   }
 
   @Override
   public FSDataOutputStream create(Path f) throws IOException {
-    this.metricsRegistry.increment(MetricName.create.name());
-    return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f)));
+    return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
+      return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f)));
+    });
   }
 
   @Override
   public FSDataOutputStream create(Path f, Progressable progress) throws IOException {
-    this.metricsRegistry.increment(MetricName.create.name());
-    return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), progress));
+    return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
+      return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), progress));
+    });
   }
 
   @Override
   public FSDataOutputStream create(Path f, short replication) throws IOException {
-    this.metricsRegistry.increment(MetricName.create.name());
-    return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), replication));
+    return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
+      return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), replication));
+    });
   }
 
   @Override
   public FSDataOutputStream create(Path f, short replication, Progressable progress) throws IOException {
-    this.metricsRegistry.increment(MetricName.create.name());
-    return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), replication, progress));
+    return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
+      return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), replication, progress));
+    });
   }
 
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize) throws IOException {
-    this.metricsRegistry.increment(MetricName.create.name());
-    return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize));
+    return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
+      return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize));
+    });
   }
 
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, Progressable progress)
       throws IOException {
-    this.metricsRegistry.increment(MetricName.create.name());
-    return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, progress));
+    return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
+      return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, progress));
+    });
   }
 
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, short replication, long blockSize,
-      Progressable progress) throws IOException {
-    this.metricsRegistry.increment(MetricName.create.name());
-    return wrapOutputStream(f,
-        fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize, progress));
+                                   Progressable progress) throws IOException {
+    return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
+      return wrapOutputStream(f,
+          fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize, progress));
+    });
   }
 
   @Override
   public FSDataOutputStream create(Path f, FsPermission permission, EnumSet<CreateFlag> flags, int bufferSize,
-      short replication, long blockSize, Progressable progress) throws IOException {
-    this.metricsRegistry.increment(MetricName.create.name());
-    return wrapOutputStream(f,
-        fileSystem.create(convertToDefaultPath(f), permission, flags, bufferSize, replication, blockSize, progress));
+                                   short replication, long blockSize, Progressable progress) throws IOException {
+    return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
+      return wrapOutputStream(f,
+          fileSystem.create(convertToDefaultPath(f), permission, flags, bufferSize, replication, blockSize, progress));
+    });
   }
 
   @Override
   public FSDataOutputStream create(Path f, FsPermission permission, EnumSet<CreateFlag> flags, int bufferSize,
-      short replication, long blockSize, Progressable progress, Options.ChecksumOpt checksumOpt) throws IOException {
-    this.metricsRegistry.increment(MetricName.create.name());
-    return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), permission, flags, bufferSize, replication,
-        blockSize, progress, checksumOpt));
+                                   short replication, long blockSize, Progressable progress, Options.ChecksumOpt checksumOpt) throws IOException {
+    return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
+      return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), permission, flags, bufferSize, replication,
+          blockSize, progress, checksumOpt));
+    });
   }
 
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, short replication, long blockSize)
       throws IOException {
-    this.metricsRegistry.increment(MetricName.create.name());
-    return wrapOutputStream(f,
-        fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize));
+    return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
+      return wrapOutputStream(f,
+          fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize));
+    });
   }
 
   @Override
@@ -246,50 +308,53 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public boolean rename(Path src, Path dst) throws IOException {
-    this.metricsRegistry.increment(MetricName.rename.name());
-    try {
-      consistencyGuard.waitTillFileAppears(convertToDefaultPath(src));
-    } catch (TimeoutException e) {
-      throw new HoodieException("Timed out waiting for " + src + " to appear", e);
-    }
-
-    boolean success = fileSystem.rename(convertToDefaultPath(src), convertToDefaultPath(dst));
-
-    if (success) {
+    return executeFuncWithTimeMetrics(MetricName.rename.name(), src, () -> {
       try {
-        consistencyGuard.waitTillFileAppears(convertToDefaultPath(dst));
+        consistencyGuard.waitTillFileAppears(convertToDefaultPath(src));
       } catch (TimeoutException e) {
-        throw new HoodieException("Timed out waiting for " + dst + " to appear", e);
+        throw new HoodieException("Timed out waiting for " + src + " to appear", e);
       }
 
-      try {
-        consistencyGuard.waitTillFileDisappears(convertToDefaultPath(src));
-      } catch (TimeoutException e) {
-        throw new HoodieException("Timed out waiting for " + src + " to disappear", e);
+      boolean success = fileSystem.rename(convertToDefaultPath(src), convertToDefaultPath(dst));
+
+      if (success) {
+        try {
+          consistencyGuard.waitTillFileAppears(convertToDefaultPath(dst));
+        } catch (TimeoutException e) {
+          throw new HoodieException("Timed out waiting for " + dst + " to appear", e);
+        }
+
+        try {
+          consistencyGuard.waitTillFileDisappears(convertToDefaultPath(src));
+        } catch (TimeoutException e) {
+          throw new HoodieException("Timed out waiting for " + src + " to disappear", e);
+        }
       }
-    }
-    return success;
+      return success;
+    });
   }
 
   @Override
   public boolean delete(Path f, boolean recursive) throws IOException {
-    this.metricsRegistry.increment(MetricName.delete.name());
-    boolean success = fileSystem.delete(convertToDefaultPath(f), recursive);
+    return executeFuncWithTimeMetrics(MetricName.delete.name(), f, () -> {
+      boolean success = fileSystem.delete(convertToDefaultPath(f), recursive);
 
-    if (success) {
-      try {
-        consistencyGuard.waitTillFileDisappears(f);
-      } catch (TimeoutException e) {
-        throw new HoodieException("Timed out waiting for " + f + " to disappear", e);
+      if (success) {
+        try {
+          consistencyGuard.waitTillFileDisappears(f);
+        } catch (TimeoutException e) {
+          throw new HoodieException("Timed out waiting for " + f + " to disappear", e);
+        }
       }
-    }
-    return success;
+      return success;
+    });
   }
 
   @Override
   public FileStatus[] listStatus(Path f) throws IOException {
-    this.metricsRegistry.increment(MetricName.listStatus.name());
-    return fileSystem.listStatus(convertToDefaultPath(f));
+    return executeFuncWithTimeMetrics(MetricName.listStatus.name(), f, () -> {
+      return fileSystem.listStatus(convertToDefaultPath(f));
+    });
   }
 
   @Override
@@ -304,27 +369,29 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public boolean mkdirs(Path f, FsPermission permission) throws IOException {
-    this.metricsRegistry.increment(MetricName.mkdirs.name());
-    boolean success = fileSystem.mkdirs(convertToDefaultPath(f), permission);
-    if (success) {
-      try {
-        consistencyGuard.waitTillFileAppears(convertToDefaultPath(f));
-      } catch (TimeoutException e) {
-        throw new HoodieException("Timed out waiting for directory " + f + " to appear", e);
+    return executeFuncWithTimeMetrics(MetricName.mkdirs.name(), f, () -> {
+      boolean success = fileSystem.mkdirs(convertToDefaultPath(f), permission);
+      if (success) {
+        try {
+          consistencyGuard.waitTillFileAppears(convertToDefaultPath(f));
+        } catch (TimeoutException e) {
+          throw new HoodieException("Timed out waiting for directory " + f + " to appear", e);
+        }
       }
-    }
-    return success;
+      return success;
+    });
   }
 
   @Override
   public FileStatus getFileStatus(Path f) throws IOException {
-    this.metricsRegistry.increment(MetricName.getFileStatus.name());
-    try {
-      consistencyGuard.waitTillFileAppears(convertToDefaultPath(f));
-    } catch (TimeoutException e) {
-      // pass
-    }
-    return fileSystem.getFileStatus(convertToDefaultPath(f));
+    return executeFuncWithTimeMetrics(MetricName.getFileStatus.name(), f, () -> {
+      try {
+        consistencyGuard.waitTillFileAppears(convertToDefaultPath(f));
+      } catch (TimeoutException e) {
+        // pass
+      }
+      return fileSystem.getFileStatus(convertToDefaultPath(f));
+    });
   }
 
   @Override
@@ -389,12 +456,12 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FSDataInputStream open(Path f) throws IOException {
-    return fileSystem.open(convertToDefaultPath(f));
+    return wrapInputStream(f, fileSystem.open(convertToDefaultPath(f)));
   }
 
   @Override
   public FSDataOutputStream createNonRecursive(Path f, boolean overwrite, int bufferSize, short replication,
-      long blockSize, Progressable progress) throws IOException {
+                                               long blockSize, Progressable progress) throws IOException {
     Path p = convertToDefaultPath(f);
     return wrapOutputStream(p,
         fileSystem.createNonRecursive(p, overwrite, bufferSize, replication, blockSize, progress));
@@ -402,7 +469,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FSDataOutputStream createNonRecursive(Path f, FsPermission permission, boolean overwrite, int bufferSize,
-      short replication, long blockSize, Progressable progress) throws IOException {
+                                               short replication, long blockSize, Progressable progress) throws IOException {
     Path p = convertToDefaultPath(f);
     return wrapOutputStream(p,
         fileSystem.createNonRecursive(p, permission, overwrite, bufferSize, replication, blockSize, progress));
@@ -410,7 +477,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FSDataOutputStream createNonRecursive(Path f, FsPermission permission, EnumSet<CreateFlag> flags,
-      int bufferSize, short replication, long blockSize, Progressable progress) throws IOException {
+                                               int bufferSize, short replication, long blockSize, Progressable progress) throws IOException {
     Path p = convertToDefaultPath(f);
     return wrapOutputStream(p,
         fileSystem.createNonRecursive(p, permission, flags, bufferSize, replication, blockSize, progress));
@@ -462,8 +529,9 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public boolean delete(Path f) throws IOException {
-    this.metricsRegistry.increment(MetricName.delete.name());
-    return delete(f, true);
+    return executeFuncWithTimeMetrics(MetricName.delete.name(), f, () -> {
+      return delete(f, true);
+    });
   }
 
   @Override
@@ -508,32 +576,37 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FileStatus[] listStatus(Path f, PathFilter filter) throws IOException {
-    this.metricsRegistry.increment(MetricName.listStatus.name());
-    return fileSystem.listStatus(convertToDefaultPath(f), filter);
+    return executeFuncWithTimeMetrics(MetricName.listStatus.name(), f, () -> {
+      return fileSystem.listStatus(convertToDefaultPath(f), filter);
+    });
   }
 
   @Override
   public FileStatus[] listStatus(Path[] files) throws IOException {
-    this.metricsRegistry.increment(MetricName.listStatus.name());
-    return fileSystem.listStatus(convertDefaults(files));
+    return executeFuncWithTimeMetrics(MetricName.listStatus.name(), files.length > 0 ? files[0] : null, () -> {
+      return fileSystem.listStatus(convertDefaults(files));
+    });
   }
 
   @Override
   public FileStatus[] listStatus(Path[] files, PathFilter filter) throws IOException {
-    this.metricsRegistry.increment(MetricName.listStatus.name());
-    return fileSystem.listStatus(convertDefaults(files), filter);
+    return executeFuncWithTimeMetrics(MetricName.listStatus.name(), files.length > 0 ? files[0] : null, () -> {
+      return fileSystem.listStatus(convertDefaults(files), filter);
+    });
   }
 
   @Override
   public FileStatus[] globStatus(Path pathPattern) throws IOException {
-    this.metricsRegistry.increment(MetricName.globStatus.name());
-    return fileSystem.globStatus(convertToDefaultPath(pathPattern));
+    return executeFuncWithTimeMetrics(MetricName.globStatus.name(), pathPattern, () -> {
+      return fileSystem.globStatus(convertToDefaultPath(pathPattern));
+    });
   }
 
   @Override
   public FileStatus[] globStatus(Path pathPattern, PathFilter filter) throws IOException {
-    this.metricsRegistry.increment(MetricName.globStatus.name());
-    return fileSystem.globStatus(convertToDefaultPath(pathPattern), filter);
+    return executeFuncWithTimeMetrics(MetricName.globStatus.name(), pathPattern, () -> {
+      return fileSystem.globStatus(convertToDefaultPath(pathPattern), filter);
+    });
   }
 
   @Override
@@ -543,8 +616,9 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public RemoteIterator<LocatedFileStatus> listFiles(Path f, boolean recursive) throws IOException {
-    this.metricsRegistry.increment(MetricName.listFiles.name());
-    return fileSystem.listFiles(convertToDefaultPath(f), recursive);
+    return executeFuncWithTimeMetrics(MetricName.listFiles.name(), f, () -> {
+      return fileSystem.listFiles(convertToDefaultPath(f), recursive);
+    });
   }
 
   @Override
@@ -554,16 +628,17 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public boolean mkdirs(Path f) throws IOException {
-    this.metricsRegistry.increment(MetricName.mkdirs.name());
-    boolean success = fileSystem.mkdirs(convertToDefaultPath(f));
-    if (success) {
-      try {
-        consistencyGuard.waitTillFileAppears(convertToDefaultPath(f));
-      } catch (TimeoutException e) {
-        throw new HoodieException("Timed out waiting for directory " + f + " to appear", e);
+    return executeFuncWithTimeMetrics(MetricName.mkdirs.name(), f, () -> {
+      boolean success = fileSystem.mkdirs(convertToDefaultPath(f));
+      if (success) {
+        try {
+          consistencyGuard.waitTillFileAppears(convertToDefaultPath(f));
+        } catch (TimeoutException e) {
+          throw new HoodieException("Timed out waiting for directory " + f + " to appear", e);
+        }
       }
-    }
-    return success;
+      return success;
+    });
   }
 
   @Override

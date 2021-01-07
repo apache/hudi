@@ -276,7 +276,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePath(), partitionPathStr);
           FSUtils.createPathIfNotExists(metaClient.getFs(), partitionPath);
           long beginLsTs = System.currentTimeMillis();
-          FileStatus[] statuses = metaClient.getFs().listStatus(partitionPath);
+          FileStatus[] statuses = listPartition(partitionPath);
           long endLsTs = System.currentTimeMillis();
           LOG.info("#files found in partition (" + partitionPathStr + ") =" + statuses.length + ", Time taken ="
               + (endLsTs - beginLsTs));
@@ -295,6 +295,16 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       LOG.info("Time to load partition (" + partitionPathStr + ") =" + (endTs - beginTs));
       return true;
     });
+  }
+
+  /**
+   * Return all the files from the partition.
+   *
+   * @param partitionPath The absolute path of the partition
+   * @throws IOException
+   */
+  protected FileStatus[] listPartition(Path partitionPath) throws IOException {
+    return metaClient.getFs().listStatus(partitionPath);
   }
 
   /**

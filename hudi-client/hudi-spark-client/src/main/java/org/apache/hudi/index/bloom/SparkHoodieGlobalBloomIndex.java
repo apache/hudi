@@ -64,7 +64,7 @@ public class SparkHoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends 
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     try {
       List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(metaClient.getFs(), metaClient.getBasePath(),
-          config.shouldAssumeDatePartitioning());
+          config.useFileListingMetadata(), config.getFileListingMetadataVerify(), config.shouldAssumeDatePartitioning());
       return super.loadInvolvedFiles(allPartitionPaths, context, hoodieTable);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to load all partitions", e);
