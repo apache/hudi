@@ -131,6 +131,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String MERGE_DATA_VALIDATION_CHECK_ENABLED = "hoodie.merge.data.validation.enabled";
   private static final String DEFAULT_MERGE_DATA_VALIDATION_CHECK_ENABLED = "false";
 
+  // Routes inserts to new files ignoring small file handling
+  private static final String ROUTE_INSERTS_TO_NEW_FILES = "hoodie.route.inserts.to.new.files";
+  private static final String DEFAULT_ROUTE_INSERTS_TO_NEW_FILES = "false";
+
   /**
    * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
    * multiple write operations (upsert/buk-insert/...) to be executed within a single commit.
@@ -328,6 +332,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public boolean isMergeDataValidationCheckEnabled() {
     return Boolean.parseBoolean(props.getProperty(MERGE_DATA_VALIDATION_CHECK_ENABLED));
+  }
+
+  public boolean isRouteInsertsToNewFiles() {
+    return Boolean.parseBoolean(props.getProperty(ROUTE_INSERTS_TO_NEW_FILES));
   }
 
   public EngineType getEngineType() {
@@ -1180,6 +1188,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withRouteInsertsToNewFiles(boolean routeInsertsToNewFiles) {
+      props.setProperty(ROUTE_INSERTS_TO_NEW_FILES, String.valueOf(routeInsertsToNewFiles));
+      return this;
+    }
+
     public Builder withProperties(Properties properties) {
       this.props.putAll(properties);
       return this;
@@ -1234,6 +1247,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           BULKINSERT_SORT_MODE, DEFAULT_BULKINSERT_SORT_MODE);
       setDefaultOnCondition(props, !props.containsKey(MERGE_DATA_VALIDATION_CHECK_ENABLED),
           MERGE_DATA_VALIDATION_CHECK_ENABLED, DEFAULT_MERGE_DATA_VALIDATION_CHECK_ENABLED);
+      setDefaultOnCondition(props, !props.containsKey(ROUTE_INSERTS_TO_NEW_FILES),
+          ROUTE_INSERTS_TO_NEW_FILES, DEFAULT_ROUTE_INSERTS_TO_NEW_FILES);
 
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().withEngineType(engineType).fromProperties(props).build());
