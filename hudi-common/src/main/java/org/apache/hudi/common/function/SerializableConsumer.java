@@ -16,11 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.common;
+package org.apache.hudi.common.function;
+
+import java.io.Serializable;
 
 /**
- * Hoodie data processing engine. support only Apache Spark and Apache Flink for now.
+ * A wrapped {@link java.util.function.Consumer} which can be serialized.
+ *
+ * @param <I> input type
  */
-public enum EngineType {
-  SPARK, FLINK
+@FunctionalInterface
+public interface SerializableConsumer<I> extends Serializable {
+  void accept(I t) throws Exception;
 }

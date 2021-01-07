@@ -20,8 +20,8 @@ package org.apache.hudi.index;
 
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;

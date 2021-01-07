@@ -18,7 +18,7 @@
 
 package org.apache.hudi.index;
 
-import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;

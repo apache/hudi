@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.common.function;
+package org.apache.hudi.common.function;
 
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;

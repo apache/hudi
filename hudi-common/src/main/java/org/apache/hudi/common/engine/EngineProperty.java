@@ -16,16 +16,18 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.common.function;
-
-import org.apache.hudi.common.util.collection.Pair;
-
-import java.io.Serializable;
+package org.apache.hudi.common.engine;
 
 /**
- * A function that returns key-value pairs (Tuple2&lt;K, V&gt;).
+ * Properties specific to each engine, that can be set/obtained from.
  */
-@FunctionalInterface
-public interface SerializablePairFunction<I, K, V> extends Serializable {
-  Pair<K, V> call(I t) throws Exception;
+public enum EngineProperty {
+  // hostname to bind embedded timeline server to
+  EMBEDDED_SERVER_HOST,
+  // Pool/queue to use to run compaction.
+  COMPACTION_POOL_NAME,
+  // Amount of total memory available to each engine executor
+  TOTAL_MEMORY_AVAILABLE,
+  // Fraction of that memory, that is already in use by the engine
+  MEMORY_FRACTION_IN_USE,
 }
