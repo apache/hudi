@@ -18,13 +18,26 @@
 
 package org.apache.hudi.index.bloom;
 
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.bloom.BloomFilterFactory;
+import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.HoodieKeyLookupHandle;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
+import org.apache.hudi.testutils.HoodieFlinkWriteableTestTable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import scala.Tuple2;
 
 import java.util.ArrayList;
@@ -33,12 +46,18 @@ import java.util.List;
 import java.util.Map;
 
 import static java.util.Arrays.asList;
+import static java.util.UUID.randomUUID;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestFlinkHoodieBloomIndex extends org.apache.hudi.testutils.FlinkHoodieClientTestHarness {
+public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
 
-  private static final org.apache.avro.Schema SCHEMA = getSchemaFromResource(TestFlinkHoodieBloomIndex.class, "/exampleSchema.avsc", true);
+  private static final Schema SCHEMA = getSchemaFromResource(TestFlinkHoodieBloomIndex.class, "/exampleSchema.avsc", true);
   private static final String TEST_NAME_WITH_PARAMS = "[{index}] Test with rangePruning={0}, treeFiltering={1}, bucketizedChecking={2}";
 
   public static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> configParams() {
@@ -61,21 +80,21 @@ public class TestFlinkHoodieBloomIndex extends org.apache.hudi.testutils.FlinkHo
     cleanupResources();
   }
 
-  private org.apache.hudi.config.HoodieWriteConfig makeConfig(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) {
-    return org.apache.hudi.config.HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withIndexConfig(org.apache.hudi.config.HoodieIndexConfig.newBuilder().bloomIndexPruneByRanges(rangePruning)
+  private HoodieWriteConfig makeConfig(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) {
+    return HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().bloomIndexPruneByRanges(rangePruning)
             .bloomIndexTreebasedFilter(treeFiltering).bloomIndexBucketizedChecking(bucketizedChecking)
             .bloomIndexKeysPerBucket(2).build())
         .build();
   }
 
-  @org.junit.jupiter.params.ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
-  @org.junit.jupiter.params.provider.MethodSource("configParams")
+  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
+  @MethodSource("configParams")
   public void testLoadInvolvedFiles(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) throws Exception {
-    org.apache.hudi.config.HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
+    HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
     FlinkHoodieBloomIndex index = new FlinkHoodieBloomIndex(config);
     HoodieTable hoodieTable = HoodieFlinkTable.create(config, context, metaClient);
-    org.apache.hudi.testutils.HoodieFlinkWriteableTestTable testTable = org.apache.hudi.testutils.HoodieFlinkWriteableTestTable.of(hoodieTable, SCHEMA);
+    HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(hoodieTable, SCHEMA);
 
     // Create some partitions, and put some files
     // "2016/01/21": 0 file
@@ -100,8 +119,8 @@ public class TestFlinkHoodieBloomIndex extends org.apache.hudi.testutils.FlinkHo
     HoodieRecord record4 =
         new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
-    java.util.List<String> partitions = asList("2016/01/21", "2016/04/01", "2015/03/12");
-    java.util.List<scala.Tuple2<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, context, hoodieTable);
+    List<String> partitions = asList("2016/01/21", "2016/04/01", "2015/03/12");
+    List<Tuple2<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, context, hoodieTable);
     // Still 0, as no valid commit
     assertEquals(0, filesList.size());
 
@@ -125,7 +144,7 @@ public class TestFlinkHoodieBloomIndex extends org.apache.hudi.testutils.FlinkHo
 
       // no longer sorted, but should have same files.
 
-      java.util.List<scala.Tuple2<String, BloomIndexFileInfo>> expected =
+      List<Tuple2<String, BloomIndexFileInfo>> expected =
           asList(new Tuple2<>("2016/04/01", new BloomIndexFileInfo("2")),
               new Tuple2<>("2015/03/12", new BloomIndexFileInfo("1")),
               new Tuple2<>("2015/03/12", new BloomIndexFileInfo("3", "000", "000")),
@@ -134,13 +153,13 @@ public class TestFlinkHoodieBloomIndex extends org.apache.hudi.testutils.FlinkHo
     }
   }
 
-  @org.junit.jupiter.params.ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
-  @org.junit.jupiter.params.provider.MethodSource("configParams")
+  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
+  @MethodSource("configParams")
   public void testRangePruning(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) {
-    org.apache.hudi.config.HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
+    HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
     FlinkHoodieBloomIndex index = new FlinkHoodieBloomIndex(config);
 
-    final java.util.Map<String, java.util.List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
+    final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo = new HashMap<>();
     partitionToFileIndexInfo.put("2017/10/22",
         asList(new BloomIndexFileInfo("f1"), new BloomIndexFileInfo("f2", "000", "000"),
             new BloomIndexFileInfo("f3", "001", "003"), new BloomIndexFileInfo("f4", "002", "007"),
@@ -159,7 +178,7 @@ public class TestFlinkHoodieBloomIndex extends org.apache.hudi.testutils.FlinkHo
         index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, partitionRecordKeyMap);
 
     assertEquals(10, comparisonKeyList.size());
-    java.util.Map<String, java.util.List<String>> recordKeyToFileComps = comparisonKeyList.stream()
+    java.util.Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream()
         .collect(java.util.stream.Collectors.groupingBy(t -> t._2.getRecordKey(), java.util.stream.Collectors.mapping(t -> t._1, java.util.stream.Collectors.toList())));
 
     assertEquals(4, recordKeyToFileComps.size());
@@ -196,9 +215,9 @@ public class TestFlinkHoodieBloomIndex extends org.apache.hudi.testutils.FlinkHo
 
     // We write record1, record2 to a parquet file, but the bloom filter contains (record1,
     // record2, record3).
-    org.apache.hudi.common.bloom.BloomFilter filter = org.apache.hudi.common.bloom.BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1, org.apache.hudi.common.bloom.BloomFilterTypeCode.SIMPLE.name());
+    BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
     filter.add(record3.getRecordKey());
-    org.apache.hudi.testutils.HoodieFlinkWriteableTestTable testTable = org.apache.hudi.testutils.HoodieFlinkWriteableTestTable.of(metaClient, SCHEMA, filter);
+    HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(metaClient, SCHEMA, filter);
     String fileId = testTable.addCommit("000").getFileIdWithInserts(partition, record1, record2);
     String filename = testTable.getBaseFileNameById(fileId);
 
@@ -209,14 +228,13 @@ public class TestFlinkHoodieBloomIndex extends org.apache.hudi.testutils.FlinkHo
     assertFalse(filter.mightContain(record4.getRecordKey()));
 
     // Compare with file
-    java.util.List<String> uuids =
-        asList(record1.getRecordKey(), record2.getRecordKey(), record3.getRecordKey(), record4.getRecordKey());
+    List<String> uuids = asList(record1.getRecordKey(), record2.getRecordKey(), record3.getRecordKey(), record4.getRecordKey());
 
-    org.apache.hudi.config.HoodieWriteConfig config = org.apache.hudi.config.HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     HoodieFlinkTable table = HoodieFlinkTable.create(config, context, metaClient);
-    org.apache.hudi.io.HoodieKeyLookupHandle keyHandle = new org.apache.hudi.io.HoodieKeyLookupHandle<>(config, table, Pair.of(partition, fileId));
-    java.util.List<String> results = keyHandle.checkCandidatesAgainstFile(hadoopConf, uuids,
-        new org.apache.hadoop.fs.Path(java.nio.file.Paths.get(basePath, partition, filename).toString()));
+    HoodieKeyLookupHandle keyHandle = new HoodieKeyLookupHandle<>(config, table, Pair.of(partition, fileId));
+    List<String> results = keyHandle.checkCandidatesAgainstFile(hadoopConf, uuids,
+        new Path(java.nio.file.Paths.get(basePath, partition, filename).toString()));
     assertEquals(results.size(), 2);
     assertTrue(results.get(0).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
         || results.get(1).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));
@@ -227,14 +245,14 @@ public class TestFlinkHoodieBloomIndex extends org.apache.hudi.testutils.FlinkHo
     // assertTrue(results.get(1)._2().equals(filename));
   }
 
-  @org.junit.jupiter.params.ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
-  @org.junit.jupiter.params.provider.MethodSource("configParams")
+  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
+  @MethodSource("configParams")
   public void testTagLocationWithEmptyList(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) {
     // We have some records to be tagged (two different partitions)
     List<HoodieRecord> records = new ArrayList<>();
     // Also create the metadata and config
-    org.apache.hudi.config.HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
-    metaClient = org.apache.hudi.common.table.HoodieTableMetaClient.reload(metaClient);
+    HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieFlinkTable table = HoodieFlinkTable.create(config, context, metaClient);
 
     // Let's tag
@@ -245,13 +263,13 @@ public class TestFlinkHoodieBloomIndex extends org.apache.hudi.testutils.FlinkHo
     }, "EmptyList should not result in IllegalArgumentException: Positive number of slices required");
   }
 
-  @org.junit.jupiter.params.ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
-  @org.junit.jupiter.params.provider.MethodSource("configParams")
+  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
+  @MethodSource("configParams")
   public void testTagLocation(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) throws Exception {
     // We have some records to be tagged (two different partitions)
-    String rowKey1 = java.util.UUID.randomUUID().toString();
-    String rowKey2 = java.util.UUID.randomUUID().toString();
-    String rowKey3 = java.util.UUID.randomUUID().toString();
+    String rowKey1 = randomUUID().toString();
+    String rowKey2 = randomUUID().toString();
+    String rowKey3 = randomUUID().toString();
     String recordStr1 = "{\"_row_key\":\"" + rowKey1 + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}";
     String recordStr2 = "{\"_row_key\":\"" + rowKey2 + "\",\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
     String recordStr3 = "{\"_row_key\":\"" + rowKey3 + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":15}";
@@ -272,9 +290,9 @@ public class TestFlinkHoodieBloomIndex extends org.apache.hudi.testutils.FlinkHo
     List<HoodieRecord> records = asList(record1, record2, record3, record4);
 
     // Also create the metadata and config
-    org.apache.hudi.config.HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
+    HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
     HoodieFlinkTable hoodieTable = HoodieFlinkTable.create(config, context, metaClient);
-    org.apache.hudi.testutils.HoodieFlinkWriteableTestTable testTable = org.apache.hudi.testutils.HoodieFlinkWriteableTestTable.of(hoodieTable, SCHEMA);
+    HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(hoodieTable, SCHEMA);
 
     // Let's tag
     FlinkHoodieBloomIndex bloomIndex = new FlinkHoodieBloomIndex(config);
@@ -311,8 +329,8 @@ public class TestFlinkHoodieBloomIndex extends org.apache.hudi.testutils.FlinkHo
     }
   }
 
-  @org.junit.jupiter.params.ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
-  @org.junit.jupiter.params.provider.MethodSource("configParams")
+  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
+  @MethodSource("configParams")
   public void testCheckExists(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) throws Exception {
     // We have some records to be tagged (two different partitions)
 
@@ -339,9 +357,9 @@ public class TestFlinkHoodieBloomIndex extends org.apache.hudi.testutils.FlinkHo
     List<HoodieKey> keys = asList(key1, key2, key3, key4);
 
     // Also create the metadata and config
-    org.apache.hudi.config.HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
-    org.apache.hudi.table.HoodieTable hoodieTable = HoodieFlinkTable.create(config, context, metaClient);
-    org.apache.hudi.testutils.HoodieFlinkWriteableTestTable testTable = org.apache.hudi.testutils.HoodieFlinkWriteableTestTable.of(hoodieTable, SCHEMA);
+    HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
+    HoodieTable hoodieTable = HoodieFlinkTable.create(config, context, metaClient);
+    HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(hoodieTable, SCHEMA);
 
     // Let's tag
     FlinkHoodieBloomIndex bloomIndex = new FlinkHoodieBloomIndex(config);
@@ -351,8 +369,8 @@ public class TestFlinkHoodieBloomIndex extends org.apache.hudi.testutils.FlinkHo
     Map<HoodieKey, Option<Pair<String, String>>> recordLocations = new HashMap<>();
     for (HoodieRecord taggedRecord : taggedRecords) {
       recordLocations.put(taggedRecord.getKey(), taggedRecord.isCurrentLocationKnown()
-                ? org.apache.hudi.common.util.Option.of(Pair.of(taggedRecord.getPartitionPath(), taggedRecord.getCurrentLocation().getFileId()))
-                : org.apache.hudi.common.util.Option.empty());
+                ? Option.of(Pair.of(taggedRecord.getPartitionPath(), taggedRecord.getCurrentLocation().getFileId()))
+                : Option.empty());
     }
       // Should not find any files
     for (Option<Pair<String, String>> record : recordLocations.values()) {
@@ -365,19 +383,19 @@ public class TestFlinkHoodieBloomIndex extends org.apache.hudi.testutils.FlinkHo
     String fileId3 = testTable.addCommit("003").getFileIdWithInserts("2015/01/31", record4);
 
     // We do the tag again
-    metaClient = org.apache.hudi.common.table.HoodieTableMetaClient.reload(metaClient);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
     hoodieTable = HoodieFlinkTable.create(config, context, metaClient);
     List<HoodieRecord> toTagRecords1 = new ArrayList<>();
     for (HoodieKey key : keys) {
-        taggedRecords.add(new org.apache.hudi.common.model.HoodieRecord(key, null));
+        taggedRecords.add(new HoodieRecord(key, null));
     }
 
     taggedRecords = bloomIndex.tagLocation(toTagRecords1, context, hoodieTable);
     recordLocations.clear();
-    for (org.apache.hudi.common.model.HoodieRecord taggedRecord : taggedRecords) {
+    for (HoodieRecord taggedRecord : taggedRecords) {
       recordLocations.put(taggedRecord.getKey(), taggedRecord.isCurrentLocationKnown()
-                ? org.apache.hudi.common.util.Option.of(org.apache.hudi.common.util.collection.Pair.of(taggedRecord.getPartitionPath(), taggedRecord.getCurrentLocation().getFileId()))
-                : org.apache.hudi.common.util.Option.empty());
+                ? Option.of(Pair.of(taggedRecord.getPartitionPath(), taggedRecord.getCurrentLocation().getFileId()))
+                : Option.empty());
     }
 
       // Check results
@@ -398,8 +416,8 @@ public class TestFlinkHoodieBloomIndex extends org.apache.hudi.testutils.FlinkHo
     }
   }
 
-  @org.junit.jupiter.params.ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
-  @org.junit.jupiter.params.provider.MethodSource("configParams")
+  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
+  @MethodSource("configParams")
   public void testBloomFilterFalseError(boolean rangePruning, boolean treeFiltering, boolean bucketizedChecking) throws Exception {
     // We have two hoodie records
     String recordStr1 = "{\"_row_key\":\"1eb5b87a-1feh-4edd-87b4-6ec96dc405a0\","
@@ -415,19 +433,18 @@ public class TestFlinkHoodieBloomIndex extends org.apache.hudi.testutils.FlinkHo
     HoodieRecord record2 =
         new HoodieRecord(new HoodieKey(rowChange2.getRowKey(), rowChange2.getPartitionPath()), rowChange2);
 
-    org.apache.hudi.common.bloom.BloomFilter filter = org.apache.hudi.common.bloom.BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1,
-        org.apache.hudi.common.bloom.BloomFilterTypeCode.SIMPLE.name());
+    BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
     filter.add(record2.getRecordKey());
-    org.apache.hudi.testutils.HoodieFlinkWriteableTestTable testTable = org.apache.hudi.testutils.HoodieFlinkWriteableTestTable.of(metaClient, SCHEMA, filter);
+    HoodieFlinkWriteableTestTable testTable = HoodieFlinkWriteableTestTable.of(metaClient, SCHEMA, filter);
     String fileId = testTable.addCommit("000").getFileIdWithInserts("2016/01/31", record1);
     assertTrue(filter.mightContain(record1.getRecordKey()));
     assertTrue(filter.mightContain(record2.getRecordKey()));
 
     // We do the tag
     List<HoodieRecord> records = asList(record1, record2);
-    org.apache.hudi.config.HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
-    metaClient = org.apache.hudi.common.table.HoodieTableMetaClient.reload(metaClient);
-    org.apache.hudi.table.HoodieTable table = HoodieFlinkTable.create(config, context, metaClient);
+    HoodieWriteConfig config = makeConfig(rangePruning, treeFiltering, bucketizedChecking);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable table = HoodieFlinkTable.create(config, context, metaClient);
 
     FlinkHoodieBloomIndex bloomIndex = new FlinkHoodieBloomIndex(config);
     List<HoodieRecord> taggedRecords = bloomIndex.tagLocation(records, context, table);
