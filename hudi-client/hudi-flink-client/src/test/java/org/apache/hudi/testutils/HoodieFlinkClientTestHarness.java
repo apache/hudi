@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
@@ -64,9 +63,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
   protected transient FileSystem fs;
   protected transient MiniClusterWithClientResource flinkCluster = null;
   protected transient HoodieFlinkEngineContext context = null;
-  protected transient HoodieTestDataGenerator dataGen = null;
   protected transient ExecutorService executorService;
-  protected transient HoodieTableMetaClient metaClient;
   protected transient HoodieFlinkWriteClient writeClient;
   protected transient HoodieTableFileSystemView tableView;
 
@@ -108,7 +105,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
    *
    */
   protected void initFlinkContexts() {
-    context = new org.apache.hudi.client.common.HoodieFlinkEngineContext(supplier);
+    context = new HoodieFlinkEngineContext(supplier);
     hadoopConf = context.getHadoopConf().get();
   }
 
