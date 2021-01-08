@@ -72,6 +72,7 @@ public class HoodieTableMetaClient implements Serializable {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieTableMetaClient.class);
   public static final String METAFOLDER_NAME = ".hoodie";
+  public static final String INSTANT_GENERATE_FOLDER_NAME = "instant_generate";
   public static final String TEMPFOLDER_NAME = METAFOLDER_NAME + File.separator + ".temp";
   public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + File.separator + ".aux";
   public static final String BOOTSTRAP_INDEX_ROOT_FOLDER_PATH = AUXILIARYFOLDER_NAME + File.separator + ".bootstrap";
@@ -202,7 +203,7 @@ public class HoodieTableMetaClient implements Serializable {
 
   /**
    * Returns Marker folder path.
-   * 
+   *
    * @param instantTs Instant Timestamp
    * @return
    */
@@ -272,7 +273,7 @@ public class HoodieTableMetaClient implements Serializable {
 
   /**
    * Return raw file-system.
-   * 
+   *
    * @return fs
    */
   public FileSystem getRawFs() {
@@ -418,6 +419,12 @@ public class HoodieTableMetaClient implements Serializable {
       if (!fs.exists(archiveLogDir)) {
         fs.mkdirs(archiveLogDir);
       }
+    }
+
+    // Always create instantGenerateFolder which is needed for InstantGenerateOperator
+    final Path instantGenerateFolder = new Path(basePath, HoodieTableMetaClient.INSTANT_GENERATE_FOLDER_NAME);
+    if (!fs.exists(instantGenerateFolder)) {
+      fs.mkdirs(instantGenerateFolder);
     }
 
     // Always create temporaryFolder which is needed for finalizeWrite for Hoodie tables
