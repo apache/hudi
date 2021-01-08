@@ -38,7 +38,8 @@ public class HoodieRollbackStat implements Serializable {
   private final List<String> failedDeleteFiles;
   // Count of HoodieLogFile to commandBlocks written for a particular rollback
   private final Map<FileStatus, Long> commandBlocksCount;
-  private final Map<FileStatus, Long> logFilesWrittenToSize;
+  // all log files with same base instant as instant to be rolledback
+  private final Map<FileStatus, Long> probableLogFileToSizeMap;
 
   public HoodieRollbackStat(String partitionPath, List<String> successDeleteFiles, List<String> failedDeleteFiles,
       Map<FileStatus, Long> commandBlocksCount) {
@@ -46,6 +47,16 @@ public class HoodieRollbackStat implements Serializable {
     this.successDeleteFiles = successDeleteFiles;
     this.failedDeleteFiles = failedDeleteFiles;
     this.commandBlocksCount = commandBlocksCount;
+    this.probableLogFileToSizeMap = Collections.EMPTY_MAP;
+  }
+
+  public HoodieRollbackStat(String partitionPath, List<String> successDeleteFiles, List<String> failedDeleteFiles,
+      Map<FileStatus, Long> commandBlocksCount, Map<FileStatus, Long> probableLogFileToSizeMap) {
+    this.partitionPath = partitionPath;
+    this.successDeleteFiles = successDeleteFiles;
+    this.failedDeleteFiles = failedDeleteFiles;
+    this.commandBlocksCount = commandBlocksCount;
+    this.probableLogFileToSizeMap = probableLogFileToSizeMap;
   }
 
   public Map<FileStatus, Long> getCommandBlocksCount() {
@@ -64,6 +75,10 @@ public class HoodieRollbackStat implements Serializable {
     return failedDeleteFiles;
   }
 
+  public Map<FileStatus, Long> getProbableLogFileToSizeMap() {
+    return probableLogFileToSizeMap;
+  }
+
   public static HoodieRollbackStat.Builder newBuilder() {
     return new Builder();
   }
@@ -76,6 +91,7 @@ public class HoodieRollbackStat implements Serializable {
     private List<String> successDeleteFiles;
     private List<String> failedDeleteFiles;
     private Map<FileStatus, Long> commandBlocksCount;
+    private Map<FileStatus, Long> probableLogFileToSizeMap;
     private String partitionPath;
 
     public Builder withDeletedFileResults(Map<FileStatus, Boolean> deletedFiles) {
@@ -101,6 +117,11 @@ public class HoodieRollbackStat implements Serializable {
       return this;
     }
 
+    public Builder withProbableLogFileToSizeMap(Map<FileStatus, Long> probableLogFileToSizeMap) {
+      this.probableLogFileToSizeMap = probableLogFileToSizeMap;
+      return this;
+    }
+
     public Builder withPartitionPath(String partitionPath) {
       this.partitionPath = partitionPath;
       return this;
@@ -116,7 +137,10 @@ public class HoodieRollbackStat implements Serializable {
       if (commandBlocksCount == null) {
         commandBlocksCount = Collections.EMPTY_MAP;
       }
-      return new HoodieRollbackStat(partitionPath, successDeleteFiles, failedDeleteFiles, commandBlocksCount);
+      if (probableLogFileToSizeMap == null) {
+        probableLogFileToSizeMap = Collections.EMPTY_MAP;
+      }
+      return new HoodieRollbackStat(partitionPath, successDeleteFiles, failedDeleteFiles, commandBlocksCount, probableLogFileToSizeMap);
     }
   }
 }

@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -53,9 +54,9 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
 
   protected final HoodieWriteConfig config;
 
-  private final String basePath;
+  protected final String basePath;
 
-  private final String instantTime;
+  protected final String instantTime;
 
   public AbstractMarkerBasedRollbackStrategy(HoodieTable<T, I, K, O> table, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
     this.table = table;
@@ -90,6 +91,7 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
     String fileId = FSUtils.getFileIdFromFilePath(baseFilePathForAppend);
     String baseCommitTime = FSUtils.getCommitTime(baseFilePathForAppend.getName());
     String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), new Path(basePath, appendBaseFilePath).getParent());
+    final Map<FileStatus, Long> probableLogFileMap = getProbableFileSizeMap(partitionPath, baseCommitTime);
 
     HoodieLogFormat.Writer writer = null;
     try {
@@ -129,9 +131,23 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
           1L);
     }
 
-    return HoodieRollbackStat.newBuilder()
+    HoodieRollbackStat.Builder builder = HoodieRollbackStat.newBuilder()
         .withPartitionPath(partitionPath)
-        .withRollbackBlockAppendResults(filesToNumBlocksRollback)
-        .build();
+        .withRollbackBlockAppendResults(filesToNumBlocksRollback);
+    if (probableLogFileMap != null) {
+      builder.withProbableLogFileToSizeMap(probableLogFileMap);
+    }
+    return builder.build();
+  }
+
+  /**
+   * Returns probable log files for the respective baseCommitTime to assist in metadata table syncing.
+   * @param partitionPath partition path of interest
+   * @param baseCommitTime base commit time of interest
+   * @return Map<FileStatus, File size>
+   * @throws IOException
+   */
+  protected Map<FileStatus, Long> getProbableFileSizeMap(String partitionPath, String baseCommitTime) throws IOException {
+    return null;
   }
 }

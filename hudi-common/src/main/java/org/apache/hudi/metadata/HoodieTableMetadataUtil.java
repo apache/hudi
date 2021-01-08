@@ -274,6 +274,19 @@ public class HoodieTableMetadataUtil {
           });
         });
       }
+
+      if (!pm.getWrittenLogFiles().isEmpty()) {
+        if (!partitionToAppendedFiles.containsKey(partition)) {
+          partitionToAppendedFiles.put(partition, new HashMap<>());
+        }
+
+        // Extract appended file name from the absolute paths saved in getWrittenLogFiles()
+        pm.getWrittenLogFiles().forEach((path, size) -> {
+          partitionToAppendedFiles.get(partition).merge(new Path(path).getName(), size, (oldSize, newSizeCopy) -> {
+            return size + oldSize;
+          });
+        });
+      }
     });
   }
 

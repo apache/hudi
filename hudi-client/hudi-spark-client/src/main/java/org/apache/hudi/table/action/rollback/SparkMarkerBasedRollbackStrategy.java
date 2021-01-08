@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -31,17 +32,25 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.MarkerFiles;
+import org.apache.hudi.table.action.rollback.ListingBasedRollbackHelper.SerializablePathFilter;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
+import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import scala.Tuple2;
 
 @SuppressWarnings("checkstyle:LineLength")
 public class SparkMarkerBasedRollbackStrategy<T extends HoodieRecordPayload> extends AbstractMarkerBasedRollbackStrategy<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
-  public SparkMarkerBasedRollbackStrategy(HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
+
+  public SparkMarkerBasedRollbackStrategy(HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table, HoodieEngineContext context, HoodieWriteConfig config,
+      String instantTime) {
     super(table, context, config, instantTime);
   }
 
@@ -74,5 +83,24 @@ public class SparkMarkerBasedRollbackStrategy<T extends HoodieRecordPayload> ext
     } catch (Exception e) {
       throw new HoodieRollbackException("Error rolling back using marker files written for " + instantToRollback, e);
     }
+  }
+
+  protected Map<FileStatus, Long> getProbableFileSizeMap(String partitionPath, String baseCommitTime) throws IOException {
+    // collect all log files that is supposed to be deleted with this rollback
+    SerializablePathFilter filter = (path) -> {
+      if (FSUtils.isLogFile(path)) {
+        String fileCommitTime = FSUtils.getBaseCommitTimeFromLogPath(path);
+        return baseCommitTime.equals(fileCommitTime);
+      }
+      return false;
+    };
+
+    final Map<FileStatus, Long> probableLogFileMap = new HashMap<>();
+    FileSystem fs = table.getMetaClient().getFs();
+    FileStatus[] toBeDeleted = fs.listStatus(FSUtils.getPartitionPath(config.getBasePath(), partitionPath), filter);
+    for (FileStatus fileStatus : toBeDeleted) {
+      probableLogFileMap.put(fileStatus, fileStatus.getLen());
+    }
+    return probableLogFileMap;
   }
 }
