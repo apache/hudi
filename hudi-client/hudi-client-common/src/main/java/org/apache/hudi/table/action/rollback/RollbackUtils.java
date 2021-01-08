@@ -123,7 +123,6 @@ public class RollbackUtils {
       HoodieActiveTimeline activeTimeline = table.getMetaClient().reloadActiveTimeline();
       List<ListingBasedRollbackRequest> partitionRollbackRequests = new ArrayList<>();
       switch (instantToRollback.getAction()) {
-
         case HoodieTimeline.COMMIT_ACTION:
           LOG.info("Rolling back commit action.");
           partitionRollbackRequests.add(

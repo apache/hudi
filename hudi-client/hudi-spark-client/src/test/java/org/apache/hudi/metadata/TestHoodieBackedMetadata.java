@@ -370,9 +370,10 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   /**
    * Test when syncing rollback to metadata if the commit being rolled back has not been synced that essentially a no-op occurs to metadata.
    */
-  @Test
-  public void testRollbackUnsyncedCommit() throws Exception {
-    init(HoodieTableType.COPY_ON_WRITE);
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testRollbackUnsyncedCommit(HoodieTableType tableType) throws Exception {
+    init(tableType);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {

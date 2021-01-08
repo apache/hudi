@@ -73,7 +73,6 @@ public class ListingBasedRollbackHelper implements Serializable {
   public List<HoodieRollbackStat> performRollback(HoodieEngineContext context, HoodieInstant instantToRollback, List<ListingBasedRollbackRequest> rollbackRequests) {
     int sparkPartitions = Math.max(Math.min(rollbackRequests.size(), config.getRollbackParallelism()), 1);
     context.setJobStatus(this.getClass().getSimpleName(), "Perform rollback actions");
-
     JavaPairRDD<String, HoodieRollbackStat> partitionPathRollbackStatsPairRDD = maybeDeleteAndCollectStats(context, instantToRollback, rollbackRequests, sparkPartitions, true);
     return partitionPathRollbackStatsPairRDD.reduceByKey(RollbackUtils::mergeRollbackStat).map(Tuple2::_2).collect();
   }
@@ -149,7 +148,6 @@ public class ListingBasedRollbackHelper implements Serializable {
               // if update belongs to an existing log file
               writer.appendBlock(new HoodieCommandBlock(header));
             }
-
           } catch (IOException | InterruptedException io) {
             throw new HoodieRollbackException("Failed to rollback for instant " + instantToRollback, io);
           } finally {
@@ -169,7 +167,6 @@ public class ListingBasedRollbackHelper implements Serializable {
               metaClient.getFs().getFileStatus(Objects.requireNonNull(writer).getLogFile().getPath()),
               1L
           );
-
           return new Tuple2<>(rollbackRequest.getPartitionPath(),
               HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
                   .withRollbackBlockAppendResults(filesToNumBlocksRollback)
