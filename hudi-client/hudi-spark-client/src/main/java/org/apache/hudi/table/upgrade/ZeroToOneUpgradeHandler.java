@@ -18,8 +18,8 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.IOType;

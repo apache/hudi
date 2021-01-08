@@ -18,6 +18,8 @@
 
 package org.apache.hudi.client.common;
 
+import org.apache.hudi.common.engine.EngineProperty;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.util.Option;
 
 import java.util.function.Supplier;

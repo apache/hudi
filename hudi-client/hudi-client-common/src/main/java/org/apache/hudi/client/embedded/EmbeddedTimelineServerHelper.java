@@ -18,8 +18,8 @@
 
 package org.apache.hudi.client.embedded;
 
-import org.apache.hudi.client.common.EngineProperty;
-import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.engine.EngineProperty;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 

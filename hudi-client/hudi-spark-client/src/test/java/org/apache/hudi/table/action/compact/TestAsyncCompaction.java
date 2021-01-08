@@ -22,6 +22,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -50,7 +51,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestAsyncCompaction extends CompactionTestBase {
 
   private HoodieWriteConfig getConfig(Boolean autoCommit) {
-    return getConfigBuilder(autoCommit).build();
+    return getConfigBuilder(autoCommit)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).validate(true).build())
+        .build();
   }
 
   @Test
@@ -85,8 +88,6 @@ public class TestAsyncCompaction extends CompactionTestBase {
       // Reload and rollback inflight compaction
       metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context, metaClient);
-      // hoodieTable.rollback(jsc,
-      //    new HoodieInstant(true, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime), false);
 
       client.rollbackInflightCompaction(
           new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime), hoodieTable);
