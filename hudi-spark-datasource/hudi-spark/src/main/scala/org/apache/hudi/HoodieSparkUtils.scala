@@ -115,7 +115,7 @@ object HoodieSparkUtils {
     if (SPARK_VERSION.startsWith("2.")) {
       new Spark2RowDeserializer(encoder)
     } else {
-      new Spark3RowDeserializer(encoder)
+      new Spark2RowDeserializer(encoder)
     }
   }
 }
