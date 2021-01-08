@@ -33,6 +33,7 @@ import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -129,17 +130,12 @@ public class KeyedWriteProcessOperator extends KeyedProcessOperator<String, Hood
         // HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient(hoodieFlinkEngineContext, StreamerUtil.getHoodieClientConfig(cfg));
 
         HoodieFlinkWriteClient writeClient = writeProcessFunction.getWriteClient();
-        HoodieInstant.State instantTimeState = writeClient.getInstantTimeState(latestInstant);
+        Option<HoodieInstant.State> instantTimeState = writeClient.getInstantTimeState(latestInstant);
         LOG.info("KeyedWriteProcessOperator initializeState get latestInstant [{}] state [{}]", latestInstant,instantTimeState);
 
         // maybe instant was archived and removed from hdfs
-        if(instantTimeState == null){
-          String latestCompletedInstanTime = writeClient.getLatestCompletedInstanTime();
-          if(latestCompletedInstanTime == null || Long.parseLong(latestCompletedInstanTime) < Long.parseLong(latestInstant)){
-            throw new RuntimeException("KeyedWriteProcessOperator initializeState get latestInstant is null ! latestCompletedInstanTime ["+latestCompletedInstanTime+"]");
-          }
-        }else {
-          switch (instantTimeState){
+        if(instantTimeState.isPresent()){
+          switch (instantTimeState.get()){
             // upsert success but commit failed
             case INFLIGHT:
               LOG.info("KeyedWriteProcessOperator initializeState get latestInstant [{}] state [{}] need to output data again.", latestInstant,instantTimeState);
@@ -148,6 +144,12 @@ public class KeyedWriteProcessOperator extends KeyedProcessOperator<String, Hood
             // restored from a success checkpoint or a success savepoint
             case COMPLETED: break;
             default:break;
+          }
+        }else {
+          Option<String> latestCompletedInstanTimeOpt = writeClient.getLatestCompletedInstanTime();
+          String latestCompletedInstanTime = latestCompletedInstanTimeOpt.orElseGet(null);
+          if(StringUtils.isNullOrEmpty(latestCompletedInstanTime) || Long.parseLong(latestCompletedInstanTime) < Long.parseLong(latestInstant)){
+            throw new RuntimeException("KeyedWriteProcessOperator initializeState get latestInstant is null ! latestCompletedInstanTime ["+latestCompletedInstanTime+"]");
           }
         }
       }
