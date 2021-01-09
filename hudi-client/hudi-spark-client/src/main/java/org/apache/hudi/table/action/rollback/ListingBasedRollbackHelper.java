@@ -22,6 +22,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -49,6 +50,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
@@ -98,7 +100,7 @@ public class ListingBasedRollbackHelper implements Serializable {
    * @return stats collected with or w/o actual deletions.
    */
   JavaPairRDD<String, HoodieRollbackStat> maybeDeleteAndCollectStats(HoodieEngineContext context, HoodieInstant instantToRollback, List<ListingBasedRollbackRequest> rollbackRequests,
-      int sparkPartitions, boolean doDelete) {
+                                                                     int sparkPartitions, boolean doDelete) {
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     return jsc.parallelize(rollbackRequests, sparkPartitions).mapToPair(rollbackRequest -> {
       switch (rollbackRequest.getType()) {
@@ -117,22 +119,9 @@ public class ListingBasedRollbackHelper implements Serializable {
         }
         case APPEND_ROLLBACK_BLOCK: {
           // collect all log files that is supposed to be deleted with this rollback
-          String baseCommit = rollbackRequest.getLatestBaseInstant().get();
-          SerializablePathFilter filter = (path) -> {
-            if (FSUtils.isLogFile(path)) {
-              // Since the baseCommitTime is the only commit for new log files, it's okay here
-              String fileCommitTime = FSUtils.getBaseCommitTimeFromLogPath(path);
-              return baseCommit.equals(fileCommitTime);
-            }
-            return false;
-          };
-
-          final Map<FileStatus, Long> probableLogFileMap = new HashMap<>();
-          FileSystem fs = metaClient.getFs();
-          FileStatus[] probableLogFiles = fs.listStatus(FSUtils.getPartitionPath(config.getBasePath(), rollbackRequest.getPartitionPath()), filter);
-          for (FileStatus fileStatus : probableLogFiles) {
-            probableLogFileMap.put(fileStatus, fileStatus.getLen());
-          }
+          final Map<FileStatus, Long> writtenLogFileSizeMap = FSUtils.getAllLogFiles(metaClient.getFs(), FSUtils.getPartitionPath(config.getBasePath(), rollbackRequest.getPartitionPath()),
+              HoodieFileFormat.HOODIE_LOG.getFileExtension(), rollbackRequest.getLatestBaseInstant().get()).collect(Collectors.toMap(HoodieLogFile::getFileStatus,
+                value -> value.getFileStatus().getLen()));
 
           Writer writer = null;
           try {
@@ -141,6 +130,7 @@ public class ListingBasedRollbackHelper implements Serializable {
                 .withFileId(rollbackRequest.getFileId().get())
                 .overBaseCommit(rollbackRequest.getLatestBaseInstant().get()).withFs(metaClient.getFs())
                 .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+
             // generate metadata
             if (doDelete) {
               Map<HeaderMetadataType, String> header = generateHeader(instantToRollback.getTimestamp());
@@ -169,7 +159,7 @@ public class ListingBasedRollbackHelper implements Serializable {
           return new Tuple2<>(rollbackRequest.getPartitionPath(),
               HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
                   .withRollbackBlockAppendResults(filesToNumBlocksRollback)
-                  .withProbableLogFileToSizeMap(probableLogFileMap).build());
+                  .withWrittenLogFileSizeMap(writtenLogFileSizeMap).build());
         }
         default:
           throw new IllegalStateException("Unknown Rollback action " + rollbackRequest);

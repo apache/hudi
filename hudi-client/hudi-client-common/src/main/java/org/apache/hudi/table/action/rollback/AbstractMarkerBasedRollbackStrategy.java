@@ -90,7 +90,7 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
     String fileId = FSUtils.getFileIdFromFilePath(baseFilePathForAppend);
     String baseCommitTime = FSUtils.getCommitTime(baseFilePathForAppend.getName());
     String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), new Path(basePath, appendBaseFilePath).getParent());
-    final Map<FileStatus, Long> probableLogFileMap = getProbableFileSizeMap(partitionPath, baseCommitTime);
+    final Map<FileStatus, Long> writtenLogFileSizeMap = getWrittenLogFileSizeMap(partitionPath, baseCommitTime, fileId);
 
     HoodieLogFormat.Writer writer = null;
     try {
@@ -133,20 +133,21 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
     HoodieRollbackStat.Builder builder = HoodieRollbackStat.newBuilder()
         .withPartitionPath(partitionPath)
         .withRollbackBlockAppendResults(filesToNumBlocksRollback);
-    if (probableLogFileMap != null) {
-      builder.withProbableLogFileToSizeMap(probableLogFileMap);
+    if (!writtenLogFileSizeMap.isEmpty()) {
+      builder.withWrittenLogFileSizeMap(writtenLogFileSizeMap);
     }
     return builder.build();
   }
 
   /**
-   * Returns probable log files for the respective baseCommitTime to assist in metadata table syncing.
+   * Returns written log file size map for the respective baseCommitTime to assist in metadata table syncing.
    * @param partitionPath partition path of interest
    * @param baseCommitTime base commit time of interest
+   * @param fileId fileId of interest
    * @return Map<FileStatus, File size>
    * @throws IOException
    */
-  protected Map<FileStatus, Long> getProbableFileSizeMap(String partitionPath, String baseCommitTime) throws IOException {
-    return null;
+  protected Map<FileStatus, Long> getWrittenLogFileSizeMap(String partitionPath, String baseCommitTime, String fileId) throws IOException {
+    return Collections.EMPTY_MAP;
   }
 }

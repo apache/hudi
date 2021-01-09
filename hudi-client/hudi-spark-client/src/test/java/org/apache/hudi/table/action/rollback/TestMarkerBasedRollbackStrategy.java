@@ -20,11 +20,14 @@ package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -40,12 +43,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
 
+  private HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
+
   @BeforeEach
   public void setUp() throws Exception {
     initPath();
     initSparkContexts();
     initFileSystem();
-    initMetaClient();
+    initMetaClient(tableType);
     initDFS();
   }
 
@@ -87,6 +92,11 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
 
   @Test
   public void testMergeOnReadRollback() throws Exception {
+
+    tearDown();
+    tableType = HoodieTableType.MERGE_ON_READ;
+    setUp();
+
     // given: wrote some base + log files and corresponding markers
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
     String f2 = testTable.addRequestedDeltaCommit("000")
@@ -102,8 +112,10 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
         .withMarkerFile("partA", f2, IOType.APPEND)
         .withMarkerFile("partB", f4, IOType.APPEND);
 
+    HoodieWriteConfig writeConfig = getConfig();
     // when
-    List<HoodieRollbackStat> stats = new SparkMarkerBasedRollbackStrategy(HoodieSparkTable.create(getConfig(), context, metaClient), context, getConfig(), "002")
+    HoodieTable morTable = HoodieSparkTable.create(writeConfig, context, metaClient);
+    List<HoodieRollbackStat> stats = new SparkMarkerBasedRollbackStrategy(morTable, context, writeConfig, "002")
         .execute(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001"));
 
     // then: ensure files are deleted, rollback block is appended (even if append does not exist)

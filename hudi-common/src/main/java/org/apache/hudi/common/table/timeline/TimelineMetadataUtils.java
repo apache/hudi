@@ -56,9 +56,9 @@ public class TimelineMetadataUtils {
   private static final Integer DEFAULT_VERSION = 1;
 
   public static HoodieRestoreMetadata convertRestoreMetadata(String startRestoreTime,
-      long durationInMs,
-      List<HoodieInstant> instants,
-      Map<String, List<HoodieRollbackMetadata>> instantToRollbackMetadata) {
+                                                             long durationInMs,
+                                                             List<HoodieInstant> instants,
+                                                             Map<String, List<HoodieRollbackMetadata>> instantToRollbackMetadata) {
     return new HoodieRestoreMetadata(startRestoreTime, durationInMs,
         instants.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()),
         Collections.unmodifiableMap(instantToRollbackMetadata), DEFAULT_VERSION,
@@ -72,7 +72,7 @@ public class TimelineMetadataUtils {
     for (HoodieRollbackStat stat : rollbackStats) {
       Map<String, Long> rollbackLogFiles = stat.getCommandBlocksCount().keySet().stream()
           .collect(Collectors.toMap(f -> f.getPath().toString(), FileStatus::getLen));
-      Map<String, Long> probableLogFiles = stat.getProbableLogFileToSizeMap().keySet().stream()
+      Map<String, Long> probableLogFiles = stat.getWrittenLogFileSizeMap().keySet().stream()
           .collect(Collectors.toMap(f -> f.getPath().toString(), FileStatus::getLen));
       HoodieRollbackPartitionMetadata metadata = new HoodieRollbackPartitionMetadata(stat.getPartitionPath(),
           stat.getSuccessDeleteFiles(), stat.getFailedDeleteFiles(), rollbackLogFiles, probableLogFiles);
@@ -81,9 +81,9 @@ public class TimelineMetadataUtils {
     }
 
     return new HoodieRollbackMetadata(startRollbackTime, durationInMs.orElseGet(() -> -1L), totalDeleted,
-        instants.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()),
-        Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION,
-        instants.stream().map(instant -> new HoodieInstantInfo(instant.getTimestamp(), instant.getAction())).collect(Collectors.toList()));
+      instants.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()),
+      Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION,
+      instants.stream().map(instant -> new HoodieInstantInfo(instant.getTimestamp(), instant.getAction())).collect(Collectors.toList()));
   }
 
   public static HoodieSavepointMetadata convertSavepointMetadata(String user, String comment,
@@ -94,7 +94,7 @@ public class TimelineMetadataUtils {
       partitionMetadataBuilder.put(stat.getKey(), metadata);
     }
     return new HoodieSavepointMetadata(user, System.currentTimeMillis(), comment,
-        Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION);
+      Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION);
   }
 
   public static Option<byte[]> serializeCompactionPlan(HoodieCompactionPlan compactionWorkload) throws IOException {
