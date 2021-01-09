@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -498,6 +499,15 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
       assertFalse(metadata(client).isInSync());
+      
+      // insert overwrite to test replacecommit
+      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      client.startCommitWithTime(newCommitTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
+      records = dataGen.generateInserts(newCommitTime, 5);
+      HoodieWriteResult replaceResult = client.insertOverwrite(jsc.parallelize(records, 1), newCommitTime);
+      writeStatuses = replaceResult.getWriteStatuses().collect();
+      assertNoWriteErrors(writeStatuses);
+      assertFalse(metadata(client).isInSync());
     }
 
     // Enable metadata table and ensure it is synced
@@ -800,6 +810,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
 
         // FileSystemView should expose the same data
         List<HoodieFileGroup> fileGroups = tableView.getAllFileGroups(partition).collect(Collectors.toList());
+        fileGroups.addAll(tableView.getAllReplacedFileGroups(partition).collect(Collectors.toList()));
 
         fileGroups.forEach(g -> LogManager.getLogger(TestHoodieBackedMetadata.class).info(g));
         fileGroups.forEach(g -> g.getAllBaseFiles().forEach(b -> LogManager.getLogger(TestHoodieBackedMetadata.class).info(b)));

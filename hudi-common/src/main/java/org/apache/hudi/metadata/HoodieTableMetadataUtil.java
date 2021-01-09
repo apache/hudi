@@ -23,11 +23,9 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.avro.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -96,8 +94,9 @@ public class HoodieTableMetadataUtil {
         // Nothing to be done here
         break;
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
-        HoodieReplaceCommitMetadata replaceMetadata = TimelineMetadataUtils.deserializeHoodieReplaceMetadata(
-            timeline.getInstantDetails(instant).get());
+        HoodieReplaceCommitMetadata replaceMetadata = HoodieReplaceCommitMetadata.fromBytes(
+            timeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+        // Note: we only add new files created here. Replaced files are removed from metadata later by cleaner.
         records = Option.of(convertMetadataToRecords(replaceMetadata, instant.getTimestamp()));
         break;
       default:
@@ -105,24 +104,6 @@ public class HoodieTableMetadataUtil {
     }
 
     return records;
-  }
-
-  public static List<HoodieRecord> convertMetadataToRecords(HoodieReplaceCommitMetadata replaceCommitMetadata, String instantTime) {
-    // treat the newly written files, as if they were a commit action.
-    HoodieCommitMetadata addedFilesMetadata = new HoodieCommitMetadata();
-    addedFilesMetadata.setOperationType(WriteOperationType.valueOf(replaceCommitMetadata.getOperationType()));
-    replaceCommitMetadata.getExtraMetadata().forEach(addedFilesMetadata::addMetadata);
-    replaceCommitMetadata.getPartitionToWriteStats().forEach((k,v) -> v.forEach(s -> {
-          HoodieWriteStat writeStat = new HoodieWriteStat();
-          // only set the few fields that are actually needed.
-          writeStat.setFileSizeInBytes(s.getFileSizeInBytes());
-          writeStat.setTotalWriteBytes(s.getTotalWriteBytes());
-          writeStat.setPath(s.getPath());
-          writeStat.setNumDeletes(s.getNumDeletes());
-          addedFilesMetadata.addWriteStat(k, writeStat);
-        }
-    ));
-    return convertMetadataToRecords(addedFilesMetadata, instantTime);
   }
 
   /**

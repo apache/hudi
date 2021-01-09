@@ -21,12 +21,11 @@ package org.apache.hudi.table.action.clean;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieActionInstant;
+import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
-import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -50,7 +49,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public abstract class BaseCleanActionExecutor<T extends HoodieRecordPayload, I, K, O> extends BaseActionExecutor<T, I, K, O, HoodieCleanMetadata> {
 
@@ -83,21 +81,9 @@ public abstract class BaseCleanActionExecutor<T extends HoodieRecordPayload, I, 
 
       context.setJobStatus(this.getClass().getSimpleName(), "Generates list of file slices to be cleaned");
 
-      // Compute the file paths, to be cleaned in each valid file group
-      Stream<Pair<String, List<CleanFileInfo>>> cleanInfos = context.map(partitionsToClean,
-          partitionPathToClean -> Pair.of(partitionPathToClean, planner.getDeletePaths(partitionPathToClean)),
-          cleanerParallelism).stream();
-
-      // Compute the file paths, to be cleaned in replaced file groups
-      List<Pair<String, List<String>>> partitionToReplacedFileIds = planner.getReplacedFileIdsToClean(earliestInstant).entrySet().stream()
-          .map(e -> Pair.of(e.getKey(), e.getValue()))
-          .collect(Collectors.toList());
-      Stream<Pair<String, List<CleanFileInfo>>> replacedCleanInfos = context.map(partitionToReplacedFileIds, partitionFileIds -> {
-        String partitionPath = partitionFileIds.getKey();
-        return Pair.of(partitionPath, planner.getDeletePathsForReplacedFileGroups(partitionPath, partitionFileIds.getRight()));
-      }, cleanerParallelism).stream();
-
-      Map<String, List<HoodieCleanFileInfo>> cleanOps = Stream.concat(cleanInfos, replacedCleanInfos)
+      Map<String, List<HoodieCleanFileInfo>> cleanOps = context
+          .map(partitionsToClean, partitionPathToClean -> Pair.of(partitionPathToClean, planner.getDeletePaths(partitionPathToClean)), cleanerParallelism)
+          .stream()
           .collect(Collectors.toMap(Pair::getKey, y -> CleanerUtils.convertToHoodieCleanFileInfoList(y.getValue())));
 
       return new HoodieCleanerPlan(earliestInstant
