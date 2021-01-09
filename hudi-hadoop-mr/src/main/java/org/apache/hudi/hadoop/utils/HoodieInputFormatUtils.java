@@ -472,40 +472,39 @@ public class HoodieInputFormatUtils {
   }
 
   /**
-   * List affected file status based on given commits.
+   * Iterate through a list of commits in ascending order, and extract the file status of
+   * all affected files from the commits metadata grouping by partition path. If the files has
+   * been touched multiple times in the given commits, the return value will keep the one
+   * from the latest commit.
    * @param basePath
    * @param commitsToCheck
    * @param timeline
    * @return HashMap<partitionPath, HashMap<fileName, FileStatus>>
    * @throws IOException
    */
-  public static HashMap<String, HashMap<String, FileStatus>> listStatusForAffectedPartitions(
+  public static HashMap<String, HashMap<String, FileStatus>> listAffectedFilesForCommits(
       Path basePath, List<HoodieInstant> commitsToCheck, HoodieTimeline timeline) throws IOException {
-    // Extract files touched by these commits.
-    // TODO This might need to be done in parallel like listStatus parallelism ?
+    // TODO: Use HoodieMetaTable to extract affected file directly.
     HashMap<String, HashMap<String, FileStatus>> partitionToFileStatusesMap = new HashMap<>();
-    for (HoodieInstant commit: commitsToCheck) {
+    List<HoodieInstant> sortedCommitsToCheck = new ArrayList<>(commitsToCheck);
+    sortedCommitsToCheck.sort(HoodieInstant::compareTo);
+    // Iterate through the given commits.
+    for (HoodieInstant commit: sortedCommitsToCheck) {
       HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get(),
           HoodieCommitMetadata.class);
+      // Iterate through all the affected partitions of a commit.
       for (Map.Entry<String, List<HoodieWriteStat>> entry: commitMetadata.getPartitionToWriteStats().entrySet()) {
         if (!partitionToFileStatusesMap.containsKey(entry.getKey())) {
           partitionToFileStatusesMap.put(entry.getKey(), new HashMap<>());
         }
+        // Iterate through all the written files of this partition.
         for (HoodieWriteStat stat : entry.getValue()) {
           String relativeFilePath = stat.getPath();
           Path fullPath = relativeFilePath != null ? FSUtils.getPartitionPath(basePath, relativeFilePath) : null;
           if (fullPath != null) {
-            if (partitionToFileStatusesMap.get(entry.getKey()).containsKey(fullPath.getName())) {
-              // If filesystem support Append. Update the FileStatus of log file if being appended.
-              FileStatus prevFileStatus = partitionToFileStatusesMap.get(entry.getKey()).get(fullPath.getName());
-              FileStatus combinedFs = new FileStatus(prevFileStatus.getLen() + stat.getTotalWriteBytes(),
-                  false, 0, 0, 0, fullPath);
-              partitionToFileStatusesMap.get(entry.getKey()).put(fullPath.getName(), combinedFs);
-            } else {
-              FileStatus fs = new FileStatus(stat.getTotalWriteBytes(), false, 0, 0,
-                  0, fullPath);
-              partitionToFileStatusesMap.get(entry.getKey()).put(fullPath.getName(), fs);
-            }
+            FileStatus fs = new FileStatus(stat.getFileSizeInBytes(), false, 0, 0,
+                0, fullPath);
+            partitionToFileStatusesMap.get(entry.getKey()).put(fullPath.getName(), fs);
           }
         }
       }

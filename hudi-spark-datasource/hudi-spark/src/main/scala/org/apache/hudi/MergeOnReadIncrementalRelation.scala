@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.listStatusForAffectedPartitions
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.listAffectedFilesForCommits
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.log4j.LogManager
 import org.apache.spark.deploy.SparkHadoopUtil
@@ -152,7 +152,7 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
   }
 
   def buildFileIndex(): List[HoodieMergeOnReadFileSplit] = {
-    val partitionsWithFileStatus = listStatusForAffectedPartitions(new Path(metaClient.getBasePath),
+    val partitionsWithFileStatus = listAffectedFilesForCommits(new Path(metaClient.getBasePath),
       commitsToReturn, commitsTimelineToReturn)
     val affectedFileStatus = new ListBuffer[FileStatus]
     partitionsWithFileStatus.iterator.foreach(p =>
