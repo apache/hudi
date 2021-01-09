@@ -42,15 +42,6 @@ public class HoodieRollbackStat implements Serializable {
   private final Map<FileStatus, Long> probableLogFileToSizeMap;
 
   public HoodieRollbackStat(String partitionPath, List<String> successDeleteFiles, List<String> failedDeleteFiles,
-      Map<FileStatus, Long> commandBlocksCount) {
-    this.partitionPath = partitionPath;
-    this.successDeleteFiles = successDeleteFiles;
-    this.failedDeleteFiles = failedDeleteFiles;
-    this.commandBlocksCount = commandBlocksCount;
-    this.probableLogFileToSizeMap = Collections.EMPTY_MAP;
-  }
-
-  public HoodieRollbackStat(String partitionPath, List<String> successDeleteFiles, List<String> failedDeleteFiles,
       Map<FileStatus, Long> commandBlocksCount, Map<FileStatus, Long> probableLogFileToSizeMap) {
     this.partitionPath = partitionPath;
     this.successDeleteFiles = successDeleteFiles;

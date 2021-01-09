@@ -78,7 +78,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
-
   private static final Logger LOG = LogManager.getLogger(TestHoodieBackedMetadata.class);
 
   @TempDir
@@ -792,12 +791,12 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
 
           for (String fileName : fsFileNames) {
             if (!metadataFilenames.contains(fileName)) {
-              System.out.println(partition + "FsFilename " + fileName + " not found in Meta data");
+              LOG.error(partition + "FsFilename " + fileName + " not found in Meta data");
             }
           }
           for (String fileName : metadataFilenames) {
             if (!fsFileNames.contains(fileName)) {
-              System.out.println(partition + "Metadata file " + fileName + " not found in original FS");
+              LOG.error(partition + "Metadata file " + fileName + " not found in original FS");
             }
           }
         }

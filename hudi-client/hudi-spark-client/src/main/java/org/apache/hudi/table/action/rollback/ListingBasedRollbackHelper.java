@@ -100,7 +100,6 @@ public class ListingBasedRollbackHelper implements Serializable {
   JavaPairRDD<String, HoodieRollbackStat> maybeDeleteAndCollectStats(HoodieEngineContext context, HoodieInstant instantToRollback, List<ListingBasedRollbackRequest> rollbackRequests,
       int sparkPartitions, boolean doDelete) {
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
-
     return jsc.parallelize(rollbackRequests, sparkPartitions).mapToPair(rollbackRequest -> {
       switch (rollbackRequest.getType()) {
         case DELETE_DATA_FILES_ONLY: {
