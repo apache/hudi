@@ -285,7 +285,7 @@ public class HoodieTableMetadataUtil {
         // Extract appended file name from the absolute paths saved in getWrittenLogFiles()
         pm.getWrittenLogFiles().forEach((path, size) -> {
           partitionToAppendedFiles.get(partition).merge(new Path(path).getName(), size, (oldSize, newSizeCopy) -> {
-            return size;
+            return oldSize;
           });
         });
       }
