@@ -1,0 +1,32 @@
+[*]
+charset = utf-8
+end_of_line = lf
+indent_size = 2
+indent_style = space
+insert_final_newline = true
+max_line_length = 150
+tab_width = 2
+ij_continuation_indent_size = 2
+
+[*.java]
+max_line_length = 200
+ij_continuation_indent_size = 4
+ij_java_binary_operation_sign_on_next_line = true
+ij_java_binary_operation_wrap = normal
+ij_java_call_parameters_new_line_after_left_paren = true
+ij_java_call_parameters_wrap = on_every_item
+ij_java_class_count_to_use_import_on_demand = 9999
+ij_java_doc_align_param_comments = false
+ij_java_doc_do_not_wrap_if_one_line = true
+ij_java_doc_enable_formatting = true
+ij_java_doc_indent_on_continuation = true
+ij_java_doc_keep_empty_lines = true
+ij_java_doc_preserve_line_breaks = false
+ij_java_imports_layout = org.apache.hudi.**, |, *, |, javax.**, |, java.**, |, scala.**, |, $*
+ij_java_layout_static_imports_separately = true
+ij_java_method_call_chain_wrap = on_every_item
+ij_java_method_parameters_new_line_after_left_paren = true
+ij_java_method_parameters_wrap = on_every_item
+ij_java_names_count_to_use_import_on_demand = 9999
+ij_java_variable_annotation_wrap = normal
+ij_java_wrap_first_method_in_call_chain = true

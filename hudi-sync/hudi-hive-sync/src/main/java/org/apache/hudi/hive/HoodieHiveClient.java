@@ -18,36 +18,36 @@
 
 package org.apache.hudi.hive;
 
-import java.io.UnsupportedEncodingException;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.metastore.api.MetaException;
-import org.apache.hadoop.hive.metastore.api.Partition;
-import org.apache.hadoop.hive.metastore.api.Table;
-import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.metastore.api.Database;
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.hadoop.hive.metastore.api.MetaException;
+import org.apache.hadoop.hive.metastore.api.Partition;
+import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 import org.apache.thrift.TException;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
@@ -76,12 +76,18 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   private HiveConf configuration;
 
   public HoodieHiveClient(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
-    super(cfg.basePath, cfg.assumeDatePartitioning, cfg.useFileListingFromMetadata, cfg.verifyMetadataFileListing, fs);
+    super(
+        cfg.basePath,
+        cfg.assumeDatePartitioning,
+        cfg.useFileListingFromMetadata,
+        cfg.verifyMetadataFileListing,
+        fs);
     this.syncConfig = cfg;
     this.fs = fs;
 
     this.configuration = configuration;
-    // Support both JDBC and metastore based implementations for backwards compatiblity. Future users should
+    // Support both JDBC and metastore based implementations for backwards compatiblity. Future
+    // users should
     // disable jdbc and depend on metastore client for all hive registrations
     if (cfg.useJdbc) {
       LOG.info("Creating hive connection " + cfg.jdbcUrl);
@@ -98,7 +104,8 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
           (PartitionValueExtractor) Class.forName(cfg.partitionValueExtractorClass).newInstance();
     } catch (Exception e) {
       throw new HoodieHiveSyncException(
-          "Failed to initialize PartitionValueExtractor class " + cfg.partitionValueExtractorClass, e);
+          "Failed to initialize PartitionValueExtractor class " + cfg.partitionValueExtractorClass,
+          e);
     }
 
     activeTimeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
@@ -108,9 +115,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     return activeTimeline;
   }
 
-  /**
-   * Add the (NEW) partitions to the table.
-   */
+  /** Add the (NEW) partitions to the table. */
   @Override
   public void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
     if (partitionsToAdd.isEmpty()) {
@@ -122,9 +127,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     updateHiveSQL(sql);
   }
 
-  /**
-   * Partition path has changed - update the path for te following partitions.
-   */
+  /** Partition path has changed - update the path for te following partitions. */
   @Override
   public void updatePartitionsToTable(String tableName, List<String> changedPartitions) {
     if (changedPartitions.isEmpty()) {
@@ -140,13 +143,24 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
 
   private String constructAddPartitions(String tableName, List<String> partitions) {
     StringBuilder alterSQL = new StringBuilder("ALTER TABLE ");
-    alterSQL.append(HIVE_ESCAPE_CHARACTER).append(syncConfig.databaseName)
-            .append(HIVE_ESCAPE_CHARACTER).append(".").append(HIVE_ESCAPE_CHARACTER)
-            .append(tableName).append(HIVE_ESCAPE_CHARACTER).append(" ADD IF NOT EXISTS ");
+    alterSQL
+        .append(HIVE_ESCAPE_CHARACTER)
+        .append(syncConfig.databaseName)
+        .append(HIVE_ESCAPE_CHARACTER)
+        .append(".")
+        .append(HIVE_ESCAPE_CHARACTER)
+        .append(tableName)
+        .append(HIVE_ESCAPE_CHARACTER)
+        .append(" ADD IF NOT EXISTS ");
     for (String partition : partitions) {
       String partitionClause = getPartitionClause(partition);
-      String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition).toString();
-      alterSQL.append("  PARTITION (").append(partitionClause).append(") LOCATION '").append(fullPartitionPath)
+      String fullPartitionPath =
+          FSUtils.getPartitionPath(syncConfig.basePath, partition).toString();
+      alterSQL
+          .append("  PARTITION (")
+          .append(partitionClause)
+          .append(") LOCATION '")
+          .append(fullPartitionPath)
           .append("' ");
     }
     return alterSQL.toString();
@@ -160,8 +174,12 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
    */
   private String getPartitionClause(String partition) {
     List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
-    ValidationUtils.checkArgument(syncConfig.partitionFields.size() == partitionValues.size(),
-        "Partition key parts " + syncConfig.partitionFields + " does not match with partition values " + partitionValues
+    ValidationUtils.checkArgument(
+        syncConfig.partitionFields.size() == partitionValues.size(),
+        "Partition key parts "
+            + syncConfig.partitionFields
+            + " does not match with partition values "
+            + partitionValues
             + ". Check partition strategy. ");
     List<String> partBuilder = new ArrayList<>();
     for (int i = 0; i < syncConfig.partitionFields.size(); i++) {
@@ -182,42 +200,56 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
 
   private List<String> constructChangePartitions(String tableName, List<String> partitions) {
     List<String> changePartitions = new ArrayList<>();
-    // Hive 2.x doesn't like db.table name for operations, hence we need to change to using the database first
-    String useDatabase = "USE " + HIVE_ESCAPE_CHARACTER + syncConfig.databaseName + HIVE_ESCAPE_CHARACTER;
+    // Hive 2.x doesn't like db.table name for operations, hence we need to change to using the
+    // database first
+    String useDatabase =
+        "USE " + HIVE_ESCAPE_CHARACTER + syncConfig.databaseName + HIVE_ESCAPE_CHARACTER;
     changePartitions.add(useDatabase);
     String alterTable = "ALTER TABLE " + HIVE_ESCAPE_CHARACTER + tableName + HIVE_ESCAPE_CHARACTER;
     for (String partition : partitions) {
       String partitionClause = getPartitionClause(partition);
       Path partitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition);
       String partitionScheme = partitionPath.toUri().getScheme();
-      String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
-              ? FSUtils.getDFSFullPartitionPath(fs, partitionPath) : partitionPath.toString();
+      String fullPartitionPath =
+          StorageSchemes.HDFS.getScheme().equals(partitionScheme)
+              ? FSUtils.getDFSFullPartitionPath(fs, partitionPath)
+              : partitionPath.toString();
       String changePartition =
-          alterTable + " PARTITION (" + partitionClause + ") SET LOCATION '" + fullPartitionPath + "'";
+          alterTable
+              + " PARTITION ("
+              + partitionClause
+              + ") SET LOCATION '"
+              + fullPartitionPath
+              + "'";
       changePartitions.add(changePartition);
     }
     return changePartitions;
   }
 
   /**
-   * Iterate over the storage partitions and find if there are any new partitions that need to be added or updated.
-   * Generate a list of PartitionEvent based on the changes required.
+   * Iterate over the storage partitions and find if there are any new partitions that need to be
+   * added or updated. Generate a list of PartitionEvent based on the changes required.
    */
-  List<PartitionEvent> getPartitionEvents(List<Partition> tablePartitions, List<String> partitionStoragePartitions) {
+  List<PartitionEvent> getPartitionEvents(
+      List<Partition> tablePartitions, List<String> partitionStoragePartitions) {
     Map<String, String> paths = new HashMap<>();
     for (Partition tablePartition : tablePartitions) {
       List<String> hivePartitionValues = tablePartition.getValues();
       String fullTablePartitionPath =
-          Path.getPathWithoutSchemeAndAuthority(new Path(tablePartition.getSd().getLocation())).toUri().getPath();
+          Path.getPathWithoutSchemeAndAuthority(new Path(tablePartition.getSd().getLocation()))
+              .toUri()
+              .getPath();
       paths.put(String.join(", ", hivePartitionValues), fullTablePartitionPath);
     }
 
     List<PartitionEvent> events = new ArrayList<>();
     for (String storagePartition : partitionStoragePartitions) {
       Path storagePartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, storagePartition);
-      String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
+      String fullStoragePartitionPath =
+          Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
       // Check if the partition values or if hdfs path is the same
-      List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
+      List<String> storagePartitionValues =
+          partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
       if (!storagePartitionValues.isEmpty()) {
         String storageValue = String.join(", ", storagePartitionValues);
         if (!paths.containsKey(storageValue)) {
@@ -230,23 +262,31 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     return events;
   }
 
-  /**
-   * Scan table partitions.
-   */
+  /** Scan table partitions. */
   public List<Partition> scanTablePartitions(String tableName) throws TException {
     return client.listPartitions(syncConfig.databaseName, tableName, (short) -1);
   }
 
   void updateTableDefinition(String tableName, MessageType newSchema) {
     try {
-      String newSchemaStr = HiveSchemaUtil.generateSchemaString(newSchema, syncConfig.partitionFields, syncConfig.supportTimestamp);
+      String newSchemaStr =
+          HiveSchemaUtil.generateSchemaString(
+              newSchema, syncConfig.partitionFields, syncConfig.supportTimestamp);
       // Cascade clause should not be present for non-partitioned tables
       String cascadeClause = syncConfig.partitionFields.size() > 0 ? " cascade" : "";
-      StringBuilder sqlBuilder = new StringBuilder("ALTER TABLE ").append(HIVE_ESCAPE_CHARACTER)
-              .append(syncConfig.databaseName).append(HIVE_ESCAPE_CHARACTER).append(".")
-              .append(HIVE_ESCAPE_CHARACTER).append(tableName)
-              .append(HIVE_ESCAPE_CHARACTER).append(" REPLACE COLUMNS(")
-              .append(newSchemaStr).append(" )").append(cascadeClause);
+      StringBuilder sqlBuilder =
+          new StringBuilder("ALTER TABLE ")
+              .append(HIVE_ESCAPE_CHARACTER)
+              .append(syncConfig.databaseName)
+              .append(HIVE_ESCAPE_CHARACTER)
+              .append(".")
+              .append(HIVE_ESCAPE_CHARACTER)
+              .append(tableName)
+              .append(HIVE_ESCAPE_CHARACTER)
+              .append(" REPLACE COLUMNS(")
+              .append(newSchemaStr)
+              .append(" )")
+              .append(cascadeClause);
       LOG.info("Updating table definition with " + sqlBuilder);
       updateHiveSQL(sqlBuilder.toString());
     } catch (IOException e) {
@@ -255,10 +295,21 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   }
 
   @Override
-  public void createTable(String tableName, MessageType storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass) {
+  public void createTable(
+      String tableName,
+      MessageType storageSchema,
+      String inputFormatClass,
+      String outputFormatClass,
+      String serdeClass) {
     try {
       String createSQLQuery =
-          HiveSchemaUtil.generateCreateDDL(tableName, storageSchema, syncConfig, inputFormatClass, outputFormatClass, serdeClass);
+          HiveSchemaUtil.generateCreateDDL(
+              tableName,
+              storageSchema,
+              syncConfig,
+              inputFormatClass,
+              outputFormatClass,
+              serdeClass);
       LOG.info("Creating table with " + createSQLQuery);
       updateHiveSQL(createSQLQuery);
     } catch (IOException e) {
@@ -266,9 +317,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     }
   }
 
-  /**
-   * Get the table schema.
-   */
+  /** Get the table schema. */
   @Override
   public Map<String, String> getTableSchema(String tableName) {
     if (syncConfig.useJdbc) {
@@ -304,15 +353,18 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
 
   public Map<String, String> getTableSchemaUsingMetastoreClient(String tableName) {
     try {
-      // HiveMetastoreClient returns partition keys separate from Columns, hence get both and merge to
+      // HiveMetastoreClient returns partition keys separate from Columns, hence get both and merge
+      // to
       // get the Schema of the table.
       final long start = System.currentTimeMillis();
       Table table = this.client.getTable(syncConfig.databaseName, tableName);
       Map<String, String> partitionKeysMap =
-          table.getPartitionKeys().stream().collect(Collectors.toMap(FieldSchema::getName, f -> f.getType().toUpperCase()));
+          table.getPartitionKeys().stream()
+              .collect(Collectors.toMap(FieldSchema::getName, f -> f.getType().toUpperCase()));
 
       Map<String, String> columnsMap =
-          table.getSd().getCols().stream().collect(Collectors.toMap(FieldSchema::getName, f -> f.getType().toUpperCase()));
+          table.getSd().getCols().stream()
+              .collect(Collectors.toMap(FieldSchema::getName, f -> f.getType().toUpperCase()));
 
       Map<String, String> schema = new HashMap<>();
       schema.putAll(columnsMap);
@@ -325,9 +377,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     }
   }
 
-  /**
-   * @return true if the configured table exists
-   */
+  /** @return true if the configured table exists */
   @Override
   public boolean doesTableExist(String tableName) {
     try {
@@ -339,7 +389,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
 
   /**
    * @param databaseName
-   * @return  true if the configured database exists
+   * @return true if the configured database exists
    */
   public boolean doesDataBaseExist(String databaseName) {
     try {
@@ -395,7 +445,9 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       ss.setCurrentDatabase(syncConfig.databaseName);
       hiveDriver = new org.apache.hadoop.hive.ql.Driver(configuration);
       final long endTime = System.currentTimeMillis();
-      LOG.info(String.format("Time taken to start SessionState and create Driver: %s ms", (endTime - startTime)));
+      LOG.info(
+          String.format(
+              "Time taken to start SessionState and create Driver: %s ms", (endTime - startTime)));
       for (String sql : sqls) {
         final long start = System.currentTimeMillis();
         responses.add(hiveDriver.run(sql));
@@ -433,10 +485,13 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       }
 
       try {
-        this.connection = DriverManager.getConnection(syncConfig.jdbcUrl, syncConfig.hiveUser, syncConfig.hivePass);
+        this.connection =
+            DriverManager.getConnection(
+                syncConfig.jdbcUrl, syncConfig.hiveUser, syncConfig.hivePass);
         LOG.info("Successfully established Hive connection to  " + syncConfig.jdbcUrl);
       } catch (SQLException e) {
-        throw new HoodieHiveSyncException("Cannot create hive connection " + getHiveJdbcUrlWithDefaultDBName(), e);
+        throw new HoodieHiveSyncException(
+            "Cannot create hive connection " + getHiveJdbcUrlWithDefaultDBName(), e);
       }
     }
   }
@@ -460,9 +515,11 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     // Get the last commit time from the TBLproperties
     try {
       Table database = client.getTable(syncConfig.databaseName, tableName);
-      return Option.ofNullable(database.getParameters().getOrDefault(HOODIE_LAST_COMMIT_TIME_SYNC, null));
+      return Option.ofNullable(
+          database.getParameters().getOrDefault(HOODIE_LAST_COMMIT_TIME_SYNC, null));
     } catch (Exception e) {
-      throw new HoodieHiveSyncException("Failed to get the last commit time synced from the database", e);
+      throw new HoodieHiveSyncException(
+          "Failed to get the last commit time synced from the database", e);
     }
   }
 
@@ -493,7 +550,8 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       table.putToParameters(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced);
       client.alter_table(syncConfig.databaseName, tableName, table);
     } catch (Exception e) {
-      throw new HoodieHiveSyncException("Failed to get update last commit time synced to " + lastCommitSynced, e);
+      throw new HoodieHiveSyncException(
+          "Failed to get update last commit time synced to " + lastCommitSynced, e);
     }
   }
 }

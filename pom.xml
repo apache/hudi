@@ -17,7 +17,8 @@
   limitations under the License.
 -->
 
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
@@ -137,6 +138,7 @@
     <utilities.bundle.hive.shade.prefix></utilities.bundle.hive.shade.prefix>
     <argLine>-Xmx2g</argLine>
     <jacoco.version>0.8.5</jacoco.version>
+    <spotless.version>2.4.2</spotless.version>
     <presto.bundle.bootstrap.scope>compile</presto.bundle.bootstrap.scope>
     <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>
     <shadeSources>true</shadeSources>
@@ -198,34 +200,35 @@
           </execution>
         </executions>
       </plugin>
-<!--
-      See https://jira.apache.org/jira/browse/HUDI-304
       <plugin>
         <groupId>com.diffplug.spotless</groupId>
         <artifactId>spotless-maven-plugin</artifactId>
-        <version>1.24.3</version>
+        <version>${spotless.version}</version>
         <configuration>
           <java>
-            <eclipse>
-              <file>${main.basedir}/style/eclipse-java-google-style.xml</file>
-              <version>4.10.0</version>
-            </eclipse>
-          </java>
-          <scala>
+            <googleJavaFormat>
+              <version>1.7</version>
+              <style>GOOGLE</style>
+            </googleJavaFormat>
+            <!-- \# refers to the static imports -->
+            <importOrder>
+              <order>org.apache.hudi,,javax,java,scala,\#</order>
+            </importOrder>
             <trimTrailingWhitespace/>
-          </scala>
+            <endWithNewline/>
+            <removeUnusedImports/>
+          </java>
         </configuration>
         <executions>
           <execution>
             <id>spotless-check</id>
-            <phase>compile</phase>
+            <phase>validate</phase>
             <goals>
               <goal>check</goal>
             </goals>
           </execution>
         </executions>
       </plugin>
--->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -331,9 +334,9 @@
                    under the License.
               -->
               <license implementation="org.apache.rat.analysis.license.SimplePatternBasedLicense">
-                <licenseFamilyCategory>AL2 </licenseFamilyCategory>
+                <licenseFamilyCategory>AL2</licenseFamilyCategory>
                 <licenseFamilyName>Apache License 2.0</licenseFamilyName>
-                <notes />
+                <notes/>
                 <patterns>
                   <pattern>Licensed to the Apache Software Foundation (ASF) under one</pattern>
                 </patterns>

@@ -26,73 +26,118 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Configs needed to sync data into Hive.
- */
+/** Configs needed to sync data into Hive. */
 public class HiveSyncConfig implements Serializable {
 
-  @Parameter(names = {"--database"}, description = "name of the target database in Hive", required = true)
+  @Parameter(
+      names = {"--database"},
+      description = "name of the target database in Hive",
+      required = true)
   public String databaseName;
 
-  @Parameter(names = {"--table"}, description = "name of the target table in Hive", required = true)
+  @Parameter(
+      names = {"--table"},
+      description = "name of the target table in Hive",
+      required = true)
   public String tableName;
 
-  @Parameter(names = {"--base-file-format"}, description = "Format of the base files (PARQUET (or) HFILE)")
+  @Parameter(
+      names = {"--base-file-format"},
+      description = "Format of the base files (PARQUET (or) HFILE)")
   public String baseFileFormat = "PARQUET";
 
-  @Parameter(names = {"--user"}, description = "Hive username", required = true)
+  @Parameter(
+      names = {"--user"},
+      description = "Hive username",
+      required = true)
   public String hiveUser;
 
-  @Parameter(names = {"--pass"}, description = "Hive password", required = true)
+  @Parameter(
+      names = {"--pass"},
+      description = "Hive password",
+      required = true)
   public String hivePass;
 
-  @Parameter(names = {"--jdbc-url"}, description = "Hive jdbc connect url", required = true)
+  @Parameter(
+      names = {"--jdbc-url"},
+      description = "Hive jdbc connect url",
+      required = true)
   public String jdbcUrl;
 
-  @Parameter(names = {"--base-path"}, description = "Basepath of hoodie table to sync", required = true)
+  @Parameter(
+      names = {"--base-path"},
+      description = "Basepath of hoodie table to sync",
+      required = true)
   public String basePath;
 
   @Parameter(names = "--partitioned-by", description = "Fields in the schema partitioned by")
   public List<String> partitionFields = new ArrayList<>();
 
-  @Parameter(names = "--partition-value-extractor", description = "Class which implements PartitionValueExtractor "
-      + "to extract the partition values from HDFS path")
-  public String partitionValueExtractorClass = SlashEncodedDayPartitionValueExtractor.class.getName();
+  @Parameter(
+      names = "--partition-value-extractor",
+      description =
+          "Class which implements PartitionValueExtractor "
+              + "to extract the partition values from HDFS path")
+  public String partitionValueExtractorClass =
+      SlashEncodedDayPartitionValueExtractor.class.getName();
 
-  @Parameter(names = {"--assume-date-partitioning"}, description = "Assume standard yyyy/mm/dd partitioning, this"
-      + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter")
+  @Parameter(
+      names = {"--assume-date-partitioning"},
+      description =
+          "Assume standard yyyy/mm/dd partitioning, this"
+              + " exists to support backward compatibility. If you use hoodie 0.3.x, do not set this parameter")
   public Boolean assumeDatePartitioning = false;
 
-  @Parameter(names = {"--use-pre-apache-input-format"},
-      description = "Use InputFormat under com.uber.hoodie package "
-          + "instead of org.apache.hudi package. Use this when you are in the process of migrating from "
-          + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to "
-          + "org.apache.hudi input format.")
+  @Parameter(
+      names = {"--use-pre-apache-input-format"},
+      description =
+          "Use InputFormat under com.uber.hoodie package "
+              + "instead of org.apache.hudi package. Use this when you are in the process of migrating from "
+              + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to "
+              + "org.apache.hudi input format.")
   public Boolean usePreApacheInputFormat = false;
 
-  @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")
+  @Parameter(
+      names = {"--use-jdbc"},
+      description = "Hive jdbc connect url")
   public Boolean useJdbc = true;
 
-  @Parameter(names = {"--auto-create-database"}, description = "Auto create hive database")
+  @Parameter(
+      names = {"--auto-create-database"},
+      description = "Auto create hive database")
   public Boolean autoCreateDatabase = true;
 
-  @Parameter(names = {"--skip-ro-suffix"}, description = "Skip the `_ro` suffix for Read optimized table, when registering")
+  @Parameter(
+      names = {"--skip-ro-suffix"},
+      description = "Skip the `_ro` suffix for Read optimized table, when registering")
   public Boolean skipROSuffix = false;
 
-  @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")
-  public Boolean useFileListingFromMetadata = HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
+  @Parameter(
+      names = {"--use-file-listing-from-metadata"},
+      description = "Fetch file listing from Hudi's metadata")
+  public Boolean useFileListingFromMetadata =
+      HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 
-  @Parameter(names = {"--verify-metadata-file-listing"}, description = "Verify file listing from Hudi's metadata against file system")
+  @Parameter(
+      names = {"--verify-metadata-file-listing"},
+      description = "Verify file listing from Hudi's metadata against file system")
   public Boolean verifyMetadataFileListing = HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE;
 
-  @Parameter(names = {"--help", "-h"}, help = true)
+  @Parameter(
+      names = {"--help", "-h"},
+      help = true)
   public Boolean help = false;
 
-  @Parameter(names = {"--support-timestamp"}, description = "'INT64' with original type TIMESTAMP_MICROS is converted to hive 'timestamp' type."
-      + "Disabled by default for backward compatibility.")
+  @Parameter(
+      names = {"--support-timestamp"},
+      description =
+          "'INT64' with original type TIMESTAMP_MICROS is converted to hive 'timestamp' type."
+              + "Disabled by default for backward compatibility.")
   public Boolean supportTimestamp = false;
 
-  @Parameter(names = {"--decode-partition"}, description = "Decode the partition value if the partition has encoded during writing")
+  @Parameter(
+      names = {"--decode-partition"},
+      description = "Decode the partition value if the partition has encoded during writing")
   public Boolean decodePartition = false;
 
   public static HiveSyncConfig copy(HiveSyncConfig cfg) {
@@ -117,25 +162,52 @@ public class HiveSyncConfig implements Serializable {
   @Override
   public String toString() {
     return "HiveSyncConfig{"
-        + "databaseName='" + databaseName + '\''
-        + ", tableName='" + tableName + '\''
-        + ", baseFileFormat='" + baseFileFormat + '\''
-        + ", hiveUser='" + hiveUser + '\''
-        + ", hivePass='" + hivePass + '\''
-        + ", jdbcUrl='" + jdbcUrl + '\''
-        + ", basePath='" + basePath + '\''
-        + ", partitionFields=" + partitionFields
-        + ", partitionValueExtractorClass='" + partitionValueExtractorClass + '\''
-        + ", assumeDatePartitioning=" + assumeDatePartitioning
-        + ", usePreApacheInputFormat=" + usePreApacheInputFormat
-        + ", useJdbc=" + useJdbc
-        + ", autoCreateDatabase=" + autoCreateDatabase
-        + ", skipROSuffix=" + skipROSuffix
-        + ", help=" + help
-        + ", supportTimestamp=" + supportTimestamp
-        + ", decodePartition=" + decodePartition
-        + ", useFileListingFromMetadata=" + useFileListingFromMetadata
-        + ", verifyMetadataFileListing=" + verifyMetadataFileListing
+        + "databaseName='"
+        + databaseName
+        + '\''
+        + ", tableName='"
+        + tableName
+        + '\''
+        + ", baseFileFormat='"
+        + baseFileFormat
+        + '\''
+        + ", hiveUser='"
+        + hiveUser
+        + '\''
+        + ", hivePass='"
+        + hivePass
+        + '\''
+        + ", jdbcUrl='"
+        + jdbcUrl
+        + '\''
+        + ", basePath='"
+        + basePath
+        + '\''
+        + ", partitionFields="
+        + partitionFields
+        + ", partitionValueExtractorClass='"
+        + partitionValueExtractorClass
+        + '\''
+        + ", assumeDatePartitioning="
+        + assumeDatePartitioning
+        + ", usePreApacheInputFormat="
+        + usePreApacheInputFormat
+        + ", useJdbc="
+        + useJdbc
+        + ", autoCreateDatabase="
+        + autoCreateDatabase
+        + ", skipROSuffix="
+        + skipROSuffix
+        + ", help="
+        + help
+        + ", supportTimestamp="
+        + supportTimestamp
+        + ", decodePartition="
+        + decodePartition
+        + ", useFileListingFromMetadata="
+        + useFileListingFromMetadata
+        + ", verifyMetadataFileListing="
+        + verifyMetadataFileListing
         + '}';
   }
 }
