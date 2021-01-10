@@ -195,7 +195,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
   private JavaRDD<GenericRecord> projectSchema(JavaRDD<GenericRecord> updates) {
     // The records read from the hoodie dataset have the hoodie record fields, rewrite the record to eliminate them
     return updates
-        .map(r -> HoodieAvroUtils.rewriteRecordWithOnlyNewSchemaFields(r, new Schema.Parser().parse(schemaStr)));
+        .map(r -> HoodieAvroUtils.rewriteRecord(r, new Schema.Parser().parse(schemaStr)));
   }
 
   private JavaRDD<GenericRecord> generateUpdates(Map<String, Integer> adjustedPartitionToFileIdCountMap,
