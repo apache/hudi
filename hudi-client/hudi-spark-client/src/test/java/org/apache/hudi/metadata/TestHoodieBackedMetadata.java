@@ -446,8 +446,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       assertTrue(metadata(client).isInSync());
     }
 
-    // Various table operations without metadata table enabled. When metadata is disabled, file system
-    // is directly used to fetch metadata and hence is always in sync.
+    // Various table operations without metadata table enabled
     String restoreToInstant;
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, false))) {
       // updates
@@ -500,8 +499,8 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       records = dataGen.generateUniqueUpdates(newCommitTime, 10);
       writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
-      assertFalse(metadata(client).isInSync());
-      
+      assertTrue(metadata(client).isInSync());
+
       // insert overwrite to test replacecommit
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
@@ -509,7 +508,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       HoodieWriteResult replaceResult = client.insertOverwrite(jsc.parallelize(records, 1), newCommitTime);
       writeStatuses = replaceResult.getWriteStatuses().collect();
       assertNoWriteErrors(writeStatuses);
-      assertFalse(metadata(client).isInSync());
+      assertTrue(metadata(client).isInSync());
     }
 
     // Enable metadata table and ensure it is synced

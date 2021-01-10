@@ -39,8 +39,7 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingMapToPairW
 import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper;
 
 /**
- * A java based engine context that can be used from map-reduce tasks executing in query engines like
- * spark, hive and presto.
+ * A java based engine context, use this implementation on the query engine integrations if needed.
  */
 public final class HoodieLocalEngineContext extends HoodieEngineContext {
 
