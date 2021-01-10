@@ -17,8 +17,6 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.{FileStatus, FileSystem, GlobPattern, Path}
-import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
@@ -26,8 +24,10 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.listAffectedFilesForCommits
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
+
+import org.apache.hadoop.fs.{FileStatus, GlobPattern, Path}
+import org.apache.hadoop.mapred.JobConf
 import org.apache.log4j.LogManager
-import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
@@ -138,9 +138,6 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
     )
 
-    // Follow the implementation of Spark internal HadoopRDD to handle the broadcast configuration.
-    FileSystem.getLocal(jobConf)
-    SparkHadoopUtil.get.addCredentials(jobConf)
     val rdd = new HoodieMergeOnReadRDD(
       sqlContext.sparkContext,
       jobConf,
