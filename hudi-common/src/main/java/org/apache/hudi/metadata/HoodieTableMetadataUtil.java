@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -91,6 +92,12 @@ public class HoodieTableMetadataUtil {
         break;
       case HoodieTimeline.SAVEPOINT_ACTION:
         // Nothing to be done here
+        break;
+      case HoodieTimeline.REPLACE_COMMIT_ACTION:
+        HoodieReplaceCommitMetadata replaceMetadata = HoodieReplaceCommitMetadata.fromBytes(
+            timeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+        // Note: we only add new files created here. Replaced files are removed from metadata later by cleaner.
+        records = Option.of(convertMetadataToRecords(replaceMetadata, instant.getTimestamp()));
         break;
       default:
         throw new HoodieException("Unknown type of action " + instant.getAction());

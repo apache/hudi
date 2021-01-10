@@ -86,7 +86,7 @@ public class ClusteringUtils {
         LOG.warn("No content found in requested file for instant " + pendingReplaceInstant);
         return Option.empty();
       }
-      HoodieRequestedReplaceMetadata requestedReplaceMetadata = TimelineMetadataUtils.deserializeRequestedReplaceMetadta(content.get());
+      HoodieRequestedReplaceMetadata requestedReplaceMetadata = TimelineMetadataUtils.deserializeRequestedReplaceMetadata(content.get());
       if (WriteOperationType.CLUSTER.name().equals(requestedReplaceMetadata.getOperationType())) {
         return Option.of(Pair.of(pendingReplaceInstant, requestedReplaceMetadata.getClusteringPlan()));
       }
