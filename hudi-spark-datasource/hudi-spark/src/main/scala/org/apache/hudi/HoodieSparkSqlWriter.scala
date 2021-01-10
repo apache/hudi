@@ -94,13 +94,6 @@ private[hudi] object HoodieSparkSqlWriter {
       operation = WriteOperationType.INSERT
     }
 
-    // If the mode is Overwrite, can set operation to INSERT_OVERWRITE_TABLE.
-    // Then in DataSourceUtils.doWriteOperation will use client.insertOverwriteTable to overwrite
-    // the table. This will replace the old fs.delete(tablepath) mode.
-    if (mode == SaveMode.Overwrite && operation !=  WriteOperationType.INSERT_OVERWRITE_TABLE) {
-      operation = WriteOperationType.INSERT_OVERWRITE_TABLE
-    }
-
     val jsc = new JavaSparkContext(sparkContext)
     val basePath = new Path(path.get)
     val instantTime = HoodieActiveTimeline.createNewInstantTime()
@@ -340,6 +333,12 @@ private[hudi] object HoodieSparkSqlWriter {
     if (operation != WriteOperationType.DELETE) {
       if (mode == SaveMode.ErrorIfExists && tableExists) {
         throw new HoodieException(s"hoodie table at $tablePath already exists.")
+      } else if (mode == SaveMode.Overwrite && tableExists && operation !=  WriteOperationType.INSERT_OVERWRITE_TABLE) {
+        // When user set operation as INSERT_OVERWRITE_TABLE,
+        // overwrite will use INSERT_OVERWRITE_TABLE operator in doWriteOperation
+        log.warn(s"hoodie table at $tablePath already exists. Deleting existing data & overwriting with new data.")
+        fs.delete(tablePath, true)
+        tableExists = false
       }
     } else {
       // Delete Operation only supports Append mode
