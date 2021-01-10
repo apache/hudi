@@ -290,10 +290,10 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
       LOG.info("Wrapper schema " + wrapperSchema.toString());
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
+        // TODO HUDI-1518 Cleaner now takes care of removing replaced file groups. This call to deleteReplacedFileGroups can be removed.
         boolean deleteSuccess = deleteReplacedFileGroups(context, hoodieInstant);
         if (!deleteSuccess) {
-          // throw error and stop archival if deleting replaced file groups failed.
-          throw new HoodieCommitException("Unable to delete file(s) for " + hoodieInstant.getFileName());
+          LOG.warn("Unable to delete file(s) for " + hoodieInstant.getFileName() + ", replaced files possibly deleted by cleaner");
         }
         try {
           deleteAnyLeftOverMarkerFiles(context, hoodieInstant);
