@@ -90,7 +90,8 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
     String fileId = FSUtils.getFileIdFromFilePath(baseFilePathForAppend);
     String baseCommitTime = FSUtils.getCommitTime(baseFilePathForAppend.getName());
     String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), new Path(basePath, appendBaseFilePath).getParent());
-    final Map<FileStatus, Long> writtenLogFileSizeMap = getWrittenLogFileSizeMap(partitionPath, baseCommitTime, fileId);
+    final Map<FileStatus, Long> writtenLogFileSizeMap = config.useFileListingMetadata()
+        ? getWrittenLogFileSizeMap(partitionPath, baseCommitTime, fileId) : Collections.EMPTY_MAP;
 
     HoodieLogFormat.Writer writer = null;
     try {
@@ -130,13 +131,10 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
           1L);
     }
 
-    HoodieRollbackStat.Builder builder = HoodieRollbackStat.newBuilder()
+    return HoodieRollbackStat.newBuilder()
         .withPartitionPath(partitionPath)
-        .withRollbackBlockAppendResults(filesToNumBlocksRollback);
-    if (!writtenLogFileSizeMap.isEmpty()) {
-      builder.withWrittenLogFileSizeMap(writtenLogFileSizeMap);
-    }
-    return builder.build();
+        .withRollbackBlockAppendResults(filesToNumBlocksRollback)
+        .withWrittenLogFileSizeMap(writtenLogFileSizeMap).build();
   }
 
   /**

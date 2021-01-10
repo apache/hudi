@@ -120,10 +120,13 @@ public class ListingBasedRollbackHelper implements Serializable {
         }
         case APPEND_ROLLBACK_BLOCK: {
           // collect all log files that is supposed to be deleted with this rollback
-          Path partitionPath = FSUtils.getPartitionPath(config.getBasePath(), rollbackRequest.getPartitionPath());
-          final Map<FileStatus, Long> writtenLogFileSizeMap = metaClient.getFs().exists(partitionPath) ? FSUtils.getAllLogFiles(metaClient.getFs(), partitionPath,
-              HoodieFileFormat.HOODIE_LOG.getFileExtension(), rollbackRequest.getLatestBaseInstant().get()).collect(Collectors.toMap(HoodieLogFile::getFileStatus,
-                value -> value.getFileStatus().getLen())) : Collections.EMPTY_MAP;
+          Map<FileStatus, Long> writtenLogFileSizeMap = Collections.EMPTY_MAP;
+          if (config.useFileListingMetadata()) {
+            Path partitionPath = FSUtils.getPartitionPath(config.getBasePath(), rollbackRequest.getPartitionPath());
+            writtenLogFileSizeMap = metaClient.getFs().exists(partitionPath) ? FSUtils.getAllLogFiles(metaClient.getFs(), partitionPath,
+                HoodieFileFormat.HOODIE_LOG.getFileExtension(), rollbackRequest.getLatestBaseInstant().get()).collect(Collectors.toMap(HoodieLogFile::getFileStatus,
+                  value -> value.getFileStatus().getLen())) : Collections.EMPTY_MAP;
+          }
 
           Writer writer = null;
           try {
