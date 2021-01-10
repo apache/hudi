@@ -18,34 +18,38 @@
 
 package org.apache.hudi.utilities;
 
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
-
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.jetbrains.annotations.TestOnly;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-public class HoodieCompactor {
+public class HoodieClusteringJob {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieCompactor.class);
+  private static final Logger LOG = LogManager.getLogger(HoodieClusteringJob.class);
   private final Config cfg;
   private transient FileSystem fs;
   private TypedProperties props;
   private final JavaSparkContext jsc;
 
-  public HoodieCompactor(JavaSparkContext jsc, Config cfg) {
+  public HoodieClusteringJob(JavaSparkContext jsc, Config cfg) {
     this.cfg = cfg;
     this.jsc = jsc;
     this.props = cfg.propsFilePath == null
@@ -66,27 +70,25 @@ public class HoodieCompactor {
     public String basePath = null;
     @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
     public String tableName = null;
-    @Parameter(names = {"--instant-time", "-it"}, description = "Compaction Instant time", required = true)
-    public String compactionInstantTime = null;
-    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert", required = true)
+    @Parameter(names = {"--instant-time", "-it"}, description = "Clustering Instant time, only need when cluster. "
+        + "And schedule clustering can generate it.", required = false)
+    public String clusteringInstantTime = null;
+    @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert", required = false)
     public int parallelism = 1;
-    @Parameter(names = {"--schema-file", "-sf"}, description = "path for Avro schema file", required = true)
-    public String schemaFile = null;
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
     public String sparkMemory = null;
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries", required = false)
     public int retry = 0;
-    @Parameter(names = {"--schedule", "-sc"}, description = "Schedule compaction", required = false)
+
+    @Parameter(names = {"--schedule", "-sc"}, description = "Schedule clustering")
     public Boolean runSchedule = false;
-    @Parameter(names = {"--strategy", "-st"}, description = "Strategy Class", required = false)
-    public String strategyClassName = null;
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
-        + "hoodie client for compacting")
+        + "hoodie client for clustering")
     public String propsFilePath = null;
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
@@ -98,44 +100,71 @@ public class HoodieCompactor {
   public static void main(String[] args) {
     final Config cfg = new Config();
     JCommander cmd = new JCommander(cfg, null, args);
-    if (cfg.help || args.length == 0) {
+    if (cfg.help || args.length == 0 || (!cfg.runSchedule && cfg.clusteringInstantTime == null)) {
       cmd.usage();
       System.exit(1);
     }
-    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("compactor-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
-    HoodieCompactor compactor = new HoodieCompactor(jsc, cfg);
-    compactor.compact(cfg.retry);
+    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("clustering-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
+    HoodieClusteringJob clusteringJob = new HoodieClusteringJob(jsc, cfg);
+    int result = clusteringJob.cluster(cfg.retry);
+    String resultMsg = String.format("Clustering with basePath: %s, tableName: %s, runSchedule: %s",
+        cfg.basePath, cfg.tableName, cfg.runSchedule);
+    if (result == -1) {
+      LOG.error(resultMsg + " failed");
+    } else {
+      LOG.info(resultMsg + " success");
+    }
+    jsc.stop();
   }
 
-  public int compact(int retry) {
+  public int cluster(int retry) {
     this.fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
     int ret = UtilHelpers.retry(retry, () -> {
       if (cfg.runSchedule) {
-        if (null == cfg.strategyClassName) {
-          throw new IllegalArgumentException("Missing Strategy class name for running compaction");
+        LOG.info("Do schedule");
+        Option<String> instantTime = doSchedule(jsc);
+        int result = instantTime.isPresent() ? 0 : -1;
+        if (result == 0) {
+          LOG.info("The schedule instant time is " + instantTime.get());
         }
-        return doSchedule(jsc);
+        return result;
       } else {
-        return doCompact(jsc);
+        LOG.info("Do cluster");
+        return doCluster(jsc);
       }
-    }, "Compact failed");
+    }, "Cluster failed");
     return ret;
   }
 
-  private int doCompact(JavaSparkContext jsc) throws Exception {
-    // Get schema.
-    String schemaStr = UtilHelpers.parseSchema(fs, cfg.schemaFile);
-    SparkRDDWriteClient client =
-        UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props);
-    JavaRDD<WriteStatus> writeResponse = (JavaRDD<WriteStatus>) client.compact(cfg.compactionInstantTime);
-    return UtilHelpers.handleErrors(jsc, cfg.compactionInstantTime, writeResponse);
+  private String getSchemaFromLatestInstant() throws Exception {
+    HoodieTableMetaClient metaClient =  new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.basePath, true);
+    TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
+    if (metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
+      throw new HoodieException("Cannot run clustering without any completed commits");
+    }
+    Schema schema = schemaUtil.getTableAvroSchema(false);
+    return schema.toString();
   }
 
-  private int doSchedule(JavaSparkContext jsc) throws Exception {
-    // Get schema.
+  private int doCluster(JavaSparkContext jsc) throws Exception {
+    String schemaStr = getSchemaFromLatestInstant();
     SparkRDDWriteClient client =
-        UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.of(cfg.strategyClassName), props);
-    client.scheduleCompactionAtInstant(cfg.compactionInstantTime, Option.empty());
-    return 0;
+        UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props);
+    JavaRDD<WriteStatus> writeResponse =
+        (JavaRDD<WriteStatus>) client.cluster(cfg.clusteringInstantTime, true).getWriteStatuses();
+    return UtilHelpers.handleErrors(jsc, cfg.clusteringInstantTime, writeResponse);
   }
+
+  @TestOnly
+  public Option<String> doSchedule() throws Exception {
+    return this.doSchedule(jsc);
+  }
+
+  private Option<String> doSchedule(JavaSparkContext jsc) throws Exception {
+    String schemaStr = getSchemaFromLatestInstant();
+    SparkRDDWriteClient client =
+        UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props);
+    return client.scheduleClustering(Option.empty());
+  }
+
 }

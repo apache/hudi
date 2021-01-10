@@ -204,9 +204,10 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       // check have schedule clustering and clustering file group to one
       waitTillHasCompletedReplaceInstant(destPath, 120, 5)
       metaClient.reloadActiveTimeline()
-      assertEquals(1, getLatestFileGroupsFileId.size)
+      assertEquals(1, getLatestFileGroupsFileId(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH).size)
     }
-    structuredStreamingForTestClusteringRunner(sourcePath, destPath, true, checkClusteringResult)
+    structuredStreamingForTestClusteringRunner(sourcePath, destPath, true,
+      HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, checkClusteringResult)
   }
 
   @Test
@@ -219,21 +220,21 @@ class TestStructuredStreaming extends HoodieClientTestBase {
         override def execute(): Unit = {
           waitTillHasCompletedReplaceInstant(destPath, 120, 5)
         }
-      }
-        , "Should have replace commit completed")
+      }, msg)
       println(msg)
     }
-    structuredStreamingForTestClusteringRunner(sourcePath, destPath, false, checkClusteringResult)
+    structuredStreamingForTestClusteringRunner(sourcePath, destPath, false,
+      HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, checkClusteringResult)
   }
 
   def structuredStreamingForTestClusteringRunner(sourcePath: String, destPath: String,
-                                           isInlineClustering: Boolean, checkClusteringResult: String => Unit): Unit = {
+                                           isInlineClustering: Boolean, partitionOfRecords: String, checkClusteringResult: String => Unit): Unit = {
     // First insert of data
-    val records1 = recordsToStrings(dataGen.generateInsertsForPartition("000", 100, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).toList
+    val records1 = recordsToStrings(dataGen.generateInsertsForPartition("000", 100, partitionOfRecords)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
 
     // Second insert of data
-    val records2 = recordsToStrings(dataGen.generateInsertsForPartition("001", 100, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).toList
+    val records2 = recordsToStrings(dataGen.generateInsertsForPartition("001", 100, partitionOfRecords)).toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
 
     val hudiOptions = getInlineClusteringOpts(isInlineClustering.toString, "2", 100)
@@ -252,7 +253,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
 
       // check have more than one file group
       this.metaClient = new HoodieTableMetaClient(fs.getConf, destPath, true)
-      assertTrue(getLatestFileGroupsFileId().size > 1)
+      assertTrue(getLatestFileGroupsFileId(partitionOfRecords).size > 1)
 
       // check clustering result
       checkClusteringResult(destPath)
@@ -265,10 +266,10 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     Await.result(Future.sequence(Seq(f1, f2)), Duration.Inf)
   }
 
-  private def getLatestFileGroupsFileId():Array[String] = {
+  private def getLatestFileGroupsFileId(partition: String):Array[String] = {
     getHoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline,
       HoodieTestTable.of(metaClient).listAllBaseFiles())
-    tableView.getLatestFileSlices(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)
+    tableView.getLatestFileSlices(partition)
       .toArray().map(slice => slice.asInstanceOf[FileSlice].getFileGroupId.getFileId)
   }
 
@@ -283,7 +284,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       this.metaClient.reloadActiveTimeline()
       val completeReplaceSize = this.metaClient.getActiveTimeline.getCompletedReplaceTimeline().getInstants.toArray.size
       println("completeReplaceSize:" + completeReplaceSize)
-      if(completeReplaceSize > 0) {
+      if (completeReplaceSize > 0) {
         success = true
       }
     } catch {
@@ -293,7 +294,7 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       Thread.sleep(sleepSecsAfterEachRun * 1000)
       currTime = System.currentTimeMillis
     }
-    if (!success) throw new IllegalStateException("Timed-out waiting for "  + " have completed replace instant appear in " + tablePath)
+    if (!success) throw new IllegalStateException("Timed-out waiting for completing replace instant appear in " + tablePath)
   }
 
 }
