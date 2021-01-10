@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.table.action.compact.CompactType;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
@@ -47,8 +48,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   // Run a compaction every N delta commits
   public static final String INLINE_COMPACT_NUM_DELTA_COMMITS_PROP = "hoodie.compact.inline.max.delta.commits";
   public static final String INLINE_COMPACT_ELAPSED_TIME_PROP = "hoodie.compact.inline.max.delta.time";
-  public static final String INLINE_COMPACT_NUM_DELTA_COMMITS_ENABLED_PROP = "hoodie.compact.inline.max.delta.commits.enable";
-  public static final String INLINE_COMPACT_ELAPSED_TIME_ENABLED_PROP = "hoodie.compact.inline.max.delta.time.enable";
+  public static final String INLINE_COMPACT_TYPE_PROP = "hoodie.compact.inline.type";
   public static final String CLEANER_FILE_VERSIONS_RETAINED_PROP = "hoodie.cleaner.fileversions.retained";
   public static final String CLEANER_COMMITS_RETAINED_PROP = "hoodie.cleaner.commits.retained";
   public static final String CLEANER_INCREMENTAL_MODE = "hoodie.cleaner.incremental.mode";
@@ -113,8 +113,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_INCREMENTAL_CLEANER = "true";
   private static final String DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS = "5";
   private static final String DEFAULT_INLINE_COMPACT_ELAPSED_TIME = String.valueOf(60 * 60);
-  private static final String DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS_ENABLED = "true";
-  private static final String DEFAULT_INLINE_COMPACT_ELAPSED_TIME_ENABLED = "false";
+  private static final String DEFAULT_INLINE_COMPACT_TYPE = CompactType.COMMIT_NUM.name();
   private static final String DEFAULT_CLEANER_FILE_VERSIONS_RETAINED = "3";
   private static final String DEFAULT_CLEANER_COMMITS_RETAINED = "10";
   private static final String DEFAULT_MAX_COMMITS_TO_KEEP = "30";
@@ -167,6 +166,11 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
 
     public Builder withInlineCompaction(Boolean inlineCompaction) {
       props.setProperty(INLINE_COMPACT_PROP, String.valueOf(inlineCompaction));
+      return this;
+    }
+
+    public Builder withInlineCompactionType(CompactType inlineCompactionType) {
+      props.setProperty(INLINE_COMPACT_TYPE_PROP, inlineCompactionType.name());
       return this;
     }
 
@@ -246,16 +250,6 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder withMaxNumDeltaCommitsBeforeCompactionEnabled(boolean maxNumDeltaCommitsBeforeCompactionEnabled) {
-      props.setProperty(INLINE_COMPACT_NUM_DELTA_COMMITS_ENABLED_PROP, String.valueOf(maxNumDeltaCommitsBeforeCompactionEnabled));
-      return this;
-    }
-
-    public Builder withMaxDeltaTimeBeforeCompactionEnabled(boolean withMaxDeltaTimeBeforeCompactionEnabled) {
-      props.setProperty(INLINE_COMPACT_ELAPSED_TIME_ENABLED_PROP, String.valueOf(withMaxDeltaTimeBeforeCompactionEnabled));
-      return this;
-    }
-
     public Builder withCompactionLazyBlockReadEnabled(Boolean compactionLazyBlockReadEnabled) {
       props.setProperty(COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, String.valueOf(compactionLazyBlockReadEnabled));
       return this;
@@ -294,10 +288,8 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
           INLINE_COMPACT_NUM_DELTA_COMMITS_PROP, DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS);
       setDefaultOnCondition(props, !props.containsKey(INLINE_COMPACT_ELAPSED_TIME_PROP),
           INLINE_COMPACT_ELAPSED_TIME_PROP, DEFAULT_INLINE_COMPACT_ELAPSED_TIME);
-      setDefaultOnCondition(props, !props.containsKey(INLINE_COMPACT_ELAPSED_TIME_ENABLED_PROP),
-          INLINE_COMPACT_ELAPSED_TIME_ENABLED_PROP, DEFAULT_INLINE_COMPACT_ELAPSED_TIME_ENABLED);
-      setDefaultOnCondition(props, !props.containsKey(INLINE_COMPACT_NUM_DELTA_COMMITS_ENABLED_PROP),
-          INLINE_COMPACT_NUM_DELTA_COMMITS_ENABLED_PROP, DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS_ENABLED);
+      setDefaultOnCondition(props, !props.containsKey(INLINE_COMPACT_TYPE_PROP),
+          INLINE_COMPACT_TYPE_PROP, DEFAULT_INLINE_COMPACT_TYPE);
       setDefaultOnCondition(props, !props.containsKey(CLEANER_POLICY_PROP), CLEANER_POLICY_PROP,
           DEFAULT_CLEANER_POLICY);
       setDefaultOnCondition(props, !props.containsKey(CLEANER_FILE_VERSIONS_RETAINED_PROP),
