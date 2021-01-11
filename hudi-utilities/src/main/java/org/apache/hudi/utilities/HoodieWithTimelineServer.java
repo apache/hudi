@@ -18,8 +18,8 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import com.beust.jcommander.JCommander;

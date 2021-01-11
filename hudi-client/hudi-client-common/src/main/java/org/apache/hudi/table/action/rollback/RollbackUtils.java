@@ -20,11 +20,11 @@ package org.apache.hudi.table.action.rollback;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -88,12 +88,13 @@ public class RollbackUtils {
    * Generate all rollback requests that needs rolling back this action without actually performing rollback for COW table type.
    * @param fs instance of {@link FileSystem} to use.
    * @param basePath base path of interest.
-   * @param shouldAssumeDatePartitioning {@code true} if date partitioning should be assumed. {@code false} otherwise.
+   * @param config instance of {@link HoodieWriteConfig} to use.
    * @return {@link List} of {@link ListingBasedRollbackRequest}s thus collected.
    */
-  public static List<ListingBasedRollbackRequest> generateRollbackRequestsByListingCOW(FileSystem fs, String basePath, boolean shouldAssumeDatePartitioning) {
+  public static List<ListingBasedRollbackRequest> generateRollbackRequestsByListingCOW(FileSystem fs, String basePath, HoodieWriteConfig config) {
     try {
-      return FSUtils.getAllPartitionPaths(fs, basePath, shouldAssumeDatePartitioning).stream()
+      return FSUtils.getAllPartitionPaths(fs, basePath, config.useFileListingMetadata(),
+          config.getFileListingMetadataVerify(), config.shouldAssumeDatePartitioning()).stream()
           .map(ListingBasedRollbackRequest::createRollbackRequestWithDeleteDataAndLogFilesAction)
           .collect(Collectors.toList());
     } catch (IOException e) {
@@ -113,7 +114,7 @@ public class RollbackUtils {
     String commit = instantToRollback.getTimestamp();
     HoodieWriteConfig config = table.getConfig();
     List<String> partitions = FSUtils.getAllPartitionPaths(table.getMetaClient().getFs(), table.getMetaClient().getBasePath(),
-        config.shouldAssumeDatePartitioning());
+        config.useFileListingMetadata(), config.getFileListingMetadataVerify(), config.shouldAssumeDatePartitioning());
     int sparkPartitions = Math.max(Math.min(partitions.size(), config.getRollbackParallelism()), 1);
     context.setJobStatus(RollbackUtils.class.getSimpleName(), "Generate all rollback requests");
     return context.flatMap(partitions, partitionPath -> {
@@ -121,6 +122,7 @@ public class RollbackUtils {
       List<ListingBasedRollbackRequest> partitionRollbackRequests = new ArrayList<>();
       switch (instantToRollback.getAction()) {
         case HoodieTimeline.COMMIT_ACTION:
+        case HoodieTimeline.REPLACE_COMMIT_ACTION:
           LOG.info("Rolling back commit action.");
           partitionRollbackRequests.add(
               ListingBasedRollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath));

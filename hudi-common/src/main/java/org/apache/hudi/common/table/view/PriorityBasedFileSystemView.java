@@ -200,6 +200,16 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
+  public Stream<HoodieFileGroup> getReplacedFileGroupsBefore(String maxCommitTime, String partitionPath) {
+    return execute(maxCommitTime, partitionPath, preferredView::getReplacedFileGroupsBefore, secondaryView::getReplacedFileGroupsBefore);
+  }
+
+  @Override
+  public Stream<HoodieFileGroup> getAllReplacedFileGroups(String partitionPath) {
+    return execute(partitionPath, preferredView::getAllReplacedFileGroups, secondaryView::getAllReplacedFileGroups);
+  }
+
+  @Override
   public Stream<Pair<String, CompactionOperation>> getPendingCompactionOperations() {
     return execute(preferredView::getPendingCompactionOperations, secondaryView::getPendingCompactionOperations);
   }

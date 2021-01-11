@@ -21,7 +21,7 @@ package org.apache.hudi.table.action.cluster.strategy;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieClusteringStrategy;
-import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -66,8 +66,10 @@ public abstract class PartitionAwareClusteringPlanStrategy<T extends HoodieRecor
     try {
       HoodieTableMetaClient metaClient = getHoodieTable().getMetaClient();
       LOG.info("Scheduling clustering for " + metaClient.getBasePath());
+      HoodieWriteConfig config = getWriteConfig();
       List<String> partitionPaths = FSUtils.getAllPartitionPaths(metaClient.getFs(), metaClient.getBasePath(),
-          getWriteConfig().shouldAssumeDatePartitioning());
+          config.useFileListingMetadata(), config.getFileListingMetadataVerify(),
+          config.shouldAssumeDatePartitioning());
 
       // filter the partition paths if needed to reduce list status
       partitionPaths = filterPartitionPaths(partitionPaths);

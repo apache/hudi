@@ -43,7 +43,7 @@ public class SizeAwareFSDataOutputStream extends FSDataOutputStream {
   private final ConsistencyGuard consistencyGuard;
 
   public SizeAwareFSDataOutputStream(Path path, FSDataOutputStream out, ConsistencyGuard consistencyGuard,
-      Runnable closeCallback) throws IOException {
+                                     Runnable closeCallback) throws IOException {
     super(out, null);
     this.path = path;
     this.closeCallback = closeCallback;
@@ -52,14 +52,22 @@ public class SizeAwareFSDataOutputStream extends FSDataOutputStream {
 
   @Override
   public synchronized void write(byte[] b, int off, int len) throws IOException {
-    bytesWritten.addAndGet(len);
-    super.write(b, off, len);
+    HoodieWrapperFileSystem.executeFuncWithTimeAndByteMetrics(HoodieWrapperFileSystem.MetricName.write.name(), path,
+        len, () -> {
+          bytesWritten.addAndGet(len);
+          super.write(b, off, len);
+          return null;
+        });
   }
 
   @Override
   public void write(byte[] b) throws IOException {
-    bytesWritten.addAndGet(b.length);
-    super.write(b);
+    HoodieWrapperFileSystem.executeFuncWithTimeAndByteMetrics(HoodieWrapperFileSystem.MetricName.write.name(), path,
+        b.length, () -> {
+          bytesWritten.addAndGet(b.length);
+          super.write(b);
+          return null;
+        });
   }
 
   @Override
@@ -76,5 +84,4 @@ public class SizeAwareFSDataOutputStream extends FSDataOutputStream {
   public long getBytesWritten() {
     return bytesWritten.get();
   }
-
 }

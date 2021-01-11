@@ -47,6 +47,9 @@ public class TestDagUtils {
   public void testConvertYamlToDag() throws Exception {
     WorkflowDag dag = DagUtils.convertYamlToDag(UtilitiesTestBase.Helpers
         .readFileFromAbsolutePath((System.getProperty("user.dir") + "/.." + COW_DAG_DOCKER_DEMO_RELATIVE_PATH)));
+    assertEquals(dag.getDagName(), "unit-test-cow-dag");
+    assertEquals(dag.getRounds(), 1);
+    assertEquals(dag.getIntermittentDelayMins(), 10);
     assertEquals(dag.getNodeList().size(), 1);
     Assertions.assertEquals(((DagNode) dag.getNodeList().get(0)).getParentNodes().size(), 0);
     assertEquals(((DagNode) dag.getNodeList().get(0)).getChildNodes().size(), 1);

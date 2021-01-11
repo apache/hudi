@@ -87,6 +87,7 @@ public class DeltaConfig implements Serializable {
     private static String HIVE_LOCAL = "hive_local";
     private static String REINIT_CONTEXT = "reinitialize_context";
     private static String START_PARTITION = "start_partition";
+    private static String DELETE_INPUT_DATA = "delete_input_data";
 
     private Map<String, Object> configsMap;
 
@@ -152,6 +153,10 @@ public class DeltaConfig implements Serializable {
 
     public boolean getReinitContext() {
       return Boolean.valueOf(configsMap.getOrDefault(REINIT_CONTEXT, false).toString());
+    }
+
+    public boolean isDeleteInputData() {
+      return Boolean.valueOf(configsMap.getOrDefault(DELETE_INPUT_DATA, false).toString());
     }
 
     public Map<String, Object> getOtherConfigs() {

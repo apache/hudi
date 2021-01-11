@@ -19,7 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -77,7 +77,7 @@ public class SparkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayl
         new Tuple2<>(partitionPath, getAllExistingFileIds(partitionPath))).collectAsMap();
   }
 
-  private List<String> getAllExistingFileIds(String partitionPath) {
+  protected List<String> getAllExistingFileIds(String partitionPath) {
     // because new commit is not complete. it is safe to mark all existing file Ids as old files
     return table.getSliceView().getLatestFileSlices(partitionPath).map(fg -> fg.getFileId()).distinct().collect(Collectors.toList());
   }

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -179,7 +179,11 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> implements Part
               + ", totalInsertBuckets => " + insertBuckets + ", recordsPerBucket => " + insertRecordsPerBucket);
           for (int b = 0; b < insertBuckets; b++) {
             bucketNumbers.add(totalBuckets);
-            recordsPerBucket.add(totalUnassignedInserts / insertBuckets);
+            if (b < insertBuckets - 1) {
+              recordsPerBucket.add(insertRecordsPerBucket);
+            } else {
+              recordsPerBucket.add(totalUnassignedInserts - (insertBuckets - 1) * insertRecordsPerBucket);
+            }
             BucketInfo bucketInfo = new BucketInfo();
             bucketInfo.bucketType = BucketType.INSERT;
             bucketInfo.partitionPath = partitionPath;
