@@ -26,15 +26,20 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -70,6 +75,38 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     cleanupResources();
   }
 
+  @Test
+  public void testCopyOnWriteRollbackWithTestTable() throws Exception {
+    // given: wrote some base files and corresponding markers
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    String f0 = testTable.addRequestedCommit("000")
+        .getFileIdsWithBaseFilesInPartitions("partA").get("partA");
+    String f1 = testTable.addCommit("001")
+        .withBaseFilesInPartition("partA", f0)
+        .getFileIdsWithBaseFilesInPartitions("partB").get("partB");
+    String f2 = "f2";
+    testTable.forCommit("001")
+        .withMarkerFile("partA", f0, IOType.MERGE)
+        .withMarkerFile("partB", f1, IOType.CREATE)
+        .withMarkerFile("partA", f2, IOType.CREATE);
+
+    // when
+    List<HoodieRollbackStat> stats = new SparkMarkerBasedRollbackStrategy(HoodieSparkTable.create(getConfig(), context, metaClient), context, getConfig(), "002")
+        .execute(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"));
+
+    // then: ensure files are deleted correctly, non-existent files reported as failed deletes
+    assertEquals(2, stats.size());
+
+    FileStatus[] partAFiles = testTable.listAllFilesInPartition("partA");
+    FileStatus[] partBFiles = testTable.listAllFilesInPartition("partB");
+
+    assertEquals(0, partBFiles.length);
+    assertEquals(1, partAFiles.length);
+    assertEquals(2, stats.stream().mapToInt(r -> r.getSuccessDeleteFiles().size()).sum());
+    assertEquals(1, stats.stream().mapToInt(r -> r.getFailedDeleteFiles().size()).sum());
+  }
+
+  @Tag("functional")
   @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
   @MethodSource("configParams")
   public void testCopyOnWriteRollback(boolean useFileListingMetadata) throws Exception {
@@ -92,6 +129,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     }
   }
 
+  @Tag("functional")
   @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
   @MethodSource("configParams")
   public void testMergeOnReadRollback(boolean useFileListingMetadata) throws Exception {
@@ -114,15 +152,10 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
       for (HoodieRollbackStat stat : stats) {
         assertEquals(0, stat.getSuccessDeleteFiles().size());
         assertEquals(0, stat.getFailedDeleteFiles().size());
-        if (useFileListingMetadata) {
-          assertEquals(1, stat.getCommandBlocksCount().size());
-          stat.getCommandBlocksCount().forEach((fileStatus, len) -> assertTrue(fileStatus.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())));
-          assertEquals(1, stat.getWrittenLogFileSizeMap().size());
-          stat.getWrittenLogFileSizeMap().forEach((fileStatus, len) -> assertTrue(fileStatus.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())));
-        } else {
-          assertEquals(0, stat.getCommandBlocksCount().size());
-          assertEquals(0, stat.getWrittenLogFileSizeMap().size());
-        }
+        assertEquals(1, stat.getCommandBlocksCount().size());
+        stat.getCommandBlocksCount().forEach((fileStatus, len) -> assertTrue(fileStatus.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())));
+        assertEquals(1, stat.getWrittenLogFileSizeMap().size());
+        stat.getWrittenLogFileSizeMap().forEach((fileStatus, len) -> assertTrue(fileStatus.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())));
       }
     }
   }

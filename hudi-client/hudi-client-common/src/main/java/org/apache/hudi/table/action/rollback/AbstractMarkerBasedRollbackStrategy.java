@@ -90,8 +90,7 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
     String fileId = FSUtils.getFileIdFromFilePath(baseFilePathForAppend);
     String baseCommitTime = FSUtils.getCommitTime(baseFilePathForAppend.getName());
     String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), new Path(basePath, appendBaseFilePath).getParent());
-    final Map<FileStatus, Long> writtenLogFileSizeMap = config.useFileListingMetadata()
-        ? getWrittenLogFileSizeMap(partitionPath, baseCommitTime, fileId) : Collections.EMPTY_MAP;
+    final Map<FileStatus, Long> writtenLogFileSizeMap = getWrittenLogFileSizeMap(partitionPath, baseCommitTime, fileId);
 
     HoodieLogFormat.Writer writer = null;
     try {
@@ -123,13 +122,10 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
       }
     }
 
-    Map<FileStatus, Long> filesToNumBlocksRollback = Collections.emptyMap();
-    if (config.useFileListingMetadata()) {
-      // When metadata is enabled, the information of files appended to is required
-      filesToNumBlocksRollback = Collections.singletonMap(
+    // the information of files appended to is required for metadata sync
+    Map<FileStatus, Long> filesToNumBlocksRollback = Collections.singletonMap(
           table.getMetaClient().getFs().getFileStatus(Objects.requireNonNull(writer).getLogFile().getPath()),
           1L);
-    }
 
     return HoodieRollbackStat.newBuilder()
         .withPartitionPath(partitionPath)

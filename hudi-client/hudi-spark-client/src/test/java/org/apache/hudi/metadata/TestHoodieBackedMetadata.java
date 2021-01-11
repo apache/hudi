@@ -369,6 +369,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
 
   /**
    * Test when syncing rollback to metadata if the commit being rolled back has not been synced that essentially a no-op occurs to metadata.
+   * Once explicit sync is called, metadata should match.
    */
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
@@ -385,7 +386,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       assertNoWriteErrors(writeStatuses);
       validateMetadata(client);
     }
-
     String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, false))) {
       // Commit with metadata disabled
@@ -397,6 +397,8 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     }
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient<>(engineContext, getWriteConfig(true, true))) {
+      assertFalse(metadata(client).isInSync());
+      client.syncTableMetadata();
       validateMetadata(client);
     }
   }

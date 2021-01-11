@@ -241,12 +241,12 @@ public class HoodieTableMetadataUtil {
     rollbackMetadata.getPartitionMetadata().values().forEach(pm -> {
       // Has this rollback produced new files?
       boolean hasRollbackLogFiles = pm.getRollbackLogFiles() != null && !pm.getRollbackLogFiles().isEmpty();
-      boolean hasAppendFiles = hasRollbackLogFiles ? pm.getRollbackLogFiles().values().stream().mapToLong(Long::longValue).sum() > 0 : false;
+      boolean hasNonZeroRollbackLogFiles = hasRollbackLogFiles ? pm.getRollbackLogFiles().values().stream().mapToLong(Long::longValue).sum() > 0 : false;
       // If commit being rolled back has not been synced to metadata table yet then there is no need to update metadata
       boolean shouldSkip = lastSyncTs.isPresent()
           && HoodieTimeline.compareTimestamps(rollbackMetadata.getCommitsRollback().get(0), HoodieTimeline.GREATER_THAN, lastSyncTs.get());
 
-      if (!hasAppendFiles && shouldSkip) {
+      if (!hasNonZeroRollbackLogFiles && shouldSkip) {
         LOG.info(String.format("Skipping syncing of rollbackMetadata at %s, given metadata table is already synced upto to %s",
             rollbackMetadata.getCommitsRollback().get(0), lastSyncTs.get()));
         return;
@@ -264,7 +264,7 @@ public class HoodieTableMetadataUtil {
         partitionToDeletedFiles.get(partition).addAll(deletedFiles);
       }
 
-      if (pm.getRollbackLogFiles() != null && !pm.getRollbackLogFiles().isEmpty()) {
+      if (hasRollbackLogFiles) {
         if (!partitionToAppendedFiles.containsKey(partition)) {
           partitionToAppendedFiles.put(partition, new HashMap<>());
         }
@@ -285,7 +285,9 @@ public class HoodieTableMetadataUtil {
         // Extract appended file name from the absolute paths saved in getWrittenLogFiles()
         pm.getWrittenLogFiles().forEach((path, size) -> {
           partitionToAppendedFiles.get(partition).merge(new Path(path).getName(), size, (oldSize, newSizeCopy) -> {
-            return oldSize;
+            // if a file exists in both written log files and rollback log files, we want to pick the one that is higher
+            // as rollback file could have been updated after written log files are computed.
+            return oldSize > newSizeCopy ? oldSize : newSizeCopy;
           });
         });
       }

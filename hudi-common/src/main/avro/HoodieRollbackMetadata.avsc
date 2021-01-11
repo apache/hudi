@@ -33,6 +33,7 @@
             {"name": "failedDeleteFiles", "type": {"type": "array", "items": "string"}},
             {"name": "rollbackLogFiles", "type": {
                 "type": "map",
+                "doc": "Files to which append blocks were written to capture rollback commit",
                 "values": {
                     "type": "long",
                     "doc": "Size of this file in bytes"
@@ -40,6 +41,7 @@
             }},
             {"name": "writtenLogFiles", "type": {
                 "type": "map",
+                "doc": "Log files written that were expected to be rolledback",
                  "values": {
                     "type": "long",
                     "doc": "Size of this file in bytes"

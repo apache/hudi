@@ -36,12 +36,10 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.MarkerFiles;
 
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -50,9 +48,7 @@ import scala.Tuple2;
 
 @SuppressWarnings("checkstyle:LineLength")
 public class SparkMarkerBasedRollbackStrategy<T extends HoodieRecordPayload> extends AbstractMarkerBasedRollbackStrategy<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
-
-  public SparkMarkerBasedRollbackStrategy(HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table, HoodieEngineContext context, HoodieWriteConfig config,
-      String instantTime) {
+  public SparkMarkerBasedRollbackStrategy(HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
     super(table, context, config, instantTime);
   }
 
@@ -89,9 +85,8 @@ public class SparkMarkerBasedRollbackStrategy<T extends HoodieRecordPayload> ext
 
   protected Map<FileStatus, Long> getWrittenLogFileSizeMap(String partitionPathStr, String baseCommitTime, String fileId) throws IOException {
     // collect all log files that is supposed to be deleted with this rollback
-    Path partitionPath = FSUtils.getPartitionPath(config.getBasePath(), partitionPathStr);
-    return table.getMetaClient().getFs().exists(partitionPath) ? FSUtils.getAllLogFiles(table.getMetaClient().getFs(),
-        FSUtils.getPartitionPath(config.getBasePath(), partitionPathStr), HoodieFileFormat.HOODIE_LOG.getFileExtension(), baseCommitTime)
-        .collect(Collectors.toMap(HoodieLogFile::getFileStatus, value -> value.getFileStatus().getLen())) : Collections.EMPTY_MAP;
+    return FSUtils.getAllLogFiles(table.getMetaClient().getFs(),
+        FSUtils.getPartitionPath(config.getBasePath(), partitionPathStr), fileId, HoodieFileFormat.HOODIE_LOG.getFileExtension(), baseCommitTime)
+        .collect(Collectors.toMap(HoodieLogFile::getFileStatus, value -> value.getFileStatus().getLen()));
   }
 }
