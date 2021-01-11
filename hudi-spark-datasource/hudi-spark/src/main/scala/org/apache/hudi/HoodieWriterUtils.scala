@@ -73,7 +73,7 @@ object HoodieWriterUtils {
       HIVE_USE_JDBC_OPT_KEY -> DEFAULT_HIVE_USE_JDBC_OPT_VAL,
       ASYNC_COMPACT_ENABLE_OPT_KEY -> DEFAULT_ASYNC_COMPACT_ENABLE_OPT_VAL,
       ENABLE_ROW_WRITER_OPT_KEY -> DEFAULT_ENABLE_ROW_WRITER_OPT_VAL
-    ) ++ translateStorageTypeToTableType(parameters)
+    ) ++ translateOptParams(parameters)
   }
 
   def toProperties(params: Map[String, String]): TypedProperties = {

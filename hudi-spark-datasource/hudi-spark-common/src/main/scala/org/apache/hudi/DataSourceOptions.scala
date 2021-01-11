@@ -26,6 +26,7 @@ import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
 import org.apache.hudi.keygen.SimpleKeyGenerator
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.log4j.LogManager
+import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 
 /**
   * List of options that can be passed to the Hoodie datasource,
@@ -183,13 +184,21 @@ object DataSourceWriteOptions {
   @Deprecated
   val DEFAULT_STORAGE_TYPE_OPT_VAL = COW_STORAGE_TYPE_OPT_VAL
 
-  def translateStorageTypeToTableType(optParams: Map[String, String]) : Map[String, String] = {
+  def translateOptParams(optParams: Map[String, String]): Map[String, String] = {
+    // translate StorageType to TableType
+    var newOptParams = optParams
     if (optParams.contains(STORAGE_TYPE_OPT_KEY) && !optParams.contains(TABLE_TYPE_OPT_KEY)) {
       log.warn(STORAGE_TYPE_OPT_KEY + " is deprecated and will be removed in a later release; Please use " + TABLE_TYPE_OPT_KEY)
-      optParams ++ Map(TABLE_TYPE_OPT_KEY -> optParams(STORAGE_TYPE_OPT_KEY))
-    } else {
-      optParams
+      newOptParams = optParams ++ Map(TABLE_TYPE_OPT_KEY -> optParams(STORAGE_TYPE_OPT_KEY))
     }
+    // translate the api partitionBy of spark DataFrameWriter to PARTITIONPATH_FIELD_OPT_KEY
+    if (optParams.contains(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY) && !optParams.contains(PARTITIONPATH_FIELD_OPT_KEY)) {
+      val partitionColumns = optParams.get(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)
+        .map(SparkDataSourceUtils.decodePartitioningColumns)
+        .getOrElse(Nil)
+      newOptParams = optParams ++ Map(PARTITIONPATH_FIELD_OPT_KEY -> partitionColumns.mkString(","))
+    }
+    newOptParams
   }
 
 
