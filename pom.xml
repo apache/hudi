@@ -105,14 +105,14 @@
     <metrics.version>4.1.1</metrics.version>
     <prometheus.version>0.8.0</prometheus.version>
     <http.version>4.4.1</http.version>
-    <spark.version>2.4.4</spark.version>
+    <spark.version>${spark2.version}</spark.version>
     <flink.version>1.12.0</flink.version>
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.0.0</spark3.version>
     <avro.version>1.8.2</avro.version>
-    <scala-11.version>2.11.12</scala-11.version>
-    <scala-12.version>2.12.10</scala-12.version>
-    <scala.version>${scala-11.version}</scala.version>
+    <scala11.version>2.11.12</scala11.version>
+    <scala12.version>2.12.10</scala12.version>
+    <scala.version>${scala11.version}</scala.version>
     <scala.binary.version>2.11</scala.binary.version>
     <apache-rat-plugin.version>0.12</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
@@ -1316,7 +1316,7 @@
     <profile>
       <id>scala-2.12</id>
       <properties>
-        <scala.version>${scala-12.version}</scala.version>
+        <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
       </properties>
       <activation>
@@ -1356,7 +1356,7 @@
       <id>spark3</id>
       <properties>
         <spark.version>${spark3.version}</spark.version>
-        <scala.version>${scala-12.version}</scala.version>
+        <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
         <kafka.version>2.4.1</kafka.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>

@@ -151,7 +151,7 @@
     <dependency>
       <groupId>org.scala-lang</groupId>
       <artifactId>scala-library</artifactId>
-      <version>${scala-11.version}</version>
+      <version>${scala11.version}</version>
     </dependency>
 
     <!-- Hoodie -->
