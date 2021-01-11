@@ -18,7 +18,17 @@
 
 package org.apache.hudi.operator;
 
+import org.apache.flink.api.common.state.ListState;
+import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.runtime.state.StateInitializationContext;
+import org.apache.flink.runtime.state.StateSnapshotContext;
+import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
+import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
+import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
 import org.apache.hudi.HoodieFlinkStreamer;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
@@ -34,26 +44,12 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.util.StreamerUtil;
 
-import org.apache.flink.api.common.state.ListState;
-import org.apache.flink.api.common.state.ListStateDescriptor;
-import org.apache.flink.runtime.state.StateInitializationContext;
-import org.apache.flink.runtime.state.StateSnapshotContext;
-import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
-import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
-import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.FileFilter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -78,13 +74,13 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   private Integer retryTimes;
   private Integer retryInterval;
   private transient boolean isMain = false;
-  private volatile transient long batchSize = 0;
+  private transient volatile long batchSize = 0;
 
   @Override
   public void processElement(StreamRecord<HoodieRecord> streamRecord) throws Exception {
     if (streamRecord.getValue() != null) {
       output.collect(streamRecord);
-      batchSize ++;
+      batchSize++;
     }
   }
 
@@ -102,7 +98,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
     // Hadoop FileSystem
     fs = FSUtils.getFs(cfg.targetBasePath, serializableHadoopConf.get());
 
-    if(isMain){
+    if (isMain) {
       // retry times
       retryTimes = Integer.valueOf(cfg.blockRetryTime);
 
@@ -128,7 +124,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
     // mk generate file by each subtask
     fs.create(path,true);
     LOG.info("subtask [{}] at checkpoint [{}] created generate file [{}]",indexOfThisSubtask,checkpointId,instantGenerateInfoFileName);
-    if(isMain){
+    if (isMain) {
       boolean hasData = generateFilePasre(checkpointId);
       // check whether the last instant is completed, if not, wait 10s and then throws an exception
       if (!StringUtils.isNullOrEmpty(latestInstant)) {
@@ -151,7 +147,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
     Path generatePath = new Path(HoodieTableMetaClient.INSTANT_GENERATE_FOLDER_NAME);
     int tryTimes = 1;
     // waiting all subtask create generate file ready
-    while (true){
+    while (true) {
       Thread.sleep(500L);
       fileStatuses = fs.listStatus(generatePath, new PathFilter() {
         @Override
@@ -161,11 +157,11 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       });
 
       // is ready
-      if(fileStatuses != null && fileStatuses.length == numberOfParallelSubtasks){
+      if (fileStatuses != null && fileStatuses.length == numberOfParallelSubtasks) {
         break;
       }
 
-      if(tryTimes >= 5){
+      if (tryTimes >= 5) {
         LOG.warn("waiting generate file, checkpointId [{}]",checkpointId);
         tryTimes = 0;
       }
@@ -173,11 +169,11 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
 
     boolean hasData = false;
     // judge whether has data in this checkpoint and delete tmp file.
-    for(FileStatus fileStatus : fileStatuses){
+    for (FileStatus fileStatus : fileStatuses) {
       Path path = fileStatus.getPath();
       String name = path.getName();
       // has data
-      if(Long.parseLong(name.split(UNDERLINE)[2]) > 0){
+      if (Long.parseLong(name.split(UNDERLINE)[2]) > 0) {
         hasData = true;
         break;
       }
@@ -185,7 +181,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
 
     // delete all tmp file
     fileStatuses = fs.listStatus(generatePath);
-    for(FileStatus fileStatus : fileStatuses){
+    for (FileStatus fileStatus : fileStatuses) {
       fs.delete(fileStatus.getPath());
     }
 
@@ -195,7 +191,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   @Override
   public void initializeState(StateInitializationContext context) throws Exception {
     isMain = getRuntimeContext().getIndexOfThisSubtask() == 0;
-    if(isMain){
+    if (isMain) {
       // instantState
       ListStateDescriptor<String> latestInstantStateDescriptor = new ListStateDescriptor<String>("latestInstant", String.class);
       latestInstantState = context.getOperatorStateStore().getListState(latestInstantStateDescriptor);
@@ -212,7 +208,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   public void snapshotState(StateSnapshotContext functionSnapshotContext) throws Exception {
     LOG.info("Update latest instant [{}] records size [{}]", latestInstant,batchSize);
     batchSize = 0;
-    if(isMain){
+    if (isMain) {
       if (latestInstantList.isEmpty()) {
         latestInstantList.add(latestInstant);
       } else {
