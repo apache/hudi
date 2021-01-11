@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Set;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -172,8 +173,9 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
 
           boolean useFileListingFromMetadata = getConf().getBoolean(METADATA_ENABLE_PROP, DEFAULT_METADATA_ENABLE_FOR_READERS);
           boolean verifyFileListing = getConf().getBoolean(METADATA_VALIDATE_PROP, DEFAULT_METADATA_VALIDATE);
-          HoodieTableFileSystemView fsView = FileSystemViewManager.createInMemoryFileSystemView(metaClient,
-              useFileListingFromMetadata, verifyFileListing);
+          HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(conf.get());
+          HoodieTableFileSystemView fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
+              metaClient, useFileListingFromMetadata, verifyFileListing);
           String partition = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), folder);
 
           List<HoodieBaseFile> latestFiles = fsView.getLatestBaseFiles(partition).collect(Collectors.toList());

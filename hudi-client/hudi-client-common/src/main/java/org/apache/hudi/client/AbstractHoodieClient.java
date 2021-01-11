@@ -119,6 +119,10 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
     return config;
   }
 
+  public HoodieEngineContext getEngineContext() {
+    return context;
+  }
+
   protected void initWrapperFSMetrics() {
     // no-op.
   }

@@ -23,6 +23,7 @@ import org.apache.avro.Schema;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -33,7 +34,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 
@@ -54,6 +54,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   static final long MAX_MEMORY_SIZE_IN_BYTES = 1024 * 1024 * 1024;
   static final int BUFFER_SIZE = 10 * 1024 * 1024;
 
+  protected final transient HoodieEngineContext engineContext;
   protected final SerializableConfiguration hadoopConf;
   protected final String datasetBasePath;
   protected boolean enabled;
@@ -66,10 +67,11 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   protected final String spillableMapDirectory;
   private transient HoodieMetadataMergedInstantRecordScanner timelineRecordScanner;
 
-  protected BaseTableMetadata(Configuration hadoopConf, String datasetBasePath, String spillableMapDirectory,
+  protected BaseTableMetadata(HoodieEngineContext engineContext, String datasetBasePath, String spillableMapDirectory,
                               boolean enabled, boolean validateLookups, boolean enableMetrics,
                               boolean assumeDatePartitioning) {
-    this.hadoopConf = new SerializableConfiguration(hadoopConf);
+    this.engineContext = engineContext;
+    this.hadoopConf = new SerializableConfiguration(engineContext.getHadoopConf());
     this.datasetBasePath = datasetBasePath;
     this.spillableMapDirectory = spillableMapDirectory;
 
@@ -102,7 +104,8 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         LOG.error("Failed to retrieve list of partition from metadata", e);
       }
     }
-    return new FileSystemBackedTableMetadata(hadoopConf, datasetBasePath, assumeDatePartitioning).getAllPartitionPaths();
+    return new FileSystemBackedTableMetadata(engineContext, hadoopConf, datasetBasePath,
+        assumeDatePartitioning).getAllPartitionPaths();
   }
 
   /**
@@ -155,7 +158,8 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     if (validateLookups) {
       // Validate the Metadata Table data by listing the partitions from the file system
       timer.startTimer();
-      FileSystemBackedTableMetadata fileSystemBackedTableMetadata = new FileSystemBackedTableMetadata(hadoopConf, datasetBasePath, assumeDatePartitioning);
+      FileSystemBackedTableMetadata fileSystemBackedTableMetadata = new FileSystemBackedTableMetadata(engineContext,
+          hadoopConf, datasetBasePath, assumeDatePartitioning);
       List<String> actualPartitions = fileSystemBackedTableMetadata.getAllPartitionPaths();
       metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.VALIDATE_PARTITIONS_STR, timer.endTimer()));
 
@@ -289,5 +293,9 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
   protected void closeReaders() {
     timelineRecordScanner = null;
+  }
+
+  protected HoodieEngineContext getEngineContext() {
+    return engineContext;
   }
 }
