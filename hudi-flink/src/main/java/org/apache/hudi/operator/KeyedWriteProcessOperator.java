@@ -35,6 +35,7 @@ import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,12 +78,12 @@ public class KeyedWriteProcessOperator extends KeyedProcessOperator<String, Hood
     if (!writeProcessFunction.hasRecordsIn() && instantTime != null) {
       outputResult = new Tuple3(instantTime, new ArrayList<WriteStatus>(), getRuntimeContext().getIndexOfThisSubtask());
       LOG.info("Mock empty writeStatus, subtaskId = [{}], instant = [{}]", getRuntimeContext().getIndexOfThisSubtask(), instantTime);
-    }else {
+    } else {
       outputResult = writeProcessFunction.getLatestOutputResult();
     }
 
     // update state
-    if(instantTime != null){
+    if (instantTime != null) {
       if (latestInstantList.isEmpty()) {
         latestInstantList.add(instantTime);
       } else {
@@ -111,14 +112,15 @@ public class KeyedWriteProcessOperator extends KeyedProcessOperator<String, Hood
     ListStateDescriptor<String> latestInstantStateDescriptor = new ListStateDescriptor<String>("latestInstant", String.class);
     latestInstantState = context.getOperatorStateStore().getListState(latestInstantStateDescriptor);
     // recordState
-    ListStateDescriptor<Tuple3<String, List<WriteStatus>, Integer>> latestOutputResultDescriptor = new ListStateDescriptor<>("latestOutputResult", new TypeHint<Tuple3<String, List<WriteStatus>, Integer>>() {}.getTypeInfo());
+    ListStateDescriptor<Tuple3<String, List<WriteStatus>, Integer>> latestOutputResultDescriptor =
+            new ListStateDescriptor<>("latestOutputResult", new TypeHint<Tuple3<String, List<WriteStatus>, Integer>>() {}.getTypeInfo());
     latestOutputResultState = context.getOperatorStateStore().getListState(latestOutputResultDescriptor);
 
     if (context.isRestored()) {
       Iterator<String> latestInstantIterator = latestInstantState.get().iterator();
-      if(latestInstantIterator.hasNext()){
+      if (latestInstantIterator.hasNext()) {
         String latestInstant = latestInstantIterator.next();
-        if(StringUtils.isNullOrEmpty(latestInstant)){
+        if (StringUtils.isNullOrEmpty(latestInstant)) {
           LOG.info("KeyedWriteProcessOperator initializeState get latestInstant [{}] is empty !", latestInstant);
           return;
         }
@@ -134,8 +136,8 @@ public class KeyedWriteProcessOperator extends KeyedProcessOperator<String, Hood
         LOG.info("KeyedWriteProcessOperator initializeState get latestInstant [{}] state [{}]", latestInstant,instantTimeState);
 
         // maybe instant was archived and removed from hdfs
-        if(instantTimeState.isPresent()){
-          switch (instantTimeState.get()){
+        if (instantTimeState.isPresent()) {
+          switch (instantTimeState.get()) {
             // upsert success but commit failed
             case INFLIGHT:
               LOG.info("KeyedWriteProcessOperator initializeState get latestInstant [{}] state [{}] need to output data again.", latestInstant,instantTimeState);
@@ -145,11 +147,11 @@ public class KeyedWriteProcessOperator extends KeyedProcessOperator<String, Hood
             case COMPLETED: break;
             default:break;
           }
-        }else {
+        } else {
           Option<String> latestCompletedInstanTimeOpt = writeClient.getLatestCompletedInstanTime();
           String latestCompletedInstanTime = latestCompletedInstanTimeOpt.orElseGet(null);
-          if(StringUtils.isNullOrEmpty(latestCompletedInstanTime) || Long.parseLong(latestCompletedInstanTime) < Long.parseLong(latestInstant)){
-            throw new RuntimeException("KeyedWriteProcessOperator initializeState get latestInstant is null ! latestCompletedInstanTime ["+latestCompletedInstanTime+"]");
+          if (StringUtils.isNullOrEmpty(latestCompletedInstanTime) || Long.parseLong(latestCompletedInstanTime) < Long.parseLong(latestInstant)) {
+            throw new RuntimeException("KeyedWriteProcessOperator initializeState get latestInstant is null ! latestCompletedInstanTime [" + latestCompletedInstanTime + "]");
           }
         }
       }
@@ -159,10 +161,10 @@ public class KeyedWriteProcessOperator extends KeyedProcessOperator<String, Hood
 
   private void handleInflightState() throws Exception {
     Iterator<Tuple3<String, List<WriteStatus>, Integer>> iterator = latestOutputResultState.get().iterator();
-    if(iterator.hasNext()){
+    if (iterator.hasNext()) {
       Tuple3<String, List<WriteStatus>, Integer> next = iterator.next();
       List<WriteStatus> writeStatuses = next.f1;
-      writeStatuses.forEach(x->{
+      writeStatuses.forEach(x -> {
         LOG.info("KeyedWriteProcessOperator initializeState output writeStatus [{}]",x);
       });
       output.collect(new StreamRecord<>(next));
