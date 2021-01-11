@@ -18,10 +18,11 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 
@@ -68,10 +69,16 @@ public interface HoodieTableMetadata extends Serializable {
     return basePath.endsWith(METADATA_TABLE_REL_PATH);
   }
 
-  static HoodieTableMetadata create(Configuration conf, String datasetBasePath, String spillableMapPath, boolean useFileListingFromMetadata,
-                                    boolean verifyListings, boolean enableMetrics, boolean shouldAssumeDatePartitioning) {
-    return new HoodieBackedTableMetadata(conf, datasetBasePath, spillableMapPath, useFileListingFromMetadata, verifyListings,
-        enableMetrics, shouldAssumeDatePartitioning);
+  static HoodieTableMetadata create(HoodieEngineContext engineContext, String datasetBasePath,
+                                    String spillableMapPath, boolean useFileListingFromMetadata, boolean verifyListings,
+                                    boolean enableMetrics, boolean shouldAssumeDatePartitioning) {
+    if (useFileListingFromMetadata) {
+      return new HoodieBackedTableMetadata(engineContext, datasetBasePath, spillableMapPath, useFileListingFromMetadata,
+          verifyListings, enableMetrics, shouldAssumeDatePartitioning);
+    } else {
+      return new FileSystemBackedTableMetadata(engineContext, new SerializableConfiguration(engineContext.getHadoopConf()),
+          datasetBasePath, shouldAssumeDatePartitioning);
+    }
   }
 
   /**

@@ -161,7 +161,9 @@ public class MetadataCommand implements CommandMarker {
   @CliCommand(value = "metadata list-partitions", help = "Print a list of all partitions from the metadata")
   public String listPartitions() throws IOException {
     HoodieCLI.getTableMetaClient();
-    HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(HoodieCLI.conf, HoodieCLI.basePath, "/tmp", true, false, false);
+    initJavaSparkContext();
+    HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc),
+        HoodieCLI.basePath, "/tmp", true, false, false, false);
 
     StringBuffer out = new StringBuffer("\n");
     if (!metadata.enabled()) {

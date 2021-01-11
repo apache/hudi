@@ -39,6 +39,7 @@ public final class HoodieMetadataConfig extends DefaultHoodieConfig {
   // Validate contents of Metadata Table on each access against the actual filesystem
   public static final String METADATA_VALIDATE_PROP = METADATA_PREFIX + ".validate";
   public static final boolean DEFAULT_METADATA_VALIDATE = false;
+  public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = false;
 
   // Parallelism for inserts
   public static final String METADATA_INSERT_PARALLELISM_PROP = METADATA_PREFIX + ".insert.parallelism";
@@ -61,10 +62,6 @@ public final class HoodieMetadataConfig extends DefaultHoodieConfig {
   // Cleaner commits retained
   public static final String CLEANER_COMMITS_RETAINED_PROP = METADATA_PREFIX + ".cleaner.commits.retained";
   public static final int DEFAULT_CLEANER_COMMITS_RETAINED = 3;
-
-  // We can set the default to true for readers, as it will internally default to listing from filesystem if metadata
-  // table is not found
-  public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = true;
 
   private HoodieMetadataConfig(Properties props) {
     super(props);
