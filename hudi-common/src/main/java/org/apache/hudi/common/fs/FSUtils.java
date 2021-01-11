@@ -45,6 +45,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -426,10 +427,14 @@ public class FSUtils {
    */
   public static Stream<HoodieLogFile> getAllLogFiles(FileSystem fs, Path partitionPath, final String fileId,
       final String logFileExtension, final String baseCommitTime) throws IOException {
-    return Arrays
-        .stream(fs.listStatus(partitionPath,
-            path -> path.getName().startsWith("." + fileId) && path.getName().contains(logFileExtension)))
-        .map(HoodieLogFile::new).filter(s -> s.getBaseCommitTime().equals(baseCommitTime));
+    try {
+      return Arrays
+          .stream(fs.listStatus(partitionPath,
+              path -> path.getName().startsWith("." + fileId) && path.getName().contains(logFileExtension)))
+          .map(HoodieLogFile::new).filter(s -> s.getBaseCommitTime().equals(baseCommitTime));
+    } catch (FileNotFoundException e) {
+      return Stream.<HoodieLogFile>builder().build();
+    }
   }
 
   /**
