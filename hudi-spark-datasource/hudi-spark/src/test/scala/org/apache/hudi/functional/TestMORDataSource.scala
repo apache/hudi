@@ -278,7 +278,6 @@ class TestMORDataSource extends HoodieClientTestBase {
     val inputDF5: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records5, 2))
     inputDF5.write.format("org.apache.hudi")
       .options(commonOpts)
-      .option("hoodie.compact.inline", "true")
       .mode(SaveMode.Append)
       .save(basePath)
     val commit5Time = HoodieDataSourceHelpers.latestCommit(fs, basePath)
