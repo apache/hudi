@@ -436,21 +436,6 @@ public class FSUtils {
   }
 
   /**
-   * Get all the log files for the passed in FileId in the partition path.
-   */
-  public static Stream<HoodieLogFile> getAllLogFiles(FileSystem fs, Path partitionPath,
-      final String logFileExtension, final String baseCommitTime) throws IOException {
-    try {
-      return Arrays
-          .stream(fs.listStatus(partitionPath,
-              path -> path.getName().contains(logFileExtension)))
-          .map(HoodieLogFile::new).filter(s -> s.getBaseCommitTime().equals(baseCommitTime));
-    } catch (FileNotFoundException e) {
-      return Stream.<HoodieLogFile>builder().build();
-    }
-  }
-
-  /**
    * Get the latest log version for the fileId in the partition path.
    */
   public static Option<Pair<Integer, String>> getLatestLogVersion(FileSystem fs, Path partitionPath,
