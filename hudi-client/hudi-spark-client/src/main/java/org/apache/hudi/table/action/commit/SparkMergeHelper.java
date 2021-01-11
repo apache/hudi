@@ -46,6 +46,9 @@ import java.util.Iterator;
 public class SparkMergeHelper<T extends HoodieRecordPayload> extends AbstractMergeHelper<T, JavaRDD<HoodieRecord<T>>,
     JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
+  private SparkMergeHelper() {
+  }
+
   private static class MergeHelperHolder {
     private static final SparkMergeHelper SPARK_MERGE_HELPER = new SparkMergeHelper();
   }

@@ -35,6 +35,7 @@ import java.io.IOException;
 public class HoodieCommonTestHarness {
 
   protected String basePath = null;
+  protected transient HoodieTestDataGenerator dataGen = null;
   protected transient HoodieTableMetaClient metaClient;
   @TempDir
   public java.nio.file.Path tempDir;
@@ -49,6 +50,24 @@ public class HoodieCommonTestHarness {
       this.basePath = basePath.toString();
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
+  }
+
+  /**
+   * Initializes a test data generator which used to generate test datas.
+   *
+   */
+  protected void initTestDataGenerator() {
+    dataGen = new HoodieTestDataGenerator();
+  }
+
+  /**
+   * Cleanups test data generator.
+   *
+   */
+  protected void cleanupTestDataGenerator() {
+    if (dataGen != null) {
+      dataGen = null;
     }
   }
 

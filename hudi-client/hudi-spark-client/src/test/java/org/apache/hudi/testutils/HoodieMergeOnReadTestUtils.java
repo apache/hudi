@@ -43,7 +43,6 @@ import org.apache.hadoop.mapred.RecordReader;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -84,36 +83,32 @@ public class HoodieMergeOnReadTestUtils {
         .map(f -> new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal()))
         .collect(Collectors.toList()));
 
-    return inputPaths.stream().map(path -> {
-      setInputPath(jobConf, path);
-      List<GenericRecord> records = new ArrayList<>();
-      try {
-        List<InputSplit> splits = Arrays.asList(inputFormat.getSplits(jobConf, 1));
-        for (InputSplit split : splits) {
-          RecordReader recordReader = inputFormat.getRecordReader(split, jobConf, null);
-          Object key = recordReader.createKey();
-          ArrayWritable writable = (ArrayWritable) recordReader.createValue();
-          while (recordReader.next(key, writable)) {
-            GenericRecordBuilder newRecord = new GenericRecordBuilder(projectedSchema);
-            // writable returns an array with [field1, field2, _hoodie_commit_time,
-            // _hoodie_commit_seqno]
-            Writable[] values = writable.get();
-            schema.getFields().stream()
-                .filter(f -> !projectCols || projectedColumns.contains(f.name()))
-                .map(f -> Pair.of(projectedSchema.getFields().stream()
-                    .filter(p -> f.name().equals(p.name())).findFirst().get(), f))
-                .forEach(fieldsPair -> newRecord.set(fieldsPair.getKey(), values[fieldsPair.getValue().pos()]));
-            records.add(newRecord.build());
-          }
+    List<GenericRecord> records = new ArrayList<>();
+    try {
+      FileInputFormat.setInputPaths(jobConf, String.join(",", inputPaths));
+      InputSplit[] splits = inputFormat.getSplits(jobConf, inputPaths.size());
+
+      for (InputSplit split : splits) {
+        RecordReader recordReader = inputFormat.getRecordReader(split, jobConf, null);
+        Object key = recordReader.createKey();
+        ArrayWritable writable = (ArrayWritable) recordReader.createValue();
+        while (recordReader.next(key, writable)) {
+          GenericRecordBuilder newRecord = new GenericRecordBuilder(projectedSchema);
+          // writable returns an array with [field1, field2, _hoodie_commit_time,
+          // _hoodie_commit_seqno]
+          Writable[] values = writable.get();
+          schema.getFields().stream()
+              .filter(f -> !projectCols || projectedColumns.contains(f.name()))
+              .map(f -> Pair.of(projectedSchema.getFields().stream()
+                  .filter(p -> f.name().equals(p.name())).findFirst().get(), f))
+              .forEach(fieldsPair -> newRecord.set(fieldsPair.getKey(), values[fieldsPair.getValue().pos()]));
+          records.add(newRecord.build());
         }
-      } catch (IOException ie) {
-        ie.printStackTrace();
       }
-      return records;
-    }).reduce((a, b) -> {
-      a.addAll(b);
-      return a;
-    }).orElse(new ArrayList<>());
+    } catch (IOException ie) {
+      ie.printStackTrace();
+    }
+    return records;
   }
 
   private static void setPropsForInputFormat(FileInputFormat inputFormat, JobConf jobConf, Schema schema, String hiveColumnTypes, boolean projectCols, List<String> projectedCols) {
@@ -155,11 +150,5 @@ public class HoodieMergeOnReadTestUtils {
     Configurable configurable = (Configurable)inputFormat;
     configurable.setConf(conf);
     jobConf.addResource(conf);
-  }
-
-  private static void setInputPath(JobConf jobConf, String inputPath) {
-    jobConf.set("mapreduce.input.fileinputformat.inputdir", inputPath);
-    jobConf.set("mapreduce.input.fileinputformat.inputdir", inputPath);
-    jobConf.set("map.input.dir", inputPath);
   }
 }

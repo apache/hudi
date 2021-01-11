@@ -109,7 +109,7 @@ public interface HoodieTimeline extends Serializable {
   /**
    * Filter this timeline to just include the in-flights excluding compaction instants.
    *
-   * @return New instance of HoodieTimeline with just in-flights excluding compaction inflights
+   * @return New instance of HoodieTimeline with just in-flights excluding compaction instants
    */
   HoodieTimeline filterPendingExcludingCompaction();
 
@@ -150,6 +150,12 @@ public interface HoodieTimeline extends Serializable {
    * @return
    */
   HoodieTimeline filterPendingCompactionTimeline();
+
+  /**
+   * Filter this timeline to just include requested and inflight replacecommit instants.
+   */
+  HoodieTimeline filterPendingReplaceTimeline();
+
 
   /**
    * Create a new Timeline with all the instants after startTs.
@@ -291,6 +297,14 @@ public interface HoodieTimeline extends Serializable {
 
   static HoodieInstant getCompactionInflightInstant(final String timestamp) {
     return new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, timestamp);
+  }
+
+  static HoodieInstant getReplaceCommitRequestedInstant(final String timestamp) {
+    return new HoodieInstant(State.REQUESTED, REPLACE_COMMIT_ACTION, timestamp);
+  }
+
+  static HoodieInstant getReplaceCommitInflightInstant(final String timestamp) {
+    return new HoodieInstant(State.INFLIGHT, REPLACE_COMMIT_ACTION, timestamp);
   }
 
   /**

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
@@ -35,7 +35,7 @@ import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
-import org.apache.hudi.testutils.HoodieWriteableTestTable;
+import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.junit.jupiter.api.AfterEach;
@@ -87,7 +87,7 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
     List<HoodieRecord> records = dataGen.generateInserts(makeNewCommitTime(), 100);
     Map<String, List<HoodieRecord>> partitionRecordsMap = recordsToPartitionRecordsMap(records);
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    HoodieWriteableTestTable testTable = HoodieWriteableTestTable.of(hoodieTable, AVRO_SCHEMA_WITH_METADATA_FIELDS);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(hoodieTable, AVRO_SCHEMA_WITH_METADATA_FIELDS);
     Map<Tuple2<String, String>, List<Tuple2<HoodieKey, HoodieRecordLocation>>> expectedList =
         writeToParquetAndGetExpectedRecordLocations(partitionRecordsMap, testTable);
 
@@ -95,15 +95,15 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
 
     for (Tuple2<String, HoodieBaseFile> entry : partitionPathFileIdPairs) {
       HoodieKeyLocationFetchHandle fetcherHandle = new HoodieKeyLocationFetchHandle(config, hoodieTable, Pair.of(entry._1, entry._2));
-      Iterator<Tuple2<HoodieKey, HoodieRecordLocation>> result = fetcherHandle.locations();
+      Iterator<Pair<HoodieKey, HoodieRecordLocation>> result = fetcherHandle.locations().iterator();
       List<Tuple2<HoodieKey, HoodieRecordLocation>> actualList = new ArrayList<>();
-      result.forEachRemaining(actualList::add);
+      result.forEachRemaining(x -> actualList.add(new Tuple2<>(x.getLeft(), x.getRight())));
       assertEquals(expectedList.get(new Tuple2<>(entry._1, entry._2.getFileId())), actualList);
     }
   }
 
   private Map<Tuple2<String, String>, List<Tuple2<HoodieKey, HoodieRecordLocation>>> writeToParquetAndGetExpectedRecordLocations(
-      Map<String, List<HoodieRecord>> partitionRecordsMap, HoodieWriteableTestTable testTable) throws Exception {
+      Map<String, List<HoodieRecord>> partitionRecordsMap, HoodieSparkWriteableTestTable testTable) throws Exception {
     Map<Tuple2<String, String>, List<Tuple2<HoodieKey, HoodieRecordLocation>>> expectedList = new HashMap<>();
     for (Map.Entry<String, List<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
       int totalRecordsPerPartition = entry.getValue().size();

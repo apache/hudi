@@ -19,8 +19,8 @@ package org.apache.hudi.async;
 
 import org.apache.hudi.client.AbstractCompactor;
 import org.apache.hudi.client.AbstractHoodieWriteClient;
-import org.apache.hudi.client.common.EngineProperty;
-import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.engine.EngineProperty;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
@@ -53,7 +53,7 @@ public abstract class AsyncCompactService extends HoodieAsyncService {
 
   private final int maxConcurrentCompaction;
   private transient AbstractCompactor compactor;
-  private transient HoodieEngineContext context;
+  protected transient HoodieEngineContext context;
   private transient BlockingQueue<HoodieInstant> pendingCompactions = new LinkedBlockingQueue<>();
   private transient ReentrantLock queueLock = new ReentrantLock();
   private transient Condition consumed = queueLock.newCondition();

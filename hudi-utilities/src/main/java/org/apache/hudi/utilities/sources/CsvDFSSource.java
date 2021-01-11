@@ -79,7 +79,7 @@ public class CsvDFSSource extends RowSource {
       SparkSession sparkSession,
       SchemaProvider schemaProvider) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    this.pathSelector = new DFSPathSelector(props, sparkContext.hadoopConfiguration());
+    this.pathSelector = DFSPathSelector.createSourceSelector(props, sparkContext.hadoopConfiguration());
     if (schemaProvider != null) {
       sourceSchema = (StructType) SchemaConverters.toSqlType(schemaProvider.getSourceSchema())
           .dataType();
@@ -92,7 +92,7 @@ public class CsvDFSSource extends RowSource {
   protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr,
       long sourceLimit) {
     Pair<Option<String>, String> selPathsWithMaxModificationTime =
-        pathSelector.getNextFilePathsAndMaxModificationTime(lastCkptStr, sourceLimit);
+        pathSelector.getNextFilePathsAndMaxModificationTime(sparkContext, lastCkptStr, sourceLimit);
     return Pair.of(fromFiles(
         selPathsWithMaxModificationTime.getLeft()), selPathsWithMaxModificationTime.getRight());
   }

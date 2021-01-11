@@ -20,14 +20,18 @@ package org.apache.hudi.client.common;
 
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.config.SerializableConfiguration;
-import org.apache.hudi.client.common.function.SerializableConsumer;
-import org.apache.hudi.client.common.function.SerializableFunction;
-import org.apache.hudi.client.common.function.SerializablePairFunction;
+import org.apache.hudi.common.engine.EngineProperty;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.function.SerializableConsumer;
+import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
+import scala.Tuple2;
 
 import java.util.List;
 import java.util.Map;
@@ -82,9 +86,15 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   @Override
   public <I, K, V> Map<K, V> mapToPair(List<I> data, SerializablePairFunction<I, K, V> func, Integer parallelism) {
     if (Objects.nonNull(parallelism)) {
-      return javaSparkContext.parallelize(data, parallelism).mapToPair(func::call).collectAsMap();
+      return javaSparkContext.parallelize(data, parallelism).mapToPair(input -> {
+        Pair<K, V> pair = func.call(input);
+        return new Tuple2(pair.getLeft(), pair.getRight());
+      }).collectAsMap();
     } else {
-      return javaSparkContext.parallelize(data).mapToPair(func::call).collectAsMap();
+      return javaSparkContext.parallelize(data).mapToPair(input -> {
+        Pair<K, V> pair = func.call(input);
+        return new Tuple2(pair.getLeft(), pair.getRight());
+      }).collectAsMap();
     }
   }
 

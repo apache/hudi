@@ -18,6 +18,9 @@
 
 package org.apache.hudi.hive;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Partition;
@@ -38,7 +41,6 @@ import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
-import org.apache.hive.jdbc.HiveDriver;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -62,17 +64,7 @@ import java.util.stream.Collectors;
 public class HoodieHiveClient extends AbstractSyncHoodieClient {
 
   private static final String HOODIE_LAST_COMMIT_TIME_SYNC = "last_commit_time_sync";
-  // Make sure we have the hive JDBC driver in classpath
-  private static String driverName = HiveDriver.class.getName();
   private static final String HIVE_ESCAPE_CHARACTER = HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
-
-  static {
-    try {
-      Class.forName(driverName);
-    } catch (ClassNotFoundException e) {
-      throw new IllegalStateException("Could not find " + driverName + " in classpath. ", e);
-    }
-  }
 
   private static final Logger LOG = LogManager.getLogger(HoodieHiveClient.class);
   private final PartitionValueExtractor partitionValueExtractor;
@@ -84,7 +76,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   private HiveConf configuration;
 
   public HoodieHiveClient(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
-    super(cfg.basePath, cfg.assumeDatePartitioning, fs);
+    super(cfg.basePath, cfg.assumeDatePartitioning, cfg.useFileListingFromMetadata, cfg.verifyMetadataFileListing, fs);
     this.syncConfig = cfg;
     this.fs = fs;
 
@@ -173,7 +165,17 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
             + ". Check partition strategy. ");
     List<String> partBuilder = new ArrayList<>();
     for (int i = 0; i < syncConfig.partitionFields.size(); i++) {
-      partBuilder.add("`" + syncConfig.partitionFields.get(i) + "`='" + partitionValues.get(i) + "'");
+      String partitionValue = partitionValues.get(i);
+      // decode the partition before sync to hive to prevent multiple escapes of HIVE
+      if (syncConfig.decodePartition) {
+        try {
+          // This is a decode operator for encode in KeyGenUtils#getRecordPartitionPath
+          partitionValue = URLDecoder.decode(partitionValue, StandardCharsets.UTF_8.toString());
+        } catch (UnsupportedEncodingException e) {
+          throw new HoodieHiveSyncException("error in decode partition: " + partitionValue, e);
+        }
+      }
+      partBuilder.add("`" + syncConfig.partitionFields.get(i) + "`='" + partitionValue + "'");
     }
     return String.join(",", partBuilder);
   }
@@ -205,7 +207,6 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     Map<String, String> paths = new HashMap<>();
     for (Partition tablePartition : tablePartitions) {
       List<String> hivePartitionValues = tablePartition.getValues();
-      Collections.sort(hivePartitionValues);
       String fullTablePartitionPath =
           Path.getPathWithoutSchemeAndAuthority(new Path(tablePartition.getSd().getLocation())).toUri().getPath();
       paths.put(String.join(", ", hivePartitionValues), fullTablePartitionPath);
@@ -217,7 +218,6 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       String fullStoragePartitionPath = Path.getPathWithoutSchemeAndAuthority(storagePartitionPath).toUri().getPath();
       // Check if the partition values or if hdfs path is the same
       List<String> storagePartitionValues = partitionValueExtractor.extractPartitionValuesInPath(storagePartition);
-      Collections.sort(storagePartitionValues);
       if (!storagePartitionValues.isEmpty()) {
         String storageValue = String.join(", ", storagePartitionValues);
         if (!paths.containsKey(storageValue)) {
@@ -426,7 +426,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   private void createHiveConnection() {
     if (connection == null) {
       try {
-        Class.forName(HiveDriver.class.getCanonicalName());
+        Class.forName("org.apache.hive.jdbc.HiveDriver");
       } catch (ClassNotFoundException e) {
         LOG.error("Unable to load Hive driver class", e);
         return;

@@ -18,8 +18,8 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -135,6 +135,7 @@ public class MarkerFiles implements Serializable {
     if (subDirectories.size() > 0) {
       parallelism = Math.min(subDirectories.size(), parallelism);
       SerializableConfiguration serializedConf = new SerializableConfiguration(fs.getConf());
+      context.setJobStatus(this.getClass().getSimpleName(), "Obtaining marker files for all created, merged paths");
       dataFiles.addAll(context.flatMap(subDirectories, directory -> {
         Path path = new Path(directory);
         FileSystem fileSystem = path.getFileSystem(serializedConf.get());

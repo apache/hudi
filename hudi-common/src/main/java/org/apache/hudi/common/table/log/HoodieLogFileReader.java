@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.TimedFSDataInputStream;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
@@ -67,13 +68,14 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private long lastReverseLogFilePosition;
   private boolean reverseReader;
   private boolean closed = false;
+  private transient Thread shutdownThread = null;
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
       boolean readBlockLazily, boolean reverseReader) throws IOException {
     FSDataInputStream fsDataInputStream = fs.open(logFile.getPath(), bufferSize);
     if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
-      this.inputStream = new FSDataInputStream(
-          new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize));
+      this.inputStream = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
+          new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
     } else {
       // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream
       // need to wrap in another BufferedFSInputStream the make bufferSize work?
@@ -108,14 +110,15 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
    * Close the inputstream if not closed when the JVM exits.
    */
   private void addShutDownHook() {
-    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+    shutdownThread = new Thread(() -> {
       try {
         close();
       } catch (Exception e) {
         LOG.warn("unable to close input stream for log file " + logFile, e);
         // fail silently for any sort of exception
       }
-    }));
+    });
+    Runtime.getRuntime().addShutdownHook(shutdownThread);
   }
 
   // TODO : convert content and block length to long by using ByteBuffer, raw byte [] allows
@@ -291,6 +294,9 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   public void close() throws IOException {
     if (!closed) {
       this.inputStream.close();
+      if (null != shutdownThread) {
+        Runtime.getRuntime().removeShutdownHook(shutdownThread);
+      }
       closed = true;
     }
   }

@@ -20,14 +20,13 @@ package org.apache.hudi.table.action.compact.strategy;
 
 import org.apache.hudi.avro.model.HoodieCompactionOperation;
 import org.apache.hudi.common.model.BaseFile;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 
 import java.text.SimpleDateFormat;
@@ -257,10 +256,13 @@ public class TestHoodieCompactionStrategy {
       HoodieBaseFile df = TestHoodieBaseFile.newDataFile(k);
       String partitionPath = keyToPartitionMap.get(k);
       List<HoodieLogFile> logFiles = v.stream().map(TestHoodieLogFile::newLogFile).collect(Collectors.toList());
+      FileSlice slice = new FileSlice(new HoodieFileGroupId(partitionPath, df.getFileId()), df.getCommitTime());
+      slice.setBaseFile(df);
+      logFiles.stream().forEach(f -> slice.addLogFile(f));
       operations.add(new HoodieCompactionOperation(df.getCommitTime(),
           logFiles.stream().map(s -> s.getPath().toString()).collect(Collectors.toList()), df.getPath(), df.getFileId(),
           partitionPath,
-          config.getCompactionStrategy().captureMetrics(config, Option.of(df), partitionPath, logFiles),
+          config.getCompactionStrategy().captureMetrics(config, slice),
           df.getBootstrapBaseFile().map(BaseFile::getPath).orElse(null))
       );
     });
@@ -303,20 +305,16 @@ public class TestHoodieCompactionStrategy {
 
   public static class TestHoodieLogFile extends HoodieLogFile {
 
+    private static int version = 0;
     private final long size;
 
     public TestHoodieLogFile(long size) {
-      super("/tmp/.ce481ee7-9e53-4a2e-9992-f9e295fa79c0_20180919184844.log.1");
+      super("/tmp/.ce481ee7-9e53-4a2e-999-f9e295fa79c0_20180919184844.log." + version++);
       this.size = size;
     }
 
     public static HoodieLogFile newLogFile(long size) {
       return new TestHoodieLogFile(size);
-    }
-
-    @Override
-    public Path getPath() {
-      return new Path("/tmp/test-log");
     }
 
     @Override

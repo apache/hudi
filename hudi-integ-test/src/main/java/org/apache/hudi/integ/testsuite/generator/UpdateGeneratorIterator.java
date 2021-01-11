@@ -18,27 +18,33 @@
 
 package org.apache.hudi.integ.testsuite.generator;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
 
 /**
  * A lazy update payload generator to generate {@link GenericRecord}s lazily.
  */
 public class UpdateGeneratorIterator implements Iterator<GenericRecord> {
 
+  private static Logger LOG = LoggerFactory.getLogger(UpdateGeneratorIterator.class);
+
   // Use the full payload generator as default
   private GenericRecordFullPayloadGenerator generator;
-  private List<String> blackListedFields;
+  private Set<String> blackListedFields;
   // iterator
   private Iterator<GenericRecord> itr;
 
   public UpdateGeneratorIterator(Iterator<GenericRecord> itr, String schemaStr, List<String> partitionPathFieldNames,
       List<String> recordKeyFieldNames, int minPayloadSize) {
     this.itr = itr;
-    this.blackListedFields = new ArrayList<>();
+    this.blackListedFields = new HashSet<>();
     this.blackListedFields.addAll(partitionPathFieldNames);
     this.blackListedFields.addAll(recordKeyFieldNames);
     Schema schema = new Schema.Parser().parse(schemaStr);

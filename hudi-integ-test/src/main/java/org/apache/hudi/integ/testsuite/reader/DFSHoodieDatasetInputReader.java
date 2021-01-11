@@ -18,8 +18,35 @@
 
 package org.apache.hudi.integ.testsuite.reader;
 
-import static java.util.Map.Entry.comparingByValue;
-import static java.util.stream.Collectors.toMap;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ParquetReaderIterator;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieMemoryConfig;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.parquet.avro.AvroParquetReader;
+import org.apache.parquet.avro.AvroReadSupport;
+import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -33,35 +60,14 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.table.view.TableFileSystemView;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ParquetReaderIterator;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.config.HoodieMemoryConfig;
-import org.apache.parquet.avro.AvroParquetReader;
-import org.apache.spark.api.java.JavaPairRDD;
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
 import scala.Tuple2;
 
+import static java.util.Map.Entry.comparingByValue;
+import static java.util.stream.Collectors.toMap;
+
 /**
- * This class helps to generate updates from an already existing hoodie dataset. It supports generating updates in
- * across partitions, files and records.
+ * This class helps to generate updates from an already existing hoodie dataset. It supports generating updates in across partitions, files and records.
  */
 public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
 
@@ -78,8 +84,12 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
   }
 
   protected List<String> getPartitions(Option<Integer> partitionsLimit) throws IOException {
-    List<String> partitionPaths = FSUtils
-        .getAllPartitionPaths(metaClient.getFs(), metaClient.getBasePath(), false);
+    // Using FSUtils.getFS here instead of metaClient.getFS() since we dont want to count these listStatus
+    // calls in metrics as they are not part of normal HUDI operation.
+    FileSystem fs = FSUtils.getFs(metaClient.getBasePath(), metaClient.getHadoopConf());
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    List<String> partitionPaths = FSUtils.getAllPartitionPaths(engineContext, fs, metaClient.getBasePath(),
+        HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS, HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE, false);
     // Sort partition so we can pick last N partitions by default
     Collections.sort(partitionPaths);
     if (!partitionPaths.isEmpty()) {
@@ -136,17 +146,30 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
     // Read all file slices in the partition
     JavaPairRDD<String, Iterator<FileSlice>> partitionToFileSlice = getPartitionToFileSlice(metaClient,
         partitionPaths);
+    Map<String, Integer> partitionToFileIdCountMap = partitionToFileSlice
+        .mapToPair(p -> new Tuple2<>(p._1, iteratorSize(p._2))).collectAsMap();
+
     // TODO : read record count from metadata
     // Read the records in a single file
     long recordsInSingleFile = iteratorSize(readParquetOrLogFiles(getSingleSliceFromRDD(partitionToFileSlice)));
     int numFilesToUpdate;
     long numRecordsToUpdatePerFile;
-    if (!numFiles.isPresent() || numFiles.get() == 0) {
+    if (!numFiles.isPresent() || numFiles.get() <= 0) {
       // If num files are not passed, find the number of files to update based on total records to update and records
       // per file
-      numFilesToUpdate = (int) (numRecordsToUpdate.get() / recordsInSingleFile);
-      log.info("Files to update {}", numFilesToUpdate);
-      numRecordsToUpdatePerFile = recordsInSingleFile;
+      numFilesToUpdate = (int) Math.floor((double) numRecordsToUpdate.get() / recordsInSingleFile);
+      if (numFilesToUpdate > 0) {
+        // recordsInSingleFile is not average so we still need to account for bias is records distribution
+        // in the files. Limit to the maximum number of files available.
+        int totalExistingFilesCount = partitionToFileIdCountMap.values().stream().reduce((a, b) -> a + b).get();
+        numFilesToUpdate = Math.min(numFilesToUpdate, totalExistingFilesCount);
+        log.info("Files to update {}, records to update per file {}", numFilesToUpdate, recordsInSingleFile);
+        numRecordsToUpdatePerFile = recordsInSingleFile;
+      } else {
+        numFilesToUpdate = 1;
+        numRecordsToUpdatePerFile = numRecordsToUpdate.get();
+        log.info("Total records passed in < records in single file. Hence setting numFilesToUpdate to 1 and numRecordsToUpdate to {} ", numRecordsToUpdatePerFile);
+      }
     } else {
       // If num files is passed, find the number of records per file based on either percentage or total records to
       // update and num files passed
@@ -154,11 +177,13 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
       numRecordsToUpdatePerFile = percentageRecordsPerFile.isPresent() ? (long) (recordsInSingleFile
           * percentageRecordsPerFile.get()) : numRecordsToUpdate.get() / numFilesToUpdate;
     }
+
     // Adjust the number of files to read per partition based on the requested partition & file counts
     Map<String, Integer> adjustedPartitionToFileIdCountMap = getFilesToReadPerPartition(partitionToFileSlice,
-        partitionPaths.size(), numFilesToUpdate);
+        partitionPaths.size(), numFilesToUpdate, partitionToFileIdCountMap);
     JavaRDD<GenericRecord> updates = projectSchema(generateUpdates(adjustedPartitionToFileIdCountMap,
         partitionToFileSlice, numFilesToUpdate, (int) numRecordsToUpdatePerFile));
+
     if (numRecordsToUpdate.isPresent() && numFiles.isPresent() && numFiles.get() != 0 && numRecordsToUpdate.get()
         != numRecordsToUpdatePerFile * numFiles.get()) {
       long remainingRecordsToAdd = (numRecordsToUpdate.get() - (numRecordsToUpdatePerFile * numFiles.get()));
@@ -190,10 +215,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
   }
 
   private Map<String, Integer> getFilesToReadPerPartition(JavaPairRDD<String, Iterator<FileSlice>>
-      partitionToFileSlice, Integer numPartitions, Integer numFiles) {
-    int numFilesPerPartition = (int) Math.ceil(numFiles / numPartitions);
-    Map<String, Integer> partitionToFileIdCountMap = partitionToFileSlice
-        .mapToPair(p -> new Tuple2<>(p._1, iteratorSize(p._2))).collectAsMap();
+      partitionToFileSlice, Integer numPartitions, Integer numFiles, Map<String, Integer> partitionToFileIdCountMap) {
     long totalExistingFilesCount = partitionToFileIdCountMap.values().stream().reduce((a, b) -> a + b).get();
     ValidationUtils.checkArgument(totalExistingFilesCount >= numFiles, "Cannot generate updates "
         + "for more files than present in the dataset, file requested " + numFiles + ", files present "
@@ -204,7 +226,9 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
         .sorted(comparingByValue())
         .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (e1, e2) -> e2,
             LinkedHashMap::new));
+
     // Limit files to be read per partition
+    int numFilesPerPartition = (int) Math.ceil((double) numFiles / numPartitions);
     Map<String, Integer> adjustedPartitionToFileIdCountMap = new HashMap<>();
     partitionToFileIdCountSortedMap.entrySet().stream().forEach(e -> {
       if (e.getValue() <= numFilesPerPartition) {
@@ -233,20 +257,30 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
 
   private Iterator<IndexedRecord> readParquetOrLogFiles(FileSlice fileSlice) throws IOException {
     if (fileSlice.getBaseFile().isPresent()) {
+      // Read the parquet files using the latest writer schema.
+      Schema schema = new Schema.Parser().parse(schemaStr);
+      AvroReadSupport.setAvroReadSchema(metaClient.getHadoopConf(), HoodieAvroUtils.addMetadataFields(schema));
       Iterator<IndexedRecord> itr =
           new ParquetReaderIterator<IndexedRecord>(AvroParquetReader.<IndexedRecord>builder(new
               Path(fileSlice.getBaseFile().get().getPath())).withConf(metaClient.getHadoopConf()).build());
       return itr;
     } else {
       // If there is no data file, fall back to reading log files
-      HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(metaClient.getFs(),
-          metaClient.getBasePath(),
-          fileSlice.getLogFiles().map(l -> l.getPath().getName()).collect(Collectors.toList()),
-          new Schema.Parser().parse(schemaStr), metaClient.getActiveTimeline().getCommitsTimeline()
-          .filterCompletedInstants().lastInstant().get().getTimestamp(),
-          HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES, true, false,
-          HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE,
-          HoodieMemoryConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH);
+      HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
+          .withFileSystem(metaClient.getFs())
+          .withBasePath(metaClient.getBasePath())
+          .withLogFilePaths(
+              fileSlice.getLogFiles().map(l -> l.getPath().getName()).collect(Collectors.toList()))
+          .withReaderSchema(new Schema.Parser().parse(schemaStr))
+          .withLatestInstantTime(metaClient.getActiveTimeline().getCommitsTimeline()
+              .filterCompletedInstants().lastInstant().get().getTimestamp())
+          .withMaxMemorySizeInBytes(
+              HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
+          .withReadBlocksLazily(true)
+          .withReverseReader(false)
+          .withBufferSize(HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE)
+          .withSpillableMapBasePath(HoodieMemoryConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH)
+          .build();
       // readAvro log files
       Iterable<HoodieRecord<? extends HoodieRecordPayload>> iterable = () -> scanner.iterator();
       Schema schema = new Schema.Parser().parse(schemaStr);
@@ -262,9 +296,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
   }
 
   /**
-   * Returns the number of elements remaining in {@code iterator}. The iterator
-   * will be left exhausted: its {@code hasNext()} method will return
-   * {@code false}.
+   * Returns the number of elements remaining in {@code iterator}. The iterator will be left exhausted: its {@code hasNext()} method will return {@code false}.
    */
   private static int iteratorSize(Iterator<?> iterator) {
     int count = 0;
@@ -276,11 +308,8 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
   }
 
   /**
-   * Creates an iterator returning the first {@code limitSize} elements of the
-   * given iterator. If the original iterator does not contain that many
-   * elements, the returned iterator will have the same behavior as the original
-   * iterator. The returned iterator supports {@code remove()} if the original
-   * iterator does.
+   * Creates an iterator returning the first {@code limitSize} elements of the given iterator. If the original iterator does not contain that many elements, the returned iterator will have the same
+   * behavior as the original iterator. The returned iterator supports {@code remove()} if the original iterator does.
    *
    * @param iterator the iterator to limit
    * @param limitSize the maximum number of elements in the returned iterator

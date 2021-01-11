@@ -18,9 +18,9 @@
 
 package org.apache.hudi.utilities;
 
-import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -117,6 +117,7 @@ public class HoodieSnapshotExporter {
 
   public void export(JavaSparkContext jsc, Config cfg) throws IOException {
     FileSystem fs = FSUtils.getFs(cfg.sourceBasePath, jsc.hadoopConfiguration());
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     if (outputPathExists(fs, cfg)) {
       throw new HoodieSnapshotExporterException("The target output path already exists.");
@@ -128,7 +129,7 @@ public class HoodieSnapshotExporter {
     LOG.info(String.format("Starting to snapshot latest version files which are also no-late-than %s.",
         latestCommitTimestamp));
 
-    final List<String> partitions = getPartitions(fs, cfg);
+    final List<String> partitions = getPartitions(engineContext, fs, cfg);
     if (partitions.isEmpty()) {
       throw new HoodieSnapshotExporterException("The source dataset has 0 partition to snapshot.");
     }
@@ -153,8 +154,8 @@ public class HoodieSnapshotExporter {
     return latestCommit.isPresent() ? Option.of(latestCommit.get().getTimestamp()) : Option.empty();
   }
 
-  private List<String> getPartitions(FileSystem fs, Config cfg) throws IOException {
-    return FSUtils.getAllPartitionPaths(fs, cfg.sourceBasePath, false);
+  private List<String> getPartitions(HoodieEngineContext engineContext, FileSystem fs, Config cfg) throws IOException {
+    return FSUtils.getAllPartitionPaths(engineContext, fs, cfg.sourceBasePath, true, false, false);
   }
 
   private void createSuccessTag(FileSystem fs, Config cfg) throws IOException {
@@ -208,7 +209,7 @@ public class HoodieSnapshotExporter {
       dataFiles.forEach(hoodieDataFile -> filePaths.add(new Tuple2<>(partition, hoodieDataFile.getPath())));
       // also need to copy over partition metadata
       Path partitionMetaFile =
-          new Path(new Path(cfg.sourceBasePath, partition), HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE);
+          new Path(FSUtils.getPartitionPath(cfg.sourceBasePath, partition), HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE);
       FileSystem fs = FSUtils.getFs(cfg.sourceBasePath, serConf.newCopy());
       if (fs.exists(partitionMetaFile)) {
         filePaths.add(new Tuple2<>(partition, partitionMetaFile.toString()));
@@ -219,7 +220,7 @@ public class HoodieSnapshotExporter {
     context.foreach(files, tuple -> {
       String partition = tuple._1();
       Path sourceFilePath = new Path(tuple._2());
-      Path toPartitionPath = new Path(cfg.targetOutputPath, partition);
+      Path toPartitionPath = FSUtils.getPartitionPath(cfg.targetOutputPath, partition);
       FileSystem fs = FSUtils.getFs(cfg.targetOutputPath, serConf.newCopy());
 
       if (!fs.exists(toPartitionPath)) {

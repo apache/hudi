@@ -19,9 +19,11 @@
 package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Functions.Function2;
+import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -157,6 +159,21 @@ public class FileSystemViewManager {
     HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     return new HoodieTableFileSystemView(metaClient, timeline, viewConf.isIncrementalTimelineSyncEnabled());
   }
+
+  public static HoodieTableFileSystemView createInMemoryFileSystemView(HoodieEngineContext engineContext,
+      HoodieTableMetaClient metaClient, boolean useFileListingFromMetadata, boolean verifyListings) {
+    LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePath());
+    if (useFileListingFromMetadata) {
+      return new HoodieMetadataFileSystemView(engineContext, metaClient,
+          metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
+          true,
+          verifyListings);
+    }
+
+    return new HoodieTableFileSystemView(metaClient,
+        metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
+  }
+
 
   /**
    * Create a remote file System view for a table.

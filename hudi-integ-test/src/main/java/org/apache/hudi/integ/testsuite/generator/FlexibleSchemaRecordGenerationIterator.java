@@ -18,14 +18,17 @@
 
 package org.apache.hudi.integ.testsuite.generator;
 
-import java.util.Iterator;
-import java.util.List;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+
+
 /**
- * A GenericRecordGeneratorIterator for the custom schema of the workload. Implements {@link Iterator} to allow for
- * iteration semantics.
+ * A GenericRecordGeneratorIterator for the custom schema of the workload. Implements {@link Iterator} to allow for iteration semantics.
  */
 public class FlexibleSchemaRecordGenerationIterator implements Iterator<GenericRecord> {
 
@@ -37,16 +40,20 @@ public class FlexibleSchemaRecordGenerationIterator implements Iterator<GenericR
   // Store last record for the partition path of the first payload to be used for all subsequent generated payloads
   private GenericRecord lastRecord;
   // Partition path field name
-  private List<String> partitionPathFieldNames;
+  private Set<String> partitionPathFieldNames;
+  private String firstPartitionPathField;
 
   public FlexibleSchemaRecordGenerationIterator(long maxEntriesToProduce, String schema) {
-    this(maxEntriesToProduce, GenericRecordFullPayloadGenerator.DEFAULT_PAYLOAD_SIZE, schema, null, GenericRecordFullPayloadGenerator.DEFAULT_NUM_DATE_PARTITIONS);
+    this(maxEntriesToProduce, GenericRecordFullPayloadGenerator.DEFAULT_PAYLOAD_SIZE, schema, null, 0);
   }
 
   public FlexibleSchemaRecordGenerationIterator(long maxEntriesToProduce, int minPayloadSize, String schemaStr,
       List<String> partitionPathFieldNames, int numPartitions) {
     this.counter = maxEntriesToProduce;
-    this.partitionPathFieldNames = partitionPathFieldNames;
+    this.partitionPathFieldNames = new HashSet<>(partitionPathFieldNames);
+    if(partitionPathFieldNames != null && partitionPathFieldNames.size() > 0) {
+      this.firstPartitionPathField = partitionPathFieldNames.get(0);
+    }
     Schema schema = new Schema.Parser().parse(schemaStr);
     this.generator = new GenericRecordFullPayloadGenerator(schema, minPayloadSize, numPartitions);
   }
@@ -59,12 +66,18 @@ public class FlexibleSchemaRecordGenerationIterator implements Iterator<GenericR
   @Override
   public GenericRecord next() {
     this.counter--;
+    boolean partitionPathsNonEmpty = partitionPathFieldNames != null && partitionPathFieldNames.size() > 0;
     if (lastRecord == null) {
-      GenericRecord record = this.generator.getNewPayload();
+      GenericRecord record = partitionPathsNonEmpty
+          ? this.generator.getNewPayloadWithTimestamp(this.firstPartitionPathField)
+          : this.generator.getNewPayload();
       lastRecord = record;
       return record;
     } else {
-      return this.generator.randomize(lastRecord, this.partitionPathFieldNames);
+      return partitionPathsNonEmpty
+          ? this.generator.getUpdatePayloadWithTimestamp(lastRecord,
+          this.partitionPathFieldNames, firstPartitionPathField)
+          : this.generator.getUpdatePayload(lastRecord, this.partitionPathFieldNames);
     }
   }
 }

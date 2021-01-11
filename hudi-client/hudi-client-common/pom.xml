@@ -31,13 +31,6 @@
   <packaging>jar</packaging>
 
   <dependencies>
-    <!-- Scala -->
-    <dependency>
-      <groupId>org.scala-lang</groupId>
-      <artifactId>scala-library</artifactId>
-      <version>${scala.version}</version>
-    </dependency>
-
     <!-- Hoodie -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
@@ -48,6 +41,11 @@
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-timeline-service</artifactId>
       <version>${project.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>joda-time</groupId>
+      <artifactId>joda-time</artifactId>
     </dependency>
 
     <!-- Logging -->

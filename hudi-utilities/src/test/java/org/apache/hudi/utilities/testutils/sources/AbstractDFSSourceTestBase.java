@@ -175,5 +175,18 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
     InputBatch<JavaRDD<GenericRecord>> fetch5 = sourceFormatAdapter.fetchNewDataInAvroFormat(
         Option.empty(), Long.MAX_VALUE);
     assertEquals(10100, fetch5.getBatch().get().count());
+
+    // 6. Should skip files/directories whose names start with prefixes ("_", ".")
+    generateOneFile(".checkpoint/3", "002", 100);
+    generateOneFile("_checkpoint/3", "002", 100);
+    generateOneFile(".3", "002", 100);
+    generateOneFile("_3", "002", 100);
+    // also work with nested directory
+    generateOneFile("foo/.bar/3", "002", 1); // not ok
+    generateOneFile("foo/bar/3", "002", 1); // ok
+    // fetch everything from the beginning
+    InputBatch<JavaRDD<GenericRecord>> fetch6 = sourceFormatAdapter.fetchNewDataInAvroFormat(
+        Option.empty(), Long.MAX_VALUE);
+    assertEquals(10101, fetch6.getBatch().get().count());
   }
 }

@@ -20,8 +20,8 @@ package org.apache.hudi.index.simple;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.SparkMemoryUtils;
-import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -147,6 +147,7 @@ public class SparkHoodieSimpleIndex<T extends HoodieRecordPayload> extends Spark
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     int fetchParallelism = Math.max(1, Math.max(baseFiles.size(), parallelism));
     return jsc.parallelize(baseFiles, fetchParallelism)
-        .flatMapToPair(partitionPathBaseFile -> new HoodieKeyLocationFetchHandle(config, hoodieTable, partitionPathBaseFile).locations());
+        .flatMapToPair(partitionPathBaseFile -> new HoodieKeyLocationFetchHandle(config, hoodieTable, partitionPathBaseFile)
+                .locations().map(x -> Tuple2.apply(((Pair)x).getLeft(), ((Pair)x).getRight())).iterator());
   }
 }

@@ -204,6 +204,7 @@ public class HoodieAvroUtils {
     List<Schema.Field> filteredFields = schema.getFields()
                                               .stream()
                                               .filter(field -> !HoodieRecord.HOODIE_META_COLUMNS.contains(field.name()))
+                                              .map(field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))
                                               .collect(Collectors.toList());
     Schema filteredSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false);
     filteredSchema.setFields(filteredFields);
@@ -431,10 +432,12 @@ public class HoodieAvroUtils {
 
     if (returnNullIfNotFound) {
       return null;
-    } else {
+    } else if (valueNode.getSchema().getField(parts[i]) == null) {
       throw new HoodieException(
           fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
               + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
+    } else {
+      throw new HoodieException("The value of " + parts[i] + " can not be null");
     }
   }
 
@@ -445,7 +448,7 @@ public class HoodieAvroUtils {
    * @param fieldValue avro field value
    * @return field value either converted (for certain data types) or as it is.
    */
-  private static Object convertValueForSpecificDataTypes(Schema fieldSchema, Object fieldValue) {
+  public static Object convertValueForSpecificDataTypes(Schema fieldSchema, Object fieldValue) {
     if (fieldSchema == null) {
       return fieldValue;
     }

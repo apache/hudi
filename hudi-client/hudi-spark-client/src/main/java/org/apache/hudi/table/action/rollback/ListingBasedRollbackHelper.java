@@ -18,10 +18,11 @@
 
 package org.apache.hudi.table.action.rollback;
 
-import org.apache.hudi.client.common.HoodieEngineContext;
-import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -49,6 +50,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
@@ -116,19 +118,29 @@ public class ListingBasedRollbackHelper implements Serializable {
                   .withDeletedFileResults(filesToDeletedStatus).build());
         }
         case APPEND_ROLLBACK_BLOCK: {
+          String fileId = rollbackRequest.getFileId().get();
+          String latestBaseInstant = rollbackRequest.getLatestBaseInstant().get();
+
+          // collect all log files that is supposed to be deleted with this rollback
+          Map<FileStatus, Long> writtenLogFileSizeMap = FSUtils.getAllLogFiles(metaClient.getFs(),
+              FSUtils.getPartitionPath(config.getBasePath(), rollbackRequest.getPartitionPath()),
+              fileId, HoodieFileFormat.HOODIE_LOG.getFileExtension(), latestBaseInstant)
+              .collect(Collectors.toMap(HoodieLogFile::getFileStatus, value -> value.getFileStatus().getLen()));
+
           Writer writer = null;
           try {
             writer = HoodieLogFormat.newWriterBuilder()
                 .onParentPath(FSUtils.getPartitionPath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
-                .withFileId(rollbackRequest.getFileId().get())
-                .overBaseCommit(rollbackRequest.getLatestBaseInstant().get()).withFs(metaClient.getFs())
+                .withFileId(fileId)
+                .overBaseCommit(latestBaseInstant)
+                .withFs(metaClient.getFs())
                 .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
 
             // generate metadata
             if (doDelete) {
               Map<HeaderMetadataType, String> header = generateHeader(instantToRollback.getTimestamp());
               // if update belongs to an existing log file
-              writer = writer.appendBlock(new HoodieCommandBlock(header));
+              writer.appendBlock(new HoodieCommandBlock(header));
             }
           } catch (IOException | InterruptedException io) {
             throw new HoodieRollbackException("Failed to rollback for instant " + instantToRollback, io);
@@ -149,16 +161,17 @@ public class ListingBasedRollbackHelper implements Serializable {
               metaClient.getFs().getFileStatus(Objects.requireNonNull(writer).getLogFile().getPath()),
               1L
           );
+
           return new Tuple2<>(rollbackRequest.getPartitionPath(),
               HoodieRollbackStat.newBuilder().withPartitionPath(rollbackRequest.getPartitionPath())
-                  .withRollbackBlockAppendResults(filesToNumBlocksRollback).build());
+                  .withRollbackBlockAppendResults(filesToNumBlocksRollback)
+                  .withWrittenLogFileSizeMap(writtenLogFileSizeMap).build());
         }
         default:
           throw new IllegalStateException("Unknown Rollback action " + rollbackRequest);
       }
     });
   }
-
 
   /**
    * Common method used for cleaning out base files under a partition path during rollback of a set of commits.
