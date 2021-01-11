@@ -80,6 +80,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
+
   private static final Logger LOG = LogManager.getLogger(TestHoodieBackedMetadata.class);
 
   @TempDir
@@ -261,13 +262,11 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   /**
    * Test rollback of various table operations sync to Metadata Table correctly.
    */
-  //@ParameterizedTest
-  //@EnumSource(HoodieTableType.class)
-  //public void testRollbackOperations(HoodieTableType tableType) throws Exception {
-  @Test
-  public void testRollbackOperations() throws Exception {
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testRollbackOperations(HoodieTableType tableType) throws Exception {
     //FIXME(metadata): This is broken for MOR, until HUDI-1434 is fixed
-    init(HoodieTableType.COPY_ON_WRITE);
+    init(tableType);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
@@ -371,13 +370,13 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   }
 
   /**
-   * Test when syncing rollback to metadata if the commit being rolled back has not been synced that essentially a no-op
-   * occurs to metadata.
-   * @throws Exception
+   * Test when syncing rollback to metadata if the commit being rolled back has not been synced that essentially a no-op occurs to metadata.
+   * Once explicit sync is called, metadata should match.
    */
-  @Test
-  public void testRollbackUnsyncedCommit() throws Exception {
-    init(HoodieTableType.COPY_ON_WRITE);
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testRollbackUnsyncedCommit(HoodieTableType tableType) throws Exception {
+    init(tableType);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
@@ -389,7 +388,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       assertNoWriteErrors(writeStatuses);
       validateMetadata(client);
     }
-
     String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, false))) {
       // Commit with metadata disabled
@@ -401,6 +399,8 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     }
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient<>(engineContext, getWriteConfig(true, true))) {
+      assertFalse(metadata(client).isInSync());
+      client.syncTableMetadata();
       validateMetadata(client);
     }
   }
@@ -528,8 +528,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   }
 
   /**
-   * Instants on Metadata Table should be archived as per config.
-   * Metadata Table should be automatically compacted as per config.
+   * Instants on Metadata Table should be archived as per config. Metadata Table should be automatically compacted as per config.
    */
   @Test
   public void testCleaningArchivingAndCompaction() throws Exception {
@@ -752,8 +751,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
 
   /**
    * Validate the metadata tables contents to ensure it matches what is on the file system.
-   *
-   * @throws IOException
    */
   private void validateMetadata(SparkRDDWriteClient client) throws IOException {
     HoodieWriteConfig config = client.getConfig();
@@ -807,7 +804,19 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
         if ((fsFileNames.size() != metadataFilenames.size()) || (!fsFileNames.equals(metadataFilenames))) {
           LOG.info("*** File system listing = " + Arrays.toString(fsFileNames.toArray()));
           LOG.info("*** Metadata listing = " + Arrays.toString(metadataFilenames.toArray()));
+
+          for (String fileName : fsFileNames) {
+            if (!metadataFilenames.contains(fileName)) {
+              LOG.error(partition + "FsFilename " + fileName + " not found in Meta data");
+            }
+          }
+          for (String fileName : metadataFilenames) {
+            if (!fsFileNames.contains(fileName)) {
+              LOG.error(partition + "Metadata file " + fileName + " not found in original FS");
+            }
+          }
         }
+
         assertEquals(fsFileNames.size(), metadataFilenames.size(), "Files within partition " + partition + " should match");
         assertTrue(fsFileNames.equals(metadataFilenames), "Files within partition " + partition + " should match");
 

@@ -53,9 +53,9 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
 
   protected final HoodieWriteConfig config;
 
-  private final String basePath;
+  protected final String basePath;
 
-  private final String instantTime;
+  protected final String instantTime;
 
   public AbstractMarkerBasedRollbackStrategy(HoodieTable<T, I, K, O> table, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
     this.table = table;
@@ -90,6 +90,7 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
     String fileId = FSUtils.getFileIdFromFilePath(baseFilePathForAppend);
     String baseCommitTime = FSUtils.getCommitTime(baseFilePathForAppend.getName());
     String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), new Path(basePath, appendBaseFilePath).getParent());
+    final Map<FileStatus, Long> writtenLogFileSizeMap = getWrittenLogFileSizeMap(partitionPath, baseCommitTime, fileId);
 
     HoodieLogFormat.Writer writer = null;
     try {
@@ -121,17 +122,26 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
       }
     }
 
-    Map<FileStatus, Long> filesToNumBlocksRollback = Collections.emptyMap();
-    if (config.useFileListingMetadata()) {
-      // When metadata is enabled, the information of files appended to is required
-      filesToNumBlocksRollback = Collections.singletonMap(
+    // the information of files appended to is required for metadata sync
+    Map<FileStatus, Long> filesToNumBlocksRollback = Collections.singletonMap(
           table.getMetaClient().getFs().getFileStatus(Objects.requireNonNull(writer).getLogFile().getPath()),
           1L);
-    }
 
     return HoodieRollbackStat.newBuilder()
         .withPartitionPath(partitionPath)
         .withRollbackBlockAppendResults(filesToNumBlocksRollback)
-        .build();
+        .withWrittenLogFileSizeMap(writtenLogFileSizeMap).build();
+  }
+
+  /**
+   * Returns written log file size map for the respective baseCommitTime to assist in metadata table syncing.
+   * @param partitionPath partition path of interest
+   * @param baseCommitTime base commit time of interest
+   * @param fileId fileId of interest
+   * @return Map<FileStatus, File size>
+   * @throws IOException
+   */
+  protected Map<FileStatus, Long> getWrittenLogFileSizeMap(String partitionPath, String baseCommitTime, String fileId) throws IOException {
+    return Collections.EMPTY_MAP;
   }
 }

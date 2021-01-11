@@ -18,20 +18,33 @@
 
 package org.apache.hudi.table.action.rollback;
 
+import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -40,13 +53,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
 
+  private static final String TEST_NAME_WITH_PARAMS = "[{index}] Test with listing metadata enable={0}";
+
+  public static Stream<Arguments> configParams() {
+    return Arrays.stream(new Boolean[][] {{true}, {false}}).map(Arguments::of);
+  }
+
+  private HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
+
   @BeforeEach
   public void setUp() throws Exception {
     initPath();
     initSparkContexts();
     initFileSystem();
-    initMetaClient();
-    initDFS();
+    initMetaClient(tableType);
+    initTestDataGenerator();
   }
 
   @AfterEach
@@ -55,7 +76,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
   }
 
   @Test
-  public void testCopyOnWriteRollback() throws Exception {
+  public void testCopyOnWriteRollbackWithTestTable() throws Exception {
     // given: wrote some base files and corresponding markers
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
     String f0 = testTable.addRequestedCommit("000")
@@ -85,43 +106,78 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     assertEquals(1, stats.stream().mapToInt(r -> r.getFailedDeleteFiles().size()).sum());
   }
 
-  @Test
-  public void testMergeOnReadRollback() throws Exception {
-    // given: wrote some base + log files and corresponding markers
-    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
-    String f2 = testTable.addRequestedDeltaCommit("000")
-        .getFileIdsWithBaseFilesInPartitions("partA").get("partA");
-    String f1 = testTable.addDeltaCommit("001")
-        .withLogFile("partA", f2)
-        .getFileIdsWithBaseFilesInPartitions("partB").get("partB");
-    String f3 = "f3";
-    String f4 = "f4";
-    testTable.forDeltaCommit("001")
-        .withMarkerFile("partB", f1, IOType.CREATE)
-        .withMarkerFile("partA", f3, IOType.CREATE)
-        .withMarkerFile("partA", f2, IOType.APPEND)
-        .withMarkerFile("partB", f4, IOType.APPEND);
+  @Tag("functional")
+  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
+  @MethodSource("configParams")
+  public void testCopyOnWriteRollback(boolean useFileListingMetadata) throws Exception {
+    HoodieWriteConfig writeConfig = getConfigBuilder().withRollbackUsingMarkers(true).withAutoCommit(false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(useFileListingMetadata).build())
+        .withPath(basePath).build();
 
-    // when
-    List<HoodieRollbackStat> stats = new SparkMarkerBasedRollbackStrategy(HoodieSparkTable.create(getConfig(), context, metaClient), context, getConfig(), "002")
-        .execute(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001"));
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      // rollback 2nd commit and ensure stats reflect the info.
+      List<HoodieRollbackStat> stats = testRun(useFileListingMetadata, writeConfig, writeClient);
 
-    // then: ensure files are deleted, rollback block is appended (even if append does not exist)
-    assertEquals(2, stats.size());
-    // will have the log file
-    FileStatus[] partBFiles = testTable.listAllFilesInPartition("partB");
-    assertEquals(1, partBFiles.length);
-    assertTrue(partBFiles[0].getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension()));
-    assertTrue(partBFiles[0].getLen() > 0);
-
-    FileStatus[] partAFiles = testTable.listAllFilesInPartition("partA");
-    assertEquals(3, partAFiles.length);
-    assertEquals(2, Stream.of(partAFiles).filter(s -> s.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())).count());
-    assertEquals(1, Stream.of(partAFiles).filter(s -> s.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())).filter(f -> f.getLen() > 0).count());
-
-    // only partB/f1_001 will be deleted
-    assertEquals(1, stats.stream().mapToInt(r -> r.getSuccessDeleteFiles().size()).sum());
-    // partA/f3_001 is non existent
-    assertEquals(1, stats.stream().mapToInt(r -> r.getFailedDeleteFiles().size()).sum());
+      assertEquals(3, stats.size());
+      for (HoodieRollbackStat stat : stats) {
+        assertEquals(1, stat.getSuccessDeleteFiles().size());
+        assertEquals(0, stat.getFailedDeleteFiles().size());
+        assertEquals(0, stat.getCommandBlocksCount().size());
+        assertEquals(0, stat.getWrittenLogFileSizeMap().size());
+      }
+    }
   }
+
+  @Tag("functional")
+  @ParameterizedTest(name = TEST_NAME_WITH_PARAMS)
+  @MethodSource("configParams")
+  public void testMergeOnReadRollback(boolean useFileListingMetadata) throws Exception {
+    // init MERGE_ON_READ_TABLE
+    tearDown();
+    tableType = HoodieTableType.MERGE_ON_READ;
+    setUp();
+
+    HoodieWriteConfig writeConfig = getConfigBuilder().withRollbackUsingMarkers(true).withAutoCommit(false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(useFileListingMetadata).build())
+        .withPath(basePath).build();
+
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, writeConfig)) {
+
+      // rollback 2nd commit and ensure stats reflect the info.
+      List<HoodieRollbackStat> stats = testRun(useFileListingMetadata, writeConfig, writeClient);
+
+      assertEquals(3, stats.size());
+      for (HoodieRollbackStat stat : stats) {
+        assertEquals(0, stat.getSuccessDeleteFiles().size());
+        assertEquals(0, stat.getFailedDeleteFiles().size());
+        assertEquals(1, stat.getCommandBlocksCount().size());
+        stat.getCommandBlocksCount().forEach((fileStatus, len) -> assertTrue(fileStatus.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())));
+        assertEquals(1, stat.getWrittenLogFileSizeMap().size());
+        stat.getWrittenLogFileSizeMap().forEach((fileStatus, len) -> assertTrue(fileStatus.getPath().getName().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension())));
+      }
+    }
+  }
+
+  private List<HoodieRollbackStat> testRun(boolean useFileListingMetadata, HoodieWriteConfig writeConfig, SparkRDDWriteClient writeClient) {
+    String newCommitTime = "001";
+    writeClient.startCommitWithTime(newCommitTime);
+
+    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+    JavaRDD<WriteStatus> writeStatuses = writeClient.insert(jsc.parallelize(records, 1), newCommitTime);
+    writeClient.commit(newCommitTime, writeStatuses);
+
+    // Updates
+    newCommitTime = "002";
+    writeClient.startCommitWithTime(newCommitTime);
+    records = dataGen.generateUniqueUpdates(newCommitTime, 50);
+    writeStatuses = writeClient.upsert(jsc.parallelize(records, 1), newCommitTime);
+    writeStatuses.collect();
+
+    // rollback 2nd commit and ensure stats reflect the info.
+    return new SparkMarkerBasedRollbackStrategy(HoodieSparkTable.create(writeConfig, context, metaClient), context, writeConfig, "003")
+        .execute(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "002"));
+  }
+
 }
