@@ -90,7 +90,6 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   @Override
   public void open() throws Exception {
     super.open();
-    isMain = getRuntimeContext().getIndexOfThisSubtask() == 0;
     // get configs from runtimeContext
     cfg = (HoodieFlinkStreamer.Config) getRuntimeContext().getExecutionConfig().getGlobalJobParameters();
 
@@ -116,7 +115,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       initTable();
 
       // create instantGenerateTmpFolder
-      createinstantGenerateTmpFolder();
+      createInstantGenerateTmpDir();
     }
   }
 
@@ -124,11 +123,11 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   public void prepareSnapshotPreBarrier(long checkpointId) throws Exception {
     super.prepareSnapshotPreBarrier(checkpointId);
     int indexOfThisSubtask = getRuntimeContext().getIndexOfThisSubtask();
-    String instantGenerateInfoFileName = String.format("%d_%d_%d",indexOfThisSubtask,checkpointId,batchSize);
-    Path path = new Path(INSTANT_GENERATE_FOLDER_NAME,instantGenerateInfoFileName);
+    String instantGenerateInfoFileName = String.format("%d_%d_%d", indexOfThisSubtask, checkpointId, batchSize);
+    Path path = new Path(INSTANT_GENERATE_FOLDER_NAME, instantGenerateInfoFileName);
     // mk generate file by each subtask
-    fs.create(path,true);
-    LOG.info("subtask [{}] at checkpoint [{}] created generate file [{}]",indexOfThisSubtask,checkpointId,instantGenerateInfoFileName);
+    fs.create(path, true);
+    LOG.info("Subtask [{}] at checkpoint [{}] created generate file [{}]", indexOfThisSubtask, checkpointId, instantGenerateInfoFileName);
     if (isMain) {
       boolean receivedDataInCurrentCP = checkReceivedData(checkpointId);
       // check whether the last instant is completed, if not, wait 10s and then throws an exception
@@ -156,23 +155,26 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       if (context.isRestored()) {
         Iterator<String> latestInstantIterator = latestInstantState.get().iterator();
         latestInstantIterator.forEachRemaining(x -> latestInstant = x);
-        LOG.info("InstantGenerateOperator initializeState get latestInstant [{}]", latestInstant);
+        LOG.info("Restoring the latest instant [{}] from the state", latestInstant);
       }
     }
   }
 
   @Override
   public void snapshotState(StateSnapshotContext functionSnapshotContext) throws Exception {
-    LOG.info("Update latest instant [{}] records size [{}]", latestInstant,batchSize);
-    batchSize = 0;
+    long checkpointId = functionSnapshotContext.getCheckpointId();
     if (isMain) {
+      LOG.info("Update latest instant [{}] records size [{}] checkpointId [{}]", latestInstant, batchSize, checkpointId);
       if (latestInstantList.isEmpty()) {
         latestInstantList.add(latestInstant);
       } else {
         latestInstantList.set(0, latestInstant);
       }
       latestInstantState.update(latestInstantList);
+    } else {
+      LOG.info("Records size [{}] checkpointId [{}]", batchSize, checkpointId);
     }
+    batchSize = 0;
   }
 
   /**
@@ -246,7 +248,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       fileStatuses = fs.listStatus(generatePath, new PathFilter() {
         @Override
         public boolean accept(Path pathname) {
-          return pathname.getName().contains(String.format("_%d_",checkpointId));
+          return pathname.getName().contains(String.format("_%d_", checkpointId));
         }
       });
 
@@ -256,19 +258,19 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       }
 
       if (tryTimes >= 5) {
-        LOG.warn("waiting generate file, checkpointId [{}]",checkpointId);
+        LOG.warn("waiting generate file, checkpointId [{}]", checkpointId);
         tryTimes = 0;
       }
     }
 
-    boolean hasData = false;
+    boolean receivedData = false;
     // judge whether has data in this checkpoint and delete tmp file.
     for (FileStatus fileStatus : fileStatuses) {
       Path path = fileStatus.getPath();
       String name = path.getName();
       // has data
       if (Long.parseLong(name.split(UNDERLINE)[2]) > 0) {
-        hasData = true;
+        receivedData = true;
         break;
       }
     }
@@ -279,10 +281,10 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       fs.delete(fileStatus.getPath());
     }
 
-    return hasData;
+    return receivedData;
   }
 
-  private void createinstantGenerateTmpFolder() throws IOException {
+  private void createInstantGenerateTmpDir() throws IOException {
     // Always create instantGenerateFolder which is needed for InstantGenerateOperator
     final Path instantGenerateFolder = new Path(cfg.targetBasePath, INSTANT_GENERATE_FOLDER_NAME);
     if (!fs.exists(instantGenerateFolder)) {
