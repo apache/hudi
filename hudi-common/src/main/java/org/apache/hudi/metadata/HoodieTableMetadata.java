@@ -33,7 +33,7 @@ import java.util.List;
 /**
  * Interface that supports querying various pieces of metadata about a hudi table.
  */
-public interface HoodieTableMetadata extends Serializable {
+public interface HoodieTableMetadata extends Serializable, AutoCloseable {
 
   // Table name suffix
   String METADATA_TABLE_NAME_SUFFIX = "_metadata";

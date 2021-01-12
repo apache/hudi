@@ -36,12 +36,6 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
 
   private final HoodieTableMetadata tableMetadata;
 
-  public HoodieMetadataFileSystemView(HoodieTableMetaClient metaClient, HoodieTableMetadata tableMetadata,
-                                      HoodieTimeline visibleActiveTimeline, boolean enableIncrementalTimelineSync) {
-    super(metaClient, visibleActiveTimeline, enableIncrementalTimelineSync);
-    this.tableMetadata = tableMetadata;
-  }
-
   public HoodieMetadataFileSystemView(HoodieEngineContext engineContext,
                                       HoodieTableMetaClient metaClient,
                                       HoodieTimeline visibleActiveTimeline,

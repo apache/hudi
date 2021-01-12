@@ -258,9 +258,12 @@ public class FSUtils {
     if (assumeDatePartitioning) {
       return getAllPartitionFoldersThreeLevelsDown(fs, basePathStr);
     } else {
-      HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, basePathStr, "/tmp/",
-          useFileListingFromMetadata, verifyListings, false, false);
-      return tableMetadata.getAllPartitionPaths();
+      try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, basePathStr, "/tmp/",
+          useFileListingFromMetadata, verifyListings, false, false)) {
+        return tableMetadata.getAllPartitionPaths();
+      } catch (Exception e) {
+        throw new HoodieException("Error fetching partition paths from metadata table", e);
+      }
     }
   }
 

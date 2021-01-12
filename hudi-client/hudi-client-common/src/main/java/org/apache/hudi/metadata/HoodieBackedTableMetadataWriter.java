@@ -148,7 +148,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .withAutoCommit(true)
         .withAvroSchemaValidate(true)
         .withEmbeddedTimelineServerEnabled(false)
-        .withAssumeDatePartitioning(false)
         .withPath(HoodieTableMetadata.getMetadataTableBasePath(writeConfig.getBasePath()))
         .withSchema(HoodieMetadataRecord.getClassSchema().toString())
         .forTable(tableName)
@@ -357,7 +356,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     ValidationUtils.checkState(enabled, "Metadata table cannot be synced as it is not enabled");
 
     try {
-      List<HoodieInstant> instantsToSync = metadata.findInstantsToSync(datasetMetaClient);
+      List<HoodieInstant> instantsToSync = metadata.findInstantsToSync();
       if (instantsToSync.isEmpty()) {
         return;
       }
@@ -371,10 +370,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         Option<List<HoodieRecord>> records = HoodieTableMetadataUtil.convertInstantToMetaRecords(datasetMetaClient, instant, metadata.getSyncedInstantTime());
         if (records.isPresent()) {
           commit(records.get(), MetadataPartitionType.FILES.partitionPath(), instant.getTimestamp());
+          // re-init the table metadata, for any future writes.
+          initTableMetadata();
         }
       }
-      // re-init the table metadata, for any future writes.
-      initTableMetadata();
     } catch (IOException ioe) {
       throw new HoodieIOException("Unable to sync instants from data to metadata table.", ioe);
     }
