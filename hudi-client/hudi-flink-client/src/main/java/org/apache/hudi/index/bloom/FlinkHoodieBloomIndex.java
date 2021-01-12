@@ -18,7 +18,6 @@
 
 package org.apache.hudi.index.bloom;
 
-import com.beust.jcommander.internal.Lists;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
@@ -37,14 +36,15 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-
-import scala.Tuple2;
+import com.beust.jcommander.internal.Lists;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+
+import scala.Tuple2;
 
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.groupingBy;
@@ -121,9 +121,9 @@ public class FlinkHoodieBloomIndex<T extends HoodieRecordPayload> extends FlinkH
   /**
    * Load all involved files as <Partition, filename> pair List.
    */
+  //TODO duplicate code with spark, we can optimize this method later
   List<Tuple2<String, BloomIndexFileInfo>> loadInvolvedFiles(List<String> partitions, final HoodieEngineContext context,
                                                              final HoodieTable hoodieTable) {
-
     // Obtain the latest data files from all the partitions.
     List<Pair<String, String>> partitionPathFileIDList = getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable).stream()
         .map(pair -> Pair.of(pair.getKey(), pair.getValue().getFileId()))

@@ -18,8 +18,6 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.hadoop.hdfs.DistributedFileSystem;
-import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
@@ -30,15 +28,17 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
+import org.apache.hudi.index.bloom.TestFlinkHoodieBloomIndex;
 
+import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.test.util.MiniClusterWithClientResource;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
-import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
-import org.apache.hudi.index.bloom.TestFlinkHoodieBloomIndex;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -85,7 +85,6 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
 
   @org.junit.jupiter.api.BeforeEach
   public void setUp() throws Exception {
-    initFlinkContexts();
     initPath();
     initFileSystem();
     // We have some records to be tagged (two different partitions)
@@ -100,18 +99,10 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
             .build());
   }
 
-  /**
-   * Initializes the Flink contexts with the given application name.
-   *
-   */
-  protected void initFlinkContexts() {
-    context = new HoodieFlinkEngineContext(supplier);
-    hadoopConf = context.getHadoopConf().get();
-  }
-
   protected void initFileSystem() {
     hadoopConf = new Configuration();
     initFileSystemWithConfiguration(hadoopConf);
+    context = new HoodieFlinkEngineContext(supplier);
   }
 
   private void initFileSystemWithConfiguration(Configuration configuration) {
@@ -208,16 +199,6 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
   }
 
   /**
-   * Cleanups test data generator.
-   *
-   */
-  protected void cleanupTestDataGenerator() {
-    if (dataGen != null) {
-      dataGen = null;
-    }
-  }
-
-  /**
    * Cleanups the distributed file system.
    *
    * @throws IOException
@@ -250,7 +231,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
    */
   protected void cleanupFlinkContexts() {
     if (context != null) {
-      LOG.info("Closing spark engine context used in previous test-case");
+      LOG.info("Closing flink engine context used in previous test-case");
       context = null;
     }
   }

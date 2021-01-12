@@ -28,16 +28,17 @@ import org.apache.hudi.io.HoodieKeyLookupHandle;
 import org.apache.hudi.io.HoodieKeyLookupHandle.KeyLookupResult;
 import org.apache.hudi.table.HoodieTable;
 
-import scala.Tuple2;
-
 import java.util.function.Function;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+import scala.Tuple2;
+
 /**
  * Function performing actual checking of List partition containing (fileId, hoodieKeys) against the actual files.
  */
+//TODO we can move this class into the hudi-client-common and reuse it for spark client
 public class HoodieFlinkBloomIndexCheckFunction
         implements Function<Iterator<Tuple2<String, HoodieKey>>, Iterator<List<KeyLookupResult>>> {
 

@@ -18,8 +18,6 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
@@ -37,15 +35,22 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
 import org.apache.hudi.testutils.HoodieFlinkWriteableTestTable;
 
+import org.apache.avro.Schema;
+import org.apache.hadoop.fs.Path;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-
-import scala.Tuple2;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
+
+import scala.Tuple2;
 
 import static java.util.Arrays.asList;
 import static java.util.UUID.randomUUID;
@@ -60,27 +65,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Unit test against FlinkHoodieBloomIndex.
  */
+//TODO merge code with Spark Bloom index tests.
 public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
 
   private static final Schema SCHEMA = getSchemaFromResource(TestFlinkHoodieBloomIndex.class, "/exampleSchema.avsc", true);
   private static final String TEST_NAME_WITH_PARAMS = "[{index}] Test with rangePruning={0}, treeFiltering={1}, bucketizedChecking={2}";
 
-  public static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> configParams() {
+  public static Stream<Arguments> configParams() {
     Object[][] data =
         new Object[][] {{true, true, true}, {false, true, true}, {true, true, false}, {true, false, true}};
-    return java.util.stream.Stream.of(data).map(org.junit.jupiter.params.provider.Arguments::of);
+    return Stream.of(data).map(Arguments::of);
   }
 
-  @org.junit.jupiter.api.BeforeEach
+  @BeforeEach
   public void setUp() throws Exception {
-    initFlinkContexts();
     initPath();
     initFileSystem();
     // We have some records to be tagged (two different partitions)
     initMetaClient();
   }
 
-  @org.junit.jupiter.api.AfterEach
+  @AfterEach
   public void tearDown() throws Exception {
     cleanupResources();
   }
@@ -193,7 +198,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     assertEquals(new java.util.HashSet<>(asList("f1", "f4")), new java.util.HashSet<>(recordKeyToFileComps.get("005")));
   }
 
-  @org.junit.jupiter.api.Test
+  @Test
   public void testCheckUUIDsAgainstOneFile() throws Exception {
     final String partition = "2016/01/31";
     // Create some records to use

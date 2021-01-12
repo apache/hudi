@@ -19,10 +19,6 @@
 
 package org.apache.hudi.testutils;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
@@ -37,11 +33,15 @@ import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.testutils.FileCreateUtils;
-import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.io.storage.HoodieAvroParquetConfig;
 import org.apache.hudi.io.storage.HoodieParquetWriter;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -54,16 +54,11 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
 
-public class HoodieFlinkWriteableTestTable extends HoodieTestTable {
+public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
   private static final Logger LOG = LogManager.getLogger(HoodieFlinkWriteableTestTable.class);
 
-  private final Schema schema;
-  private final BloomFilter filter;
-
   private HoodieFlinkWriteableTestTable(String basePath, org.apache.hadoop.fs.FileSystem fs, HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter) {
-    super(basePath, fs, metaClient);
-    this.schema = schema;
-    this.filter = filter;
+    super(basePath, fs, metaClient, schema, filter);
   }
 
   public static HoodieFlinkWriteableTestTable of(HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter) {
