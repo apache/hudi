@@ -18,6 +18,18 @@
 
 package org.apache.hudi.operator;
 
+import org.apache.flink.api.common.state.ListState;
+import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.runtime.state.StateInitializationContext;
+import org.apache.flink.runtime.state.StateSnapshotContext;
+import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
+import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
+import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.PathFilter;
 import org.apache.hudi.HoodieFlinkStreamer;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
@@ -32,24 +44,12 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.util.StreamerUtil;
 
-import org.apache.flink.api.common.state.ListState;
-import org.apache.flink.api.common.state.ListStateDescriptor;
-import org.apache.flink.runtime.state.StateInitializationContext;
-import org.apache.flink.runtime.state.StateSnapshotContext;
-import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
-import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
-import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -63,7 +63,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
 
   private static final Logger LOG = LoggerFactory.getLogger(InstantGenerateOperator.class);
   public static final String NAME = "InstantGenerateOperator";
-
+  private static final String UNDERLINE = "_";
   private HoodieFlinkStreamer.Config cfg;
   private HoodieFlinkWriteClient writeClient;
   private SerializableConfiguration serializableHadoopConf;
@@ -71,30 +71,26 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   private String latestInstant = "";
   private List<String> latestInstantList = new ArrayList<>(1);
   private transient ListState<String> latestInstantState;
-  private List<StreamRecord> bufferedRecords = new LinkedList();
-  private transient ListState<StreamRecord> recordsState;
   private Integer retryTimes;
   private Integer retryInterval;
+  private transient boolean isMain = false;
+  private transient volatile long batchSize = 0;
 
   @Override
   public void processElement(StreamRecord<HoodieRecord> streamRecord) throws Exception {
     if (streamRecord.getValue() != null) {
-      bufferedRecords.add(streamRecord);
       output.collect(streamRecord);
+      batchSize++;
     }
   }
 
   @Override
   public void open() throws Exception {
     super.open();
+    isMain = getRuntimeContext().getIndexOfThisSubtask() == 0;
+
     // get configs from runtimeContext
     cfg = (HoodieFlinkStreamer.Config) getRuntimeContext().getExecutionConfig().getGlobalJobParameters();
-
-    // retry times
-    retryTimes = Integer.valueOf(cfg.blockRetryTime);
-
-    // retry interval
-    retryInterval = Integer.valueOf(cfg.blockRetryInterval);
 
     // hadoopConf
     serializableHadoopConf = new SerializableConfiguration(StreamerUtil.getHadoopConf());
@@ -102,65 +98,124 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
     // Hadoop FileSystem
     fs = FSUtils.getFs(cfg.targetBasePath, serializableHadoopConf.get());
 
-    TaskContextSupplier taskContextSupplier = new FlinkTaskContextSupplier(null);
+    if (isMain) {
+      // retry times
+      retryTimes = Integer.valueOf(cfg.blockRetryTime);
 
-    // writeClient
-    writeClient = new HoodieFlinkWriteClient(new HoodieFlinkEngineContext(taskContextSupplier), StreamerUtil.getHoodieClientConfig(cfg), true);
+      // retry interval
+      retryInterval = Integer.valueOf(cfg.blockRetryInterval);
 
-    // init table, create it if not exists.
-    initTable();
+      TaskContextSupplier taskContextSupplier = new FlinkTaskContextSupplier(null);
+
+      // writeClient
+      writeClient = new HoodieFlinkWriteClient(new HoodieFlinkEngineContext(taskContextSupplier), StreamerUtil.getHoodieClientConfig(cfg), true);
+
+      // init table, create it if not exists.
+      initTable();
+    }
   }
 
   @Override
   public void prepareSnapshotPreBarrier(long checkpointId) throws Exception {
     super.prepareSnapshotPreBarrier(checkpointId);
-    // check whether the last instant is completed, if not, wait 10s and then throws an exception
-    if (!StringUtils.isNullOrEmpty(latestInstant)) {
-      doCheck();
-      // last instant completed, set it empty
-      latestInstant = "";
+    int indexOfThisSubtask = getRuntimeContext().getIndexOfThisSubtask();
+    String instantGenerateInfoFileName = indexOfThisSubtask + UNDERLINE + checkpointId + UNDERLINE + batchSize;
+    Path path = new Path(HoodieTableMetaClient.INSTANT_GENERATE_FOLDER_NAME,instantGenerateInfoFileName);
+    // mk generate file by each subtask
+    fs.create(path,true);
+    LOG.info("subtask [{}] at checkpoint [{}] created generate file [{}]",indexOfThisSubtask,checkpointId,instantGenerateInfoFileName);
+    if (isMain) {
+      boolean hasData = generateFilePasre(checkpointId);
+      // check whether the last instant is completed, if not, wait 10s and then throws an exception
+      if (!StringUtils.isNullOrEmpty(latestInstant)) {
+        doCheck();
+        // last instant completed, set it empty
+        latestInstant = "";
+      }
+
+      // no data no new instant
+      if (hasData) {
+        latestInstant = startNewInstant(checkpointId);
+      }
     }
 
-    // no data no new instant
-    if (!bufferedRecords.isEmpty()) {
-      latestInstant = startNewInstant(checkpointId);
+  }
+
+  private boolean generateFilePasre(long checkpointId) throws InterruptedException, IOException {
+    int numberOfParallelSubtasks = getRuntimeContext().getNumberOfParallelSubtasks();
+    FileStatus[] fileStatuses = null;
+    Path generatePath = new Path(HoodieTableMetaClient.INSTANT_GENERATE_FOLDER_NAME);
+    int tryTimes = 1;
+    // waiting all subtask create generate file ready
+    while (true) {
+      Thread.sleep(500L);
+      fileStatuses = fs.listStatus(generatePath, new PathFilter() {
+        @Override
+        public boolean accept(Path pathname) {
+          return pathname.getName().contains(UNDERLINE + checkpointId + UNDERLINE);
+        }
+      });
+
+      // is ready
+      if (fileStatuses != null && fileStatuses.length == numberOfParallelSubtasks) {
+        break;
+      }
+
+      if (tryTimes >= 5) {
+        LOG.warn("waiting generate file, checkpointId [{}]",checkpointId);
+        tryTimes = 0;
+      }
     }
+
+    boolean hasData = false;
+    // judge whether has data in this checkpoint and delete tmp file.
+    for (FileStatus fileStatus : fileStatuses) {
+      Path path = fileStatus.getPath();
+      String name = path.getName();
+      // has data
+      if (Long.parseLong(name.split(UNDERLINE)[2]) > 0) {
+        hasData = true;
+        break;
+      }
+    }
+
+    // delete all tmp file
+    fileStatuses = fs.listStatus(generatePath);
+    for (FileStatus fileStatus : fileStatuses) {
+      fs.delete(fileStatus.getPath());
+    }
+
+    return hasData;
   }
 
   @Override
   public void initializeState(StateInitializationContext context) throws Exception {
-    // instantState
-    ListStateDescriptor<String> latestInstantStateDescriptor = new ListStateDescriptor<String>("latestInstant", String.class);
-    latestInstantState = context.getOperatorStateStore().getListState(latestInstantStateDescriptor);
+    isMain = getRuntimeContext().getIndexOfThisSubtask() == 0;
+    if (isMain) {
+      // instantState
+      ListStateDescriptor<String> latestInstantStateDescriptor = new ListStateDescriptor<String>("latestInstant", String.class);
+      latestInstantState = context.getOperatorStateStore().getListState(latestInstantStateDescriptor);
 
-    // recordState
-    ListStateDescriptor<StreamRecord> recordsStateDescriptor = new ListStateDescriptor<StreamRecord>("recordsState", StreamRecord.class);
-    recordsState = context.getOperatorStateStore().getListState(recordsStateDescriptor);
-
-    if (context.isRestored()) {
-      Iterator<String> latestInstantIterator = latestInstantState.get().iterator();
-      latestInstantIterator.forEachRemaining(x -> latestInstant = x);
-      LOG.info("InstantGenerateOperator initializeState get latestInstant [{}]", latestInstant);
-
-      Iterator<StreamRecord> recordIterator = recordsState.get().iterator();
-      bufferedRecords.clear();
-      recordIterator.forEachRemaining(x -> bufferedRecords.add(x));
+      if (context.isRestored()) {
+        Iterator<String> latestInstantIterator = latestInstantState.get().iterator();
+        latestInstantIterator.forEachRemaining(x -> latestInstant = x);
+        LOG.info("InstantGenerateOperator initializeState get latestInstant [{}]", latestInstant);
+      }
     }
   }
 
   @Override
   public void snapshotState(StateSnapshotContext functionSnapshotContext) throws Exception {
-    if (latestInstantList.isEmpty()) {
-      latestInstantList.add(latestInstant);
-    } else {
-      latestInstantList.set(0, latestInstant);
+    LOG.info("Update latest instant [{}] records size [{}]", latestInstant,batchSize);
+    batchSize = 0;
+    if (isMain) {
+      if (latestInstantList.isEmpty()) {
+        latestInstantList.add(latestInstant);
+      } else {
+        latestInstantList.set(0, latestInstant);
+      }
+      latestInstantState.update(latestInstantList);
     }
-    latestInstantState.update(latestInstantList);
-    LOG.info("Update latest instant [{}]", latestInstant);
-
-    recordsState.update(bufferedRecords);
-    LOG.info("Update records state size = [{}]", bufferedRecords.size());
-    bufferedRecords.clear();
   }
 
   /**
@@ -196,7 +251,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
         return;
       }
     }
-    throw new InterruptedException("Last instant costs more than ten second, stop task now");
+    throw new InterruptedException(String.format("Last instant costs more than %s second, stop task now", retryTimes * retryInterval));
   }
 
 
@@ -206,7 +261,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   private void initTable() throws IOException {
     if (!fs.exists(new Path(cfg.targetBasePath))) {
       HoodieTableMetaClient.initTableType(new Configuration(serializableHadoopConf.get()), cfg.targetBasePath,
-          HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName, 1);
+              HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName, 1);
       LOG.info("Table initialized");
     } else {
       LOG.info("Table already [{}/{}] exists, do nothing here", cfg.targetBasePath, cfg.targetTableName);
