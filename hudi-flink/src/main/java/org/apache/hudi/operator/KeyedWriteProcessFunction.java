@@ -70,7 +70,7 @@ public class KeyedWriteProcessFunction extends KeyedProcessFunction<String, Hood
   private String latestInstant;
 
   /**
-   * Tuple3<latestInstant, upsert result, indexOfThisSubtask>
+   * Tuple3<latestInstant, upsert result, indexOfThisSubtask>.
    */
   private Tuple3<String, List<WriteStatus>, Integer> latestOutputResult;
 
