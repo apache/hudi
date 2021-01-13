@@ -40,6 +40,7 @@ import org.apache.hadoop.fs.BufferedFSInputStream;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSInputStream;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -274,19 +275,27 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   }
 
   private long scanForNextAvailableBlockOffset() throws IOException {
+    // Make buffer large enough to scan through the file as quick as possible especially if it is on S3/GCS.
+    // Using lower buffer is incurring a lot of API calls thus drastically increasing the cost of the storage
+    // and also may take days to complete scanning trough the large files.
+    byte[] dataBuf = new byte[1024 * 1024];
+    boolean eof = false;
     while (true) {
       long currentPos = inputStream.getPos();
       try {
-        boolean hasNextMagic = hasNextMagic();
-        if (hasNextMagic) {
-          return currentPos;
-        } else {
-          // No luck - advance and try again
-          inputStream.seek(currentPos + 1);
-        }
+        Arrays.fill(dataBuf, (byte) 0);
+        inputStream.readFully(dataBuf, 0, dataBuf.length);
       } catch (EOFException e) {
+        eof = true;
+      }
+      long pos = Bytes.indexOf(dataBuf, HoodieLogFormat.MAGIC);
+      if (pos > 0) {
+        return currentPos + pos;
+      }
+      if (eof) {
         return inputStream.getPos();
       }
+      inputStream.seek(currentPos + dataBuf.length - HoodieLogFormat.MAGIC.length);
     }
   }
 
