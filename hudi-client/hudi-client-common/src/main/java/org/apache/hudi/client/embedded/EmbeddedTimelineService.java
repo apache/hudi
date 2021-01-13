@@ -46,12 +46,13 @@ public class EmbeddedTimelineService {
   private final SerializableConfiguration hadoopConf;
   private final FileSystemViewStorageConfig config;
   private final HoodieMetadataConfig metadataConfig;
+  private final String basePath;
 
   private transient FileSystemViewManager viewManager;
   private transient TimelineService server;
-  
+
   public EmbeddedTimelineService(HoodieEngineContext context, String embeddedTimelineServiceHostAddr, int embeddedTimelineServerPort,
-                                 HoodieMetadataConfig metadataConfig, FileSystemViewStorageConfig config) {
+                                 HoodieMetadataConfig metadataConfig, FileSystemViewStorageConfig config, String basePath) {
     setHostAddr(embeddedTimelineServiceHostAddr);
     this.context = context;
     this.config = config;
@@ -59,6 +60,7 @@ public class EmbeddedTimelineService {
     this.hadoopConf = context.getHadoopConf();
     this.viewManager = createViewManager();
     this.preferredPort = embeddedTimelineServerPort;
+    this.basePath = basePath;
   }
 
   private FileSystemViewManager createViewManager() {
@@ -71,7 +73,7 @@ public class EmbeddedTimelineService {
       // Reset to default if set to Remote
       builder.withStorageType(FileSystemViewStorageType.MEMORY);
     }
-    return FileSystemViewManager.createViewManager(context, metadataConfig, builder.build());
+    return FileSystemViewManager.createViewManager(context, metadataConfig, builder.build(), basePath);
   }
 
   public void startServer() throws IOException {

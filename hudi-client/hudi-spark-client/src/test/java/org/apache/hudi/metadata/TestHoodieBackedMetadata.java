@@ -265,7 +265,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   public void testRollbackOperations(HoodieTableType tableType) throws Exception {
-    //FIXME(metadata): This is broken for MOR, until HUDI-1434 is fixed
     init(tableType);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
@@ -755,6 +754,9 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   private void validateMetadata(SparkRDDWriteClient client) throws IOException {
     HoodieWriteConfig config = client.getConfig();
 
+    client.close();
+    client = new SparkRDDWriteClient(client.getEngineContext(), client.getConfig());
+
     HoodieTableMetadata tableMetadata = metadata(client);
     assertNotNull(tableMetadata, "MetadataReader should have been initialized");
     if (!config.useFileListingMetadata()) {
@@ -920,7 +922,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
             .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1)
             .withAutoClean(false).retainCommits(1).retainFileVersions(1).build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024 * 1024 * 1024).build())
-        .withEmbeddedTimelineServerEnabled(false).forTable("test-trip-table")
+        .withEmbeddedTimelineServerEnabled(true).forTable("test-trip-table")
         .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
             .withEnableBackupForRemoteFileSystemView(false).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
