@@ -324,7 +324,7 @@ public class TestHBaseIndex extends FunctionalTestHarness {
 
     String newCommitTime = writeClient.startCommit();
     // make a commit with 199 records
-    JavaRDD<HoodieRecord> writeRecords = generateAndCommitRecords(writeClient, 199);
+    JavaRDD<HoodieRecord> writeRecords = generateAndCommitRecords(writeClient, 199, newCommitTime);
 
     // make a second commit with a single record
     String invalidCommit = writeClient.startCommit();
