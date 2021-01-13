@@ -26,6 +26,7 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.log4j.LogManager;
@@ -40,6 +41,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -147,6 +149,7 @@ public class KafkaOffsetGen {
   public static class Config {
 
     private static final String KAFKA_TOPIC_NAME = "hoodie.deltastreamer.source.kafka.topic";
+    private static final String KAFKA_CHECKPOINT_TIMESTAMP = "hoodie.deltastreamer.source.kafka.checkpoint.timestamp";
     private static final String MAX_EVENTS_FROM_KAFKA_SOURCE_PROP = "hoodie.deltastreamer.kafka.source.maxEvents";
     private static final KafkaResetOffsetStrategies DEFAULT_AUTO_RESET_OFFSET = KafkaResetOffsetStrategies.LATEST;
     public static final long DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE = 5000000;
@@ -156,6 +159,7 @@ public class KafkaOffsetGen {
   private final HashMap<String, Object> kafkaParams;
   private final TypedProperties props;
   protected final String topicName;
+  private final String kafkaCheckpointTimestamp;
 
   public KafkaOffsetGen(TypedProperties props) {
     this.props = props;
@@ -165,6 +169,7 @@ public class KafkaOffsetGen {
     }
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.KAFKA_TOPIC_NAME));
     topicName = props.getString(Config.KAFKA_TOPIC_NAME);
+    kafkaCheckpointTimestamp = props.getString(Config.KAFKA_CHECKPOINT_TIMESTAMP);
   }
 
   public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long sourceLimit, HoodieDeltaStreamerMetrics metrics) {
@@ -182,6 +187,10 @@ public class KafkaOffsetGen {
               .map(x -> new TopicPartition(x.topic(), x.partition())).collect(Collectors.toSet());
 
       // Determine the offset ranges to read from
+      if (kafkaCheckpointTimestamp != null) {
+        lastCheckpointStr = Option.of(getOffsetsByTimestamp(consumer, partitionInfoList, topicName, Long.parseLong(kafkaCheckpointTimestamp)));
+      }
+
       if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty()) {
         fromOffsets = checkupValidOffsets(consumer, lastCheckpointStr, topicPartitions);
         metrics.updateDeltaStreamerKafkaDelayCountMetrics(delayOffsetCalculation(lastCheckpointStr, topicPartitions, consumer));
@@ -246,6 +255,32 @@ public class KafkaOffsetGen {
     }
     return delayCount;
   }
+
+  /**
+   * Get the checkpoint by timestamp.
+   * @param consumer
+   * @param topicName
+   * @param timestamp
+   * @return
+   */
+  private String getOffsetsByTimestamp(KafkaConsumer consumer, List<PartitionInfo> partitionInfoList, String topicName, Long timestamp) {
+
+    Map<TopicPartition, Long> topicPartitions = partitionInfoList.stream()
+                                                    .map(x -> new TopicPartition(x.topic(), x.partition()))
+                                                    .collect(Collectors.toMap(Function.identity(), x -> timestamp));
+
+    Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestamp = consumer.offsetsForTimes(topicPartitions);
+
+    StringBuilder sb = new StringBuilder();
+    sb.append(topicName + ",");
+    for (Map.Entry<TopicPartition, OffsetAndTimestamp> map : offsetAndTimestamp.entrySet()) {
+      if (map.getValue() != null) {
+        sb.append(map.getKey().partition()).append(":").append(map.getValue().offset()).append(",");
+      }
+    }
+    return sb.deleteCharAt(sb.length() - 1).toString();
+  }
+
 
   /**
    * Check if topic exists.
