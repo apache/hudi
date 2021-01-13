@@ -289,7 +289,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         eof = true;
       }
       long pos = Bytes.indexOf(dataBuf, HoodieLogFormat.MAGIC);
-      if (pos > 0) {
+      if (pos >= 0) {
         return currentPos + pos;
       }
       if (eof) {
