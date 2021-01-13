@@ -21,9 +21,11 @@ package org.apache.hudi.schema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.operator.FlinkOptions;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;
+import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
@@ -43,22 +45,29 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     private static final String TARGET_SCHEMA_FILE_PROP = "hoodie.deltastreamer.schemaprovider.target.schema.file";
   }
 
-  private final FileSystem fs;
-
   private final Schema sourceSchema;
 
   private Schema targetSchema;
 
   public FilebasedSchemaProvider(TypedProperties props) {
-    super(props);
     StreamerUtil.checkRequiredProperties(props, Collections.singletonList(Config.SOURCE_SCHEMA_FILE_PROP));
-    this.fs = FSUtils.getFs(props.getString(Config.SOURCE_SCHEMA_FILE_PROP), StreamerUtil.getHadoopConf());
+    FileSystem fs = FSUtils.getFs(props.getString(Config.SOURCE_SCHEMA_FILE_PROP), StreamerUtil.getHadoopConf());
     try {
       this.sourceSchema = new Schema.Parser().parse(fs.open(new Path(props.getString(Config.SOURCE_SCHEMA_FILE_PROP))));
       if (props.containsKey(Config.TARGET_SCHEMA_FILE_PROP)) {
         this.targetSchema =
             new Schema.Parser().parse(fs.open(new Path(props.getString(Config.TARGET_SCHEMA_FILE_PROP))));
       }
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Error reading schema", ioe);
+    }
+  }
+
+  public FilebasedSchemaProvider(Configuration conf) {
+    final String readSchemaPath = conf.getString(FlinkOptions.READ_SCHEMA_FILE_PATH);
+    final FileSystem fs = FSUtils.getFs(readSchemaPath, StreamerUtil.getHadoopConf());
+    try {
+      this.sourceSchema = new Schema.Parser().parse(fs.open(new Path(readSchemaPath)));
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading schema", ioe);
     }
