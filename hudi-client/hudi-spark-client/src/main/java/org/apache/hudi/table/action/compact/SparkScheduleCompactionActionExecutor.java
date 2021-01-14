@@ -37,6 +37,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
+import scala.Tuple2;
 
 import java.io.IOException;
 import java.text.ParseException;
@@ -61,20 +62,8 @@ public class SparkScheduleCompactionActionExecutor<T extends HoodieRecordPayload
   @Override
   protected HoodieCompactionPlan scheduleCompaction() {
     LOG.info("Checking if compaction needs to be run on " + config.getBasePath());
-    Option<HoodieInstant> lastCompaction = table.getActiveTimeline().getCommitTimeline()
-        .filterCompletedInstants().lastInstant();
-    HoodieTimeline deltaCommits = table.getActiveTimeline().getDeltaCommitTimeline();
-    String lastCompactionTs;
-    int deltaCommitsSinceLastCompaction;
-    if (lastCompaction.isPresent()) {
-      lastCompactionTs = lastCompaction.get().getTimestamp();
-      deltaCommitsSinceLastCompaction = deltaCommits.findInstantsAfter(lastCompactionTs, Integer.MAX_VALUE).countInstants();
-    } else {
-      lastCompactionTs = deltaCommits.firstInstant().get().getTimestamp();
-      deltaCommitsSinceLastCompaction = deltaCommits.findInstantsAfterOrEquals(lastCompactionTs, Integer.MAX_VALUE).countInstants();
-    }
     // judge if we need to compact according to num delta commits and time elapsed
-    boolean compactable = getCompactType(deltaCommitsSinceLastCompaction, lastCompactionTs);
+    boolean compactable = needCompact(config.getInlineCompactType());
     if (compactable) {
       LOG.info("Generating compaction plan for merge on read table " + config.getBasePath());
       HoodieSparkMergeOnReadTableCompactor compactor = new HoodieSparkMergeOnReadTableCompactor();
@@ -91,27 +80,63 @@ public class SparkScheduleCompactionActionExecutor<T extends HoodieRecordPayload
       }
     }
 
-    LOG.info(String.format("Not scheduling compaction as only %s delta commits was found since last compaction %s."
-            + "Waiting for %s,or %sms elapsed time need since last compaction %s.", deltaCommitsSinceLastCompaction,
-        lastCompactionTs, config.getInlineCompactDeltaCommitMax(), config.getInlineCompactDeltaElapsedTimeMax(), lastCompactionTs));
     return new HoodieCompactionPlan();
   }
 
-  public boolean getCompactType(Integer deltaCommitsSinceLastCompaction, String lastCompactionTs) {
-    switch (config.getInlineCompactType()) {
-      case COMMIT_NUM:
-        return config.getInlineCompactDeltaCommitMax() <= deltaCommitsSinceLastCompaction;
-      case TIME_ELAPSED:
-        return  parseToTimestamp(lastCompactionTs) + config.getInlineCompactDeltaElapsedTimeMax() <= parseToTimestamp(instantTime);
-      case NUM_OR_TIME:
-        return config.getInlineCompactDeltaCommitMax() <= deltaCommitsSinceLastCompaction
-            || parseToTimestamp(lastCompactionTs) + config.getInlineCompactDeltaElapsedTimeMax() <= parseToTimestamp(instantTime);
-      case NUM_AND_TIME:
-        return config.getInlineCompactDeltaCommitMax() <= deltaCommitsSinceLastCompaction
-            && parseToTimestamp(lastCompactionTs) + config.getInlineCompactDeltaElapsedTimeMax() <= parseToTimestamp(instantTime);
-      default:
-        throw new HoodieCompactionException("Compact type unspecified, set " + config.getInlineCompactType());
+  public Tuple2<Integer, String> checkCompact(CompactType compactType) {
+    Option<HoodieInstant> lastCompaction = table.getActiveTimeline().getCommitTimeline()
+            .filterCompletedInstants().lastInstant();
+    HoodieTimeline deltaCommits = table.getActiveTimeline().getDeltaCommitTimeline();
+
+    String lastCompactionTs;
+    int deltaCommitsSinceLastCompaction = 0;
+    if (lastCompaction.isPresent()) {
+      lastCompactionTs = lastCompaction.get().getTimestamp();
+    } else {
+      lastCompactionTs = deltaCommits.firstInstant().get().getTimestamp();
     }
+    if (compactType != CompactType.TIME_ELAPSED) {
+      if (lastCompaction.isPresent()) {
+        deltaCommitsSinceLastCompaction = deltaCommits.findInstantsAfter(lastCompactionTs, Integer.MAX_VALUE).countInstants();
+      } else {
+        deltaCommitsSinceLastCompaction = deltaCommits.findInstantsAfterOrEquals(lastCompactionTs, Integer.MAX_VALUE).countInstants();
+      }
+    }
+    return new Tuple2(deltaCommitsSinceLastCompaction, lastCompactionTs);
+  }
+
+  public boolean needCompact(CompactType compactType) {
+    boolean compactable;
+    // return deltaCommitsSinceLastCompaction and lastCompactionTs
+    Tuple2<Integer, String> threshold = checkCompact(compactType);
+    switch (compactType) {
+      case COMMIT_NUM:
+        compactable = config.getInlineCompactDeltaCommitMax() <= threshold._1;
+        break;
+      case TIME_ELAPSED:
+        compactable = parseToTimestamp(threshold._2) + config.getInlineCompactDeltaElapsedTimeMax() <= parseToTimestamp(instantTime);
+        break;
+      case NUM_OR_TIME:
+        compactable = config.getInlineCompactDeltaCommitMax() <= threshold._1
+            || parseToTimestamp(threshold._2) + config.getInlineCompactDeltaElapsedTimeMax() <= parseToTimestamp(instantTime);
+        break;
+      case NUM_AND_TIME:
+        compactable = config.getInlineCompactDeltaCommitMax() <= threshold._1
+            && parseToTimestamp(threshold._2) + config.getInlineCompactDeltaElapsedTimeMax() <= parseToTimestamp(instantTime);
+        break;
+      default:
+        throw new HoodieCompactionException("Unsupported compact type: " + config.getInlineCompactType());
+    }
+
+    if (compactable) {
+      LOG.info(String.format("Scheduling compaction: %s. Delta commits found: %s times, and last compaction time is %s.",
+              compactType.name(), threshold._1, threshold._2));
+    } else {
+      LOG.info(String.format("Not scheduling compaction as only %s delta commits was found since last compaction %s."
+                      + "Waiting for %s,or %sms elapsed time need since last compaction %s.", threshold._1,
+              threshold._2, config.getInlineCompactDeltaCommitMax(), config.getInlineCompactDeltaElapsedTimeMax(), threshold._2));
+    }
+    return compactable;
   }
 
   public Long parseToTimestamp(String time) {
