@@ -19,6 +19,7 @@
 package org.apache.hudi;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.HoodieReadClient;
@@ -31,6 +32,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
@@ -82,6 +84,31 @@ public class DataSourceUtils {
     }
 
     throw new TableNotFoundException("Unable to find a hudi table for the user provided paths.");
+  }
+
+  public static Option<String> getOnePartitionPath(FileSystem fs, Path tablePath) throws IOException {
+    FileStatus[] statuses = fs.listStatus(tablePath);
+    for (FileStatus status : statuses) {
+      if (status.isDirectory()) {
+        if (HoodiePartitionMetadata.hasPartitionMetadata(fs, status.getPath())) {
+          return Option.of(status.getPath().toString());
+        } else {
+          Option<String> partitionPath = getOnePartitionPath(fs, status.getPath());
+          if (partitionPath.isPresent()) {
+            return partitionPath;
+          }
+        }
+      }
+    }
+    return Option.empty();
+  }
+
+  public static String getDataPath(String tablePath, String partitionPath) {
+    assert partitionPath.length() > tablePath.length();
+    assert partitionPath.startsWith(tablePath);
+    int n = partitionPath.substring(tablePath.length()).split("/").length;
+    String dataPathSuffix = String.join("/*", Collections.nCopies(n + 1, ""));
+    return tablePath + dataPathSuffix;
   }
 
   /**
