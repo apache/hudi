@@ -53,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Operator helps to generate globally unique instant, it must be executed in one parallelism. Before generate a new
@@ -75,15 +76,15 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   private Integer retryTimes;
   private Integer retryInterval;
   private static final String UNDERLINE = "_";
-  private static final String INSTANT_GENERATE_FOLDER_NAME = "instant_generate_tmp";
+  private static final String INSTANT_MARKER_FOLDER_NAME = ".instant_marker";
   private transient boolean isMain = false;
-  private transient volatile long batchSize = 0L;
+  private transient AtomicLong batchSize = new AtomicLong(0);
 
   @Override
   public void processElement(StreamRecord<HoodieRecord> streamRecord) throws Exception {
     if (streamRecord.getValue() != null) {
       output.collect(streamRecord);
-      batchSize++;
+      batchSize.incrementAndGet();
     }
   }
 
@@ -114,8 +115,8 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       // init table, create it if not exists.
       initTable();
 
-      // create instantGenerateTmpFolder
-      createInstantGenerateTmpDir();
+      // create instant marker directory
+      createInstantMarkerDir();
     }
   }
 
@@ -123,11 +124,11 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   public void prepareSnapshotPreBarrier(long checkpointId) throws Exception {
     super.prepareSnapshotPreBarrier(checkpointId);
     int indexOfThisSubtask = getRuntimeContext().getIndexOfThisSubtask();
-    String instantGenerateInfoFileName = String.format("%d_%d_%d", indexOfThisSubtask, checkpointId, batchSize);
-    Path path = new Path(INSTANT_GENERATE_FOLDER_NAME, instantGenerateInfoFileName);
+    String instantMarkerFileName = String.format("%d_%d_%d", indexOfThisSubtask, checkpointId, batchSize.get());
+    Path path = new Path(new Path(HoodieTableMetaClient.AUXILIARYFOLDER_NAME, INSTANT_MARKER_FOLDER_NAME), instantMarkerFileName);
     // mk generate file by each subtask
     fs.create(path, true);
-    LOG.info("Subtask [{}] at checkpoint [{}] created generate file [{}]", indexOfThisSubtask, checkpointId, instantGenerateInfoFileName);
+    LOG.info("Subtask [{}] at checkpoint [{}] created generate file [{}]", indexOfThisSubtask, checkpointId, instantMarkerFileName);
     if (isMain) {
       boolean receivedDataInCurrentCP = checkReceivedData(checkpointId);
       // check whether the last instant is completed, if not, wait 10s and then throws an exception
@@ -174,7 +175,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
     } else {
       LOG.info("Records size [{}] checkpointId [{}]", batchSize, checkpointId);
     }
-    batchSize = 0;
+    batchSize.set(0);
   }
 
   /**
@@ -199,7 +200,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
     int tryTimes = 0;
     while (tryTimes < retryTimes) {
       tryTimes++;
-      StringBuffer sb = new StringBuffer();
+      StringBuilder sb = new StringBuilder();
       if (rollbackPendingCommits.contains(latestInstant)) {
         rollbackPendingCommits.forEach(x -> sb.append(x).append(","));
         LOG.warn("Latest transaction [{}] is not completed! unCompleted transaction:[{}],try times [{}]", latestInstant, sb.toString(), tryTimes);
@@ -239,13 +240,13 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
 
   private boolean checkReceivedData(long checkpointId) throws InterruptedException, IOException {
     int numberOfParallelSubtasks = getRuntimeContext().getNumberOfParallelSubtasks();
-    FileStatus[] fileStatuses = null;
-    Path generatePath = new Path(INSTANT_GENERATE_FOLDER_NAME);
+    FileStatus[] fileStatuses;
+    Path instantMarkerPath = new Path(HoodieTableMetaClient.AUXILIARYFOLDER_NAME, INSTANT_MARKER_FOLDER_NAME);
     int tryTimes = 1;
-    // waiting all subtask create generate file ready
+    // waiting all subtask create marker file ready
     while (true) {
       Thread.sleep(500L);
-      fileStatuses = fs.listStatus(generatePath, new PathFilter() {
+      fileStatuses = fs.listStatus(instantMarkerPath, new PathFilter() {
         @Override
         public boolean accept(Path pathname) {
           return pathname.getName().contains(String.format("_%d_", checkpointId));
@@ -261,10 +262,11 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
         LOG.warn("waiting generate file, checkpointId [{}]", checkpointId);
         tryTimes = 0;
       }
+      tryTimes++;
     }
 
     boolean receivedData = false;
-    // judge whether has data in this checkpoint and delete tmp file.
+    // judge whether has data in this checkpoint and delete maker file.
     for (FileStatus fileStatus : fileStatuses) {
       Path path = fileStatus.getPath();
       String name = path.getName();
@@ -275,20 +277,20 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       }
     }
 
-    // delete all tmp file
-    fileStatuses = fs.listStatus(generatePath);
+    // delete all marker file
+    fileStatuses = fs.listStatus(instantMarkerPath);
     for (FileStatus fileStatus : fileStatuses) {
-      fs.delete(fileStatus.getPath());
+      fs.delete(fileStatus.getPath(), true);
     }
 
     return receivedData;
   }
 
-  private void createInstantGenerateTmpDir() throws IOException {
-    // Always create instantGenerateFolder which is needed for InstantGenerateOperator
-    final Path instantGenerateFolder = new Path(cfg.targetBasePath, INSTANT_GENERATE_FOLDER_NAME);
-    if (!fs.exists(instantGenerateFolder)) {
-      fs.mkdirs(instantGenerateFolder);
+  private void createInstantMarkerDir() throws IOException {
+    // Always create instantMarkerFolder which is needed for InstantGenerateOperator
+    final Path instantMarkerFolder = new Path(new Path(cfg.targetBasePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME), INSTANT_MARKER_FOLDER_NAME);
+    if (!fs.exists(instantMarkerFolder)) {
+      fs.mkdirs(instantMarkerFolder);
     }
   }
 }
