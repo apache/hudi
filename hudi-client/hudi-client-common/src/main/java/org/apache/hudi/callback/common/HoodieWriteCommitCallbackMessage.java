@@ -41,13 +41,19 @@ public class HoodieWriteCommitCallbackMessage implements Serializable {
    */
   private String basePath;
 
+  /**
+   * partitionPath in hudi table
+   */
+  private String partitionPath;
+
   public HoodieWriteCommitCallbackMessage() {
   }
 
-  public HoodieWriteCommitCallbackMessage(String commitTime, String tableName, String basePath) {
+  public HoodieWriteCommitCallbackMessage(String commitTime, String tableName, String basePath, String partitionPath) {
     this.commitTime = commitTime;
     this.tableName = tableName;
     this.basePath = basePath;
+    this.partitionPath = partitionPath;
   }
 
   public String getCommitTime() {

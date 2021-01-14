@@ -66,10 +66,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -194,11 +191,14 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     }
 
     // callback if needed.
+    List<String> partitionPath = new ArrayList<>();
+    stats.forEach(stat -> partitionPath.add(stat.getPartitionPath()));
+
     if (config.writeCommitCallbackOn()) {
       if (null == commitCallback) {
         commitCallback = HoodieCommitCallbackFactory.create(config);
       }
-      commitCallback.call(new HoodieWriteCommitCallbackMessage(instantTime, config.getTableName(), config.getBasePath()));
+      commitCallback.call(new HoodieWriteCommitCallbackMessage(instantTime, config.getTableName(), config.getBasePath(), partitionPath.toString()));
     }
     return true;
   }
