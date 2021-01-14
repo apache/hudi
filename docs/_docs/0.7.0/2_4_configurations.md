@@ -1,7 +1,8 @@
 ---
+version: 0.6.0
 title: Configurations
 keywords: garbage collection, hudi, jvm, configs, tuning
-permalink: /docs/configurations.html
+permalink: /docs/0.6.0-configurations.html
 summary: "Here we list all possible configurations and what they mean"
 toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
@@ -81,7 +82,7 @@ Actual value ontained by invoking .toString()</span>
   <span style="color:grey">When set to true, partition folder names follow the format of Hive partitions: <partition_column_name>=<partition_value></span>
 
 #### KEYGENERATOR_CLASS_OPT_KEY {#KEYGENERATOR_CLASS_OPT_KEY}
-  Property: `hoodie.datasource.write.keygenerator.class`, Default: `org.apache.hudi.keygen.SimpleKeyGenerator` <br/>
+  Property: `hoodie.datasource.write.keygenerator.class`, Default: `org.apache.hudi.SimpleKeyGenerator` <br/>
   <span style="color:grey">Key generator class, that implements will extract the key out of incoming `Row` object</span>
   
 #### COMMIT_METADATA_KEYPREFIX_OPT_KEY {#COMMIT_METADATA_KEYPREFIX_OPT_KEY}
@@ -133,17 +134,6 @@ This is useful to store checkpointing information, in a consistent way with the 
   Property: `hoodie.datasource.hive_sync.use_jdbc`, Default: `true` <br/>
   <span style="color:grey">Use JDBC when hive synchronization is enabled</span>
 
-#### HIVE_AUTO_CREATE_DATABASE_OPT_KEY {#HIVE_AUTO_CREATE_DATABASE_OPT_KEY}
-Property: `hoodie.datasource.hive_sync.auto_create_database` Default: `true` <br/>
-<span style="color:grey"> Auto create hive database if does not exists </span>
-
-#### HIVE_SKIP_RO_SUFFIX {#HIVE_SKIP_RO_SUFFIX}
-Property: `hoodie.datasource.hive_sync.skip_ro_suffix` Default: `false` <br/>
-<span style="color:grey"> Skip the `_ro` suffix for Read optimized table, when registering</span>
-
-#### HIVE_SUPPORT_TIMESTAMP {#HIVE_SUPPORT_TIMESTAMP}
-Property: `hoodie.datasource.hive_sync.support_timestamp` Default: `false` <br/>
-<span style="color:grey"> 'INT64' with original type TIMESTAMP_MICROS is converted to hive 'timestamp' type. Disabled by default for backward compatibility. </span>
 
 ### Read Options
 
@@ -167,9 +157,6 @@ Property: `hoodie.datasource.read.end.instanttime`, Default: latest instant (i.e
 <span style="color:grey"> Instant time to limit incrementally fetched data to. New data written with an
 `instant_time <= END_INSTANTTIME` are fetched out.</span>
 
-#### INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY {#INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY}
-Property: `hoodie.datasource.read.schema.use.end.instanttime`, Default: false <br/>
-<span style="color:grey"> Uses end instant schema when incrementally fetched data to. Default: users latest instant schema. </span>
 
 ## WriteClient Configs {#writeclient-configs}
 
@@ -222,17 +209,9 @@ Property: `hoodie.bulkinsert.sort.mode`<br/>
 Property: `hoodie.insert.shuffle.parallelism`, `hoodie.upsert.shuffle.parallelism`<br/>
 <span style="color:grey">Once data has been initially imported, this parallelism controls initial parallelism for reading input records. Ensure this value is high enough say: 1 partition for 1 GB of input data</span>
 
-#### withDeleteParallelism(parallelism = 1500) {#withDelteParallelism}
-Property: `hoodie.delete.shuffle.parallelism`<br/>
-<span style="color:grey">This parallelism is Used for "delete" operation while deduping or repartioning. </span>
-
 #### combineInput(on_insert = false, on_update=true) {#combineInput} 
 Property: `hoodie.combine.before.insert`, `hoodie.combine.before.upsert`<br/>
 <span style="color:grey">Flag which first combines the input RDD and merges multiple partial records into a single record before inserting or updating in DFS</span>
-
-#### combineDeleteInput(on_Delete = true) {#combineDeleteInput}
-Property: `hoodie.combine.before.delete`<br/>
-<span style="color:grey">Flag which first combines the input RDD and merges multiple partial records into a single record before deleting in DFS</span>
 
 #### withWriteStatusStorageLevel(level = MEMORY_AND_DISK_SER) {#withWriteStatusStorageLevel} 
 Property: `hoodie.write.status.storage.level`<br/>
@@ -343,10 +322,6 @@ Property: `hoodie.index.hbase.zknode.path` <br/>
 #### hbaseTableName(tableName)  [Required] {#hbaseTableName}
 Property: `hoodie.index.hbase.table` <br/>
 <span style="color:grey">Only applies if index type is HBASE. HBase Table name to use as the index. Hudi stores the row_key and [partition_path, fileID, commitTime] mapping in the table.</span>
-
-#### hbaseIndexUpdatePartitionPath(updatePartitionPath) {#hbaseIndexUpdatePartitionPath}
-Property: `hoodie.hbase.index.update.partition.path` <br/>
-<span style="color:grey">Only applies if index type is HBASE. When an already existing record is upserted to a new partition compared to whats in storage, this config when set, will delete old record in old paritition and will insert it as new record in new partition. </span>
 
 #### Simple Index configs
 
@@ -486,119 +461,6 @@ Property: `hoodie.compaction.daybased.target` <br/>
 #### withPayloadClass(payloadClassName = org.apache.hudi.common.model.HoodieAvroPayload) {#payloadClassName} 
 Property: `hoodie.compaction.payload.class` <br/>
 <span style="color:grey">This needs to be same as class used during insert/upserts. Just like writing, compaction also uses the record payload class to merge records in the log against each other, merge again with the base file and produce the final record to be written after compaction.</span>
-
-### Bootstrap Configs
-Controls bootstrap related configs. If you want to bootstrap your data for the first time into hudi, this bootstrap operation will come in handy as you don't need to wait for entire data to be loaded into hudi to start leveraging hudi. 
-
-[withBootstrapConfig](#withBootstrapConfig) (HoodieBootstrapConfig) <br/>
-
-#### withBootstrapBasePath(basePath) {#withBootstrapBasePath}
-Property: `hoodie.bootstrap.base.path` <br/>
-<span style="color:grey"> Base path to bootstrap dataset into hudi. </span> 
-
-#### withBootstrapParallelism(parallelism = 1500) {#withBootstrapParallelism}
-Property: `hoodie.bootstrap.parallelism` <br/>
-<span style="color:grey"> Parallelism value to be used to bootstrap data into hudi </span>
-
-#### withBootstrapKeyGenClass(keyGenClass) (#withBootstrapKeyGenClass)
-Property: `hoodie.bootstrap.keygen.class` <br/>
-<span style="color:grey"> TBF </span>
-
-#### withBootstrapModeSelector(partitionSelectorClass = org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector) {#withBootstrapModeSelector}
-Property: `hoodie.bootstrap.mode.selector` <br/>
-<span style="color:grey"> TBF </span>
-
-#### withBootstrapPartitionPathTranslatorClass(partitionPathTranslatorClass = org.apache.hudi.client.bootstrap.translator.IdentityBootstrapPartitionPathTranslator) {#withBootstrapPartitionPathTranslatorClass}
-Property: `hoodie.bootstrap.partitionpath.translator.class` <br/>
-<span style="color:grey"> TBF </span>
-
-#### withFullBootstrapInputProvider(partitionSelectorClass = org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider) {#withFullBootstrapInputProvider}
-Property: `hoodie.bootstrap.full.input.provider` <br/>
-<span style="color:grey"> TBF </span>
-
-#### withBootstrapModeSelectorRegex(regex = ".*") {#withBootstrapModeSelectorRegex}
-Property: `hoodie.bootstrap.mode.selector.regex` <br/>
-<span style="color:grey"> TBF </span>
-
-#### withBootstrapModeForRegexMatch(modeForRegexMatch = org.apache.hudi.client.bootstrap.METADATA_ONLY) 
-Property: `withBootstrapModeForRegexMatch` <br/>
-<span style="color:grey"> TBF </span>
-
-### HoodieMetadataConfig
-Configurations used by the HUDI Metadata Table. This table maintains the meta information stored in hudi dataset so that listing can be avoided during queries. 
-
-[withMetadataConfig](#withMetadataConfig) (HoodieMetadataConfig) <br/>
-
-#### enable(enable = false) {#enable}
-Property: `hoodie.metadata.enable` <br/>
-<span style="color:grey"> Enable the internal Metadata Table which saves file listings </span>
-
-#### validate(validate = false) {#validate}
-Property: `hoodie.metadata.validate` <br/>
-<span style="color:grey"> Validate contents of Metadata Table on each access against the actual filesystem </span>
-
-#### withInsertParallelism(parallelism = 1) {#withInsertParallelism}
-Property: `hoodie.metadata.insert.parallelism` <br/>
-<span style="color:grey"> Enable the internal Metadata Table which saves file listings </span>
-
-#### withAsyncClean(asyncClean = false) {#enable}
-Property: `hoodie.metadata.clean.async` <br/>
-<span style="color:grey"> Enable the internal Metadata Table which saves file listings </span>
-
-#### withMaxNumDeltaCommitsBeforeCompaction(maxNumDeltaCommitsBeforeCompaction = 24) {#enable}
-Property: `hoodie.metadata.compact.max.delta.commits` <br/>
-<span style="color:grey"> Enable the internal Metadata Table which saves file listings </span>
-
-#### archiveCommitsWith(minToKeep = 30, maxToKeep = 20) {#enable}
-Property: `hoodie.metadata.keep.min.commits`, `hoodie.metadata.keep.max.commits` <br/>
-<span style="color:grey"> Enable the internal Metadata Table which saves file listings </span>
-
-#### retainCommits(commitsRetained = 3) {#enable}
-Property: `hoodie.metadata.cleaner.commits.retained` <br/>
-<span style="color:grey"> Enable the internal Metadata Table which saves file listings </span>
-
-### Clustering Configs
-Controls clustering operations in hudi. Each clustering has to be configured for its strategy, and config params. This config drives the same. 
-
-[withClusteringConfig](#withClusteringConfig) (HoodieClusteringConfig) <br/>
-
-#### withClusteringPlanStrategyClass(clusteringStrategyClass = org.apache.hudi.client.clustering.plan.strategy.SparkRecentDaysClusteringPlanStrategy) {#withClusteringPlanStrategyClass}
-Property: `hoodie.clustering.plan.strategy.class` <br/>
-<span style="color:grey"> Config to provide a strategy class to create ClusteringPlan. Class has to be subclass of ClusteringPlanStrategy </span>
-
-#### withClusteringExecutionStrategyClass(runClusteringStrategyClass = org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy) {#withClusteringExecutionStrategyClass}
-Property: `hoodie.clustering.execution.strategy.class` <br/>
-<span style="color:grey"> Config to provide a strategy class to execute a ClusteringPlan. Class has to be subclass of RunClusteringStrategy </span>
-
-#### withClusteringTargetPartitions(clusteringTargetPartitions = 2) {#withClusteringTargetPartitions}
-Property: `hoodie.clustering.plan.strategy.daybased.lookback.partitions` <br/>
-<span style="color:grey"> Number of partitions to list to create ClusteringPlan </span>
-
-#### withClusteringPlanSmallFileLimit(clusteringSmallFileLimit = 600Mb) {#withClusteringPlanSmallFileLimit}
-Property: `hoodie.clustering.plan.strategy.small.file.limit` <br/>
-<span style="color:grey"> Files smaller than the size specified here are candidates for clustering </span>
-
-#### withClusteringMaxBytesInGroup(clusteringMaxGroupSize = 2Gb) {#withClusteringMaxBytesInGroup}
-Property: `hoodie.clustering.plan.strategy.max.bytes.per.group` <br/>
-<span style="color:grey"> Max amount of data to be included in one group
-Each clustering operation can create multiple groups. Total amount of data processed by clustering operation is defined by below two properties (CLUSTERING_MAX_BYTES_PER_GROUP * CLUSTERING_MAX_NUM_GROUPS). </span>
-
-#### withClusteringMaxNumGroups(maxNumGroups = 30) {#withClusteringMaxNumGroups}
-Property : `hoodie.clustering.plan.strategy.max.num.groups` <br/>
-<span style="color:grey"> Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism. </span>
-
-#### withClusteringTargetFileMaxBytes(targetFileSize = 1Gb ) {#withClusteringTargetFileMaxBytes}
-Property: `hoodie.clustering.plan.strategy.target.file.max.bytes` <br/>
-<span style="color:grey"> Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups </span>
-
-### HoodiePayloadConfig
-Payload related configs. This config can be leveraged by payload implementations to determine their business logic. 
-
-[withPayloadConfig](#withPayloadConfig) (HoodiePayloadConfig) <br/>
-
-#### withPayloadOrderingField(payloadOrderingField = "ts") {#withPayloadOrderingField}
-Property: `hoodie.payload.ordering.field` <br/>
-<span style="color:grey"> Property to hold the payload ordering field name. </span>
 
 ### Metrics configs
 
