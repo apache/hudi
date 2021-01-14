@@ -63,6 +63,10 @@ public class HiveSyncTool extends AbstractSyncTool {
 
   public HiveSyncTool(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
     super(configuration.getAllProperties(), fs);
+    //Set Hive meta store URI which enables synchronize to remote hive
+    if (cfg.hiveMetaStoreUri != null) {
+      configuration.set("hive.metastore.uris",cfg.hiveMetaStoreUri);
+    }
     this.hoodieHiveClient = new HoodieHiveClient(cfg, configuration, fs);
     this.cfg = cfg;
     // Set partitionFields to empty, when the NonPartitionedExtractor is used

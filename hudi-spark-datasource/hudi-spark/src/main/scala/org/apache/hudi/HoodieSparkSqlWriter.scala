@@ -367,6 +367,7 @@ private[hudi] object HoodieSparkSqlWriter {
     hiveSyncConfig.hiveUser = parameters(HIVE_USER_OPT_KEY)
     hiveSyncConfig.hivePass = parameters(HIVE_PASS_OPT_KEY)
     hiveSyncConfig.jdbcUrl = parameters(HIVE_URL_OPT_KEY)
+    hiveSyncConfig.hiveMetaStoreUri = parameters(HIVE_METASTORE_URI_OPT_KEY)
     hiveSyncConfig.partitionFields =
       ListBuffer(parameters(HIVE_PARTITION_FIELDS_OPT_KEY).split(",").map(_.trim).filter(!_.isEmpty).toList: _*)
     hiveSyncConfig.partitionValueExtractorClass = parameters(HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY)
