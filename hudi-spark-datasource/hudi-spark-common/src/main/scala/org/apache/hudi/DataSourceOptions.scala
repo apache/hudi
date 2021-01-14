@@ -17,13 +17,14 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hive.HiveSyncTool
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
-import org.apache.hudi.keygen.SimpleKeyGenerator
+import org.apache.hudi.keygen.{CustomKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
@@ -196,9 +197,23 @@ object DataSourceWriteOptions {
       val partitionColumns = optParams.get(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)
         .map(SparkDataSourceUtils.decodePartitioningColumns)
         .getOrElse(Nil)
-      newOptParams = optParams ++ Map(PARTITIONPATH_FIELD_OPT_KEY -> partitionColumns.mkString(","))
+      val keyGenerator = DataSourceUtils.createKeyGenerator(toProperties(optParams))
+      val partitionPathField =
+        keyGenerator match {
+          case _: CustomKeyGenerator =>
+            partitionColumns.map(e => s"$e:SIMPLE").mkString(",")
+          case _ =>
+            partitionColumns.mkString(",")
+        }
+      newOptParams = optParams ++ Map(PARTITIONPATH_FIELD_OPT_KEY -> partitionPathField)
     }
     newOptParams
+  }
+
+  def toProperties(params: Map[String, String]): TypedProperties = {
+    val props = new TypedProperties()
+    params.foreach(kv => props.setProperty(kv._1, kv._2))
+    props
   }
 
 
