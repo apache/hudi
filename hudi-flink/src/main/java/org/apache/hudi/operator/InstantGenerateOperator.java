@@ -150,7 +150,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
     isMain = getRuntimeContext().getIndexOfThisSubtask() == 0;
     if (isMain) {
       // instantState
-      ListStateDescriptor<String> latestInstantStateDescriptor = new ListStateDescriptor<String>("latestInstant", String.class);
+      ListStateDescriptor<String> latestInstantStateDescriptor = new ListStateDescriptor<>("latestInstant", String.class);
       latestInstantState = context.getOperatorStateStore().getListState(latestInstantStateDescriptor);
 
       if (context.isRestored()) {
@@ -203,7 +203,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       StringBuilder sb = new StringBuilder();
       if (rollbackPendingCommits.contains(latestInstant)) {
         rollbackPendingCommits.forEach(x -> sb.append(x).append(","));
-        LOG.warn("Latest transaction [{}] is not completed! unCompleted transaction:[{}],try times [{}]", latestInstant, sb.toString(), tryTimes);
+        LOG.warn("Latest transaction [{}] is not completed! unCompleted transaction:[{}],try times [{}]", latestInstant, sb, tryTimes);
         TimeUnit.SECONDS.sleep(retryInterval);
         rollbackPendingCommits = writeClient.getInflightsAndRequestedInstants(commitType);
       } else {
