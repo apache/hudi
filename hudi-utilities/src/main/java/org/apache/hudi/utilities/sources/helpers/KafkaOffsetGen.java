@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
@@ -43,6 +44,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
 
 /**
  * Source to read data from Kafka, incrementally.
@@ -160,6 +163,7 @@ public class KafkaOffsetGen {
   private final TypedProperties props;
   protected final String topicName;
   private final String kafkaCheckpointTimestamp;
+  private final String checkpointResetKey;
 
   public KafkaOffsetGen(TypedProperties props) {
     this.props = props;
@@ -169,7 +173,8 @@ public class KafkaOffsetGen {
     }
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.KAFKA_TOPIC_NAME));
     topicName = props.getString(Config.KAFKA_TOPIC_NAME);
-    kafkaCheckpointTimestamp = props.getString(Config.KAFKA_CHECKPOINT_TIMESTAMP);
+    kafkaCheckpointTimestamp = props.getString(Config.KAFKA_CHECKPOINT_TIMESTAMP, "");
+    checkpointResetKey = props.getString(CHECKPOINT_RESET_KEY, "");
   }
 
   public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long sourceLimit, HoodieDeltaStreamerMetrics metrics) {
@@ -187,8 +192,12 @@ public class KafkaOffsetGen {
               .map(x -> new TopicPartition(x.topic(), x.partition())).collect(Collectors.toSet());
 
       // Determine the offset ranges to read from
-      if (kafkaCheckpointTimestamp != null) {
-        lastCheckpointStr = Option.of(getOffsetsByTimestamp(consumer, partitionInfoList, topicName, Long.parseLong(kafkaCheckpointTimestamp)));
+      if (!StringUtils.isNullOrEmpty(kafkaCheckpointTimestamp)) {
+        String offsetsByTimestamp = getOffsetsByTimestamp(consumer, partitionInfoList, topicName, Long.parseLong(kafkaCheckpointTimestamp));
+
+        if (!offsetsByTimestamp.equals(checkpointResetKey)) {
+          lastCheckpointStr = Option.of(offsetsByTimestamp);
+        }
       }
 
       if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty()) {
