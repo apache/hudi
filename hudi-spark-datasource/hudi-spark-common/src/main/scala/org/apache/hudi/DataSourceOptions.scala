@@ -307,6 +307,7 @@ object DataSourceWriteOptions {
   val HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY = "hoodie.datasource.hive_sync.use_pre_apache_input_format"
   val HIVE_USE_JDBC_OPT_KEY = "hoodie.datasource.hive_sync.use_jdbc"
   val HIVE_AUTO_CREATE_DATABASE_OPT_KEY = "hoodie.datasource.hive_sync.auto_create_database"
+  val HIVE_IGNORE_CONNECT_EXCEPTION_OPT_KEY = "hoodie.datasource.hive_sync.ignore_connect_exception"
   val HIVE_SKIP_RO_SUFFIX = "hoodie.datasource.hive_sync.skip_ro_suffix"
   val HIVE_SUPPORT_TIMESTAMP = "hoodie.datasource.hive_sync.support_timestamp"
 
@@ -325,6 +326,7 @@ object DataSourceWriteOptions {
   val DEFAULT_USE_PRE_APACHE_INPUT_FORMAT_OPT_VAL = "false"
   val DEFAULT_HIVE_USE_JDBC_OPT_VAL = "true"
   val DEFAULT_HIVE_AUTO_CREATE_DATABASE_OPT_KEY = "true"
+  val DEFAULT_HIVE_IGNORE_CONNECT_EXCEPTION_OPT_KEY = "false"
   val DEFAULT_HIVE_SKIP_RO_SUFFIX_VAL = "false"
   val DEFAULT_HIVE_SUPPORT_TIMESTAMP = "false"
 

@@ -57,13 +57,23 @@ public class HiveSyncTool extends AbstractSyncTool {
   public static final String SUFFIX_READ_OPTIMIZED_TABLE = "_ro";
 
   private final HiveSyncConfig cfg;
-  private final HoodieHiveClient hoodieHiveClient;
+  private HoodieHiveClient hoodieHiveClient = null;
   private final String snapshotTableName;
   private final Option<String> roTableTableName;
 
   public HiveSyncTool(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
     super(configuration.getAllProperties(), fs);
-    this.hoodieHiveClient = new HoodieHiveClient(cfg, configuration, fs);
+
+    try {
+      this.hoodieHiveClient = new HoodieHiveClient(cfg, configuration, fs);
+    } catch (RuntimeException e) {
+      if (cfg.ignoreConnectException) {
+        LOG.error("Got runtime exception when hive syncing", e);
+      } else {
+        throw new HoodieHiveSyncException("Got runtime exception when hive syncing", e);
+      }
+    }
+
     this.cfg = cfg;
     // Set partitionFields to empty, when the NonPartitionedExtractor is used
     if (NonPartitionedExtractor.class.getName().equals(cfg.partitionValueExtractorClass)) {
