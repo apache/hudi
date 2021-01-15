@@ -154,6 +154,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   public void write(HoodieRecord record, Option<IndexedRecord> avroRecord, Option<Exception> exception) {
     Option recordMetadata = record.getData().getMetadata();
     if (exception.isPresent() && exception.get() instanceof Throwable) {
+    //if(true) {
       // Not throwing exception from here, since we don't want to fail the entire job for a single record
       writeStatus.markFailure(record, exception.get(), recordMetadata);
       LOG.error("Error writing record " + record, exception.get());

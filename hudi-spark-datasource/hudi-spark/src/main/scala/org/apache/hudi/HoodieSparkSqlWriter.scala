@@ -116,7 +116,6 @@ private[hudi] object HoodieSparkSqlWriter {
           null.asInstanceOf[String])
         tableConfig = tableMetaClient.getTableConfig
       }
-
       val commitActionType = DataSourceUtils.getCommitActionType(operation, tableConfig.getTableType)
 
       // short-circuit if bulk_insert via row is enabled.
@@ -128,7 +127,6 @@ private[hudi] object HoodieSparkSqlWriter {
         return (success, commitTime, common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
       }
       // scalastyle:on
-
       val (writeResult, writeClient: SparkRDDWriteClient[HoodieRecordPayload[Nothing]]) =
         if (operation != WriteOperationType.DELETE) {
           // register classes & schemas
@@ -465,7 +463,7 @@ private[hudi] object HoodieSparkSqlWriter {
       (commitSuccess && metaSyncSuccess, compactionInstant)
     } else {
       log.error(s"${tableInstantInfo.operation} failed with $errorCount errors :")
-      if (log.isTraceEnabled) {
+      if (true) {
         log.trace("Printing out the top 100 errors")
         writeResult.getWriteStatuses.rdd.filter(ws => ws.hasErrors)
           .take(100)

@@ -130,7 +130,7 @@ public class TestDataSourceUtils {
   public void testDoWriteOperationWithoutUserDefinedBulkInsertPartitioner() throws HoodieException {
     when(hoodieWriteClient.getConfig()).thenReturn(config);
 
-    DataSourceUtils.doWriteOperation(hoodieWriteClient, hoodieRecords, "test-time",
+    DataSourceUtils.doWriteOperation(hoodieWriteClient, null, "test-time",
             WriteOperationType.BULK_INSERT);
 
     verify(hoodieWriteClient, times(1)).bulkInsert(any(hoodieRecords.getClass()), anyString(),
@@ -143,7 +143,7 @@ public class TestDataSourceUtils {
     setAndVerifyHoodieWriteClientWith("NonExistClassName");
 
     Exception exception = assertThrows(HoodieException.class, () -> {
-      DataSourceUtils.doWriteOperation(hoodieWriteClient, hoodieRecords, "test-time",
+      DataSourceUtils.doWriteOperation(hoodieWriteClient, null, "test-time",
               WriteOperationType.BULK_INSERT);
     });
 
@@ -154,7 +154,7 @@ public class TestDataSourceUtils {
   public void testDoWriteOperationWithUserDefinedBulkInsertPartitioner() throws HoodieException {
     setAndVerifyHoodieWriteClientWith(NoOpBulkInsertPartitioner.class.getName());
 
-    DataSourceUtils.doWriteOperation(hoodieWriteClient, hoodieRecords, "test-time",
+    DataSourceUtils.doWriteOperation(hoodieWriteClient, null, "test-time",
             WriteOperationType.BULK_INSERT);
 
     verify(hoodieWriteClient, times(1)).bulkInsert(any(hoodieRecords.getClass()), anyString(),
