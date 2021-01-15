@@ -38,6 +38,7 @@ import org.apache.flink.runtime.state.StateInitializationContext;
 import org.apache.flink.runtime.state.StateSnapshotContext;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
+import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -75,16 +76,18 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   private transient ListState<String> latestInstantState;
   private Integer retryTimes;
   private Integer retryInterval;
-  private static final String UNDERLINE = "_";
+  private static final String DELIMITER = "_";
   private static final String INSTANT_MARKER_FOLDER_NAME = ".instant_marker";
   private transient boolean isMain = false;
-  private transient AtomicLong batchSize = new AtomicLong(0);
+  private transient AtomicLong recordCounter = new AtomicLong(0);
+  private StreamingRuntimeContext runtimeContext;
+  private int indexOfThisSubtask;
 
   @Override
   public void processElement(StreamRecord<HoodieRecord> streamRecord) throws Exception {
     if (streamRecord.getValue() != null) {
       output.collect(streamRecord);
-      batchSize.incrementAndGet();
+      recordCounter.incrementAndGet();
     }
   }
 
@@ -92,7 +95,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   public void open() throws Exception {
     super.open();
     // get configs from runtimeContext
-    cfg = (HoodieFlinkStreamer.Config) getRuntimeContext().getExecutionConfig().getGlobalJobParameters();
+    cfg = (HoodieFlinkStreamer.Config) runtimeContext.getExecutionConfig().getGlobalJobParameters();
 
     // retry times
     retryTimes = Integer.valueOf(cfg.blockRetryTime);
@@ -107,7 +110,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
     fs = FSUtils.getFs(cfg.targetBasePath, serializableHadoopConf.get());
 
     if (isMain) {
-      TaskContextSupplier taskContextSupplier = new FlinkTaskContextSupplier(null);
+      TaskContextSupplier taskContextSupplier = new FlinkTaskContextSupplier(runtimeContext);
 
       // writeClient
       writeClient = new HoodieFlinkWriteClient(new HoodieFlinkEngineContext(taskContextSupplier), StreamerUtil.getHoodieClientConfig(cfg), true);
@@ -123,8 +126,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   @Override
   public void prepareSnapshotPreBarrier(long checkpointId) throws Exception {
     super.prepareSnapshotPreBarrier(checkpointId);
-    int indexOfThisSubtask = getRuntimeContext().getIndexOfThisSubtask();
-    String instantMarkerFileName = String.format("%d_%d_%d", indexOfThisSubtask, checkpointId, batchSize.get());
+    String instantMarkerFileName = String.format("%d%s%d%s%d", indexOfThisSubtask, DELIMITER, checkpointId, DELIMITER, recordCounter.get());
     Path path = new Path(new Path(HoodieTableMetaClient.AUXILIARYFOLDER_NAME, INSTANT_MARKER_FOLDER_NAME), instantMarkerFileName);
     // mk generate file by each subtask
     fs.create(path, true);
@@ -147,7 +149,10 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
 
   @Override
   public void initializeState(StateInitializationContext context) throws Exception {
-    isMain = getRuntimeContext().getIndexOfThisSubtask() == 0;
+    runtimeContext = getRuntimeContext();
+    indexOfThisSubtask = runtimeContext.getIndexOfThisSubtask();
+    isMain = indexOfThisSubtask == 0;
+
     if (isMain) {
       // instantState
       ListStateDescriptor<String> latestInstantStateDescriptor = new ListStateDescriptor<>("latestInstant", String.class);
@@ -164,8 +169,9 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   @Override
   public void snapshotState(StateSnapshotContext functionSnapshotContext) throws Exception {
     long checkpointId = functionSnapshotContext.getCheckpointId();
+    long recordSize = recordCounter.get();
     if (isMain) {
-      LOG.info("Update latest instant [{}] records size [{}] checkpointId [{}]", latestInstant, batchSize, checkpointId);
+      LOG.info("Update latest instant [{}] records size [{}] checkpointId [{}]", latestInstant, recordSize, checkpointId);
       if (latestInstantList.isEmpty()) {
         latestInstantList.add(latestInstant);
       } else {
@@ -173,9 +179,9 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       }
       latestInstantState.update(latestInstantList);
     } else {
-      LOG.info("Records size [{}] checkpointId [{}]", batchSize, checkpointId);
+      LOG.info("Task instance {} received {} records in checkpoint [{}]", indexOfThisSubtask, recordSize, checkpointId);
     }
-    batchSize.set(0);
+    recordCounter.set(0);
   }
 
   /**
@@ -239,7 +245,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   }
 
   private boolean checkReceivedData(long checkpointId) throws InterruptedException, IOException {
-    int numberOfParallelSubtasks = getRuntimeContext().getNumberOfParallelSubtasks();
+    int numberOfParallelSubtasks = runtimeContext.getNumberOfParallelSubtasks();
     FileStatus[] fileStatuses;
     Path instantMarkerPath = new Path(HoodieTableMetaClient.AUXILIARYFOLDER_NAME, INSTANT_MARKER_FOLDER_NAME);
     int tryTimes = 1;
@@ -249,7 +255,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       fileStatuses = fs.listStatus(instantMarkerPath, new PathFilter() {
         @Override
         public boolean accept(Path pathname) {
-          return pathname.getName().contains(String.format("_%d_", checkpointId));
+          return pathname.getName().contains(String.format("%s%d%s", DELIMITER, checkpointId, DELIMITER));
         }
       });
 
@@ -271,7 +277,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       Path path = fileStatus.getPath();
       String name = path.getName();
       // has data
-      if (Long.parseLong(name.split(UNDERLINE)[2]) > 0) {
+      if (Long.parseLong(name.split(DELIMITER)[2]) > 0) {
         receivedData = true;
         break;
       }

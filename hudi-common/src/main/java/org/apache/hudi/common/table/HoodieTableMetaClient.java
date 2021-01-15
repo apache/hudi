@@ -202,7 +202,7 @@ public class HoodieTableMetaClient implements Serializable {
 
   /**
    * Returns Marker folder path.
-   *
+   * 
    * @param instantTs Instant Timestamp
    * @return
    */
@@ -272,7 +272,7 @@ public class HoodieTableMetaClient implements Serializable {
 
   /**
    * Return raw file-system.
-   *
+   * 
    * @return fs
    */
   public FileSystem getRawFs() {
