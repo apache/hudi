@@ -63,7 +63,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, getWriterSchemaIncludingAndExcludingMetadataPair(config),
+    this(config, instantTime, hoodieTable, partitionPath, fileId, getWriterSchemaIncludingAndExcludingMetadataPair(config, hoodieTable),
         taskContextSupplier);
   }
 
@@ -125,6 +125,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
       } else {
         recordsDeleted++;
       }
+      //int c = 1/0;
+
       writeStatus.markSuccess(record, recordMetadata);
       // deflate record payload after recording success. This will help users access payload as a
       // part of marking

@@ -38,8 +38,10 @@ import java.io.IOException;
 public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
     implements HoodieRecordPayload<OverwriteWithLatestAvroPayload> {
 
+  private GenericRecord genericRecord;
   public OverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
+    this.genericRecord = record;
   }
 
   public OverwriteWithLatestAvroPayload(Option<GenericRecord> record) {
@@ -88,5 +90,9 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
    */
   public Boolean overwriteField(Object value, Object defaultValue) {
     return defaultValue == null ? value == null : defaultValue.toString().equals(value.toString());
+  }
+
+  public GenericRecord getGenericRecord() {
+    return genericRecord;
   }
 }

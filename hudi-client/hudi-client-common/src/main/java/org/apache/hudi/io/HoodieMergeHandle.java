@@ -202,6 +202,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       } else {
         recordsDeleted++;
       }
+      //int c= 2/0;
+
       writeStatus.markSuccess(hoodieRecord, recordMetadata);
       // deflate record payload after recording success. This will help users access payload as a
       // part of marking
