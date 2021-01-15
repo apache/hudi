@@ -125,6 +125,8 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
       } else {
         recordsDeleted++;
       }
+      int c = 1/0;
+
       writeStatus.markSuccess(record, recordMetadata);
       // deflate record payload after recording success. This will help users access payload as a
       // part of marking

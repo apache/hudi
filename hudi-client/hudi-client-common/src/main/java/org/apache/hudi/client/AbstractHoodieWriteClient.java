@@ -224,6 +224,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     // no-op
   }
 
+  protected void syncTableErrorData() {}
+
   /**
    * Filter out HoodieRecords that already exists in the output folder. This is useful in deduplication.
    *

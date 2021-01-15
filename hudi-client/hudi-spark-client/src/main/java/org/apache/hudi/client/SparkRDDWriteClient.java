@@ -25,13 +25,13 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.metrics.Registry;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -43,6 +43,7 @@ import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndex;
+import org.apache.hudi.error.SparkHoodieBackedErrorTableWriter;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -249,6 +250,31 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     return new HoodieWriteResult(postWrite(result, instantTime, table), result.getPartitionToReplaceFileIds());
   }
 
+  public JavaRDD<WriteStatus> insertError(JavaRDD<HoodieRecord<T>> records, String instantTime) {
+    HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table =
+        getTableAndInitCtx(WriteOperationType.INSERT, instantTime);
+    table.validateInsertSchema();
+    preWrite(instantTime, WriteOperationType.INSERT);
+    HoodieWriteMetadata<JavaRDD<WriteStatus>> result = table.insert(context,instantTime, records);
+
+    if (result.getIndexLookupDuration().isPresent()) {
+      metrics.updateIndexMetrics(getOperationType().name(), result.getIndexUpdateDuration().get().toMillis());
+    }
+
+    if (result.isCommitted()) {
+      // Perform post commit operations.
+      if (result.getFinalizeDuration().isPresent()) {
+        metrics.updateFinalizeWriteMetrics(result.getFinalizeDuration().get().toMillis(),
+            result.getWriteStats().get().size());
+      }
+
+      postCommit(table, result.getCommitMetadata().get(), instantTime, Option.empty());
+      emitCommitMetrics(instantTime, result.getCommitMetadata().get(), table.getMetaClient().getCommitActionType());
+    }
+
+    return result.getWriteStatuses();
+  }
+
   @Override
   protected JavaRDD<WriteStatus> postWrite(HoodieWriteMetadata<JavaRDD<WriteStatus>> result,
                                            String instantTime,
@@ -256,6 +282,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     if (result.getIndexLookupDuration().isPresent()) {
       metrics.updateIndexMetrics(getOperationType().name(), result.getIndexUpdateDuration().get().toMillis());
     }
+
     if (result.isCommitted()) {
       // Perform post commit operations.
       if (result.getFinalizeDuration().isPresent()) {
@@ -264,9 +291,11 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       }
 
       postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime, Option.empty());
-
       emitCommitMetrics(instantTime, result.getCommitMetadata().get(), hoodieTable.getMetaClient().getCommitActionType());
     }
+
+    SparkHoodieBackedErrorTableWriter.create(hadoopConf, config, context).commit(result.getWriteStatuses(), hoodieTable);
+
     return result.getWriteStatuses();
   }
 
@@ -288,6 +317,8 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     finalizeWrite(table, compactionCommitTime, writeStats);
     LOG.info("Committing Compaction " + compactionCommitTime + ". Finished with result " + metadata);
     SparkCompactHelpers.newInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
+
+    SparkHoodieBackedErrorTableWriter.create(hadoopConf, config, context).commit(writeStatuses, table);
 
     if (compactionTimer != null) {
       long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
@@ -396,6 +427,11 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   public void syncTableMetadata() {
     // Open up the metadata table again, for syncing
     SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
+  }
+
+  @Override
+  public void syncTableErrorData() {
+    SparkHoodieBackedErrorTableWriter.create(hadoopConf, config, context);
   }
 
   @Override
