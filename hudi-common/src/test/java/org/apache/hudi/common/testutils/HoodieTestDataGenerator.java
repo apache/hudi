@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -118,6 +119,11 @@ public class HoodieTestDataGenerator {
   public static final String TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"tripUberRec\",\"fields\":["
       + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
       + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
+
+  public static final String MISS_TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"tripUberRec\",\"fields\":["
+          + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},"
+          + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
+
   public static final String SHORT_TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"shortTripRec\",\"fields\":["
       + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
       + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
@@ -132,6 +138,7 @@ public class HoodieTestDataGenerator {
       HoodieAvroUtils.addMetadataFields(AVRO_SCHEMA);
   public static final Schema AVRO_SHORT_TRIP_SCHEMA = new Schema.Parser().parse(SHORT_TRIP_SCHEMA);
   public static final Schema AVRO_TRIP_SCHEMA = new Schema.Parser().parse(TRIP_SCHEMA);
+  public static final Schema AVRO_MISS_TRIP_SCHEMA = new Schema.Parser().parse(MISS_TRIP_SCHEMA);
   public static final Schema FLATTENED_AVRO_SCHEMA = new Schema.Parser().parse(TRIP_FLATTENED_SCHEMA);
 
   private static final Random RAND = new Random(46474747);
@@ -178,8 +185,9 @@ public class HoodieTestDataGenerator {
       return generatePayloadForTripSchema(key, commitTime);
     } else if (SHORT_TRIP_SCHEMA.equals(schemaStr)) {
       return generatePayloadForShortTripSchema(key, commitTime);
+    } else if (MISS_TRIP_SCHEMA.equals(schemaStr)) {
+      return generatePayloadForMissTripSchema(key, commitTime);
     }
-
     return null;
   }
 
@@ -226,6 +234,11 @@ public class HoodieTestDataGenerator {
     return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), SHORT_TRIP_SCHEMA);
   }
 
+  public RawTripTestPayload generatePayloadForMissTripSchema(HoodieKey key, String commitTime) throws IOException {
+    GenericRecord rec = generateRecordForMissTripSchema(key.getRecordKey(), "driver-" + commitTime, 0);
+    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), MISS_TRIP_SCHEMA);
+  }
+
   /**
    * Generates a new avro record of the above schema format for a delete.
    */
@@ -233,6 +246,16 @@ public class HoodieTestDataGenerator {
     GenericRecord rec = generateGenericRecord(key.getRecordKey(), "rider-" + instantTime, "driver-" + instantTime, 0,
         true, false);
     return new RawTripTestPayload(Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA, true);
+  }
+
+  public OverwriteWithLatestAvroPayload generateMissWithOverwriteWithLatestAvroPayload(HoodieKey key, String instantTime) {
+    GenericRecord rec = generateRecordForMissTripSchema(key.getRecordKey(), "driver-" + instantTime, 0);
+    return new OverwriteWithLatestAvroPayload(Option.of(rec));
+  }
+
+  public OverwriteWithLatestAvroPayload generateUpdatesWithOverwriteWithLatestAvroPayload(HoodieKey key, String instantTime) {
+    GenericRecord rec = generateRecordForTripSchema(key.getRecordKey(), "rider-" + instantTime,"driver-" + instantTime, 0);
+    return new OverwriteWithLatestAvroPayload(Option.of(rec));
   }
 
   /**
@@ -323,6 +346,16 @@ public class HoodieTestDataGenerator {
     rec.put("_row_key", rowKey);
     rec.put("timestamp", timestamp);
     rec.put("rider", riderName);
+    rec.put("driver", driverName);
+    rec.put("fare", RAND.nextDouble() * 100);
+    rec.put("_hoodie_is_deleted", false);
+    return rec;
+  }
+
+  public GenericRecord generateRecordForMissTripSchema(String rowKey, String driverName, long timestamp) {
+    GenericRecord rec = new GenericData.Record(AVRO_MISS_TRIP_SCHEMA);
+    rec.put("_row_key", rowKey);
+    rec.put("timestamp", timestamp);
     rec.put("driver", driverName);
     rec.put("fare", RAND.nextDouble() * 100);
     rec.put("_hoodie_is_deleted", false);

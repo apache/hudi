@@ -25,6 +25,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Commonly used assertion functions.
@@ -38,4 +39,13 @@ public class Assertions {
     assertAll(statuses.stream().map(status -> () ->
         assertFalse(status.hasErrors(), "Errors found in write of " + status.getFileId())));
   }
+
+  /**
+   * Assert no failures in writing hoodie files.
+   */
+  public static void assertHasWriteErrors(List<WriteStatus> statuses) {
+    assertAll(statuses.stream().map(status -> () ->
+            assertTrue(status.hasErrors(), "Errors found in write of " + status.getFileId())));
+  }
+
 }

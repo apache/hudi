@@ -21,6 +21,7 @@ package org.apache.hudi.config;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.common.config.DefaultHoodieConfig;
+import org.apache.hudi.common.config.HoodieErrorTableConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
@@ -919,6 +920,37 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Integer.parseInt(props.getProperty(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED_PROP));
   }
 
+  /**
+   * Error table configs.
+   */
+  public boolean enableErrorTable() {
+    return Boolean.parseBoolean(props.getProperty(HoodieErrorTableConfig.ERROR_TABLE_ENABLE_PROP));
+  }
+
+  public String getErrorTableBasePath() {
+    return props.getProperty(HoodieErrorTableConfig.ERROR_TABLE_BASE_PATH_PROP);
+  }
+
+  public String getErrorTableName() {
+    return props.getProperty(HoodieErrorTableConfig.ERROR_TABLE_NAME_PROP);
+  }
+
+  public int getErrorTableInsertParallelism() {
+    return Integer.parseInt(props.getProperty(HoodieErrorTableConfig.ERROR_TABLE_INSERT_PARALLELISM_PROP));
+  }
+
+  public int getErrorTableCleanerCommitsRetained() {
+    return Integer.parseInt(props.getProperty(HoodieErrorTableConfig.CLEANER_COMMITS_RETAINED_PROP));
+  }
+
+  public int getErrorTableMinCommitsToKeep() {
+    return Integer.parseInt(props.getProperty(HoodieErrorTableConfig.MIN_COMMITS_TO_KEEP_PROP));
+  }
+
+  public int getErrorTableMaxCommitsToKeep() {
+    return Integer.parseInt(props.getProperty(HoodieErrorTableConfig.MAX_COMMITS_TO_KEEP_PROP));
+  }
+
   public static class Builder {
 
     protected final Properties props = new Properties();
@@ -935,6 +967,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private boolean isCallbackConfigSet = false;
     private boolean isPayloadConfigSet = false;
     private boolean isMetadataConfigSet = false;
+    private boolean isErrorTableConfigSet = false;
 
     public Builder withEngineType(EngineType engineType) {
       this.engineType = engineType;
@@ -1074,6 +1107,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     public Builder withCompactionConfig(HoodieCompactionConfig compactionConfig) {
       props.putAll(compactionConfig.getProps());
       isCompactionConfigSet = true;
+      return this;
+    }
+
+    public Builder withErrorTableConfig(HoodieErrorTableConfig errorTableConfig) {
+      props.putAll(errorTableConfig.getProps());
+      isErrorTableConfigSet = true;
       return this;
     }
 
@@ -1265,6 +1304,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           HoodiePayloadConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isMetadataConfigSet,
           HoodieMetadataConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isErrorTableConfigSet,
+          HoodieErrorTableConfig.newBuilder().fromProperties(props).build());
 
       setDefaultOnCondition(props, !props.containsKey(EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION),
           EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION, DEFAULT_EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION);
