@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.NumericUtils;
@@ -201,29 +200,13 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
           long recordsToAppend = Math.min((config.getParquetMaxFileSize() - smallFile.sizeBytes) / averageRecordSize,
               totalUnassignedInserts);
           if (recordsToAppend > 0 && totalUnassignedInserts > 0) {
-            int bucket;
-            if (config.isRouteInsertsToNewFiles()) {
-              // if insert operation, route inserts to new files regardless of small file handling.
-              if (WriteOperationType.isChangingRecords(profile.getOperationType())
-                  && updateLocationToBucket.containsKey(smallFile.location.getFileId())) {
-                bucket = updateLocationToBucket.get(smallFile.location.getFileId());
-                LOG.info("Assigning " + recordsToAppend + " inserts to existing update bucket " + bucket);
-              } else if (profile.getOperationType() == null || WriteOperationType.isChangingRecords(profile.getOperationType())) {
-                bucket = addUpdateBucket(partitionPath, smallFile.location.getFileId());
-                LOG.info("Assigning " + recordsToAppend + " inserts to new update bucket " + bucket);
-              } else {
-                bucket = totalBuckets;
-                addInsertBucket(partitionPath);
-                LOG.info("Assigning " + recordsToAppend + " inserts to new insert bucket " + bucket);
-              }
-            } else { // create a new bucket or re-use an existing bucket
-              if (updateLocationToBucket.containsKey(smallFile.location.getFileId())) {
-                bucket = updateLocationToBucket.get(smallFile.location.getFileId());
-                LOG.info("Assigning " + recordsToAppend + " inserts to existing update bucket " + bucket);
-              } else {
-                bucket = addUpdateBucket(partitionPath, smallFile.location.getFileId());
-                LOG.info("Assigning " + recordsToAppend + " inserts to new update bucket " + bucket);
-              }
+            int bucket;// create a new bucket or re-use an existing bucket
+            if (updateLocationToBucket.containsKey(smallFile.location.getFileId())) {
+              bucket = updateLocationToBucket.get(smallFile.location.getFileId());
+              LOG.info("Assigning " + recordsToAppend + " inserts to existing update bucket " + bucket);
+            } else {
+              bucket = addUpdateBucket(partitionPath, smallFile.location.getFileId());
+              LOG.info("Assigning " + recordsToAppend + " inserts to new update bucket " + bucket);
             }
             bucketNumbers.add(bucket);
             recordsPerBucket.add(recordsToAppend);

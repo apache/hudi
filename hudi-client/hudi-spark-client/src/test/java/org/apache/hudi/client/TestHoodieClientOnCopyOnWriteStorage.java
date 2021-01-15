@@ -373,7 +373,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         0, 150);
 
     // Now simulate an upgrade and perform a restore operation
-    HoodieWriteConfig newConfig = getConfigBuilder().withProps(config.getProps()).withTimelineLayoutVersion(
+    HoodieWriteConfig newConfig = getConfigBuilder()
+        .withRouteInsertsToNewFiles(true)
+        .withProps(config.getProps()).withTimelineLayoutVersion(
         TimelineLayoutVersion.CURR_VERSION).build();
     client = getHoodieWriteClient(newConfig, false);
     client.restoreToInstant("004");
@@ -459,8 +461,62 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   /**
-   * Tesst deletion of records.
+   * Test Insert API for HoodieConcatHandle
    */
+  @Test
+  public void testInsertsWithHoodieConcatHandle() throws Exception {
+    testHoodieConcatHandle(getConfig(), false);
+  }
+
+  /**
+   * Test UpsertPrepped API.
+   */
+  @Test
+  public void testInsertsPreppedWithHoodieConcatHandle() throws Exception {
+    testHoodieConcatHandle(getConfig(),  true);
+  }
+
+  /**
+   * Test one of HoodieConcatHandle w/ {@link AbstractHoodieWriteClient#index} API.
+   *
+   * @param config Write Config
+   * @throws Exception in case of error
+   */
+  private void testHoodieConcatHandle(HoodieWriteConfig config, boolean isPrepped)
+      throws Exception {
+    // Force using older timeline layout
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder().withRouteInsertsToNewFiles(true)
+        .withProps(config.getProps()).withTimelineLayoutVersion(
+            VERSION_0).build();
+    HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(), metaClient.getTableType(),
+        metaClient.getTableConfig().getTableName(), metaClient.getArchivePath(),
+        metaClient.getTableConfig().getPayloadClass(), VERSION_0);
+    SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig, false);
+
+    // Write 1 (only inserts)
+    String newCommitTime = "001";
+    String initCommitTime = "000";
+    int numRecords = 200;
+    insertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime, numRecords, SparkRDDWriteClient::insert,
+        isPrepped, true, numRecords);
+
+    // Write 2 (updates)
+    String prevCommitTime = newCommitTime;
+    newCommitTime = "004";
+    numRecords = 100;
+    String commitTimeBetweenPrevAndNew = "002";
+
+    final Function2<List<HoodieRecord>, String, Integer> recordGenFunction =
+        generateWrapRecordsFn(isPrepped, hoodieWriteConfig, dataGen::generateUniqueUpdates);
+
+    writeBatch(client, newCommitTime, prevCommitTime, Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime,
+        numRecords, recordGenFunction, SparkRDDWriteClient::insert, true, numRecords, 300,
+        2);
+  }
+
+    /**
+     * Tesst deletion of records.
+     */
   @Test
   public void testDeletes() throws Exception {
     SparkRDDWriteClient client = getHoodieWriteClient(getConfig(), false);

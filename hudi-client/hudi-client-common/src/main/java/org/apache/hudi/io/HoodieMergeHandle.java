@@ -64,11 +64,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
 
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected Set<String> writtenRecordKeys;
-  private HoodieFileWriter<IndexedRecord> fileWriter;
+  protected HoodieFileWriter<IndexedRecord> fileWriter;
 
-  private Path newFilePath;
+  protected Path newFilePath;
   private Path oldFilePath;
-  private long recordsWritten = 0;
+  protected long recordsWritten = 0;
   private long recordsDeleted = 0;
   private long updatedRecordsWritten = 0;
   protected long insertRecordsWritten = 0;
