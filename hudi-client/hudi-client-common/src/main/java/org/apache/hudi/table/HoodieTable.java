@@ -107,7 +107,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     this.context = context;
     this.metadata = HoodieTableMetadata.create(context, config.getBasePath(), FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR,
         config.getMetadataConfig().useFileListingMetadata(), config.getMetadataConfig().getFileListingMetadataVerify(),
-        false, config.getMetadataConfig().shouldAssumeDatePartitioning());
+        config.getMetadataConfig().enableMetrics(), config.getMetadataConfig().shouldAssumeDatePartitioning());
     this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), () -> metadata);
     this.metaClient = metaClient;
     this.index = getIndex(config, context);

@@ -31,9 +31,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metrics.DistributedRegistry;
@@ -99,12 +97,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected void commit(List<HoodieRecord> records, String partitionName, String instantTime) {
-    ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
-    try {
-      metadata.close();
-    } catch (Exception e) {
-      throw new HoodieException("Error committing to metadata table", e);
-    }
+    super.commit(records, partitionName, instantTime);
 
     JavaRDD<HoodieRecord> recordRDD = prepRecords(records, partitionName);
 

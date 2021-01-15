@@ -99,9 +99,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       } catch (TableNotFoundException e) {
         LOG.warn("Metadata table was not found at path " + metadataBasePath);
         this.enabled = false;
+        this.metaClient = null;
       } catch (Exception e) {
         LOG.error("Failed to initialize metadata table at path " + metadataBasePath, e);
         this.enabled = false;
+        this.metaClient = null;
       }
     } else {
       LOG.info("Metadata table is disabled.");
@@ -204,16 +206,15 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    */
   protected List<HoodieInstant> findInstantsToSync() {
     initIfNeeded();
-    Option<HoodieInstant> latestMetadataInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
 
     // if there are no instants yet, return empty list, since there is nothing to sync here.
-    if (!latestMetadataInstant.isPresent()) {
+    if (!enabled || !metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
       return Collections.EMPTY_LIST;
     }
 
     // All instants on the data timeline, which are greater than the last instant on metadata timeline
     // are candidates for sync.
-    String latestMetadataInstantTime = latestMetadataInstant.get().getTimestamp();
+    String latestMetadataInstantTime = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get().getTimestamp();
     HoodieDefaultTimeline candidateTimeline = datasetMetaClient.getActiveTimeline().findInstantsAfter(latestMetadataInstantTime, Integer.MAX_VALUE);
     Option<HoodieInstant> earliestIncompleteInstant = candidateTimeline.filterInflightsAndRequested().firstInstant();
 

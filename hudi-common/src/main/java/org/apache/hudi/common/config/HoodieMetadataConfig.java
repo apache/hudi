@@ -41,6 +41,10 @@ public final class HoodieMetadataConfig extends DefaultHoodieConfig {
   public static final boolean DEFAULT_METADATA_VALIDATE = false;
   public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = false;
 
+  // Enable metrics for internal Metadata Table
+  public static final String METADATA_METRICS_ENABLE_PROP = METADATA_PREFIX + ".metrics.enable";
+  public static final boolean DEFAULT_METADATA_METRICS_ENABLE = false;
+
   // Parallelism for inserts
   public static final String METADATA_INSERT_PARALLELISM_PROP = METADATA_PREFIX + ".insert.parallelism";
   public static final int DEFAULT_METADATA_INSERT_PARALLELISM = 1;
@@ -86,11 +90,15 @@ public final class HoodieMetadataConfig extends DefaultHoodieConfig {
   }
 
   public boolean useFileListingMetadata() {
-    return Boolean.parseBoolean(props.getProperty(HoodieMetadataConfig.METADATA_ENABLE_PROP));
+    return Boolean.parseBoolean(props.getProperty(METADATA_ENABLE_PROP));
   }
 
   public boolean getFileListingMetadataVerify() {
-    return Boolean.parseBoolean(props.getProperty(HoodieMetadataConfig.METADATA_VALIDATE_PROP));
+    return Boolean.parseBoolean(props.getProperty(METADATA_VALIDATE_PROP));
+  }
+
+  public boolean enableMetrics() {
+    return Boolean.parseBoolean(props.getProperty(METADATA_METRICS_ENABLE_PROP));
   }
 
   public static class Builder {
@@ -111,6 +119,11 @@ public final class HoodieMetadataConfig extends DefaultHoodieConfig {
 
     public Builder enable(boolean enable) {
       props.setProperty(METADATA_ENABLE_PROP, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder enableMetrics(boolean enableMetrics) {
+      props.setProperty(METADATA_METRICS_ENABLE_PROP, String.valueOf(enableMetrics));
       return this;
     }
 
@@ -159,6 +172,8 @@ public final class HoodieMetadataConfig extends DefaultHoodieConfig {
       HoodieMetadataConfig config = new HoodieMetadataConfig(props);
       setDefaultOnCondition(props, !props.containsKey(METADATA_ENABLE_PROP), METADATA_ENABLE_PROP,
           String.valueOf(DEFAULT_METADATA_ENABLE));
+      setDefaultOnCondition(props, !props.containsKey(METADATA_METRICS_ENABLE_PROP), METADATA_METRICS_ENABLE_PROP,
+          String.valueOf(DEFAULT_METADATA_METRICS_ENABLE));
       setDefaultOnCondition(props, !props.containsKey(METADATA_VALIDATE_PROP), METADATA_VALIDATE_PROP,
           String.valueOf(DEFAULT_METADATA_VALIDATE));
       setDefaultOnCondition(props, !props.containsKey(METADATA_INSERT_PARALLELISM_PROP), METADATA_INSERT_PARALLELISM_PROP,

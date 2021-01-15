@@ -201,7 +201,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     // instant on the metadata table. This is required for metadata table sync.
     if (config.useFileListingMetadata()) {
       try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(table.getContext(), config.getBasePath(), "/tmp/",
-          true, config.getFileListingMetadataVerify(), false, config.shouldAssumeDatePartitioning())) {
+          true, config.getFileListingMetadataVerify(), config.getMetadataConfig().enableMetrics(), config.shouldAssumeDatePartitioning())) {
         Option<String> lastSyncedInstantTime = tableMetadata.getSyncedInstantTime();
 
         if (lastSyncedInstantTime.isPresent()) {

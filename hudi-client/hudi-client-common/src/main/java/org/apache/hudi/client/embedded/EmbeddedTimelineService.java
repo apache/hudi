@@ -56,11 +56,11 @@ public class EmbeddedTimelineService {
     setHostAddr(embeddedTimelineServiceHostAddr);
     this.context = context;
     this.config = config;
+    this.basePath = basePath;
     this.metadataConfig = metadataConfig;
     this.hadoopConf = context.getHadoopConf();
     this.viewManager = createViewManager();
     this.preferredPort = embeddedTimelineServerPort;
-    this.basePath = basePath;
   }
 
   private FileSystemViewManager createViewManager() {
