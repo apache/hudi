@@ -378,6 +378,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
           commit(records.get(), MetadataPartitionType.FILES.partitionPath(), instant.getTimestamp());
         }
       }
+      initTableMetadata();
     } catch (IOException ioe) {
       throw new HoodieIOException("Unable to sync instants from data to metadata table.", ioe);
     }
@@ -457,8 +458,5 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    * Commit the {@code HoodieRecord}s to Metadata Table as a new delta-commit.
    *
    */
-  protected void commit(List<HoodieRecord> records, String partitionName, String instantTime) {
-    ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
-    initTableMetadata();
-  }
+  protected abstract void commit(List<HoodieRecord> records, String partitionName, String instantTime);
 }

@@ -206,7 +206,7 @@ public class FileSystemViewManager {
                                                         final FileSystemViewStorageConfig config,
                                                         final String basePath) {
     return createViewManager(context, metadataConfig, config,
-        () -> HoodieTableMetadata.create(context, basePath, FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR,
+        () -> HoodieTableMetadata.create(context, basePath, config.getSpillableDir(),
             metadataConfig.useFileListingMetadata(), metadataConfig.getFileListingMetadataVerify(),
         metadataConfig.enableMetrics(), metadataConfig.shouldAssumeDatePartitioning()));
   }

@@ -46,6 +46,7 @@ import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -200,7 +201,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     // If metadata table is enabled, do not archive instants which are more recent that the latest synced
     // instant on the metadata table. This is required for metadata table sync.
     if (config.useFileListingMetadata()) {
-      try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(table.getContext(), config.getBasePath(), "/tmp/",
+      try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(table.getContext(), config.getBasePath(), FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR,
           true, config.getFileListingMetadataVerify(), config.getMetadataConfig().enableMetrics(), config.shouldAssumeDatePartitioning())) {
         Option<String> lastSyncedInstantTime = tableMetadata.getSyncedInstantTime();
 

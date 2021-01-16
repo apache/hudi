@@ -145,7 +145,7 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
         .longValue();
   }
 
-  public String getBaseStoreDir() {
+  public String getSpillableDir() {
     return props.getProperty(FILESYSTEM_VIEW_SPILLABLE_DIR);
   }
 

@@ -94,15 +94,11 @@ public class RollbackUtils {
    * @return {@link List} of {@link ListingBasedRollbackRequest}s thus collected.
    */
   public static List<ListingBasedRollbackRequest> generateRollbackRequestsByListingCOW(HoodieEngineContext engineContext,
-      FileSystem fs, String basePath, HoodieWriteConfig config) {
-    try {
-      return FSUtils.getAllPartitionPaths(engineContext, fs, basePath, config.useFileListingMetadata(),
-          config.getFileListingMetadataVerify(), config.shouldAssumeDatePartitioning()).stream()
-          .map(ListingBasedRollbackRequest::createRollbackRequestWithDeleteDataAndLogFilesAction)
-          .collect(Collectors.toList());
-    } catch (IOException e) {
-      throw new HoodieIOException("Error generating rollback requests", e);
-    }
+                                                                                       String basePath, HoodieWriteConfig config) {
+    return FSUtils.getAllPartitionPaths(engineContext, basePath, config.useFileListingMetadata(),
+        config.getFileListingMetadataVerify(), config.shouldAssumeDatePartitioning()).stream()
+        .map(ListingBasedRollbackRequest::createRollbackRequestWithDeleteDataAndLogFilesAction)
+        .collect(Collectors.toList());
   }
 
   /**
@@ -116,7 +112,7 @@ public class RollbackUtils {
   public static List<ListingBasedRollbackRequest> generateRollbackRequestsUsingFileListingMOR(HoodieInstant instantToRollback, HoodieTable table, HoodieEngineContext context) throws IOException {
     String commit = instantToRollback.getTimestamp();
     HoodieWriteConfig config = table.getConfig();
-    List<String> partitions = FSUtils.getAllPartitionPaths(context, table.getMetaClient().getFs(), table.getMetaClient().getBasePath(),
+    List<String> partitions = FSUtils.getAllPartitionPaths(context, table.getMetaClient().getBasePath(),
         config.useFileListingMetadata(), config.getFileListingMetadataVerify(), config.shouldAssumeDatePartitioning());
     int sparkPartitions = Math.max(Math.min(partitions.size(), config.getRollbackParallelism()), 1);
     context.setJobStatus(RollbackUtils.class.getSimpleName(), "Generate all rollback requests");

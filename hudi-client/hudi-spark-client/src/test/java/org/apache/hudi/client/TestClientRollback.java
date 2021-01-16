@@ -101,7 +101,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       assertNoWriteErrors(statuses);
       HoodieWriteConfig config = getConfig();
       List<String> partitionPaths =
-          FSUtils.getAllPartitionPaths(context, fs, cfg.getBasePath(), config.useFileListingMetadata(),
+          FSUtils.getAllPartitionPaths(context, cfg.getBasePath(), config.useFileListingMetadata(),
               config.getFileListingMetadataVerify(), config.shouldAssumeDatePartitioning());
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieSparkTable table = HoodieSparkTable.create(getConfig(), context, metaClient);

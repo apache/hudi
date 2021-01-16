@@ -751,11 +751,16 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   /**
    * Validate the metadata tables contents to ensure it matches what is on the file system.
    */
-  private void validateMetadata(SparkRDDWriteClient client) throws IOException {
-    HoodieWriteConfig config = client.getConfig();
+  private void validateMetadata(SparkRDDWriteClient testClient) throws IOException {
+    HoodieWriteConfig config = testClient.getConfig();
 
-    client.close();
-    client = new SparkRDDWriteClient(client.getEngineContext(), client.getConfig());
+    SparkRDDWriteClient client;
+    if (config.isEmbeddedTimelineServerEnabled()) {
+      testClient.close();
+      client = new SparkRDDWriteClient(testClient.getEngineContext(), testClient.getConfig());
+    } else {
+      client = testClient;
+    }
 
     HoodieTableMetadata tableMetadata = metadata(client);
     assertNotNull(tableMetadata, "MetadataReader should have been initialized");
@@ -871,7 +876,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     // Metadata table has a fixed number of partitions
     // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
     // in the .hoodie folder.
-    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, fs, HoodieTableMetadata.getMetadataTableBasePath(basePath),
+    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, HoodieTableMetadata.getMetadataTableBasePath(basePath),
         false, false, false);
     assertEquals(MetadataPartitionType.values().length, metadataTablePartitions.size());
 

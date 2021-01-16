@@ -194,9 +194,9 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    * @return all partitions paths for the dataset.
    * @throws IOException
    */
-  private List<String> getPartitionPathsForFullCleaning() throws IOException {
+  private List<String> getPartitionPathsForFullCleaning() {
     // Go to brute force mode of scanning all partitions
-    return FSUtils.getAllPartitionPaths(context, hoodieTable.getMetaClient().getFs(), config.getBasePath(),
+    return FSUtils.getAllPartitionPaths(context, config.getBasePath(),
         config.useFileListingMetadata(), config.getFileListingMetadataVerify(), config.shouldAssumeDatePartitioning());
   }
 
