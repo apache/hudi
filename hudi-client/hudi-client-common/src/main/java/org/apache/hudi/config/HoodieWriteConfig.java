@@ -477,7 +477,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public long getClusteringMaxBytesInGroup() {
     return Long.parseLong(props.getProperty(HoodieClusteringConfig.CLUSTERING_MAX_BYTES_PER_GROUP));
   }
-
+  
   public long getClusteringSmallFileLimit() {
     return Long.parseLong(props.getProperty(HoodieClusteringConfig.CLUSTERING_PLAN_SMALL_FILE_LIMIT));
   }
@@ -493,7 +493,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public int getTargetPartitionsForClustering() {
     return Integer.parseInt(props.getProperty(HoodieClusteringConfig.CLUSTERING_TARGET_PARTITIONS));
   }
-
+  
   public String getClusteringSortColumns() {
     return props.getProperty(HoodieClusteringConfig.CLUSTERING_SORT_COLUMNS_PROPERTY);
   }
