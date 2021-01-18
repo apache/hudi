@@ -72,11 +72,16 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private transient Thread shutdownThread = null;
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
-      boolean readBlockLazily, boolean reverseReader) throws IOException {
+                             boolean readBlockLazily, boolean reverseReader) throws IOException {
     FSDataInputStream fsDataInputStream = fs.open(logFile.getPath(), bufferSize);
     if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
       this.inputStream = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
           new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
+    } else if (fsDataInputStream.getWrappedStream() instanceof FSDataInputStream
+        && ((FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream() instanceof FSInputStream) {
+      this.inputStream = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
+          new BufferedFSInputStream((FSInputStream) ((
+              (FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream()), bufferSize)));
     } else {
       // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream
       // need to wrap in another BufferedFSInputStream the make bufferSize work?
