@@ -398,8 +398,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_PROP));
   }
 
-  public CompactionTriggerStrategy getInlineCompactType() {
-    return CompactionTriggerStrategy.valueOf(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_TYPE_PROP));
+  public CompactionTriggerStrategy getInlineCompactTriggerStrategy() {
+    return CompactionTriggerStrategy.valueOf(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY_PROP));
   }
 
   public int getInlineCompactDeltaCommitMax() {

@@ -63,7 +63,7 @@ public class SparkScheduleCompactionActionExecutor<T extends HoodieRecordPayload
   protected HoodieCompactionPlan scheduleCompaction() {
     LOG.info("Checking if compaction needs to be run on " + config.getBasePath());
     // judge if we need to compact according to num delta commits and time elapsed
-    boolean compactable = needCompact(config.getInlineCompactType());
+    boolean compactable = needCompact(config.getInlineCompactTriggerStrategy());
     if (compactable) {
       LOG.info("Generating compaction plan for merge on read table " + config.getBasePath());
       HoodieSparkMergeOnReadTableCompactor compactor = new HoodieSparkMergeOnReadTableCompactor();
@@ -157,7 +157,7 @@ public class SparkScheduleCompactionActionExecutor<T extends HoodieRecordPayload
         }
         return compactable;
       default:
-        throw new HoodieCompactionException("Unsupported compact type: " + config.getInlineCompactType());
+        throw new HoodieCompactionException("Unsupported compact type: " + config.getInlineCompactTriggerStrategy());
     }
   }
 
