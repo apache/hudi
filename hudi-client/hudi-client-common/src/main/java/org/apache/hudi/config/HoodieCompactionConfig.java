@@ -22,7 +22,7 @@ import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.table.action.compact.CompactType;
+import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
@@ -113,7 +113,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_INCREMENTAL_CLEANER = "true";
   private static final String DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS = "5";
   private static final String DEFAULT_INLINE_COMPACT_ELAPSED_TIME = String.valueOf(60 * 60);
-  private static final String DEFAULT_INLINE_COMPACT_TYPE = CompactType.COMMIT_NUM.name();
+  private static final String DEFAULT_INLINE_COMPACT_TYPE = CompactionTriggerStrategy.NUM.name();
   private static final String DEFAULT_CLEANER_FILE_VERSIONS_RETAINED = "3";
   private static final String DEFAULT_CLEANER_COMMITS_RETAINED = "10";
   private static final String DEFAULT_MAX_COMMITS_TO_KEEP = "30";
@@ -169,7 +169,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder withInlineCompactionType(CompactType inlineCompactionType) {
+    public Builder withInlineCompactionType(CompactionTriggerStrategy inlineCompactionType) {
       props.setProperty(INLINE_COMPACT_TYPE_PROP, inlineCompactionType.name());
       return this;
     }

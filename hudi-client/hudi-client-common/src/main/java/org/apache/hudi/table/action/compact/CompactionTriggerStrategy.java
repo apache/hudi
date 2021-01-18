@@ -18,6 +18,6 @@
 
 package org.apache.hudi.table.action.compact;
 
-public enum  CompactType {
-    COMMIT_NUM, TIME_ELAPSED, NUM_AND_TIME, NUM_OR_TIME
+public enum CompactionTriggerStrategy {
+    NUM, TIME_ELAPSED, NUM_AND_TIME, NUM_OR_TIME
 }

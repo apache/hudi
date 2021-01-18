@@ -34,7 +34,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
-import org.apache.hudi.table.action.compact.CompactType;
+import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.hadoop.hbase.io.compress.Compression;
@@ -398,8 +398,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_PROP));
   }
 
-  public CompactType getInlineCompactType() {
-    return CompactType.valueOf(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_TYPE_PROP));
+  public CompactionTriggerStrategy getInlineCompactType() {
+    return CompactionTriggerStrategy.valueOf(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_TYPE_PROP));
   }
 
   public int getInlineCompactDeltaCommitMax() {
