@@ -61,7 +61,6 @@ public class TimelineUtils {
       switch (s.getAction()) {
         case HoodieTimeline.COMMIT_ACTION:
         case HoodieTimeline.DELTA_COMMIT_ACTION:
-        case HoodieTimeline.REPLACE_COMMIT_ACTION:
           try {
             HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(s).get(), HoodieCommitMetadata.class);
             return commitMetadata.getPartitionToWriteStats().keySet().stream();
