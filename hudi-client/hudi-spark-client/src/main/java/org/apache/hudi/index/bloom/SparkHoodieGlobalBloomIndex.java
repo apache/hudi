@@ -60,8 +60,7 @@ public class SparkHoodieGlobalBloomIndex<T extends HoodieRecordPayload> extends 
   List<Tuple2<String, BloomIndexFileInfo>> loadInvolvedFiles(List<String> partitions, final HoodieEngineContext context,
                                                              final HoodieTable hoodieTable) {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
-    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(context, metaClient.getBasePath(),
-        config.useFileListingMetadata(), config.getFileListingMetadataVerify(), config.shouldAssumeDatePartitioning());
+    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), metaClient.getBasePath());
     return super.loadInvolvedFiles(allPartitionPaths, context, hoodieTable);
   }
 

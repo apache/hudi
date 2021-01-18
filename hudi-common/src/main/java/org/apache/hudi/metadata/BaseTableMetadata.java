@@ -19,6 +19,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
@@ -32,7 +33,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -58,31 +58,25 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   protected final SerializableConfiguration hadoopConf;
   protected final String datasetBasePath;
   protected final HoodieTableMetaClient datasetMetaClient;
-
-  protected boolean enabled;
   protected final Option<HoodieMetadataMetrics> metrics;
-
-  private final boolean validateLookups;
-  private final boolean assumeDatePartitioning;
-
+  protected final HoodieMetadataConfig metadataConfig;
   // Directory used for Spillable Map when merging records
   protected final String spillableMapDirectory;
+
+  protected boolean enabled;
   private TimelineMergedTableMetadata timelineMergedMetadata;
 
-  protected BaseTableMetadata(HoodieEngineContext engineContext, String datasetBasePath, String spillableMapDirectory,
-                              boolean enabled, boolean validateLookups, boolean enableMetrics,
-                              boolean assumeDatePartitioning) {
+  protected BaseTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
+                              String datasetBasePath, String spillableMapDirectory) {
     this.engineContext = engineContext;
     this.hadoopConf = new SerializableConfiguration(engineContext.getHadoopConf());
     this.datasetBasePath = datasetBasePath;
     this.datasetMetaClient = new HoodieTableMetaClient(hadoopConf.get(), datasetBasePath);
     this.spillableMapDirectory = spillableMapDirectory;
+    this.metadataConfig = metadataConfig;
 
-    this.enabled = enabled;
-    this.validateLookups = validateLookups;
-    this.assumeDatePartitioning = assumeDatePartitioning;
-
-    if (enableMetrics) {
+    this.enabled = metadataConfig.useFileListingMetadata();
+    if (metadataConfig.enableMetrics()) {
       this.metrics = Option.of(new HoodieMetadataMetrics(Registry.getRegistry("HoodieMetadata")));
     } else {
       this.metrics = Option.empty();
@@ -107,12 +101,15 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       try {
         return fetchAllPartitionPaths();
       } catch (Exception e) {
-        LOG.error("Failed to retrieve list of partition from metadata", e);
-        throw new HoodieException("Failed to retrieve list of partition from metadata", e);
+        if (metadataConfig.enableFallback()) {
+          LOG.error("Failed to retrieve list of partition from metadata", e);
+        } else {
+          throw new HoodieMetadataException("Failed to retrieve list of partition from metadata", e);
+        }
       }
     }
     return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, datasetBasePath,
-        assumeDatePartitioning).getAllPartitionPaths();
+        metadataConfig.shouldAssumeDatePartitioning()).getAllPartitionPaths();
   }
 
   /**
@@ -132,12 +129,16 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       try {
         return fetchAllFilesInPartition(partitionPath);
       } catch (Exception e) {
-        LOG.error("Failed to retrieve files in partition " + partitionPath + " from metadata", e);
-        throw new HoodieException("Failed to retrieve files in partition " + partitionPath + " from metadata", e);
+        if (metadataConfig.enableFallback()) {
+          LOG.error("Failed to retrieve files in partition " + partitionPath + " from metadata", e);
+        } else {
+          throw new HoodieMetadataException("Failed to retrieve files in partition " + partitionPath + " from metadata", e);
+        }
       }
     }
 
-    return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, datasetBasePath, assumeDatePartitioning).getAllFilesInPartition(partitionPath);
+    return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, datasetBasePath, metadataConfig.shouldAssumeDatePartitioning())
+        .getAllFilesInPartition(partitionPath);
   }
 
   /**
@@ -163,11 +164,11 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       }
     }
 
-    if (validateLookups) {
+    if (metadataConfig.validateFileListingMetadata()) {
       // Validate the Metadata Table data by listing the partitions from the file system
       timer.startTimer();
       FileSystemBackedTableMetadata fileSystemBackedTableMetadata = new FileSystemBackedTableMetadata(getEngineContext(),
-          hadoopConf, datasetBasePath, assumeDatePartitioning);
+          hadoopConf, datasetBasePath, metadataConfig.shouldAssumeDatePartitioning());
       List<String> actualPartitions = fileSystemBackedTableMetadata.getAllPartitionPaths();
       metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.VALIDATE_PARTITIONS_STR, timer.endTimer()));
 
@@ -213,7 +214,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       statuses = hoodieRecord.get().getData().getFileStatuses(hadoopConf.get(), partitionPath);
     }
 
-    if (validateLookups) {
+    if (metadataConfig.validateFileListingMetadata()) {
       // Validate the Metadata Table data by listing the partitions from the file system
       timer.startTimer();
 

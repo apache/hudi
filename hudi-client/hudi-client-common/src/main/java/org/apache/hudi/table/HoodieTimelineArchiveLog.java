@@ -201,8 +201,8 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     // If metadata table is enabled, do not archive instants which are more recent that the latest synced
     // instant on the metadata table. This is required for metadata table sync.
     if (config.useFileListingMetadata()) {
-      try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(table.getContext(), config.getBasePath(), FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR,
-          true, config.getFileListingMetadataVerify(), config.getMetadataConfig().enableMetrics(), config.shouldAssumeDatePartitioning())) {
+      try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(table.getContext(), config.getMetadataConfig(),
+          config.getBasePath(), FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR)) {
         Option<String> lastSyncedInstantTime = tableMetadata.getSyncedInstantTime();
 
         if (lastSyncedInstantTime.isPresent()) {

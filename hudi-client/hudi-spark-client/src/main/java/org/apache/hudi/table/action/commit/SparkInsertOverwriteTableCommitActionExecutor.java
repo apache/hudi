@@ -47,8 +47,7 @@ public class SparkInsertOverwriteTableCommitActionExecutor<T extends HoodieRecor
   @Override
   protected Map<String, List<String>> getPartitionToReplacedFileIds(JavaRDD<WriteStatus> writeStatuses) {
     Map<String, List<String>> partitionToExistingFileIds = new HashMap<>();
-    List<String> partitionPaths = FSUtils.getAllPartitionPaths(context, table.getMetaClient().getBasePath(),
-        config.useFileListingMetadata(), config.getFileListingMetadataVerify(), false);
+    List<String> partitionPaths = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     if (partitionPaths != null && partitionPaths.size() > 0) {
       context.setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of all partitions");

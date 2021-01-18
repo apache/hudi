@@ -902,9 +902,8 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
 
   private HoodieTableMetadata metadata(SparkRDDWriteClient client) {
     HoodieWriteConfig clientConfig = client.getConfig();
-    return HoodieTableMetadata.create(client.getEngineContext(), clientConfig.getBasePath(),
-        clientConfig.getSpillableMapBasePath(), clientConfig.useFileListingMetadata(),
-        clientConfig.getFileListingMetadataVerify(), false, clientConfig.shouldAssumeDatePartitioning());
+    return HoodieTableMetadata.create(client.getEngineContext(), clientConfig.getMetadataConfig(), clientConfig.getBasePath(),
+        clientConfig.getSpillableMapBasePath());
   }
 
   // TODO: this can be moved to TestHarness after merge from master
@@ -931,7 +930,11 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
         .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
             .withEnableBackupForRemoteFileSystemView(false).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(useFileListingMetadata).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(useFileListingMetadata)
+            .enableReuse(false)
+            .enableMetrics(enableMetrics)
+            .enableFallback(false).build())
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(enableMetrics)
             .withExecutorMetrics(true).usePrefix("unit-test").build());
   }

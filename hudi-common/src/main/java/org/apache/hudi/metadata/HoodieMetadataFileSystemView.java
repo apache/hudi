@@ -23,11 +23,13 @@ import java.io.IOException;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.exception.HoodieException;
 
 /**
  * {@code HoodieTableFileSystemView} implementation that retrieved partition listings from the Metadata Table.
@@ -46,12 +48,10 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
   public HoodieMetadataFileSystemView(HoodieEngineContext engineContext,
                                       HoodieTableMetaClient metaClient,
                                       HoodieTimeline visibleActiveTimeline,
-                                      boolean useFileListingFromMetadata,
-                                      boolean verifyListings) {
+                                      HoodieMetadataConfig metadataConfig) {
     super(metaClient, visibleActiveTimeline);
-    this.tableMetadata = HoodieTableMetadata.create(engineContext, metaClient.getBasePath(),
-        FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR, useFileListingFromMetadata, verifyListings,
-        false, false);
+    this.tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, metaClient.getBasePath(),
+        FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR);
   }
 
   /**
@@ -63,5 +63,14 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
   @Override
   protected FileStatus[] listPartition(Path partitionPath) throws IOException {
     return tableMetadata.getAllFilesInPartition(partitionPath);
+  }
+
+  @Override
+  public void close() {
+    try {
+      tableMetadata.close();
+    } catch (Exception e) {
+      throw new HoodieException("Error closing metadata file system view.", e);
+    }
   }
 }

@@ -114,8 +114,10 @@ public class FileSystemViewManager {
    * Closes all views opened.
    */
   public void close() {
-    this.globalViewMap.values().forEach(SyncableFileSystemView::close);
-    this.globalViewMap.clear();
+    if (!this.globalViewMap.isEmpty()) {
+      this.globalViewMap.values().forEach(SyncableFileSystemView::close);
+      this.globalViewMap.clear();
+    }
   }
 
   // FACTORY METHODS FOR CREATING FILE-SYSTEM VIEWS
@@ -166,13 +168,12 @@ public class FileSystemViewManager {
   }
 
   public static HoodieTableFileSystemView createInMemoryFileSystemView(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient,
-                                                                       boolean useFileListingFromMetadata, boolean verifyListings) {
+                                                                       HoodieMetadataConfig metadataConfig) {
     LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePath());
-    if (useFileListingFromMetadata) {
+    if (metadataConfig.useFileListingMetadata()) {
       return new HoodieMetadataFileSystemView(engineContext, metaClient,
           metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
-          true,
-          verifyListings);
+          metadataConfig);
     }
     return new HoodieTableFileSystemView(metaClient,
         metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
@@ -206,9 +207,7 @@ public class FileSystemViewManager {
                                                         final FileSystemViewStorageConfig config,
                                                         final String basePath) {
     return createViewManager(context, metadataConfig, config,
-        () -> HoodieTableMetadata.create(context, basePath, config.getSpillableDir(),
-            metadataConfig.useFileListingMetadata(), metadataConfig.getFileListingMetadataVerify(),
-        metadataConfig.enableMetrics(), metadataConfig.shouldAssumeDatePartitioning()));
+        () -> HoodieTableMetadata.create(context, metadataConfig, basePath, config.getSpillableDir()));
   }
 
   /**

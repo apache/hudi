@@ -101,8 +101,7 @@ public class SparkHoodieGlobalSimpleIndex<T extends HoodieRecordPayload> extends
   protected List<Pair<String, HoodieBaseFile>> getAllBaseFilesInTable(final HoodieEngineContext context,
                                                                       final HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) {
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
-    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(context, metaClient.getBasePath(),
-        config.useFileListingMetadata(), config.getFileListingMetadataVerify(), config.shouldAssumeDatePartitioning());
+    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), metaClient.getBasePath());
     // Obtain the latest data files from all the partitions.
     return getLatestBaseFilesForAllPartitions(allPartitionPaths, context, hoodieTable);
   }

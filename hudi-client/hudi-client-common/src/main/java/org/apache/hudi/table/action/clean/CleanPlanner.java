@@ -196,8 +196,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
    */
   private List<String> getPartitionPathsForFullCleaning() {
     // Go to brute force mode of scanning all partitions
-    return FSUtils.getAllPartitionPaths(context, config.getBasePath(),
-        config.useFileListingMetadata(), config.getFileListingMetadataVerify(), config.shouldAssumeDatePartitioning());
+    return FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), config.getBasePath());
   }
 
   /**

@@ -29,6 +29,7 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
@@ -105,9 +106,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     this.config = config;
     this.hadoopConfiguration = context.getHadoopConf();
     this.context = context;
-    this.metadata = HoodieTableMetadata.create(context, config.getBasePath(), FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR,
-        config.getMetadataConfig().useFileListingMetadata(), config.getMetadataConfig().getFileListingMetadataVerify(),
-        config.getMetadataConfig().enableMetrics(), config.getMetadataConfig().shouldAssumeDatePartitioning());
+
+    // disable reuse of resources, given there is no close() called on the executors ultimately
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
+        .enableReuse(false).build();
+    this.metadata = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath(),
+        FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR);
+
     this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), () -> metadata);
     this.metaClient = metaClient;
     this.index = getIndex(config, context);

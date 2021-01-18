@@ -222,10 +222,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       if (this.metadata != null) {
         this.metadata.close();
       }
-      this.metadata = new HoodieBackedTableMetadata(engineContext, datasetWriteConfig.getBasePath(),
-          datasetWriteConfig.getSpillableMapBasePath(), datasetWriteConfig.useFileListingMetadata(),
-          datasetWriteConfig.getFileListingMetadataVerify(), false,
-          datasetWriteConfig.shouldAssumeDatePartitioning());
+      this.metadata = new HoodieBackedTableMetadata(engineContext, datasetWriteConfig.getMetadataConfig(),
+          datasetWriteConfig.getBasePath(), datasetWriteConfig.getSpillableMapBasePath());
       this.metaClient = metadata.getMetaClient();
     } catch (Exception e) {
       throw new HoodieException("Error initializing metadata table for reads", e);

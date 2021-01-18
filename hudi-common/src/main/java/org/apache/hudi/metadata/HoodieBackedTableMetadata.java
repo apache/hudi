@@ -20,6 +20,7 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
@@ -70,22 +71,20 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private String metadataBasePath;
   // Metadata table's timeline and metaclient
   private HoodieTableMetaClient metaClient;
-
   private List<FileSlice> latestFileSystemMetadataSlices;
 
   // Readers for the base and log file which store the metadata
   private transient HoodieFileReader<GenericRecord> baseFileReader;
   private transient HoodieMetadataMergedLogRecordScanner logRecordScanner;
 
-  public HoodieBackedTableMetadata(Configuration conf, String datasetBasePath, String spillableMapDirectory, boolean enabled,
-                                   boolean validateLookups, boolean assumeDatePartitioning) {
-    this(new HoodieLocalEngineContext(conf), datasetBasePath, spillableMapDirectory, enabled, validateLookups,
-        false, assumeDatePartitioning);
+  public HoodieBackedTableMetadata(Configuration conf, HoodieMetadataConfig metadataConfig,
+                                   String datasetBasePath, String spillableMapDirectory) {
+    this(new HoodieLocalEngineContext(conf), metadataConfig, datasetBasePath, spillableMapDirectory);
   }
 
-  public HoodieBackedTableMetadata(HoodieEngineContext engineContext, String datasetBasePath, String spillableMapDirectory,
-                                   boolean enabled, boolean validateLookups, boolean enableMetrics, boolean assumeDatePartitioning) {
-    super(engineContext, datasetBasePath, spillableMapDirectory, enabled, validateLookups, enableMetrics, assumeDatePartitioning);
+  public HoodieBackedTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
+                                   String datasetBasePath, String spillableMapDirectory) {
+    super(engineContext, metadataConfig, datasetBasePath, spillableMapDirectory);
     initIfNeeded();
   }
 
@@ -113,51 +112,62 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   @Override
   protected Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKeyFromMetadata(String key) {
     try {
-      openBaseAndLogFiles();
+      //TODO(metadata): remove the timers or turn them into good log statements.
+      HoodieTimer timer = new HoodieTimer().startTimer();
+      openFileSliceIfNeeded();
+
+      System.err.println(" >> Open took " + timer.endTimer());
+
+      timer.startTimer();
       // Retrieve record from base file
       HoodieRecord<HoodieMetadataPayload> hoodieRecord = null;
       if (baseFileReader != null) {
-        HoodieTimer timer = new HoodieTimer().startTimer();
+        HoodieTimer readTimer = new HoodieTimer().startTimer();
         Option<GenericRecord> baseRecord = baseFileReader.getRecordByKey(key);
         if (baseRecord.isPresent()) {
           hoodieRecord = SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(),
               metaClient.getTableConfig().getPayloadClass());
-          metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BASEFILE_READ_STR, timer.endTimer()));
+          metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BASEFILE_READ_STR, readTimer.endTimer()));
         }
       }
+      System.err.println(" >> Read of base file took " + timer.endTimer());
 
       // Retrieve record from log file
-      Option<HoodieRecord<HoodieMetadataPayload>> logHoodieRecord = logRecordScanner.getRecordByKey(key);
-      if (logHoodieRecord.isPresent()) {
-        if (hoodieRecord != null) {
-          // Merge the payloads
-          HoodieRecordPayload mergedPayload = logHoodieRecord.get().getData().preCombine(hoodieRecord.getData());
-          hoodieRecord = new HoodieRecord(hoodieRecord.getKey(), mergedPayload);
-        } else {
-          hoodieRecord = logHoodieRecord.get();
+      timer.startTimer();
+      if (logRecordScanner != null) {
+        Option<HoodieRecord<HoodieMetadataPayload>> logHoodieRecord = logRecordScanner.getRecordByKey(key);
+        if (logHoodieRecord.isPresent()) {
+          if (hoodieRecord != null) {
+            // Merge the payloads
+            HoodieRecordPayload mergedPayload = logHoodieRecord.get().getData().preCombine(hoodieRecord.getData());
+            hoodieRecord = new HoodieRecord(hoodieRecord.getKey(), mergedPayload);
+          } else {
+            hoodieRecord = logHoodieRecord.get();
+          }
         }
       }
-
+      System.err.println(" >> Read of merged/log file took " + timer.endTimer());
       return Option.ofNullable(hoodieRecord);
     } catch (IOException ioe) {
       throw new HoodieIOException("Error merging records from metadata table for key :" + key, ioe);
     } finally {
-      try {
-        close();
-      } catch (Exception e) {
-        throw new HoodieException("Error closing resources during metadata table merge, for key :" + key, e);
-      }
+      HoodieTimer timer = new HoodieTimer().startTimer();
+      closeIfNeeded();
+      System.err.println(" >> Close took " + timer.endTimer());
     }
   }
 
   /**
    * Open readers to the base and log files.
    */
-  private synchronized void openBaseAndLogFiles() throws IOException {
-
-    HoodieTimer timer = new HoodieTimer().startTimer();
+  private synchronized void openFileSliceIfNeeded() throws IOException {
+    if (metadataConfig.enableReuse() && baseFileReader != null) {
+      // we will reuse what's open.
+      return;
+    }
 
     // Metadata is in sync till the latest completed instant on the dataset
+    HoodieTimer timer = new HoodieTimer().startTimer();
     String latestInstantTime = getLatestDatasetInstantTime();
     ValidationUtils.checkArgument(latestFileSystemMetadataSlices.size() == 1, "must be at-least one validata metadata file slice");
 
@@ -189,6 +199,16 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     metrics.ifPresent(metrics -> metrics.updateMetrics(HoodieMetadataMetrics.SCAN_STR, timer.endTimer()));
   }
 
+  private void closeIfNeeded() {
+    try {
+      if (!metadataConfig.enableReuse()) {
+        close();
+      }
+    } catch (Exception e) {
+      throw new HoodieException("Error closing resources during metadata table merge", e);
+    }
+  }
+
   @Override
   public void close() throws Exception {
     if (baseFileReader != null) {
@@ -199,6 +219,12 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       logRecordScanner.close();
       logRecordScanner = null;
     }
+    //TODO(metadata): remove all this
+    /*    try {
+      throw new HoodieException("Metadata closed from here");
+    } catch (Exception e) {
+      LOG.warn("Metadata closed", e);
+    }*/
   }
 
   /**
