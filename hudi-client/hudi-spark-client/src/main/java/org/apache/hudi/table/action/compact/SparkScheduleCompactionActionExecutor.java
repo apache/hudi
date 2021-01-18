@@ -109,20 +109,28 @@ public class SparkScheduleCompactionActionExecutor<T extends HoodieRecordPayload
     boolean compactable;
     // return deltaCommitsSinceLastCompaction and lastCompactionTs
     Tuple2<Integer, String> threshold = checkCompact(compactType);
+    int inlineCompactDeltaCommitMax = config.getInlineCompactDeltaCommitMax();
+    int inlineCompactDeltaElapsedTimeMax = config.getInlineCompactDeltaElapsedTimeMax();
     switch (compactType) {
       case COMMIT_NUM:
-        compactable = config.getInlineCompactDeltaCommitMax() <= threshold._1;
+        compactable = inlineCompactDeltaCommitMax <= threshold._1;
+        LOG.info(String.format("Trigger compaction when commit_num >=%s", inlineCompactDeltaCommitMax));
         break;
       case TIME_ELAPSED:
-        compactable = parseToTimestamp(threshold._2) + config.getInlineCompactDeltaElapsedTimeMax() <= parseToTimestamp(instantTime);
+        compactable = parseToTimestamp(threshold._2) + inlineCompactDeltaElapsedTimeMax <= parseToTimestamp(instantTime);
+        LOG.info(String.format("Trigger compaction when elapsed_time >=%ss", inlineCompactDeltaElapsedTimeMax));
         break;
       case NUM_OR_TIME:
-        compactable = config.getInlineCompactDeltaCommitMax() <= threshold._1
-            || parseToTimestamp(threshold._2) + config.getInlineCompactDeltaElapsedTimeMax() <= parseToTimestamp(instantTime);
+        compactable = inlineCompactDeltaCommitMax <= threshold._1
+            || parseToTimestamp(threshold._2) + inlineCompactDeltaElapsedTimeMax <= parseToTimestamp(instantTime);
+        LOG.info(String.format("Trigger compaction when commit_num >=%s or elapsed_time >=%ss", inlineCompactDeltaCommitMax,
+                inlineCompactDeltaElapsedTimeMax));
         break;
       case NUM_AND_TIME:
-        compactable = config.getInlineCompactDeltaCommitMax() <= threshold._1
-            && parseToTimestamp(threshold._2) + config.getInlineCompactDeltaElapsedTimeMax() <= parseToTimestamp(instantTime);
+        compactable = inlineCompactDeltaCommitMax <= threshold._1
+            && parseToTimestamp(threshold._2) + inlineCompactDeltaElapsedTimeMax <= parseToTimestamp(instantTime);
+        LOG.info(String.format("Trigger compaction when commit_num >=%s and elapsed_time >=%ss", inlineCompactDeltaCommitMax,
+                inlineCompactDeltaElapsedTimeMax));
         break;
       default:
         throw new HoodieCompactionException("Unsupported compact type: " + config.getInlineCompactType());
