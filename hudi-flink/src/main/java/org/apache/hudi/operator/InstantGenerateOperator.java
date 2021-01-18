@@ -128,18 +128,17 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
     super.prepareSnapshotPreBarrier(checkpointId);
     String instantMarkerFileName = String.format("%d%s%d%s%d", indexOfThisSubtask, DELIMITER, checkpointId, DELIMITER, recordCounter.get());
     Path path = new Path(new Path(HoodieTableMetaClient.AUXILIARYFOLDER_NAME, INSTANT_MARKER_FOLDER_NAME), instantMarkerFileName);
-    // mk generate file by each subtask
+    // mk marker file by each subtask
     fs.create(path, true);
-    LOG.info("Subtask [{}] at checkpoint [{}] created generate file [{}]", indexOfThisSubtask, checkpointId, instantMarkerFileName);
+    LOG.info("Subtask [{}] at checkpoint [{}] created marker file [{}]", indexOfThisSubtask, checkpointId, instantMarkerFileName);
     if (isMain) {
-      boolean receivedDataInCurrentCP = checkReceivedData(checkpointId);
       // check whether the last instant is completed, if not, wait 10s and then throws an exception
       if (!StringUtils.isNullOrEmpty(latestInstant)) {
         doCheck();
         // last instant completed, set it empty
         latestInstant = "";
       }
-
+      boolean receivedDataInCurrentCP = checkReceivedData(checkpointId);
       // no data no new instant
       if (receivedDataInCurrentCP) {
         latestInstant = startNewInstant(checkpointId);
@@ -265,7 +264,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       }
 
       if (tryTimes >= 5) {
-        LOG.warn("waiting generate file, checkpointId [{}]", checkpointId);
+        LOG.warn("waiting marker file, checkpointId [{}]", checkpointId);
         tryTimes = 0;
       }
       tryTimes++;
