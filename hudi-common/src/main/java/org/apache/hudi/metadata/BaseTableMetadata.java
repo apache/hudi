@@ -202,7 +202,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
         throw new HoodieMetadataException("Metadata record for partition " + partitionName + " is inconsistent: "
             + hoodieRecord.get().getData());
       }
-      statuses = hoodieRecord.get().getData().getFileStatuses(partitionPath);
+      statuses = hoodieRecord.get().getData().getFileStatuses(hadoopConf.get(), partitionPath);
     }
 
     if (validateLookups) {

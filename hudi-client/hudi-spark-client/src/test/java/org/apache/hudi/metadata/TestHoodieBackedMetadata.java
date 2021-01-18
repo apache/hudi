@@ -801,6 +801,14 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
         // File sizes should be valid
         Arrays.stream(metaStatuses).forEach(s -> assertTrue(s.getLen() > 0));
 
+        // Block sizes should be valid
+        Arrays.stream(metaStatuses).forEach(s -> assertTrue(s.getBlockSize() > 0));
+        List<Long> fsBlockSizes = Arrays.stream(fsStatuses).map(FileStatus::getBlockSize).collect(Collectors.toList());
+        Collections.sort(fsBlockSizes);
+        List<Long> metadataBlockSizes = Arrays.stream(metaStatuses).map(FileStatus::getBlockSize).collect(Collectors.toList());
+        Collections.sort(metadataBlockSizes);
+        assertEquals(fsBlockSizes, metadataBlockSizes);
+
         if ((fsFileNames.size() != metadataFilenames.size()) || (!fsFileNames.equals(metadataFilenames))) {
           LOG.info("*** File system listing = " + Arrays.toString(fsFileNames.toArray()));
           LOG.info("*** Metadata listing = " + Arrays.toString(metadataFilenames.toArray()));
