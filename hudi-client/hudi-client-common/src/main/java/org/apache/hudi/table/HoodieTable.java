@@ -29,9 +29,10 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
-import org.apache.hudi.client.common.TaskContextSupplier;
-import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
@@ -93,6 +94,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
 
   protected final HoodieWriteConfig config;
   protected final HoodieTableMetaClient metaClient;
+  protected final transient HoodieEngineContext context;
   protected final HoodieIndex<T, I, K, O> index;
 
   private SerializableConfiguration hadoopConfiguration;
@@ -108,6 +110,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
         config.getViewStorageConfig());
     this.metaClient = metaClient;
     this.index = getIndex(config, context);
+    this.context = context;
     this.taskContextSupplier = context.getTaskContextSupplier();
   }
 
@@ -660,8 +663,16 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
 
   public HoodieTableMetadata metadata() {
     if (metadata == null) {
-      metadata = HoodieTableMetadata.create(hadoopConfiguration.get(), config.getBasePath(), config.getSpillableMapBasePath(),
-          config.useFileListingMetadata(), config.getFileListingMetadataVerify(), config.isMetricsOn(), config.shouldAssumeDatePartitioning());
+      HoodieEngineContext engineContext = context;
+      if (engineContext == null) {
+        // This is to handle scenarios where this is called at the executor tasks which do not have access
+        // to engine context, and it ends up being null (as its not serializable and marked transient here).
+        engineContext = new HoodieLocalEngineContext(hadoopConfiguration.get());
+      }
+
+      metadata = HoodieTableMetadata.create(engineContext, config.getBasePath(), config.getSpillableMapBasePath(),
+          config.useFileListingMetadata(), config.getFileListingMetadataVerify(), config.isMetricsOn(),
+          config.shouldAssumeDatePartitioning());
     }
     return metadata;
   }

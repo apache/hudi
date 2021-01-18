@@ -21,14 +21,17 @@ package org.apache.hudi.common.table.timeline;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -64,6 +67,17 @@ public class TimelineUtils {
             return commitMetadata.getPartitionToWriteStats().keySet().stream();
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get partitions written at " + s, e);
+          } 
+        case HoodieTimeline.REPLACE_COMMIT_ACTION:
+          try {
+            HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
+                timeline.getInstantDetails(s).get(), HoodieReplaceCommitMetadata.class);
+            Set<String> partitions = new HashSet<>();
+            partitions.addAll(commitMetadata.getPartitionToReplaceFileIds().keySet());
+            partitions.addAll(commitMetadata.getPartitionToWriteStats().keySet());
+            return partitions.stream();
+          } catch (IOException e) {
+            throw new HoodieIOException("Failed to get partitions modified at " + s, e);
           }
         case HoodieTimeline.CLEAN_ACTION:
           try {

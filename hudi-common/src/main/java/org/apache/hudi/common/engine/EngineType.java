@@ -16,18 +16,11 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.common;
+package org.apache.hudi.common.engine;
 
 /**
- * Properties specific to each engine, that can be set/obtained from.
+ * Hoodie data processing engine. support only Apache Spark and Apache Flink for now.
  */
-public enum EngineProperty {
-  // hostname to bind embedded timeline server to
-  EMBEDDED_SERVER_HOST,
-  // Pool/queue to use to run compaction.
-  COMPACTION_POOL_NAME,
-  // Amount of total memory available to each engine executor
-  TOTAL_MEMORY_AVAILABLE,
-  // Fraction of that memory, that is already in use by the engine
-  MEMORY_FRACTION_IN_USE,
+public enum EngineType {
+  SPARK, FLINK
 }

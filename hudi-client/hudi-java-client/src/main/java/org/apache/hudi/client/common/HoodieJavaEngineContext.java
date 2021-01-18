@@ -19,10 +19,13 @@
 package org.apache.hudi.client.common;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hudi.client.common.function.SerializableConsumer;
-import org.apache.hudi.client.common.function.SerializableFunction;
-import org.apache.hudi.client.common.function.SerializablePairFunction;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.engine.EngineProperty;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.function.SerializableConsumer;
+import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.hudi.common.util.collection.Pair;
@@ -33,10 +36,10 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.toList;
-import static org.apache.hudi.client.common.function.FunctionWrapper.throwingFlatMapWrapper;
-import static org.apache.hudi.client.common.function.FunctionWrapper.throwingForeachWrapper;
-import static org.apache.hudi.client.common.function.FunctionWrapper.throwingMapToPairWrapper;
-import static org.apache.hudi.client.common.function.FunctionWrapper.throwingMapWrapper;
+import static org.apache.hudi.common.function.FunctionWrapper.throwingFlatMapWrapper;
+import static org.apache.hudi.common.function.FunctionWrapper.throwingForeachWrapper;
+import static org.apache.hudi.common.function.FunctionWrapper.throwingMapToPairWrapper;
+import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper;
 
 /**
  * A java engine implementation of HoodieEngineContext.

@@ -16,11 +16,30 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.common;
+package org.apache.hudi.common.engine;
 
-/**
- * Hoodie data processing engine. support only Apache Spark and Apache Flink for now.
- */
-public enum EngineType {
-  SPARK, FLINK
+import org.apache.hudi.common.util.Option;
+
+import java.util.function.Supplier;
+
+public final class LocalTaskContextSupplier extends TaskContextSupplier {
+  @Override
+  public Supplier<Integer> getPartitionIdSupplier() {
+    return () -> 0;
+  }
+
+  @Override
+  public Supplier<Integer> getStageIdSupplier() {
+    return () -> 0;
+  }
+
+  @Override
+  public Supplier<Long> getAttemptIdSupplier() {
+    return () -> 0L;
+  }
+
+  @Override
+  public Option<String> getProperty(EngineProperty prop) {
+    return Option.empty();
+  }
 }

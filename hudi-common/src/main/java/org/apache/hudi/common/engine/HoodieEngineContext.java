@@ -16,12 +16,12 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.common;
+package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
-import org.apache.hudi.client.common.function.SerializableConsumer;
-import org.apache.hudi.client.common.function.SerializableFunction;
-import org.apache.hudi.client.common.function.SerializablePairFunction;
+import org.apache.hudi.common.function.SerializableConsumer;
+import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
 
 import java.util.List;

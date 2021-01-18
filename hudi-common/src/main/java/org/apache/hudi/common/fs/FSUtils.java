@@ -19,6 +19,7 @@
 package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -44,6 +45,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -252,13 +254,14 @@ public class FSUtils {
     }
   }
 
-  public static List<String> getAllPartitionPaths(FileSystem fs, String basePathStr, boolean useFileListingFromMetadata, boolean verifyListings,
+  public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext, FileSystem fs, String basePathStr,
+                                                  boolean useFileListingFromMetadata, boolean verifyListings,
                                                   boolean assumeDatePartitioning) throws IOException {
     if (assumeDatePartitioning) {
       return getAllPartitionFoldersThreeLevelsDown(fs, basePathStr);
     } else {
-      HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(fs.getConf(), basePathStr, "/tmp/", useFileListingFromMetadata,
-          verifyListings, false, false);
+      HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, basePathStr, "/tmp/",
+          useFileListingFromMetadata, verifyListings, false, false);
       return tableMetadata.getAllPartitionPaths();
     }
   }
@@ -424,10 +427,14 @@ public class FSUtils {
    */
   public static Stream<HoodieLogFile> getAllLogFiles(FileSystem fs, Path partitionPath, final String fileId,
       final String logFileExtension, final String baseCommitTime) throws IOException {
-    return Arrays
-        .stream(fs.listStatus(partitionPath,
-            path -> path.getName().startsWith("." + fileId) && path.getName().contains(logFileExtension)))
-        .map(HoodieLogFile::new).filter(s -> s.getBaseCommitTime().equals(baseCommitTime));
+    try {
+      return Arrays
+          .stream(fs.listStatus(partitionPath,
+              path -> path.getName().startsWith("." + fileId) && path.getName().contains(logFileExtension)))
+          .map(HoodieLogFile::new).filter(s -> s.getBaseCommitTime().equals(baseCommitTime));
+    } catch (FileNotFoundException e) {
+      return Stream.<HoodieLogFile>builder().build();
+    }
   }
 
   /**

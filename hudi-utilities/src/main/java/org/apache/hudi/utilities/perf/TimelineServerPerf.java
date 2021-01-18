@@ -18,9 +18,9 @@
 
 package org.apache.hudi.utilities.perf;
 
-import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -85,13 +85,14 @@ public class TimelineServerPerf implements Serializable {
   }
 
   public void run() throws IOException {
-
-    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(timelineServer.getFs(), cfg.basePath, cfg.useFileListingFromMetadata,
-        cfg.verifyMetadataFileListing, true);
+    JavaSparkContext jsc = UtilHelpers.buildSparkContext("hudi-view-perf-" + cfg.basePath, cfg.sparkMaster);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(engineContext, timelineServer.getFs(), cfg.basePath,
+        cfg.useFileListingFromMetadata, cfg.verifyMetadataFileListing, true);
     Collections.shuffle(allPartitionPaths);
     List<String> selected = allPartitionPaths.stream().filter(p -> !p.contains("error")).limit(cfg.maxPartitions)
         .collect(Collectors.toList());
-    JavaSparkContext jsc = UtilHelpers.buildSparkContext("hudi-view-perf-" + cfg.basePath, cfg.sparkMaster);
+
     if (!useExternalTimelineServer) {
       this.timelineServer.startService();
       setHostAddrFromSparkConf(jsc.getConf());

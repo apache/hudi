@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Functions.Function2;
@@ -159,12 +160,11 @@ public class FileSystemViewManager {
     return new HoodieTableFileSystemView(metaClient, timeline, viewConf.isIncrementalTimelineSyncEnabled());
   }
 
-  public static HoodieTableFileSystemView createInMemoryFileSystemView(HoodieTableMetaClient metaClient,
-                                                                       boolean useFileListingFromMetadata,
-                                                                       boolean verifyListings) {
+  public static HoodieTableFileSystemView createInMemoryFileSystemView(HoodieEngineContext engineContext,
+      HoodieTableMetaClient metaClient, boolean useFileListingFromMetadata, boolean verifyListings) {
     LOG.info("Creating InMemory based view for basePath " + metaClient.getBasePath());
     if (useFileListingFromMetadata) {
-      return new HoodieMetadataFileSystemView(metaClient,
+      return new HoodieMetadataFileSystemView(engineContext, metaClient,
           metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(),
           true,
           verifyListings);

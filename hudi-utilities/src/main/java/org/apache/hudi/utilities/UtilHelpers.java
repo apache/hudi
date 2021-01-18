@@ -428,4 +428,22 @@ public class UtilHelpers {
     SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
     return wrapSchemaProviderWithPostProcessor(rowSchemaProvider, cfg, jssc, null);
   }
+
+  @FunctionalInterface
+  public interface CheckedSupplier<T> {
+    T get() throws Throwable;
+  }
+
+  public static int retry(int maxRetryCount, CheckedSupplier<Integer> supplier, String errorMessage) {
+    int ret = -1;
+    try {
+      do {
+        ret = supplier.get();
+      } while (ret != 0 && maxRetryCount-- > 0);
+    } catch (Throwable t) {
+      LOG.error(errorMessage, t);
+    }
+    return ret;
+  }
+
 }

@@ -18,11 +18,13 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -426,8 +428,9 @@ public class HoodieInputFormatUtils {
 
     boolean useFileListingFromMetadata = job.getBoolean(METADATA_ENABLE_PROP, DEFAULT_METADATA_ENABLE_FOR_READERS);
     boolean verifyFileListing = job.getBoolean(METADATA_VALIDATE_PROP, DEFAULT_METADATA_VALIDATE);
-    HoodieTableFileSystemView fsView = FileSystemViewManager.createInMemoryFileSystemView(metaClient,
-            useFileListingFromMetadata, verifyFileListing);
+    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(job);
+    HoodieTableFileSystemView fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
+        metaClient, useFileListingFromMetadata, verifyFileListing);
 
     List<HoodieBaseFile> filteredBaseFiles = new ArrayList<>();
     for (Path p : paths) {
@@ -470,4 +473,44 @@ public class HoodieInputFormatUtils {
     }
   }
 
+  /**
+   * Iterate through a list of commits in ascending order, and extract the file status of
+   * all affected files from the commits metadata grouping by partition path. If the files has
+   * been touched multiple times in the given commits, the return value will keep the one
+   * from the latest commit.
+   * @param basePath
+   * @param commitsToCheck
+   * @param timeline
+   * @return HashMap<partitionPath, HashMap<fileName, FileStatus>>
+   * @throws IOException
+   */
+  public static HashMap<String, HashMap<String, FileStatus>> listAffectedFilesForCommits(
+      Path basePath, List<HoodieInstant> commitsToCheck, HoodieTimeline timeline) throws IOException {
+    // TODO: Use HoodieMetaTable to extract affected file directly.
+    HashMap<String, HashMap<String, FileStatus>> partitionToFileStatusesMap = new HashMap<>();
+    List<HoodieInstant> sortedCommitsToCheck = new ArrayList<>(commitsToCheck);
+    sortedCommitsToCheck.sort(HoodieInstant::compareTo);
+    // Iterate through the given commits.
+    for (HoodieInstant commit: sortedCommitsToCheck) {
+      HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get(),
+          HoodieCommitMetadata.class);
+      // Iterate through all the affected partitions of a commit.
+      for (Map.Entry<String, List<HoodieWriteStat>> entry: commitMetadata.getPartitionToWriteStats().entrySet()) {
+        if (!partitionToFileStatusesMap.containsKey(entry.getKey())) {
+          partitionToFileStatusesMap.put(entry.getKey(), new HashMap<>());
+        }
+        // Iterate through all the written files of this partition.
+        for (HoodieWriteStat stat : entry.getValue()) {
+          String relativeFilePath = stat.getPath();
+          Path fullPath = relativeFilePath != null ? FSUtils.getPartitionPath(basePath, relativeFilePath) : null;
+          if (fullPath != null) {
+            FileStatus fs = new FileStatus(stat.getFileSizeInBytes(), false, 0, 0,
+                0, fullPath);
+            partitionToFileStatusesMap.get(entry.getKey()).put(fullPath.getName(), fs);
+          }
+        }
+      }
+    }
+    return partitionToFileStatusesMap;
+  }
 }

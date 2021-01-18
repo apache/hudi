@@ -18,13 +18,13 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -33,6 +33,8 @@ import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
+
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -43,6 +45,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.metadata.HoodieTableMetadata.NON_PARTITIONED_NAME;
@@ -91,6 +94,12 @@ public class HoodieTableMetadataUtil {
         break;
       case HoodieTimeline.SAVEPOINT_ACTION:
         // Nothing to be done here
+        break;
+      case HoodieTimeline.REPLACE_COMMIT_ACTION:
+        HoodieReplaceCommitMetadata replaceMetadata = HoodieReplaceCommitMetadata.fromBytes(
+            timeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+        // Note: we only add new files created here. Replaced files are removed from metadata later by cleaner.
+        records = Option.of(convertMetadataToRecords(replaceMetadata, instant.getTimestamp()));
         break;
       default:
         throw new HoodieException("Unknown type of action " + instant.getAction());
@@ -239,12 +248,13 @@ public class HoodieTableMetadataUtil {
 
     rollbackMetadata.getPartitionMetadata().values().forEach(pm -> {
       // Has this rollback produced new files?
-      boolean hasAppendFiles = pm.getAppendFiles().values().stream().mapToLong(Long::longValue).sum() > 0;
+      boolean hasRollbackLogFiles = pm.getRollbackLogFiles() != null && !pm.getRollbackLogFiles().isEmpty();
+      boolean hasNonZeroRollbackLogFiles = hasRollbackLogFiles && pm.getRollbackLogFiles().values().stream().mapToLong(Long::longValue).sum() > 0;
       // If commit being rolled back has not been synced to metadata table yet then there is no need to update metadata
       boolean shouldSkip = lastSyncTs.isPresent()
           && HoodieTimeline.compareTimestamps(rollbackMetadata.getCommitsRollback().get(0), HoodieTimeline.GREATER_THAN, lastSyncTs.get());
 
-      if (!hasAppendFiles && shouldSkip) {
+      if (!hasNonZeroRollbackLogFiles && shouldSkip) {
         LOG.info(String.format("Skipping syncing of rollbackMetadata at %s, given metadata table is already synced upto to %s",
             rollbackMetadata.getCommitsRollback().get(0), lastSyncTs.get()));
         return;
@@ -262,16 +272,31 @@ public class HoodieTableMetadataUtil {
         partitionToDeletedFiles.get(partition).addAll(deletedFiles);
       }
 
-      if (!pm.getAppendFiles().isEmpty()) {
+      BiFunction<Long, Long, Long> fileMergeFn = (oldSize, newSizeCopy) -> {
+        // if a file exists in both written log files and rollback log files, we want to pick the one that is higher
+        // as rollback file could have been updated after written log files are computed.
+        return oldSize > newSizeCopy ? oldSize : newSizeCopy;
+      };
+
+      if (hasRollbackLogFiles) {
         if (!partitionToAppendedFiles.containsKey(partition)) {
           partitionToAppendedFiles.put(partition, new HashMap<>());
         }
 
         // Extract appended file name from the absolute paths saved in getAppendFiles()
-        pm.getAppendFiles().forEach((path, size) -> {
-          partitionToAppendedFiles.get(partition).merge(new Path(path).getName(), size, (oldSize, newSizeCopy) -> {
-            return size + oldSize;
-          });
+        pm.getRollbackLogFiles().forEach((path, size) -> {
+          partitionToAppendedFiles.get(partition).merge(new Path(path).getName(), size, fileMergeFn);
+        });
+      }
+
+      if (pm.getWrittenLogFiles() != null && !pm.getWrittenLogFiles().isEmpty()) {
+        if (!partitionToAppendedFiles.containsKey(partition)) {
+          partitionToAppendedFiles.put(partition, new HashMap<>());
+        }
+
+        // Extract appended file name from the absolute paths saved in getWrittenLogFiles()
+        pm.getWrittenLogFiles().forEach((path, size) -> {
+          partitionToAppendedFiles.get(partition).merge(new Path(path).getName(), size, fileMergeFn);
         });
       }
     });

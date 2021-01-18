@@ -152,7 +152,18 @@ public class TableSchemaResolver {
    * @throws Exception
    */
   public Schema getTableAvroSchema() throws Exception {
-    Option<Schema> schemaFromCommitMetadata = getTableSchemaFromCommitMetadata(true);
+    return getTableAvroSchema(true);
+  }
+
+  /**
+   * Gets schema for a hoodie table in Avro format, can choice if include metadata fields.
+   *
+   * @param includeMetadataFields choice if include metadata fields
+   * @return Avro schema for this table
+   * @throws Exception
+   */
+  public Schema getTableAvroSchema(boolean includeMetadataFields) throws Exception {
+    Option<Schema> schemaFromCommitMetadata = getTableSchemaFromCommitMetadata(includeMetadataFields);
     return schemaFromCommitMetadata.isPresent() ? schemaFromCommitMetadata.get() : getTableAvroSchemaFromDataFile();
   }
 
