@@ -58,6 +58,7 @@ import java.util.Objects;
 public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   public static final int DEFAULT_BUFFER_SIZE = 16 * 1024 * 1024; // 16 MB
+  private static final int BLOCK_SCAN_READ_BUFFER_SIZE = 1024 * 1024; // 1 MB
   private static final Logger LOG = LogManager.getLogger(HoodieLogFileReader.class);
 
   private final FSDataInputStream inputStream;
@@ -74,14 +75,13 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
                              boolean readBlockLazily, boolean reverseReader) throws IOException {
     FSDataInputStream fsDataInputStream = fs.open(logFile.getPath(), bufferSize);
-    if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
-      this.inputStream = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
-          new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
-    } else if (fsDataInputStream.getWrappedStream() instanceof FSDataInputStream
-        && ((FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream() instanceof FSInputStream) {
+    if (FSUtils.isGCSInputStream(fsDataInputStream)) {
       this.inputStream = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
           new BufferedFSInputStream((FSInputStream) ((
               (FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream()), bufferSize)));
+    } else if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
+      this.inputStream = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
+          new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
     } else {
       // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream
       // need to wrap in another BufferedFSInputStream the make bufferSize work?
@@ -281,9 +281,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   private long scanForNextAvailableBlockOffset() throws IOException {
     // Make buffer large enough to scan through the file as quick as possible especially if it is on S3/GCS.
-    // Using lower buffer is incurring a lot of API calls thus drastically increasing the cost of the storage
-    // and also may take days to complete scanning trough the large files.
-    byte[] dataBuf = new byte[1024 * 1024];
+    byte[] dataBuf = new byte[BLOCK_SCAN_READ_BUFFER_SIZE];
     boolean eof = false;
     while (true) {
       long currentPos = inputStream.getPos();
