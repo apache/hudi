@@ -36,8 +36,26 @@ import java.util.Iterator;
 import java.util.Map;
 
 /**
- * Handle to concatenate new records to old records w/o any merging. If Operation is set to Inserts, and if {{@link HoodieWriteConfig#isRouteInsertsToNewFiles()}}
+ * Handle to concatenate new records to old records w/o any merging. If Operation is set to Inserts, and if {{@link HoodieWriteConfig#isMergeAllowDuplicateInserts()}}
  * is set, this handle will be used instead of {@link HoodieMergeHandle}
+ * Simplified Logic:
+ * For every existing record
+ *     Write the record as is
+ * For all incoming records, write to file as is.
+ *
+ * Illustration with simple data.
+ * Incoming data:
+ *     rec1_2, rec4_2, rec5_1, rec6_1
+ * Existing data:
+ *     rec1_1, rec2_1, rec3_1, rec4_1
+ *
+ * For every existing record, merge w/ incoming if requried and write to storage.
+ *    => rec1_1, rec2_1, rec3_1 and rec4_1 is written to storage
+ * Write all records from incoming set to storage
+ *    => rec1_2, rec4_2, rec5_1 and rec6_1
+ *
+ * Final snapshot in storage
+ * rec1_1, rec2_1, rec3_1, rec4_1, rec1_2, rec4_2, rec5_1, rec6_1
  */
 public class HoodieConcatHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
 

@@ -321,7 +321,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
     if (table.requireSortedRecords()) {
       return new HoodieSortedMergeHandle<>(config, instantTime, (HoodieSparkTable) table, recordItr, partitionPath, fileId, taskContextSupplier);
-    } else if (!WriteOperationType.isChangingRecords(operationType) && config.isRouteInsertsToNewFiles()) {
+    } else if (!WriteOperationType.isChangingRecords(operationType) && config.isMergeAllowDuplicateInserts()) {
       return new HoodieConcatHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier);
     } else {
       return new HoodieMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier);

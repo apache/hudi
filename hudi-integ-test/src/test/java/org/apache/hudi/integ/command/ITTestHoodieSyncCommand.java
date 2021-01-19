@@ -51,9 +51,8 @@ public class ITTestHoodieSyncCommand extends HoodieTestHiveBase {
     TestExecStartResultCallback result =
         executeCommandStringInDocker(ADHOC_1_CONTAINER, HUDI_CLI_TOOL + " --cmdfile " + SYNC_VALIDATE_COMMANDS, true);
 
-    // When using insert operation, the new inserts are created by the small file, which cause the count of new inserts is only 100.
     String expected = String.format("Count difference now is (count(%s) - count(%s) == %d. Catch up count is %d",
-        hiveTableName, hiveTableName2, 100, 100);
+        hiveTableName, hiveTableName2, 100, 200);
     assertTrue(result.getStderr().toString().contains(expected));
 
     dropHiveTables(hiveTableName, HoodieTableType.COPY_ON_WRITE.name());

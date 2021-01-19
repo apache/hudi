@@ -374,7 +374,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // Now simulate an upgrade and perform a restore operation
     HoodieWriteConfig newConfig = getConfigBuilder()
-        .withRouteInsertsToNewFiles(true)
+        .withMergeAllowDuplicateInserts(true)
         .withProps(config.getProps()).withTimelineLayoutVersion(
         TimelineLayoutVersion.CURR_VERSION).build();
     client = getHoodieWriteClient(newConfig, false);
@@ -461,7 +461,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   /**
-   * Test Insert API for HoodieConcatHandle
+   * Test Insert API for HoodieConcatHandle.
    */
   @Test
   public void testInsertsWithHoodieConcatHandle() throws Exception {
@@ -485,9 +485,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   private void testHoodieConcatHandle(HoodieWriteConfig config, boolean isPrepped)
       throws Exception {
     // Force using older timeline layout
-    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder().withRouteInsertsToNewFiles(true)
-        .withProps(config.getProps()).withTimelineLayoutVersion(
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()
+        .withProps(config.getProps()).withMergeAllowDuplicateInserts(true).withTimelineLayoutVersion(
             VERSION_0).build();
+
+    System.out.println(" allow merge" + hoodieWriteConfig.isMergeAllowDuplicateInserts());
+
     HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(), metaClient.getTableType(),
         metaClient.getTableConfig().getTableName(), metaClient.getArchivePath(),
         metaClient.getTableConfig().getPayloadClass(), VERSION_0);
@@ -514,9 +517,9 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         2);
   }
 
-    /**
-     * Tesst deletion of records.
-     */
+  /**
+   * Tests deletion of records.
+   */
   @Test
   public void testDeletes() throws Exception {
     SparkRDDWriteClient client = getHoodieWriteClient(getConfig(), false);
@@ -1767,7 +1770,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             HoodieStorageConfig.newBuilder()
                 .hfileMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200))
                 .parquetMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200)).build())
-        .withRouteInsertsToNewFiles(routeInsertsToNewFiles)
+        .withMergeAllowDuplicateInserts(routeInsertsToNewFiles)
         .withProps(props)
         .build();
   }

@@ -129,15 +129,6 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
     return bucket;
   }
 
-  private void addInsertBucket(String partitionPath) {
-    BucketInfo bucketInfo = new BucketInfo();
-    bucketInfo.bucketType = BucketType.INSERT;
-    bucketInfo.fileIdPrefix = FSUtils.createNewFileIdPfx();
-    bucketInfo.partitionPath = partitionPath;
-    bucketInfoMap.put(totalBuckets, bucketInfo);
-    totalBuckets++;
-  }
-
   /**
    * Get the in pending clustering fileId for each partition path.
    * @return partition path to pending clustering file groups id
@@ -200,7 +191,8 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
           long recordsToAppend = Math.min((config.getParquetMaxFileSize() - smallFile.sizeBytes) / averageRecordSize,
               totalUnassignedInserts);
           if (recordsToAppend > 0 && totalUnassignedInserts > 0) {
-            int bucket;// create a new bucket or re-use an existing bucket
+            // create a new bucket or re-use an existing bucket
+            int bucket;
             if (updateLocationToBucket.containsKey(smallFile.location.getFileId())) {
               bucket = updateLocationToBucket.get(smallFile.location.getFileId());
               LOG.info("Assigning " + recordsToAppend + " inserts to existing update bucket " + bucket);
@@ -231,7 +223,12 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
             } else {
               recordsPerBucket.add(totalUnassignedInserts - (insertBuckets - 1) * insertRecordsPerBucket);
             }
-            addInsertBucket(partitionPath);
+            BucketInfo bucketInfo = new BucketInfo();
+            bucketInfo.bucketType = BucketType.INSERT;
+            bucketInfo.partitionPath = partitionPath;
+            bucketInfo.fileIdPrefix = FSUtils.createNewFileIdPfx();
+            bucketInfoMap.put(totalBuckets, bucketInfo);
+            totalBuckets++;
           }
         }
 
