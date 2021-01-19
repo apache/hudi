@@ -169,7 +169,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder withInlineCompactionType(CompactionTriggerStrategy compactionTriggerStrategy) {
+    public Builder withInlineCompactionTriggerStrategy(CompactionTriggerStrategy compactionTriggerStrategy) {
       props.setProperty(INLINE_COMPACT_TRIGGER_STRATEGY_PROP, compactionTriggerStrategy.name());
       return this;
     }

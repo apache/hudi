@@ -44,7 +44,7 @@ public class TestInlineCompaction extends CompactionTestBase {
             .withInlineCompaction(true)
             .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommits)
             .withMaxDeltaTimeBeforeCompaction(maxDeltaTime)
-            .withInlineCompactionType(inlineCompactionType).build())
+            .withInlineCompactionTriggerStrategy(inlineCompactionType).build())
         .build();
   }
 
@@ -203,7 +203,7 @@ public class TestInlineCompaction extends CompactionTestBase {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(false)
             .withMaxDeltaTimeBeforeCompaction(5)
-            .withInlineCompactionType(CompactionTriggerStrategy.TIME_ELAPSED).build())
+            .withInlineCompactionTriggerStrategy(CompactionTriggerStrategy.TIME_ELAPSED).build())
         .build();
     String instantTime;
     List<String> instants = IntStream.range(0, 2).mapToObj(i -> HoodieActiveTimeline.createNewInstantTime()).collect(Collectors.toList());
@@ -241,7 +241,7 @@ public class TestInlineCompaction extends CompactionTestBase {
             .withInlineCompaction(false)
             .withMaxDeltaTimeBeforeCompaction(1)
             .withMaxNumDeltaCommitsBeforeCompaction(1)
-            .withInlineCompactionType(CompactionTriggerStrategy.NUM_AND_TIME).build())
+            .withInlineCompactionTriggerStrategy(CompactionTriggerStrategy.NUM_AND_TIME).build())
         .build();
     String instantTime;
     List<String> instants = IntStream.range(0, 2).mapToObj(i -> HoodieActiveTimeline.createNewInstantTime()).collect(Collectors.toList());
