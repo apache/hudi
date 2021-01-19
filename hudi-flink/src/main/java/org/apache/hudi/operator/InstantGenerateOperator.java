@@ -247,7 +247,6 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
     int numberOfParallelSubtasks = runtimeContext.getNumberOfParallelSubtasks();
     FileStatus[] fileStatuses;
     Path instantMarkerPath = new Path(HoodieTableMetaClient.AUXILIARYFOLDER_NAME, INSTANT_MARKER_FOLDER_NAME);
-    int tryTimes = 1;
     // waiting all subtask create marker file ready
     while (true) {
       Thread.sleep(500L);
@@ -262,12 +261,6 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       if (fileStatuses != null && fileStatuses.length == numberOfParallelSubtasks) {
         break;
       }
-
-      if (tryTimes >= 5) {
-        LOG.warn("waiting marker file, checkpointId [{}]", checkpointId);
-        tryTimes = 0;
-      }
-      tryTimes++;
     }
 
     boolean receivedData = false;
@@ -283,10 +276,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
     }
 
     // delete all marker file
-    fileStatuses = fs.listStatus(instantMarkerPath);
-    for (FileStatus fileStatus : fileStatuses) {
-      fs.delete(fileStatus.getPath(), true);
-    }
+    cleanMarkerDir(instantMarkerPath);
 
     return receivedData;
   }
@@ -296,6 +286,16 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
     final Path instantMarkerFolder = new Path(new Path(cfg.targetBasePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME), INSTANT_MARKER_FOLDER_NAME);
     if (!fs.exists(instantMarkerFolder)) {
       fs.mkdirs(instantMarkerFolder);
+    } else {
+      // Clean marker dir.
+      cleanMarkerDir(instantMarkerFolder);
+    }
+  }
+
+  private void cleanMarkerDir(Path instantMarkerFolder) throws IOException {
+    FileStatus[] fileStatuses = fs.listStatus(instantMarkerFolder);
+    for (FileStatus fileStatus : fileStatuses) {
+      fs.delete(fileStatus.getPath(), true);
     }
   }
 }
