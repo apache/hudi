@@ -47,7 +47,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   public static final String INLINE_COMPACT_PROP = "hoodie.compact.inline";
   // Run a compaction every N delta commits
   public static final String INLINE_COMPACT_NUM_DELTA_COMMITS_PROP = "hoodie.compact.inline.max.delta.commits";
-  public static final String INLINE_COMPACT_ELAPSED_TIME_PROP = "hoodie.compact.inline.max.delta.time";
+  public static final String INLINE_COMPACT_ELAPSED_TIME_PROP = "hoodie.compact.inline.max.delta.seconds";
   public static final String INLINE_COMPACT_TRIGGER_STRATEGY_PROP = "hoodie.compact.inline.trigger.strategy";
   public static final String CLEANER_FILE_VERSIONS_RETAINED_PROP = "hoodie.cleaner.fileversions.retained";
   public static final String CLEANER_COMMITS_RETAINED_PROP = "hoodie.cleaner.commits.retained";
