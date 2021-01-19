@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.model;
 
-import java.io.Serializable;
 import org.apache.hudi.exception.HoodieException;
 
 import java.util.Locale;
@@ -26,7 +25,7 @@ import java.util.Locale;
 /**
  * The supported write operation types, used by commitMetadata.
  */
-public enum WriteOperationType implements Serializable {
+public enum WriteOperationType {
   // directly insert
   INSERT("insert"),
   INSERT_PREPPED("insert_prepped"),

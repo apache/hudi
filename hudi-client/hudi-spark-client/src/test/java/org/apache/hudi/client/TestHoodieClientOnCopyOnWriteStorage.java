@@ -114,7 +114,6 @@ import static org.apache.hudi.config.HoodieClusteringConfig.DEFAULT_CLUSTERING_E
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -466,7 +465,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   /**
-   * Test UpsertPrepped API.
+   * Test InsertPrepped API for HoodieConcatHandle.
    */
   @Test
   public void testInsertsPreppedWithHoodieConcatHandle() throws Exception {
@@ -941,11 +940,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
    */
   @ParameterizedTest
   @MethodSource("configParams")
-  public void testSmallInsertHandlingForInserts(boolean mergeInsertsAllowDuplicates) throws Exception {
+  public void testSmallInsertHandlingForInserts(boolean mergeAllowDuplicateInserts) throws Exception {
     final String testPartitionPath = "2016/09/26";
     final int insertSplitLimit = 100;
     // setup the small file handling params
-    HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit, false, mergeInsertsAllowDuplicates); // hold upto 200 records max
+    HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit, false, mergeAllowDuplicateInserts); // hold upto 200 records max
     dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
     SparkRDDWriteClient client = getHoodieWriteClient(config, false);
 
@@ -973,7 +972,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     statuses = client.insert(insertRecordsRDD2, commitTime2).collect();
     assertNoWriteErrors(statuses);
     assertEquals(1, statuses.size(), "Just 1 file needs to be updated.");
-    assertNotNull(statuses.get(0).getFileId(), "Existing file should be expanded");
+    assertEquals(file1, statuses.get(0).getFileId(), "Existing file should be expanded");
     assertEquals(commitTime1, statuses.get(0).getStat().getPrevCommit(), "Existing file should be expanded");
 
     Path newFile = new Path(basePath, statuses.get(0).getStat().getPath());
@@ -1010,12 +1009,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     int totalInserts = 0;
     for (HoodieBaseFile file : files) {
-      if (!mergeInsertsAllowDuplicates) {
-        assertEquals(commitTime3, file.getCommitTime(), "All files must be at commit 3");
-        totalInserts += ParquetUtils.readAvroRecords(hadoopConf, new Path(file.getPath())).size();
-      } else {
-        totalInserts += readRowKeysFromParquet(hadoopConf, new Path(file.getPath())).size();
-      }
+      assertEquals(commitTime3, file.getCommitTime(), "All files must be at commit 3");
+      totalInserts += ParquetUtils.readAvroRecords(hadoopConf, new Path(file.getPath())).size();
     }
     assertEquals(totalInserts, inserts1.size() + inserts2.size() + inserts3.size(), "Total number of records must add up");
   }
@@ -1713,8 +1708,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Build Hoodie Write Config for small data file sizes.
    */
-  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, boolean useNullSchema, boolean mergeInsertsAllowDups) {
-    return getSmallInsertWriteConfig(insertSplitSize, useNullSchema, dataGen.getEstimatedFileSizeInBytes(150), mergeInsertsAllowDups);
+  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, boolean useNullSchema, boolean mergeAllowDuplicateInserts) {
+    return getSmallInsertWriteConfig(insertSplitSize, useNullSchema, dataGen.getEstimatedFileSizeInBytes(150), mergeAllowDuplicateInserts);
   }
 
   /**
@@ -1727,24 +1722,24 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Build Hoodie Write Config for specified small file sizes.
    */
-  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, boolean useNullSchema, long smallFileSize, boolean mergeInsertsAllowDups) {
+  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, boolean useNullSchema, long smallFileSize, boolean mergeAllowDuplicateInserts) {
     String schemaStr = useNullSchema ? NULL_SCHEMA : TRIP_EXAMPLE_SCHEMA;
-    return getSmallInsertWriteConfig(insertSplitSize, schemaStr, smallFileSize, mergeInsertsAllowDups);
+    return getSmallInsertWriteConfig(insertSplitSize, schemaStr, smallFileSize, mergeAllowDuplicateInserts);
   }
 
   private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize) {
     return getSmallInsertWriteConfig(insertSplitSize, schemaStr, smallFileSize, false);
   }
 
-  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize, boolean mergeInsertsAllowDups) {
-    return getSmallInsertWriteConfig(insertSplitSize, schemaStr, smallFileSize, mergeInsertsAllowDups, new Properties());
+  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize, boolean mergeAllowDuplicateInserts) {
+    return getSmallInsertWriteConfig(insertSplitSize, schemaStr, smallFileSize, mergeAllowDuplicateInserts, new Properties());
   }
 
   private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize, Properties props) {
     return getSmallInsertWriteConfig(insertSplitSize, schemaStr, smallFileSize, false, props);
   }
 
-  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize, boolean mergeInsertsAllowDups,
+  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize, boolean mergeAllowDuplicateInserts,
       Properties props) {
     HoodieWriteConfig.Builder builder = getConfigBuilder(schemaStr);
     return builder
@@ -1756,7 +1751,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             HoodieStorageConfig.newBuilder()
                 .hfileMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200))
                 .parquetMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200)).build())
-        .withMergeAllowDuplicateInserts(mergeInsertsAllowDups)
+        .withMergeAllowDuplicateInserts(mergeAllowDuplicateInserts)
         .withProps(props)
         .build();
   }
