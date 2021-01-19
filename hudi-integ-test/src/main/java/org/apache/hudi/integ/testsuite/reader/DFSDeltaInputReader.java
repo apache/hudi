@@ -80,7 +80,6 @@ public abstract class DFSDeltaInputReader implements DeltaInputReader<GenericRec
       }
       if (totalSizeOfFilesPresent <= totalSizeToRead) {
         endOffset++;
-        continue;
       } else {
         return Pair.of(startOffset, endOffset);
       }
