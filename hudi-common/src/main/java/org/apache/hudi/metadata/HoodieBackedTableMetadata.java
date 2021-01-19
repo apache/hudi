@@ -52,6 +52,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -112,11 +113,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   @Override
   protected Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKeyFromMetadata(String key) {
     try {
-      //TODO(metadata): remove the timers or turn them into good log statements.
+      List<Long> timings = new ArrayList<>();
       HoodieTimer timer = new HoodieTimer().startTimer();
       openFileSliceIfNeeded();
-
-      System.err.println(" >> Open took " + timer.endTimer());
+      timings.add(timer.endTimer());
 
       timer.startTimer();
       // Retrieve record from base file
@@ -130,7 +130,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BASEFILE_READ_STR, readTimer.endTimer()));
         }
       }
-      System.err.println(" >> Read of base file took " + timer.endTimer());
+      timings.add(timer.endTimer());
 
       // Retrieve record from log file
       timer.startTimer();
@@ -146,14 +146,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           }
         }
       }
-      System.err.println(" >> Read of merged/log file took " + timer.endTimer());
+      timings.add(timer.endTimer());
+      LOG.info(String.format("Metadata read for key %s took [open, baseFileRead, logMerge] %s ms", key, timings));
       return Option.ofNullable(hoodieRecord);
     } catch (IOException ioe) {
       throw new HoodieIOException("Error merging records from metadata table for key :" + key, ioe);
     } finally {
-      HoodieTimer timer = new HoodieTimer().startTimer();
       closeIfNeeded();
-      System.err.println(" >> Close took " + timer.endTimer());
     }
   }
 
@@ -219,12 +218,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       logRecordScanner.close();
       logRecordScanner = null;
     }
-    //TODO(metadata): remove all this
-    /*    try {
-      throw new HoodieException("Metadata closed from here");
-    } catch (Exception e) {
-      LOG.warn("Metadata closed", e);
-    }*/
   }
 
   /**

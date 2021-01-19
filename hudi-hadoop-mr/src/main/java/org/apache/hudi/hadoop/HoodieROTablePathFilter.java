@@ -83,7 +83,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
    */
   private SerializableConfiguration conf;
 
-  private final HoodieLocalEngineContext engineContext;
+  private transient HoodieLocalEngineContext engineContext;
 
 
   private transient FileSystem fs;
@@ -97,7 +97,6 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
     this.nonHoodiePathCache = new HashSet<>();
     this.conf = new SerializableConfiguration(conf);
     this.metaClientCache = new HashMap<>();
-    this.engineContext = new HoodieLocalEngineContext(this.conf.get());
   }
 
   /**
@@ -115,6 +114,10 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
 
   @Override
   public boolean accept(Path path) {
+
+    if (engineContext == null) {
+      this.engineContext = new HoodieLocalEngineContext(this.conf.get());
+    }
 
     if (LOG.isDebugEnabled()) {
       LOG.debug("Checking acceptance for path " + path);

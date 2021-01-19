@@ -452,6 +452,13 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
   }
 
+  @Override
+  public void close() throws Exception {
+    if (metadata != null) {
+      metadata.close();
+    }
+  }
+
   /**
    * Commit the {@code HoodieRecord}s to Metadata Table as a new delta-commit.
    *
