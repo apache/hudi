@@ -25,7 +25,7 @@ import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -82,6 +82,11 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> delete(HoodieEngineContext context, String instantTime, List<HoodieKey> keys) {
     return new FlinkDeleteCommitActionExecutor<>(context, config, this, instantTime, keys).execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata deletePartitions(HoodieEngineContext context, String instantTime, List<String> partitions) {
+    throw new HoodieNotSupportedException("DeletePartitions is not supported yet");
   }
 
   @Override

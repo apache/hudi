@@ -29,7 +29,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.HoodieWriteResult
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
@@ -38,7 +38,7 @@ import org.apache.hudi.config.HoodieBootstrapConfig.{BOOTSTRAP_BASE_PATH_PROP, B
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
-import org.apache.hudi.internal.HoodieDataSourceInternalWriter
+import org.apache.hudi.internal.{DataSourceInternalWriterHelper, HoodieDataSourceInternalWriter}
 import org.apache.hudi.sync.common.AbstractSyncTool
 import org.apache.log4j.LogManager
 import org.apache.spark.SPARK_VERSION
@@ -94,13 +94,6 @@ private[hudi] object HoodieSparkSqlWriter {
       operation = WriteOperationType.INSERT
     }
 
-    // If the mode is Overwrite, can set operation to INSERT_OVERWRITE_TABLE.
-    // Then in DataSourceUtils.doWriteOperation will use client.insertOverwriteTable to overwrite
-    // the table. This will replace the old fs.delete(tablepath) mode.
-    if (mode == SaveMode.Overwrite && operation !=  WriteOperationType.INSERT_OVERWRITE_TABLE) {
-      operation = WriteOperationType.INSERT_OVERWRITE_TABLE
-    }
-
     val jsc = new JavaSparkContext(sparkContext)
     val basePath = new Path(path.get)
     val instantTime = HoodieActiveTimeline.createNewInstantTime()
@@ -130,9 +123,6 @@ private[hudi] object HoodieSparkSqlWriter {
       // scalastyle:off
       if (parameters(ENABLE_ROW_WRITER_OPT_KEY).toBoolean &&
         operation == WriteOperationType.BULK_INSERT) {
-        if (!SPARK_VERSION.startsWith("2.")) {
-          throw new HoodieException("Bulk insert using row writer is not supported with Spark 3. To use row writer please switch to spark 2.")
-        }
         val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, parameters, df, tblName,
                                                                                 basePath, path, instantTime)
         return (success, commitTime, common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
@@ -299,10 +289,22 @@ private[hudi] object HoodieSparkSqlWriter {
     val nameSpace = s"hoodie.${tblName}"
     val writeConfig = DataSourceUtils.createHoodieConfig(null, path.get, tblName, mapAsJavaMap(parameters))
     val hoodieDF = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, writeConfig, df, structName, nameSpace)
-    hoodieDF.write.format("org.apache.hudi.internal")
-      .option(HoodieDataSourceInternalWriter.INSTANT_TIME_OPT_KEY, instantTime)
-      .options(parameters)
-      .save()
+    if (SPARK_VERSION.startsWith("2.")) {
+      hoodieDF.write.format("org.apache.hudi.internal")
+        .option(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY, instantTime)
+        .options(parameters)
+        .save()
+    } else if (SPARK_VERSION.startsWith("3.")) {
+      hoodieDF.write.format("org.apache.hudi.spark3.internal")
+        .option(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY, instantTime)
+        .option(HoodieWriteConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL, hoodieDF.schema.toDDL)
+        .options(parameters)
+        .mode(SaveMode.Append)
+        .save()
+    } else {
+      throw new HoodieException("Bulk insert using row writer is not supported with current Spark version."
+        + " To use row writer please switch to spark 2 or spark 3")
+    }
     val hiveSyncEnabled = parameters.get(HIVE_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
     val metaSyncEnabled = parameters.get(META_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
     val syncHiveSucess = if (hiveSyncEnabled || metaSyncEnabled) {
@@ -331,6 +333,12 @@ private[hudi] object HoodieSparkSqlWriter {
     if (operation != WriteOperationType.DELETE) {
       if (mode == SaveMode.ErrorIfExists && tableExists) {
         throw new HoodieException(s"hoodie table at $tablePath already exists.")
+      } else if (mode == SaveMode.Overwrite && tableExists && operation !=  WriteOperationType.INSERT_OVERWRITE_TABLE) {
+        // When user set operation as INSERT_OVERWRITE_TABLE,
+        // overwrite will use INSERT_OVERWRITE_TABLE operator in doWriteOperation
+        log.warn(s"hoodie table at $tablePath already exists. Deleting existing data & overwriting with new data.")
+        fs.delete(tablePath, true)
+        tableExists = false
       }
     } else {
       // Delete Operation only supports Append mode
@@ -363,7 +371,11 @@ private[hudi] object HoodieSparkSqlWriter {
       ListBuffer(parameters(HIVE_PARTITION_FIELDS_OPT_KEY).split(",").map(_.trim).filter(!_.isEmpty).toList: _*)
     hiveSyncConfig.partitionValueExtractorClass = parameters(HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY)
     hiveSyncConfig.useJdbc = parameters(HIVE_USE_JDBC_OPT_KEY).toBoolean
+    hiveSyncConfig.useFileListingFromMetadata = parameters(HoodieMetadataConfig.METADATA_ENABLE_PROP).toBoolean
+    hiveSyncConfig.verifyMetadataFileListing = parameters(HoodieMetadataConfig.METADATA_VALIDATE_PROP).toBoolean
     hiveSyncConfig.supportTimestamp = parameters.get(HIVE_SUPPORT_TIMESTAMP).exists(r => r.toBoolean)
+    hiveSyncConfig.decodePartition = parameters.getOrElse(URL_ENCODE_PARTITIONING_OPT_KEY,
+      DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL).toBoolean
     hiveSyncConfig
   }
 

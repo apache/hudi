@@ -20,7 +20,7 @@ package org.apache.hudi.client.bootstrap;
 
 import java.io.Serializable;
 import org.apache.hudi.avro.model.HoodieFileStatus;
-import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.collection.Pair;
 

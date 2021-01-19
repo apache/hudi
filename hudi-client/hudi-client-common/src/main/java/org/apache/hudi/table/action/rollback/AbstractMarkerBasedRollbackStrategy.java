@@ -18,9 +18,10 @@
 
 package org.apache.hudi.table.action.rollback;
 
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -37,6 +38,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Performs rollback using marker files generated during the write..
@@ -51,9 +53,9 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
 
   protected final HoodieWriteConfig config;
 
-  private final String basePath;
+  protected final String basePath;
 
-  private final String instantTime;
+  protected final String instantTime;
 
   public AbstractMarkerBasedRollbackStrategy(HoodieTable<T, I, K, O> table, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
     this.table = table;
@@ -88,6 +90,7 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
     String fileId = FSUtils.getFileIdFromFilePath(baseFilePathForAppend);
     String baseCommitTime = FSUtils.getCommitTime(baseFilePathForAppend.getName());
     String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), new Path(basePath, appendBaseFilePath).getParent());
+    final Map<FileStatus, Long> writtenLogFileSizeMap = getWrittenLogFileSizeMap(partitionPath, baseCommitTime, fileId);
 
     HoodieLogFormat.Writer writer = null;
     try {
@@ -108,7 +111,7 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
       // generate metadata
       Map<HoodieLogBlock.HeaderMetadataType, String> header = RollbackUtils.generateHeader(instantToRollback.getTimestamp(), instantTime);
       // if update belongs to an existing log file
-      writer = writer.appendBlock(new HoodieCommandBlock(header));
+      writer.appendBlock(new HoodieCommandBlock(header));
     } finally {
       try {
         if (writer != null) {
@@ -119,10 +122,26 @@ public abstract class AbstractMarkerBasedRollbackStrategy<T extends HoodieRecord
       }
     }
 
+    // the information of files appended to is required for metadata sync
+    Map<FileStatus, Long> filesToNumBlocksRollback = Collections.singletonMap(
+          table.getMetaClient().getFs().getFileStatus(Objects.requireNonNull(writer).getLogFile().getPath()),
+          1L);
+
     return HoodieRollbackStat.newBuilder()
         .withPartitionPath(partitionPath)
-        // we don't use this field per se. Avoiding the extra file status call.
-        .withRollbackBlockAppendResults(Collections.emptyMap())
-        .build();
+        .withRollbackBlockAppendResults(filesToNumBlocksRollback)
+        .withWrittenLogFileSizeMap(writtenLogFileSizeMap).build();
+  }
+
+  /**
+   * Returns written log file size map for the respective baseCommitTime to assist in metadata table syncing.
+   * @param partitionPath partition path of interest
+   * @param baseCommitTime base commit time of interest
+   * @param fileId fileId of interest
+   * @return Map<FileStatus, File size>
+   * @throws IOException
+   */
+  protected Map<FileStatus, Long> getWrittenLogFileSizeMap(String partitionPath, String baseCommitTime, String fileId) throws IOException {
+    return Collections.EMPTY_MAP;
   }
 }

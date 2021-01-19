@@ -33,6 +33,7 @@ import org.apache.log4j.Logger;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.List;
 
 /**
  * File Format for Hoodie Log Files. The File Format consists of blocks each separated with a MAGIC sync marker. A Block
@@ -61,14 +62,21 @@ public interface HoodieLogFormat {
   interface Writer extends Closeable {
 
     /**
-     * @return the path to this {@link HoodieLogFormat}
+     * @return the path to the current {@link HoodieLogFile} being written to.
      */
     HoodieLogFile getLogFile();
 
     /**
-     * Append Block returns a new Writer if the log is rolled.
+     * Append Block to a log file.
+     * @return {@link AppendResult} containing result of the append.
      */
-    Writer appendBlock(HoodieLogBlock block) throws IOException, InterruptedException;
+    AppendResult appendBlock(HoodieLogBlock block) throws IOException, InterruptedException;
+
+    /**
+     * Appends the list of blocks to a logfile.
+     * @return {@link AppendResult} containing result of the append.
+     */
+    AppendResult appendBlocks(List<HoodieLogBlock> blocks) throws IOException, InterruptedException;
 
     long getCurrentSize() throws IOException;
   }
@@ -88,7 +96,7 @@ public interface HoodieLogFormat {
      * 
      * @return
      */
-    public boolean hasPrev();
+    boolean hasPrev();
 
     /**
      * Read log file in reverse order and return prev block if present.
@@ -96,7 +104,7 @@ public interface HoodieLogFormat {
      * @return
      * @throws IOException
      */
-    public HoodieLogBlock prev() throws IOException;
+    HoodieLogBlock prev() throws IOException;
   }
 
   /**
@@ -125,6 +133,8 @@ public interface HoodieLogFormat {
     // version number for this log file. If not specified, then the current version will be
     // computed by inspecting the file system
     private Integer logVersion;
+    // file len of this log file
+    private Long fileLen = 0L;
     // Location of the directory containing the log
     private Path parentPath;
     // Log File Write Token
@@ -142,13 +152,13 @@ public interface HoodieLogFormat {
       return this;
     }
 
-    public WriterBuilder withLogWriteToken(String writeToken) {
-      this.logWriteToken = writeToken;
+    public WriterBuilder withRolloverLogWriteToken(String rolloverLogWriteToken) {
+      this.rolloverLogWriteToken = rolloverLogWriteToken;
       return this;
     }
 
-    public WriterBuilder withRolloverLogWriteToken(String rolloverLogWriteToken) {
-      this.rolloverLogWriteToken = rolloverLogWriteToken;
+    public WriterBuilder withLogWriteToken(String logWriteToken) {
+      this.logWriteToken = logWriteToken;
       return this;
     }
 
@@ -182,12 +192,17 @@ public interface HoodieLogFormat {
       return this;
     }
 
+    public WriterBuilder withFileSize(long fileLen) {
+      this.fileLen = fileLen;
+      return this;
+    }
+
     public WriterBuilder onParentPath(Path parentPath) {
       this.parentPath = parentPath;
       return this;
     }
 
-    public Writer build() throws IOException, InterruptedException {
+    public Writer build() throws IOException {
       LOG.info("Building HoodieLogFormat Writer");
       if (fs == null) {
         throw new IllegalArgumentException("fs is not specified");
@@ -229,13 +244,14 @@ public interface HoodieLogFormat {
       if (logWriteToken == null) {
         // This is the case where we have existing log-file with old format. rollover to avoid any conflicts
         logVersion += 1;
+        fileLen = 0L;
         logWriteToken = rolloverLogWriteToken;
       }
 
       Path logPath = new Path(parentPath,
           FSUtils.makeLogFileName(logFileId, fileExtension, instantTime, logVersion, logWriteToken));
       LOG.info("HoodieLogFile on path " + logPath);
-      HoodieLogFile logFile = new HoodieLogFile(logPath);
+      HoodieLogFile logFile = new HoodieLogFile(logPath, fileLen);
 
       if (bufferSize == null) {
         bufferSize = FSUtils.getDefaultBufferSize(fs);
@@ -246,8 +262,7 @@ public interface HoodieLogFormat {
       if (sizeThreshold == null) {
         sizeThreshold = DEFAULT_SIZE_THRESHOLD;
       }
-      return new HoodieLogFormatWriter(fs, logFile, bufferSize, replication, sizeThreshold, logWriteToken,
-          rolloverLogWriteToken);
+      return new HoodieLogFormatWriter(fs, logFile, bufferSize, replication, sizeThreshold, rolloverLogWriteToken);
     }
   }
 

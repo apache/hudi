@@ -44,5 +44,5 @@ public interface Transformer {
    * @return Transformed Dataset
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
-  Dataset apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset, TypedProperties properties);
+  Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset, TypedProperties properties);
 }

@@ -21,10 +21,10 @@ package org.apache.hudi.hive;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent.PartitionEventType;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
+import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent.PartitionEventType;
 
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.parquet.schema.MessageType;
@@ -56,7 +56,7 @@ public class TestHiveSyncTool {
   }
 
   private static Iterable<Object[]> useJdbcAndSchemaFromCommitMetadata() {
-    return Arrays.asList(new Object[][] { { true, true }, { true, false }, { false, true }, { false, false } });
+    return Arrays.asList(new Object[][] {{true, true}, {true, false}, {false, true}, {false, false}});
   }
 
   @BeforeEach
@@ -347,7 +347,7 @@ public class TestHiveSyncTool {
       assertEquals(hiveClient.getTableSchema(roTableName).size(),
           SchemaTestUtil.getSimpleSchema().getFields().size() + HiveTestUtil.hiveSyncConfig.partitionFields.size()
               + HoodieRecord.HOODIE_META_COLUMNS.size(),
-                   "Hive Schema should match the table schema + partition field");
+          "Hive Schema should match the table schema + partition field");
     } else {
       // The data generated and schema in the data file do not have metadata columns, so we need a separate check.
       assertEquals(hiveClient.getTableSchema(roTableName).size(),
@@ -377,7 +377,7 @@ public class TestHiveSyncTool {
       assertEquals(hiveClient.getTableSchema(roTableName).size(),
           SchemaTestUtil.getEvolvedSchema().getFields().size() + HiveTestUtil.hiveSyncConfig.partitionFields.size()
               + HoodieRecord.HOODIE_META_COLUMNS.size(),
-                   "Hive Schema should match the evolved table schema + partition field");
+          "Hive Schema should match the evolved table schema + partition field");
     } else {
       // The data generated and schema in the data file do not have metadata columns, so we need a separate check.
       assertEquals(hiveClient.getTableSchema(roTableName).size(),
@@ -418,7 +418,7 @@ public class TestHiveSyncTool {
       assertEquals(hiveClientRT.getTableSchema(snapshotTableName).size(),
           SchemaTestUtil.getSimpleSchema().getFields().size() + HiveTestUtil.hiveSyncConfig.partitionFields.size()
               + HoodieRecord.HOODIE_META_COLUMNS.size(),
-                   "Hive Schema should match the table schema + partition field");
+          "Hive Schema should match the table schema + partition field");
     } else {
       // The data generated and schema in the data file do not have metadata columns, so we need a separate check.
       assertEquals(hiveClientRT.getTableSchema(snapshotTableName).size(),
@@ -489,6 +489,50 @@ public class TestHiveSyncTool {
         "Table partitions should match the number of partitions we wrote");
     assertEquals(instantTime, hiveClient.getLastCommitTimeSynced(hiveSyncConfig.tableName).get(),
         "The last commit that was sycned should be updated in the TBLPROPERTIES");
+
+    // HoodieHiveClient had a bug where partition vals were sorted
+    // and stored as keys in a map. The following tests this particular case.
+    // Now lets create partition "2010/01/02" and followed by "2010/02/01".
+    String commitTime2 = "101";
+    HiveTestUtil.addCOWPartition("2010/01/02", true, true, commitTime2);
+
+    hiveClient = new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    List<String> writtenPartitionsSince = hiveClient.getPartitionsWrittenToSince(Option.of(instantTime));
+    assertEquals(1, writtenPartitionsSince.size(), "We should have one partition written after 100 commit");
+    List<Partition> hivePartitions = hiveClient.scanTablePartitions(hiveSyncConfig.tableName);
+    List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince);
+    assertEquals(1, partitionEvents.size(), "There should be only one paritition event");
+    assertEquals(PartitionEventType.ADD, partitionEvents.iterator().next().eventType, "The one partition event must of type ADD");
+
+    tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    tool.syncHoodieTable();
+
+    // Sync should add the one partition
+    assertEquals(6, hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size(),
+        "Table partitions should match the number of partitions we wrote");
+    assertEquals(commitTime2, hiveClient.getLastCommitTimeSynced(hiveSyncConfig.tableName).get(),
+        "The last commit that was sycned should be 101");
+
+    // create partition "2010/02/01" and ensure sync works
+    String commitTime3 = "102";
+    HiveTestUtil.addCOWPartition("2010/02/01", true, true, commitTime3);
+    HiveTestUtil.getCreatedTablesSet().add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName);
+
+    hiveClient = new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+
+    tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    tool.syncHoodieTable();
+
+    assertTrue(hiveClient.doesTableExist(hiveSyncConfig.tableName),
+        "Table " + hiveSyncConfig.tableName + " should exist after sync completes");
+    assertEquals(hiveClient.getTableSchema(hiveSyncConfig.tableName).size(),
+        hiveClient.getDataSchema().getColumns().size() + 3,
+        "Hive Schema should match the table schema + partition fields");
+    assertEquals(7, hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size(),
+        "Table partitions should match the number of partitions we wrote");
+    assertEquals(commitTime3, hiveClient.getLastCommitTimeSynced(hiveSyncConfig.tableName).get(),
+        "The last commit that was sycned should be updated in the TBLPROPERTIES");
+    assertEquals(1, hiveClient.getPartitionsWrittenToSince(Option.of(commitTime2)).size());
   }
 
   @ParameterizedTest
@@ -507,17 +551,17 @@ public class TestHiveSyncTool {
 
     HoodieHiveClient hiveClient = new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     assertFalse(hiveClient.doesTableExist(hiveSyncConfig.tableName),
-            "Table " + hiveSyncConfig.tableName + " should not exist initially");
+        "Table " + hiveSyncConfig.tableName + " should not exist initially");
     // Lets do the sync
     HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     tool.syncHoodieTable();
     assertTrue(hiveClient.doesTableExist(hiveSyncConfig.tableName),
-            "Table " + hiveSyncConfig.tableName + " should exist after sync completes");
+        "Table " + hiveSyncConfig.tableName + " should exist after sync completes");
     assertEquals(hiveClient.getTableSchema(hiveSyncConfig.tableName).size(),
-            hiveClient.getDataSchema().getColumns().size(),
-            "Hive Schema should match the table schema，ignoring the partition fields");
+        hiveClient.getDataSchema().getColumns().size(),
+        "Hive Schema should match the table schema，ignoring the partition fields");
     assertEquals(0, hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size(),
-            "Table should not have partitions because of the NonPartitionedExtractor");
+        "Table should not have partitions because of the NonPartitionedExtractor");
   }
 
   @ParameterizedTest
