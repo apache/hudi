@@ -206,7 +206,7 @@
       <id>presto-shade-unbundle-bootstrap</id>
       <properties>
         <presto.bundle.bootstrap.scope>provided</presto.bundle.bootstrap.scope>
-        <presto.bundle.bootstrap.shade.prefix></presto.bundle.bootstrap.shade.prefix>
+        <presto.bundle.bootstrap.shade.prefix />
       </properties>
     </profile>
   </profiles>
