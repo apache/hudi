@@ -118,8 +118,8 @@ public class SparkScheduleCompactionActionExecutor<T extends HoodieRecordPayload
         if (compactable) {
           LOG.info(String.format("The delta commits >= %s, trigger compaction scheduler.", inlineCompactDeltaCommitMax));
         } else {
-          LOG.info(String.format("Not scheduling compaction because %s delta commits needed since last compaction %s." +
-              "But only %s delta commits found.", inlineCompactDeltaCommitMax, threshold._2, threshold._1));
+          LOG.info(String.format("Not scheduling compaction because %s delta commits needed since last compaction %s."
+              + "But only %s delta commits found.", inlineCompactDeltaCommitMax, threshold._2, threshold._1));
         }
         return compactable;
       case TIME_ELAPSED:
@@ -128,8 +128,8 @@ public class SparkScheduleCompactionActionExecutor<T extends HoodieRecordPayload
         if (compactable) {
           LOG.info(String.format("The elapsed time >=%ss, trigger compaction scheduler.", inlineCompactDeltaElapsedTimeMax));
         } else {
-          LOG.info(String.format("Not scheduling compaction because %s elapsed time needed since last compaction %s." +
-              "But only %ss elapsed time found", inlineCompactDeltaElapsedTimeMax, threshold._2, elapsedTime));
+          LOG.info(String.format("Not scheduling compaction because %s elapsed time needed since last compaction %s."
+              + "But only %ss elapsed time found", inlineCompactDeltaElapsedTimeMax, threshold._2, elapsedTime));
         }
         return compactable;
       case NUM_OR_TIME:
@@ -139,8 +139,8 @@ public class SparkScheduleCompactionActionExecutor<T extends HoodieRecordPayload
           LOG.info(String.format("The delta commits >= %s or elapsed_time >=%ss, trigger compaction scheduler.", inlineCompactDeltaCommitMax,
               inlineCompactDeltaElapsedTimeMax));
         } else {
-          LOG.info(String.format("Not scheduling compaction because %s delta commits or %ss elapsed time needed since last compaction %s." +
-                  "But only %s delta commits and %ss elapsed time found", inlineCompactDeltaCommitMax, inlineCompactDeltaElapsedTimeMax, threshold._2,
+          LOG.info(String.format("Not scheduling compaction because %s delta commits or %ss elapsed time needed since last compaction %s."
+                  + "But only %s delta commits and %ss elapsed time found", inlineCompactDeltaCommitMax, inlineCompactDeltaElapsedTimeMax, threshold._2,
               threshold._1, elapsedTime));
         }
         return compactable;
@@ -151,8 +151,8 @@ public class SparkScheduleCompactionActionExecutor<T extends HoodieRecordPayload
           LOG.info(String.format("The delta commits >= %s and elapsed_time >=%ss, trigger compaction scheduler.", inlineCompactDeltaCommitMax,
               inlineCompactDeltaElapsedTimeMax));
         } else {
-          LOG.info(String.format("Not scheduling compaction because %s delta commits and %ss elapsed time needed since last compaction %s." +
-                  "But only %s delta commits and %ss elapsed time found", inlineCompactDeltaCommitMax, inlineCompactDeltaElapsedTimeMax, threshold._2,
+          LOG.info(String.format("Not scheduling compaction because %s delta commits and %ss elapsed time needed since last compaction %s."
+                  + "But only %s delta commits and %ss elapsed time found", inlineCompactDeltaCommitMax, inlineCompactDeltaElapsedTimeMax, threshold._2,
               threshold._1, elapsedTime));
         }
         return compactable;
