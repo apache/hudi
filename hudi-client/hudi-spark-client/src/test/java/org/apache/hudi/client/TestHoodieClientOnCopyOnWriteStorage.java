@@ -18,11 +18,13 @@
 
 package org.apache.hudi.client;
 
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -30,6 +32,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -59,8 +62,8 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.io.HoodieMergeHandle;
-import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
+import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -68,10 +71,6 @@ import org.apache.hudi.table.action.commit.SparkWriteHelper;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
-
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -94,11 +93,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.Properties;
 
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
 import static org.apache.hudi.common.testutils.FileCreateUtils.getBaseFileCountsForPaths;
@@ -132,8 +131,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }
   };
 
-  public static Stream<Arguments> configParams() {
-    return Arrays.stream(new Boolean[][] {{true}, {false}}).map(Arguments::of);
+  private static Stream<Arguments> configParams() {
+    return Arrays.stream(new Boolean[][] {{true},{false}}).map(Arguments::of);
   }
 
   private HoodieTestTable testTable;
@@ -373,9 +372,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         0, 150);
 
     // Now simulate an upgrade and perform a restore operation
-    HoodieWriteConfig newConfig = getConfigBuilder()
-        .withMergeAllowDuplicateInserts(true)
-        .withProps(config.getProps()).withTimelineLayoutVersion(
+    HoodieWriteConfig newConfig = getConfigBuilder().withProps(config.getProps()).withTimelineLayoutVersion(
         TimelineLayoutVersion.CURR_VERSION).build();
     client = getHoodieWriteClient(newConfig, false);
     client.restoreToInstant("004");
@@ -477,7 +474,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   /**
-   * Test one of HoodieConcatHandle w/ {@link AbstractHoodieWriteClient#index} API.
+   * Test one of HoodieConcatHandle w/ {@link AbstractHoodieWriteClient#insert(Object, String)} API.
    *
    * @param config Write Config
    * @throws Exception in case of error
@@ -488,8 +485,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()
         .withProps(config.getProps()).withMergeAllowDuplicateInserts(true).withTimelineLayoutVersion(
             VERSION_0).build();
-
-    System.out.println(" allow merge" + hoodieWriteConfig.isMergeAllowDuplicateInserts());
 
     HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(), metaClient.getTableType(),
         metaClient.getTableConfig().getTableName(), metaClient.getArchivePath(),
@@ -767,7 +762,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   private Pair<List<WriteStatus>, List<HoodieRecord>> insertBatchRecords(SparkRDDWriteClient client, String commitTime,
-      Integer recordNum, int expectStatueSize) {
+                                                                         Integer recordNum, int expectStatueSize) {
     client.startCommitWithTime(commitTime);
     List<HoodieRecord> inserts1 = dataGen.generateInserts(commitTime, recordNum);
     JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts1, 1);
@@ -800,7 +795,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String commitTime2 = "002";
     List<List<FileSlice>> firstInsertFileSlicesList = table.getFileSystemView().getAllFileGroups(testPartitionPath)
         .map(fileGroup -> fileGroup.getAllFileSlices().collect(Collectors.toList())).collect(Collectors.toList());
-    List<FileSlice>[] fileSlices = (List<FileSlice>[]) firstInsertFileSlicesList.toArray(new List[firstInsertFileSlicesList.size()]);
+    List<FileSlice>[] fileSlices = (List<FileSlice>[])firstInsertFileSlicesList.toArray(new List[firstInsertFileSlicesList.size()]);
     createRequestedReplaceInstant(this.metaClient, commitTime2, fileSlices);
 
     // 3. insert one record with no updating reject exception, and not merge the small file, just generate a new file group
@@ -818,8 +813,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String assertMsg = String.format("Not allowed to update the clustering files in partition: %s "
         + "For pending clustering operations, we are not going to support update for now.", testPartitionPath);
     assertThrows(HoodieUpsertException.class, () -> {
-      writeClient.upsert(jsc.parallelize(insertsAndUpdates3, 1), commitTime3).collect();
-    }, assertMsg);
+      writeClient.upsert(jsc.parallelize(insertsAndUpdates3, 1), commitTime3).collect(); }, assertMsg);
 
     // 5. insert one record with no updating reject exception, will merge the small file
     String commitTime5 = "005";
@@ -947,11 +941,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
    */
   @ParameterizedTest
   @MethodSource("configParams")
-  public void testSmallInsertHandlingForInserts(boolean routeInsertsToNewFiles) throws Exception {
+  public void testSmallInsertHandlingForInserts(boolean mergeInsertsAllowDuplicates) throws Exception {
     final String testPartitionPath = "2016/09/26";
     final int insertSplitLimit = 100;
     // setup the small file handling params
-    HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit, false, routeInsertsToNewFiles); // hold upto 200 records max
+    HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit, false, mergeInsertsAllowDuplicates); // hold upto 200 records max
     dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
     SparkRDDWriteClient client = getHoodieWriteClient(config, false);
 
@@ -979,19 +973,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     statuses = client.insert(insertRecordsRDD2, commitTime2).collect();
     assertNoWriteErrors(statuses);
     assertEquals(1, statuses.size(), "Just 1 file needs to be updated.");
-    if (!routeInsertsToNewFiles) {
-      assertNotNull(statuses.get(0).getFileId(), "Existing file should be expanded");
-      assertEquals(commitTime1, statuses.get(0).getStat().getPrevCommit(), "Existing file should be expanded");
-    } else {
-      // TODO assertEquals(1, statuses.size(), "Just 1 file needs to be added.");
-      assertNotNull(statuses.get(0).getFileId(), "Small file should be added");
-      assertEquals("null", statuses.get(0).getStat().getPrevCommit(), "Small file should be added");
-    }
+    assertNotNull(statuses.get(0).getFileId(), "Existing file should be expanded");
+    assertEquals(commitTime1, statuses.get(0).getStat().getPrevCommit(), "Existing file should be expanded");
+
     Path newFile = new Path(basePath, statuses.get(0).getStat().getPath());
-    assertEquals(routeInsertsToNewFiles ? 40 : 140, readRowKeysFromParquet(hadoopConf, newFile).size(),
+    assertEquals(140, readRowKeysFromParquet(hadoopConf, newFile).size(),
         "file should contain 140 records");
-    // TODO: assertEquals(40, readRowKeysFromParquet(hadoopConf, newFile).size(),
-    // "file should contain 40 records");
     List<GenericRecord> records = ParquetUtils.readAvroRecords(hadoopConf, newFile);
     for (GenericRecord record : records) {
       String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
@@ -1010,23 +997,20 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     statuses = client.insert(insertRecordsRDD3, commitTime3).collect();
     assertNoWriteErrors(statuses);
     assertEquals(2, statuses.size(), "2 files needs to be committed.");
-    if (routeInsertsToNewFiles) {
-      assertEquals(200,
-          readRowKeysFromParquet(hadoopConf, new Path(basePath, statuses.get(0).getStat().getPath())).size()
-              + readRowKeysFromParquet(hadoopConf, new Path(basePath, statuses.get(1).getStat().getPath())).size(),
-          "file should contain 200 records");
-    }
+    assertEquals(340,
+        readRowKeysFromParquet(hadoopConf, new Path(basePath, statuses.get(0).getStat().getPath())).size()
+            + readRowKeysFromParquet(hadoopConf, new Path(basePath, statuses.get(1).getStat().getPath())).size(),
+        "file should contain 340 records");
 
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath);
     HoodieTable table = getHoodieTable(metaClient, config);
     List<HoodieBaseFile> files = table.getBaseFileOnlyView()
         .getLatestBaseFilesBeforeOrOn(testPartitionPath, commitTime3).collect(Collectors.toList());
-    assertEquals(routeInsertsToNewFiles ? 4 : 2, files.size(), "Total of " + (routeInsertsToNewFiles ? 4 : 2) + " valid data files");
-    // TODO assertEquals(4, files.size(), "Total of 4 valid data files");
+    assertEquals(2, files.size(), "Total of 2 valid data files");
 
     int totalInserts = 0;
     for (HoodieBaseFile file : files) {
-      if (!routeInsertsToNewFiles) {
+      if (!mergeInsertsAllowDuplicates) {
         assertEquals(commitTime3, file.getCommitTime(), "All files must be at commit 3");
         totalInserts += ParquetUtils.readAvroRecords(hadoopConf, new Path(file.getPath())).size();
       } else {
@@ -1189,10 +1173,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   /**
-   * 1) Do write1 (upsert) with 'batch1RecordsCount' number of records.
-   * 2) Do write2 (insert overwrite) with 'batch2RecordsCount' number of records.
+   *  1) Do write1 (upsert) with 'batch1RecordsCount' number of records.
+   *  2) Do write2 (insert overwrite) with 'batch2RecordsCount' number of records.
    *
-   * Verify that all records in step1 are overwritten
+   *  Verify that all records in step1 are overwritten
    */
   private void verifyInsertOverwritePartitionHandling(int batch1RecordsCount, int batch2RecordsCount) throws Exception {
     final String testPartitionPath = "americas";
@@ -1269,10 +1253,12 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   /**
-   * 1) Do write1 (upsert) with 'batch1RecordsCount' number of records for first partition.
-   * 2) Do write2 (upsert) with 'batch2RecordsCount' number of records for second partition.
-   * 3) Do write3 (upsert) with 'batch3RecordsCount' number of records for third partition.
-   * 4) delete first partition and check result. 5) delete second and third partition and check result.
+   *  1) Do write1 (upsert) with 'batch1RecordsCount' number of records for first partition.
+   *  2) Do write2 (upsert) with 'batch2RecordsCount' number of records for second partition.
+   *  3) Do write3 (upsert) with 'batch3RecordsCount' number of records for third partition.
+   *  4) delete first partition and check result.
+   *  5) delete second and third partition and check result.
+   *
    */
   private void verifyDeletePartitionsHandling(int batch1RecordsCount, int batch2RecordsCount, int batch3RecordsCount) throws Exception {
     HoodieWriteConfig config = getSmallInsertWriteConfig(2000, false);
@@ -1727,8 +1713,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Build Hoodie Write Config for small data file sizes.
    */
-  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, boolean useNullSchema, boolean routeInsertsToNewFiles) {
-    return getSmallInsertWriteConfig(insertSplitSize, useNullSchema, dataGen.getEstimatedFileSizeInBytes(150), routeInsertsToNewFiles);
+  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, boolean useNullSchema, boolean mergeInsertsAllowDups) {
+    return getSmallInsertWriteConfig(insertSplitSize, useNullSchema, dataGen.getEstimatedFileSizeInBytes(150), mergeInsertsAllowDups);
   }
 
   /**
@@ -1741,24 +1727,24 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Build Hoodie Write Config for specified small file sizes.
    */
-  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, boolean useNullSchema, long smallFileSize, boolean routeInsertsToNewFiles) {
+  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, boolean useNullSchema, long smallFileSize, boolean mergeInsertsAllowDups) {
     String schemaStr = useNullSchema ? NULL_SCHEMA : TRIP_EXAMPLE_SCHEMA;
-    return getSmallInsertWriteConfig(insertSplitSize, schemaStr, smallFileSize, routeInsertsToNewFiles);
+    return getSmallInsertWriteConfig(insertSplitSize, schemaStr, smallFileSize, mergeInsertsAllowDups);
   }
 
   private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize) {
     return getSmallInsertWriteConfig(insertSplitSize, schemaStr, smallFileSize, false);
   }
 
-  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize, boolean routeInsertsToNewFiles) {
-    return getSmallInsertWriteConfig(insertSplitSize, schemaStr, smallFileSize, routeInsertsToNewFiles, new Properties());
+  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize, boolean mergeInsertsAllowDups) {
+    return getSmallInsertWriteConfig(insertSplitSize, schemaStr, smallFileSize, mergeInsertsAllowDups, new Properties());
   }
 
   private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize, Properties props) {
     return getSmallInsertWriteConfig(insertSplitSize, schemaStr, smallFileSize, false, props);
   }
 
-  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize, boolean routeInsertsToNewFiles,
+  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize, boolean mergeInsertsAllowDups,
       Properties props) {
     HoodieWriteConfig.Builder builder = getConfigBuilder(schemaStr);
     return builder
@@ -1770,7 +1756,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             HoodieStorageConfig.newBuilder()
                 .hfileMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200))
                 .parquetMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200)).build())
-        .withMergeAllowDuplicateInserts(routeInsertsToNewFiles)
+        .withMergeAllowDuplicateInserts(mergeInsertsAllowDups)
         .withProps(props)
         .build();
   }
