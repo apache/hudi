@@ -106,8 +106,7 @@ public class UtilHelpers {
       } catch (HoodieException e) {
         return (Source) ReflectionUtils.loadClass(sourceClass,
             new Class<?>[]{TypedProperties.class, JavaSparkContext.class,
-                SparkSession.class, SchemaProvider.class,
-                HoodieDeltaStreamerMetrics.class}, cfg,
+                SparkSession.class, SchemaProvider.class}, cfg,
             jssc, sparkSession, schemaProvider);
       }
     } catch (Throwable e) {
