@@ -62,7 +62,7 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
     this.maxMemoryForBootstrapBaseFile = config.getMaxMemoryForBootstrapBaseFile();
     this.maxMemoryForReplaceFileGroups = config.getMaxMemoryForReplacedFileGroups();
     this.maxMemoryForClusteringFileGroups = config.getMaxMemoryForPendingClusteringFileGroups();
-    this.baseStoreDir = config.getBaseStoreDir();
+    this.baseStoreDir = config.getSpillableDir();
     init(metaClient, visibleActiveTimeline);
   }
 

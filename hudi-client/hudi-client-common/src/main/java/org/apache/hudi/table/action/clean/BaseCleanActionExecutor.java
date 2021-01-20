@@ -67,7 +67,7 @@ public abstract class BaseCleanActionExecutor<T extends HoodieRecordPayload, I, 
    */
   HoodieCleanerPlan requestClean(HoodieEngineContext context) {
     try {
-      CleanPlanner<T, I, K, O> planner = new CleanPlanner<>(table, config);
+      CleanPlanner<T, I, K, O> planner = new CleanPlanner<>(context, table, config);
       Option<HoodieInstant> earliestInstant = planner.getEarliestCommitToRetain();
       List<String> partitionsToClean = planner.getPartitionPathsToClean(earliestInstant);
 

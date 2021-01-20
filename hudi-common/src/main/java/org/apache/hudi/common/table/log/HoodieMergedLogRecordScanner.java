@@ -153,6 +153,12 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     return totalTimeTakenToReadAndMergeBlocks;
   }
 
+  public void close() {
+    if (records != null) {
+      records.close();
+    }
+  }
+
   /**
    * Builder used to build {@code HoodieUnMergedLogRecordScanner}.
    */
