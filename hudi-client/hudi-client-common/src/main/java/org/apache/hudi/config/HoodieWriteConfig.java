@@ -334,7 +334,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(MERGE_DATA_VALIDATION_CHECK_ENABLED));
   }
 
-  public boolean isMergeAllowDuplicateInserts() {
+  public boolean allowDuplicateInserts() {
     return Boolean.parseBoolean(props.getProperty(MERGE_ALLOW_DUPLICATE_INSERTS));
   }
 

@@ -36,7 +36,7 @@ import java.util.Iterator;
 import java.util.Map;
 
 /**
- * Handle to concatenate new records to old records w/o any merging. If Operation is set to Inserts, and if {{@link HoodieWriteConfig#isMergeAllowDuplicateInserts()}}
+ * Handle to concatenate new records to old records w/o any merging. If Operation is set to Inserts, and if {{@link HoodieWriteConfig#allowDuplicateInserts()}}
  * is set, this handle will be used instead of {@link HoodieMergeHandle}
  * Simplified Logic:
  * For every existing record
