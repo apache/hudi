@@ -31,7 +31,7 @@ import org.apache.spark.sql.execution.streaming.Sink
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
+import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
 
 import scala.collection.JavaConverters._
 
@@ -45,6 +45,11 @@ class DefaultSource extends RelationProvider
   with DataSourceRegister
   with StreamSinkProvider
   with Serializable {
+
+  SparkSession.getActiveSession.foreach { spark =>
+    // Enable "passPartitionByAsOptions" to support "write.partitionBy(...)"
+    spark.conf.set("spark.sql.legacy.sources.write.passPartitionByAsOptions", "true")
+  }
 
   private val log = LogManager.getLogger(classOf[DefaultSource])
 

@@ -197,10 +197,12 @@ object DataSourceWriteOptions {
       val partitionColumns = optParams.get(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)
         .map(SparkDataSourceUtils.decodePartitioningColumns)
         .getOrElse(Nil)
-      val keyGenerator = DataSourceUtils.createKeyGenerator(toProperties(optParams))
+
+      val keyGeneratorClass = optParams.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY,
+        DataSourceWriteOptions.DEFAULT_KEYGENERATOR_CLASS_OPT_VAL)
       val partitionPathField =
-        keyGenerator match {
-          case _: CustomKeyGenerator =>
+        keyGeneratorClass match {
+          case "org.apache.hudi.keygen.CustomKeyGenerator" =>
             partitionColumns.map(e => s"$e:SIMPLE").mkString(",")
           case _ =>
             partitionColumns.mkString(",")
@@ -209,13 +211,6 @@ object DataSourceWriteOptions {
     }
     newOptParams
   }
-
-  def toProperties(params: Map[String, String]): TypedProperties = {
-    val props = new TypedProperties()
-    params.foreach(kv => props.setProperty(kv._1, kv._2))
-    props
-  }
-
 
   /**
     * Hive table name, to register the table into.

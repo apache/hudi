@@ -348,4 +348,49 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
   }
+
+  @Test def testPartitionByTranslateToPartitionPath() {
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    val noPartitionPathOpts = commonOpts - DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY
+
+    // partitionBy takes effect
+    inputDF.write.format("hudi")
+      .partitionBy("current_date")
+      .options(noPartitionPathOpts)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    var recordsReadDF = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/*")
+
+    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= col("current_date").cast("string")).count() == 0)
+
+    // PARTITIONPATH_FIELD_OPT_KEY takes effect
+    inputDF.write.format("hudi")
+      .partitionBy("current_date")
+      .options(noPartitionPathOpts)
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    recordsReadDF = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/*")
+
+    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= col("timestamp").cast("string")).count() == 0)
+
+    // CustomKeyGenerator
+    inputDF.write.format("hudi")
+      .partitionBy("current_date")
+      .options(noPartitionPathOpts)
+      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY, "org.apache.hudi.keygen.CustomKeyGenerator")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    recordsReadDF = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/*")
+
+    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= col("current_date").cast("string")).count() == 0)
+  }
 }
