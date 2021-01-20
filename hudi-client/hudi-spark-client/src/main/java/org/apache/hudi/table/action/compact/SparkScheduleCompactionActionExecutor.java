@@ -107,58 +107,43 @@ public class SparkScheduleCompactionActionExecutor<T extends HoodieRecordPayload
 
   public boolean needCompact(CompactionTriggerStrategy compactionTriggerStrategy) {
     boolean compactable;
-    // return deltaCommitsSinceLastCompaction and lastCompactionTs
-    Tuple2<Integer, String> threshold = getLastDeltaCommitInfo(compactionTriggerStrategy);
+    // get deltaCommitsSinceLastCompaction and lastCompactionTs
+    Tuple2<Integer, String> lastDeltaCommitInfo = getLastDeltaCommitInfo(compactionTriggerStrategy);
     int inlineCompactDeltaCommitMax = config.getInlineCompactDeltaCommitMax();
-    int inlineCompactDeltaElapsedTimeMax = config.getInlineCompactDeltaElapsedTimeMax();
-    long elapsedTime;
+    int inlineCompactDeltaSecondsMax = config.getInlineCompactDeltaSecondsMax();
     switch (compactionTriggerStrategy) {
       case NUM:
-        compactable = inlineCompactDeltaCommitMax <= threshold._1;
+        compactable = inlineCompactDeltaCommitMax <= lastDeltaCommitInfo._1;
         if (compactable) {
           LOG.info(String.format("The delta commits >= %s, trigger compaction scheduler.", inlineCompactDeltaCommitMax));
-        } else {
-          LOG.info(String.format("Not scheduling compaction because %s delta commits needed since last compaction %s."
-              + "But only %s delta commits found.", inlineCompactDeltaCommitMax, threshold._2, threshold._1));
         }
-        return compactable;
+        break;
       case TIME_ELAPSED:
-        elapsedTime = parsedToSeconds(instantTime) - parsedToSeconds(threshold._2);
-        compactable = inlineCompactDeltaElapsedTimeMax <= elapsedTime;
+        compactable = inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(lastDeltaCommitInfo._2);
         if (compactable) {
-          LOG.info(String.format("The elapsed time >=%ss, trigger compaction scheduler.", inlineCompactDeltaElapsedTimeMax));
-        } else {
-          LOG.info(String.format("Not scheduling compaction because %s elapsed time needed since last compaction %s."
-              + "But only %ss elapsed time found", inlineCompactDeltaElapsedTimeMax, threshold._2, elapsedTime));
+          LOG.info(String.format("The elapsed time >=%ss, trigger compaction scheduler.", inlineCompactDeltaSecondsMax));
         }
-        return compactable;
+        break;
       case NUM_OR_TIME:
-        elapsedTime = parsedToSeconds(instantTime) - parsedToSeconds(threshold._2);
-        compactable = inlineCompactDeltaCommitMax <= threshold._1 || inlineCompactDeltaElapsedTimeMax <= elapsedTime;
+        compactable = inlineCompactDeltaCommitMax <= lastDeltaCommitInfo._1
+            || inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(lastDeltaCommitInfo._2);
         if (compactable) {
           LOG.info(String.format("The delta commits >= %s or elapsed_time >=%ss, trigger compaction scheduler.", inlineCompactDeltaCommitMax,
-              inlineCompactDeltaElapsedTimeMax));
-        } else {
-          LOG.info(String.format("Not scheduling compaction because %s delta commits or %ss elapsed time needed since last compaction %s."
-                  + "But only %s delta commits and %ss elapsed time found", inlineCompactDeltaCommitMax, inlineCompactDeltaElapsedTimeMax, threshold._2,
-              threshold._1, elapsedTime));
+              inlineCompactDeltaSecondsMax));
         }
-        return compactable;
+        break;
       case NUM_AND_TIME:
-        elapsedTime = parsedToSeconds(instantTime) - parsedToSeconds(threshold._2);
-        compactable = inlineCompactDeltaCommitMax <= threshold._1 && inlineCompactDeltaElapsedTimeMax <= elapsedTime;
+        compactable = inlineCompactDeltaCommitMax <= lastDeltaCommitInfo._1
+            && inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(lastDeltaCommitInfo._2);
         if (compactable) {
           LOG.info(String.format("The delta commits >= %s and elapsed_time >=%ss, trigger compaction scheduler.", inlineCompactDeltaCommitMax,
-              inlineCompactDeltaElapsedTimeMax));
-        } else {
-          LOG.info(String.format("Not scheduling compaction because %s delta commits and %ss elapsed time needed since last compaction %s."
-                  + "But only %s delta commits and %ss elapsed time found", inlineCompactDeltaCommitMax, inlineCompactDeltaElapsedTimeMax, threshold._2,
-              threshold._1, elapsedTime));
+              inlineCompactDeltaSecondsMax));
         }
-        return compactable;
+        break;
       default:
-        throw new HoodieCompactionException("Unsupported compact type: " + config.getInlineCompactTriggerStrategy());
+        throw new HoodieCompactionException("Unsupported compaction trigger strategy: " + config.getInlineCompactTriggerStrategy());
     }
+    return compactable;
   }
 
   public Long parsedToSeconds(String time) {

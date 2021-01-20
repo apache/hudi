@@ -47,7 +47,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   public static final String INLINE_COMPACT_PROP = "hoodie.compact.inline";
   // Run a compaction every N delta commits
   public static final String INLINE_COMPACT_NUM_DELTA_COMMITS_PROP = "hoodie.compact.inline.max.delta.commits";
-  public static final String INLINE_COMPACT_ELAPSED_TIME_PROP = "hoodie.compact.inline.max.delta.seconds";
+  public static final String INLINE_COMPACT_TIME_DELTA_SECONDS_PROP = "hoodie.compact.inline.max.delta.seconds";
   public static final String INLINE_COMPACT_TRIGGER_STRATEGY_PROP = "hoodie.compact.inline.trigger.strategy";
   public static final String CLEANER_FILE_VERSIONS_RETAINED_PROP = "hoodie.cleaner.fileversions.retained";
   public static final String CLEANER_COMMITS_RETAINED_PROP = "hoodie.cleaner.commits.retained";
@@ -112,7 +112,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_INLINE_COMPACT = "false";
   private static final String DEFAULT_INCREMENTAL_CLEANER = "true";
   private static final String DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS = "5";
-  private static final String DEFAULT_INLINE_COMPACT_ELAPSED_TIME = String.valueOf(60 * 60);
+  private static final String DEFAULT_INLINE_COMPACT_TIME_DELTA_SECONDS = String.valueOf(60 * 60);
   private static final String DEFAULT_INLINE_COMPACT_TRIGGER_STRATEGY = CompactionTriggerStrategy.NUM.name();
   private static final String DEFAULT_CLEANER_FILE_VERSIONS_RETAINED = "3";
   private static final String DEFAULT_CLEANER_COMMITS_RETAINED = "10";
@@ -245,8 +245,8 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder withMaxDeltaTimeBeforeCompaction(int maxDeltaTimeBeforeCompaction) {
-      props.setProperty(INLINE_COMPACT_ELAPSED_TIME_PROP, String.valueOf(maxDeltaTimeBeforeCompaction));
+    public Builder withMaxDeltaSecondsBeforeCompaction(int maxDeltaSecondsBeforeCompaction) {
+      props.setProperty(INLINE_COMPACT_TIME_DELTA_SECONDS_PROP, String.valueOf(maxDeltaSecondsBeforeCompaction));
       return this;
     }
 
@@ -286,8 +286,8 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
           DEFAULT_INLINE_COMPACT);
       setDefaultOnCondition(props, !props.containsKey(INLINE_COMPACT_NUM_DELTA_COMMITS_PROP),
           INLINE_COMPACT_NUM_DELTA_COMMITS_PROP, DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS);
-      setDefaultOnCondition(props, !props.containsKey(INLINE_COMPACT_ELAPSED_TIME_PROP),
-          INLINE_COMPACT_ELAPSED_TIME_PROP, DEFAULT_INLINE_COMPACT_ELAPSED_TIME);
+      setDefaultOnCondition(props, !props.containsKey(INLINE_COMPACT_TIME_DELTA_SECONDS_PROP),
+          INLINE_COMPACT_TIME_DELTA_SECONDS_PROP, DEFAULT_INLINE_COMPACT_TIME_DELTA_SECONDS);
       setDefaultOnCondition(props, !props.containsKey(INLINE_COMPACT_TRIGGER_STRATEGY_PROP),
           INLINE_COMPACT_TRIGGER_STRATEGY_PROP, DEFAULT_INLINE_COMPACT_TRIGGER_STRATEGY);
       setDefaultOnCondition(props, !props.containsKey(CLEANER_POLICY_PROP), CLEANER_POLICY_PROP,

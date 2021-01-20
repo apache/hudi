@@ -406,8 +406,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Integer.parseInt(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP));
   }
 
-  public int getInlineCompactDeltaElapsedTimeMax() {
-    return Integer.parseInt(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_ELAPSED_TIME_PROP));
+  public int getInlineCompactDeltaSecondsMax() {
+    return Integer.parseInt(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_TIME_DELTA_SECONDS_PROP));
   }
 
   public CompactionStrategy getCompactionStrategy() {

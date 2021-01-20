@@ -90,6 +90,20 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     });
   }
 
+  /**
+   * Returns next instant time that adds milliseconds in the {@link #COMMIT_FORMATTER} format.
+   * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
+   */
+  public static String createNewInstantTime(long milliseconds) {
+    return lastInstantTime.updateAndGet((oldVal) -> {
+      String newCommitTime;
+      do {
+        newCommitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date(System.currentTimeMillis() + milliseconds));
+      } while (HoodieTimeline.compareTimestamps(newCommitTime, LESSER_THAN_OR_EQUALS, oldVal));
+      return newCommitTime;
+    });
+  }
+
   protected HoodieActiveTimeline(HoodieTableMetaClient metaClient, Set<String> includedExtensions) {
     this(metaClient, includedExtensions, true);
   }

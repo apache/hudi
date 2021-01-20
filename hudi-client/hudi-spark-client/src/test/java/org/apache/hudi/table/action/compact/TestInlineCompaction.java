@@ -43,7 +43,7 @@ public class TestInlineCompaction extends CompactionTestBase {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(true)
             .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommits)
-            .withMaxDeltaTimeBeforeCompaction(maxDeltaTime)
+            .withMaxDeltaSecondsBeforeCompaction(maxDeltaTime)
             .withInlineCompactionTriggerStrategy(inlineCompactionType).build())
         .build();
   }
@@ -99,8 +99,7 @@ public class TestInlineCompaction extends CompactionTestBase {
       runNextDeltaCommits(writeClient, readClient, Arrays.asList(instantTime), records, cfg, true, new ArrayList<>());
 
       // after 10s, that will trigger compaction
-      Thread.sleep(10000);
-      String finalInstant = HoodieActiveTimeline.createNewInstantTime();
+      String finalInstant = HoodieActiveTimeline.createNewInstantTime(10000);
       HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
       createNextDeltaCommit(finalInstant, dataGen.generateUpdates(finalInstant, 100), writeClient, metaClient, cfg, false);
 
@@ -127,10 +126,9 @@ public class TestInlineCompaction extends CompactionTestBase {
 
       metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
       assertEquals(4, metaClient.getActiveTimeline().getCommitsAndCompactionTimeline().countInstants());
-      Thread.sleep(20000);
       // 4th commit, that will trigger compaction because reach the time elapsed
       metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
-      finalInstant = HoodieActiveTimeline.createNewInstantTime();
+      finalInstant = HoodieActiveTimeline.createNewInstantTime(20000);
       createNextDeltaCommit(finalInstant, dataGen.generateUpdates(finalInstant, 10), writeClient, metaClient, cfg, false);
 
       metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
@@ -151,10 +149,9 @@ public class TestInlineCompaction extends CompactionTestBase {
 
       // Then: ensure no compaction is executedm since there are only 3 delta commits
       assertEquals(3, metaClient.getActiveTimeline().getCommitsAndCompactionTimeline().countInstants());
-      Thread.sleep(20000);
       // 4th commit, that will trigger compaction
       metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
-      String finalInstant = HoodieActiveTimeline.createNewInstantTime();
+      String finalInstant = HoodieActiveTimeline.createNewInstantTime(20000);
       createNextDeltaCommit(finalInstant, dataGen.generateUpdates(finalInstant, 10), writeClient, metaClient, cfg, false);
 
       metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
@@ -202,7 +199,7 @@ public class TestInlineCompaction extends CompactionTestBase {
     HoodieWriteConfig cfg = getConfigBuilder(false)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(false)
-            .withMaxDeltaTimeBeforeCompaction(5)
+            .withMaxDeltaSecondsBeforeCompaction(5)
             .withInlineCompactionTriggerStrategy(CompactionTriggerStrategy.TIME_ELAPSED).build())
         .build();
     String instantTime;
@@ -212,8 +209,7 @@ public class TestInlineCompaction extends CompactionTestBase {
       HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
       runNextDeltaCommits(writeClient, readClient, instants, records, cfg, true, new ArrayList<>());
       // Schedule compaction instantTime, make it in-flight (simulates inline compaction failing)
-      Thread.sleep(10000);
-      instantTime = HoodieActiveTimeline.createNewInstantTime();
+      instantTime = HoodieActiveTimeline.createNewInstantTime(10000);
       scheduleCompaction(instantTime, writeClient, cfg);
       moveCompactionFromRequestedToInflight(instantTime, cfg);
     }
@@ -239,7 +235,7 @@ public class TestInlineCompaction extends CompactionTestBase {
     HoodieWriteConfig cfg = getConfigBuilder(false)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(false)
-            .withMaxDeltaTimeBeforeCompaction(1)
+            .withMaxDeltaSecondsBeforeCompaction(1)
             .withMaxNumDeltaCommitsBeforeCompaction(1)
             .withInlineCompactionTriggerStrategy(CompactionTriggerStrategy.NUM_AND_TIME).build())
         .build();
