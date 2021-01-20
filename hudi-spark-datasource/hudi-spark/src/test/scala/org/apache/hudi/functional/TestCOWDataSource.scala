@@ -348,4 +348,31 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
   }
+
+  @Test def testAutoInferDataPath(): Unit = {
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    // default partitionPath
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    // No need to specify basePath/*/*
+    spark.read.format("org.apache.hudi")
+      .load(basePath).show()
+
+    // partitionPath with org.apache.hudi.keygen.CustomKeyGenerator
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY, "org.apache.hudi.keygen.CustomKeyGenerator")
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "rider:SIMPLE,begin_lon:SIMPLE,end_lon:SIMPLE")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    // No need to specify basePath/*/*
+    spark.read.format("org.apache.hudi")
+      .load(basePath).show()
+  }
+
 }
