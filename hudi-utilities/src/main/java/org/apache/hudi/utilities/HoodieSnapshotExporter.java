@@ -129,7 +129,7 @@ public class HoodieSnapshotExporter {
     LOG.info(String.format("Starting to snapshot latest version files which are also no-late-than %s.",
         latestCommitTimestamp));
 
-    final List<String> partitions = getPartitions(engineContext, fs, cfg);
+    final List<String> partitions = getPartitions(engineContext, cfg);
     if (partitions.isEmpty()) {
       throw new HoodieSnapshotExporterException("The source dataset has 0 partition to snapshot.");
     }
@@ -154,8 +154,8 @@ public class HoodieSnapshotExporter {
     return latestCommit.isPresent() ? Option.of(latestCommit.get().getTimestamp()) : Option.empty();
   }
 
-  private List<String> getPartitions(HoodieEngineContext engineContext, FileSystem fs, Config cfg) throws IOException {
-    return FSUtils.getAllPartitionPaths(engineContext, fs, cfg.sourceBasePath, true, false, false);
+  private List<String> getPartitions(HoodieEngineContext engineContext, Config cfg) {
+    return FSUtils.getAllPartitionPaths(engineContext, cfg.sourceBasePath, true, false, false);
   }
 
   private void createSuccessTag(FileSystem fs, Config cfg) throws IOException {

@@ -86,9 +86,8 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
   protected List<String> getPartitions(Option<Integer> partitionsLimit) throws IOException {
     // Using FSUtils.getFS here instead of metaClient.getFS() since we dont want to count these listStatus
     // calls in metrics as they are not part of normal HUDI operation.
-    FileSystem fs = FSUtils.getFs(metaClient.getBasePath(), metaClient.getHadoopConf());
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    List<String> partitionPaths = FSUtils.getAllPartitionPaths(engineContext, fs, metaClient.getBasePath(),
+    List<String> partitionPaths = FSUtils.getAllPartitionPaths(engineContext, metaClient.getBasePath(),
         HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS, HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE, false);
     // Sort partition so we can pick last N partitions by default
     Collections.sort(partitionPaths);

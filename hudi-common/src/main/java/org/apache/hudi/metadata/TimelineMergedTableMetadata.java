@@ -18,48 +18,48 @@
 
 package org.apache.hudi.metadata;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.DefaultSizeEstimator;
-import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 
 /**
  * Provides functionality to convert timeline instants to table metadata records and then merge by key. Specify
  *  a filter to limit keys that are merged and stored in memory.
  */
-public class HoodieMetadataMergedInstantRecordScanner {
+public class TimelineMergedTableMetadata implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HoodieMetadataMergedInstantRecordScanner.class);
+  private static final Logger LOG = LogManager.getLogger(TimelineMergedTableMetadata.class);
 
   HoodieTableMetaClient metaClient;
   private List<HoodieInstant> instants;
   private Option<String> lastSyncTs;
   private Set<String> mergeKeyFilter;
-  protected final ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records;
 
-  public HoodieMetadataMergedInstantRecordScanner(HoodieTableMetaClient metaClient, List<HoodieInstant> instants,
-                                                  Option<String> lastSyncTs, Schema readerSchema, Long maxMemorySizeInBytes,
-                                                  String spillableMapBasePath, Set<String> mergeKeyFilter) throws IOException {
+  // keep it a simple hash map, so it can be easily passed onto the executors, once merged.
+  protected final Map<String, HoodieRecord<? extends HoodieRecordPayload>> timelineMergedRecords;
+
+  public TimelineMergedTableMetadata(HoodieTableMetaClient metaClient, List<HoodieInstant> instants,
+                                     Option<String> lastSyncTs, Set<String> mergeKeyFilter) {
     this.metaClient = metaClient;
     this.instants = instants;
     this.lastSyncTs = lastSyncTs;
     this.mergeKeyFilter = mergeKeyFilter != null ? mergeKeyFilter : Collections.emptySet();
-    this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
-        new HoodieRecordSizeEstimator(readerSchema));
+    this.timelineMergedRecords = new HashMap<>();
 
     scan();
   }
@@ -92,13 +92,13 @@ public class HoodieMetadataMergedInstantRecordScanner {
   private void processNextRecord(HoodieRecord<? extends HoodieRecordPayload> hoodieRecord) {
     String key = hoodieRecord.getRecordKey();
     if (mergeKeyFilter.isEmpty() || mergeKeyFilter.contains(key)) {
-      if (records.containsKey(key)) {
+      if (timelineMergedRecords.containsKey(key)) {
         // Merge and store the merged record
-        HoodieRecordPayload combinedValue = hoodieRecord.getData().preCombine(records.get(key).getData());
-        records.put(key, new HoodieRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue));
+        HoodieRecordPayload combinedValue = hoodieRecord.getData().preCombine(timelineMergedRecords.get(key).getData(), new Properties());
+        timelineMergedRecords.put(key, new HoodieRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue));
       } else {
         // Put the record as is
-        records.put(key, hoodieRecord);
+        timelineMergedRecords.put(key, hoodieRecord);
       }
     }
   }
@@ -110,6 +110,6 @@ public class HoodieMetadataMergedInstantRecordScanner {
    * @return {@code HoodieRecord} if key was found else {@code Option.empty()}
    */
   public Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKey(String key) {
-    return Option.ofNullable((HoodieRecord) records.get(key));
+    return Option.ofNullable((HoodieRecord) timelineMergedRecords.get(key));
   }
 }
