@@ -83,14 +83,6 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
     }
   }
 
-  @org.junit.jupiter.api.BeforeEach
-  public void setUp() throws Exception {
-    initPath();
-    initFileSystem();
-    // We have some records to be tagged (two different partitions)
-    initMetaClient();
-  }
-
   protected void initFlinkMiniCluster() {
     flinkCluster = new MiniClusterWithClientResource(
         new MiniClusterResourceConfiguration.Builder()

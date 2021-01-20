@@ -193,26 +193,21 @@ public class FlinkHoodieBloomIndex<T extends HoodieRecordPayload> extends FlinkH
         config.useBloomIndexTreebasedFilter() ? new IntervalTreeBasedIndexFileFilter(partitionToFileIndexInfo)
             : new ListBasedIndexFileFilter(partitionToFileIndexInfo);
 
-    List<Tuple2<String, HoodieKey>> ans = new ArrayList<>();
+    List<Tuple2<String, HoodieKey>> fileRecordPairs = new ArrayList<>();
     partitionRecordKeyMap.keySet().forEach(partitionPath ->  {
       List<String> hoodieRecordKeys = partitionRecordKeyMap.get(partitionPath);
       hoodieRecordKeys.forEach(hoodieRecordKey -> {
         indexFileFilter.getMatchingFilesAndPartition(partitionPath, hoodieRecordKey).forEach(partitionFileIdPair -> {
-          ans.add(new Tuple2<>(partitionFileIdPair.getRight(),
+          fileRecordPairs.add(new Tuple2<>(partitionFileIdPair.getRight(),
                   new HoodieKey(hoodieRecordKey, partitionPath)));
         });
       });
     });
-    return ans;
+    return fileRecordPairs;
   }
 
   /**
-   * Find out <RowKey, filename> pair. All workload grouped by file-level.
-   * <p>
-   * Join Map(PartitionPath, RecordKey) and Map(PartitionPath, File) & then repartition such that each List
-   * is a file, then for each file, we do (1) load bloom filter, (2) load rowKeys, (3) Tag rowKey
-   * <p>
-   * Make sure the parallelism is atleast the groupby parallelism for tagging location
+   * Find out <RowKey, filename> pair.
    */
   Map<HoodieKey, HoodieRecordLocation> findMatchingFilesForRecordKeys(
       List<Tuple2<String, HoodieKey>> fileComparisons,
@@ -247,7 +242,7 @@ public class FlinkHoodieBloomIndex<T extends HoodieRecordPayload> extends FlinkH
           Map<HoodieKey, HoodieRecordLocation> keyFilenamePair, List<HoodieRecord<T>> records) {
     Map<HoodieKey, HoodieRecord<T>> keyRecordPairMap = new HashMap<>();
     records.forEach(r -> keyRecordPairMap.put(r.getKey(), r));
-    // Here as the recordRDD might have more data than rowKeyRDD (some rowKeys' fileId is null),
+    // Here as the record might have more data than rowKey (some rowKeys' fileId is null),
     // so we do left outer join.
     List<Tuple2<HoodieRecord<T>, HoodieRecordLocation>> newList = new ArrayList<>();
     keyRecordPairMap.keySet().forEach(k -> {

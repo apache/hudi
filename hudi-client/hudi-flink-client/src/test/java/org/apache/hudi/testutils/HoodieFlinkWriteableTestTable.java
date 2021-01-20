@@ -20,8 +20,6 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
@@ -32,27 +30,18 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
-import org.apache.hudi.common.testutils.FileCreateUtils;
-import org.apache.hudi.config.HoodieStorageConfig;
-import org.apache.hudi.io.storage.HoodieAvroParquetConfig;
-import org.apache.hudi.io.storage.HoodieParquetWriter;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.parquet.avro.AvroSchemaConverter;
-import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
 
 public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
   private static final Logger LOG = LogManager.getLogger(HoodieFlinkWriteableTestTable.class);
@@ -95,7 +84,7 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
   }
 
   public String getFileIdWithInserts(String partition, HoodieRecord... records) throws Exception {
-    return getFileIdWithInserts(partition, java.util.Arrays.asList(records));
+    return getFileIdWithInserts(partition, Arrays.asList(records));
   }
 
   public String getFileIdWithInserts(String partition, List<HoodieRecord> records) throws Exception {
@@ -109,33 +98,11 @@ public class HoodieFlinkWriteableTestTable extends HoodieWriteableTestTable {
   }
 
   public HoodieFlinkWriteableTestTable withInserts(String partition, String fileId, HoodieRecord... records) throws Exception {
-    return withInserts(partition, fileId, java.util.Arrays.asList(records));
+    return withInserts(partition, fileId, Arrays.asList(records));
   }
 
   public HoodieFlinkWriteableTestTable withInserts(String partition, String fileId, List<HoodieRecord> records) throws Exception {
-    FileCreateUtils.createPartitionMetaFile(basePath, partition);
-    String fileName = baseFileName(currentInstantTime, fileId);
-
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
-        new AvroSchemaConverter().convert(schema), schema, filter);
-    HoodieAvroParquetConfig config = new HoodieAvroParquetConfig(writeSupport, CompressionCodecName.GZIP,
-        ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 120 * 1024 * 1024,
-        new Configuration(), Double.parseDouble(HoodieStorageConfig.DEFAULT_STREAM_COMPRESSION_RATIO));
-    try (HoodieParquetWriter writer = new HoodieParquetWriter(
-        currentInstantTime,
-        new Path(java.nio.file.Paths.get(basePath, partition, fileName).toString()),
-        config, schema, new FlinkTaskContextSupplier(null))) {
-      int seqId = 1;
-      for (HoodieRecord record : records) {
-        GenericRecord avroRecord = (GenericRecord) record.getData().getInsertValue(schema).get();
-        HoodieAvroUtils.addCommitMetadataToRecord(avroRecord, currentInstantTime, String.valueOf(seqId++));
-        HoodieAvroUtils.addHoodieKeyToRecord(avroRecord, record.getRecordKey(), record.getPartitionPath(), fileName);
-        writer.writeAvro(record.getRecordKey(), avroRecord);
-        filter.add(record.getRecordKey());
-      }
-    }
-
-    return this;
+    return (HoodieFlinkWriteableTestTable) withInserts(partition, fileId, records, new org.apache.hudi.client.FlinkTaskContextSupplier(null));
   }
 
   public HoodieFlinkWriteableTestTable withLogAppends(List<HoodieRecord> records) throws Exception {
