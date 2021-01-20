@@ -16,13 +16,11 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.metrics;
+package org.apache.hudi.common.function;
 
 import java.io.Serializable;
 
-/**
- * Interface for Hudi Metric Types.
- */
-public interface Metric extends Serializable {
-  Long getValue();
+@FunctionalInterface
+public interface SerializableSupplier<T> extends Serializable {
+  T get();
 }

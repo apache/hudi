@@ -108,18 +108,9 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     // process snapshot queries next.
     List<Path> snapshotPaths = inputPathHandler.getSnapshotPaths();
     if (snapshotPaths.size() > 0) {
-      Map<HoodieTableMetaClient, List<Path>> groupedPaths =
-          HoodieInputFormatUtils.groupSnapshotPathsByMetaClient(tableMetaClientMap.values(), snapshotPaths);
-      LOG.info("Found a total of " + groupedPaths.size() + " groups");
-      for (Map.Entry<HoodieTableMetaClient, List<Path>> entry : groupedPaths.entrySet()) {
-        HoodieTableMetaClient metaClient = entry.getKey();
-        List<FileStatus> result = HoodieInputFormatUtils.filterFileStatusForSnapshotMode(job, entry.getKey(), entry.getValue());
-        if (result != null) {
-          returns.addAll(result);
-        }
-      }
+      returns.addAll(HoodieInputFormatUtils.filterFileStatusForSnapshotMode(job, tableMetaClientMap, snapshotPaths));
     }
-    return returns.toArray(new FileStatus[returns.size()]);
+    return returns.toArray(new FileStatus[0]);
   }
 
 

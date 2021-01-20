@@ -46,6 +46,7 @@ import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -56,6 +57,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -198,14 +201,20 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     // If metadata table is enabled, do not archive instants which are more recent that the latest synced
     // instant on the metadata table. This is required for metadata table sync.
     if (config.useFileListingMetadata()) {
-      Option<String> lastSyncedInstantTime = table.metadata().getSyncedInstantTime();
-      if (lastSyncedInstantTime.isPresent()) {
-        LOG.info("Limiting archiving of instants to last synced instant on metadata table at " + lastSyncedInstantTime.get());
-        instants = instants.filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(), HoodieTimeline.LESSER_THAN,
-            lastSyncedInstantTime.get()));
-      } else {
-        LOG.info("Not archiving as there is no instants yet on the metadata table");
-        instants = Stream.empty();
+      try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(table.getContext(), config.getMetadataConfig(),
+          config.getBasePath(), FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR)) {
+        Option<String> lastSyncedInstantTime = tableMetadata.getSyncedInstantTime();
+
+        if (lastSyncedInstantTime.isPresent()) {
+          LOG.info("Limiting archiving of instants to last synced instant on metadata table at " + lastSyncedInstantTime.get());
+          instants = instants.filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(), HoodieTimeline.LESSER_THAN,
+              lastSyncedInstantTime.get()));
+        } else {
+          LOG.info("Not archiving as there is no instants yet on the metadata table");
+          instants = Stream.empty();
+        }
+      } catch (Exception e) {
+        throw new HoodieException("Error limiting instant archival based on metadata table", e);
       }
     }
 

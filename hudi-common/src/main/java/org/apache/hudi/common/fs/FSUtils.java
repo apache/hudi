@@ -27,6 +27,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -34,6 +35,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -252,15 +254,29 @@ public class FSUtils {
     }
   }
 
-  public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext, FileSystem fs, String basePathStr,
+  public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext, String basePathStr,
                                                   boolean useFileListingFromMetadata, boolean verifyListings,
-                                                  boolean assumeDatePartitioning) throws IOException {
-    if (assumeDatePartitioning) {
-      return getAllPartitionFoldersThreeLevelsDown(fs, basePathStr);
-    } else {
-      HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, basePathStr, "/tmp/",
-          useFileListingFromMetadata, verifyListings, false, false);
+                                                  boolean assumeDatePartitioning) {
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(useFileListingFromMetadata)
+        .validate(verifyListings)
+        .withAssumeDatePartitioning(assumeDatePartitioning)
+        .build();
+    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
+        FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR)) {
       return tableMetadata.getAllPartitionPaths();
+    } catch (Exception e) {
+      throw new HoodieException("Error fetching partition paths from metadata table", e);
+    }
+  }
+
+  public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
+                                                  String basePathStr) {
+    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
+        FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR)) {
+      return tableMetadata.getAllPartitionPaths();
+    } catch (Exception e) {
+      throw new HoodieException("Error fetching partition paths from metadata table", e);
     }
   }
 
