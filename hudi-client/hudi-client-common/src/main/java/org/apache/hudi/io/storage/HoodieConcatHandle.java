@@ -18,7 +18,7 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.client.common.TaskContextSupplier;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -37,7 +37,8 @@ import java.util.Map;
 
 /**
  * Handle to concatenate new records to old records w/o any merging. If Operation is set to Inserts, and if {{@link HoodieWriteConfig#allowDuplicateInserts()}}
- * is set, this handle will be used instead of {@link HoodieMergeHandle}
+ * is set, this handle will be used instead of {@link HoodieMergeHandle}.
+ *
  * Simplified Logic:
  * For every existing record
  *     Write the record as is
@@ -49,13 +50,16 @@ import java.util.Map;
  * Existing data:
  *     rec1_1, rec2_1, rec3_1, rec4_1
  *
- * For every existing record, merge w/ incoming if requried and write to storage.
+ * For every existing record, write to storage as is.
  *    => rec1_1, rec2_1, rec3_1 and rec4_1 is written to storage
  * Write all records from incoming set to storage
  *    => rec1_2, rec4_2, rec5_1 and rec6_1
  *
  * Final snapshot in storage
  * rec1_1, rec2_1, rec3_1, rec4_1, rec1_2, rec4_2, rec5_1, rec6_1
+ *
+ * Users should ensure there are no duplicates when "insert" operation is used and if the respective config is enabled. So, above scenario should not
+ * happen and every batch should have new records to be inserted. Above example is for illustration purposes only.
  */
 public class HoodieConcatHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
 

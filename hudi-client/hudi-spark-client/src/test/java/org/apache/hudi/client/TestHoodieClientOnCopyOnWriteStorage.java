@@ -482,7 +482,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       throws Exception {
     // Force using older timeline layout
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()
-        .withProps(config.getProps()).withMergeAllowDuplicateInserts(true).withTimelineLayoutVersion(
+        .withProps(config.getProps()).withMergeAllowDuplicateOnInserts(true).withTimelineLayoutVersion(
             VERSION_0).build();
 
     HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(), metaClient.getTableType(),
@@ -1751,7 +1751,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             HoodieStorageConfig.newBuilder()
                 .hfileMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200))
                 .parquetMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200)).build())
-        .withMergeAllowDuplicateInserts(mergeAllowDuplicateInserts)
+        .withMergeAllowDuplicateOnInserts(mergeAllowDuplicateInserts)
         .withProps(props)
         .build();
   }
