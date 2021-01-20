@@ -32,6 +32,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -57,6 +58,7 @@ public class TestJsonStringToHoodieRecordMapFunction extends HoodieFlinkClientTe
   }
 
   @Test
+  @Disabled
   public void testMapFunction() throws Exception {
     final String newCommitTime = "001";
     final int numRecords = 10;

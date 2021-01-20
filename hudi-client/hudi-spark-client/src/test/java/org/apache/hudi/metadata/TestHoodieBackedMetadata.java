@@ -59,6 +59,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -409,6 +410,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
    */
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
+  @Disabled
   public void testSync(HoodieTableType tableType) throws Exception {
     init(tableType);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
