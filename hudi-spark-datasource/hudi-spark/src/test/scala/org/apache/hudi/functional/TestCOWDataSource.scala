@@ -358,7 +358,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    // No need to specify basePath/*/*
+    // no need to specify basePath/*/*
     spark.read.format("org.apache.hudi")
       .load(basePath).show()
 
@@ -370,9 +370,8 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    // No need to specify basePath/*/*
+    // no need to specify basePath/*/*/*/*
     spark.read.format("org.apache.hudi")
       .load(basePath).show()
   }
-
 }
