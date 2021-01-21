@@ -18,7 +18,7 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.client.common.EngineType;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
 
 import org.apache.hudi.index.HoodieIndex;

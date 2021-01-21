@@ -94,7 +94,12 @@ class DefaultSource extends RelationProvider
     } else if(parameters(QUERY_TYPE_OPT_KEY).equals(QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)) {
       getBaseFileOnlyView(sqlContext, parameters, schema, readPaths, isBootstrappedTable, globPaths, metaClient)
     } else if (parameters(QUERY_TYPE_OPT_KEY).equals(QUERY_TYPE_INCREMENTAL_OPT_VAL)) {
-      new IncrementalRelation(sqlContext, tablePath, optParams, schema)
+      val metaClient = new HoodieTableMetaClient(fs.getConf, tablePath)
+      if (metaClient.getTableType.equals(HoodieTableType.MERGE_ON_READ)) {
+        new MergeOnReadIncrementalRelation(sqlContext, optParams, schema, metaClient)
+      } else {
+        new IncrementalRelation(sqlContext, optParams, schema, metaClient)
+      }
     } else {
       throw new HoodieException("Invalid query type :" + parameters(QUERY_TYPE_OPT_KEY))
     }

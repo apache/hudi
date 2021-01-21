@@ -19,7 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.TaskContextSupplier;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -31,6 +31,7 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;
@@ -101,7 +102,7 @@ public class HoodieSortedMergeHandle<T extends HoodieRecordPayload, I, K, O> ext
   }
 
   @Override
-  public WriteStatus close() {
+  public List<WriteStatus> close() {
     // write out any pending records (this can happen when inserts are turned into updates)
     newRecordKeysSorted.stream().forEach(key -> {
       try {

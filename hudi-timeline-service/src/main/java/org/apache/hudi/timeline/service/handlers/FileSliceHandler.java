@@ -94,6 +94,16 @@ public class FileSliceHandler extends Handler {
         .collect(Collectors.toList());
   }
 
+  public List<FileGroupDTO> getReplacedFileGroupsBefore(String basePath, String maxCommitTime, String partitionPath) {
+    return viewManager.getFileSystemView(basePath).getReplacedFileGroupsBefore(maxCommitTime, partitionPath).map(FileGroupDTO::fromFileGroup)
+        .collect(Collectors.toList());
+  }
+  
+  public List<FileGroupDTO> getAllReplacedFileGroups(String basePath, String partitionPath) {
+    return viewManager.getFileSystemView(basePath).getAllReplacedFileGroups(partitionPath).map(FileGroupDTO::fromFileGroup)
+        .collect(Collectors.toList());
+  }
+
   public List<ClusteringOpDTO> getFileGroupsInPendingClustering(String basePath) {
     return viewManager.getFileSystemView(basePath).getFileGroupsInPendingClustering()
         .map(fgInstant -> ClusteringOpDTO.fromClusteringOp(fgInstant.getLeft(), fgInstant.getRight()))

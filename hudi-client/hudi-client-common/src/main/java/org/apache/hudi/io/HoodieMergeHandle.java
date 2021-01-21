@@ -19,7 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.TaskContextSupplier;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -50,8 +50,10 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -258,7 +260,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   }
 
   @Override
-  public WriteStatus close() {
+  public List<WriteStatus> close() {
     try {
       // write out any pending records (this can happen when inserts are turned into updates)
       Iterator<HoodieRecord<T>> newRecordsItr = (keyToNewRecords instanceof ExternalSpillableMap)
@@ -301,7 +303,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       LOG.info(String.format("MergeHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
           stat.getFileId(), runtimeStats.getTotalUpsertTime()));
 
-      return writeStatus;
+      return Collections.singletonList(writeStatus);
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);
     }
@@ -331,11 +333,6 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
 
   public Path getOldFilePath() {
     return oldFilePath;
-  }
-
-  @Override
-  public WriteStatus getWriteStatus() {
-    return writeStatus;
   }
 
   @Override
