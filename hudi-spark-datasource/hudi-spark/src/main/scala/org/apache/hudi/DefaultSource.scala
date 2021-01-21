@@ -48,6 +48,7 @@ class DefaultSource extends RelationProvider
 
   SparkSession.getActiveSession.foreach { spark =>
     // Enable "passPartitionByAsOptions" to support "write.partitionBy(...)"
+    // TODO Remove this when upgrading to Spark 3.0.0
     spark.conf.set("spark.sql.legacy.sources.write.passPartitionByAsOptions", "true")
   }
 
