@@ -36,7 +36,7 @@ import java.util.List;
 import scala.Tuple2;
 
 /**
- * Function performing actual checking of List partition containing (fileId, hoodieKeys) against the actual files.
+ * Function performing actual checking of list containing (fileId, hoodieKeys) against the actual files.
  */
 //TODO we can move this class into the hudi-client-common and reuse it for spark client
 public class HoodieFlinkBloomIndexCheckFunction
