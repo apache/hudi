@@ -1,0 +1,61 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+trigger:
+  - master
+  - release-*
+
+pool:
+  vmImage: 'ubuntu-20.04'
+
+steps:
+  - task: Maven@3
+    enabled: false
+    inputs:
+      mavenPomFile: 'pom.xml'
+      goals: 'clean install' # Optional
+      options: -DskipTests -q # Optional
+      publishJUnitResults: false
+      javaHomeOption: 'JDKVersion'
+      jdkVersionOption: '1.8'
+      jdkArchitectureOption: 'x64'
+  - task: Maven@3
+    inputs:
+      mavenPomFile: 'pom.xml'
+      goals: 'test' # Optional
+      options: -Punit-tests
+      publishJUnitResults: true
+      testResultsFiles: '**/surefire-reports/TEST-*.xml'
+      testRunTitle: unit tests
+      codeCoverageToolOption: 'jaCoCo' # Optional. Options: none, cobertura, jaCoCo. Enabling code coverage inserts the `clean` goal into the Maven goals list when Maven runs.
+      #codeCoverageClassFilter: # Optional. Comma-separated list of filters to include or exclude classes from collecting code coverage. For example: +:com.*,+:org.*,-:my.app*.*
+      #codeCoverageClassFilesDirectories: # Optional
+      #codeCoverageSourceDirectories: # Optional
+      #codeCoverageFailIfEmpty: false # Optional
+      javaHomeOption: 'JDKVersion'
+      jdkVersionOption: '1.8'
+      #jdkDirectory: # Required when javaHomeOption == Path
+      jdkArchitectureOption: 'x64'
+      #mavenVersionOption: 'Default' # Options: default, path
+      #mavenDirectory: # Required when mavenVersionOption == Path
+      #mavenSetM2Home: false # Required when mavenVersionOption == Path
+      #mavenOptions: '-Xmx1024m' # Optional
+      #mavenAuthenticateFeed: false
+      #effectivePomSkip: false
+      #sonarQubeRunAnalysis: false
+      #sqMavenPluginVersionChoice: 'latest' # Required when sonarQubeRunAnalysis == True# Options: latest, pom
+      #checkStyleRunAnalysis: false # Optional
+      #pmdRunAnalysis: false # Optional
+      #findBugsRunAnalysis: false # Optional
