@@ -407,10 +407,14 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   /**
    * Test sync of table operations.
    */
+  /*
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   public void testSync(HoodieTableType tableType) throws Exception {
-    init(tableType);
+  */
+  @Test
+  public void testSync() throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     String newCommitTime;
