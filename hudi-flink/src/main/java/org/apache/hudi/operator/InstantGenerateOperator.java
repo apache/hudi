@@ -109,7 +109,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
     fs = FSUtils.getFs(cfg.targetBasePath, serializableHadoopConf.get());
 
     if (isMain) {
-      TaskContextSupplier taskContextSupplier = new FlinkTaskContextSupplier(runtimeContext);
+      TaskContextSupplier taskContextSupplier = new FlinkTaskContextSupplier(null);
 
       // writeClient
       writeClient = new HoodieFlinkWriteClient(new HoodieFlinkEngineContext(taskContextSupplier), StreamerUtil.getHoodieClientConfig(cfg), true);
