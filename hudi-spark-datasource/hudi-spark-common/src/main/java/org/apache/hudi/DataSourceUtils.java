@@ -84,6 +84,19 @@ public class DataSourceUtils {
     throw new TableNotFoundException("Unable to find a hudi table for the user provided paths.");
   }
 
+  public static String getDataPath(String tablePath, String partitionPath) {
+    // When the table is not partitioned
+    if (tablePath.equals(partitionPath)) {
+      return tablePath + "/*";
+    }
+    assert partitionPath.length() > tablePath.length();
+    assert partitionPath.startsWith(tablePath);
+    int n = partitionPath.substring(tablePath.length()).split("/").length;
+    String dataPathSuffix = String.join("/*", Collections.nCopies(n + 1, ""));
+    return tablePath + dataPathSuffix;
+  }
+
+
   /**
    * Create a key generator class via reflection, passing in any configs needed.
    * <p>

@@ -583,4 +583,56 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .load(basePath + "/*")
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("")).count() == 0)
   }
+
+  @Test def testAutoInferDataPath(): Unit = {
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    // default partition
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    // no need to specify basePath/*/*
+    spark.read.format("org.apache.hudi")
+      .load(basePath).show()
+
+    // partition with org.apache.hudi.keygen.CustomKeyGenerator
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY, "org.apache.hudi.keygen.CustomKeyGenerator")
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "rider:SIMPLE,begin_lon:SIMPLE,end_lon:SIMPLE")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    // no need to specify basePath/*/*/*/*
+    spark.read.format("org.apache.hudi")
+      .load(basePath).show()
+
+    // no partition
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    // no need to specify basePath/*
+    spark.read.format("org.apache.hudi")
+      .load(basePath).show()
+
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY, "org.apache.hudi.keygen.CustomKeyGenerator")
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "current_ts:SIMPLE")
+      .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
+      .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    // specify basePath/yyyyMMdd/*
+    val date = new DateTime().toString(DateTimeFormat.forPattern("yyyyMMdd"))
+    spark.read.format("org.apache.hudi")
+      .load(basePath + s"/$date/*").show()
+  }
 }
