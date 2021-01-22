@@ -57,7 +57,7 @@ class DefaultSource extends RelationProvider
                               optParams: Map[String, String],
                               schema: StructType): BaseRelation = {
     // Add default options for unspecified read options keys.
-    val parameters = translateViewTypesToQueryTypes(optParams)
+    var parameters = translateViewTypesToQueryTypes(optParams)
 
     val path = parameters.get("path")
     val readPathsStr = parameters.get(DataSourceReadOptions.READ_PATHS_OPT_KEY)
@@ -73,6 +73,10 @@ class DefaultSource extends RelationProvider
 
     val tablePath = DataSourceUtils.getTablePath(fs, globPaths.toArray)
     log.info("Obtained hudi table path: " + tablePath)
+    val onePartitionPath = DataSourceUtils.getOnePartitionPath(fs, new Path(tablePath))
+    val dataPath = DataSourceUtils.getDataPath(tablePath, onePartitionPath.orElse(s"$tablePath/*"))
+    log.info("Obtained hudi data path: " + dataPath)
+    parameters += "path" -> dataPath
 
     val metaClient = new HoodieTableMetaClient(fs.getConf, tablePath)
     val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
