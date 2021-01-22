@@ -494,7 +494,7 @@ Controls bootstrap related configs. If you want to bootstrap your data for the f
 
 #### withBootstrapBasePath(basePath) {#withBootstrapBasePath}
 Property: `hoodie.bootstrap.base.path` <br/>
-<span style="color:grey"> Base path to bootstrap dataset into hudi. </span> 
+<span style="color:grey"> Base path of the dataset that needs to be bootstrapped as a Hudi table </span> 
 
 #### withBootstrapParallelism(parallelism = 1500) {#withBootstrapParallelism}
 Property: `hoodie.bootstrap.parallelism` <br/>
@@ -502,60 +502,61 @@ Property: `hoodie.bootstrap.parallelism` <br/>
 
 #### withBootstrapKeyGenClass(keyGenClass) (#withBootstrapKeyGenClass)
 Property: `hoodie.bootstrap.keygen.class` <br/>
-<span style="color:grey"> TBF </span>
+<span style="color:grey"> Key generator implementation to be used for generating keys from the bootstrapped dataset </span>
 
 #### withBootstrapModeSelector(partitionSelectorClass = org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector) {#withBootstrapModeSelector}
 Property: `hoodie.bootstrap.mode.selector` <br/>
-<span style="color:grey"> TBF </span>
+<span style="color:grey"> Selects the mode in which each file/partition in the bootstrapped dataset gets bootstrapped</span>
 
 #### withBootstrapPartitionPathTranslatorClass(partitionPathTranslatorClass = org.apache.hudi.client.bootstrap.translator.IdentityBootstrapPartitionPathTranslator) {#withBootstrapPartitionPathTranslatorClass}
 Property: `hoodie.bootstrap.partitionpath.translator.class` <br/>
-<span style="color:grey"> TBF </span>
+<span style="color:grey"> Translates the partition paths from the bootstrapped data into how is laid out as a Hudi table. </span>
 
 #### withFullBootstrapInputProvider(partitionSelectorClass = org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider) {#withFullBootstrapInputProvider}
 Property: `hoodie.bootstrap.full.input.provider` <br/>
-<span style="color:grey"> TBF </span>
+<span style="color:grey"> Class to use for reading the bootstrap dataset partitions/files, for Bootstrap mode `FULL_RECORD` </span>
 
 #### withBootstrapModeSelectorRegex(regex = ".*") {#withBootstrapModeSelectorRegex}
 Property: `hoodie.bootstrap.mode.selector.regex` <br/>
-<span style="color:grey"> TBF </span>
+<span style="color:grey"> Matches each bootstrap dataset partition against this regex and applies the mode below to it. </span>
 
 #### withBootstrapModeForRegexMatch(modeForRegexMatch = org.apache.hudi.client.bootstrap.METADATA_ONLY) 
 Property: `withBootstrapModeForRegexMatch` <br/>
-<span style="color:grey"> TBF </span>
+<span style="color:grey"> Bootstrap mode to apply for partition paths, that match regex above. `METADATA_ONLY` will generate just skeleton base files
+with keys/footers, avoiding full cost of rewriting the dataset. `FULL_RECORD` will perform a full copy/rewrite of the data as a Hudi table. </span>
 
-### HoodieMetadataConfig
+### Metadata Config
 Configurations used by the HUDI Metadata Table. This table maintains the meta information stored in hudi dataset so that listing can be avoided during queries. 
 
 [withMetadataConfig](#withMetadataConfig) (HoodieMetadataConfig) <br/>
 
 #### enable(enable = false) {#enable}
 Property: `hoodie.metadata.enable` <br/>
-<span style="color:grey"> Enable the internal Metadata Table which saves file listings </span>
+<span style="color:grey"> Enable the internal Metadata Table which stores table level metadata such as file listings </span>
+
+#### enableReuse(enable = true) {#enable}
+Property: `hoodie.metadata.reuse.enable` <br/>
+<span style="color:grey"> Enable reusing of opened file handles/merged logs, across multiple fetches from metadata table. </span>
+
+#### enableFallback(enable = true) {#enable}
+Property: `hoodie.metadata.fallback.enable` <br/>
+<span style="color:grey"> Fallback to listing from DFS, if there are any errors in fetching from metadata table </span>
 
 #### validate(validate = false) {#validate}
 Property: `hoodie.metadata.validate` <br/>
-<span style="color:grey"> Validate contents of Metadata Table on each access against the actual filesystem </span>
+<span style="color:grey"> Validate contents of Metadata Table on each access against the actual listings from DFS</span>
 
 #### withInsertParallelism(parallelism = 1) {#withInsertParallelism}
 Property: `hoodie.metadata.insert.parallelism` <br/>
-<span style="color:grey"> Enable the internal Metadata Table which saves file listings </span>
-
-#### withAsyncClean(asyncClean = false) {#enable}
-Property: `hoodie.metadata.clean.async` <br/>
-<span style="color:grey"> Enable the internal Metadata Table which saves file listings </span>
+<span style="color:grey"> Parallelism to use when writing to the metadata table </span>
 
 #### withMaxNumDeltaCommitsBeforeCompaction(maxNumDeltaCommitsBeforeCompaction = 24) {#enable}
 Property: `hoodie.metadata.compact.max.delta.commits` <br/>
-<span style="color:grey"> Enable the internal Metadata Table which saves file listings </span>
+<span style="color:grey"> Controls how often the metadata table is compacted.</span>
 
 #### archiveCommitsWith(minToKeep = 30, maxToKeep = 20) {#enable}
 Property: `hoodie.metadata.keep.min.commits`, `hoodie.metadata.keep.max.commits` <br/>
-<span style="color:grey"> Enable the internal Metadata Table which saves file listings </span>
-
-#### retainCommits(commitsRetained = 3) {#enable}
-Property: `hoodie.metadata.cleaner.commits.retained` <br/>
-<span style="color:grey"> Enable the internal Metadata Table which saves file listings </span>
+<span style="color:grey"> Controls the archival of the metadata table's timeline </span>
 
 ### Clustering Configs
 Controls clustering operations in hudi. Each clustering has to be configured for its strategy, and config params. This config drives the same. 
@@ -591,7 +592,7 @@ Property : `hoodie.clustering.plan.strategy.max.num.groups` <br/>
 Property: `hoodie.clustering.plan.strategy.target.file.max.bytes` <br/>
 <span style="color:grey"> Each group can produce 'N' (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups </span>
 
-### HoodiePayloadConfig
+### Payload Configs
 Payload related configs. This config can be leveraged by payload implementations to determine their business logic. 
 
 [withPayloadConfig](#withPayloadConfig) (HoodiePayloadConfig) <br/>
