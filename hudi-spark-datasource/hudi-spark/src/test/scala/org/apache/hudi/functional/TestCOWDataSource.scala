@@ -587,17 +587,17 @@ class TestCOWDataSource extends HoodieClientTestBase {
   @Test def testAutoInferDataPath(): Unit = {
     val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-    // default partition
+    // Default partition
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    // no need to specify basePath/*/*
+    // No need to specify basePath/*/*
     spark.read.format("org.apache.hudi")
       .load(basePath).show()
 
-    // partition with org.apache.hudi.keygen.CustomKeyGenerator
+    // Partition with org.apache.hudi.keygen.CustomKeyGenerator
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY, "org.apache.hudi.keygen.CustomKeyGenerator")
@@ -605,11 +605,11 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    // no need to specify basePath/*/*/*/*
+    // No need to specify basePath/*/*/*/*
     spark.read.format("org.apache.hudi")
       .load(basePath).show()
 
-    // no partition
+    // No partition
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
@@ -617,7 +617,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    // no need to specify basePath/*
+    // No need to specify basePath/*
     spark.read.format("org.apache.hudi")
       .load(basePath).show()
 
@@ -630,7 +630,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    // specify basePath/yyyyMMdd/*
+    // Specify basePath/yyyyMMdd/*
     val date = new DateTime().toString(DateTimeFormat.forPattern("yyyyMMdd"))
     spark.read.format("org.apache.hudi")
       .load(basePath + s"/$date/*").show()

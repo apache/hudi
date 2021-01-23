@@ -84,6 +84,30 @@ public class DataSourceUtils {
     throw new TableNotFoundException("Unable to find a hudi table for the user provided paths.");
   }
 
+<<<<<<< HEAD
+=======
+  public static Option<String> getOnePartitionPath(FileSystem fs, Path tablePath) throws IOException {
+    // When the table is not partitioned
+    if (HoodiePartitionMetadata.hasPartitionMetadata(fs, tablePath)) {
+      return Option.of(tablePath.toString());
+    }
+    FileStatus[] statuses = fs.listStatus(tablePath);
+    for (FileStatus status : statuses) {
+      if (status.isDirectory()) {
+        if (HoodiePartitionMetadata.hasPartitionMetadata(fs, status.getPath())) {
+          return Option.of(status.getPath().toString());
+        } else {
+          Option<String> partitionPath = getOnePartitionPath(fs, status.getPath());
+          if (partitionPath.isPresent()) {
+            return partitionPath;
+          }
+        }
+      }
+    }
+    return Option.empty();
+  }
+
+>>>>>>> [HUDI-1527] automatically infer the data directory, users only need to specify the table directory [adapt no partition]
   public static String getDataPath(String tablePath, String partitionPath) {
     // When the table is not partitioned
     if (tablePath.equals(partitionPath)) {
