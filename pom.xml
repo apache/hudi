@@ -128,6 +128,7 @@
     <skipUTs>${skipTests}</skipUTs>
     <skipFTs>${skipTests}</skipFTs>
     <skipITs>${skipTests}</skipITs>
+    <skip.hudi-spark2.unit.tests>${skipTests}</skip.hudi-spark2.unit.tests>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <main.basedir>${project.basedir}</main.basedir>
     <spark.bundle.hive.scope>provided</spark.bundle.hive.scope>
@@ -141,7 +142,6 @@
     <presto.bundle.bootstrap.scope>compile</presto.bundle.bootstrap.scope>
     <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>
     <shadeSources>true</shadeSources>
-    <skip.hudi-spark2.unit.tests>false</skip.hudi-spark2.unit.tests>
   </properties>
 
   <scm>
