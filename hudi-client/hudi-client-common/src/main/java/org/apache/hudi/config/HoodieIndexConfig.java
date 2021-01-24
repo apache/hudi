@@ -90,6 +90,13 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
   public static final String SIMPLE_INDEX_INPUT_STORAGE_LEVEL = "hoodie.simple.index.input.storage.level";
   public static final String DEFAULT_SIMPLE_INDEX_INPUT_STORAGE_LEVEL = "MEMORY_AND_DISK_SER";
 
+  // Record level index configs
+  public static final String RECORD_LEVEL_INDEX_NUM_PARTITIONS = "hoodie.record.level.index.num.partitions";
+  public static final String DEFAULT_RECORD_LEVEL_INDEX_NUM_PARTITIONS = "1";
+
+  public static final String RECORD_LEVEL_INDEX_ENABLE_SEEK_PROP = "hoodie.record.level.index.enable.seek";
+  public static final String DEFAULT_RECORD_LEVEL_INDEX_ENABLE_SEEK = "false";
+
   /**
    * Only applies if index type is GLOBAL_BLOOM.
    * <p>
@@ -291,6 +298,10 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
           DEFAULT_GLOBAL_SIMPLE_INDEX_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(SIMPLE_INDEX_UPDATE_PARTITION_PATH),
           SIMPLE_INDEX_UPDATE_PARTITION_PATH, DEFAULT_SIMPLE_INDEX_UPDATE_PARTITION_PATH);
+      setDefaultOnCondition(props, !props.containsKey(RECORD_LEVEL_INDEX_NUM_PARTITIONS), RECORD_LEVEL_INDEX_NUM_PARTITIONS,
+          DEFAULT_RECORD_LEVEL_INDEX_NUM_PARTITIONS);
+      setDefaultOnCondition(props, !props.containsKey(RECORD_LEVEL_INDEX_ENABLE_SEEK_PROP), RECORD_LEVEL_INDEX_ENABLE_SEEK_PROP,
+          DEFAULT_RECORD_LEVEL_INDEX_ENABLE_SEEK);
       // Throws IllegalArgumentException if the value set is not a known Hoodie Index Type
       HoodieIndex.IndexType.valueOf(props.getProperty(INDEX_TYPE_PROP));
       return config;

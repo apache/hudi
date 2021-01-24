@@ -133,10 +133,10 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     super(context, writeConfig, timelineService);
     this.metrics = new HoodieMetrics(config, config.getTableName());
     this.rollbackPending = rollbackPending;
-    this.index = createIndex(writeConfig);
+    this.index = createIndex(writeConfig, context);
   }
 
-  protected abstract HoodieIndex<T, I, K, O> createIndex(HoodieWriteConfig writeConfig);
+  protected abstract HoodieIndex<T, I, K, O> createIndex(HoodieWriteConfig writeConfig, HoodieEngineContext context);
 
   public void setOperationType(WriteOperationType operationType) {
     this.operationType = operationType;

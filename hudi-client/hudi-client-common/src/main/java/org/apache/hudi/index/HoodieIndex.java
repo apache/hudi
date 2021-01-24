@@ -61,9 +61,20 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implem
    * <p>
    * TODO(vc): We may need to propagate the record as well in a WriteStatus class
    */
-  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
+  @PublicAPIMethod(maturity = ApiMaturityLevel.DEPRECATED)
   public abstract O updateLocation(O writeStatuses, HoodieEngineContext context,
-                                   HoodieTable<T, I, K, O> hoodieTable) throws HoodieIndexException;
+      HoodieTable<T, I, K, O> hoodieTable) throws HoodieIndexException;
+
+  /**
+   * Extracts the location of written records, and updates the index.
+   * <p>
+   * TODO(vc): We may need to propagate the record as well in a WriteStatus class
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public O updateLocation(O writeStatuses, HoodieEngineContext context,
+      HoodieTable<T, I, K, O> hoodieTable, String instantTime) throws HoodieIndexException {
+    return updateLocation(writeStatuses, context, hoodieTable);
+  }
 
   /**
    * Rollback the effects of the commit made at instantTime.
@@ -104,6 +115,6 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   public enum IndexType {
-    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, SIMPLE, GLOBAL_SIMPLE
+    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, SIMPLE, GLOBAL_SIMPLE, RECORD_LEVEL_INDEX
   }
 }

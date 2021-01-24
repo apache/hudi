@@ -138,7 +138,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
       }
     }, true).flatMap(List::iterator);
 
-    updateIndexAndCommitIfNeeded(writeStatusRDD, result);
+    updateIndexAndCommitIfNeeded(writeStatusRDD, result, instantTime);
     return result;
   }
 
@@ -207,13 +207,13 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     return partitionedRDD.map(Tuple2::_2);
   }
 
-  protected void updateIndexAndCommitIfNeeded(JavaRDD<WriteStatus> writeStatusRDD, HoodieWriteMetadata result) {
+  protected void updateIndexAndCommitIfNeeded(JavaRDD<WriteStatus> writeStatusRDD, HoodieWriteMetadata result, String instantTime) {
     // cache writeStatusRDD before updating index, so that all actions before this are not triggered again for future
     // RDD actions that are performed after updating the index.
     writeStatusRDD = writeStatusRDD.persist(SparkMemoryUtils.getWriteStatusStorageLevel(config.getProps()));
     Instant indexStartTime = Instant.now();
     // Update the index back
-    JavaRDD<WriteStatus> statuses = table.getIndex().updateLocation(writeStatusRDD, context, table);
+    JavaRDD<WriteStatus> statuses = table.getIndex().updateLocation(writeStatusRDD, context, table, instantTime);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
     result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(statuses));

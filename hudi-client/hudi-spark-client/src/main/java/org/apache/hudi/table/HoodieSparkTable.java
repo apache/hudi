@@ -67,6 +67,6 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
 
   @Override
   protected HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
-    return SparkHoodieIndex.createIndex(config);
+    return SparkHoodieIndex.createIndex(config, context);
   }
 }

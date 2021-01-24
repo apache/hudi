@@ -155,7 +155,7 @@ public class TestCleaner extends HoodieClientTestBase {
     // We no longer write empty cleaner plans when there is nothing to be cleaned.
     assertTrue(table.getCompletedCleanTimeline().empty());
 
-    HoodieIndex index = SparkHoodieIndex.createIndex(cfg);
+    HoodieIndex index = SparkHoodieIndex.createIndex(cfg, context);
     List<HoodieRecord> taggedRecords = ((JavaRDD<HoodieRecord>) index.tagLocation(jsc.parallelize(records, 1), context, table)).collect();
     checkTaggedRecords(taggedRecords, newCommitTime);
   }

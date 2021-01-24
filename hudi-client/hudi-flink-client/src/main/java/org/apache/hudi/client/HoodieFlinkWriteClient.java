@@ -71,8 +71,8 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
    * Complete changes performed at the given instantTime marker with specified action.
    */
   @Override
-  protected HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> createIndex(HoodieWriteConfig writeConfig) {
-    return FlinkHoodieIndex.createIndex((HoodieFlinkEngineContext) context, config);
+  protected HoodieIndex<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> createIndex(HoodieWriteConfig writeConfig, HoodieEngineContext context) {
+    return FlinkHoodieIndex.createIndex((HoodieFlinkEngineContext) this.context, config);
   }
 
   @Override

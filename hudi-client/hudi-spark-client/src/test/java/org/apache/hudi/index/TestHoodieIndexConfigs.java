@@ -68,29 +68,29 @@ public class TestHoodieIndexConfigs {
       case INMEMORY:
         config = clientConfigBuilder.withPath(basePath)
             .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
-        assertTrue(SparkHoodieIndex.createIndex(config) instanceof SparkInMemoryHashIndex);
+        assertTrue(SparkHoodieIndex.createIndex(config, null) instanceof SparkInMemoryHashIndex);
         break;
       case BLOOM:
         config = clientConfigBuilder.withPath(basePath)
             .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
-        assertTrue(SparkHoodieIndex.createIndex(config) instanceof SparkHoodieBloomIndex);
+        assertTrue(SparkHoodieIndex.createIndex(config, null) instanceof SparkHoodieBloomIndex);
         break;
       case GLOBAL_BLOOM:
         config = clientConfigBuilder.withPath(basePath)
             .withIndexConfig(indexConfigBuilder.withIndexType(IndexType.GLOBAL_BLOOM).build()).build();
-        assertTrue(SparkHoodieIndex.createIndex(config) instanceof SparkHoodieGlobalBloomIndex);
+        assertTrue(SparkHoodieIndex.createIndex(config, null) instanceof SparkHoodieGlobalBloomIndex);
         break;
       case SIMPLE:
         config = clientConfigBuilder.withPath(basePath)
             .withIndexConfig(indexConfigBuilder.withIndexType(IndexType.SIMPLE).build()).build();
-        assertTrue(SparkHoodieIndex.createIndex(config) instanceof SparkHoodieSimpleIndex);
+        assertTrue(SparkHoodieIndex.createIndex(config, null) instanceof SparkHoodieSimpleIndex);
         break;
       case HBASE:
         config = clientConfigBuilder.withPath(basePath)
             .withIndexConfig(indexConfigBuilder.withIndexType(HoodieIndex.IndexType.HBASE)
                 .withHBaseIndexConfig(new HoodieHBaseIndexConfig.Builder().build()).build())
             .build();
-        assertTrue(SparkHoodieIndex.createIndex(config) instanceof SparkHoodieHBaseIndex);
+        assertTrue(SparkHoodieIndex.createIndex(config, null) instanceof SparkHoodieHBaseIndex);
         break;
       default:
         // no -op. just for checkstyle errors
@@ -103,7 +103,7 @@ public class TestHoodieIndexConfigs {
     HoodieIndexConfig.Builder indexConfigBuilder = HoodieIndexConfig.newBuilder();
     HoodieWriteConfig config = clientConfigBuilder.withPath(basePath)
         .withIndexConfig(indexConfigBuilder.withIndexClass(DummyHoodieIndex.class.getName()).build()).build();
-    assertTrue(SparkHoodieIndex.createIndex(config) instanceof DummyHoodieIndex);
+    assertTrue(SparkHoodieIndex.createIndex(config, null) instanceof DummyHoodieIndex);
   }
 
   @Test
@@ -113,14 +113,14 @@ public class TestHoodieIndexConfigs {
     final HoodieWriteConfig config1 = clientConfigBuilder.withPath(basePath)
         .withIndexConfig(indexConfigBuilder.withIndexClass(IndexWithConstructor.class.getName()).build()).build();
     final Throwable thrown1 = assertThrows(HoodieException.class, () -> {
-      SparkHoodieIndex.createIndex(config1);
+      SparkHoodieIndex.createIndex(config1, null);
     }, "exception is expected");
     assertTrue(thrown1.getMessage().contains("is not a subclass of HoodieIndex"));
 
     final HoodieWriteConfig config2 = clientConfigBuilder.withPath(basePath)
         .withIndexConfig(indexConfigBuilder.withIndexClass(IndexWithoutConstructor.class.getName()).build()).build();
     final Throwable thrown2 = assertThrows(HoodieException.class, () -> {
-      SparkHoodieIndex.createIndex(config2);
+      SparkHoodieIndex.createIndex(config2, null);
     }, "exception is expected");
     assertTrue(thrown2.getMessage().contains("Unable to instantiate class"));
   }
@@ -133,8 +133,8 @@ public class TestHoodieIndexConfigs {
 
     @Override
     public JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD,
-                                               HoodieEngineContext context,
-                                               HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) throws HoodieIndexException {
+        HoodieEngineContext context,
+        HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable) throws HoodieIndexException {
       return null;
     }
 

@@ -218,7 +218,7 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
   private Function2<List<HoodieRecord>, String, Integer> wrapRecordsGenFunctionForPreppedCalls(
       final HoodieWriteConfig writeConfig, final Function2<List<HoodieRecord>, String, Integer> recordGenFunction) {
     return (commit, numRecords) -> {
-      final SparkHoodieIndex index = SparkHoodieIndex.createIndex(writeConfig);
+      final SparkHoodieIndex index = SparkHoodieIndex.createIndex(writeConfig, context);
       List<HoodieRecord> records = recordGenFunction.apply(commit, numRecords);
       final HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath, true);
       HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
@@ -239,7 +239,7 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
   private Function<Integer, List<HoodieKey>> wrapDeleteKeysGenFunctionForPreppedCalls(
       final HoodieWriteConfig writeConfig, final Function<Integer, List<HoodieKey>> keyGenFunction) {
     return (numRecords) -> {
-      final SparkHoodieIndex index = SparkHoodieIndex.createIndex(writeConfig);
+      final SparkHoodieIndex index = SparkHoodieIndex.createIndex(writeConfig, context);
       List<HoodieKey> records = keyGenFunction.apply(numRecords);
       final HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath, true);
       HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context, metaClient);

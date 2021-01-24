@@ -99,7 +99,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath, true);
     this.hoodieTable = HoodieSparkTable.create(clientConfig, context, metaClient);
-    this.index = SparkHoodieIndex.createIndex(clientConfig);
+    this.index = SparkHoodieIndex.createIndex(clientConfig, context);
     this.sqlContextOpt = Option.empty();
   }
 

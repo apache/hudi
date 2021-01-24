@@ -923,6 +923,14 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Integer.parseInt(props.getProperty(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED_PROP));
   }
 
+  public int getNumPartitionsForRecordLevelIndex() {
+    return Integer.parseInt(props.getProperty(HoodieIndexConfig.RECORD_LEVEL_INDEX_NUM_PARTITIONS));
+  }
+
+  public boolean enableSeekForRecordLevelIndex() {
+    return Boolean.parseBoolean(props.getProperty(HoodieIndexConfig.RECORD_LEVEL_INDEX_ENABLE_SEEK_PROP));
+  }
+
   public static class Builder {
 
     protected final Properties props = new Properties();

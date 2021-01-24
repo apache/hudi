@@ -74,7 +74,7 @@ public class SparkBulkInsertHelper<T extends HoodieRecordPayload, R> extends Abs
     // write new files
     JavaRDD<WriteStatus> writeStatuses = bulkInsert(inputRecords, instantTime, table, config, performDedupe, userDefinedBulkInsertPartitioner, false, config.getBulkInsertShuffleParallelism());
     //update index
-    ((BaseSparkCommitActionExecutor) executor).updateIndexAndCommitIfNeeded(writeStatuses, result);
+    ((BaseSparkCommitActionExecutor) executor).updateIndexAndCommitIfNeeded(writeStatuses, result, instantTime);
     return result;
   }
 

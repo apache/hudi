@@ -99,7 +99,7 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
     }
 
     HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = buildWriteMetadata(writeStatusRDD);
-    updateIndexAndCommitIfNeeded(writeStatusRDD, writeMetadata);
+    updateIndexAndCommitIfNeeded(writeStatusRDD, writeMetadata, instantTime);
     if (!writeMetadata.getCommitMetadata().isPresent()) {
       HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(writeStatusRDD.map(WriteStatus::getStat).collect(), writeMetadata.getPartitionToReplaceFileIds(),
           extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());

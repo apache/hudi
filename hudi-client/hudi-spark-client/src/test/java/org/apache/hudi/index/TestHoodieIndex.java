@@ -91,7 +91,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   }
 
   @ParameterizedTest
-  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE"})
+  @EnumSource(value = IndexType.class, names = {"RECORD_LEVEL_INDEX"})
   public void testSimpleTagLocationAndUpdate(IndexType indexType) throws Exception {
     setUp(indexType);
     String newCommitTime = "001";
@@ -141,7 +141,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   }
 
   @ParameterizedTest
-  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE"})
+  @EnumSource(value = IndexType.class, names = {"RECORD_LEVEL_INDEX"})
   public void testTagLocationAndDuplicateUpdate(IndexType indexType) throws Exception {
     setUp(indexType);
     String newCommitTime = "001";
@@ -160,6 +160,15 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     // recomputed. This includes the state transitions. We need to delete the inflight instance so that subsequent
     // upsert will not run into conflicts.
     metaClient.getFs().delete(new Path(metaClient.getMetaPath(), "001.inflight"));
+
+    metaClient.getFs().delete(new Path(metaClient.getMetaPath() + Path.SEPARATOR + "index" + Path.SEPARATOR
+        + HoodieTableMetaClient.METAFOLDER_NAME, "001.deltacommit.inflight"));
+    System.out.println("Deleted index delta commit " + (metaClient.getMetaPath() + Path.SEPARATOR + "index" + Path.SEPARATOR
+        + HoodieTableMetaClient.METAFOLDER_NAME));
+    metaClient.getFs().delete(new Path(metaClient.getMetaPath() + Path.SEPARATOR + "index" + Path.SEPARATOR
+        + HoodieTableMetaClient.METAFOLDER_NAME, "001.deltacommit.requested"));
+    metaClient.getFs().delete(new Path(metaClient.getMetaPath() + Path.SEPARATOR + "index" + Path.SEPARATOR
+        + HoodieTableMetaClient.METAFOLDER_NAME, "001.deltacommit"));
 
     writeClient.upsert(writeRecords, newCommitTime);
     Assertions.assertNoWriteErrors(writeStatues.collect());
@@ -191,7 +200,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   }
 
   @ParameterizedTest
-  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE"})
+  @EnumSource(value = IndexType.class, names = {"RECORD_LEVEL_INDEX"})
   public void testSimpleTagLocationAndUpdateWithRollback(IndexType indexType) throws Exception {
     setUp(indexType);
     String newCommitTime = writeClient.startCommit();
@@ -243,7 +252,7 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   }
 
   @ParameterizedTest
-  @EnumSource(value = IndexType.class, names = {"BLOOM", "SIMPLE",})
+  @EnumSource(value = IndexType.class, names = {"BLOOM"})
   public void testTagLocationAndFetchRecordLocations(IndexType indexType) throws Exception {
     setUp(indexType);
     String p1 = "2016/01/31";
