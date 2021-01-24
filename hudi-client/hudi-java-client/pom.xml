@@ -37,6 +37,12 @@
             <version>${parent.version}</version>
         </dependency>
 
+        <!-- Parquet -->
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-avro</artifactId>
+        </dependency>
+
         <!-- Hoodie - Test -->
         <dependency>
             <groupId>org.apache.hudi</groupId>
