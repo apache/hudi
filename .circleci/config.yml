@@ -1,8 +1,32 @@
-version: 2.1
-orbs:
-  maven: circleci/maven@1.1.0
+version: 2
+
+jobs:
+  test:
+    docker:
+      - image: circleci/openjdk:8-stretch
+        auth:
+          username: xushiyan
+          password: $DOCKERHUB_PASSWORD  # context / project UI env-var reference
+    steps:
+      - checkout
+      - run: mvn -Punit-tests -pl "hudi-utilities" test
+
+  build:
+    docker:
+      - image: circleci/openjdk:8-stretch
+        auth:
+          username: xushiyan
+          password: $DOCKERHUB_PASSWORD  # context / project UI env-var reference
+    steps:
+      - checkout
+      - run: mvn -DskipTests clean install -q
+
 workflows:
-  maven_test:
+  version: 2
+
+  build-then-test:
     jobs:
-      - maven/test:
-          command: '-DskipTests clean install'
+      - build
+      - test:
+          requires:
+            - build
