@@ -17,12 +17,12 @@
   <parent>
     <artifactId>hudi-spark-datasource</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.6.1-SNAPSHOT</version>
+    <version>0.8.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
   <artifactId>hudi-spark2_${scala.binary.version}</artifactId>
-  <version>${parent.version}</version>
+  <version>0.8.0-SNAPSHOT</version>
 
   <name>hudi-spark2_${scala.binary.version}</name>
   <packaging>jar</packaging>
@@ -125,6 +125,13 @@
         </configuration>
       </plugin>
       <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <skipTests>${skip.hudi-spark2.unit.tests}</skipTests>
+        </configuration>
+      </plugin>
+      <plugin>
         <groupId>org.apache.rat</groupId>
         <artifactId>apache-rat-plugin</artifactId>
       </plugin>
@@ -144,7 +151,7 @@
     <dependency>
       <groupId>org.scala-lang</groupId>
       <artifactId>scala-library</artifactId>
-      <version>${scala.version}</version>
+      <version>${scala11.version}</version>
     </dependency>
 
     <!-- Hoodie -->

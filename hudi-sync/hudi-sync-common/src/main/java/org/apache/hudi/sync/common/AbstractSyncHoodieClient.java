@@ -18,9 +18,6 @@
 
 package org.apache.hudi.sync.common;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -29,12 +26,13 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 
-import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -128,13 +126,9 @@ public abstract class AbstractSyncHoodieClient {
   public List<String> getPartitionsWrittenToSince(Option<String> lastCommitTimeSynced) {
     if (!lastCommitTimeSynced.isPresent()) {
       LOG.info("Last commit time synced is not known, listing all partitions in " + basePath + ",FS :" + fs);
-      try {
-        HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
-        return FSUtils.getAllPartitionPaths(engineContext, fs, basePath, useFileListingFromMetadata, verifyMetadataFileListing,
-            assumeDatePartitioning);
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to list all partitions in " + basePath, e);
-      }
+      HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
+      return FSUtils.getAllPartitionPaths(engineContext, basePath, useFileListingFromMetadata, verifyMetadataFileListing,
+          assumeDatePartitioning);
     } else {
       LOG.info("Last commit time synced is " + lastCommitTimeSynced.get() + ", Getting commits since then");
       return TimelineUtils.getPartitionsWritten(metaClient.getActiveTimeline().getCommitsTimeline()
