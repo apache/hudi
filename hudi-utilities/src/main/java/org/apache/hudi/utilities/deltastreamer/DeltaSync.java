@@ -299,7 +299,7 @@ public class DeltaSync implements Serializable {
       if (lastCommit.isPresent()) {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
             .fromBytes(commitTimelineOpt.get().getInstantDetails(lastCommit.get()).get(), HoodieCommitMetadata.class);
-        props.put(CHECKPOINT_RESET_KEY, commitMetadata.getMetadata(CHECKPOINT_RESET_KEY));
+        props.put(CHECKPOINT_RESET_KEY, commitMetadata.getMetadata(CHECKPOINT_RESET_KEY) == null ? "" : commitMetadata.getMetadata(CHECKPOINT_RESET_KEY));
         if (cfg.checkpoint != null && !cfg.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
           resumeCheckpointStr = Option.of(cfg.checkpoint);
         } else if (commitMetadata.getMetadata(CHECKPOINT_KEY) != null) {
