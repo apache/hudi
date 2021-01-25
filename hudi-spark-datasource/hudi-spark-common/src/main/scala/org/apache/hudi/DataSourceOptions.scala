@@ -17,14 +17,14 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hive.HiveSyncTool
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
-import org.apache.hudi.keygen.{CustomKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.Config
+import org.apache.hudi.keygen.SimpleKeyGenerator
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
@@ -203,7 +203,12 @@ object DataSourceWriteOptions {
       val partitionPathField =
         keyGeneratorClass match {
           case "org.apache.hudi.keygen.CustomKeyGenerator" =>
-            partitionColumns.map(e => s"$e:SIMPLE").mkString(",")
+            // If the parameter contains TIMESTAMP_TYPE_FIELD_PROP and TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, use the TIMESTAMP type
+            if (optParams.contains(Config.TIMESTAMP_TYPE_FIELD_PROP) && optParams.contains(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP)) {
+              partitionColumns.map(e => s"$e:TIMESTAMP").mkString(",")
+            } else {
+              partitionColumns.map(e => s"$e:SIMPLE").mkString(",")
+            }
           case _ =>
             partitionColumns.mkString(",")
         }
