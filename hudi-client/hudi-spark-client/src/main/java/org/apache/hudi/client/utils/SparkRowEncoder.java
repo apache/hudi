@@ -23,6 +23,8 @@ import org.apache.spark.sql.catalyst.InternalRow;
 
 import java.io.Serializable;
 
-public interface SparkRowDeserializer extends Serializable {
+public interface SparkRowEncoder extends Serializable {
   Row deserializeRow(InternalRow internalRow);
+
+  InternalRow serializeRow(Row row);
 }

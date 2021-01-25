@@ -17,17 +17,17 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.client.utils.SparkRowDeserializer
-
+import org.apache.hudi.client.utils.SparkRowEncoder
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 
-class Spark3RowDeserializer(val encoder: ExpressionEncoder[Row]) extends SparkRowDeserializer {
-
-  private val deserializer: ExpressionEncoder.Deserializer[Row] = encoder.createDeserializer()
-
+class Spark2RowEncoder(val encoder: ExpressionEncoder[Row]) extends SparkRowEncoder {
   def deserializeRow(internalRow: InternalRow): Row = {
-    deserializer.apply(internalRow)
+    encoder.fromRow(internalRow)
+  }
+
+  override def serializeRow(row: Row): InternalRow = {
+    encoder.toRow(row)
   }
 }
