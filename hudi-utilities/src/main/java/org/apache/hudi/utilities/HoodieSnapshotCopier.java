@@ -98,7 +98,7 @@ public class HoodieSnapshotCopier implements Serializable {
     LOG.info(String.format("Starting to snapshot latest version files which are also no-late-than %s.",
         latestCommitTimestamp));
 
-    List<String> partitions = FSUtils.getAllPartitionPaths(context, fs, baseDir, useFileListingFromMetadata, verifyMetadataFileListing, shouldAssumeDatePartitioning);
+    List<String> partitions = FSUtils.getAllPartitionPaths(context, baseDir, useFileListingFromMetadata, verifyMetadataFileListing, shouldAssumeDatePartitioning);
     if (partitions.size() > 0) {
       LOG.info(String.format("The job needs to copy %d partitions.", partitions.size()));
 

@@ -30,6 +30,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.bootstrap.TestBootstrapIndex;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapFileMapping;
@@ -524,7 +525,8 @@ public class TestCleaner extends HoodieClientTestBase {
   @ValueSource(booleans = {false, true})
   public void testKeepLatestFileVersions(Boolean enableBootstrapSourceClean) throws Exception {
     HoodieWriteConfig config =
-        HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
+        HoodieWriteConfig.newBuilder().withPath(basePath)
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
                 .withCleanBootstrapBaseFileEnabled(enableBootstrapSourceClean)
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).build())
@@ -615,7 +617,8 @@ public class TestCleaner extends HoodieClientTestBase {
   public void testKeepLatestFileVersionsMOR() throws Exception {
 
     HoodieWriteConfig config =
-        HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
+        HoodieWriteConfig.newBuilder().withPath(basePath)
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).build())
             .build();
@@ -652,7 +655,8 @@ public class TestCleaner extends HoodieClientTestBase {
   public void testKeepLatestCommitsMOR() throws Exception {
 
     HoodieWriteConfig config =
-            HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
+            HoodieWriteConfig.newBuilder().withPath(basePath)
+                .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
                     .withCompactionConfig(HoodieCompactionConfig.newBuilder()
                             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1).build())
                     .build();
@@ -691,7 +695,8 @@ public class TestCleaner extends HoodieClientTestBase {
   
   @Test
   public void testCleanWithReplaceCommits() throws Exception {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2).build())
         .build();
@@ -971,7 +976,8 @@ public class TestCleaner extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("argumentsForTestKeepLatestCommits")
   public void testKeepLatestCommits(boolean simulateFailureRetry, boolean enableIncrementalClean, boolean enableBootstrapSourceClean) throws Exception {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withIncrementalCleaningMode(enableIncrementalClean)
             .withCleanBootstrapBaseFileEnabled(enableBootstrapSourceClean)
@@ -1146,7 +1152,8 @@ public class TestCleaner extends HoodieClientTestBase {
    */
   @Test
   public void testCleaningWithZeroPartitionPaths() throws Exception {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2).build())
         .build();
@@ -1167,7 +1174,8 @@ public class TestCleaner extends HoodieClientTestBase {
    */
   @Test
   public void testKeepLatestCommitsWithPendingCompactions() throws Exception {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2).build())
         .build();
@@ -1190,7 +1198,8 @@ public class TestCleaner extends HoodieClientTestBase {
   @ValueSource(booleans = {false, true})
   public void testKeepLatestVersionsWithPendingCompactions(boolean retryFailure) throws Exception {
     HoodieWriteConfig config =
-        HoodieWriteConfig.newBuilder().withPath(basePath).withAssumeDatePartitioning(true)
+        HoodieWriteConfig.newBuilder().withPath(basePath)
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(2).build())
             .build();
@@ -1213,7 +1222,8 @@ public class TestCleaner extends HoodieClientTestBase {
   public void testCleanPreviousCorruptedCleanFiles() throws IOException {
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder()
-            .withPath(basePath).withAssumeDatePartitioning(true)
+            .withPath(basePath)
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
             .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(1).build())
             .build();
