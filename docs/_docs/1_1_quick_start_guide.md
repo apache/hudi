@@ -13,13 +13,13 @@ After each write operation we will also show how to read the data both snapshot 
 
 ## Setup
 
-Hudi works with Spark-2.x versions. You can follow instructions [here](https://spark.apache.org/downloads.html) for setting up spark. 
+Hudi works with Spark-2.x & Spark 3.x versions. You can follow instructions [here](https://spark.apache.org/downloads.html) for setting up spark. 
 From the extracted directory run spark-shell with Hudi as:
 
 ```scala
 // spark-shell
-spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
-  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.6.0,org.apache.spark:spark-avro_2.11:2.4.4 \
+spark-shell \
+  --packages org.apache.hudi:hudi-spark-bundle_2.12:0.7.0,org.apache.spark:spark-avro_2.12:3.0.1 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
@@ -27,9 +27,9 @@ spark-2.4.4-bin-hadoop2.7/bin/spark-shell \
   <h4>Please note the following: </h4>
 <ul>
   <li>spark-avro module needs to be specified in --packages as it is not included with spark-shell by default</li>
-  <li>spark-avro and spark versions must match (we have used 2.4.4 for both above)</li>
-  <li>we have used hudi-spark-bundle built for scala 2.11 since the spark-avro module used also depends on 2.11. 
-         If spark-avro_2.12 is used, correspondingly hudi-spark-bundle_2.12 needs to be used. </li>
+  <li>spark-avro and spark versions must match (we have used 3.0.1 for both above)</li>
+  <li>we have used hudi-spark-bundle built for scala 2.12 since the spark-avro module used also depends on 2.12. 
+         If spark-avro_2.11 is used, correspondingly hudi-spark-bundle_2.11 needs to be used. </li>
 </ul>
 </div>
 
@@ -218,18 +218,90 @@ Note: Only `Append` mode is supported for delete operation.
 
 See the [deletion section](/docs/writing_data.html#deletes) of the writing data page for more details.
 
+## Insert Overwrite Table
+
+Generate some new trips, overwrite the table logically at the Hudi metadata level. The Hudi cleaner will eventually
+clean up the previous table snapshot's file groups. This can be faster than deleting the older table and recreating 
+in `Overwrite` mode.
+
+```scala
+// spark-shell
+spark.
+  read.format("hudi").
+  load(basePath + "/*/*/*/*").
+  select("uuid","partitionpath").
+  show(10, false)
+
+val inserts = convertToStringList(dataGen.generateInserts(10))
+val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
+df.write.format("hudi").
+  options(getQuickstartWriteConfigs).
+  option(OPERATION_OPT_KEY,"insert_overwrite_table").
+  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+  option(TABLE_NAME, tableName).
+  mode(Append).
+  save(basePath)
+
+// Should have different keys now, from query before.
+spark.
+  read.format("hudi").
+  load(basePath + "/*/*/*/*").
+  select("uuid","partitionpath").
+  show(10, false)
+
+``` 
+
+## Insert Overwrite 
+
+Generate some new trips, overwrite the all the partitions that are present in the input. This operation can be faster
+than `upsert` for batch ETL jobs, that are recomputing entire target partitions at once (as opposed to incrementally
+updating the target tables). This is because, we are able to bypass indexing, precombining and other repartitioning 
+steps in the upsert write path completely.
+
+```scala
+// spark-shell
+spark.
+  read.format("hudi").
+  load(basePath + "/*/*/*/*").
+  select("uuid","partitionpath").
+  sort("partitionpath","uuid").
+  show(100, false)
+
+val inserts = convertToStringList(dataGen.generateInserts(10))
+val df = spark.
+  read.json(spark.sparkContext.parallelize(inserts, 2)).
+  filter("partitionpath = 'americas/united_states/san_francisco'")
+df.write.format("hudi").
+  options(getQuickstartWriteConfigs).
+  option(OPERATION_OPT_KEY,"insert_overwrite").
+  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+  option(TABLE_NAME, tableName).
+  mode(Append).
+  save(basePath)
+
+// Should have different keys now for San Francisco alone, from query before.
+spark.
+  read.format("hudi").
+  load(basePath + "/*/*/*/*").
+  select("uuid","partitionpath").
+  sort("partitionpath","uuid").
+  show(100, false)
+```
 
 # Pyspark example
 ## Setup
 
-Hudi works with Spark-2.x versions. You can follow instructions [here](https://spark.apache.org/downloads.html) for setting up spark. 
-From the extracted directory run spark-shell with Hudi as:
+Examples below illustrate the same flow above, instead using PySpark.
 
 ```python
 # pyspark
 export PYSPARK_PYTHON=$(which python3)
-spark-2.4.4-bin-hadoop2.7/bin/pyspark \
-  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.6.0,org.apache.spark:spark-avro_2.11:2.4.4 \
+pyspark \
+  --packages org.apache.hudi:hudi-spark-bundle_2.12:0.7.0,org.apache.spark:spark-avro_2.11:3.0.1 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
@@ -237,9 +309,9 @@ spark-2.4.4-bin-hadoop2.7/bin/pyspark \
   <h4>Please note the following: </h4>
 <ul>
   <li>spark-avro module needs to be specified in --packages as it is not included with spark-shell by default</li>
-  <li>spark-avro and spark versions must match (we have used 2.4.4 for both above)</li>
-  <li>we have used hudi-spark-bundle built for scala 2.11 since the spark-avro module used also depends on 2.11. 
-         If spark-avro_2.12 is used, correspondingly hudi-spark-bundle_2.12 needs to be used. </li>
+  <li>spark-avro and spark versions must match (we have used 3.0.1 for both above)</li>
+  <li>we have used hudi-spark-bundle built for scala 2.12 since the spark-avro module used also depends on 2.12. 
+         If spark-avro_2.11 is used, correspondingly hudi-spark-bundle_2.11 needs to be used. </li>
 </ul>
 </div>
 
