@@ -52,7 +52,7 @@ When there is late arriving data (data intended for 9:00 arriving >1 hr late at 
 With the help of the timeline, an incremental query attempting to get all new data that was committed successfully since 10:00 hours, is able to very efficiently consume
 only the changed files without say scanning all the time buckets > 07:00.
 
-## File management
+## File Layout
 Hudi organizes a table into a directory structure under a `basepath` on DFS. Table is broken up into partitions, which are folders containing data files for that partition,
 very similar to Hive tables. Each partition is uniquely identified by its `partitionpath`, which is relative to the basepath.
 
