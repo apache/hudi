@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -365,7 +366,8 @@ public class DeltaSync implements Serializable {
     } else {
       // Pull the data from the source & prepare the write
       InputBatch<JavaRDD<GenericRecord>> dataAndCheckpoint =
-          formatAdapter.fetchNewDataInAvroFormat(resumeCheckpointStr, cfg.sourceLimit);
+          formatAdapter.fetchNewDataInAvroFormat(resumeCheckpointStr, cfg.sourceLimit,
+                  props.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()), cfg.sourceOrderingField);
       avroRDDOptional = dataAndCheckpoint.getBatch();
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       schemaProvider = dataAndCheckpoint.getSchemaProvider();

@@ -55,30 +55,37 @@ public final class SourceFormatAdapter {
   /**
    * Fetch new data in avro format. If the source provides data in different format, they are translated to Avro format
    */
-  public InputBatch<JavaRDD<GenericRecord>> fetchNewDataInAvroFormat(Option<String> lastCkptStr, long sourceLimit) {
+  public InputBatch<JavaRDD<GenericRecord>> fetchNewDataInAvroFormat(Option<String> lastCkptStr, long sourceLimit,
+                                                                     String recordKeyField, String sourceOrderingField) {
+    JavaRDD<GenericRecord> genericRecordRDD;
     switch (source.getSourceType()) {
       case AVRO:
-        return ((AvroSource) source).fetchNext(lastCkptStr, sourceLimit);
+        InputBatch<JavaRDD<GenericRecord>> genericRecord = ((AvroSource) source).fetchNext(lastCkptStr, sourceLimit);
+        genericRecordRDD = getValidateGenericRecordRDD(genericRecord.getBatch().orElse(null),
+                recordKeyField, sourceOrderingField);
+        return new InputBatch<>(Option.ofNullable(genericRecordRDD), genericRecord.getCheckpointForNextBatch(),
+              genericRecord.getSchemaProvider());
       case JSON: {
         InputBatch<JavaRDD<String>> r = ((JsonSource) source).fetchNext(lastCkptStr, sourceLimit);
         AvroConvertor convertor = new AvroConvertor(r.getSchemaProvider().getSourceSchema());
-        return new InputBatch<>(Option.ofNullable(r.getBatch().map(rdd -> rdd.map(convertor::fromJson)).orElse(null)),
-            r.getCheckpointForNextBatch(), r.getSchemaProvider());
+        genericRecordRDD = getValidateGenericRecordRDD(r.getBatch().map(rdd -> rdd.map(convertor::fromJson))
+                        .orElse(null), recordKeyField, sourceOrderingField);
+        return new InputBatch<>(Option.ofNullable(genericRecordRDD), r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
       case ROW: {
         InputBatch<Dataset<Row>> r = ((RowSource) source).fetchNext(lastCkptStr, sourceLimit);
-        return new InputBatch<>(Option.ofNullable(r.getBatch().map(
-            rdd -> {
-              SchemaProvider originalProvider = UtilHelpers.getOriginalSchemaProvider(r.getSchemaProvider());
-              return (originalProvider instanceof FilebasedSchemaProvider)
-                  // If the source schema is specified through Avro schema,
-                  // pass in the schema for the Row-to-Avro conversion
-                  // to avoid nullability mismatch between Avro schema and Row schema
-                  ? HoodieSparkUtils.createRdd(rdd, r.getSchemaProvider().getSourceSchema(),
-                  HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD() : HoodieSparkUtils.createRdd(rdd,
-                  HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD();
-            })
-            .orElse(null)), r.getCheckpointForNextBatch(), r.getSchemaProvider());
+        genericRecordRDD = getValidateGenericRecordRDD(r.getBatch().map(
+          rdd -> {
+            SchemaProvider originalProvider = UtilHelpers.getOriginalSchemaProvider(r.getSchemaProvider());
+            return (originalProvider instanceof FilebasedSchemaProvider)
+              // If the source schema is specified through Avro schema,
+              // pass in the schema for the Row-to-Avro conversion
+              // to avoid nullability mismatch between Avro schema and Row schema
+              ? HoodieSparkUtils.createRdd(rdd, r.getSchemaProvider().getSourceSchema(),
+              HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD() : HoodieSparkUtils.createRdd(rdd,
+              HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD();
+          }).orElse(null), recordKeyField, sourceOrderingField);
+        return new InputBatch<>(Option.ofNullable(genericRecordRDD), r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
       default:
         throw new IllegalArgumentException("Unknown source type (" + source.getSourceType() + ")");
@@ -117,5 +124,18 @@ public final class SourceFormatAdapter {
       default:
         throw new IllegalArgumentException("Unknown source type (" + source.getSourceType() + ")");
     }
+  }
+
+  /**
+   * validate whether the value of the RDD data is null.
+   */
+  private JavaRDD<GenericRecord> getValidateGenericRecordRDD(JavaRDD<GenericRecord> genericRecordJavaRDD, String recordKeyField, String sourceOrderingField) {
+    return genericRecordJavaRDD.map(record -> {
+      if (record.get(recordKeyField) == null || record.get(sourceOrderingField) == null) {
+        return null;
+      } else {
+        return record;
+      }
+    }).filter(record -> record != null);
   }
 }
