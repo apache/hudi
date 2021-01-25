@@ -114,4 +114,9 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
   public boolean isInSync() {
     return true;
   }
+
+  @Override
+  public void close() throws Exception {
+    // no-op
+  }
 }

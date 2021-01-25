@@ -93,11 +93,10 @@ public class HoodieFlinkStreamer {
             .name("kafka_to_hudi_record")
             .uid("kafka_to_hudi_record_uid");
 
-    // InstantGenerateOperator helps to emit globally unique instantTime, it must be executed in one parallelism
+    // InstantGenerateOperator helps to emit globally unique instantTime
     inputRecords.transform(InstantGenerateOperator.NAME, TypeInformation.of(HoodieRecord.class), new InstantGenerateOperator())
         .name("instant_generator")
         .uid("instant_generator_id")
-        .setParallelism(1)
 
         // Keyby partition path, to avoid multiple subtasks writing to a partition at the same time
         .keyBy(HoodieRecord::getPartitionPath)
