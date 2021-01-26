@@ -29,10 +29,14 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import io.javalin.Javalin;
+import io.javalin.core.util.JettyServerUtil;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.util.thread.QueuedThreadPool;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -44,32 +48,40 @@ public class TimelineService {
 
   private static final Logger LOG = LogManager.getLogger(TimelineService.class);
   private static final int START_SERVICE_MAX_RETRIES = 16;
+  private static final int DEFAULT_NUM_THREADS = -1;
 
   private int serverPort;
   private Configuration conf;
   private transient FileSystem fs;
   private transient Javalin app = null;
   private transient FileSystemViewManager fsViewsManager;
+  private final int numThreads;
+  private final boolean shouldCompressOutput;
+  private final boolean useAsync;
 
   public int getServerPort() {
     return serverPort;
   }
 
-  public TimelineService(int serverPort, FileSystemViewManager globalFileSystemViewManager, Configuration conf)
-      throws IOException {
+  public TimelineService(int serverPort, FileSystemViewManager globalFileSystemViewManager, Configuration conf,
+      int numThreads, boolean compressOutput, boolean useAsync) throws IOException {
     this.conf = FSUtils.prepareHadoopConf(conf);
     this.fs = FileSystem.get(conf);
     this.serverPort = serverPort;
     this.fsViewsManager = globalFileSystemViewManager;
+    this.numThreads = numThreads;
+    this.shouldCompressOutput = compressOutput;
+    this.useAsync = useAsync;
   }
 
   public TimelineService(int serverPort, FileSystemViewManager globalFileSystemViewManager) throws IOException {
-    this(serverPort, globalFileSystemViewManager, new Configuration());
+    this(serverPort, globalFileSystemViewManager, new Configuration(), DEFAULT_NUM_THREADS, true, false);
   }
 
   public TimelineService(Config config) throws IOException {
     this(config.serverPort, buildFileSystemViewManager(config,
-        new SerializableConfiguration(FSUtils.prepareHadoopConf(new Configuration()))));
+        new SerializableConfiguration(FSUtils.prepareHadoopConf(new Configuration()))), new Configuration(),
+        config.numThreads, config.compress, config.async);
   }
 
   public static class Config implements Serializable {
@@ -96,6 +108,15 @@ public class TimelineService {
 
     @Parameter(names = {"--rocksdb-path", "-rp"}, description = "Root directory for RocksDB")
     public String rocksDBPath = FileSystemViewStorageConfig.DEFAULT_ROCKSDB_BASE_PATH;
+
+    @Parameter(names = {"--threads", "-t"}, description = "Number of threads to use for serving requests")
+    public int numThreads = DEFAULT_NUM_THREADS;
+
+    @Parameter(names = {"--async"}, description = "Use asyncronous request processing")
+    public boolean async = false;
+
+    @Parameter(names = {"--compress"}, description = "Compress output using gzip")
+    public boolean compress = true;
 
     @Parameter(names = {"--help", "-h"})
     public Boolean help = false;
@@ -129,8 +150,15 @@ public class TimelineService {
   }
 
   public int startService() throws IOException {
-    app = Javalin.create();
-    RequestHandler requestHandler = new RequestHandler(app, conf, fsViewsManager);
+    final Server server = numThreads == DEFAULT_NUM_THREADS ? JettyServerUtil.defaultServer()
+            : new Server(new QueuedThreadPool(numThreads));
+
+    app = Javalin.create().server(() -> server);
+    if (!shouldCompressOutput) {
+      app.disableDynamicGzip();
+    }
+
+    RequestHandler requestHandler = new RequestHandler(app, conf, fsViewsManager, useAsync);
     app.get("/", ctx -> ctx.result("Hello World"));
     requestHandler.register();
     int realServerPort = startServiceOnPort(serverPort);
