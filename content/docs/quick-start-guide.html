@@ -95,6 +95,8 @@
             </li><li class="masthead__menu-item">
               <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
             </li><li class="masthead__menu-item">
+              <a href="/docs/powered_by.html" target="_self" >Powered By</a>
+            </li><li class="masthead__menu-item">
               <a href="/releases.html" target="_self" >Releases</a>
             </li></ul>
         <button class="greedy-nav__toggle hidden" type="button">
@@ -138,11 +140,22 @@
     
       <li>
         
-          <span class="nav__sub-title">Getting Started</span>
+          <span class="nav__sub-title">Documentation</span>
         
 
         
         <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/overview.html" class="">Overview</a></li>
+            
+
           
             
             
@@ -163,62 +176,6 @@
 
             
               <li><a href="/docs/use_cases.html" class="">Use Cases</a></li>
-            
-
-          
-            
-            
-
-            
-            
-
-            
-              <li><a href="/docs/powered_by.html" class="">Talks & Powered By</a></li>
-            
-
-          
-            
-            
-
-            
-            
-
-            
-              <li><a href="/docs/comparison.html" class="">Comparison</a></li>
-            
-
-          
-            
-            
-
-            
-            
-
-            
-              <li><a href="/docs/docker_demo.html" class="">Docker Demo</a></li>
-            
-
-          
-        </ul>
-        
-      </li>
-    
-      <li>
-        
-          <span class="nav__sub-title">Documentation</span>
-        
-
-        
-        <ul>
-          
-            
-            
-
-            
-            
-
-            
-              <li><a href="/docs/concepts.html" class="">Concepts</a></li>
             
 
           
@@ -277,6 +234,18 @@
             
 
           
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">Resources</span>
+        
+
+        
+        <ul>
+          
             
             
 
@@ -284,7 +253,18 @@
             
 
             
-              <li><a href="/docs/cloud.html" class="">Cloud Storage</a></li>
+              <li><a href="/docs/docker_demo.html" class="">Dockerized Demo</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/cloud.html" class="">Storage Configuration</a></li>
             
 
           
@@ -298,18 +278,6 @@
               <li><a href="/docs/metrics.html" class="">Metrics</a></li>
             
 
-          
-        </ul>
-        
-      </li>
-    
-      <li>
-        
-          <span class="nav__sub-title">INFO</span>
-        
-
-        
-        <ul>
           
             
             
@@ -375,6 +343,8 @@
       <li><a href="#incremental-query">Incremental query</a></li>
       <li><a href="#point-in-time-query">Point in time query</a></li>
       <li><a href="#deletes">Delete data</a></li>
+      <li><a href="#insert-overwrite-table">Insert Overwrite Table</a></li>
+      <li><a href="#insert-overwrite">Insert Overwrite</a></li>
     </ul>
   </li>
   <li><a href="#pyspark-example">Pyspark example</a>
@@ -401,12 +371,12 @@ After each write operation we will also show how to read the data both snapshot 
 
 <h2 id="setup">Setup</h2>
 
-<p>Hudi works with Spark-2.x versions. You can follow instructions <a href="https://spark.apache.org/downloads.html">here</a> for setting up spark. 
+<p>Hudi works with Spark-2.x &amp; Spark 3.x versions. You can follow instructions <a href="https://spark.apache.org/downloads.html">here</a> for setting up spark. 
 From the extracted directory run spark-shell with Hudi as:</p>
 
 <div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// spark-shell
-</span><span class="n">spark</span><span class="o">-</span><span class="mf">2.4</span><span class="o">.</span><span class="mi">4</span><span class="o">-</span><span class="n">bin</span><span class="o">-</span><span class="n">hadoop2</span><span class="o">.</span><span class="mi">7</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">spark</span><span class="o">-</span><span class="n">shell</span> <span class="o">\</span>
-  <span class="o">--</span><span class="n">packages</span> <span class="nv">org</span><span class="o">.</span><span class="py">apache</span><span class="o">.</span><span class="py">hudi</span><span class="k">:</span><span class="kt">hudi-spark-bundle_2.</span><span class="err">11</span><span class="kt">:</span><span class="err">0</span><span class="kt">.</span><span class="err">6</span><span class="kt">.</span><span class="err">0</span><span class="o">,</span><span class="nv">org</span><span class="o">.</span><span class="py">apache</span><span class="o">.</span><span class="py">spark</span><span class="k">:</span><span class="kt">spark-avro_2.</span><span class="err">11</span><span class="kt">:</span><span class="err">2</span><span class="kt">.</span><span class="err">4</span><span class="kt">.</span><span class="err">4</span> <span class="kt">\</span>
+</span><span class="n">spark</span><span class="o">-</span><span class="n">shell</span> <span class="o">\</span>
+  <span class="o">--</span><span class="n">packages</span> <span class="nv">org</span><span class="o">.</span><span class="py">apache</span><span class="o">.</span><span class="py">hudi</span><span class="k">:</span><span class="kt">hudi-spark-bundle_2.</span><span class="err">12</span><span class="kt">:</span><span class="err">0</span><span class="kt">.</span><span class="err">7</span><span class="kt">.</span><span class="err">0</span><span class="o">,</span><span class="nv">org</span><span class="o">.</span><span class="py">apache</span><span class="o">.</span><span class="py">spark</span><span class="k">:</span><span class="kt">spark-avro_2.</span><span class="err">12</span><span class="kt">:</span><span class="err">3</span><span class="kt">.</span><span class="err">0</span><span class="kt">.</span><span class="err">1</span> <span class="kt">\</span>
   <span class="kt">--conf</span> <span class="kt">'spark.serializer</span><span class="o">=</span><span class="nv">org</span><span class="o">.</span><span class="py">apache</span><span class="o">.</span><span class="py">spark</span><span class="o">.</span><span class="py">serializer</span><span class="o">.</span><span class="py">KryoSerializer</span><span class="o">'</span>
 </code></pre></div></div>
 
@@ -414,9 +384,9 @@ From the extracted directory run spark-shell with Hudi as:</p>
   <h4>Please note the following: </h4>
 <ul>
   <li>spark-avro module needs to be specified in --packages as it is not included with spark-shell by default</li>
-  <li>spark-avro and spark versions must match (we have used 2.4.4 for both above)</li>
-  <li>we have used hudi-spark-bundle built for scala 2.11 since the spark-avro module used also depends on 2.11. 
-         If spark-avro_2.12 is used, correspondingly hudi-spark-bundle_2.12 needs to be used. </li>
+  <li>spark-avro and spark versions must match (we have used 3.0.1 for both above)</li>
+  <li>we have used hudi-spark-bundle built for scala 2.12 since the spark-avro module used also depends on 2.12. 
+         If spark-avro_2.11 is used, correspondingly hudi-spark-bundle_2.11 needs to be used. </li>
 </ul>
 </div>
 
@@ -592,16 +562,87 @@ specific commit time and beginTime to “000” (denoting earliest possible comm
 
 <p>See the <a href="/docs/writing_data.html#deletes">deletion section</a> of the writing data page for more details.</p>
 
+<h2 id="insert-overwrite-table">Insert Overwrite Table</h2>
+
+<p>Generate some new trips, overwrite the table logically at the Hudi metadata level. The Hudi cleaner will eventually
+clean up the previous table snapshot’s file groups. This can be faster than deleting the older table and recreating 
+in <code class="highlighter-rouge">Overwrite</code> mode.</p>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// spark-shell
+</span><span class="n">spark</span><span class="o">.</span>
+  <span class="nv">read</span><span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">).</span>
+  <span class="nf">load</span><span class="o">(</span><span class="n">basePath</span> <span class="o">+</span> <span class="s">"/*/*/*/*"</span><span class="o">).</span>
+  <span class="nf">select</span><span class="o">(</span><span class="s">"uuid"</span><span class="o">,</span><span class="s">"partitionpath"</span><span class="o">).</span>
+  <span class="nf">show</span><span class="o">(</span><span class="mi">10</span><span class="o">,</span> <span class="kc">false</span><span class="o">)</span>
+
+<span class="k">val</span> <span class="nv">inserts</span> <span class="k">=</span> <span class="nf">convertToStringList</span><span class="o">(</span><span class="nv">dataGen</span><span class="o">.</span><span class="py">generateInserts</span><span class="o">(</span><span class="mi">10</span><span class="o">))</span>
+<span class="k">val</span> <span class="nv">df</span> <span class="k">=</span> <span class="nv">spark</span><span class="o">.</span><span class="py">read</span><span class="o">.</span><span class="py">json</span><span class="o">(</span><span class="nv">spark</span><span class="o">.</span><span class="py">sparkContext</span><span class="o">.</span><span class="py">parallelize</span><span class="o">(</span><span class="n">inserts</span><span class="o">,</span> <span class="mi">2</span><span class="o">))</span>
+<span class="nv">df</span><span class="o">.</span><span class="py">write</span><span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">).</span>
+  <span class="nf">options</span><span class="o">(</span><span class="n">getQuickstartWriteConfigs</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">OPERATION_OPT_KEY</span><span class="o">,</span><span class="s">"insert_overwrite_table"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">PRECOMBINE_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"ts"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">RECORDKEY_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"uuid"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">PARTITIONPATH_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"partitionpath"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">TABLE_NAME</span><span class="o">,</span> <span class="n">tableName</span><span class="o">).</span>
+  <span class="nf">mode</span><span class="o">(</span><span class="nc">Append</span><span class="o">).</span>
+  <span class="nf">save</span><span class="o">(</span><span class="n">basePath</span><span class="o">)</span>
+
+<span class="c1">// Should have different keys now, from query before.
+</span><span class="n">spark</span><span class="o">.</span>
+  <span class="nv">read</span><span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">).</span>
+  <span class="nf">load</span><span class="o">(</span><span class="n">basePath</span> <span class="o">+</span> <span class="s">"/*/*/*/*"</span><span class="o">).</span>
+  <span class="nf">select</span><span class="o">(</span><span class="s">"uuid"</span><span class="o">,</span><span class="s">"partitionpath"</span><span class="o">).</span>
+  <span class="nf">show</span><span class="o">(</span><span class="mi">10</span><span class="o">,</span> <span class="kc">false</span><span class="o">)</span>
+
+</code></pre></div></div>
+
+<h2 id="insert-overwrite">Insert Overwrite</h2>
+
+<p>Generate some new trips, overwrite the all the partitions that are present in the input. This operation can be faster
+than <code class="highlighter-rouge">upsert</code> for batch ETL jobs, that are recomputing entire target partitions at once (as opposed to incrementally
+updating the target tables). This is because, we are able to bypass indexing, precombining and other repartitioning 
+steps in the upsert write path completely.</p>
+
+<div class="language-scala highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">// spark-shell
+</span><span class="n">spark</span><span class="o">.</span>
+  <span class="nv">read</span><span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">).</span>
+  <span class="nf">load</span><span class="o">(</span><span class="n">basePath</span> <span class="o">+</span> <span class="s">"/*/*/*/*"</span><span class="o">).</span>
+  <span class="nf">select</span><span class="o">(</span><span class="s">"uuid"</span><span class="o">,</span><span class="s">"partitionpath"</span><span class="o">).</span>
+  <span class="nf">sort</span><span class="o">(</span><span class="s">"partitionpath"</span><span class="o">,</span><span class="s">"uuid"</span><span class="o">).</span>
+  <span class="nf">show</span><span class="o">(</span><span class="mi">100</span><span class="o">,</span> <span class="kc">false</span><span class="o">)</span>
+
+<span class="k">val</span> <span class="nv">inserts</span> <span class="k">=</span> <span class="nf">convertToStringList</span><span class="o">(</span><span class="nv">dataGen</span><span class="o">.</span><span class="py">generateInserts</span><span class="o">(</span><span class="mi">10</span><span class="o">))</span>
+<span class="k">val</span> <span class="nv">df</span> <span class="k">=</span> <span class="n">spark</span><span class="o">.</span>
+  <span class="nv">read</span><span class="o">.</span><span class="py">json</span><span class="o">(</span><span class="nv">spark</span><span class="o">.</span><span class="py">sparkContext</span><span class="o">.</span><span class="py">parallelize</span><span class="o">(</span><span class="n">inserts</span><span class="o">,</span> <span class="mi">2</span><span class="o">)).</span>
+  <span class="nf">filter</span><span class="o">(</span><span class="s">"partitionpath = 'americas/united_states/san_francisco'"</span><span class="o">)</span>
+<span class="nv">df</span><span class="o">.</span><span class="py">write</span><span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">).</span>
+  <span class="nf">options</span><span class="o">(</span><span class="n">getQuickstartWriteConfigs</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">OPERATION_OPT_KEY</span><span class="o">,</span><span class="s">"insert_overwrite"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">PRECOMBINE_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"ts"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">RECORDKEY_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"uuid"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">PARTITIONPATH_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"partitionpath"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">TABLE_NAME</span><span class="o">,</span> <span class="n">tableName</span><span class="o">).</span>
+  <span class="nf">mode</span><span class="o">(</span><span class="nc">Append</span><span class="o">).</span>
+  <span class="nf">save</span><span class="o">(</span><span class="n">basePath</span><span class="o">)</span>
+
+<span class="c1">// Should have different keys now for San Francisco alone, from query before.
+</span><span class="n">spark</span><span class="o">.</span>
+  <span class="nv">read</span><span class="o">.</span><span class="py">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">).</span>
+  <span class="nf">load</span><span class="o">(</span><span class="n">basePath</span> <span class="o">+</span> <span class="s">"/*/*/*/*"</span><span class="o">).</span>
+  <span class="nf">select</span><span class="o">(</span><span class="s">"uuid"</span><span class="o">,</span><span class="s">"partitionpath"</span><span class="o">).</span>
+  <span class="nf">sort</span><span class="o">(</span><span class="s">"partitionpath"</span><span class="o">,</span><span class="s">"uuid"</span><span class="o">).</span>
+  <span class="nf">show</span><span class="o">(</span><span class="mi">100</span><span class="o">,</span> <span class="kc">false</span><span class="o">)</span>
+</code></pre></div></div>
+
 <h1 id="pyspark-example">Pyspark example</h1>
 <h2 id="setup-1">Setup</h2>
 
-<p>Hudi works with Spark-2.x versions. You can follow instructions <a href="https://spark.apache.org/downloads.html">here</a> for setting up spark. 
-From the extracted directory run spark-shell with Hudi as:</p>
+<p>Examples below illustrate the same flow above, instead using PySpark.</p>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># pyspark
 </span><span class="n">export</span> <span class="n">PYSPARK_PYTHON</span><span class="o">=</span><span class="err">$</span><span class="p">(</span><span class="n">which</span> <span class="n">python3</span><span class="p">)</span>
-<span class="n">spark</span><span class="o">-</span><span class="mf">2.4.4</span><span class="o">-</span><span class="nb">bin</span><span class="o">-</span><span class="n">hadoop2</span><span class="mf">.7</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">pyspark</span> \
-  <span class="o">--</span><span class="n">packages</span> <span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">hudi</span><span class="p">:</span><span class="n">hudi</span><span class="o">-</span><span class="n">spark</span><span class="o">-</span><span class="n">bundle_2</span><span class="mf">.11</span><span class="p">:</span><span class="mf">0.6.0</span><span class="p">,</span><span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">spark</span><span class="p">:</span><span class="n">spark</span><span class="o">-</span><span class="n">avro_2</span><span class="mf">.11</span><span class="p">:</span><span class="mf">2.4.4</span> \
+<span class="n">pyspark</span> \
+  <span class="o">--</span><span class="n">packages</span> <span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">hudi</span><span class="p">:</span><span class="n">hudi</span><span class="o">-</span><span class="n">spark</span><span class="o">-</span><span class="n">bundle_2</span><span class="mf">.12</span><span class="p">:</span><span class="mf">0.7.0</span><span class="p">,</span><span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">spark</span><span class="p">:</span><span class="n">spark</span><span class="o">-</span><span class="n">avro_2</span><span class="mf">.11</span><span class="p">:</span><span class="mf">3.0.1</span> \
   <span class="o">--</span><span class="n">conf</span> <span class="s">'spark.serializer=org.apache.spark.serializer.KryoSerializer'</span>
 </code></pre></div></div>
 
@@ -609,9 +650,9 @@ From the extracted directory run spark-shell with Hudi as:</p>
   <h4>Please note the following: </h4>
 <ul>
   <li>spark-avro module needs to be specified in --packages as it is not included with spark-shell by default</li>
-  <li>spark-avro and spark versions must match (we have used 2.4.4 for both above)</li>
-  <li>we have used hudi-spark-bundle built for scala 2.11 since the spark-avro module used also depends on 2.11. 
-         If spark-avro_2.12 is used, correspondingly hudi-spark-bundle_2.12 needs to be used. </li>
+  <li>spark-avro and spark versions must match (we have used 3.0.1 for both above)</li>
+  <li>we have used hudi-spark-bundle built for scala 2.12 since the spark-avro module used also depends on 2.12. 
+         If spark-avro_2.11 is used, correspondingly hudi-spark-bundle_2.11 needs to be used. </li>
 </ul>
 </div>
 

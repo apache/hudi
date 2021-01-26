@@ -95,6 +95,8 @@
             </li><li class="masthead__menu-item">
               <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
             </li><li class="masthead__menu-item">
+              <a href="/docs/powered_by.html" target="_self" >Powered By</a>
+            </li><li class="masthead__menu-item">
               <a href="/releases.html" target="_self" >Releases</a>
             </li></ul>
         <button class="greedy-nav__toggle hidden" type="button">
@@ -138,11 +140,22 @@
     
       <li>
         
-          <span class="nav__sub-title">Getting Started</span>
+          <span class="nav__sub-title">Documentation</span>
         
 
         
         <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/overview.html" class="">Overview</a></li>
+            
+
           
             
             
@@ -163,62 +176,6 @@
 
             
               <li><a href="/docs/use_cases.html" class="">Use Cases</a></li>
-            
-
-          
-            
-            
-
-            
-            
-
-            
-              <li><a href="/docs/powered_by.html" class="">Talks & Powered By</a></li>
-            
-
-          
-            
-            
-
-            
-            
-
-            
-              <li><a href="/docs/comparison.html" class="">Comparison</a></li>
-            
-
-          
-            
-            
-
-            
-            
-
-            
-              <li><a href="/docs/docker_demo.html" class="">Docker Demo</a></li>
-            
-
-          
-        </ul>
-        
-      </li>
-    
-      <li>
-        
-          <span class="nav__sub-title">Documentation</span>
-        
-
-        
-        <ul>
-          
-            
-            
-
-            
-            
-
-            
-              <li><a href="/docs/concepts.html" class="">Concepts</a></li>
             
 
           
@@ -277,6 +234,18 @@
             
 
           
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">Resources</span>
+        
+
+        
+        <ul>
+          
             
             
 
@@ -284,7 +253,18 @@
             
 
             
-              <li><a href="/docs/cloud.html" class="">Cloud Storage</a></li>
+              <li><a href="/docs/docker_demo.html" class="">Dockerized Demo</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/cloud.html" class="">Storage Configuration</a></li>
             
 
           
@@ -298,18 +278,6 @@
               <li><a href="/docs/metrics.html" class="">Metrics</a></li>
             
 
-          
-        </ul>
-        
-      </li>
-    
-      <li>
-        
-          <span class="nav__sub-title">INFO</span>
-        
-
-        
-        <ul>
           
             
             
@@ -377,6 +345,10 @@
       <li><a href="#index-configs">Index configs</a></li>
       <li><a href="#storage-configs">Storage configs</a></li>
       <li><a href="#compaction-configs">Compaction configs</a></li>
+      <li><a href="#bootstrap-configs">Bootstrap Configs</a></li>
+      <li><a href="#metadata-config">Metadata Config</a></li>
+      <li><a href="#clustering-configs">Clustering Configs</a></li>
+      <li><a href="#payload-configs">Payload Configs</a></li>
       <li><a href="#metrics-configs">Metrics configs</a></li>
       <li><a href="#memory-configs">Memory configs</a></li>
       <li><a href="#write-commit-callback-configs">Write commit callback configs</a></li>
@@ -511,6 +483,18 @@ This is useful to store checkpointing information, in a consistent way with the 
 <p>Property: <code class="highlighter-rouge">hoodie.datasource.hive_sync.use_jdbc</code>, Default: <code class="highlighter-rouge">true</code> <br />
   <span style="color:grey">Use JDBC when hive synchronization is enabled</span></p>
 
+<h4 id="HIVE_AUTO_CREATE_DATABASE_OPT_KEY">HIVE_AUTO_CREATE_DATABASE_OPT_KEY</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.datasource.hive_sync.auto_create_database</code> Default: <code class="highlighter-rouge">true</code> <br />
+<span style="color:grey"> Auto create hive database if does not exists </span></p>
+
+<h4 id="HIVE_SKIP_RO_SUFFIX">HIVE_SKIP_RO_SUFFIX</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.datasource.hive_sync.skip_ro_suffix</code> Default: <code class="highlighter-rouge">false</code> <br />
+<span style="color:grey"> Skip the <code class="highlighter-rouge">_ro</code> suffix for Read optimized table, when registering</span></p>
+
+<h4 id="HIVE_SUPPORT_TIMESTAMP">HIVE_SUPPORT_TIMESTAMP</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.datasource.hive_sync.support_timestamp</code> Default: <code class="highlighter-rouge">false</code> <br />
+<span style="color:grey"> ‘INT64’ with original type TIMESTAMP_MICROS is converted to hive ‘timestamp’ type. Disabled by default for backward compatibility. </span></p>
+
 <h3 id="read-options">Read Options</h3>
 
 <p>Options useful for reading tables via <code class="highlighter-rouge">read.format.option(...)</code></p>
@@ -532,6 +516,10 @@ necessarily correspond to an instant on the timeline. New data written with an
 <p>Property: <code class="highlighter-rouge">hoodie.datasource.read.end.instanttime</code>, Default: latest instant (i.e fetches all new data since begin instant time) <br />
 <span style="color:grey"> Instant time to limit incrementally fetched data to. New data written with an
 <code class="highlighter-rouge">instant_time &lt;= END_INSTANTTIME</code> are fetched out.</span></p>
+
+<h4 id="INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY">INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.datasource.read.schema.use.end.instanttime</code>, Default: false <br />
+<span style="color:grey"> Uses end instant schema when incrementally fetched data to. Default: users latest instant schema. </span></p>
 
 <h2 id="writeclient-configs">WriteClient Configs</h2>
 
@@ -583,9 +571,17 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <p>Property: <code class="highlighter-rouge">hoodie.insert.shuffle.parallelism</code>, <code class="highlighter-rouge">hoodie.upsert.shuffle.parallelism</code><br />
 <span style="color:grey">Once data has been initially imported, this parallelism controls initial parallelism for reading input records. Ensure this value is high enough say: 1 partition for 1 GB of input data</span></p>
 
+<h4 id="withDelteParallelism">withDeleteParallelism(parallelism = 1500)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.delete.shuffle.parallelism</code><br />
+<span style="color:grey">This parallelism is Used for “delete” operation while deduping or repartioning. </span></p>
+
 <h4 id="combineInput">combineInput(on_insert = false, on_update=true)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.combine.before.insert</code>, <code class="highlighter-rouge">hoodie.combine.before.upsert</code><br />
 <span style="color:grey">Flag which first combines the input RDD and merges multiple partial records into a single record before inserting or updating in DFS</span></p>
+
+<h4 id="combineDeleteInput">combineDeleteInput(on_Delete = true)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.combine.before.delete</code><br />
+<span style="color:grey">Flag which first combines the input RDD and merges multiple partial records into a single record before deleting in DFS</span></p>
 
 <h4 id="withWriteStatusStorageLevel">withWriteStatusStorageLevel(level = MEMORY_AND_DISK_SER)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.write.status.storage.level</code><br />
@@ -696,6 +692,10 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <h4 id="hbaseTableName">hbaseTableName(tableName)  [Required]</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.index.hbase.table</code> <br />
 <span style="color:grey">Only applies if index type is HBASE. HBase Table name to use as the index. Hudi stores the row_key and [partition_path, fileID, commitTime] mapping in the table.</span></p>
+
+<h4 id="hbaseIndexUpdatePartitionPath">hbaseIndexUpdatePartitionPath(updatePartitionPath)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.hbase.index.update.partition.path</code> <br />
+<span style="color:grey">Only applies if index type is HBASE. When an already existing record is upserted to a new partition compared to whats in storage, this config when set, will delete old record in old paritition and will insert it as new record in new partition. </span></p>
 
 <h4 id="simple-index-configs">Simple Index configs</h4>
 
@@ -835,6 +835,120 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <h4 id="payloadClassName">withPayloadClass(payloadClassName = org.apache.hudi.common.model.HoodieAvroPayload)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.compaction.payload.class</code> <br />
 <span style="color:grey">This needs to be same as class used during insert/upserts. Just like writing, compaction also uses the record payload class to merge records in the log against each other, merge again with the base file and produce the final record to be written after compaction.</span></p>
+
+<h3 id="bootstrap-configs">Bootstrap Configs</h3>
+<p>Controls bootstrap related configs. If you want to bootstrap your data for the first time into hudi, this bootstrap operation will come in handy as you don’t need to wait for entire data to be loaded into hudi to start leveraging hudi.</p>
+
+<p><a href="#withBootstrapConfig">withBootstrapConfig</a> (HoodieBootstrapConfig) <br /></p>
+
+<h4 id="withBootstrapBasePath">withBootstrapBasePath(basePath)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.bootstrap.base.path</code> <br />
+<span style="color:grey"> Base path of the dataset that needs to be bootstrapped as a Hudi table </span></p>
+
+<h4 id="withBootstrapParallelism">withBootstrapParallelism(parallelism = 1500)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.bootstrap.parallelism</code> <br />
+<span style="color:grey"> Parallelism value to be used to bootstrap data into hudi </span></p>
+
+<h4 id="withbootstrapkeygenclasskeygenclass-withbootstrapkeygenclass">withBootstrapKeyGenClass(keyGenClass) (#withBootstrapKeyGenClass)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.bootstrap.keygen.class</code> <br />
+<span style="color:grey"> Key generator implementation to be used for generating keys from the bootstrapped dataset </span></p>
+
+<h4 id="withBootstrapModeSelector">withBootstrapModeSelector(partitionSelectorClass = org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.bootstrap.mode.selector</code> <br />
+<span style="color:grey"> Selects the mode in which each file/partition in the bootstrapped dataset gets bootstrapped</span></p>
+
+<h4 id="withBootstrapPartitionPathTranslatorClass">withBootstrapPartitionPathTranslatorClass(partitionPathTranslatorClass = org.apache.hudi.client.bootstrap.translator.IdentityBootstrapPartitionPathTranslator)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.bootstrap.partitionpath.translator.class</code> <br />
+<span style="color:grey"> Translates the partition paths from the bootstrapped data into how is laid out as a Hudi table. </span></p>
+
+<h4 id="withFullBootstrapInputProvider">withFullBootstrapInputProvider(partitionSelectorClass = org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.bootstrap.full.input.provider</code> <br />
+<span style="color:grey"> Class to use for reading the bootstrap dataset partitions/files, for Bootstrap mode <code class="highlighter-rouge">FULL_RECORD</code> </span></p>
+
+<h4 id="withBootstrapModeSelectorRegex">withBootstrapModeSelectorRegex(regex = “.*”)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.bootstrap.mode.selector.regex</code> <br />
+<span style="color:grey"> Matches each bootstrap dataset partition against this regex and applies the mode below to it. </span></p>
+
+<h4 id="withbootstrapmodeforregexmatchmodeforregexmatch--orgapachehudiclientbootstrapmetadata_only">withBootstrapModeForRegexMatch(modeForRegexMatch = org.apache.hudi.client.bootstrap.METADATA_ONLY)</h4>
+<p>Property: <code class="highlighter-rouge">withBootstrapModeForRegexMatch</code> <br />
+<span style="color:grey"> Bootstrap mode to apply for partition paths, that match regex above. <code class="highlighter-rouge">METADATA_ONLY</code> will generate just skeleton base files
+with keys/footers, avoiding full cost of rewriting the dataset. <code class="highlighter-rouge">FULL_RECORD</code> will perform a full copy/rewrite of the data as a Hudi table. </span></p>
+
+<h3 id="metadata-config">Metadata Config</h3>
+<p>Configurations used by the HUDI Metadata Table. This table maintains the meta information stored in hudi dataset so that listing can be avoided during queries.</p>
+
+<p><a href="#withMetadataConfig">withMetadataConfig</a> (HoodieMetadataConfig) <br /></p>
+
+<h4 id="enable">enable(enable = false)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.metadata.enable</code> <br />
+<span style="color:grey"> Enable the internal Metadata Table which stores table level metadata such as file listings </span></p>
+
+<h4 id="enable">enableReuse(enable = true)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.metadata.reuse.enable</code> <br />
+<span style="color:grey"> Enable reusing of opened file handles/merged logs, across multiple fetches from metadata table. </span></p>
+
+<h4 id="enable">enableFallback(enable = true)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.metadata.fallback.enable</code> <br />
+<span style="color:grey"> Fallback to listing from DFS, if there are any errors in fetching from metadata table </span></p>
+
+<h4 id="validate">validate(validate = false)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.metadata.validate</code> <br />
+<span style="color:grey"> Validate contents of Metadata Table on each access against the actual listings from DFS</span></p>
+
+<h4 id="withInsertParallelism">withInsertParallelism(parallelism = 1)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.metadata.insert.parallelism</code> <br />
+<span style="color:grey"> Parallelism to use when writing to the metadata table </span></p>
+
+<h4 id="enable">withMaxNumDeltaCommitsBeforeCompaction(maxNumDeltaCommitsBeforeCompaction = 24)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.metadata.compact.max.delta.commits</code> <br />
+<span style="color:grey"> Controls how often the metadata table is compacted.</span></p>
+
+<h4 id="enable">archiveCommitsWith(minToKeep = 30, maxToKeep = 20)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.metadata.keep.min.commits</code>, <code class="highlighter-rouge">hoodie.metadata.keep.max.commits</code> <br />
+<span style="color:grey"> Controls the archival of the metadata table’s timeline </span></p>
+
+<h3 id="clustering-configs">Clustering Configs</h3>
+<p>Controls clustering operations in hudi. Each clustering has to be configured for its strategy, and config params. This config drives the same.</p>
+
+<p><a href="#withClusteringConfig">withClusteringConfig</a> (HoodieClusteringConfig) <br /></p>
+
+<h4 id="withClusteringPlanStrategyClass">withClusteringPlanStrategyClass(clusteringStrategyClass = org.apache.hudi.client.clustering.plan.strategy.SparkRecentDaysClusteringPlanStrategy)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.clustering.plan.strategy.class</code> <br />
+<span style="color:grey"> Config to provide a strategy class to create ClusteringPlan. Class has to be subclass of ClusteringPlanStrategy </span></p>
+
+<h4 id="withClusteringExecutionStrategyClass">withClusteringExecutionStrategyClass(runClusteringStrategyClass = org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.clustering.execution.strategy.class</code> <br />
+<span style="color:grey"> Config to provide a strategy class to execute a ClusteringPlan. Class has to be subclass of RunClusteringStrategy </span></p>
+
+<h4 id="withClusteringTargetPartitions">withClusteringTargetPartitions(clusteringTargetPartitions = 2)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.clustering.plan.strategy.daybased.lookback.partitions</code> <br />
+<span style="color:grey"> Number of partitions to list to create ClusteringPlan </span></p>
+
+<h4 id="withClusteringPlanSmallFileLimit">withClusteringPlanSmallFileLimit(clusteringSmallFileLimit = 600Mb)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.clustering.plan.strategy.small.file.limit</code> <br />
+<span style="color:grey"> Files smaller than the size specified here are candidates for clustering </span></p>
+
+<h4 id="withClusteringMaxBytesInGroup">withClusteringMaxBytesInGroup(clusteringMaxGroupSize = 2Gb)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.clustering.plan.strategy.max.bytes.per.group</code> <br />
+<span style="color:grey"> Max amount of data to be included in one group
+Each clustering operation can create multiple groups. Total amount of data processed by clustering operation is defined by below two properties (CLUSTERING_MAX_BYTES_PER_GROUP * CLUSTERING_MAX_NUM_GROUPS). </span></p>
+
+<h4 id="withClusteringMaxNumGroups">withClusteringMaxNumGroups(maxNumGroups = 30)</h4>
+<p>Property : <code class="highlighter-rouge">hoodie.clustering.plan.strategy.max.num.groups</code> <br />
+<span style="color:grey"> Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism. </span></p>
+
+<h4 id="withClusteringTargetFileMaxBytes">withClusteringTargetFileMaxBytes(targetFileSize = 1Gb )</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.clustering.plan.strategy.target.file.max.bytes</code> <br />
+<span style="color:grey"> Each group can produce ‘N’ (CLUSTERING_MAX_GROUP_SIZE/CLUSTERING_TARGET_FILE_SIZE) output file groups </span></p>
+
+<h3 id="payload-configs">Payload Configs</h3>
+<p>Payload related configs. This config can be leveraged by payload implementations to determine their business logic.</p>
+
+<p><a href="#withPayloadConfig">withPayloadConfig</a> (HoodiePayloadConfig) <br /></p>
+
+<h4 id="withPayloadOrderingField">withPayloadOrderingField(payloadOrderingField = “ts”)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.payload.ordering.field</code> <br />
+<span style="color:grey"> Property to hold the payload ordering field name. </span></p>
 
 <h3 id="metrics-configs">Metrics configs</h3>
 
