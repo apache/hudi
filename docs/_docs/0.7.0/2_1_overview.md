@@ -1,13 +1,14 @@
 ---
-title: "Concepts"
+version: 0.7.0
+title: "Overview"
 keywords: hudi, design, table, queries, timeline
-permalink: /docs/concepts.html
+permalink: /docs/0.7.0-overview.html
 summary: "Here we introduce some basic concepts & give a broad technical overview of Hudi"
 toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
 ---
 
-Apache Hudi (pronounced “Hudi”) provides the following streaming primitives over hadoop compatible storages
+Apache Hudi (pronounced “hoodie”) provides streaming primitives over hadoop compatible storages
 
  * Update/Delete Records      (how do I change records in a table?)
  * Change Streams             (how do I fetch records that changed?)
@@ -52,7 +53,7 @@ When there is late arriving data (data intended for 9:00 arriving >1 hr late at 
 With the help of the timeline, an incremental query attempting to get all new data that was committed successfully since 10:00 hours, is able to very efficiently consume
 only the changed files without say scanning all the time buckets > 07:00.
 
-## File management
+## File Layout
 Hudi organizes a table into a directory structure under a `basepath` on DFS. Table is broken up into partitions, which are folders containing data files for that partition,
 very similar to Hive tables. Each partition is uniquely identified by its `partitionpath`, which is relative to the basepath.
 

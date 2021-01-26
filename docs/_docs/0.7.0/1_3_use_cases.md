@@ -1,7 +1,8 @@
 ---
+version: 0.7.0
 title: "Use Cases"
 keywords: hudi, data ingestion, etl, real time, use cases
-permalink: /docs/use_cases.html
+permalink: /docs/0.7.0-use_cases.html
 summary: "Following are some sample use-cases for Hudi, which illustrate the benefits in terms of faster processing & increased efficiency"
 toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
