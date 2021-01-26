@@ -21,7 +21,7 @@ package org.apache.hudi.async;
 import org.apache.hudi.client.AbstractCompactor;
 import org.apache.hudi.client.AbstractHoodieWriteClient;
 import org.apache.hudi.client.HoodieSparkCompactor;
-import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 
 public class SparkAsyncCompactService extends AsyncCompactService {
 
@@ -31,6 +31,6 @@ public class SparkAsyncCompactService extends AsyncCompactService {
 
   @Override
   protected AbstractCompactor createCompactor(AbstractHoodieWriteClient client) {
-    return new HoodieSparkCompactor(client);
+    return new HoodieSparkCompactor(client, this.context);
   }
 }

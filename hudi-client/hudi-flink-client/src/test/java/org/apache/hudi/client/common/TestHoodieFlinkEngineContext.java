@@ -20,6 +20,7 @@ package org.apache.hudi.client.common;
 
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,8 +30,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-
-import scala.Tuple2;
 
 /**
  * Unit test against HoodieFlinkEngineContext.
@@ -85,7 +84,7 @@ public class TestHoodieFlinkEngineContext {
 
     Map<String, String> resultMap = context.mapToPair(mapList, x -> {
       String[] splits = x.split("_");
-      return Tuple2.apply(splits[0], splits[1]);
+      return new ImmutablePair<>(splits[0], splits[1]);
     }, 2);
 
     Assertions.assertEquals(resultMap.get("spark"), resultMap.get("flink"));

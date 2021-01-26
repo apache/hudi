@@ -19,7 +19,7 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.TaskContextSupplier;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -34,8 +34,11 @@ import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.table.HoodieTable;
 
@@ -47,8 +50,10 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -222,7 +227,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       HoodieRecord<T> hoodieRecord = new HoodieRecord<>(keyToNewRecords.get(key));
       try {
         Option<IndexedRecord> combinedAvroRecord =
-            hoodieRecord.getData().combineAndGetUpdateValue(oldRecord, useWriterSchema ? writerSchemaWithMetafields : writerSchema);
+            hoodieRecord.getData().combineAndGetUpdateValue(oldRecord, useWriterSchema ? writerSchemaWithMetafields : writerSchema,
+                config.getPayloadConfig().getProps());
         if (writeUpdateRecord(hoodieRecord, combinedAvroRecord)) {
           /*
            * ONLY WHEN 1) we have an update for this key AND 2) We are able to successfully write the the combined new
@@ -241,14 +247,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
 
     if (copyOldRecord) {
       // this should work as it is, since this is an existing record
-      String errMsg = "Failed to merge old record into new file for key " + key + " from old file " + getOldFilePath()
-          + " to new file " + newFilePath + " with writerSchema " + writerSchemaWithMetafields.toString(true);
       try {
         fileWriter.writeAvro(key, oldRecord);
-      } catch (ClassCastException e) {
-        LOG.debug("Old record is " + oldRecord);
-        throw new HoodieUpsertException(errMsg, e);
       } catch (IOException | RuntimeException e) {
+        String errMsg = String.format("Failed to merge old record into new file for key %s from old file %s to new file %s with writerSchema %s",
+                key, getOldFilePath(), newFilePath, writerSchemaWithMetafields.toString(true));
         LOG.debug("Old record is " + oldRecord);
         throw new HoodieUpsertException(errMsg, e);
       }
@@ -257,7 +260,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   }
 
   @Override
-  public WriteStatus close() {
+  public List<WriteStatus> close() {
     try {
       // write out any pending records (this can happen when inserts are turned into updates)
       Iterator<HoodieRecord<T>> newRecordsItr = (keyToNewRecords instanceof ExternalSpillableMap)
@@ -295,22 +298,41 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       runtimeStats.setTotalUpsertTime(timer.endTimer());
       stat.setRuntimeStats(runtimeStats);
 
+      performMergeDataValidationCheck(writeStatus);
+
       LOG.info(String.format("MergeHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
           stat.getFileId(), runtimeStats.getTotalUpsertTime()));
 
-      return writeStatus;
+      return Collections.singletonList(writeStatus);
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);
     }
   }
 
-  public Path getOldFilePath() {
-    return oldFilePath;
+  public void performMergeDataValidationCheck(WriteStatus writeStatus) {
+    if (!config.isMergeDataValidationCheckEnabled()) {
+      return;
+    }
+
+    long oldNumWrites = 0;
+    try {
+      HoodieFileReader reader = HoodieFileReaderFactory.getFileReader(hoodieTable.getHadoopConf(), oldFilePath);
+      oldNumWrites = reader.getTotalRecords();
+    } catch (IOException e) {
+      throw new HoodieUpsertException("Failed to check for merge data validation", e);
+    }
+
+    if ((writeStatus.getStat().getNumWrites() + writeStatus.getStat().getNumDeletes()) < oldNumWrites) {
+      throw new HoodieCorruptedDataException(
+          String.format("Record write count decreased for file: %s, Partition Path: %s (%s:%d + %d < %s:%d)",
+              writeStatus.getFileId(), writeStatus.getPartitionPath(),
+              instantTime, writeStatus.getStat().getNumWrites(), writeStatus.getStat().getNumDeletes(),
+              FSUtils.getCommitTime(oldFilePath.toString()), oldNumWrites));
+    }
   }
 
-  @Override
-  public WriteStatus getWriteStatus() {
-    return writeStatus;
+  public Path getOldFilePath() {
+    return oldFilePath;
   }
 
   @Override

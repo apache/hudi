@@ -18,18 +18,6 @@
 
 package org.apache.hudi.common.fs;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
-import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.InvalidHoodiePathException;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
@@ -39,17 +27,34 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.InvalidHoodiePathException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -193,8 +198,17 @@ public class FSUtils {
   /**
    * Obtain all the partition paths, that are present in this table, denoted by presence of
    * {@link HoodiePartitionMetadata#HOODIE_PARTITION_METAFILE}.
+   *
+   * If the basePathStr is a subdirectory of .hoodie folder then we assume that the partitions of an internal
+   * table (a hoodie table within the .hoodie directory) are to be obtained.
+   *
+   * @param fs FileSystem instance
+   * @param basePathStr base directory
    */
   public static List<String> getAllFoldersWithPartitionMetaFile(FileSystem fs, String basePathStr) throws IOException {
+    // If the basePathStr is a folder within the .hoodie directory then we are listing partitions within an
+    // internal table.
+    final boolean isMetadataTable = HoodieTableMetadata.isMetadataTable(basePathStr);
     final Path basePath = new Path(basePathStr);
     final List<String> partitions = new ArrayList<>();
     processFiles(fs, basePathStr, (locatedFileStatus) -> {
@@ -203,7 +217,7 @@ public class FSUtils {
         partitions.add(getRelativePartitionPath(basePath, filePath.getParent()));
       }
       return true;
-    }, true);
+    }, !isMetadataTable);
     return partitions;
   }
 
@@ -240,12 +254,29 @@ public class FSUtils {
     }
   }
 
-  public static List<String> getAllPartitionPaths(FileSystem fs, String basePathStr, boolean assumeDatePartitioning)
-      throws IOException {
-    if (assumeDatePartitioning) {
-      return getAllPartitionFoldersThreeLevelsDown(fs, basePathStr);
-    } else {
-      return getAllFoldersWithPartitionMetaFile(fs, basePathStr);
+  public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext, String basePathStr,
+                                                  boolean useFileListingFromMetadata, boolean verifyListings,
+                                                  boolean assumeDatePartitioning) {
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(useFileListingFromMetadata)
+        .validate(verifyListings)
+        .withAssumeDatePartitioning(assumeDatePartitioning)
+        .build();
+    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
+        FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR)) {
+      return tableMetadata.getAllPartitionPaths();
+    } catch (Exception e) {
+      throw new HoodieException("Error fetching partition paths from metadata table", e);
+    }
+  }
+
+  public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
+                                                  String basePathStr) {
+    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
+        FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR)) {
+      return tableMetadata.getAllPartitionPaths();
+    } catch (Exception e) {
+      throw new HoodieException("Error fetching partition paths from metadata table", e);
     }
   }
 
@@ -385,6 +416,20 @@ public class FSUtils {
   }
 
   /**
+   * Get the names of all the base and log files in the given partition path.
+   */
+  public static FileStatus[] getAllDataFilesInPartition(FileSystem fs, Path partitionPath) throws IOException {
+    final Set<String> validFileExtensions = Arrays.stream(HoodieFileFormat.values())
+        .map(HoodieFileFormat::getFileExtension).collect(Collectors.toCollection(HashSet::new));
+    final String logFileExtension = HoodieFileFormat.HOODIE_LOG.getFileExtension();
+
+    return Arrays.stream(fs.listStatus(partitionPath, path -> {
+      String extension = FSUtils.getFileExtension(path.getName());
+      return validFileExtensions.contains(extension) || path.getName().contains(logFileExtension);
+    })).filter(FileStatus::isFile).toArray(FileStatus[]::new);
+  }
+
+  /**
    * Get the latest log file written from the list of log files passed in.
    */
   public static Option<HoodieLogFile> getLatestLogFile(Stream<HoodieLogFile> logFiles) {
@@ -396,10 +441,14 @@ public class FSUtils {
    */
   public static Stream<HoodieLogFile> getAllLogFiles(FileSystem fs, Path partitionPath, final String fileId,
       final String logFileExtension, final String baseCommitTime) throws IOException {
-    return Arrays
-        .stream(fs.listStatus(partitionPath,
-            path -> path.getName().startsWith("." + fileId) && path.getName().contains(logFileExtension)))
-        .map(HoodieLogFile::new).filter(s -> s.getBaseCommitTime().equals(baseCommitTime));
+    try {
+      return Arrays
+          .stream(fs.listStatus(partitionPath,
+              path -> path.getName().startsWith("." + fileId) && path.getName().contains(logFileExtension)))
+          .map(HoodieLogFile::new).filter(s -> s.getBaseCommitTime().equals(baseCommitTime));
+    } catch (FileNotFoundException e) {
+      return Stream.<HoodieLogFile>builder().build();
+    }
   }
 
   /**

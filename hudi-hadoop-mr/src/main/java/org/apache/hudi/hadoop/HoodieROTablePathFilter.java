@@ -18,18 +18,20 @@
 
 package org.apache.hudi.hadoop;
 
-import java.util.Map;
-import java.util.Set;
-import org.apache.hadoop.conf.Configurable;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 
+import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -41,6 +43,8 @@ import java.io.Serializable;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -79,6 +83,9 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
    */
   private SerializableConfiguration conf;
 
+  private transient HoodieLocalEngineContext engineContext;
+
+
   private transient FileSystem fs;
 
   public HoodieROTablePathFilter() {
@@ -107,6 +114,10 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
 
   @Override
   public boolean accept(Path path) {
+
+    if (engineContext == null) {
+      this.engineContext = new HoodieLocalEngineContext(this.conf.get());
+    }
 
     if (LOG.isDebugEnabled()) {
       LOG.debug("Checking acceptance for path " + path);
@@ -156,6 +167,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
       }
 
       if (baseDir != null) {
+        HoodieTableFileSystemView fsView = null;
         try {
           HoodieTableMetaClient metaClient = metaClientCache.get(baseDir.toString());
           if (null == metaClient) {
@@ -163,9 +175,10 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
             metaClientCache.put(baseDir.toString(), metaClient);
           }
 
-          HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
-              metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants(), fs.listStatus(folder));
-          List<HoodieBaseFile> latestFiles = fsView.getLatestBaseFiles().collect(Collectors.toList());
+          fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
+              metaClient, HoodieInputFormatUtils.buildMetadataConfig(getConf()));
+          String partition = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), folder);
+          List<HoodieBaseFile> latestFiles = fsView.getLatestBaseFiles(partition).collect(Collectors.toList());
           // populate the cache
           if (!hoodiePathCache.containsKey(folder.toString())) {
             hoodiePathCache.put(folder.toString(), new HashSet<>());
@@ -189,6 +202,10 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
           }
           nonHoodiePathCache.add(folder.toString());
           return true;
+        } finally {
+          if (fsView != null) {
+            fsView.close();
+          }
         }
       } else {
         // files is at < 3 level depth in FS tree, can't be hoodie dataset

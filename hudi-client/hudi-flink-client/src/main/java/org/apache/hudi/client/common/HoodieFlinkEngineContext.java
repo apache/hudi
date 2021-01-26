@@ -19,10 +19,13 @@
 package org.apache.hudi.client.common;
 
 import org.apache.hudi.client.FlinkTaskContextSupplier;
-import org.apache.hudi.client.common.function.SerializableConsumer;
-import org.apache.hudi.client.common.function.SerializableFunction;
-import org.apache.hudi.client.common.function.SerializablePairFunction;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.engine.EngineProperty;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.function.SerializableConsumer;
+import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.flink.api.common.functions.RuntimeContext;
@@ -33,12 +36,12 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import scala.Tuple2;
+import org.apache.hudi.common.util.collection.Pair;
 
-import static org.apache.hudi.client.common.function.FunctionWrapper.throwingFlatMapWrapper;
-import static org.apache.hudi.client.common.function.FunctionWrapper.throwingForeachWrapper;
-import static org.apache.hudi.client.common.function.FunctionWrapper.throwingMapToPairWrapper;
-import static org.apache.hudi.client.common.function.FunctionWrapper.throwingMapWrapper;
+import static org.apache.hudi.common.function.FunctionWrapper.throwingFlatMapWrapper;
+import static org.apache.hudi.common.function.FunctionWrapper.throwingForeachWrapper;
+import static org.apache.hudi.common.function.FunctionWrapper.throwingMapToPairWrapper;
+import static org.apache.hudi.common.function.FunctionWrapper.throwingMapWrapper;
 
 /**
  * A flink engine implementation of HoodieEngineContext.
@@ -76,7 +79,7 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
 
   @Override
   public <I, K, V> Map<K, V> mapToPair(List<I> data, SerializablePairFunction<I, K, V> func, Integer parallelism) {
-    return data.stream().map(throwingMapToPairWrapper(func)).collect(Collectors.toMap(Tuple2::_1, Tuple2::_2));
+    return data.stream().map(throwingMapToPairWrapper(func)).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
   }
 
   @Override

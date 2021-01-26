@@ -104,7 +104,7 @@ public class TestHoodieLogFileCommand extends AbstractShellIntegrationTest {
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, INSTANT_TIME);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
       dataBlock = new HoodieAvroDataBlock(records, header);
-      writer = writer.appendBlock(dataBlock);
+      writer.appendBlock(dataBlock);
     } finally {
       if (writer != null) {
         writer.close();
@@ -183,7 +183,7 @@ public class TestHoodieLogFileCommand extends AbstractShellIntegrationTest {
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, INSTANT_TIME);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
       HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records1, header);
-      writer = writer.appendBlock(dataBlock);
+      writer.appendBlock(dataBlock);
     } finally {
       if (writer != null) {
         writer.close();
@@ -197,13 +197,23 @@ public class TestHoodieLogFileCommand extends AbstractShellIntegrationTest {
     // get expected result of 10 records.
     List<String> logFilePaths = Arrays.stream(fs.globStatus(new Path(partitionPath + "/*")))
         .map(status -> status.getPath().toString()).collect(Collectors.toList());
-    HoodieMergedLogRecordScanner scanner =
-        new HoodieMergedLogRecordScanner(fs, tablePath, logFilePaths, schema, INSTANT_TIME,
-            HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES,
-            Boolean.parseBoolean(HoodieCompactionConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED),
-            Boolean.parseBoolean(HoodieCompactionConfig.DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED),
-            HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE,
-            HoodieMemoryConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH);
+    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
+        .withFileSystem(fs)
+        .withBasePath(tablePath)
+        .withLogFilePaths(logFilePaths)
+        .withReaderSchema(schema)
+        .withLatestInstantTime(INSTANT_TIME)
+        .withMaxMemorySizeInBytes(
+            HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
+        .withReadBlocksLazily(
+            Boolean.parseBoolean(
+                HoodieCompactionConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED))
+        .withReverseReader(
+            Boolean.parseBoolean(
+                HoodieCompactionConfig.DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED))
+        .withBufferSize(HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE)
+        .withSpillableMapBasePath(HoodieMemoryConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH)
+        .build();
 
     Iterator<HoodieRecord<? extends HoodieRecordPayload>> records = scanner.iterator();
     int num = 0;

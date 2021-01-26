@@ -18,21 +18,23 @@
 
 package org.apache.hudi.source;
 
-import org.apache.hudi.HoodieFlinkStreamer;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieFlinkStreamerException;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
 import org.apache.hudi.util.AvroConvertor;
 import org.apache.hudi.util.StreamerUtil;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.api.common.functions.MapFunction;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -41,34 +43,46 @@ import java.io.IOException;
  */
 public class JsonStringToHoodieRecordMapFunction implements MapFunction<String, HoodieRecord> {
 
-  private static Logger LOG = LoggerFactory.getLogger(JsonStringToHoodieRecordMapFunction.class);
-
-  private final HoodieFlinkStreamer.Config cfg;
   private TypedProperties props;
   private KeyGenerator keyGenerator;
   private AvroConvertor avroConvertor;
+  private Option<String> schemaStr;
+  private String payloadClassName;
+  private String orderingField;
 
-  public JsonStringToHoodieRecordMapFunction(HoodieFlinkStreamer.Config cfg) {
-    this.cfg = cfg;
+  public JsonStringToHoodieRecordMapFunction(TypedProperties props) {
+    this(props, Option.empty());
+  }
+
+  public JsonStringToHoodieRecordMapFunction(TypedProperties props, Option<String> schemaStr) {
+    this.props = props;
+    this.schemaStr = schemaStr;
     init();
   }
 
   @Override
   public HoodieRecord map(String value) throws Exception {
-    GenericRecord gr = avroConvertor.fromJson(value);
-    HoodieRecordPayload payload = StreamerUtil.createPayload(cfg.payloadClassName, gr,
-        (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false));
+    GenericRecord gr = this.avroConvertor.fromJson(value);
+    HoodieRecordPayload payload = StreamerUtil.createPayload(this.payloadClassName, gr,
+        (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, this.orderingField, false));
 
-    return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
+    return new HoodieRecord<>(this.keyGenerator.getKey(gr), payload);
   }
 
   private void init() {
-    this.props = StreamerUtil.getProps(cfg);
-    avroConvertor = new AvroConvertor(new FilebasedSchemaProvider(props).getSourceSchema());
+    if (schemaStr.isPresent()) {
+      this.avroConvertor = new AvroConvertor(new Schema.Parser().parse(schemaStr.get()));
+    } else {
+      this.avroConvertor = new AvroConvertor(new FilebasedSchemaProvider(props).getSourceSchema());
+    }
+    this.payloadClassName = props.getString(HoodieWriteConfig.WRITE_PAYLOAD_CLASS,
+        OverwriteWithLatestAvroPayload.class.getName());
+    this.orderingField = props.getString(HoodieWriteConfig.PRECOMBINE_FIELD_PROP, "ts");
     try {
-      keyGenerator = StreamerUtil.createKeyGenerator(props);
+      this.keyGenerator = StreamerUtil.createKeyGenerator(props);
     } catch (IOException e) {
-      LOG.error("Init keyGenerator failed ", e);
+      throw new HoodieFlinkStreamerException(String.format("KeyGenerator %s initialization failed",
+          props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP, SimpleAvroKeyGenerator.class.getName())), e);
     }
   }
 }

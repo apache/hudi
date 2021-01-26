@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -152,7 +153,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> implements Part
         for (SmallFile smallFile : smallFiles) {
           long recordsToAppend = Math.min((config.getParquetMaxFileSize() - smallFile.sizeBytes) / averageRecordSize,
               totalUnassignedInserts);
-          if (recordsToAppend > 0 && totalUnassignedInserts > 0) {
+          if (recordsToAppend > 0) {
             // create a new bucket or re-use an existing bucket
             int bucket;
             if (updateLocationToBucket.containsKey(smallFile.location.getFileId())) {
@@ -180,7 +181,11 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> implements Part
               + ", totalInsertBuckets => " + insertBuckets + ", recordsPerBucket => " + insertRecordsPerBucket);
           for (int b = 0; b < insertBuckets; b++) {
             bucketNumbers.add(totalBuckets);
-            recordsPerBucket.add(totalUnassignedInserts / insertBuckets);
+            if (b < insertBuckets - 1) {
+              recordsPerBucket.add(insertRecordsPerBucket);
+            } else {
+              recordsPerBucket.add(totalUnassignedInserts - (insertBuckets - 1) * insertRecordsPerBucket);
+            }
             BucketInfo bucketInfo = new BucketInfo();
             bucketInfo.bucketType = BucketType.INSERT;
             bucketInfo.partitionPath = partitionPath;
@@ -210,7 +215,8 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> implements Part
     Map<String, List<SmallFile>> partitionSmallFilesMap = new HashMap<>();
     if (partitionPaths != null && partitionPaths.size() > 0) {
       context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions");
-      partitionSmallFilesMap = context.mapToPair(partitionPaths, partitionPath -> new Tuple2<>(partitionPath, getSmallFiles(partitionPath)), 0);
+      partitionSmallFilesMap = context.mapToPair(partitionPaths,
+          partitionPath -> new ImmutablePair<>(partitionPath, getSmallFiles(partitionPath)), 0);
     }
     return partitionSmallFilesMap;
   }

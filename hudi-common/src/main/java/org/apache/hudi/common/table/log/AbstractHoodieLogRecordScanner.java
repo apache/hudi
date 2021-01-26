@@ -80,7 +80,7 @@ public abstract class AbstractHoodieLogRecordScanner {
   // Merge strategy to use when combining records from log
   private final String payloadClassFQN;
   // Log File Paths
-  private final List<String> logFilePaths;
+  protected final List<String> logFilePaths;
   // Read Lazily flag
   private final boolean readBlocksLazily;
   // Reverse reader - Not implemented yet (NA -> Why do we need ?)
@@ -105,7 +105,6 @@ public abstract class AbstractHoodieLogRecordScanner {
   // Progress
   private float progress = 0.0f;
 
-  // TODO (NA) - Change this to a builder, this constructor is too long
   public AbstractHoodieLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
       String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize) {
     this.readerSchema = readerSchema;
@@ -149,7 +148,8 @@ public abstract class AbstractHoodieLogRecordScanner {
         switch (r.getBlockType()) {
           case HFILE_DATA_BLOCK:
           case AVRO_DATA_BLOCK:
-            LOG.info("Reading a data block from file " + logFile.getPath());
+            LOG.info("Reading a data block from file " + logFile.getPath() + " at instant "
+                + r.getLogBlockHeader().get(INSTANT_TIME));
             if (isNewInstantBlock(r) && !readBlocksLazily) {
               // If this is an avro data block belonging to a different commit/instant,
               // then merge the last blocks and records into the main result
@@ -203,8 +203,7 @@ public abstract class AbstractHoodieLogRecordScanner {
                     LOG.info("Rolling back the last corrupted log block read in " + logFile.getPath());
                     currentInstantLogBlocks.pop();
                     numBlocksRolledBack++;
-                  } else if (lastBlock.getBlockType() != CORRUPT_BLOCK
-                      && targetInstantForCommandBlock.contentEquals(lastBlock.getLogBlockHeader().get(INSTANT_TIME))) {
+                  } else if (targetInstantForCommandBlock.contentEquals(lastBlock.getLogBlockHeader().get(INSTANT_TIME))) {
                     // rollback last data block or delete block
                     LOG.info("Rolling back the last log block read in " + logFile.getPath());
                     currentInstantLogBlocks.pop();
@@ -279,10 +278,12 @@ public abstract class AbstractHoodieLogRecordScanner {
     List<IndexedRecord> recs = dataBlock.getRecords();
     totalLogRecords.addAndGet(recs.size());
     for (IndexedRecord rec : recs) {
-      HoodieRecord<? extends HoodieRecordPayload> hoodieRecord =
-          SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN);
-      processNextRecord(hoodieRecord);
+      processNextRecord(createHoodieRecord(rec));
     }
+  }
+
+  protected HoodieRecord<?> createHoodieRecord(IndexedRecord rec) {
+    return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN);
   }
 
   /**
@@ -357,5 +358,29 @@ public abstract class AbstractHoodieLogRecordScanner {
 
   public long getTotalCorruptBlocks() {
     return totalCorruptBlocks.get();
+  }
+
+  /**
+   * Builder used to build {@code AbstractHoodieLogRecordScanner}.
+   */
+  public abstract static class Builder {
+
+    public abstract Builder withFileSystem(FileSystem fs);
+
+    public abstract Builder withBasePath(String basePath);
+
+    public abstract Builder withLogFilePaths(List<String> logFilePaths);
+
+    public abstract Builder withReaderSchema(Schema schema);
+
+    public abstract Builder withLatestInstantTime(String latestInstantTime);
+
+    public abstract Builder withReadBlocksLazily(boolean readBlocksLazily);
+
+    public abstract Builder withReverseReader(boolean reverseReader);
+
+    public abstract Builder withBufferSize(int bufferSize);
+
+    public abstract AbstractHoodieLogRecordScanner build();
   }
 }

@@ -21,7 +21,7 @@ package org.apache.hudi.table.action;
 import java.io.Serializable;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;

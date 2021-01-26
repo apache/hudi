@@ -228,6 +228,11 @@ public class HoodieTestTable {
     return this;
   }
 
+  public HoodieTestTable forReplaceCommit(String instantTime) {
+    currentInstantTime = instantTime;
+    return this;
+  }
+
   public HoodieTestTable forCompaction(String instantTime) {
     currentInstantTime = instantTime;
     return this;

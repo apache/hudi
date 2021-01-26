@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
@@ -109,20 +108,9 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
     // process snapshot queries next.
     List<Path> snapshotPaths = inputPathHandler.getSnapshotPaths();
     if (snapshotPaths.size() > 0) {
-      setInputPaths(job, snapshotPaths.toArray(new Path[snapshotPaths.size()]));
-      FileStatus[] fileStatuses = super.listStatus(job);
-      Map<HoodieTableMetaClient, List<FileStatus>> groupedFileStatus =
-          HoodieInputFormatUtils.groupFileStatusForSnapshotPaths(fileStatuses,
-              HoodieFileFormat.PARQUET.getFileExtension(), tableMetaClientMap.values());
-      LOG.info("Found a total of " + groupedFileStatus.size() + " groups");
-      for (Map.Entry<HoodieTableMetaClient, List<FileStatus>> entry : groupedFileStatus.entrySet()) {
-        List<FileStatus> result = HoodieInputFormatUtils.filterFileStatusForSnapshotMode(job, entry.getKey(), entry.getValue());
-        if (result != null) {
-          returns.addAll(result);
-        }
-      }
+      returns.addAll(HoodieInputFormatUtils.filterFileStatusForSnapshotMode(job, tableMetaClientMap, snapshotPaths));
     }
-    return returns.toArray(new FileStatus[returns.size()]);
+    return returns.toArray(new FileStatus[0]);
   }
 
 

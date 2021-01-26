@@ -37,11 +37,12 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
-import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor.Config;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
+import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
+import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
 import org.apache.hudi.utilities.sources.JsonKafkaSource;
 import org.apache.hudi.utilities.sources.Source;
@@ -54,7 +55,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.apache.spark.Accumulator;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -67,6 +67,7 @@ import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils;
 import org.apache.spark.sql.jdbc.JdbcDialect;
 import org.apache.spark.sql.jdbc.JdbcDialects;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.util.LongAccumulator;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -291,7 +292,7 @@ public class UtilHelpers {
   }
 
   public static int handleErrors(JavaSparkContext jsc, String instantTime, JavaRDD<WriteStatus> writeResponse) {
-    Accumulator<Integer> errors = jsc.accumulator(0);
+    LongAccumulator errors = jsc.sc().longAccumulator();
     writeResponse.foreach(writeStatus -> {
       if (writeStatus.hasErrors()) {
         errors.add(1);
@@ -400,7 +401,7 @@ public class UtilHelpers {
   }
 
   public static SchemaProviderWithPostProcessor wrapSchemaProviderWithPostProcessor(SchemaProvider provider,
-      TypedProperties cfg, JavaSparkContext jssc) {
+      TypedProperties cfg, JavaSparkContext jssc, List<String> transformerClassNames) {
 
     if (provider == null) {
       return null;
@@ -409,7 +410,15 @@ public class UtilHelpers {
     if (provider instanceof  SchemaProviderWithPostProcessor) {
       return (SchemaProviderWithPostProcessor)provider;
     }
+
     String schemaPostProcessorClass = cfg.getString(Config.SCHEMA_POST_PROCESSOR_PROP, null);
+    boolean enableSparkAvroPostProcessor = Boolean.valueOf(cfg.getString(SparkAvroPostProcessor.Config.SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE, "true"));
+
+    if (transformerClassNames != null && !transformerClassNames.isEmpty()
+            && enableSparkAvroPostProcessor && StringUtils.isNullOrEmpty(schemaPostProcessorClass)) {
+      schemaPostProcessorClass = SparkAvroPostProcessor.class.getName();
+    }
+
     return new SchemaProviderWithPostProcessor(provider,
         Option.ofNullable(createSchemaPostProcessor(schemaPostProcessorClass, cfg, jssc)));
   }
@@ -417,6 +426,24 @@ public class UtilHelpers {
   public static SchemaProvider createRowBasedSchemaProvider(StructType structType,
       TypedProperties cfg, JavaSparkContext jssc) {
     SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
-    return wrapSchemaProviderWithPostProcessor(rowSchemaProvider, cfg, jssc);
+    return wrapSchemaProviderWithPostProcessor(rowSchemaProvider, cfg, jssc, null);
   }
+
+  @FunctionalInterface
+  public interface CheckedSupplier<T> {
+    T get() throws Throwable;
+  }
+
+  public static int retry(int maxRetryCount, CheckedSupplier<Integer> supplier, String errorMessage) {
+    int ret = -1;
+    try {
+      do {
+        ret = supplier.get();
+      } while (ret != 0 && maxRetryCount-- > 0);
+    } catch (Throwable t) {
+      LOG.error(errorMessage, t);
+    }
+    return ret;
+  }
+
 }

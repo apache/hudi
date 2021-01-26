@@ -33,39 +33,49 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
 
   // Property Names
   public static final String FILESYSTEM_VIEW_STORAGE_TYPE = "hoodie.filesystem.view.type";
+  public static final FileSystemViewStorageType DEFAULT_VIEW_STORAGE_TYPE = FileSystemViewStorageType.MEMORY;
+
   public static final String FILESYSTEM_VIEW_INCREMENTAL_SYNC_MODE = "hoodie.filesystem.view.incr.timeline.sync.enable";
+  public static final String DEFAULT_FILESYSTEM_VIEW_INCREMENTAL_SYNC_MODE = "false";
+
   public static final String FILESYSTEM_SECONDARY_VIEW_STORAGE_TYPE = "hoodie.filesystem.view.secondary.type";
+  public static final FileSystemViewStorageType DEFAULT_SECONDARY_VIEW_STORAGE_TYPE = FileSystemViewStorageType.MEMORY;
+
   public static final String FILESYSTEM_VIEW_REMOTE_HOST = "hoodie.filesystem.view.remote.host";
+  public static final String DEFUALT_REMOTE_VIEW_SERVER_HOST = "localhost";
+
   public static final String FILESYSTEM_VIEW_REMOTE_PORT = "hoodie.filesystem.view.remote.port";
+  public static final Integer DEFAULT_REMOTE_VIEW_SERVER_PORT = 26754;
+
   public static final String FILESYSTEM_VIEW_SPILLABLE_DIR = "hoodie.filesystem.view.spillable.dir";
+  public static final String DEFAULT_VIEW_SPILLABLE_DIR = "/tmp/view_map/";
+
   public static final String FILESYSTEM_VIEW_SPILLABLE_MEM = "hoodie.filesystem.view.spillable.mem";
+  private static final Long DEFAULT_MAX_MEMORY_FOR_VIEW = 100 * 1024 * 1024L; // 100 MB
+
   public static final String FILESYSTEM_VIEW_PENDING_COMPACTION_MEM_FRACTION =
       "hoodie.filesystem.view.spillable.compaction.mem.fraction";
+  private static final Double DEFAULT_MEM_FRACTION_FOR_PENDING_COMPACTION = 0.01;
+
   public static final String FILESYSTEM_VIEW_BOOTSTRAP_BASE_FILE_FRACTION =
       "hoodie.filesystem.view.spillable.bootstrap.base.file.mem.fraction";
+
   public static final String FILESYSTEM_VIEW_REPLACED_MEM_FRACTION =
       "hoodie.filesystem.view.spillable.replaced.mem.fraction";
+  private static final Double DEFAULT_MEM_FRACTION_FOR_REPLACED_FILEGROUPS = 0.01;
+
   public static final String FILESYSTEM_VIEW_PENDING_CLUSTERING_MEM_FRACTION =
       "hoodie.filesystem.view.spillable.clustering.mem.fraction";
+  private static final Double DEFAULT_MEM_FRACTION_FOR_PENDING_CLUSTERING_FILEGROUPS = 0.01;
+
   private static final String ROCKSDB_BASE_PATH_PROP = "hoodie.filesystem.view.rocksdb.base.path";
-  public static final String FILESTYSTEM_REMOTE_TIMELINE_CLIENT_TIMEOUT_SECS =
-      "hoodie.filesystem.view.remote.timeout.secs";
-
-
-  public static final FileSystemViewStorageType DEFAULT_VIEW_STORAGE_TYPE = FileSystemViewStorageType.MEMORY;
-  public static final FileSystemViewStorageType DEFAULT_SECONDARY_VIEW_STORAGE_TYPE = FileSystemViewStorageType.MEMORY;
   public static final String DEFAULT_ROCKSDB_BASE_PATH = "/tmp/hoodie_timeline_rocksdb";
 
-  public static final String DEFAULT_FILESYSTEM_VIEW_INCREMENTAL_SYNC_MODE = "false";
-  public static final String DEFUALT_REMOTE_VIEW_SERVER_HOST = "localhost";
-  public static final Integer DEFAULT_REMOTE_VIEW_SERVER_PORT = 26754;
+  public static final String FILESTYSTEM_REMOTE_TIMELINE_CLIENT_TIMEOUT_SECS =
+      "hoodie.filesystem.view.remote.timeout.secs";
   public static final Integer DEFAULT_REMOTE_TIMELINE_CLIENT_TIMEOUT_SECS = 5 * 60; // 5 min
-  public static final String DEFAULT_VIEW_SPILLABLE_DIR = "/tmp/view_map/";
-  private static final Double DEFAULT_MEM_FRACTION_FOR_PENDING_COMPACTION = 0.01;
+
   private static final Double DEFAULT_MEM_FRACTION_FOR_EXTERNAL_DATA_FILE = 0.05;
-  private static final Double DEFAULT_MEM_FRACTION_FOR_REPLACED_FILEGROUPS = 0.01;
-  private static final Double DEFAULT_MEM_FRACTION_FOR_PENDING_CLUSTERING_FILEGROUPS = 0.01;
-  private static final Long DEFAULT_MAX_MEMORY_FOR_VIEW = 100 * 1024 * 1024L; // 100 MB
 
   /**
    * Configs to control whether backup needs to be configured if clients were not able to reach
@@ -135,7 +145,7 @@ public class FileSystemViewStorageConfig extends DefaultHoodieConfig {
         .longValue();
   }
 
-  public String getBaseStoreDir() {
+  public String getSpillableDir() {
     return props.getProperty(FILESYSTEM_VIEW_SPILLABLE_DIR);
   }
 

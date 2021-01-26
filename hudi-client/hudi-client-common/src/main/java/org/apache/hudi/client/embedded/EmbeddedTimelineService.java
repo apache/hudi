@@ -18,7 +18,8 @@
 
 package org.apache.hudi.client.embedded;
 
-import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -41,14 +42,22 @@ public class EmbeddedTimelineService {
   private int serverPort;
   private int preferredPort;
   private String hostAddr;
+  private HoodieEngineContext context;
   private final SerializableConfiguration hadoopConf;
   private final FileSystemViewStorageConfig config;
+  private final HoodieMetadataConfig metadataConfig;
+  private final String basePath;
+
   private transient FileSystemViewManager viewManager;
   private transient TimelineService server;
 
-  public EmbeddedTimelineService(HoodieEngineContext context, String embeddedTimelineServiceHostAddr, int embeddedTimelineServerPort, FileSystemViewStorageConfig config) {
+  public EmbeddedTimelineService(HoodieEngineContext context, String embeddedTimelineServiceHostAddr, int embeddedTimelineServerPort,
+                                 HoodieMetadataConfig metadataConfig, FileSystemViewStorageConfig config, String basePath) {
     setHostAddr(embeddedTimelineServiceHostAddr);
+    this.context = context;
     this.config = config;
+    this.basePath = basePath;
+    this.metadataConfig = metadataConfig;
     this.hadoopConf = context.getHadoopConf();
     this.viewManager = createViewManager();
     this.preferredPort = embeddedTimelineServerPort;
@@ -64,7 +73,7 @@ public class EmbeddedTimelineService {
       // Reset to default if set to Remote
       builder.withStorageType(FileSystemViewStorageType.MEMORY);
     }
-    return FileSystemViewManager.createViewManager(hadoopConf, builder.build());
+    return FileSystemViewManager.createViewManager(context, metadataConfig, builder.build(), basePath);
   }
 
   public void startServer() throws IOException {
