@@ -67,10 +67,6 @@ public final class HoodieMetadataConfig extends DefaultHoodieConfig {
   public static final String CLEANER_COMMITS_RETAINED_PROP = METADATA_PREFIX + ".cleaner.commits.retained";
   public static final int DEFAULT_CLEANER_COMMITS_RETAINED = 3;
 
-  // Controls whether or no the base file open/log merges are reused per API call
-  public static final String ENABLE_REUSE_PROP = METADATA_PREFIX + ".reuse.enable";
-  public static final String DEFAULT_ENABLE_REUSE = "true";
-
   // Controls whether or not, upon failure to fetch from metadata table, should fallback to listing.
   public static final String ENABLE_FALLBACK_PROP = METADATA_PREFIX + ".fallback.enable";
   public static final String DEFAULT_ENABLE_FALLBACK = "true";
@@ -103,10 +99,6 @@ public final class HoodieMetadataConfig extends DefaultHoodieConfig {
 
   public boolean useFileListingMetadata() {
     return Boolean.parseBoolean(props.getProperty(METADATA_ENABLE_PROP));
-  }
-
-  public boolean enableReuse() {
-    return Boolean.parseBoolean(props.getProperty(ENABLE_REUSE_PROP));
   }
 
   public boolean enableFallback() {
@@ -148,11 +140,6 @@ public final class HoodieMetadataConfig extends DefaultHoodieConfig {
 
     public Builder enableMetrics(boolean enableMetrics) {
       props.setProperty(METADATA_METRICS_ENABLE_PROP, String.valueOf(enableMetrics));
-      return this;
-    }
-
-    public Builder enableReuse(boolean reuse) {
-      props.setProperty(ENABLE_REUSE_PROP, String.valueOf(reuse));
       return this;
     }
 
@@ -233,8 +220,6 @@ public final class HoodieMetadataConfig extends DefaultHoodieConfig {
           HOODIE_ASSUME_DATE_PARTITIONING_PROP, DEFAULT_ASSUME_DATE_PARTITIONING);
       setDefaultOnCondition(props, !props.containsKey(ENABLE_FALLBACK_PROP), ENABLE_FALLBACK_PROP,
           DEFAULT_ENABLE_FALLBACK);
-      setDefaultOnCondition(props, !props.containsKey(ENABLE_REUSE_PROP), ENABLE_REUSE_PROP,
-          DEFAULT_ENABLE_REUSE);
       setDefaultOnCondition(props, !props.containsKey(DIRECTORY_FILTER_REGEX), DIRECTORY_FILTER_REGEX,
           DEFAULT_DIRECTORY_FILTER_REGEX);
       return config;
