@@ -1356,6 +1356,13 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     List<HoodieFileGroup> allReplaced = fsView.getReplacedFileGroupsBeforeOrOn("2", partitionPath1).collect(Collectors.toList());
     assertEquals(1, allReplaced.size());
     assertEquals(fileId1, allReplaced.get(0).getFileGroupId().getFileId());
+
+    allReplaced = fsView.getReplacedFileGroupsBefore("2", partitionPath1).collect(Collectors.toList());
+    assertEquals(0, allReplaced.size());
+
+    allReplaced = fsView.getAllReplacedFileGroups(partitionPath1).collect(Collectors.toList());
+    assertEquals(1, allReplaced.size());
+    assertEquals(fileId1, allReplaced.get(0).getFileGroupId().getFileId());
   }
 
   @Test

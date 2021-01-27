@@ -21,7 +21,7 @@ package org.apache.hudi.async;
 import org.apache.hudi.client.AbstractCompactor;
 import org.apache.hudi.client.AbstractHoodieWriteClient;
 import org.apache.hudi.client.HoodieSparkCompactor;
-import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 
 /**
  * Async Compaction Service used by Structured Streaming. Here, async compaction is run in daemon mode to prevent

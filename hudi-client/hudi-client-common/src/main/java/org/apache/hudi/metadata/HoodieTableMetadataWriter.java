@@ -16,23 +16,28 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.common;
+package org.apache.hudi.metadata;
 
-import org.apache.hudi.common.util.Option;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 
 import java.io.Serializable;
-import java.util.function.Supplier;
 
 /**
- * Base task context supplier.
+ * Interface that supports updating metadata for a given table, as actions complete.
  */
-public abstract class TaskContextSupplier implements Serializable {
+public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
 
-  public abstract Supplier<Integer> getPartitionIdSupplier();
+  void update(HoodieCommitMetadata commitMetadata, String instantTime);
 
-  public abstract Supplier<Integer> getStageIdSupplier();
+  void update(HoodieCleanerPlan cleanerPlan, String instantTime);
 
-  public abstract Supplier<Long> getAttemptIdSupplier();
+  void update(HoodieCleanMetadata cleanMetadata, String instantTime);
 
-  public abstract Option<String> getProperty(EngineProperty prop);
+  void update(HoodieRestoreMetadata restoreMetadata, String instantTime);
+
+  void update(HoodieRollbackMetadata rollbackMetadata, String instantTime);
 }

@@ -109,21 +109,16 @@ public class HoodieCompactor {
 
   public int compact(int retry) {
     this.fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
-    int ret = -1;
-    try {
-      do {
-        if (cfg.runSchedule) {
-          if (null == cfg.strategyClassName) {
-            throw new IllegalArgumentException("Missing Strategy class name for running compaction");
-          }
-          ret = doSchedule(jsc);
-        } else {
-          ret = doCompact(jsc);
+    int ret = UtilHelpers.retry(retry, () -> {
+      if (cfg.runSchedule) {
+        if (null == cfg.strategyClassName) {
+          throw new IllegalArgumentException("Missing Strategy class name for running compaction");
         }
-      } while (ret != 0 && retry-- > 0);
-    } catch (Throwable t) {
-      LOG.error(t);
-    }
+        return doSchedule(jsc);
+      } else {
+        return doCompact(jsc);
+      }
+    }, "Compact failed");
     return ret;
   }
 

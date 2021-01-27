@@ -481,7 +481,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
       GenericRecord payload;
       try {
         payload = (GenericRecord)r.getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA).get();
-        GenericRecord newPayload = HoodieAvroUtils.rewriteRecordWithOnlyNewSchemaFields(payload, newSchema);
+        GenericRecord newPayload = HoodieAvroUtils.rewriteRecord(payload, newSchema);
         return new HoodieRecord(key, new RawTripTestPayload(newPayload.toString(), key.getRecordKey(), key.getPartitionPath(), schemaStr));
       } catch (IOException e) {
         throw new RuntimeException("Conversion to new schema failed");

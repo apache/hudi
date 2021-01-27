@@ -80,7 +80,7 @@ public abstract class AbstractHoodieLogRecordScanner {
   // Merge strategy to use when combining records from log
   private final String payloadClassFQN;
   // Log File Paths
-  private final List<String> logFilePaths;
+  protected final List<String> logFilePaths;
   // Read Lazily flag
   private final boolean readBlocksLazily;
   // Reverse reader - Not implemented yet (NA -> Why do we need ?)
@@ -148,7 +148,8 @@ public abstract class AbstractHoodieLogRecordScanner {
         switch (r.getBlockType()) {
           case HFILE_DATA_BLOCK:
           case AVRO_DATA_BLOCK:
-            LOG.info("Reading a data block from file " + logFile.getPath());
+            LOG.info("Reading a data block from file " + logFile.getPath() + " at instant "
+                + r.getLogBlockHeader().get(INSTANT_TIME));
             if (isNewInstantBlock(r) && !readBlocksLazily) {
               // If this is an avro data block belonging to a different commit/instant,
               // then merge the last blocks and records into the main result
@@ -202,8 +203,7 @@ public abstract class AbstractHoodieLogRecordScanner {
                     LOG.info("Rolling back the last corrupted log block read in " + logFile.getPath());
                     currentInstantLogBlocks.pop();
                     numBlocksRolledBack++;
-                  } else if (lastBlock.getBlockType() != CORRUPT_BLOCK
-                      && targetInstantForCommandBlock.contentEquals(lastBlock.getLogBlockHeader().get(INSTANT_TIME))) {
+                  } else if (targetInstantForCommandBlock.contentEquals(lastBlock.getLogBlockHeader().get(INSTANT_TIME))) {
                     // rollback last data block or delete block
                     LOG.info("Rolling back the last log block read in " + logFile.getPath());
                     currentInstantLogBlocks.pop();
@@ -278,10 +278,12 @@ public abstract class AbstractHoodieLogRecordScanner {
     List<IndexedRecord> recs = dataBlock.getRecords();
     totalLogRecords.addAndGet(recs.size());
     for (IndexedRecord rec : recs) {
-      HoodieRecord<? extends HoodieRecordPayload> hoodieRecord =
-          SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN);
-      processNextRecord(hoodieRecord);
+      processNextRecord(createHoodieRecord(rec));
     }
+  }
+
+  protected HoodieRecord<?> createHoodieRecord(IndexedRecord rec) {
+    return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN);
   }
 
   /**

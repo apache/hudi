@@ -299,6 +299,21 @@ public class FileSystemViewHandler {
       writeValueAsString(ctx, dtos);
     }, true));
 
+    app.get(RemoteHoodieTableFileSystemView.ALL_REPLACED_FILEGROUPS_BEFORE, new ViewHandler(ctx -> {
+      List<FileGroupDTO> dtos = sliceHandler.getReplacedFileGroupsBefore(
+          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
+          ctx.queryParam(RemoteHoodieTableFileSystemView.MAX_INSTANT_PARAM,""),
+          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
+      writeValueAsString(ctx, dtos);
+    }, true));
+
+    app.get(RemoteHoodieTableFileSystemView.ALL_REPLACED_FILEGROUPS_PARTITION, new ViewHandler(ctx -> {
+      List<FileGroupDTO> dtos = sliceHandler.getAllReplacedFileGroups(
+          ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow(),
+          ctx.queryParam(RemoteHoodieTableFileSystemView.PARTITION_PARAM,""));
+      writeValueAsString(ctx, dtos);
+    }, true));
+
     app.get(RemoteHoodieTableFileSystemView.PENDING_CLUSTERING_FILEGROUPS, new ViewHandler(ctx -> {
       List<ClusteringOpDTO> dtos = sliceHandler.getFileGroupsInPendingClustering(
           ctx.validatedQueryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM).getOrThrow());

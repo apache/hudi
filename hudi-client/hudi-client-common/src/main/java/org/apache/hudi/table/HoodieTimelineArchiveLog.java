@@ -28,7 +28,7 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.ReplaceArchivalHelper;
-import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -46,6 +46,7 @@ import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -56,6 +57,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -195,6 +198,26 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
         .collect(Collectors.groupingBy(i -> Pair.of(i.getTimestamp(),
             HoodieInstant.getComparableAction(i.getAction()))));
 
+    // If metadata table is enabled, do not archive instants which are more recent that the latest synced
+    // instant on the metadata table. This is required for metadata table sync.
+    if (config.useFileListingMetadata()) {
+      try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(table.getContext(), config.getMetadataConfig(),
+          config.getBasePath(), FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR)) {
+        Option<String> lastSyncedInstantTime = tableMetadata.getSyncedInstantTime();
+
+        if (lastSyncedInstantTime.isPresent()) {
+          LOG.info("Limiting archiving of instants to last synced instant on metadata table at " + lastSyncedInstantTime.get());
+          instants = instants.filter(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(), HoodieTimeline.LESSER_THAN,
+              lastSyncedInstantTime.get()));
+        } else {
+          LOG.info("Not archiving as there is no instants yet on the metadata table");
+          instants = Stream.empty();
+        }
+      } catch (Exception e) {
+        throw new HoodieException("Error limiting instant archival based on metadata table", e);
+      }
+    }
+
     return instants.flatMap(hoodieInstant ->
         groupByTsAction.get(Pair.of(hoodieInstant.getTimestamp(),
             HoodieInstant.getComparableAction(hoodieInstant.getAction()))).stream());
@@ -276,10 +299,10 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
       LOG.info("Wrapper schema " + wrapperSchema.toString());
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
+        // TODO HUDI-1518 Cleaner now takes care of removing replaced file groups. This call to deleteReplacedFileGroups can be removed.
         boolean deleteSuccess = deleteReplacedFileGroups(context, hoodieInstant);
         if (!deleteSuccess) {
-          // throw error and stop archival if deleting replaced file groups failed.
-          throw new HoodieCommitException("Unable to delete file(s) for " + hoodieInstant.getFileName());
+          LOG.warn("Unable to delete file(s) for " + hoodieInstant.getFileName() + ", replaced files possibly deleted by cleaner");
         }
         try {
           deleteAnyLeftOverMarkerFiles(context, hoodieInstant);

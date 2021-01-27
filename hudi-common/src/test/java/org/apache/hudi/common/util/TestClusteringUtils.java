@@ -98,6 +98,22 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     validateClusteringInstant(fileIds3, partitionPath1, clusterTime, fileGroupToInstantMap);
   }
 
+  // replacecommit.inflight doesnt have clustering plan. 
+  // Verify that getClusteringPlan fetches content from corresponding requested file.
+  @Test
+  public void testClusteringPlanInflight() throws Exception {
+    String partitionPath1 = "partition1";
+    List<String> fileIds1 = new ArrayList<>();
+    fileIds1.add(UUID.randomUUID().toString());
+    fileIds1.add(UUID.randomUUID().toString());
+    String clusterTime1 = "1";
+    HoodieInstant requestedInstant = createRequestedReplaceInstant(partitionPath1, clusterTime1, fileIds1);
+    HoodieInstant inflightInstant = metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(requestedInstant, Option.empty());
+    HoodieClusteringPlan requestedClusteringPlan = ClusteringUtils.getClusteringPlan(metaClient, requestedInstant).get().getRight();
+    HoodieClusteringPlan inflightClusteringPlan = ClusteringUtils.getClusteringPlan(metaClient, inflightInstant).get().getRight();
+    assertEquals(requestedClusteringPlan, inflightClusteringPlan);
+  }
+
   private void validateClusteringInstant(List<String> fileIds, String partitionPath,
                                          String expectedInstantTime, Map<HoodieFileGroupId, HoodieInstant> fileGroupToInstantMap) {
     for (String fileId : fileIds) {

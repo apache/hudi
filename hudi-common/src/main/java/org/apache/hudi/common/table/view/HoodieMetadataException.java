@@ -16,16 +16,19 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.common.function;
-
-import org.apache.hudi.common.util.collection.Pair;
-
-import java.io.Serializable;
+package org.apache.hudi.exception;
 
 /**
- * A function that returns key-value pairs (Tuple2&lt;K, V&gt;).
+ * <p>
+ * Exception thrown for table metadata related failures.
+ * </p>
  */
-@FunctionalInterface
-public interface SerializablePairFunction<I, K, V> extends Serializable {
-  Pair<K, V> call(I t) throws Exception;
+public class HoodieMetadataException extends HoodieException {
+  public HoodieMetadataException(String msg, Exception t) {
+    super(msg, t);
+  }
+
+  public HoodieMetadataException(String msg) {
+    super(msg);
+  }
 }

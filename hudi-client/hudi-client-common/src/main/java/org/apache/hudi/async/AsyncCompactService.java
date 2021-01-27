@@ -19,8 +19,8 @@ package org.apache.hudi.async;
 
 import org.apache.hudi.client.AbstractCompactor;
 import org.apache.hudi.client.AbstractHoodieWriteClient;
-import org.apache.hudi.client.common.EngineProperty;
-import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.engine.EngineProperty;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;

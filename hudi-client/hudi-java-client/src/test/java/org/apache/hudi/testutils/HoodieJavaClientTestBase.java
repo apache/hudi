@@ -16,16 +16,33 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.common.function;
+package org.apache.hudi.testutils;
 
-import java.io.Serializable;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+
+import java.io.IOException;
 
 /**
- * A wrapped {@link java.util.function.Consumer} which can be serialized.
- *
- * @param <I> input type
+ * Base Class providing setup/cleanup and utility methods for testing Hoodie Client facing tests.
  */
-@FunctionalInterface
-public interface SerializableConsumer<I> extends Serializable {
-  void accept(I t) throws Exception;
+public class HoodieJavaClientTestBase extends HoodieJavaClientTestHarness {
+
+  @BeforeEach
+  public void setUp() throws Exception {
+    initResources();
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    cleanupResources();
+  }
+
+  // Functional Interfaces for passing lambda and Hoodie Write API contexts
+
+  @FunctionalInterface
+  public interface Function2<R, T1, T2> {
+
+    R apply(T1 v1, T2 v2) throws IOException;
+  }
 }

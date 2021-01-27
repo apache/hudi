@@ -91,6 +91,12 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String ALL_REPLACED_FILEGROUPS_BEFORE_OR_ON =
       String.format("%s/%s", BASE_URL, "filegroups/replaced/beforeoron/");
 
+  public static final String ALL_REPLACED_FILEGROUPS_BEFORE =
+      String.format("%s/%s", BASE_URL, "filegroups/replaced/before/");
+
+  public static final String ALL_REPLACED_FILEGROUPS_PARTITION =
+      String.format("%s/%s", BASE_URL, "filegroups/replaced/partition/");
+  
   public static final String PENDING_CLUSTERING_FILEGROUPS = String.format("%s/%s", BASE_URL, "clustering/pending/");
 
 
@@ -373,6 +379,30 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, MAX_INSTANT_PARAM, maxCommitTime);
     try {
       List<FileGroupDTO> fileGroups = executeRequest(ALL_REPLACED_FILEGROUPS_BEFORE_OR_ON, paramsMap,
+          new TypeReference<List<FileGroupDTO>>() {}, RequestMethod.GET);
+      return fileGroups.stream().map(dto -> FileGroupDTO.toFileGroup(dto, metaClient));
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
+  public Stream<HoodieFileGroup> getReplacedFileGroupsBefore(String maxCommitTime, String partitionPath) {
+    Map<String, String> paramsMap = getParamsWithAdditionalParam(partitionPath, MAX_INSTANT_PARAM, maxCommitTime);
+    try {
+      List<FileGroupDTO> fileGroups = executeRequest(ALL_REPLACED_FILEGROUPS_BEFORE, paramsMap,
+          new TypeReference<List<FileGroupDTO>>() {}, RequestMethod.GET);
+      return fileGroups.stream().map(dto -> FileGroupDTO.toFileGroup(dto, metaClient));
+    } catch (IOException e) {
+      throw new HoodieRemoteException(e);
+    }
+  }
+
+  @Override
+  public Stream<HoodieFileGroup> getAllReplacedFileGroups(String partitionPath) {
+    Map<String, String> paramsMap = getParamsWithPartitionPath(partitionPath);
+    try {
+      List<FileGroupDTO> fileGroups = executeRequest(ALL_REPLACED_FILEGROUPS_PARTITION, paramsMap,
           new TypeReference<List<FileGroupDTO>>() {}, RequestMethod.GET);
       return fileGroups.stream().map(dto -> FileGroupDTO.toFileGroup(dto, metaClient));
     } catch (IOException e) {

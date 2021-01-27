@@ -16,11 +16,18 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.common;
+package org.apache.hudi.metadata;
 
-/**
- * Hoodie data processing engine. support only Apache Spark and Apache Flink for now.
- */
-public enum EngineType {
-  SPARK, FLINK
+public enum MetadataPartitionType {
+  FILES("files");
+
+  private final String partitionPath;
+
+  MetadataPartitionType(String partitionPath) {
+    this.partitionPath = partitionPath;
+  }
+
+  public String partitionPath() {
+    return partitionPath;
+  }
 }
