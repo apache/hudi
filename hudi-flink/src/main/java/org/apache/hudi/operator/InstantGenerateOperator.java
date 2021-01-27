@@ -78,7 +78,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   private static final String DELIMITER = "_";
   private static final String INSTANT_MARKER_FOLDER_NAME = ".instant_marker";
   private transient boolean isMain = false;
-  private transient AtomicLong recordCounter = new AtomicLong(0);
+  private AtomicLong recordCounter = new AtomicLong(0);
   private StreamingRuntimeContext runtimeContext;
   private int indexOfThisSubtask;
 
