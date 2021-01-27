@@ -43,8 +43,7 @@
                   {
                      "name":"dataFilePath",
                      "type":["null","string"],
-                     "default": null,
-                     "aliases": ["baseFilePath"]
+                     "default": null
                   },
                   {
                      "name":"fileId",
