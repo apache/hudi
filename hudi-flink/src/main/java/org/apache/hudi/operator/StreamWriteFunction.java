@@ -289,10 +289,12 @@ public class StreamWriteFunction<K, I, O> extends KeyedProcessFunction<K, I, O> 
     boolean shouldCombine = this.config.getBoolean(FlinkOptions.INSERT_DROP_DUPS)
         || WriteOperationType.fromValue(this.config.getString(FlinkOptions.OPERATION)) == WriteOperationType.UPSERT;
     GenericRecord gr = (GenericRecord) this.converter.convert(this.avroSchema, record);
+    final String payloadClazz = this.config.getString(FlinkOptions.PAYLOAD_CLASS);
+    Comparable orderingVal = (Comparable) HoodieAvroUtils.getNestedFieldVal(gr,
+        this.config.getString(FlinkOptions.PRECOMBINE_FIELD), false);
     HoodieRecordPayload payload = shouldCombine
-        ? StreamerUtil.createPayload(this.config.getString(FlinkOptions.PAYLOAD_CLASS), gr,
-        (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, this.config.getString(FlinkOptions.PRECOMBINE_FIELD), false))
-        : StreamerUtil.createPayload(this.config.getString(FlinkOptions.PAYLOAD_CLASS), gr);
+        ? StreamerUtil.createPayload(payloadClazz, gr, orderingVal)
+        : StreamerUtil.createPayload(payloadClazz, gr);
     return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
   }
 

@@ -291,6 +291,9 @@ public class StreamWriteOperatorCoordinator
 
   private void checkAndCommitWithRetry() {
     int retryTimes = this.conf.getInteger(FlinkOptions.RETRY_TIMES);
+    if (retryTimes < 0) {
+      retryTimes = 1;
+    }
     long retryIntervalMillis = this.conf.getLong(FlinkOptions.RETRY_INTERVAL_MS);
     int tryTimes = 0;
     while (tryTimes++ < retryTimes) {
@@ -298,7 +301,7 @@ public class StreamWriteOperatorCoordinator
         if (!checkReady()) {
           // Do not throw if the try times expires but the event buffer are still not ready,
           // because we have a force check when next checkpoint starts.
-          waitFor(retryIntervalMillis);
+          sleepFor(retryIntervalMillis);
           continue;
         }
         doCommit();
@@ -309,12 +312,15 @@ public class StreamWriteOperatorCoordinator
         if (tryTimes == retryTimes) {
           throw new HoodieException(throwable);
         }
-        waitFor(retryIntervalMillis);
+        sleepFor(retryIntervalMillis);
       }
     }
   }
 
-  private void waitFor(long intervalMillis) {
+  /**
+   * Sleep {@code intervalMillis} milliseconds in current thread.
+   */
+  private void sleepFor(long intervalMillis) {
     try {
       TimeUnit.MILLISECONDS.sleep(intervalMillis);
     } catch (InterruptedException e) {
@@ -348,7 +354,7 @@ public class StreamWriteOperatorCoordinator
     long totalRecords = writeResults.stream().map(WriteStatus::getTotalRecords).reduce(Long::sum).orElse(0L);
     boolean hasErrors = totalErrorRecords > 0;
 
-    if (!hasErrors || this.conf.getBoolean(FlinkOptions.IGNORE_FAILED_BATCH)) {
+    if (!hasErrors || this.conf.getBoolean(FlinkOptions.IGNORE_FAILED)) {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
       if (hasErrors) {
         LOG.warn("Some records failed to merge but forcing commit since commitOnErrors set to true. Errors/Total="

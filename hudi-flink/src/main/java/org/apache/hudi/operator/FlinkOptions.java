@@ -18,6 +18,7 @@
 
 package org.apache.hudi.operator;
 
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -75,8 +76,8 @@ public class FlinkOptions {
   public static final ConfigOption<String> TABLE_TYPE = ConfigOptions
       .key("write.table.type")
       .stringType()
-      .defaultValue("COPY_ON_WRITE")
-      .withDescription("Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ");
+      .defaultValue(HoodieTableType.COPY_ON_WRITE.name())
+      .withDescription("Type of table to write, COPY_ON_WRITE (or) MERGE_ON_READ");
 
   public static final ConfigOption<String> OPERATION = ConfigOptions
       .key("write.operation")
@@ -124,8 +125,8 @@ public class FlinkOptions {
       .withDescription("Flag to indicate how long (by millisecond) before a retry should issued for failed checkpoint batch.\n"
           + "By default 2000 and it will be doubled by every retry");
 
-  public static final ConfigOption<Boolean> IGNORE_FAILED_BATCH = ConfigOptions
-      .key("write.ignore.failed.batch")
+  public static final ConfigOption<Boolean> IGNORE_FAILED = ConfigOptions
+      .key("write.ignore.failed")
       .booleanType()
       .defaultValue(true)
       .withDescription("Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch.\n"
@@ -165,7 +166,7 @@ public class FlinkOptions {
   // Remember to update the set when adding new options.
   public static final List<ConfigOption<?>> OPTIONAL_OPTIONS = Arrays.asList(
       TABLE_TYPE, OPERATION, PRECOMBINE_FIELD, PAYLOAD_CLASS, INSERT_DROP_DUPS, RETRY_TIMES,
-      RETRY_INTERVAL_MS, IGNORE_FAILED_BATCH, RECORD_KEY_FIELD, PARTITION_PATH_FIELD, KEYGEN_CLASS
+      RETRY_INTERVAL_MS, IGNORE_FAILED, RECORD_KEY_FIELD, PARTITION_PATH_FIELD, KEYGEN_CLASS
   );
 
   // Prefix for Hoodie specific properties.
@@ -193,7 +194,7 @@ public class FlinkOptions {
     conf.setBoolean(FlinkOptions.INSERT_DROP_DUPS, config.filterDupes);
     conf.setInteger(FlinkOptions.RETRY_TIMES, Integer.parseInt(config.instantRetryTimes));
     conf.setLong(FlinkOptions.RETRY_INTERVAL_MS, Long.parseLong(config.instantRetryInterval));
-    conf.setBoolean(FlinkOptions.IGNORE_FAILED_BATCH, config.commitOnErrors);
+    conf.setBoolean(FlinkOptions.IGNORE_FAILED, config.commitOnErrors);
     conf.setString(FlinkOptions.RECORD_KEY_FIELD, config.recordKeyField);
     conf.setString(FlinkOptions.PARTITION_PATH_FIELD, config.partitionPathField);
     conf.setString(FlinkOptions.KEYGEN_CLASS, config.keygenClass);
