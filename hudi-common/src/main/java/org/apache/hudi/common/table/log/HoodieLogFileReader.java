@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.SchemeAwareFSDataInputStream;
 import org.apache.hudi.common.fs.TimedFSDataInputStream;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -75,13 +76,13 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
                              boolean readBlockLazily, boolean reverseReader) throws IOException {
     FSDataInputStream fsDataInputStream = fs.open(logFile.getPath(), bufferSize);
-    if (FSUtils.isGCSInputStream(fsDataInputStream)) {
-      this.inputStream = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
-          new BufferedFSInputStream((FSInputStream) ((
-              (FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream()), bufferSize)));
-    } else if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
+    if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
       this.inputStream = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
           new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
+    } else if (FSUtils.isGCSFileSystem(fs)) {
+      this.inputStream = new SchemeAwareFSDataInputStream(new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
+          new BufferedFSInputStream((FSInputStream) ((
+              (FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream()), bufferSize))), true);
     } else {
       // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream
       // need to wrap in another BufferedFSInputStream the make bufferSize work?
@@ -238,11 +239,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private boolean isBlockCorrupt(int blocksize) throws IOException {
     long currentPos = inputStream.getPos();
     try {
-      if (FSUtils.isGCSInputStream(inputStream)) {
-        inputStream.seek(currentPos + blocksize - 1);
-      } else {
-        inputStream.seek(currentPos + blocksize);
-      }
+      inputStream.seek(currentPos + blocksize);
     } catch (EOFException e) {
       LOG.info("Found corrupted block in file " + logFile + " with block size(" + blocksize + ") running past EOF");
       // this is corrupt

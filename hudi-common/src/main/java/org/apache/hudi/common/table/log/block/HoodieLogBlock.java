@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
@@ -258,14 +257,6 @@ public abstract class HoodieLogBlock {
    * @throws IOException -
    */
   private static void safeSeek(FSDataInputStream inputStream, long pos) throws IOException {
-    try {
-      inputStream.seek(pos);
-    } catch (EOFException e) {
-      if (FSUtils.isGCSInputStream(inputStream)) {
-        inputStream.seek(pos - 1);
-      } else {
-        throw e;
-      }
-    }
+    inputStream.seek(pos);
   }
 }
