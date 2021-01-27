@@ -20,19 +20,21 @@ package org.apache.hudi.common.fs;
 
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Wrapper over <code>FSDataOutputStream</code> to keep track of the size of the written bytes. This gives a cheap way
+ * Wrapper over <code>OutputStream</code> to keep track of the size of the written bytes. This gives a cheap way
  * to check on the underlying file size.
  */
-public class SizeAwareFSDataOutputStream extends FSDataOutputStream {
+public class TimedSizeAwareOutputStream extends OutputStream {
 
+  // Underlying stream
+  private OutputStream out;
   // A callback to call when the output stream is closed.
   private final Runnable closeCallback;
   // Keep track of the bytes written
@@ -42,9 +44,9 @@ public class SizeAwareFSDataOutputStream extends FSDataOutputStream {
   // Consistency guard
   private final ConsistencyGuard consistencyGuard;
 
-  public SizeAwareFSDataOutputStream(Path path, FSDataOutputStream out, ConsistencyGuard consistencyGuard,
+  public TimedSizeAwareOutputStream(Path path, OutputStream out, ConsistencyGuard consistencyGuard,
                                      Runnable closeCallback) throws IOException {
-    super(out, null);
+    this.out = out;
     this.path = path;
     this.closeCallback = closeCallback;
     this.consistencyGuard = consistencyGuard;
@@ -55,7 +57,7 @@ public class SizeAwareFSDataOutputStream extends FSDataOutputStream {
     HoodieWrapperFileSystem.executeFuncWithTimeAndByteMetrics(HoodieWrapperFileSystem.MetricName.write.name(), path,
         len, () -> {
           bytesWritten.addAndGet(len);
-          super.write(b, off, len);
+          out.write(b, off, len);
           return null;
         });
   }
@@ -65,14 +67,24 @@ public class SizeAwareFSDataOutputStream extends FSDataOutputStream {
     HoodieWrapperFileSystem.executeFuncWithTimeAndByteMetrics(HoodieWrapperFileSystem.MetricName.write.name(), path,
         b.length, () -> {
           bytesWritten.addAndGet(b.length);
-          super.write(b);
+          out.write(b);
+          return null;
+        });
+  }
+
+  @Override
+  public synchronized void write(int b) throws IOException {
+    HoodieWrapperFileSystem.executeFuncWithTimeAndByteMetrics(HoodieWrapperFileSystem.MetricName.write.name(), path,
+        1, () -> {
+          bytesWritten.addAndGet(1);
+          out.write(b);
           return null;
         });
   }
 
   @Override
   public void close() throws IOException {
-    super.close();
+    out.close();
     try {
       consistencyGuard.waitTillFileAppears(path);
     } catch (TimeoutException e) {

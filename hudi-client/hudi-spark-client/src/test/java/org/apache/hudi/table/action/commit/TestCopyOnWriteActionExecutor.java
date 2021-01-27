@@ -375,8 +375,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
 
     List<HoodieRecord> records = new ArrayList<>();
-    // Approx 1150 records are written for block size of 64KB
-    for (int i = 0; i < 2000; i++) {
+    // Approx 1400 records are written for block size of 64KB
+    for (int i = 0; i < 3000; i++) {
       String recordStr = "{\"_row_key\":\"" + UUID.randomUUID().toString()
           + "\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":" + i + "}";
       RawTripTestPayload rowChange = new RawTripTestPayload(recordStr);
@@ -398,7 +398,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase {
         counts++;
       }
     }
-    assertEquals(3, counts, "If the number of records are more than 1150, then there should be a new file");
+    assertEquals(3, counts, "If the number of records are more than 1400, then there should be a new file");
   }
 
   @Test

@@ -18,14 +18,19 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.common.config.HoodieWrapperFileSystemConfig;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
+import org.apache.hadoop.fs.BufferedFSInputStream;
 import org.apache.hadoop.fs.ContentSummary;
 import org.apache.hadoop.fs.CreateFlag;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -68,7 +73,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   public static final String HOODIE_SCHEME_PREFIX = "hoodie-";
 
   protected enum MetricName {
-    create, rename, delete, listStatus, mkdirs, getFileStatus, globStatus, listFiles, read, write
+    create, rename, delete, listStatus, mkdirs, getFileStatus, globStatus, listFiles, read, write, open
   }
 
   private static Registry METRICS_REGISTRY_DATA;
@@ -79,15 +84,30 @@ public class HoodieWrapperFileSystem extends FileSystem {
     METRICS_REGISTRY_META = registryMeta;
   }
 
-
-  private ConcurrentMap<String, SizeAwareFSDataOutputStream> openStreams = new ConcurrentHashMap<>();
+  // Cache for open output streams.
+  //  - TimedSizeAwareOutputStream records the number of bytes written out
+  //  - BufferedSizeAwareOutputStream records the current size of buffered data not yet written. This is present
+  //    only when stream buffering is enabled.
+  private ConcurrentMap<String, Pair<TimedSizeAwareOutputStream, Option<BufferedSizeAwareOutputStream>>> openStreams =
+      new ConcurrentHashMap<>();
   private FileSystem fileSystem;
   private URI uri;
   private ConsistencyGuard consistencyGuard = new NoOpConsistencyGuard();
 
+  // Whether IO stream buffering is enabled
+  private boolean ioBufferingEnabled = false;
+  // Min size of buffer for stream on data files
+  private int minDataFileIOBufferSizeBytes = 0;
+  // Min size of buffer for stream on non-data files
+  private int minFileIOBufferSizeBytes = 0;
+
   @FunctionalInterface
   public interface CheckedFunction<R> {
     R get() throws IOException;
+  }
+
+  @FunctionalInterface
+  public interface CheckedIntFunction extends CheckedFunction<Integer> {
   }
 
   private static Registry getMetricRegistryForPath(Path p) {
@@ -95,11 +115,48 @@ public class HoodieWrapperFileSystem extends FileSystem {
         ? METRICS_REGISTRY_META : METRICS_REGISTRY_DATA;
   }
 
+  /**
+   * Executes the given function and updates the metric with time taken to execute the function.
+   */
   protected static <R> R executeFuncWithTimeMetrics(String metricName, Path p, CheckedFunction<R> func) throws IOException {
+    Registry registry = getMetricRegistryForPath(p);
+    return executeFuncWithTimeMetrics(metricName, p, func, registry);
+  }
+
+  /**
+   * Executes the given function and updates the metric with time taken to execute the function and number of bytes
+   * as provided in the argument.
+   */
+  protected static <R> R executeFuncWithTimeAndByteMetrics(String metricName, Path p, long byteCount,
+      CheckedFunction<R> func) throws IOException {
+    Registry registry = getMetricRegistryForPath(p);
+    if (registry != null) {
+      registry.add(metricName + ".totalBytes", byteCount);
+    }
+
+    return executeFuncWithTimeMetrics(metricName, p, func, registry);
+  }
+
+  /**
+   * Executes the given function and updates the metric with time taken to execute the function and number of bytes.
+   *
+   * The number of bytes are returned from the execution of the provided function.
+   */
+  protected static int executeFuncWithTimeAndByteMetrics(String metricName, Path p, CheckedIntFunction func) throws IOException {
+    Registry registry = getMetricRegistryForPath(p);
+    int ret = executeFuncWithTimeMetrics(metricName, p, func, registry);
+    if (ret > 0 && registry != null) {
+      registry.add(metricName + ".totalBytes", ret);
+    }
+
+    return ret;
+  }
+
+  private static <R> R executeFuncWithTimeMetrics(String metricName, Path p, CheckedFunction<R> func,
+      Registry registry) throws IOException {
     HoodieTimer timer = new HoodieTimer().startTimer();
     R res = func.get();
 
-    Registry registry = getMetricRegistryForPath(p);
     if (registry != null) {
       registry.increment(metricName);
       registry.add(metricName + ".totalDuration", timer.endTimer());
@@ -108,22 +165,14 @@ public class HoodieWrapperFileSystem extends FileSystem {
     return res;
   }
 
-  protected static <R> R executeFuncWithTimeAndByteMetrics(String metricName, Path p, long byteCount,
-                                                           CheckedFunction<R> func) throws IOException {
-    Registry registry = getMetricRegistryForPath(p);
-    if (registry != null) {
-      registry.add(metricName + ".totalBytes", byteCount);
-    }
-
-    return executeFuncWithTimeMetrics(metricName, p, func);
-  }
-
   public HoodieWrapperFileSystem() {}
 
   public HoodieWrapperFileSystem(FileSystem fileSystem, ConsistencyGuard consistencyGuard) {
     this.fileSystem = fileSystem;
     this.uri = fileSystem.getUri();
     this.consistencyGuard = consistencyGuard;
+
+    setIOBufferConfig(fileSystem.getConf());
   }
 
   public static Path convertToHoodiePath(Path file, Configuration conf) {
@@ -133,6 +182,15 @@ public class HoodieWrapperFileSystem extends FileSystem {
     } catch (HoodieIOException e) {
       throw e;
     }
+  }
+
+  private void setIOBufferConfig(Configuration conf) {
+    ioBufferingEnabled = Boolean.parseBoolean(conf.get(HoodieWrapperFileSystemConfig.FILE_IO_BUFFER_ENABLED, "false"));
+    minFileIOBufferSizeBytes = Integer.parseInt(conf.get(HoodieWrapperFileSystemConfig.MIN_FILE_IO_BUFFER_SIZE, "0"));
+    minDataFileIOBufferSizeBytes = Integer.parseInt(conf.get(HoodieWrapperFileSystemConfig.MIN_DATA_FILE_IO_BUFFER_SIZE, "0"));
+    ValidationUtils.checkArgument(!ioBufferingEnabled || (minFileIOBufferSizeBytes > 0), "IO Buffer size should be greater than 0");
+    ValidationUtils.checkArgument(!ioBufferingEnabled || (minDataFileIOBufferSizeBytes > 0),
+        "IO Data Buffer size should be greater than 0");
   }
 
   private static Path convertPathWithScheme(Path oldPath, String newScheme) {
@@ -174,6 +232,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
     // FileSystem.get
     // fileSystem.initialize(FileSystem.getDefaultUri(conf), conf);
     // fileSystem.setConf(conf);
+    setIOBufferConfig(conf);
   }
 
   @Override
@@ -183,7 +242,9 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FSDataInputStream open(Path f, int bufferSize) throws IOException {
-    return wrapInputStream(f, fileSystem.open(convertToDefaultPath(f), bufferSize));
+    return executeFuncWithTimeMetrics(MetricName.open.name(), f, () -> {
+      return wrapInputStream(f, fileSystem.open(convertToDefaultPath(f), bufferSize), bufferSize);
+    });
   }
 
   @Override
@@ -192,27 +253,72 @@ public class HoodieWrapperFileSystem extends FileSystem {
     return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
       final Path translatedPath = convertToDefaultPath(f);
       return wrapOutputStream(f,
-          fileSystem.create(translatedPath, permission, overwrite, bufferSize, replication, blockSize, progress));
+          fileSystem.create(translatedPath, permission, overwrite, bufferSize, replication, blockSize, progress), bufferSize);
     });
   }
 
-  private FSDataOutputStream wrapOutputStream(final Path path, FSDataOutputStream fsDataOutputStream)
-      throws IOException {
-    if (fsDataOutputStream instanceof SizeAwareFSDataOutputStream) {
-      return fsDataOutputStream;
-    }
 
-    SizeAwareFSDataOutputStream os = new SizeAwareFSDataOutputStream(path, fsDataOutputStream, consistencyGuard,
+  /**
+   * The stream hierarchy after wrapping will be as follows.
+   *
+   *  FSDataOuputStream (returned)
+   *      BufferedOutputStream (required for output buffering)
+   *          TimedSizeAwareOutputStream  (required for tracking metrics, timings and the number of bytes written)
+   *               fs.open()   (Original stream returned from underlying FileSystem)
+   */
+  private FSDataOutputStream wrapOutputStream(final Path path, FSDataOutputStream fsDataOutputStream, int bufferSize)
+      throws IOException {
+    TimedSizeAwareOutputStream tos = new TimedSizeAwareOutputStream(path, fsDataOutputStream, consistencyGuard,
         () -> openStreams.remove(path.getName()));
-    openStreams.put(path.getName(), os);
-    return os;
+
+    if (ioBufferingEnabled) {
+      int minBufferSize = FSUtils.isDataFile(path) ? minDataFileIOBufferSizeBytes : minFileIOBufferSizeBytes;
+      int finalBufferSize = Math.max(minBufferSize, bufferSize);
+      LOG.info("Using buffersize=" + finalBufferSize + " to wrap output stream for path " + path);
+      BufferedSizeAwareOutputStream bos = new BufferedSizeAwareOutputStream(tos, finalBufferSize);
+      openStreams.put(path.getName(), Pair.of(tos, Option.of(bos)));
+      return new FSDataOutputStream(bos);
+    } else {
+      openStreams.put(path.getName(), Pair.of(tos, Option.empty()));
+      return new FSDataOutputStream(tos);
+    }
+  }
+
+  private FSDataOutputStream wrapOutputStream(final Path path, FSDataOutputStream fsDataOutputStream) throws IOException {
+    return wrapOutputStream(path, fsDataOutputStream, 0);
+  }
+
+  /**
+   * The stream hierarchy after wrapping will be as follows.
+   *
+   * FSDataInputStream (returned)
+   *    BufferedFSInputStream (required for buffering)
+   *      TimedFSInputStream  (required for tracking metrics and timings)
+   *         fs.open()  (Original stream returned from underlying FileSystem)
+   *
+   * @param path
+   * @param fsDataInputStream
+   * @param bufferSize
+   * @return
+   * @throws IOException
+   */
+
+  private FSDataInputStream wrapInputStream(final Path path, FSDataInputStream fsDataInputStream,
+      int bufferSize) throws IOException {
+    TimedFSInputStream tis = new TimedFSInputStream(path, fsDataInputStream);
+
+    if (ioBufferingEnabled) {
+      int minBufferSize = FSUtils.isDataFile(path) ? minDataFileIOBufferSizeBytes : minFileIOBufferSizeBytes;
+      int finalBufferSize = Math.max(minBufferSize, bufferSize);
+      LOG.info("Using buffersize=" + finalBufferSize + " to wrap input stream for path " + path);
+      return new FSDataInputStream(new BufferedFSInputStream(tis, finalBufferSize));
+    } else {
+      return new FSDataInputStream(tis);
+    }
   }
 
   private FSDataInputStream wrapInputStream(final Path path, FSDataInputStream fsDataInputStream) throws IOException {
-    if (fsDataInputStream instanceof TimedFSDataInputStream) {
-      return fsDataInputStream;
-    }
-    return new TimedFSDataInputStream(path, fsDataInputStream);
+    return wrapInputStream(path, fsDataInputStream, 0);
   }
 
   @Override
@@ -253,7 +359,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
   @Override
   public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
-      return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize));
+      return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize), bufferSize);
     });
   }
 
@@ -261,7 +367,8 @@ public class HoodieWrapperFileSystem extends FileSystem {
   public FSDataOutputStream create(Path f, boolean overwrite, int bufferSize, Progressable progress)
       throws IOException {
     return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
-      return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, progress));
+      return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, progress),
+          bufferSize);
     });
   }
 
@@ -270,7 +377,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
                                    Progressable progress) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
       return wrapOutputStream(f,
-          fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize, progress));
+          fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize, progress), bufferSize);
     });
   }
 
@@ -279,7 +386,8 @@ public class HoodieWrapperFileSystem extends FileSystem {
                                    short replication, long blockSize, Progressable progress) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
       return wrapOutputStream(f,
-          fileSystem.create(convertToDefaultPath(f), permission, flags, bufferSize, replication, blockSize, progress));
+          fileSystem.create(convertToDefaultPath(f), permission, flags, bufferSize, replication, blockSize, progress),
+          bufferSize);
     });
   }
 
@@ -288,7 +396,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
                                    short replication, long blockSize, Progressable progress, Options.ChecksumOpt checksumOpt) throws IOException {
     return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
       return wrapOutputStream(f, fileSystem.create(convertToDefaultPath(f), permission, flags, bufferSize, replication,
-          blockSize, progress, checksumOpt));
+          blockSize, progress, checksumOpt), bufferSize);
     });
   }
 
@@ -297,13 +405,13 @@ public class HoodieWrapperFileSystem extends FileSystem {
       throws IOException {
     return executeFuncWithTimeMetrics(MetricName.create.name(), f, () -> {
       return wrapOutputStream(f,
-          fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize));
+          fileSystem.create(convertToDefaultPath(f), overwrite, bufferSize, replication, blockSize), bufferSize);
     });
   }
 
   @Override
   public FSDataOutputStream append(Path f, int bufferSize, Progressable progress) throws IOException {
-    return wrapOutputStream(f, fileSystem.append(convertToDefaultPath(f), bufferSize, progress));
+    return wrapOutputStream(f, fileSystem.append(convertToDefaultPath(f), bufferSize, progress), bufferSize);
   }
 
   @Override
@@ -456,7 +564,9 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FSDataInputStream open(Path f) throws IOException {
-    return wrapInputStream(f, fileSystem.open(convertToDefaultPath(f)));
+    return executeFuncWithTimeMetrics(MetricName.open.name(), f, () -> {
+      return wrapInputStream(f, fileSystem.open(convertToDefaultPath(f)));
+    });
   }
 
   @Override
@@ -464,7 +574,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
                                                long blockSize, Progressable progress) throws IOException {
     Path p = convertToDefaultPath(f);
     return wrapOutputStream(p,
-        fileSystem.createNonRecursive(p, overwrite, bufferSize, replication, blockSize, progress));
+        fileSystem.createNonRecursive(p, overwrite, bufferSize, replication, blockSize, progress), bufferSize);
   }
 
   @Override
@@ -472,7 +582,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
                                                short replication, long blockSize, Progressable progress) throws IOException {
     Path p = convertToDefaultPath(f);
     return wrapOutputStream(p,
-        fileSystem.createNonRecursive(p, permission, overwrite, bufferSize, replication, blockSize, progress));
+        fileSystem.createNonRecursive(p, permission, overwrite, bufferSize, replication, blockSize, progress), bufferSize);
   }
 
   @Override
@@ -480,7 +590,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
                                                int bufferSize, short replication, long blockSize, Progressable progress) throws IOException {
     Path p = convertToDefaultPath(f);
     return wrapOutputStream(p,
-        fileSystem.createNonRecursive(p, permission, flags, bufferSize, replication, blockSize, progress));
+        fileSystem.createNonRecursive(p, permission, flags, bufferSize, replication, blockSize, progress), bufferSize);
   }
 
   @Override
@@ -503,7 +613,7 @@ public class HoodieWrapperFileSystem extends FileSystem {
 
   @Override
   public FSDataOutputStream append(Path f, int bufferSize) throws IOException {
-    return wrapOutputStream(f, fileSystem.append(convertToDefaultPath(f), bufferSize));
+    return wrapOutputStream(f, fileSystem.append(convertToDefaultPath(f), bufferSize), bufferSize);
   }
 
   @Override
@@ -976,10 +1086,22 @@ public class HoodieWrapperFileSystem extends FileSystem {
     return psrcsNew;
   }
 
+  /**
+   * Returns the total number of bytes written to the file.
+   *
+   * The returned count includes both the bytes already flushed the file system and (only if stream buffering is enabled)
+   * the bytes which are in the in-memory stream buffer.
+   */
   public long getBytesWritten(Path file) {
     if (openStreams.containsKey(file.getName())) {
-      return openStreams.get(file.getName()).getBytesWritten();
+      Pair<TimedSizeAwareOutputStream, Option<BufferedSizeAwareOutputStream>> streams = openStreams.get(file.getName());
+      // Bytes which have already been flushed to file system
+      final long flushedBytes = streams.getKey().getBytesWritten();
+      // Bytes which are currently buffered
+      final long bufferedBytes = streams.getValue().isPresent() ? streams.getValue().get().getBytesBuffered() : 0;
+      return flushedBytes + bufferedBytes;
     }
+
     // When the file is first written, we do not have a track of it
     throw new IllegalArgumentException(
         file.toString() + " does not have a open stream. Cannot get the bytes written on the stream");

@@ -54,6 +54,10 @@ public abstract class HoodieEngineContext {
     return taskContextSupplier;
   }
 
+  public void setHadoopConfig(String name, String value) {
+    getHadoopConf().get().set(name, value);
+  }
+
   public abstract <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism);
 
   public abstract <I, O> List<O> flatMap(List<I> data, SerializableFunction<I, Stream<O>> func, int parallelism);

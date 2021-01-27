@@ -79,15 +79,12 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       this.inputStream = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
           new BufferedFSInputStream((FSInputStream) ((
               (FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream()), bufferSize)));
-    } else if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
-      this.inputStream = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
-          new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
     } else {
-      // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream
-      // need to wrap in another BufferedFSInputStream the make bufferSize work?
       this.inputStream = fsDataInputStream;
     }
 
+    LOG.info("Opened inputstream of type " + this.inputStream.getClass().getName() + "  wrapping over "
+        + inputStream.getWrappedStream().getClass().getName() + " with buffersize " + bufferSize);
     this.logFile = logFile;
     this.readerSchema = readerSchema;
     this.readBlockLazily = readBlockLazily;

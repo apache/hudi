@@ -64,6 +64,12 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
     return sqlContext;
   }
 
+  @Override
+  public void setHadoopConfig(String name, String value) {
+    super.setHadoopConfig(name, value);
+    javaSparkContext.hadoopConfiguration().set(name, value);
+  }
+
   public static JavaSparkContext getSparkContext(HoodieEngineContext context) {
     return ((HoodieSparkEngineContext) context).getJavaSparkContext();
   }

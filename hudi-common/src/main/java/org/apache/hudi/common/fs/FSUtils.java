@@ -50,11 +50,9 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -221,7 +219,7 @@ public class FSUtils {
   /**
    * Recursively processes all files in the base-path. If excludeMetaFolder is set, the meta-folder and all its subdirs
    * are skipped
-   * 
+   *
    * @param fs File System
    * @param basePathStr Base-Path
    * @param consumer Callback for processing
@@ -407,22 +405,27 @@ public class FSUtils {
     return LOG_FILE_PREFIX + suffix;
   }
 
+  /**
+   * Returns true if the given path is a Log file.
+   */
   public static boolean isLogFile(Path logPath) {
     Matcher matcher = LOG_FILE_PATTERN.matcher(logPath.getName());
     return matcher.find() && logPath.getName().contains(".log");
   }
 
   /**
+   * Returns true if the given path is a Base file or a Log file.
+   */
+  public static boolean isDataFile(Path path) {
+    return HoodieFileFormat.isBaseFile(path) || FSUtils.isLogFile(path);
+  }
+
+  /**
    * Get the names of all the base and log files in the given partition path.
    */
   public static FileStatus[] getAllDataFilesInPartition(FileSystem fs, Path partitionPath) throws IOException {
-    final Set<String> validFileExtensions = Arrays.stream(HoodieFileFormat.values())
-        .map(HoodieFileFormat::getFileExtension).collect(Collectors.toCollection(HashSet::new));
-    final String logFileExtension = HoodieFileFormat.HOODIE_LOG.getFileExtension();
-
     return Arrays.stream(fs.listStatus(partitionPath, path -> {
-      String extension = FSUtils.getFileExtension(path.getName());
-      return validFileExtensions.contains(extension) || path.getName().contains(logFileExtension);
+      return HoodieFileFormat.isBaseFile(path) || isLogFile(path);
     })).filter(FileStatus::isFile).toArray(FileStatus[]::new);
   }
 
@@ -542,7 +545,7 @@ public class FSUtils {
 
   /**
    * This is due to HUDI-140 GCS has a different behavior for detecting EOF during seek().
-   * 
+   *
    * @param inputStream FSDataInputStream
    * @return true if the inputstream or the wrapped one is of type GoogleHadoopFSInputStream
    */

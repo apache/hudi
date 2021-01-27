@@ -18,6 +18,14 @@
 
 package org.apache.hudi.common.model;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.fs.FSUtils;
+
 /**
  * Hoodie file format.
  */
@@ -27,6 +35,10 @@ public enum HoodieFileFormat {
   HFILE(".hfile");
 
   private final String extension;
+  private static final Set<String> BASE_FILE_EXTENSIONS = Arrays.stream(HoodieFileFormat.values())
+      .map(HoodieFileFormat::getFileExtension)
+      .filter(x -> !x.equals(HoodieFileFormat.HOODIE_LOG.getFileExtension()))
+      .collect(Collectors.toCollection(HashSet::new));
 
   HoodieFileFormat(String extension) {
     this.extension = extension;
@@ -34,5 +46,10 @@ public enum HoodieFileFormat {
 
   public String getFileExtension() {
     return extension;
+  }
+
+  public static boolean isBaseFile(Path path) {
+    String extension = FSUtils.getFileExtension(path.getName());
+    return BASE_FILE_EXTENSIONS.contains(extension);
   }
 }

@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieWrapperFileSystemConfig;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -168,6 +169,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private FileSystemViewStorageConfig viewStorageConfig;
   private HoodiePayloadConfig hoodiePayloadConfig;
   private HoodieMetadataConfig metadataConfig;
+  private HoodieWrapperFileSystemConfig wrapperFsConfig;
 
   private EngineType engineType;
 
@@ -188,6 +190,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     this.viewStorageConfig = clientSpecifiedViewStorageConfig;
     this.hoodiePayloadConfig = HoodiePayloadConfig.newBuilder().fromProperties(newProps).build();
     this.metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(props).build();
+    this.wrapperFsConfig = HoodieWrapperFileSystemConfig.newBuilder().fromProperties(props).build();
   }
 
   public static HoodieWriteConfig.Builder newBuilder() {
@@ -497,7 +500,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public long getClusteringMaxBytesInGroup() {
     return Long.parseLong(props.getProperty(HoodieClusteringConfig.CLUSTERING_MAX_BYTES_PER_GROUP));
   }
-  
+
   public long getClusteringSmallFileLimit() {
     return Long.parseLong(props.getProperty(HoodieClusteringConfig.CLUSTERING_PLAN_SMALL_FILE_LIMIT));
   }
@@ -513,7 +516,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public int getTargetPartitionsForClustering() {
     return Integer.parseInt(props.getProperty(HoodieClusteringConfig.CLUSTERING_TARGET_PARTITIONS));
   }
-  
+
   public String getClusteringSortColumns() {
     return props.getProperty(HoodieClusteringConfig.CLUSTERING_SORT_COLUMNS_PROPERTY);
   }
@@ -964,6 +967,21 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Integer.parseInt(props.getProperty(HoodieMetadataConfig.MIN_COMMITS_TO_KEEP_PROP));
   }
 
+  /**
+   * File system IO buffering configs.
+   */
+  public boolean isFileIOBufferingEnabled() {
+    return wrapperFsConfig.isFileIOBufferingEnabled();
+  }
+
+  public int getFileIOBufferMinSize() {
+    return wrapperFsConfig.getFileIOBufferMinSize();
+  }
+
+  public int getDataFileIOBufferMinSize() {
+    return wrapperFsConfig.getDataFileIOBufferMinSize();
+  }
+
   public static class Builder {
 
     protected final Properties props = new Properties();
@@ -980,6 +998,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private boolean isCallbackConfigSet = false;
     private boolean isPayloadConfigSet = false;
     private boolean isMetadataConfigSet = false;
+    private boolean isWrapperFsConfigSet = false;
 
     public Builder withEngineType(EngineType engineType) {
       this.engineType = engineType;
@@ -1153,6 +1172,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withWrapperFsConfig(HoodieWrapperFileSystemConfig wrapperFsConfig) {
+      props.putAll(wrapperFsConfig.getProps());
+      isWrapperFsConfigSet = true;
+      return this;
+    }
+
     public Builder withAutoCommit(boolean autoCommit) {
       props.setProperty(HOODIE_AUTO_COMMIT_PROP, String.valueOf(autoCommit));
       return this;
@@ -1318,6 +1343,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           HoodiePayloadConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isMetadataConfigSet,
           HoodieMetadataConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isWrapperFsConfigSet,
+          HoodieWrapperFileSystemConfig.newBuilder().fromProperties(props).build());
 
       setDefaultOnCondition(props, !props.containsKey(EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION),
           EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION, DEFAULT_EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION);
