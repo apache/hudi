@@ -1433,4 +1433,9 @@ var store = [{
         "excerpt":"Building High-Performance Data Lake Using Apache Hudi and Alluxio at T3Go T3Go is China’s first platform for smart travel based on the Internet of Vehicles. In this article, Trevor Zhang and Vino Yang from T3Go describe the evolution of their data lake architecture, built on cloud-native or open-source technologies including...","categories": ["blog"],
         "tags": [],
         "url": "https://hudi.apache.org/blog/high-perf-data-lake-with-hudi-and-alluxio-t3go/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Optimize Data lake layout using Clustering in Apache Hudi",
+        "excerpt":"Background Apache Hudi brings stream processing to big data, providing fresh data while being an order of magnitude efficient over traditional batch processing. In a data lake/warehouse, one of the key trade-offs is between ingestion speed and query performance. Data ingestion typically prefers small files to improve parallelism and make...","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/hudi-clustering-intro/",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},]
