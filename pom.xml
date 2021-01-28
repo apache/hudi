@@ -151,6 +151,32 @@
     <tag>HEAD</tag>
   </scm>
 
+  <issueManagement>
+    <system>JIRA</system>
+    <url>https://issues.apache.org/jira/browse/HUDI</url>
+  </issueManagement>
+
+  <mailingLists>
+    <mailingList>
+      <name>Dev Mailing List</name>
+      <post>dev@hudi.apache.org</post>
+      <subscribe>dev-subscribe@hudi.apache.org</subscribe>
+      <unsubscribe>dev-unsubscribe@hudi.apache.org</unsubscribe>
+    </mailingList>
+    <mailingList>
+      <name>User Mailing List</name>
+      <post>users@hudi.apache.org</post>
+      <subscribe>users-subscribe@hudi.apache.org</subscribe>
+      <unsubscribe>users-unsubscribe@hudi.apache.org</unsubscribe>
+    </mailingList>
+    <mailingList>
+      <name>Commits Mailing List</name>
+      <post>commits@hudi.apache.org</post>
+      <subscribe>commits-subscribe@hudi.apache.org</subscribe>
+      <unsubscribe>commits-unsubscribe@hudi.apache.org</unsubscribe>
+    </mailingList>
+  </mailingLists>
+
   <build>
     <plugins>
       <plugin>
