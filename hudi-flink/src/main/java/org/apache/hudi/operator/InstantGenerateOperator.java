@@ -18,7 +18,7 @@
 
 package org.apache.hudi.operator;
 
-import org.apache.hudi.HoodieFlinkStreamer;
+import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
@@ -66,7 +66,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   private static final Logger LOG = LoggerFactory.getLogger(InstantGenerateOperator.class);
   public static final String NAME = "InstantGenerateOperator";
 
-  private HoodieFlinkStreamer.Config cfg;
+  private FlinkStreamerConfig cfg;
   private HoodieFlinkWriteClient writeClient;
   private SerializableConfiguration serializableHadoopConf;
   private transient FileSystem fs;
@@ -94,13 +94,13 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   public void open() throws Exception {
     super.open();
     // get configs from runtimeContext
-    cfg = (HoodieFlinkStreamer.Config) runtimeContext.getExecutionConfig().getGlobalJobParameters();
+    cfg = (FlinkStreamerConfig) getRuntimeContext().getExecutionConfig().getGlobalJobParameters();
 
     // retry times
-    retryTimes = Integer.valueOf(cfg.blockRetryTime);
+    retryTimes = Integer.valueOf(cfg.instantRetryTimes);
 
     // retry interval
-    retryInterval = Integer.valueOf(cfg.blockRetryInterval);
+    retryInterval = Integer.valueOf(cfg.instantRetryInterval);
 
     // hadoopConf
     serializableHadoopConf = new SerializableConfiguration(StreamerUtil.getHadoopConf());

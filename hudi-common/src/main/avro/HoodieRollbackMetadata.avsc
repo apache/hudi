@@ -57,10 +57,10 @@
      /* overlaps with 'commitsRollback' field. Adding this to track action type for all the instants being rolled back. */
      {
        "name": "instantsRollback",
-       "default": null,
+       "default": [],
        "type": {
           "type": "array",
-          "default": null,
+          "default": [],
           "items": "HoodieInstantInfo"
        }
      }

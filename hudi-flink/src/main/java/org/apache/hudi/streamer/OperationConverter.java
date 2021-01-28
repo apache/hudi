@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,21 +16,19 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.schema;
+package org.apache.hudi.streamer;
 
-import org.apache.avro.Schema;
+import org.apache.hudi.common.model.WriteOperationType;
 
-import java.io.Serializable;
+import com.beust.jcommander.IStringConverter;
+import com.beust.jcommander.ParameterException;
 
 /**
- * Class to provide schema for reading data and also writing into a Hoodie table.
+ * Converter that converts a string into enum WriteOperationType.
  */
-public abstract class SchemaProvider implements Serializable {
-
-  public abstract Schema getSourceSchema();
-
-  public Schema getTargetSchema() {
-    // by default, use source schema as target for hoodie table as well
-    return getSourceSchema();
+public class OperationConverter implements IStringConverter<WriteOperationType> {
+  @Override
+  public WriteOperationType convert(String value) throws ParameterException {
+    return WriteOperationType.valueOf(value);
   }
 }
