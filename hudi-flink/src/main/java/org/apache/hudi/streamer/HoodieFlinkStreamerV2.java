@@ -18,22 +18,25 @@
 
 package org.apache.hudi.streamer;
 
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.operator.FlinkOptions;
 import org.apache.hudi.operator.StreamWriteOperatorFactory;
+import org.apache.hudi.operator.partitioner.BucketAssignFunction;
+import org.apache.hudi.operator.transform.RowDataToHoodieFunction;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.JCommander;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.formats.json.JsonRowDataDeserializationSchema;
 import org.apache.flink.formats.json.TimestampFormat;
 import org.apache.flink.runtime.state.filesystem.FsStateBackend;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
-import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.RowDataTypeInfo;
-import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.util.Properties;
@@ -70,13 +73,8 @@ public class HoodieFlinkStreamerV2 {
             .getLogicalType();
     Configuration conf = FlinkOptions.fromStreamerConfig(cfg);
     int numWriteTask = conf.getInteger(FlinkOptions.WRITE_TASK_PARALLELISM);
-    StreamWriteOperatorFactory<RowData> operatorFactory =
-        new StreamWriteOperatorFactory<>(rowType, conf, numWriteTask);
-
-    int partitionFieldIndex = rowType.getFieldIndex(conf.getString(FlinkOptions.PARTITION_PATH_FIELD));
-    LogicalType partitionFieldType = rowType.getTypeAt(partitionFieldIndex);
-    final RowData.FieldGetter partitionFieldGetter =
-        RowData.createFieldGetter(partitionFieldType, partitionFieldIndex);
+    StreamWriteOperatorFactory<HoodieRecord> operatorFactory =
+        new StreamWriteOperatorFactory<>(conf, numWriteTask);
 
     DataStream<Object> dataStream = env.addSource(new FlinkKafkaConsumer<>(
         cfg.kafkaTopic,
@@ -89,11 +87,19 @@ public class HoodieFlinkStreamerV2 {
         ), kafkaProps))
         .name("kafka_source")
         .uid("uid_kafka_source")
+        .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class))
         // Key-by partition path, to avoid multiple subtasks write to a partition at the same time
-        .keyBy(partitionFieldGetter::getFieldOrNull)
+        .keyBy(HoodieRecord::getPartitionPath)
+        .transform(
+            "bucket_assigner",
+            TypeInformation.of(HoodieRecord.class),
+            new KeyedProcessOperator<>(new BucketAssignFunction<>(conf)))
+        .uid("uid_bucket_assigner")
+        // shuffle by fileId(bucket id)
+        .keyBy(record -> record.getCurrentLocation().getFileId())
         .transform("hoodie_stream_write", null, operatorFactory)
         .uid("uid_hoodie_stream_write")
-        .setParallelism(numWriteTask); // should make it configurable
+        .setParallelism(numWriteTask);
 
     env.addOperator(dataStream.getTransformation());
 

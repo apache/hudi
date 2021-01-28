@@ -167,6 +167,12 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     deleteInstantFile(instant);
   }
 
+  public void deletePending(HoodieInstant.State state, String action, String instantStr) {
+    HoodieInstant instant = new HoodieInstant(state, action, instantStr);
+    ValidationUtils.checkArgument(!instant.isCompleted());
+    deleteInstantFile(instant);
+  }
+
   public void deleteCompactionRequested(HoodieInstant instant) {
     ValidationUtils.checkArgument(instant.isRequested());
     ValidationUtils.checkArgument(Objects.equals(instant.getAction(), HoodieTimeline.COMPACTION_ACTION));

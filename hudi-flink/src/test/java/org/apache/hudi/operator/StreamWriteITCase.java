@@ -18,16 +18,24 @@
 
 package org.apache.hudi.operator;
 
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.operator.partitioner.BucketAssignFunction;
+import org.apache.hudi.operator.transform.RowDataToHoodieFunction;
 import org.apache.hudi.operator.utils.TestConfigurations;
 import org.apache.hudi.operator.utils.TestData;
+import org.apache.hudi.sink.CommitSink;
+import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.common.io.FilePathFilter;
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
+import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.io.TextInputFormat;
+import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.core.fs.Path;
@@ -37,7 +45,7 @@ import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.FileProcessingMode;
-import org.apache.flink.table.data.RowData;
+import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.table.runtime.typeutils.RowDataTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.TestLogger;
@@ -47,6 +55,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
@@ -74,19 +83,15 @@ public class StreamWriteITCase extends TestLogger {
     StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment();
     execEnv.getConfig().disableObjectReuse();
     execEnv.setParallelism(4);
-    // 1 second a time
-    execEnv.enableCheckpointing(2000, CheckpointingMode.EXACTLY_ONCE);
+    // set up checkpoint interval
+    execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
 
-    // Read from kafka source
+    // Read from file source
     RowType rowType =
         (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
             .getLogicalType();
-    StreamWriteOperatorFactory<RowData> operatorFactory =
-        new StreamWriteOperatorFactory<>(rowType, conf, 4);
-
-    int partitionFieldIndex = rowType.getFieldIndex(conf.getString(FlinkOptions.PARTITION_PATH_FIELD));
-    final RowData.FieldGetter partitionFieldGetter =
-        RowData.createFieldGetter(rowType.getTypeAt(partitionFieldIndex), partitionFieldIndex);
+    StreamWriteOperatorFactory<HoodieRecord> operatorFactory =
+        new StreamWriteOperatorFactory<>(conf, 4);
 
     JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
         rowType,
@@ -107,17 +112,103 @@ public class StreamWriteITCase extends TestLogger {
         // use PROCESS_CONTINUOUSLY mode to trigger checkpoint
         .readFile(format, sourcePath, FileProcessingMode.PROCESS_CONTINUOUSLY, 1000, typeInfo)
         .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
+        .setParallelism(4)
+        .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class))
         // Key-by partition path, to avoid multiple subtasks write to a partition at the same time
-        .keyBy(partitionFieldGetter::getFieldOrNull)
+        .keyBy(HoodieRecord::getPartitionPath)
+        .transform(
+            "bucket_assigner",
+            TypeInformation.of(HoodieRecord.class),
+            new KeyedProcessOperator<>(new BucketAssignFunction<>(conf)))
+        .uid("uid_bucket_assigner")
+        // shuffle by fileId(bucket id)
+        .keyBy(record -> record.getCurrentLocation().getFileId())
         .transform("hoodie_stream_write", null, operatorFactory)
-        .uid("uid_hoodie_stream_write")
-        .setParallelism(4);
+        .uid("uid_hoodie_stream_write");
     execEnv.addOperator(dataStream.getTransformation());
 
     JobClient client = execEnv.executeAsync(execEnv.getStreamGraph(conf.getString(FlinkOptions.TABLE_NAME)));
     if (client.getJobStatus().get() != JobStatus.FAILED) {
       try {
-        TimeUnit.SECONDS.sleep(10);
+        TimeUnit.SECONDS.sleep(8);
+        client.cancel();
+      } catch (Throwable var1) {
+        // ignored
+      }
+    }
+
+    TestData.checkWrittenData(tempFile, EXPECTED);
+  }
+
+  @Test
+  public void testWriteToHoodieLegacy() throws Exception {
+    FlinkStreamerConfig streamerConf = TestConfigurations.getDefaultStreamerConf(tempFile.getAbsolutePath());
+    Configuration conf = FlinkOptions.fromStreamerConfig(streamerConf);
+    StreamerUtil.initTableIfNotExists(conf);
+    StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment();
+    execEnv.getConfig().disableObjectReuse();
+    execEnv.setParallelism(4);
+    // set up checkpoint interval
+    execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
+    execEnv.getConfig().setGlobalJobParameters(streamerConf);
+
+    // Read from file source
+    RowType rowType =
+        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
+            .getLogicalType();
+
+    JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
+        rowType,
+        new RowDataTypeInfo(rowType),
+        false,
+        true,
+        TimestampFormat.ISO_8601
+    );
+    String sourcePath = Objects.requireNonNull(Thread.currentThread()
+        .getContextClassLoader().getResource("test_source.data")).toString();
+
+    TextInputFormat format = new TextInputFormat(new Path(sourcePath));
+    format.setFilesFilter(FilePathFilter.createDefaultFilter());
+    TypeInformation<String> typeInfo = BasicTypeInfo.STRING_TYPE_INFO;
+    format.setCharsetName("UTF-8");
+
+    execEnv
+        // use PROCESS_CONTINUOUSLY mode to trigger checkpoint
+        .readFile(format, sourcePath, FileProcessingMode.PROCESS_CONTINUOUSLY, 1000, typeInfo)
+        .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
+        .setParallelism(4)
+        .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class))
+        .transform(InstantGenerateOperator.NAME, TypeInformation.of(HoodieRecord.class), new InstantGenerateOperator())
+        .name("instant_generator")
+        .uid("instant_generator_id")
+
+        // Keyby partition path, to avoid multiple subtasks writing to a partition at the same time
+        .keyBy(HoodieRecord::getPartitionPath)
+        // use the bucket assigner to generate bucket IDs
+        .transform(
+            "bucket_assigner",
+            TypeInformation.of(HoodieRecord.class),
+            new KeyedProcessOperator<>(new BucketAssignFunction<>(conf)))
+        .uid("uid_bucket_assigner")
+        // shuffle by fileId(bucket id)
+        .keyBy(record -> record.getCurrentLocation().getFileId())
+        // write operator, where the write operation really happens
+        .transform(KeyedWriteProcessOperator.NAME, TypeInformation.of(new TypeHint<Tuple3<String, List<WriteStatus>, Integer>>() {
+        }), new KeyedWriteProcessOperator(new KeyedWriteProcessFunction()))
+        .name("write_process")
+        .uid("write_process_uid")
+        .setParallelism(4)
+
+        // Commit can only be executed once, so make it one parallelism
+        .addSink(new CommitSink())
+        .name("commit_sink")
+        .uid("commit_sink_uid")
+        .setParallelism(1);
+
+    JobClient client = execEnv.executeAsync(execEnv.getStreamGraph(conf.getString(FlinkOptions.TABLE_NAME)));
+    if (client.getJobStatus().get() != JobStatus.FAILED) {
+      try {
+        TimeUnit.SECONDS.sleep(8);
         client.cancel();
       } catch (Throwable var1) {
         // ignored
