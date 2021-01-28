@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,22 +15,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.apache.hudi.schema;
-
-import org.apache.avro.Schema;
-
-import java.io.Serializable;
-
-/**
- * Class to provide schema for reading data and also writing into a Hoodie table.
- */
-public abstract class SchemaProvider implements Serializable {
-
-  public abstract Schema getSourceSchema();
-
-  public Schema getTargetSchema() {
-    // by default, use source schema as target for hoodie table as well
-    return getSourceSchema();
-  }
+{
+  "type" : "record",
+  "name" : "record",
+  "fields" : [ {
+    "name" : "uuid",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "name",
+    "type" : [ "null", "string" ],
+    "default" : null
+  }, {
+    "name" : "age",
+    "type" : [ "null", "int" ],
+    "default" : null
+  }, {
+    "name" : "ts",
+    "type" : [ "null", {
+      "type" : "long",
+      "logicalType" : "timestamp-millis"
+    } ],
+    "default" : null
+  }, {
+    "name" : "partition",
+    "type" : [ "null", "string" ],
+    "default" : null
+  } ]
 }

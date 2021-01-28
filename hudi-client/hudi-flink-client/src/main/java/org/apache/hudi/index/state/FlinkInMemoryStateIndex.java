@@ -54,9 +54,7 @@ public class FlinkInMemoryStateIndex<T extends HoodieRecordPayload> extends Flin
     if (context.getRuntimeContext() != null) {
       MapStateDescriptor<HoodieKey, HoodieRecordLocation> indexStateDesc =
           new MapStateDescriptor<>("indexState", TypeInformation.of(HoodieKey.class), TypeInformation.of(HoodieRecordLocation.class));
-      if (context.getRuntimeContext() != null) {
-        mapState = context.getRuntimeContext().getMapState(indexStateDesc);
-      }
+      mapState = context.getRuntimeContext().getMapState(indexStateDesc);
     }
   }
 
