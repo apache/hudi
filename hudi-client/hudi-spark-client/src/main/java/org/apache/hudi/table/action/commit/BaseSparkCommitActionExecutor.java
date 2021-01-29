@@ -208,7 +208,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     return partitionedRDD.map(Tuple2::_2);
   }
 
-  protected void updateIndexAndCommitIfNeeded(JavaRDD<WriteStatus> writeStatusRDD, HoodieWriteMetadata result) {
+  protected JavaRDD<WriteStatus> updateIndex(JavaRDD<WriteStatus> writeStatusRDD, HoodieWriteMetadata result) {
     // cache writeStatusRDD before updating index, so that all actions before this are not triggered again for future
     // RDD actions that are performed after updating the index.
     writeStatusRDD = writeStatusRDD.persist(SparkMemoryUtils.getWriteStatusStorageLevel(config.getProps()));
@@ -218,6 +218,11 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
     result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(statuses));
+    return statuses;
+  }
+  
+  protected void updateIndexAndCommitIfNeeded(JavaRDD<WriteStatus> writeStatusRDD, HoodieWriteMetadata result) {
+    updateIndex(writeStatusRDD, result);
     commitOnAutoCommit(result);
   }
 
