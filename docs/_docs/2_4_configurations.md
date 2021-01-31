@@ -278,13 +278,17 @@ Property: `hoodie.index.type` <br/>
 
 #### Bloom Index configs
 
+#### bloomIndexFilterType(bucketizedChecking = BloomFilterTypeCode.SIMPLE) {#bloomIndexFilterType}
+Property: `hoodie.bloom.index.filter.type` <br/>
+<span style="color:grey">Filter type used. Default is BloomFilterTypeCode.SIMPLE. Available values are [BloomFilterTypeCode.SIMPLE , BloomFilterTypeCode.DYNAMIC_V0]. Dynamic bloom filters auto size themselves based on number of keys.</span>
+
 #### bloomFilterNumEntries(numEntries = 60000) {#bloomFilterNumEntries}
 Property: `hoodie.index.bloom.num_entries` <br/>
-<span style="color:grey">Only applies if index type is BLOOM. <br/>This is the number of entries to be stored in the bloom filter. We assume the maxParquetFileSize is 128MB and averageRecordSize is 1024B and hence we approx a total of 130K records in a file. The default (60000) is roughly half of this approximation. [HUDI-56](https://issues.apache.org/jira/browse/HUDI-56) tracks computing this dynamically. Warning: Setting this very low, will generate a lot of false positives and index lookup will have to scan a lot more files than it has to and Setting this to a very high number will increase the size every data file linearly (roughly 4KB for every 50000 entries).</span>
+<span style="color:grey">Only applies if index type is BLOOM. <br/>This is the number of entries to be stored in the bloom filter. We assume the maxParquetFileSize is 128MB and averageRecordSize is 1024B and hence we approx a total of 130K records in a file. The default (60000) is roughly half of this approximation. [HUDI-56](https://issues.apache.org/jira/browse/HUDI-56) tracks computing this dynamically. Warning: Setting this very low, will generate a lot of false positives and index lookup will have to scan a lot more files than it has to and Setting this to a very high number will increase the size every data file linearly (roughly 4KB for every 50000 entries). This config is also used with DYNNAMIC bloom filter which determines the initial size for the bloom. </span>
 
 #### bloomFilterFPP(fpp = 0.000000001) {#bloomFilterFPP}
 Property: `hoodie.index.bloom.fpp` <br/>
-<span style="color:grey">Only applies if index type is BLOOM. <br/> Error rate allowed given the number of entries. This is used to calculate how many bits should be assigned for the bloom filter and the number of hash functions. This is usually set very low (default: 0.000000001), we like to tradeoff disk space for lower false positives</span>
+<span style="color:grey">Only applies if index type is BLOOM. <br/> Error rate allowed given the number of entries. This is used to calculate how many bits should be assigned for the bloom filter and the number of hash functions. This is usually set very low (default: 0.000000001), we like to tradeoff disk space for lower false positives. If the number of entries added to bloom filter exceeds the congfigured value (`hoodie.index.bloom.num_entries`), then this fpp may not be honored.</span>
 
 #### bloomIndexParallelism(0) {#bloomIndexParallelism}
 Property: `hoodie.bloom.index.parallelism` <br/>
@@ -292,7 +296,7 @@ Property: `hoodie.bloom.index.parallelism` <br/>
 
 #### bloomIndexPruneByRanges(pruneRanges = true) {#bloomIndexPruneByRanges}
 Property: `hoodie.bloom.index.prune.by.ranges` <br/>
-<span style="color:grey">Only applies if index type is BLOOM. <br/> When true, range information from files to leveraged speed up index lookups. Particularly helpful, if the key has a monotonously increasing prefix, such as timestamp.</span>
+<span style="color:grey">Only applies if index type is BLOOM. <br/> When true, range information from files to leveraged speed up index lookups. Particularly helpful, if the key has a monotonously increasing prefix, such as timestamp. If the record key is completely random, it is better to turn this off.</span>
 
 #### bloomIndexUseCaching(useCaching = true) {#bloomIndexUseCaching}
 Property: `hoodie.bloom.index.use.caching` <br/>
@@ -305,10 +309,6 @@ Property: `hoodie.bloom.index.use.treebased.filter` <br/>
 #### bloomIndexBucketizedChecking(bucketizedChecking = true) {#bloomIndexBucketizedChecking}
 Property: `hoodie.bloom.index.bucketized.checking` <br/>
 <span style="color:grey">Only applies if index type is BLOOM. <br/> When true, bucketized bloom filtering is enabled. This reduces skew seen in sort based bloom index lookup</span>
-
-#### bloomIndexFilterType(bucketizedChecking = BloomFilterTypeCode.SIMPLE) {#bloomIndexFilterType}
-Property: `hoodie.bloom.index.filter.type` <br/>
-<span style="color:grey">Filter type used. Default is BloomFilterTypeCode.SIMPLE. Available values are [BloomFilterTypeCode.SIMPLE , BloomFilterTypeCode.DYNAMIC_V0]. Dynamic bloom filters auto size themselves based on number of keys</span>
 
 #### bloomIndexFilterDynamicMaxEntries(maxNumberOfEntries = 100000) {#bloomIndexFilterDynamicMaxEntries}
 Property: `hoodie.bloom.index.filter.dynamic.max.entries` <br/>
