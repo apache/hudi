@@ -64,6 +64,8 @@ object DataSourceReadOptions {
 
   val READ_PATHS_OPT_KEY = "hoodie.datasource.read.paths"
 
+  val READ_PRE_COMBINE_FIELD = HoodieWriteConfig.PRECOMBINE_FIELD_PROP
+
   @Deprecated
   val VIEW_TYPE_OPT_KEY = "hoodie.datasource.view.type"
   @Deprecated
