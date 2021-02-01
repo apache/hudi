@@ -90,10 +90,7 @@ public class SavepointActionExecutor<T extends HoodieRecordPayload, I, K, O> ext
           "Could not savepoint commit " + instantTime + " as this is beyond the lookup window " + lastCommitRetained);
 
       context.setJobStatus(this.getClass().getSimpleName(), "Collecting latest files for savepoint " + instantTime);
-      List<String> partitions = FSUtils.getAllPartitionPaths(table.getMetaClient().getFs(),
-          table.getMetaClient().getBasePath(), config.useFileListingMetadata(), config.getFileListingMetadataVerify(),
-          config.shouldAssumeDatePartitioning()
-      );
+      List<String> partitions = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
       Map<String, List<String>> latestFilesMap = context.mapToPair(partitions, partitionPath -> {
         // Scan all partitions files with this commit time
         LOG.info("Collecting latest files in partition path " + partitionPath);

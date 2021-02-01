@@ -86,6 +86,7 @@ public class HoodieSnapshotCopier implements Serializable {
     final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs.getConf(), baseDir);
     final BaseFileOnlyView fsView = new HoodieTableFileSystemView(tableMetadata,
         tableMetadata.getActiveTimeline().getCommitsAndCompactionTimeline().filterCompletedInstants());
+    HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     // Get the latest commit
     Option<HoodieInstant> latestCommit =
         tableMetadata.getActiveTimeline().getCommitsAndCompactionTimeline().filterCompletedInstants().lastInstant();
@@ -97,7 +98,7 @@ public class HoodieSnapshotCopier implements Serializable {
     LOG.info(String.format("Starting to snapshot latest version files which are also no-late-than %s.",
         latestCommitTimestamp));
 
-    List<String> partitions = FSUtils.getAllPartitionPaths(fs, baseDir, useFileListingFromMetadata, verifyMetadataFileListing, shouldAssumeDatePartitioning);
+    List<String> partitions = FSUtils.getAllPartitionPaths(context, baseDir, useFileListingFromMetadata, verifyMetadataFileListing, shouldAssumeDatePartitioning);
     if (partitions.size() > 0) {
       LOG.info(String.format("The job needs to copy %d partitions.", partitions.size()));
 
@@ -108,7 +109,6 @@ public class HoodieSnapshotCopier implements Serializable {
         fs.delete(new Path(outputDir), true);
       }
 
-      HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
       context.setJobStatus(this.getClass().getSimpleName(), "Creating a snapshot");
 
       List<Tuple2<String, String>> filesToCopy = context.flatMap(partitions, partition -> {

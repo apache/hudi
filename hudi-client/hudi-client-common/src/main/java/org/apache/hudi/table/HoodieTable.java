@@ -29,8 +29,10 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
@@ -48,8 +50,8 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
@@ -62,7 +64,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
@@ -94,18 +95,25 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   protected final HoodieWriteConfig config;
   protected final HoodieTableMetaClient metaClient;
   protected final HoodieIndex<T, I, K, O> index;
-
   private SerializableConfiguration hadoopConfiguration;
-  private transient FileSystemViewManager viewManager;
-  private HoodieTableMetadata metadata;
-
   protected final TaskContextSupplier taskContextSupplier;
+  private final HoodieTableMetadata metadata;
+
+  private transient FileSystemViewManager viewManager;
+  protected final transient HoodieEngineContext context;
 
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     this.config = config;
     this.hadoopConfiguration = context.getHadoopConf();
-    this.viewManager = FileSystemViewManager.createViewManager(hadoopConfiguration,
-        config.getViewStorageConfig());
+    this.context = context;
+
+    // disable reuse of resources, given there is no close() called on the executors ultimately
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
+        .enableReuse(false).build();
+    this.metadata = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath(),
+        FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR);
+
+    this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), () -> metadata);
     this.metaClient = metaClient;
     this.index = getIndex(config, context);
     this.taskContextSupplier = context.getTaskContextSupplier();
@@ -115,7 +123,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
 
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
-      viewManager = FileSystemViewManager.createViewManager(hadoopConfiguration, config.getViewStorageConfig());
+      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), () -> metadata);
     }
     return viewManager;
   }
@@ -246,41 +254,28 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * Get the view of the file system for this table.
    */
   public TableFileSystemView getFileSystemView() {
-    if (config.useFileListingMetadata()) {
-      return getFileSystemViewInternal(getCompletedCommitsTimeline());
-    } else {
-      return new HoodieTableFileSystemView(metaClient, getCompletedCommitsTimeline());
-    }
+    return new HoodieTableFileSystemView(metaClient, getCompletedCommitsTimeline());
   }
 
   /**
    * Get the base file only view of the file system for this table.
    */
   public BaseFileOnlyView getBaseFileOnlyView() {
-    return getFileSystemViewInternal(metaClient.getActiveTimeline().filterCompletedAndCompactionInstants());
+    return getViewManager().getFileSystemView(metaClient);
   }
 
   /**
    * Get the full view of the file system for this table.
    */
   public SliceView getSliceView() {
-    return getFileSystemViewInternal(metaClient.getActiveTimeline().filterCompletedAndCompactionInstants());
+    return getViewManager().getFileSystemView(metaClient);
   }
 
   /**
    * Get complete view of the file system for this table with ability to force sync.
    */
   public SyncableFileSystemView getHoodieView() {
-    return getFileSystemViewInternal(metaClient.getActiveTimeline().filterCompletedAndCompactionInstants());
-  }
-
-  private SyncableFileSystemView getFileSystemViewInternal(HoodieTimeline timeline) {
-    if (config.useFileListingMetadata()) {
-      FileSystemViewStorageConfig viewConfig = config.getViewStorageConfig();
-      return new HoodieMetadataFileSystemView(metaClient, this.metadata(), timeline, viewConfig.isIncrementalTimelineSyncEnabled());
-    } else {
-      return getViewManager().getFileSystemView(metaClient);
-    }
+    return getViewManager().getFileSystemView(metaClient);
   }
 
   /**
@@ -658,11 +653,9 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     return getBaseFileFormat() == HoodieFileFormat.HFILE;
   }
 
-  public HoodieTableMetadata metadata() {
-    if (metadata == null) {
-      metadata = HoodieTableMetadata.create(hadoopConfiguration.get(), config.getBasePath(), config.getSpillableMapBasePath(),
-          config.useFileListingMetadata(), config.getFileListingMetadataVerify(), config.isMetricsOn(), config.shouldAssumeDatePartitioning());
-    }
-    return metadata;
+  public HoodieEngineContext getContext() {
+    // This is to handle scenarios where this is called at the executor tasks which do not have access
+    // to engine context, and it ends up being null (as its not serializable and marked transient here).
+    return context == null ? new HoodieLocalEngineContext(hadoopConfiguration.get()) : context;
   }
 }

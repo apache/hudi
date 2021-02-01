@@ -72,8 +72,8 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, ts1);
     activeTimeline.createNewInstant(instant1);
     // create replace metadata only with replaced file Ids (no new files created)
-    activeTimeline.saveAsComplete(instant1, 
-        Option.of(getReplaceCommitMetadata(basePath, ts1, replacePartition,2, newFilePartition,0, Collections.emptyMap())));
+    activeTimeline.saveAsComplete(instant1,
+        Option.of(getReplaceCommitMetadata(basePath, ts1, replacePartition, 2, newFilePartition, 0, Collections.emptyMap())));
     metaClient.reloadActiveTimeline();
 
     List<String> partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("0", 10));
@@ -85,7 +85,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     activeTimeline.createNewInstant(instant2);
     // create replace metadata only with replaced file Ids (no new files created)
     activeTimeline.saveAsComplete(instant2,
-        Option.of(getReplaceCommitMetadata(basePath, ts2, replacePartition,0, newFilePartition,3, Collections.emptyMap())));
+        Option.of(getReplaceCommitMetadata(basePath, ts2, replacePartition, 0, newFilePartition, 3, Collections.emptyMap())));
     metaClient.reloadActiveTimeline();
     partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
     assertEquals(1, partitions.size());
@@ -96,7 +96,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     assertTrue(partitions.contains(replacePartition));
     assertTrue(partitions.contains(newFilePartition));
   }
-  
+
   @Test
   public void testGetPartitions() throws IOException {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
@@ -120,20 +120,20 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     // verify modified partitions included cleaned data
     List<String> partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
     assertEquals(5, partitions.size());
-    assertEquals(partitions, Arrays.asList(new String[]{"0", "2", "3", "4", "5"}));
+    assertEquals(partitions, Arrays.asList(new String[] {"0", "2", "3", "4", "5"}));
 
     partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsInRange("1", "4"));
     assertEquals(4, partitions.size());
-    assertEquals(partitions, Arrays.asList(new String[]{"0", "2", "3", "4"}));
+    assertEquals(partitions, Arrays.asList(new String[] {"0", "2", "3", "4"}));
 
     // verify only commit actions
     partitions = TimelineUtils.getPartitionsWritten(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
     assertEquals(4, partitions.size());
-    assertEquals(partitions, Arrays.asList(new String[]{"2", "3", "4", "5"}));
+    assertEquals(partitions, Arrays.asList(new String[] {"2", "3", "4", "5"}));
 
     partitions = TimelineUtils.getPartitionsWritten(metaClient.getActiveTimeline().findInstantsInRange("1", "4"));
     assertEquals(3, partitions.size());
-    assertEquals(partitions, Arrays.asList(new String[]{"2", "3", "4"}));
+    assertEquals(partitions, Arrays.asList(new String[] {"2", "3", "4"}));
   }
 
   @Test
@@ -181,10 +181,10 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
 
     // verify modified partitions included cleaned data
     List<String> partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
-    assertEquals(partitions, Arrays.asList(new String[]{"2", "3", "4", "5"}));
+    assertEquals(partitions, Arrays.asList(new String[] {"2", "3", "4", "5"}));
 
     partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsInRange("1", "4"));
-    assertEquals(partitions, Arrays.asList(new String[]{"2", "3", "4"}));
+    assertEquals(partitions, Arrays.asList(new String[] {"2", "3", "4"}));
   }
 
   @Test
@@ -201,7 +201,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     activeTimeline.createNewInstant(instant);
     activeTimeline.saveAsComplete(instant, Option.of(getCommitMetadata(basePath, ts, ts, 2, Collections.emptyMap())));
 
-    ts =  "1";
+    ts = "1";
     instant = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, ts);
     activeTimeline.createNewInstant(instant);
     Map<String, String> extraMetadata = new HashMap<>();
@@ -241,7 +241,8 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     List<HoodieInstant> rollbacks = new ArrayList<>();
     rollbacks.add(new HoodieInstant(false, actionType, commitTs));
 
-    HoodieRollbackStat rollbackStat = new HoodieRollbackStat(partition, deletedFiles, Collections.emptyList(), Collections.emptyMap());
+    HoodieRollbackStat rollbackStat = new HoodieRollbackStat(partition, deletedFiles, Collections.emptyList(), Collections.emptyMap(),
+        Collections.EMPTY_MAP);
     List<HoodieRollbackStat> rollbackStats = new ArrayList<>();
     rollbackStats.add(rollbackStat);
     return TimelineMetadataUtils.convertRollbackMetadata(commitTs, Option.empty(), rollbacks, rollbackStats);
@@ -264,7 +265,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
   }
 
   private byte[] getReplaceCommitMetadata(String basePath, String commitTs, String replacePartition, int replaceCount,
-                                          String newFilePartition, int newFileCount, Map<String, String> extraMetadata)
+      String newFilePartition, int newFileCount, Map<String, String> extraMetadata)
       throws IOException {
     HoodieReplaceCommitMetadata commit = new HoodieReplaceCommitMetadata();
     for (int i = 1; i <= newFileCount; i++) {

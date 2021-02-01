@@ -29,7 +29,7 @@ import java.io.Serializable;
 /**
  * Interface that supports updating metadata for a given table, as actions complete.
  */
-public interface HoodieTableMetadataWriter extends Serializable {
+public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
 
   void update(HoodieCommitMetadata commitMetadata, String instantTime);
 

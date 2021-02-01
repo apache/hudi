@@ -28,7 +28,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -57,7 +56,7 @@ public abstract class BaseMergeOnReadRollbackActionExecutor<T extends HoodieReco
   }
 
   @Override
-  protected List<HoodieRollbackStat> executeRollback() throws IOException {
+  protected List<HoodieRollbackStat> executeRollback() {
     HoodieTimer rollbackTimer = new HoodieTimer();
     rollbackTimer.startTimer();
 

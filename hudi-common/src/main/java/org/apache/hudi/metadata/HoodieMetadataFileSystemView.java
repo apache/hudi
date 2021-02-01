@@ -22,10 +22,14 @@ import java.io.IOException;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.exception.HoodieException;
 
 /**
  * {@code HoodieTableFileSystemView} implementation that retrieved partition listings from the Metadata Table.
@@ -34,20 +38,20 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
 
   private final HoodieTableMetadata tableMetadata;
 
-  public HoodieMetadataFileSystemView(HoodieTableMetaClient metaClient, HoodieTableMetadata tableMetadata,
-                                      HoodieTimeline visibleActiveTimeline, boolean enableIncrementalTimelineSync) {
-    super(metaClient, visibleActiveTimeline, enableIncrementalTimelineSync);
+  public HoodieMetadataFileSystemView(HoodieTableMetaClient metaClient,
+                                      HoodieTimeline visibleActiveTimeline,
+                                      HoodieTableMetadata tableMetadata) {
+    super(metaClient, visibleActiveTimeline);
     this.tableMetadata = tableMetadata;
   }
 
-  public HoodieMetadataFileSystemView(HoodieTableMetaClient metaClient,
+  public HoodieMetadataFileSystemView(HoodieEngineContext engineContext,
+                                      HoodieTableMetaClient metaClient,
                                       HoodieTimeline visibleActiveTimeline,
-                                      boolean useFileListingFromMetadata,
-                                      boolean verifyListings) {
+                                      HoodieMetadataConfig metadataConfig) {
     super(metaClient, visibleActiveTimeline);
-    this.tableMetadata = HoodieTableMetadata.create(metaClient.getHadoopConf(), metaClient.getBasePath(),
-        FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR, useFileListingFromMetadata, verifyListings,
-        false, false);
+    this.tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, metaClient.getBasePath(),
+        FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR);
   }
 
   /**
@@ -59,5 +63,14 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
   @Override
   protected FileStatus[] listPartition(Path partitionPath) throws IOException {
     return tableMetadata.getAllFilesInPartition(partitionPath);
+  }
+
+  @Override
+  public void close() {
+    try {
+      tableMetadata.close();
+    } catch (Exception e) {
+      throw new HoodieException("Error closing metadata file system view.", e);
+    }
   }
 }

@@ -74,14 +74,16 @@ public class RollbackUtils {
     final List<String> successDeleteFiles = new ArrayList<>();
     final List<String> failedDeleteFiles = new ArrayList<>();
     final Map<FileStatus, Long> commandBlocksCount = new HashMap<>();
-    final List<FileStatus> filesToRollback = new ArrayList<>();
+    final Map<FileStatus, Long> writtenLogFileSizeMap = new HashMap<>();
     Option.ofNullable(stat1.getSuccessDeleteFiles()).ifPresent(successDeleteFiles::addAll);
     Option.ofNullable(stat2.getSuccessDeleteFiles()).ifPresent(successDeleteFiles::addAll);
     Option.ofNullable(stat1.getFailedDeleteFiles()).ifPresent(failedDeleteFiles::addAll);
     Option.ofNullable(stat2.getFailedDeleteFiles()).ifPresent(failedDeleteFiles::addAll);
     Option.ofNullable(stat1.getCommandBlocksCount()).ifPresent(commandBlocksCount::putAll);
     Option.ofNullable(stat2.getCommandBlocksCount()).ifPresent(commandBlocksCount::putAll);
-    return new HoodieRollbackStat(stat1.getPartitionPath(), successDeleteFiles, failedDeleteFiles, commandBlocksCount);
+    Option.ofNullable(stat1.getWrittenLogFileSizeMap()).ifPresent(writtenLogFileSizeMap::putAll);
+    Option.ofNullable(stat2.getWrittenLogFileSizeMap()).ifPresent(writtenLogFileSizeMap::putAll);
+    return new HoodieRollbackStat(stat1.getPartitionPath(), successDeleteFiles, failedDeleteFiles, commandBlocksCount, writtenLogFileSizeMap);
   }
 
   /**
@@ -91,15 +93,11 @@ public class RollbackUtils {
    * @param config instance of {@link HoodieWriteConfig} to use.
    * @return {@link List} of {@link ListingBasedRollbackRequest}s thus collected.
    */
-  public static List<ListingBasedRollbackRequest> generateRollbackRequestsByListingCOW(FileSystem fs, String basePath, HoodieWriteConfig config) {
-    try {
-      return FSUtils.getAllPartitionPaths(fs, basePath, config.useFileListingMetadata(),
-          config.getFileListingMetadataVerify(), config.shouldAssumeDatePartitioning()).stream()
-          .map(ListingBasedRollbackRequest::createRollbackRequestWithDeleteDataAndLogFilesAction)
-          .collect(Collectors.toList());
-    } catch (IOException e) {
-      throw new HoodieIOException("Error generating rollback requests", e);
-    }
+  public static List<ListingBasedRollbackRequest> generateRollbackRequestsByListingCOW(HoodieEngineContext engineContext,
+                                                                                       String basePath, HoodieWriteConfig config) {
+    return FSUtils.getAllPartitionPaths(engineContext, config.getMetadataConfig(), basePath).stream()
+        .map(ListingBasedRollbackRequest::createRollbackRequestWithDeleteDataAndLogFilesAction)
+        .collect(Collectors.toList());
   }
 
   /**
@@ -113,8 +111,7 @@ public class RollbackUtils {
   public static List<ListingBasedRollbackRequest> generateRollbackRequestsUsingFileListingMOR(HoodieInstant instantToRollback, HoodieTable table, HoodieEngineContext context) throws IOException {
     String commit = instantToRollback.getTimestamp();
     HoodieWriteConfig config = table.getConfig();
-    List<String> partitions = FSUtils.getAllPartitionPaths(table.getMetaClient().getFs(), table.getMetaClient().getBasePath(),
-        config.useFileListingMetadata(), config.getFileListingMetadataVerify(), config.shouldAssumeDatePartitioning());
+    List<String> partitions = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
     int sparkPartitions = Math.max(Math.min(partitions.size(), config.getRollbackParallelism()), 1);
     context.setJobStatus(RollbackUtils.class.getSimpleName(), "Generate all rollback requests");
     return context.flatMap(partitions, partitionPath -> {

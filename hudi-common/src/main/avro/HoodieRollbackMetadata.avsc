@@ -31,18 +31,24 @@
             {"name": "partitionPath", "type": "string"},
             {"name": "successDeleteFiles", "type": {"type": "array", "items": "string"}},
             {"name": "failedDeleteFiles", "type": {"type": "array", "items": "string"}},
-            {"name": "appendFiles", "type": {
+            {"name": "rollbackLogFiles", "type": {
                 "type": "map",
-                "doc": "Files to which append blocks were written",
+                "doc": "Files to which append blocks were written to capture rollback commit",
                 "values": {
+                    "type": "long",
+                    "doc": "Size of this file in bytes"
+                }
+            }},
+            {"name": "writtenLogFiles", "type": {
+                "type": "map",
+                "doc": "Log files written that were expected to be rolledback",
+                 "values": {
                     "type": "long",
                     "doc": "Size of this file in bytes"
                 }
             }}
         ]
-     }
-     }
-     },
+     }}},
      {
         "name":"version",
         "type":["int", "null"],
@@ -51,10 +57,10 @@
      /* overlaps with 'commitsRollback' field. Adding this to track action type for all the instants being rolled back. */
      {
        "name": "instantsRollback",
-       "default": null,
+       "default": [],
        "type": {
           "type": "array",
-          "default": null,
+          "default": [],
           "items": "HoodieInstantInfo"
        }
      }

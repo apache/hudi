@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -40,6 +42,7 @@ import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
 import org.apache.hudi.hadoop.realtime.HoodieHFileRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -64,10 +67,10 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_ENABLE_PROP;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_VALIDATE_PROP;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_ENABLE_PROP;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_VALIDATE_PROP;
 
 public class HoodieInputFormatUtils {
 
@@ -412,39 +415,50 @@ public class HoodieInputFormatUtils {
     return grouped;
   }
 
-  /**
-   * Filters data files under @param paths for a snapshot queried table.
-   * @param job
-   * @param metaClient
-   * @param paths
-   * @return
-   */
-  public static List<FileStatus> filterFileStatusForSnapshotMode(
-          JobConf job, HoodieTableMetaClient metaClient, List<Path> paths) throws IOException {
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Hoodie Metadata initialized with completed commit Ts as :" + metaClient);
-    }
+  public static HoodieMetadataConfig buildMetadataConfig(Configuration conf) {
+    return HoodieMetadataConfig.newBuilder()
+        .enable(conf.getBoolean(METADATA_ENABLE_PROP, DEFAULT_METADATA_ENABLE_FOR_READERS))
+        .validate(conf.getBoolean(METADATA_VALIDATE_PROP, DEFAULT_METADATA_VALIDATE))
+        .build();
+  }
 
-    boolean useFileListingFromMetadata = job.getBoolean(METADATA_ENABLE_PROP, DEFAULT_METADATA_ENABLE_FOR_READERS);
-    boolean verifyFileListing = job.getBoolean(METADATA_VALIDATE_PROP, DEFAULT_METADATA_VALIDATE);
-    HoodieTableFileSystemView fsView = FileSystemViewManager.createInMemoryFileSystemView(metaClient,
-            useFileListingFromMetadata, verifyFileListing);
-
-    List<HoodieBaseFile> filteredBaseFiles = new ArrayList<>();
-    for (Path p : paths) {
-      String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), p);
-      List<HoodieBaseFile> matched = fsView.getLatestBaseFiles(relativePartitionPath).collect(Collectors.toList());
-      filteredBaseFiles.addAll(matched);
-    }
-
-    LOG.info("Total paths to process after hoodie filter " + filteredBaseFiles.size());
+  public static List<FileStatus> filterFileStatusForSnapshotMode(JobConf job, Map<String, HoodieTableMetaClient> tableMetaClientMap,
+                                                                 List<Path> snapshotPaths) throws IOException {
+    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(job);
     List<FileStatus> returns = new ArrayList<>();
-    for (HoodieBaseFile filteredFile : filteredBaseFiles) {
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("Processing latest hoodie file - " + filteredFile.getPath());
+
+    Map<HoodieTableMetaClient, List<Path>> groupedPaths = HoodieInputFormatUtils
+        .groupSnapshotPathsByMetaClient(tableMetaClientMap.values(), snapshotPaths);
+    Map<HoodieTableMetaClient, HoodieTableFileSystemView> fsViewCache = new HashMap<>();
+    LOG.info("Found a total of " + groupedPaths.size() + " groups");
+
+    try {
+      for (Map.Entry<HoodieTableMetaClient, List<Path>> entry : groupedPaths.entrySet()) {
+        HoodieTableMetaClient metaClient = entry.getKey();
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Hoodie Metadata initialized with completed commit instant as :" + metaClient);
+        }
+
+        HoodieTableFileSystemView fsView = fsViewCache.computeIfAbsent(metaClient, tableMetaClient ->
+            FileSystemViewManager.createInMemoryFileSystemView(engineContext, tableMetaClient, buildMetadataConfig(job)));
+        List<HoodieBaseFile> filteredBaseFiles = new ArrayList<>();
+        for (Path p : entry.getValue()) {
+          String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), p);
+          List<HoodieBaseFile> matched = fsView.getLatestBaseFiles(relativePartitionPath).collect(Collectors.toList());
+          filteredBaseFiles.addAll(matched);
+        }
+
+        LOG.info("Total paths to process after hoodie filter " + filteredBaseFiles.size());
+        for (HoodieBaseFile filteredFile : filteredBaseFiles) {
+          if (LOG.isDebugEnabled()) {
+            LOG.debug("Processing latest hoodie file - " + filteredFile.getPath());
+          }
+          filteredFile = refreshFileStatus(job, filteredFile);
+          returns.add(getFileStatus(filteredFile));
+        }
       }
-      filteredFile = refreshFileStatus(job, filteredFile);
-      returns.add(getFileStatus(filteredFile));
+    } finally {
+      fsViewCache.forEach(((metaClient, fsView) -> fsView.close()));
     }
     return returns;
   }

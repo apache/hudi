@@ -146,7 +146,8 @@ public class MetadataCommand implements CommandMarker {
   @CliCommand(value = "metadata stats", help = "Print stats about the metadata")
   public String stats() throws IOException {
     HoodieCLI.getTableMetaClient();
-    HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(HoodieCLI.conf, HoodieCLI.basePath, "/tmp", true, false, false);
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
+    HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(HoodieCLI.conf, config, HoodieCLI.basePath, "/tmp");
     Map<String, String> stats = metadata.stats();
 
     StringBuffer out = new StringBuffer("\n");
@@ -161,7 +162,10 @@ public class MetadataCommand implements CommandMarker {
   @CliCommand(value = "metadata list-partitions", help = "Print a list of all partitions from the metadata")
   public String listPartitions() throws IOException {
     HoodieCLI.getTableMetaClient();
-    HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(HoodieCLI.conf, HoodieCLI.basePath, "/tmp", true, false, false);
+    initJavaSparkContext();
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
+    HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc), config,
+        HoodieCLI.basePath, "/tmp");
 
     StringBuffer out = new StringBuffer("\n");
     if (!metadata.enabled()) {
@@ -192,7 +196,8 @@ public class MetadataCommand implements CommandMarker {
       @CliOption(key = {"partition"}, help = "Name of the partition to list files", mandatory = true)
       final String partition) throws IOException {
     HoodieCLI.getTableMetaClient();
-    HoodieBackedTableMetadata metaReader = new HoodieBackedTableMetadata(HoodieCLI.conf, HoodieCLI.basePath, "/tmp", true, false, false);
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
+    HoodieBackedTableMetadata metaReader = new HoodieBackedTableMetadata(HoodieCLI.conf, config, HoodieCLI.basePath, "/tmp");
 
     StringBuffer out = new StringBuffer("\n");
     if (!metaReader.enabled()) {
