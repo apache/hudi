@@ -72,6 +72,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     try {
       this.client = Hive.get(configuration).getMSC();
     } catch (MetaException | HiveException e) {
+      LOG.error("Failed to create HiveMetaStoreClient", e);
       throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);
     }
 
@@ -110,6 +111,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       }).collect(Collectors.toList());
       client.add_partitions(partitionList,true,false);
     } catch (TException e) {
+      LOG.error(syncConfig.databaseName + "." + tableName + " add partition failed", e);
       throw new HoodieHiveSyncException(syncConfig.databaseName + "." + tableName + " add partition failed", e);
     }
   }
@@ -137,6 +139,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       }).collect(Collectors.toList());
       client.alter_partitions(syncConfig.databaseName, tableName, partitionList, null);
     } catch (TException e) {
+      LOG.info(syncConfig.databaseName + "." + tableName + " update partition failed", e);
       throw new HoodieHiveSyncException(syncConfig.databaseName + "." + tableName + " update partition failed", e);
     }
   }
@@ -201,6 +204,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       }
       client.alter_table_with_environmentContext(syncConfig.databaseName, tableName, table, environmentContext);
     } catch (Exception e) {
+      LOG.info("Failed to update table for " + tableName, e);
       throw new HoodieHiveSyncException("Failed to update table for " + tableName, e);
     }
   }
@@ -232,6 +236,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       newTb.setTableType(TableType.EXTERNAL_TABLE.toString());
       client.createTable(newTb);
     } catch (Exception e) {
+      LOG.error("failed to create table " + tableName, e);
       throw new HoodieHiveSyncException("failed to create table " + tableName, e);
     }
   }
@@ -263,6 +268,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       LOG.info(String.format("Time taken to getTableSchema: %s ms", (end - start)));
       return schema;
     } catch (Exception e) {
+      LOG.error("Failed to get table schema for : " + tableName, e);
       throw new HoodieHiveSyncException("Failed to get table schema for : " + tableName, e);
     }
   }
@@ -275,6 +281,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     try {
       return client.tableExists(syncConfig.databaseName, tableName);
     } catch (TException e) {
+      LOG.error("Failed to check if table exists " + tableName, e);
       throw new HoodieHiveSyncException("Failed to check if table exists " + tableName, e);
     }
   }
@@ -290,6 +297,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
         return true;
       }
     } catch (TException e) {
+      LOG.error("Failed to check if database exists " + databaseName, e);
       throw new HoodieHiveSyncException("Failed to check if database exists " + databaseName, e);
     }
     return false;
@@ -304,6 +312,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       Database database = new Database(databaseName, description, location, null);
       client.createDatabase(database);
     } catch (Exception e) {
+      LOG.error("Failed to create database " + databaseName, e);
       throw new HoodieHiveSyncException("Failed to create database " + databaseName, e);
     }
   }
@@ -313,6 +322,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       try {
         client.dropDatabase(databaseName);
       } catch (TException e) {
+        LOG.error("Failed to drop database " + databaseName, e);
         throw new HoodieHiveSyncException("Failed to drop database " + databaseName, e);
       }
     }
@@ -322,8 +332,9 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     String dataBaseName = fullTableName.split("\\.")[0];
     String tableName = fullTableName.split("\\.")[1];
     try {
-      client.tableExists(dataBaseName, tableName);
+      client.dropTable(dataBaseName, tableName);
     } catch (TException e) {
+      LOG.error("Failed to drop table " + fullTableName, e);
       throw new HoodieHiveSyncException("Failed to drop table " + fullTableName, e);
     }
   }
@@ -335,6 +346,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       Table database = client.getTable(syncConfig.databaseName, tableName);
       return Option.ofNullable(database.getParameters().getOrDefault(HOODIE_LAST_COMMIT_TIME_SYNC, null));
     } catch (Exception e) {
+      LOG.error("Failed to get the last commit time synced from the database", e);
       throw new HoodieHiveSyncException("Failed to get the last commit time synced from the database", e);
     }
   }
@@ -352,6 +364,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       table.putToParameters(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced);
       client.alter_table(syncConfig.databaseName, tableName, table);
     } catch (Exception e) {
+      LOG.error("Failed to get update last commit time synced to " + lastCommitSynced, e);
       throw new HoodieHiveSyncException("Failed to get update last commit time synced to " + lastCommitSynced, e);
     }
   }
