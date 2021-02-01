@@ -182,8 +182,8 @@ public class UtilitiesTestBase {
     HoodieTableMetaClient.initTableType(dfs.getConf(), hiveSyncConfig.basePath, HoodieTableType.COPY_ON_WRITE,
         hiveSyncConfig.tableName, null);
     HoodieHiveClient client = new HoodieHiveClient(hiveSyncConfig, hiveConf, dfs);
-    client.updateHiveSQL("drop database if exists " + hiveSyncConfig.databaseName);
-    client.updateHiveSQL("create database " + hiveSyncConfig.databaseName);
+    client.dropDataBase(hiveSyncConfig.databaseName);
+    client.createDataBase(hiveSyncConfig.databaseName,"","");
     client.close();
   }
 

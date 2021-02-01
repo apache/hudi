@@ -24,12 +24,12 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.dla.util.DLASchemaUtil;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.PartitionValueExtractor;
 import org.apache.hudi.hive.SchemaDifference;
-import org.apache.hudi.hive.util.HiveSchemaUtil;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -103,7 +103,7 @@ public class HoodieDLAClient extends AbstractSyncHoodieClient {
   @Override
   public void createTable(String tableName, MessageType storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass) {
     try {
-      String createSQLQuery = HiveSchemaUtil.generateCreateDDL(tableName, storageSchema, toHiveSyncConfig(), inputFormatClass, outputFormatClass, serdeClass);
+      String createSQLQuery = DLASchemaUtil.generateCreateDDL(tableName, storageSchema, toHiveSyncConfig(), inputFormatClass, outputFormatClass, serdeClass);
       LOG.info("Creating table with " + createSQLQuery);
       updateDLASQL(createSQLQuery);
     } catch (IOException e) {

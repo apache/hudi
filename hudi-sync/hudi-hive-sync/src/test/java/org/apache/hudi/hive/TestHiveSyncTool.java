@@ -40,6 +40,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -228,8 +229,11 @@ public class TestHiveSyncTool {
     // Alter partitions
     // Manually change a hive partition location to check if the sync will detect
     // it and generage a partition update event for it.
-    hiveClient.updateHiveSQL("ALTER TABLE `" + HiveTestUtil.hiveSyncConfig.tableName
-        + "` PARTITION (`datestr`='2050-01-01') SET LOCATION '/some/new/location'");
+    List<String> changedPartitions = new ArrayList<>();
+    changedPartitions.add("2050-01-01");
+    Partition partition = new Partition(changedPartitions, HiveTestUtil.hiveSyncConfig.databaseName, HiveTestUtil.hiveSyncConfig.tableName,
+            0, 0, null, null);
+    hiveClient.updatePartitionToTable(HiveTestUtil.hiveSyncConfig.tableName, partition, "/some/new/location");
 
     hiveClient = new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     List<Partition> hivePartitions = hiveClient.scanTablePartitions(HiveTestUtil.hiveSyncConfig.tableName);

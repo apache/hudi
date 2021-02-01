@@ -109,9 +109,6 @@ public class HiveTestUtil {
     fileSystem = FileSystem.get(configuration);
 
     hiveSyncConfig = new HiveSyncConfig();
-    hiveSyncConfig.jdbcUrl = "jdbc:hive2://127.0.0.1:9999/";
-    hiveSyncConfig.hiveUser = "";
-    hiveSyncConfig.hivePass = "";
     hiveSyncConfig.databaseName = "testdb";
     hiveSyncConfig.tableName = "test1";
     hiveSyncConfig.basePath = "/tmp/hdfs/TestHiveSyncTool/";
@@ -131,11 +128,11 @@ public class HiveTestUtil {
 
     HoodieHiveClient client = new HoodieHiveClient(hiveSyncConfig, hiveServer.getHiveConf(), fileSystem);
     for (String tableName : createdTablesSet) {
-      client.updateHiveSQL("drop table if exists " + tableName);
+      client.dropTable(tableName);
     }
     createdTablesSet.clear();
-    client.updateHiveSQL("drop database if exists " + hiveSyncConfig.databaseName);
-    client.updateHiveSQL("create database " + hiveSyncConfig.databaseName);
+    client.dropDataBase(hiveSyncConfig.databaseName);
+    client.createDataBase(hiveSyncConfig.databaseName, "", "");
   }
 
   public static HiveConf getHiveConf() {
