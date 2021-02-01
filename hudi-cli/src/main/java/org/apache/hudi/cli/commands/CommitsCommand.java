@@ -314,6 +314,45 @@ public class CommitsCommand implements CommandMarker {
         limit, headerOnly, rows, exportTableName);
   }
 
+  @CliCommand(value = "commit show_write_stats", help = "Show write stats of a commit")
+  public String showWriteStats(
+      @CliOption(key = {"createView"}, mandatory = false, help = "view name to store output table",
+          unspecifiedDefaultValue = "") final String exportTableName,
+      @CliOption(key = {"commit"}, help = "Commit to show") final String instantTime,
+      @CliOption(key = {"limit"}, help = "Limit commits", unspecifiedDefaultValue = "-1") final Integer limit,
+      @CliOption(key = {"sortBy"}, help = "Sorting Field", unspecifiedDefaultValue = "") final String sortByField,
+      @CliOption(key = {"desc"}, help = "Ordering", unspecifiedDefaultValue = "false") final boolean descending,
+      @CliOption(key = {"headeronly"}, help = "Print Header Only",
+          unspecifiedDefaultValue = "false") final boolean headerOnly)
+      throws Exception {
+
+    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
+    HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
+    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime);
+
+    if (!timeline.containsInstant(commitInstant)) {
+      return "Commit " + instantTime + " not found in Commits " + timeline;
+    }
+    HoodieCommitMetadata meta = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(commitInstant).get(),
+        HoodieCommitMetadata.class);
+    long recordsWritten = meta.fetchTotalRecordsWritten();
+    long bytesWritten = meta.fetchTotalBytesWritten();
+    long avgRecSize = (long) Math.ceil((1.0 * bytesWritten) / recordsWritten);
+    List<Comparable[]> rows = new ArrayList<>();
+    rows.add(new Comparable[] {bytesWritten, recordsWritten, avgRecSize});
+
+    Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
+    fieldNameToConverterMap.put(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN, entry ->
+        NumericUtils.humanReadableByteCount((Long.parseLong(entry.toString()))));
+
+    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN_COMMIT)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_RECORDS_WRITTEN_COMMIT)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_AVG_REC_SIZE_COMMIT);
+
+    return HoodiePrintHelper.print(header, fieldNameToConverterMap, sortByField, descending,
+        limit, headerOnly, rows, exportTableName);
+  }
+
   @CliCommand(value = "commit showfiles", help = "Show file level details of a commit")
   public String showCommitFiles(
       @CliOption(key = {"createView"}, mandatory = false, help = "view name to store output table",
