@@ -21,11 +21,11 @@ package org.apache.hudi.table.action.clean;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieActionInstant;
+import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
-import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.common.HoodieCleanStat;
-import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -67,12 +67,12 @@ public abstract class BaseCleanActionExecutor<T extends HoodieRecordPayload, I, 
    */
   HoodieCleanerPlan requestClean(HoodieEngineContext context) {
     try {
-      CleanPlanner<T, I, K, O> planner = new CleanPlanner<>(table, config);
+      CleanPlanner<T, I, K, O> planner = new CleanPlanner<>(context, table, config);
       Option<HoodieInstant> earliestInstant = planner.getEarliestCommitToRetain();
       List<String> partitionsToClean = planner.getPartitionPathsToClean(earliestInstant);
 
       if (partitionsToClean.isEmpty()) {
-        LOG.info("Nothing to clean here. It is already clean");
+        LOG.info("Nothing to clean here.");
         return HoodieCleanerPlan.newBuilder().setPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name()).build();
       }
       LOG.info("Total Partitions to clean : " + partitionsToClean.size() + ", with policy " + config.getCleanerPolicy());

@@ -29,7 +29,7 @@ import org.apache.hudi.callback.HoodieWriteCommitCallback;
 import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.callback.util.HoodieCommitCallbackFactory;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
-import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -96,8 +96,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
 
   private transient WriteOperationType operationType;
   private transient HoodieWriteCommitCallback commitCallback;
+  private transient AsyncCleanerService asyncCleanerService;
   protected final boolean rollbackPending;
-  protected transient AsyncCleanerService asyncCleanerService;
 
   /**
    * Create a write client, without cleaning up failed/inflight commits.
@@ -218,6 +218,10 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime
           + "Instant time is not of valid format", e);
     }
+  }
+
+  protected void syncTableMetadata() {
+    // no-op
   }
 
   /**
@@ -364,6 +368,19 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   public abstract O delete(K keys, final String instantTime);
 
   /**
+   * Common method containing steps to be performed before write (upsert/insert/...
+   *
+   * @param instantTime Instant Time
+   * @param hoodieTable Hoodie Table
+   * @return Write Status
+   */
+  protected void preWrite(String instantTime, WriteOperationType writeOperationType) {
+    setOperationType(writeOperationType);
+    syncTableMetadata();
+    this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this);
+  }
+
+  /**
    * Common method containing steps to be performed after write (upsert/insert/..) operations including auto-commit.
    * @param result  Commit Action Result
    * @param instantTime Instant Time
@@ -407,7 +424,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       // We cannot have unbounded commit files. Archive commits if we have to archive
       HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);
       archiveLog.archiveIfRequired(context);
-      autoCleanOnCommit(instantTime);
+      autoCleanOnCommit();
+
+      syncTableMetadata();
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
@@ -434,9 +453,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   /**
    * Handle auto clean during commit.
    *
-   * @param instantTime
    */
-  protected void autoCleanOnCommit(String instantTime) {
+  protected void autoCleanOnCommit() {
     if (config.isAutoClean()) {
       // Call clean to cleanup if there is anything to cleanup after the commit,
       if (config.isAsyncClean()) {
@@ -444,8 +462,9 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
         AsyncCleanerService.waitForCompletion(asyncCleanerService);
         LOG.info("Cleaner has finished");
       } else {
+        // Do not reuse instantTime for clean as metadata table requires all changes to have unique instant timestamps.
         LOG.info("Auto cleaning is enabled. Running cleaner now");
-        clean(instantTime);
+        clean();
       }
     }
   }
@@ -605,7 +624,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       rollbackPendingCommits();
     }
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
-    startCommitWithTime(instantTime);
+    HoodieTableMetaClient metaClient = createMetaClient(true);
+    startCommit(instantTime, metaClient.getCommitActionType(), metaClient);
     return instantTime;
   }
 
@@ -712,11 +732,29 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   }
 
   /**
+   * Get inflight time line exclude compaction and clustering.
+   * @param table
+   * @return
+   */
+  private HoodieTimeline getInflightTimelineExcludeCompactionAndClustering(HoodieTable<T, I, K, O> table) {
+    HoodieTimeline inflightTimelineWithReplaceCommit = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompaction();
+    HoodieTimeline inflightTimelineExcludeClusteringCommit = inflightTimelineWithReplaceCommit.filter(instant -> {
+      if (instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+        Option<Pair<HoodieInstant, HoodieClusteringPlan>> instantPlan = ClusteringUtils.getClusteringPlan(table.getMetaClient(), instant);
+        return !instantPlan.isPresent();
+      } else {
+        return true;
+      }
+    });
+    return inflightTimelineExcludeClusteringCommit;
+  }
+
+  /**
    * Cleanup all pending commits.
    */
   private void rollbackPendingCommits() {
     HoodieTable<T, I, K, O> table = createTable(config, hadoopConf);
-    HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompaction();
+    HoodieTimeline inflightTimeline = getInflightTimelineExcludeCompactionAndClustering(table);
     List<String> commits = inflightTimeline.getReverseOrderedInstants().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
     for (String commit : commits) {

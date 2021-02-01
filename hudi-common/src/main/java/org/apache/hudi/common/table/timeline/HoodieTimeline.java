@@ -109,7 +109,7 @@ public interface HoodieTimeline extends Serializable {
   /**
    * Filter this timeline to just include the in-flights excluding compaction instants.
    *
-   * @return New instance of HoodieTimeline with just in-flights excluding compaction inflights
+   * @return New instance of HoodieTimeline with just in-flights excluding compaction instants
    */
   HoodieTimeline filterPendingExcludingCompaction();
 

@@ -18,8 +18,8 @@
 
 package org.apache.hudi.client.embedded;
 
-import org.apache.hudi.client.common.EngineProperty;
-import org.apache.hudi.client.common.HoodieEngineContext;
+import org.apache.hudi.common.engine.EngineProperty;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
@@ -49,8 +49,8 @@ public class EmbeddedTimelineServerHelper {
       // Run Embedded Timeline Server
       LOG.info("Starting Timeline service !!");
       Option<String> hostAddr = context.getProperty(EngineProperty.EMBEDDED_SERVER_HOST);
-      timelineServer = Option.of(new EmbeddedTimelineService(context, hostAddr.orElse(null),
-          config.getEmbeddedTimelineServerPort(), config.getClientSpecifiedViewStorageConfig()));
+      timelineServer = Option.of(new EmbeddedTimelineService(context, hostAddr.orElse(null), config.getEmbeddedTimelineServerPort(),
+          config.getMetadataConfig(), config.getClientSpecifiedViewStorageConfig(), config.getBasePath()));
       timelineServer.get().startServer();
       updateWriteConfigWithTimelineServer(timelineServer.get(), config);
     }

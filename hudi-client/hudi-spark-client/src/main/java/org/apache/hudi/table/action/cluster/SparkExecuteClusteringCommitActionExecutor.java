@@ -27,9 +27,9 @@ import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.ConcatenatingIterator;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
@@ -94,18 +94,34 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
         .map(inputGroup -> runClusteringForGroupAsync(inputGroup, clusteringPlan.getStrategy().getStrategyParams()))
         .map(CompletableFuture::join)
         .reduce((rdd1, rdd2) -> rdd1.union(rdd2)).orElse(engineContext.emptyRDD());
-    if (writeStatusRDD.isEmpty()) {
-      throw new HoodieClusteringException("Clustering plan produced 0 WriteStatus for " + instantTime + " #groups: " + clusteringPlan.getInputGroups().size());
-    }
-
+    
     HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = buildWriteMetadata(writeStatusRDD);
-    updateIndexAndCommitIfNeeded(writeStatusRDD, writeMetadata);
+    JavaRDD<WriteStatus> statuses = updateIndex(writeStatusRDD, writeMetadata);
+    writeMetadata.setWriteStats(statuses.map(WriteStatus::getStat).collect());
+    // validate clustering action before committing result
+    validateWriteResult(writeMetadata);
+    commitOnAutoCommit(writeMetadata);
     if (!writeMetadata.getCommitMetadata().isPresent()) {
       HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(writeStatusRDD.map(WriteStatus::getStat).collect(), writeMetadata.getPartitionToReplaceFileIds(),
           extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());
       writeMetadata.setCommitMetadata(Option.of(commitMetadata));
     }
     return writeMetadata;
+  }
+
+  /**
+   * Validate actions taken by clustering. In the first implementation, we validate at least one new file is written.
+   * But we can extend this to add more validation. E.g. number of records read = number of records written etc.
+   * 
+   * We can also make these validations in BaseCommitActionExecutor to reuse pre-commit hooks for multiple actions.
+   */
+  private void validateWriteResult(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata) {
+    if (writeMetadata.getWriteStatuses().isEmpty()) {
+      throw new HoodieClusteringException("Clustering plan produced 0 WriteStatus for " + instantTime
+          + " #groups: " + clusteringPlan.getInputGroups().size() + " expected at least "
+          + clusteringPlan.getInputGroups().stream().mapToInt(HoodieClusteringGroup::getNumOutputFileGroups).sum()
+          + " write statuses");
+    }
   }
 
   /**
@@ -222,7 +238,6 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
     HoodieWriteMetadata<JavaRDD<WriteStatus>> result = new HoodieWriteMetadata<>();
     result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(writeStatusJavaRDD));
     result.setWriteStatuses(writeStatusJavaRDD);
-    result.setWriteStats(writeStatusJavaRDD.map(WriteStatus::getStat).collect());
     result.setCommitMetadata(Option.empty());
     result.setCommitted(false);
     return result;

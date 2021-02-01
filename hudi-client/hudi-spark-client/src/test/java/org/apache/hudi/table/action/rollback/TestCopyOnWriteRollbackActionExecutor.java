@@ -28,7 +28,6 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.MarkerFiles;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -125,6 +124,19 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     assertFalse(testTable.baseFileExists(p2, "002", "id22"));
   }
 
+  // Verify that rollback works with replacecommit
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testCopyOnWriteRollbackWithReplaceCommits(boolean isUsingMarkers) throws IOException {
+    //1. prepare data and assert data result
+    List<FileSlice> firstPartitionCommit2FileSlices = new ArrayList<>();
+    List<FileSlice> secondPartitionCommit2FileSlices = new ArrayList<>();
+    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(isUsingMarkers).withAutoCommit(false).build();
+    this.insertOverwriteCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, !isUsingMarkers);
+    HoodieTable table = this.getHoodieTable(metaClient, cfg);
+    performRollbackAndValidate(isUsingMarkers, cfg, table, firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices);
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testCopyOnWriteRollbackActionExecutor(boolean isUsingMarkers) throws IOException {
@@ -133,8 +145,14 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     List<FileSlice> secondPartitionCommit2FileSlices = new ArrayList<>();
     HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(isUsingMarkers).withAutoCommit(false).build();
     this.twoUpsertCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, !isUsingMarkers);
+    metaClient.reloadActiveTimeline();
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
-
+    performRollbackAndValidate(isUsingMarkers, cfg, table, firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices);
+  }
+  
+  private void performRollbackAndValidate(boolean isUsingMarkers, HoodieWriteConfig cfg, HoodieTable table,
+                                          List<FileSlice> firstPartitionCommit2FileSlices,
+                                          List<FileSlice> secondPartitionCommit2FileSlices) throws IOException {
     //2. rollback
     HoodieInstant commitInstant;
     if (isUsingMarkers) {

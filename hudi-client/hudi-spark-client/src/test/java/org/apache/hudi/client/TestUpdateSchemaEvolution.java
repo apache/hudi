@@ -84,10 +84,10 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
       }
       Map<String, HoodieRecord> insertRecordMap = insertRecords.stream()
           .collect(Collectors.toMap(r -> r.getRecordKey(), Function.identity()));
-      HoodieCreateHandle createHandle =
+      HoodieCreateHandle<?,?,?,?> createHandle =
           new HoodieCreateHandle(config, "100", table, insertRecords.get(0).getPartitionPath(), "f1-0", insertRecordMap, supplier);
       createHandle.write();
-      return createHandle.close();
+      return createHandle.close().get(0);
     }).collect();
 
     final Path commitFile = new Path(config.getBasePath() + "/.hoodie/" + HoodieTimeline.makeCommitFileName("100"));

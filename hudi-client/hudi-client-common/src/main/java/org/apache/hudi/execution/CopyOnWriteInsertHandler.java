@@ -19,7 +19,7 @@
 package org.apache.hudi.execution;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.TaskContextSupplier;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueConsumer;
@@ -71,7 +71,7 @@ public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
   public void consumeOneRecord(HoodieInsertValueGenResult<HoodieRecord> payload) {
     final HoodieRecord insertPayload = payload.record;
     String partitionPath = insertPayload.getPartitionPath();
-    HoodieWriteHandle handle = handles.get(partitionPath);
+    HoodieWriteHandle<?,?,?,?> handle = handles.get(partitionPath);
     if (handle == null) {
       // If the records are sorted, this means that we encounter a new partition path
       // and the records for the previous partition path are all written,
@@ -87,7 +87,7 @@ public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
 
     if (!handle.canWrite(payload.record)) {
       // Handle is full. Close the handle and add the WriteStatus
-      statuses.add(handle.close());
+      statuses.addAll(handle.close());
       // Open new handle
       handle = writeHandleFactory.create(config, instantTime, hoodieTable,
           insertPayload.getPartitionPath(), idPrefix, taskContextSupplier);
@@ -108,8 +108,8 @@ public class CopyOnWriteInsertHandler<T extends HoodieRecordPayload>
   }
 
   private void closeOpenHandles() {
-    for (HoodieWriteHandle handle : handles.values()) {
-      statuses.add(handle.close());
+    for (HoodieWriteHandle<?,?,?,?> handle : handles.values()) {
+      statuses.addAll(handle.close());
     }
     handles.clear();
   }

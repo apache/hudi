@@ -18,24 +18,28 @@
 
 package org.apache.hudi.util;
 
-import org.apache.hudi.HoodieFlinkStreamer;
+import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
+import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.client.common.EngineType;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
-import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.keygen.KeyGenerator;
-import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
+import org.apache.hudi.operator.FlinkOptions;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
+import org.apache.flink.api.java.hadoop.mapred.utils.HadoopUtils;
+import org.apache.flink.configuration.ConfigOption;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.util.Preconditions;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -43,31 +47,42 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.List;
 import java.util.Properties;
 
+/**
+ * Utilities for Flink stream read and write.
+ */
 public class StreamerUtil {
 
-  private static Logger LOG = LoggerFactory.getLogger(StreamerUtil.class);
+  private static final Logger LOG = LoggerFactory.getLogger(StreamerUtil.class);
 
-  public static Properties getKafkaProps(HoodieFlinkStreamer.Config cfg) {
-    Properties result = new Properties();
-    result.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cfg.kafkaBootstrapServers);
-    result.put(ConsumerConfig.GROUP_ID_CONFIG, cfg.kafkaGroupId);
-    return result;
+  public static TypedProperties appendKafkaProps(FlinkStreamerConfig config) {
+    TypedProperties properties = getProps(config);
+    properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.kafkaBootstrapServers);
+    properties.put(ConsumerConfig.GROUP_ID_CONFIG, config.kafkaGroupId);
+    return properties;
   }
 
-  public static TypedProperties getProps(HoodieFlinkStreamer.Config cfg) {
+  public static TypedProperties getProps(FlinkStreamerConfig cfg) {
     return readConfig(
         FSUtils.getFs(cfg.propsFilePath, getHadoopConf()),
         new Path(cfg.propsFilePath), cfg.configs).getConfig();
   }
 
+  public static Schema getSourceSchema(FlinkStreamerConfig cfg) {
+    return new FilebasedSchemaProvider(FlinkOptions.fromStreamerConfig(cfg)).getSourceSchema();
+  }
+
+  public static Schema getSourceSchema(org.apache.flink.configuration.Configuration conf) {
+    return new FilebasedSchemaProvider(conf).getSourceSchema();
+  }
 
   /**
-   * Read conig from files.
+   * Read config from properties file (`--props` option) and cmd line (`--hoodie-conf` option).
    */
   public static DFSPropertiesConfiguration readConfig(FileSystem fs, Path cfgPath, List<String> overriddenProps) {
     DFSPropertiesConfiguration conf;
@@ -90,16 +105,50 @@ public class StreamerUtil {
     return conf;
   }
 
-  public static Configuration getHadoopConf() {
-    return new Configuration();
+  public static org.apache.hadoop.conf.Configuration getHadoopConf() {
+    // create hadoop configuration with hadoop conf directory configured.
+    org.apache.hadoop.conf.Configuration hadoopConf = null;
+    for (String possibleHadoopConfPath : HadoopUtils.possibleHadoopConfPaths(new Configuration())) {
+      hadoopConf = getHadoopConfiguration(possibleHadoopConfPath);
+      if (hadoopConf != null) {
+        break;
+      }
+    }
+    if (hadoopConf == null) {
+      hadoopConf = new org.apache.hadoop.conf.Configuration();
+    }
+    return hadoopConf;
   }
 
-  public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
-    checkPropNames.forEach(prop -> {
-      if (!props.containsKey(prop)) {
-        throw new HoodieNotSupportedException("Required property " + prop + " is missing");
+  /**
+   * Returns a new Hadoop Configuration object using the path to the hadoop conf configured.
+   *
+   * @param hadoopConfDir Hadoop conf directory path.
+   * @return A Hadoop configuration instance.
+   */
+  private static org.apache.hadoop.conf.Configuration getHadoopConfiguration(String hadoopConfDir) {
+    if (new File(hadoopConfDir).exists()) {
+      org.apache.hadoop.conf.Configuration hadoopConfiguration = new org.apache.hadoop.conf.Configuration();
+      File coreSite = new File(hadoopConfDir, "core-site.xml");
+      if (coreSite.exists()) {
+        hadoopConfiguration.addResource(new Path(coreSite.getAbsolutePath()));
       }
-    });
+      File hdfsSite = new File(hadoopConfDir, "hdfs-site.xml");
+      if (hdfsSite.exists()) {
+        hadoopConfiguration.addResource(new Path(hdfsSite.getAbsolutePath()));
+      }
+      File yarnSite = new File(hadoopConfDir, "yarn-site.xml");
+      if (yarnSite.exists()) {
+        hadoopConfiguration.addResource(new Path(yarnSite.getAbsolutePath()));
+      }
+      // Add mapred-site.xml. We need to read configurations like compression codec.
+      File mapredSite = new File(hadoopConfDir, "mapred-site.xml");
+      if (mapredSite.exists()) {
+        hadoopConfiguration.addResource(new Path(mapredSite.getAbsolutePath()));
+      }
+      return hadoopConfiguration;
+    }
+    return null;
   }
 
   /**
@@ -119,6 +168,21 @@ public class StreamerUtil {
   }
 
   /**
+   * Create a key generator class via reflection, passing in any configs needed.
+   * <p>
+   * If the class name of key generator is configured through the properties file, i.e., {@code props}, use the corresponding key generator class; otherwise, use the default key generator class
+   * specified in {@link FlinkOptions}.
+   */
+  public static KeyGenerator createKeyGenerator(Configuration conf) throws IOException {
+    String keyGeneratorClass = conf.getString(FlinkOptions.KEYGEN_CLASS);
+    try {
+      return (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, flinkConf2TypedProperties(conf));
+    } catch (Throwable e) {
+      throw new IOException("Could not load key generator class " + keyGeneratorClass, e);
+    }
+  }
+
+  /**
    * Create a payload class via reflection, passing in an ordering/precombine value.
    */
   public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Comparable orderingVal)
@@ -131,21 +195,59 @@ public class StreamerUtil {
     }
   }
 
-  public static HoodieWriteConfig getHoodieClientConfig(HoodieFlinkStreamer.Config cfg) {
-    FileSystem fs = FSUtils.getFs(cfg.targetBasePath, getHadoopConf());
-    HoodieWriteConfig.Builder builder =
-        HoodieWriteConfig.newBuilder().withEngineType(EngineType.FLINK).withPath(cfg.targetBasePath).combineInput(cfg.filterDupes, true)
-            .withCompactionConfig(HoodieCompactionConfig.newBuilder().withPayloadClass(cfg.payloadClassName).build())
-            .withPayloadConfig(HoodiePayloadConfig.newBuilder().withPayloadOrderingField(cfg.sourceOrderingField)
-                .build())
-            .forTable(cfg.targetTableName)
-            .withAutoCommit(false)
-            .withProps(readConfig(fs, new Path(cfg.propsFilePath), cfg.configs)
-                .getConfig());
-
-    builder = builder.withSchema(new FilebasedSchemaProvider(getProps(cfg)).getTargetSchema().toString());
-    HoodieWriteConfig config = builder.build();
-    return config;
+  /**
+   * Create a payload class via reflection, do not ordering/precombine value.
+   */
+  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record)
+      throws IOException {
+    try {
+      return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
+          new Class<?>[] {Option.class}, Option.of(record));
+    } catch (Throwable e) {
+      throw new IOException("Could not create payload for class: " + payloadClass, e);
+    }
   }
 
+  public static HoodieWriteConfig getHoodieClientConfig(Configuration conf) {
+    HoodieWriteConfig.Builder builder =
+        HoodieWriteConfig.newBuilder()
+            .withEngineType(EngineType.FLINK)
+            .withPath(conf.getString(FlinkOptions.PATH))
+            .combineInput(conf.getBoolean(FlinkOptions.INSERT_DROP_DUPS), true)
+            .withCompactionConfig(
+                HoodieCompactionConfig.newBuilder()
+                    .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS))
+                    .build())
+            .forTable(conf.getString(FlinkOptions.TABLE_NAME))
+            .withAutoCommit(false)
+            .withProps(flinkConf2TypedProperties(FlinkOptions.flatOptions(conf)));
+
+    builder = builder.withSchema(getSourceSchema(conf).toString());
+    return builder.build();
+  }
+
+  /**
+   * Converts the give {@link Configuration} to {@link TypedProperties}.
+   * The default values are also set up.
+   *
+   * @param conf The flink configuration
+   * @return a TypedProperties instance
+   */
+  public static TypedProperties flinkConf2TypedProperties(Configuration conf) {
+    Properties properties = new Properties();
+    // put all the set up options
+    conf.addAllToProperties(properties);
+    // put all the default options
+    for (ConfigOption<?> option : FlinkOptions.OPTIONAL_OPTIONS) {
+      if (!conf.contains(option)) {
+        properties.put(option.key(), option.defaultValue());
+      }
+    }
+    return new TypedProperties(properties);
+  }
+
+  public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
+    checkPropNames.forEach(prop ->
+        Preconditions.checkState(!props.containsKey(prop), "Required property " + prop + " is missing"));
+  }
 }

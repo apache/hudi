@@ -20,9 +20,11 @@ package org.apache.hudi.client.common;
 
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.config.SerializableConfiguration;
-import org.apache.hudi.client.common.function.SerializableConsumer;
-import org.apache.hudi.client.common.function.SerializableFunction;
-import org.apache.hudi.client.common.function.SerializablePairFunction;
+import org.apache.hudi.common.engine.EngineProperty;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.function.SerializableConsumer;
+import org.apache.hudi.common.function.SerializableFunction;
+import org.apache.hudi.common.function.SerializablePairFunction;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;

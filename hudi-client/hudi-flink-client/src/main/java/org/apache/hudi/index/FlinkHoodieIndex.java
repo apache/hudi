@@ -20,8 +20,8 @@ package org.apache.hudi.index;
 
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.index.bloom.FlinkHoodieBloomIndex;
 import org.apache.hudi.index.state.FlinkInMemoryStateIndex;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.table.HoodieTable;
@@ -58,6 +59,8 @@ public abstract class FlinkHoodieIndex<T extends HoodieRecordPayload> extends Ho
     switch (config.getIndexType()) {
       case INMEMORY:
         return new FlinkInMemoryStateIndex<>(context, config);
+      case BLOOM:
+        return new FlinkHoodieBloomIndex(config);
       default:
         throw new HoodieIndexException("Unsupported index type " + config.getIndexType());
     }

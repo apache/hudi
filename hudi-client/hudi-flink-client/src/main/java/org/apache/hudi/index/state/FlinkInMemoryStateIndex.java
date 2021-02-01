@@ -19,8 +19,8 @@
 package org.apache.hudi.index.state;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieEngineContext;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -54,9 +54,7 @@ public class FlinkInMemoryStateIndex<T extends HoodieRecordPayload> extends Flin
     if (context.getRuntimeContext() != null) {
       MapStateDescriptor<HoodieKey, HoodieRecordLocation> indexStateDesc =
           new MapStateDescriptor<>("indexState", TypeInformation.of(HoodieKey.class), TypeInformation.of(HoodieRecordLocation.class));
-      if (context.getRuntimeContext() != null) {
-        mapState = context.getRuntimeContext().getMapState(indexStateDesc);
-      }
+      mapState = context.getRuntimeContext().getMapState(indexStateDesc);
     }
   }
 

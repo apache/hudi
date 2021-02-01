@@ -207,4 +207,34 @@ public class TestHoodieAvroUtils {
     Schema schemaWithoutMetaCols = HoodieAvroUtils.removeMetadataFields(schemaWithMetaCols);
     assertEquals(schemaWithoutMetaCols.getFields().size(), NUM_FIELDS_IN_EXAMPLE_SCHEMA);
   }
+
+  @Test
+  public void testGetNestedFieldVal() {
+    GenericRecord rec = new GenericData.Record(new Schema.Parser().parse(EXAMPLE_SCHEMA));
+    rec.put("_row_key", "key1");
+    rec.put("non_pii_col", "val1");
+    rec.put("pii_col", "val2");
+
+    Object rowKey = HoodieAvroUtils.getNestedFieldVal(rec, "_row_key", true);
+    assertEquals(rowKey, "key1");
+
+    Object rowKeyNotExist = HoodieAvroUtils.getNestedFieldVal(rec, "fake_key", true);
+    assertNull(rowKeyNotExist);
+
+    // Field does not exist
+    try {
+      HoodieAvroUtils.getNestedFieldVal(rec, "fake_key", false);
+    } catch (Exception e) {
+      assertEquals("fake_key(Part -fake_key) field not found in record. Acceptable fields were :[timestamp, _row_key, non_pii_col, pii_col]",
+          e.getMessage());
+    }
+
+    // Field exist while value not
+    try {
+      HoodieAvroUtils.getNestedFieldVal(rec, "timestamp", false);
+    } catch (Exception e) {
+      assertEquals("The value of timestamp can not be null", e.getMessage());
+    }
+  }
+
 }

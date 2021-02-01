@@ -109,7 +109,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         if (usesCustomPayload) {
           // If using a custom payload, return only the projection fields. The readerSchema is a schema derived from
           // the writerSchema with only the projection fields
-          recordToReturn = HoodieAvroUtils.rewriteRecordWithOnlyNewSchemaFields(rec.get(), getReaderSchema());
+          recordToReturn = HoodieAvroUtils.rewriteRecord(rec.get(), getReaderSchema());
         }
         // we assume, a later safe record in the log, is newer than what we have in the map &
         // replace it. Since we want to return an arrayWritable which is the same length as the elements in the latest

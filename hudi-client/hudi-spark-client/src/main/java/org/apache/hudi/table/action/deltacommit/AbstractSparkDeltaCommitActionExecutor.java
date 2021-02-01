@@ -79,11 +79,10 @@ public abstract class AbstractSparkDeltaCommitActionExecutor<T extends HoodieRec
       LOG.info("Small file corrections for updates for commit " + instantTime + " for file " + fileId);
       return super.handleUpdate(partitionPath, fileId, recordItr);
     } else {
-      HoodieAppendHandle appendHandle = new HoodieAppendHandle<>(config, instantTime, table,
+      HoodieAppendHandle<?,?,?,?> appendHandle = new HoodieAppendHandle<>(config, instantTime, table,
           partitionPath, fileId, recordItr, taskContextSupplier);
       appendHandle.doAppend();
-      appendHandle.close();
-      return Collections.singletonList(Collections.singletonList(appendHandle.getWriteStatus())).iterator();
+      return Collections.singletonList(appendHandle.close()).iterator();
     }
   }
 

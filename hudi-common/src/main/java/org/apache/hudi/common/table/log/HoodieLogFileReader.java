@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.TimedFSDataInputStream;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
@@ -39,6 +40,7 @@ import org.apache.hadoop.fs.BufferedFSInputStream;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSInputStream;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -56,6 +58,7 @@ import java.util.Objects;
 public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   public static final int DEFAULT_BUFFER_SIZE = 16 * 1024 * 1024; // 16 MB
+  private static final int BLOCK_SCAN_READ_BUFFER_SIZE = 1024 * 1024; // 1 MB
   private static final Logger LOG = LogManager.getLogger(HoodieLogFileReader.class);
 
   private final FSDataInputStream inputStream;
@@ -70,11 +73,15 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private transient Thread shutdownThread = null;
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
-      boolean readBlockLazily, boolean reverseReader) throws IOException {
+                             boolean readBlockLazily, boolean reverseReader) throws IOException {
     FSDataInputStream fsDataInputStream = fs.open(logFile.getPath(), bufferSize);
-    if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
-      this.inputStream = new FSDataInputStream(
-          new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize));
+    if (FSUtils.isGCSInputStream(fsDataInputStream)) {
+      this.inputStream = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
+          new BufferedFSInputStream((FSInputStream) ((
+              (FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream()), bufferSize)));
+    } else if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
+      this.inputStream = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
+          new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
     } else {
       // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream
       // need to wrap in another BufferedFSInputStream the make bufferSize work?
@@ -273,19 +280,25 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   }
 
   private long scanForNextAvailableBlockOffset() throws IOException {
+    // Make buffer large enough to scan through the file as quick as possible especially if it is on S3/GCS.
+    byte[] dataBuf = new byte[BLOCK_SCAN_READ_BUFFER_SIZE];
+    boolean eof = false;
     while (true) {
       long currentPos = inputStream.getPos();
       try {
-        boolean hasNextMagic = hasNextMagic();
-        if (hasNextMagic) {
-          return currentPos;
-        } else {
-          // No luck - advance and try again
-          inputStream.seek(currentPos + 1);
-        }
+        Arrays.fill(dataBuf, (byte) 0);
+        inputStream.readFully(dataBuf, 0, dataBuf.length);
       } catch (EOFException e) {
+        eof = true;
+      }
+      long pos = Bytes.indexOf(dataBuf, HoodieLogFormat.MAGIC);
+      if (pos >= 0) {
+        return currentPos + pos;
+      }
+      if (eof) {
         return inputStream.getPos();
       }
+      inputStream.seek(currentPos + dataBuf.length - HoodieLogFormat.MAGIC.length);
     }
   }
 
