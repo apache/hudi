@@ -46,6 +46,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 
@@ -108,9 +109,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       HoodieTableMetaClient datasetMetaClient = new HoodieTableMetaClient(hadoopConf, datasetWriteConfig.getBasePath());
       initialize(engineContext, datasetMetaClient);
       if (enabled) {
-        // (re) init the metadata for reading.
-        initTableMetadata();
-
         // This is always called even in case the table was created for the first time. This is because
         // initFromFilesystem() does file listing and hence may take a long time during which some new updates
         // may have occurred on the table. Hence, calling this always ensures that the metadata is brought in sync
@@ -148,7 +146,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         .withAutoCommit(true)
         .withAvroSchemaValidate(true)
         .withEmbeddedTimelineServerEnabled(false)
-        .withAssumeDatePartitioning(false)
         .withPath(HoodieTableMetadata.getMetadataTableBasePath(writeConfig.getBasePath()))
         .withSchema(HoodieMetadataRecord.getClassSchema().toString())
         .forTable(tableName)
@@ -220,12 +217,17 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   protected abstract void initialize(HoodieEngineContext engineContext, HoodieTableMetaClient datasetMetaClient);
 
-  private void initTableMetadata() {
-    this.metadata = new HoodieBackedTableMetadata(engineContext, datasetWriteConfig.getBasePath(),
-        datasetWriteConfig.getSpillableMapBasePath(), datasetWriteConfig.useFileListingMetadata(),
-        datasetWriteConfig.getFileListingMetadataVerify(), false,
-        datasetWriteConfig.shouldAssumeDatePartitioning());
-    this.metaClient = metadata.getMetaClient();
+  protected void initTableMetadata() {
+    try {
+      if (this.metadata != null) {
+        this.metadata.close();
+      }
+      this.metadata = new HoodieBackedTableMetadata(engineContext, datasetWriteConfig.getMetadataConfig(),
+          datasetWriteConfig.getBasePath(), datasetWriteConfig.getSpillableMapBasePath());
+      this.metaClient = metadata.getMetaClient();
+    } catch (Exception e) {
+      throw new HoodieException("Error initializing metadata table for reads", e);
+    }
   }
 
   protected void bootstrapIfNeeded(HoodieEngineContext engineContext, HoodieTableMetaClient datasetMetaClient) throws IOException {
@@ -355,9 +357,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    */
   private void syncFromInstants(HoodieTableMetaClient datasetMetaClient) {
     ValidationUtils.checkState(enabled, "Metadata table cannot be synced as it is not enabled");
-
+    // (re) init the metadata for reading.
+    initTableMetadata();
     try {
-      List<HoodieInstant> instantsToSync = metadata.findInstantsToSync(datasetMetaClient);
+      List<HoodieInstant> instantsToSync = metadata.findInstantsToSync();
       if (instantsToSync.isEmpty()) {
         return;
       }
@@ -373,7 +376,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
           commit(records.get(), MetadataPartitionType.FILES.partitionPath(), instant.getTimestamp());
         }
       }
-      // re-init the table metadata, for any future writes.
       initTableMetadata();
     } catch (IOException ioe) {
       throw new HoodieIOException("Unable to sync instants from data to metadata table.", ioe);
@@ -447,6 +449,13 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     if (enabled) {
       List<HoodieRecord> records = HoodieTableMetadataUtil.convertMetadataToRecords(rollbackMetadata, instantTime, metadata.getSyncedInstantTime());
       commit(records, MetadataPartitionType.FILES.partitionPath(), instantTime);
+    }
+  }
+
+  @Override
+  public void close() throws Exception {
+    if (metadata != null) {
+      metadata.close();
     }
   }
 
