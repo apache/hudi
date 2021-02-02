@@ -25,15 +25,16 @@ import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.Config
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.sql._
-import org.apache.spark.sql.functions.{col, lit, udf}
-import org.apache.spark.sql.types.{DataTypes, DateType, IntegerType, StringType, StructField, StructType, TimestampType}
+import org.apache.spark.sql.functions.{col, concat, lit, udf}
+import org.apache.spark.sql.types._
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -352,58 +353,32 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
   }
 
-  @Test def testPartitionByTranslateToPartitionPath() {
+  private def getDataFrameWriter(keyGenerator: String): DataFrameWriter[Row] = {
     val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
 
-    val noPartitionPathOpts = commonOpts - DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY
-
-    // partitionBy takes effect
     inputDF.write.format("hudi")
-      .partitionBy("current_date")
-      .options(noPartitionPathOpts)
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY, keyGenerator)
       .mode(SaveMode.Overwrite)
+  }
+
+  @Test def testTranslateSparkParamsToHudiParamsWithCustomKeyGenerator(): Unit = {
+    // Without fieldType, the default is SIMPLE
+    var writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName)
+    writer.partitionBy("current_ts")
       .save(basePath)
 
     var recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*")
 
-    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= col("current_date").cast("string")).count() == 0)
-
-    // PARTITIONPATH_FIELD_OPT_KEY takes effect
-    inputDF.write.format("hudi")
-      .partitionBy("current_date")
-      .options(noPartitionPathOpts)
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp")
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
-
-    recordsReadDF = spark.read.format("org.apache.hudi")
-      .load(basePath + "/*/*")
-
-    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= col("timestamp").cast("string")).count() == 0)
-
-    // CustomKeyGenerator with SIMPLE
-    inputDF.write.format("hudi")
-      .partitionBy("current_ts")
-      .options(noPartitionPathOpts)
-      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY, "org.apache.hudi.keygen.CustomKeyGenerator")
-      .mode(SaveMode.Overwrite)
-      .save(basePath)
-
-    recordsReadDF = spark.read.format("org.apache.hudi")
-      .load(basePath + "/*/*")
-
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= col("current_ts").cast("string")).count() == 0)
 
-    // CustomKeyGenerator with TIMESTAMP
-    inputDF.write.format("hudi")
-      .partitionBy("current_ts")
-      .options(noPartitionPathOpts)
-      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY, "org.apache.hudi.keygen.CustomKeyGenerator")
+    // Specify fieldType as TIMESTAMP
+    writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName)
+    writer.partitionBy("current_ts:TIMESTAMP")
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
       .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
-      .mode(SaveMode.Overwrite)
       .save(basePath)
 
     recordsReadDF = spark.read.format("org.apache.hudi")
@@ -411,5 +386,107 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     val udf_date_format = udf((data: Long) => new DateTime(data).toString(DateTimeFormat.forPattern("yyyyMMdd")))
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= udf_date_format(col("current_ts"))).count() == 0)
+
+    // Mixed fieldType
+    writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName)
+    writer.partitionBy("driver", "rider:SIMPLE", "current_ts:TIMESTAMP")
+      .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
+      .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
+      .save(basePath)
+
+    recordsReadDF = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/*/*")
+    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!=
+      concat(col("driver"), lit("/"), col("rider"), lit("/"), udf_date_format(col("current_ts")))).count() == 0)
+
+    // Test invalid partitionKeyType
+    writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName)
+    writer = writer.partitionBy("current_ts:DUMMY")
+      .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
+      .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
+    try {
+      writer.save(basePath)
+      fail("should fail when invalid PartitionKeyType is provided!")
+    } catch {
+      case e: Exception =>
+        assertTrue(e.getMessage.contains("No enum constant org.apache.hudi.keygen.CustomAvroKeyGenerator.PartitionKeyType.DUMMY"))
+    }
+  }
+
+  @Test def testTranslateSparkParamsToHudiParamsWithSimpleKeyGenerator() {
+    // Use the `driver` field as the partition key
+    var writer = getDataFrameWriter(classOf[SimpleKeyGenerator].getName)
+    writer.partitionBy("driver")
+      .save(basePath)
+
+    var recordsReadDF = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/*")
+
+    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= col("driver")).count() == 0)
+
+    // Use the `driver,rider` field as the partition key, If no such field exists, the default value `default` is used
+    writer = getDataFrameWriter(classOf[SimpleKeyGenerator].getName)
+    writer.partitionBy("driver", "rider")
+      .save(basePath)
+
+    recordsReadDF = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/*")
+
+    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("default")).count() == 0)
+  }
+
+  @Test def testTranslateSparkParamsToHudiParamsWithComplexKeyGenerator() {
+    // Use the `driver` field as the partition key
+    var writer = getDataFrameWriter(classOf[ComplexKeyGenerator].getName)
+    writer.partitionBy("driver")
+      .save(basePath)
+
+    var recordsReadDF = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/*")
+
+    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= col("driver")).count() == 0)
+
+    // Use the `driver`,`rider` field as the partition key
+    writer = getDataFrameWriter(classOf[ComplexKeyGenerator].getName)
+    writer.partitionBy("driver", "rider")
+      .save(basePath)
+
+    recordsReadDF = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/*")
+
+    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= concat(col("driver"), lit("/"), col("rider"))).count() == 0)
+  }
+
+  @Test def testTranslateSparkParamsToHudiParamsWithTimestampBasedKeyGenerator() {
+    val writer = getDataFrameWriter(classOf[TimestampBasedKeyGenerator].getName)
+    writer.partitionBy("current_ts")
+      .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
+      .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
+      .save(basePath)
+
+    val recordsReadDF = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/*")
+    val udf_date_format = udf((data: Long) => new DateTime(data).toString(DateTimeFormat.forPattern("yyyyMMdd")))
+    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= udf_date_format(col("current_ts"))).count() == 0)
+  }
+
+  @Test def testTranslateSparkParamsToHudiParamsWithGlobalDeleteKeyGenerator() {
+    val writer = getDataFrameWriter(classOf[GlobalDeleteKeyGenerator].getName)
+    writer.partitionBy("driver")
+      .save(basePath)
+
+    val recordsReadDF = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*")
+    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("")).count() == 0)
+  }
+
+  @Test def testTranslateSparkParamsToHudiParamsWithNonpartitionedKeyGenerator() {
+    val writer = getDataFrameWriter(classOf[NonpartitionedKeyGenerator].getName)
+    writer.partitionBy("driver")
+      .save(basePath)
+
+    val recordsReadDF = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*")
+    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("")).count() == 0)
   }
 }

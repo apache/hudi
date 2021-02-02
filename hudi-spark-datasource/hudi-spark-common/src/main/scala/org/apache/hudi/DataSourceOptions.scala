@@ -24,7 +24,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hive.HiveSyncTool
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.Config
-import org.apache.hudi.keygen.SimpleKeyGenerator
+import org.apache.hudi.keygen.{CustomKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
@@ -185,35 +185,47 @@ object DataSourceWriteOptions {
   @Deprecated
   val DEFAULT_STORAGE_TYPE_OPT_VAL = COW_STORAGE_TYPE_OPT_VAL
 
-  def translateOptParams(optParams: Map[String, String]): Map[String, String] = {
-    // translate StorageType to TableType
-    var newOptParams = optParams
+  def translateStorageTypeToTableType(optParams: Map[String, String]) : Map[String, String] = {
     if (optParams.contains(STORAGE_TYPE_OPT_KEY) && !optParams.contains(TABLE_TYPE_OPT_KEY)) {
       log.warn(STORAGE_TYPE_OPT_KEY + " is deprecated and will be removed in a later release; Please use " + TABLE_TYPE_OPT_KEY)
-      newOptParams = optParams ++ Map(TABLE_TYPE_OPT_KEY -> optParams(STORAGE_TYPE_OPT_KEY))
+      optParams ++ Map(TABLE_TYPE_OPT_KEY -> optParams(STORAGE_TYPE_OPT_KEY))
+    } else {
+      optParams
     }
+  }
+
+  /**
+    * Translate spark parameters to hudi parameters
+    *
+    * @param optParams Parameters to be translated
+    * @return Parameters after translation
+    */
+  def translateSqlOptions(optParams: Map[String, String]): Map[String, String] = {
+    var translatedOptParams = optParams
     // translate the api partitionBy of spark DataFrameWriter to PARTITIONPATH_FIELD_OPT_KEY
-    if (optParams.contains(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY) && !optParams.contains(PARTITIONPATH_FIELD_OPT_KEY)) {
+    if (optParams.contains(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)) {
       val partitionColumns = optParams.get(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)
         .map(SparkDataSourceUtils.decodePartitioningColumns)
         .getOrElse(Nil)
       val keyGeneratorClass = optParams.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY,
         DataSourceWriteOptions.DEFAULT_KEYGENERATOR_CLASS_OPT_VAL)
+
       val partitionPathField =
         keyGeneratorClass match {
-          case "org.apache.hudi.keygen.CustomKeyGenerator" =>
-            // If the parameter contains TIMESTAMP_TYPE_FIELD_PROP and TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, use the TIMESTAMP type
-            if (optParams.contains(Config.TIMESTAMP_TYPE_FIELD_PROP) && optParams.contains(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP)) {
-              partitionColumns.map(e => s"$e:TIMESTAMP").mkString(",")
-            } else {
-              partitionColumns.map(e => s"$e:SIMPLE").mkString(",")
-            }
+          case c if c == classOf[CustomKeyGenerator].getName =>
+            partitionColumns.map(e => {
+              if (e.contains(":")) {
+                e
+              } else {
+                s"$e:SIMPLE"
+              }
+            }).mkString(",")
           case _ =>
             partitionColumns.mkString(",")
         }
-      newOptParams = optParams ++ Map(PARTITIONPATH_FIELD_OPT_KEY -> partitionPathField)
+      translatedOptParams = optParams ++ Map(PARTITIONPATH_FIELD_OPT_KEY -> partitionPathField)
     }
-    newOptParams
+    translatedOptParams
   }
 
   /**

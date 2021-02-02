@@ -47,9 +47,11 @@ class DefaultSource extends RelationProvider
   with Serializable {
 
   SparkSession.getActiveSession.foreach { spark =>
-    // Enable "passPartitionByAsOptions" to support "write.partitionBy(...)"
-    // TODO Remove this when upgrading to Spark 3.0.0
-    spark.conf.set("spark.sql.legacy.sources.write.passPartitionByAsOptions", "true")
+    val sparkVersion = spark.version
+    if (sparkVersion.startsWith("0.") || sparkVersion.startsWith("1.") || sparkVersion.startsWith("2.")) {
+      // Enable "passPartitionByAsOptions" to support "write.partitionBy(...)"
+      spark.conf.set("spark.sql.legacy.sources.write.passPartitionByAsOptions", "true")
+    }
   }
 
   private val log = LogManager.getLogger(classOf[DefaultSource])
@@ -132,12 +134,13 @@ class DefaultSource extends RelationProvider
                               optParams: Map[String, String],
                               df: DataFrame): BaseRelation = {
     val parameters = HoodieWriterUtils.parametersWithWriteDefaults(optParams)
+    val translatedOptOptions = DataSourceWriteOptions.translateSqlOptions(parameters)
     val dfWithoutMetaCols = df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala:_*)
 
-    if (parameters(OPERATION_OPT_KEY).equals(BOOTSTRAP_OPERATION_OPT_VAL)) {
-      HoodieSparkSqlWriter.bootstrap(sqlContext, mode, parameters, dfWithoutMetaCols)
+    if (translatedOptOptions(OPERATION_OPT_KEY).equals(BOOTSTRAP_OPERATION_OPT_VAL)) {
+      HoodieSparkSqlWriter.bootstrap(sqlContext, mode, translatedOptOptions, dfWithoutMetaCols)
     } else {
-      HoodieSparkSqlWriter.write(sqlContext, mode, parameters, dfWithoutMetaCols)
+      HoodieSparkSqlWriter.write(sqlContext, mode, translatedOptOptions, dfWithoutMetaCols)
     }
     new HoodieEmptyRelation(sqlContext, dfWithoutMetaCols.schema)
   }
@@ -147,9 +150,10 @@ class DefaultSource extends RelationProvider
                           partitionColumns: Seq[String],
                           outputMode: OutputMode): Sink = {
     val parameters = HoodieWriterUtils.parametersWithWriteDefaults(optParams)
+    val translatedOptOptions = DataSourceWriteOptions.translateSqlOptions(parameters)
     new HoodieStreamingSink(
       sqlContext,
-      parameters,
+      translatedOptOptions,
       partitionColumns,
       outputMode)
   }
