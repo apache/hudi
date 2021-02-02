@@ -72,7 +72,7 @@ public class TestJsonStringToHoodieRecordMapFunction extends HoodieFlinkClientTe
     props.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_row_key");
     props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "current_date");
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-    env.setParallelism(2);
+    env.setParallelism(1);
 
     SimpleTestSinkFunction.valuesList.clear();
     env.fromCollection(recordStr)
