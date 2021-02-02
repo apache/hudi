@@ -130,9 +130,9 @@ public class TimelineService {
 
   public int startService() throws IOException {
     app = Javalin.create();
-    FileSystemViewHandler router = new FileSystemViewHandler(app, conf, fsViewsManager);
+    RequestHandler requestHandler = new RequestHandler(app, conf, fsViewsManager);
     app.get("/", ctx -> ctx.result("Hello World"));
-    router.register();
+    requestHandler.register();
     int realServerPort = startServiceOnPort(serverPort);
     LOG.info("Starting Timeline server on port :" + realServerPort);
     this.serverPort = realServerPort;
