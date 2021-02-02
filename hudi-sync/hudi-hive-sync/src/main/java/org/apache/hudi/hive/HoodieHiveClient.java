@@ -104,10 +104,15 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     try {
       StorageDescriptor sd = client.getTable(syncConfig.databaseName, tableName).getSd();
       List<Partition> partitionList = partitionsToAdd.stream().map(partition -> {
+        StorageDescriptor partitionSd = new StorageDescriptor();
+        partitionSd.setCols(sd.getCols());
+        partitionSd.setInputFormat(sd.getInputFormat());
+        partitionSd.setOutputFormat(sd.getOutputFormat());
+        partitionSd.setSerdeInfo(sd.getSerdeInfo());
         String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition).toString();
         List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
-        sd.setLocation(fullPartitionPath);
-        return new Partition(partitionValues, syncConfig.databaseName, tableName, 0, 0, sd, null);
+        partitionSd.setLocation(fullPartitionPath);
+        return new Partition(partitionValues, syncConfig.databaseName, tableName, 0, 0, partitionSd, null);
       }).collect(Collectors.toList());
       client.add_partitions(partitionList,true,false);
     } catch (TException e) {
