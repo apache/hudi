@@ -50,12 +50,12 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Main REST Handler class that handles local view staleness and delegates calls to slice/data-file/timeline handlers.
+ *  Main REST Handler class that handles and delegates calls to timeline relevant handlers.
  */
-public class FileSystemViewHandler {
+public class RequestHandler {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-  private static final Logger LOG = LogManager.getLogger(FileSystemViewHandler.class);
+  private static final Logger LOG = LogManager.getLogger(RequestHandler.class);
 
   private final FileSystemViewManager viewManager;
   private final Javalin app;
@@ -63,7 +63,7 @@ public class FileSystemViewHandler {
   private final FileSliceHandler sliceHandler;
   private final BaseFileHandler dataFileHandler;
 
-  public FileSystemViewHandler(Javalin app, Configuration conf, FileSystemViewManager viewManager) throws IOException {
+  public RequestHandler(Javalin app, Configuration conf, FileSystemViewManager viewManager) throws IOException {
     this.viewManager = viewManager;
     this.app = app;
     this.instantHandler = new TimelineHandler(conf, viewManager);
