@@ -98,7 +98,7 @@ public class ClusteringUtils {
 
   /**
    * Get filegroups to pending clustering instant mapping for all pending clustering plans.
-   * This includes all clustering operattions in 'requested' and 'inflight' states.
+   * This includes all clustering operations in 'requested' and 'inflight' states.
    */
   public static Map<HoodieFileGroupId, HoodieInstant> getAllFileGroupsInPendingClusteringPlans(
       HoodieTableMetaClient metaClient) {
