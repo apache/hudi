@@ -29,4 +29,6 @@ public class HoodiePayloadProps {
   public static final String PAYLOAD_ORDERING_FIELD_PROP = "hoodie.payload.ordering.field";
   public static String DEFAULT_PAYLOAD_ORDERING_FIELD_VAL = "ts";
 
+  public static final String PAYLOAD_EVENT_TIME_FIELD_PROP = "hoodie.payload.event.time.field";
+  public static String DEFAULT_PAYLOAD_EVENT_TIME_FIELD_VAL = "ts";
 }

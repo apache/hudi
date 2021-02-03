@@ -25,6 +25,7 @@ import org.apache.hadoop.fs.Path;
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
+import java.time.Instant;
 
 /**
  * Statistics about a single Hoodie write operation.
@@ -142,6 +143,11 @@ public class HoodieWriteStat implements Serializable {
    * File Size as of close.
    */
   private long fileSizeInBytes;
+
+  /**
+   * The earliest of incoming records' event times (Epoch ms) for calculating latency.
+   */
+  private long earliestRecordEventTime = Instant.MAX.toEpochMilli();
 
   @Nullable
   @JsonIgnore
@@ -301,6 +307,14 @@ public class HoodieWriteStat implements Serializable {
 
   public void setFileSizeInBytes(long fileSizeInBytes) {
     this.fileSizeInBytes = fileSizeInBytes;
+  }
+
+  public long getEarliestRecordEventTime() {
+    return earliestRecordEventTime;
+  }
+
+  public void setEarliestRecordEventTime(long earliestRecordEventTime) {
+    this.earliestRecordEventTime = earliestRecordEventTime;
   }
 
   @Nullable

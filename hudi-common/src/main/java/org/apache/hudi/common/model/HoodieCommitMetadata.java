@@ -32,6 +32,7 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -321,6 +322,16 @@ public class HoodieCommitMetadata implements Serializable {
       }
     }
     return totalUpsertTime;
+  }
+
+  public long getEarliestRecordEventTime() {
+    long earliestEventTime = Instant.MAX.toEpochMilli();
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (HoodieWriteStat writeStat : entry.getValue()) {
+        earliestEventTime = Math.min(writeStat.getEarliestRecordEventTime(), earliestEventTime);
+      }
+    }
+    return earliestEventTime;
   }
 
   @Override

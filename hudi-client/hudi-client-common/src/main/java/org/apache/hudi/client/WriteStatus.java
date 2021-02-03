@@ -24,11 +24,14 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY;
 
 /**
  * Status of a write operation.
@@ -77,6 +80,14 @@ public class WriteStatus implements Serializable {
       writtenRecords.add(record);
     }
     totalRecords++;
+
+    // get the earliest event time for calculating latency
+    if (optionalRecordMetadata.isPresent()) {
+      // TODO handle format and default value
+      String eventTimeVal = optionalRecordMetadata.get().getOrDefault(METADATA_EVENT_TIME_KEY, null);
+      long eventTime = Instant.parse(eventTimeVal).toEpochMilli();
+      stat.setEarliestRecordEventTime(Math.min(eventTime, stat.getEarliestRecordEventTime()));
+    }
   }
 
   /**
