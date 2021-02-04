@@ -16,13 +16,12 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hive.util;
+package org.apache.hudi.dla.util;
 
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.sync.common.SchemaDifference;
-
+import org.apache.hudi.hive.util.ColumnNameXLator;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.DecimalMetadata;
@@ -40,14 +39,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Schema Utilities.
  */
-public class HiveSchemaUtil {
+public class DLASchemaUtil {
 
-  private static final Logger LOG = LogManager.getLogger(HiveSchemaUtil.class);
+  private static final Logger LOG = LogManager.getLogger(DLASchemaUtil.class);
   public static final String HIVE_ESCAPE_CHARACTER = "`";
 
   /**
@@ -140,7 +138,7 @@ public class HiveSchemaUtil {
    * @param messageType : Parquet Schema
    * @return : Hive Table schema read from parquet file MAP[String,String]
    */
-  public static Map<String, String> convertParquetSchemaToHiveSchema(MessageType messageType, boolean supportTimestamp) throws IOException {
+  private static Map<String, String> convertParquetSchemaToHiveSchema(MessageType messageType, boolean supportTimestamp) throws IOException {
     Map<String, String> schema = new LinkedHashMap<>();
     List<Type> parquetFields = messageType.getFields();
     for (Type parquetType : parquetFields) {
@@ -154,22 +152,6 @@ public class HiveSchemaUtil {
 
       schema.put(hiveCompatibleFieldName(key, false), result.toString());
     }
-    return schema;
-  }
-
-  public static List<FieldSchema> convertParquetSchemaToHiveFieldSchema(MessageType messageType, HiveSyncConfig syncConfig) {
-    List<Type> parquetFields = messageType.getFields();
-
-    List<FieldSchema> schema = parquetFields.stream().map(parquetType -> {
-      StringBuilder result = new StringBuilder();
-      String key = parquetType.getName();
-      if (parquetType.isRepetition(Type.Repetition.REPEATED)) {
-        result.append(createHiveArray(parquetType, "", syncConfig.supportTimestamp));
-      } else {
-        result.append(convertField(parquetType, syncConfig.supportTimestamp));
-      }
-      return new FieldSchema(key, result.toString().toLowerCase(),"");
-    }).filter(field -> !syncConfig.partitionFields.contains(field.getName())).collect(Collectors.toList());
     return schema;
   }
 
@@ -438,7 +420,7 @@ public class HiveSchemaUtil {
     return sb.toString();
   }
 
-  public static String getPartitionKeyType(Map<String, String> hiveSchema, String partitionKey) {
+  private static String getPartitionKeyType(Map<String, String> hiveSchema, String partitionKey) {
     if (hiveSchema.containsKey(partitionKey)) {
       return hiveSchema.get(partitionKey);
     }

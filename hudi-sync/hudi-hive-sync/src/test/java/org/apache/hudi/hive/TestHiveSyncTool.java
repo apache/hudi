@@ -27,6 +27,7 @@ import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent.PartitionEventType;
 
 import org.apache.hadoop.hive.metastore.api.Partition;
+import org.apache.hudi.sync.common.SchemaDifference;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;

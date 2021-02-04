@@ -21,10 +21,14 @@ package org.apache.hudi.hive;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
+
+import org.apache.hadoop.hive.metastore.TableType;
 import org.apache.hadoop.hive.metastore.api.MetaException;
+import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Partition;
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.Table;
+import org.apache.hadoop.hive.metastore.api.SerDeInfo;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
@@ -257,12 +261,32 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   @Override
   public void createTable(String tableName, MessageType storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass) {
     try {
-      String createSQLQuery =
-          HiveSchemaUtil.generateCreateDDL(tableName, storageSchema, syncConfig, inputFormatClass, outputFormatClass, serdeClass);
-      LOG.info("Creating table with " + createSQLQuery);
-      updateHiveSQL(createSQLQuery);
-    } catch (IOException e) {
-      throw new HoodieHiveSyncException("Failed to create table " + tableName, e);
+      List<FieldSchema> fieldSchema = HiveSchemaUtil.convertParquetSchemaToHiveFieldSchema(storageSchema, syncConfig);
+      Map<String, String> hiveSchema = HiveSchemaUtil.convertParquetSchemaToHiveSchema(storageSchema, syncConfig.supportTimestamp);
+      List<FieldSchema> partitionSchema = syncConfig.partitionFields.stream().map(partitionKey -> {
+        String partitionKeyType = HiveSchemaUtil.getPartitionKeyType(hiveSchema, partitionKey);
+        return new FieldSchema(partitionKey, partitionKeyType.toLowerCase(), "");
+      }).collect(Collectors.toList());
+      Table newTb = new Table();
+      newTb.setDbName(syncConfig.databaseName);
+      newTb.setTableName(tableName);
+      newTb.setCreateTime((int) System.currentTimeMillis());
+      StorageDescriptor storageDescriptor = new StorageDescriptor();
+      storageDescriptor.setCols(fieldSchema);
+      storageDescriptor.setInputFormat(inputFormatClass);
+      storageDescriptor.setOutputFormat(outputFormatClass);
+      storageDescriptor.setLocation(syncConfig.basePath);
+      Map<String, String> map = new HashMap();
+      map.put("serialization.format", "1");
+      storageDescriptor.setSerdeInfo(new SerDeInfo(null, serdeClass, map));
+      newTb.setSd(storageDescriptor);
+      newTb.setPartitionKeys(partitionSchema);
+      newTb.putToParameters("EXTERNAL", "TRUE");
+      newTb.setTableType(TableType.EXTERNAL_TABLE.toString());
+      client.createTable(newTb);
+    } catch (Exception e) {
+      LOG.error("failed to create table " + tableName, e);
+      throw new HoodieHiveSyncException("failed to create table " + tableName, e);
     }
   }
 
