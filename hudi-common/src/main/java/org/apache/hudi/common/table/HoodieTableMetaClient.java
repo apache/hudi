@@ -45,9 +45,6 @@ import org.apache.hadoop.fs.PathFilter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import org.apache.commons.io.FilenameUtils;
-
-import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
@@ -120,10 +117,10 @@ public class HoodieTableMetaClient implements Serializable {
                                ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
                                String payloadClassName) {
     LOG.info("Loading HoodieTableMetaClient from " + basePath);
-    this.basePath = FilenameUtils.separatorsToUnix(basePath);
     this.consistencyGuardConfig = consistencyGuardConfig;
     this.hadoopConf = new SerializableConfiguration(conf);
-    Path basePathDir = new Path(this.basePath);
+    Path basePathDir = new Path(basePath);
+    this.basePath = basePathDir.toString();
     this.metaPath = new Path(basePath, METAFOLDER_NAME).toString();
     Path metaPathDir = new Path(this.metaPath);
     this.fs = getFs();
