@@ -159,4 +159,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
     }).toList
     fileSplits
   }
+
+  // just for test
+  def getFileIndexPaths = fileIndex.map(x => x.dataFile.get.filePath)
 }

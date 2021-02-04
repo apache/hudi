@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
@@ -148,8 +149,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
 
       // Skip all files that are descendants of .hoodie in its path.
       String filePath = path.toString();
-      if (filePath.contains("/" + HoodieTableMetaClient.METAFOLDER_NAME + "/")
-          || filePath.endsWith("/" + HoodieTableMetaClient.METAFOLDER_NAME)) {
+      if (TablePathUtils.isHoodieMetaPath(filePath)) {
         if (LOG.isDebugEnabled()) {
           LOG.debug(String.format("Skipping Hoodie Metadata file  %s \n", filePath));
         }
