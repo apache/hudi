@@ -71,6 +71,8 @@ Committers are chosen by a majority vote of the Apache Hudi [PMC](https://www.ap
 | <img src="https://avatars.githubusercontent.com/umehrot2" style="max-width: 100px" alt="umehrot2" align="middle" /> | [Udit Mehrotra](https://github.com/umehrot2)                      | Committer       | uditme        |
 | <img src="https://avatars.githubusercontent.com/vinothchandar" style="max-width: 100px" alt="vinothchandar" align="middle" /> | [Vinoth Chandar](https://github.com/vinothchandar)           | PMC, Committer | vinoth       |
 | <img src="https://avatars.githubusercontent.com/yanghua" style="max-width: 100px" alt="yanghua" /> | [vinoyang](https://github.com/yanghua)                       | PMC, Committer       | vinoyang     |
+| <img src="https://avatars.githubusercontent.com/lw309637554" style="max-width: 100px" alt="lw309637554" /> | [Wei Li](https://github.com/lw309637554)                       | Committer       | liway     |
+| <img src="https://avatars.githubusercontent.com/wangxianghu" style="max-width: 100px" alt="wangxianghu" /> | [Xianghu Wang](https://github.com/wangxianghu)                       | Committer       | wangxianghu     |
 
 ## Code Contributions
 
