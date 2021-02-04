@@ -223,13 +223,13 @@ The `hudi-spark` module offers the DataSource API to write (and read) a Spark Da
 
 **`DataSourceWriteOptions`**:
 
-**RECORDKEY_FIELD_OPT_KEY** (Required): Primary key field(s). Nested fields can be specified using the dot notation eg: `a.b.c`. When using multiple columns as primary key use comma separated notation, eg: `"col1,col2,col3,etc"`. Single or multiple columns as primary key specified by `KEYGENERATOR_CLASS_OPT_KEY` property.<br>
+**RECORDKEY_FIELD_OPT_KEY** (Required): Primary key field(s). Record keys uniquely identify a record/row within each partition. If one wants to have a global uniqueness, there are two options. You could either make the dataset non-partitioned, or, you can leverage Global indexes to ensure record keys are unique irrespective of the partition path. Record keys can either be a single column or refer to multiple columns. `KEYGENERATOR_CLASS_OPT_KEY` property should be set accordingly based on whether it is a simple or complex key. For eg: `"col1"` for simple field, `"col1,col2,col3,etc"` for complex field. Nested fields can be specified using the dot notation eg: `a.b.c`. <br>
 Default value: `"uuid"`<br>
 
-**PARTITIONPATH_FIELD_OPT_KEY** (Required): Columns to be used for partitioning the table. To prevent partitioning, provide empty string as value eg: `""`. Specify partitioning/no partitioning using `KEYGENERATOR_CLASS_OPT_KEY`. If synchronizing to hive, also specify using `HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY.`<br>
+**PARTITIONPATH_FIELD_OPT_KEY** (Required): Columns to be used for partitioning the table. To prevent partitioning, provide empty string as value eg: `""`. Specify partitioning/no partitioning using `KEYGENERATOR_CLASS_OPT_KEY`. If partition path needs to be url encoded, you can set `URL_ENCODE_PARTITIONING_OPT_KEY`. If synchronizing to hive, also specify using `HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY.`<br>
 Default value: `"partitionpath"`<br>
 
-**PRECOMBINE_FIELD_OPT_KEY** (Required): When two records have the same key value, the record with the largest value from the field specified will be choosen.<br>
+**PRECOMBINE_FIELD_OPT_KEY** (Required): When two records within the same batch have the same key value, the record with the largest value from the field specified will be choosen. If you are using default payload of OverwriteWithLatestAvroPayload for HoodieRecordPayload (`WRITE_PAYLOAD_CLASS`), an incoming record will always takes precendence compared to the one in storage ignoring this `PRECOMBINE_FIELD_OPT_KEY`. <br>
 Default value: `"ts"`<br>
 
 **OPERATION_OPT_KEY**: The [write operations](#write-operations) to use.<br>
