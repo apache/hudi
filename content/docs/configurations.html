@@ -627,13 +627,17 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 
 <h4 id="bloom-index-configs">Bloom Index configs</h4>
 
+<h4 id="bloomIndexFilterType">bloomIndexFilterType(bucketizedChecking = BloomFilterTypeCode.SIMPLE)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.bloom.index.filter.type</code> <br />
+<span style="color:grey">Filter type used. Default is BloomFilterTypeCode.SIMPLE. Available values are [BloomFilterTypeCode.SIMPLE , BloomFilterTypeCode.DYNAMIC_V0]. Dynamic bloom filters auto size themselves based on number of keys.</span></p>
+
 <h4 id="bloomFilterNumEntries">bloomFilterNumEntries(numEntries = 60000)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.index.bloom.num_entries</code> <br />
-<span style="color:grey">Only applies if index type is BLOOM. <br />This is the number of entries to be stored in the bloom filter. We assume the maxParquetFileSize is 128MB and averageRecordSize is 1024B and hence we approx a total of 130K records in a file. The default (60000) is roughly half of this approximation. <a href="https://issues.apache.org/jira/browse/HUDI-56">HUDI-56</a> tracks computing this dynamically. Warning: Setting this very low, will generate a lot of false positives and index lookup will have to scan a lot more files than it has to and Setting this to a very high number will increase the size every data file linearly (roughly 4KB for every 50000 entries).</span></p>
+<span style="color:grey">Only applies if index type is BLOOM. <br />This is the number of entries to be stored in the bloom filter. We assume the maxParquetFileSize is 128MB and averageRecordSize is 1024B and hence we approx a total of 130K records in a file. The default (60000) is roughly half of this approximation. <a href="https://issues.apache.org/jira/browse/HUDI-56">HUDI-56</a> tracks computing this dynamically. Warning: Setting this very low, will generate a lot of false positives and index lookup will have to scan a lot more files than it has to and Setting this to a very high number will increase the size every data file linearly (roughly 4KB for every 50000 entries). This config is also used with DYNNAMIC bloom filter which determines the initial size for the bloom. </span></p>
 
 <h4 id="bloomFilterFPP">bloomFilterFPP(fpp = 0.000000001)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.index.bloom.fpp</code> <br />
-<span style="color:grey">Only applies if index type is BLOOM. <br /> Error rate allowed given the number of entries. This is used to calculate how many bits should be assigned for the bloom filter and the number of hash functions. This is usually set very low (default: 0.000000001), we like to tradeoff disk space for lower false positives</span></p>
+<span style="color:grey">Only applies if index type is BLOOM. <br /> Error rate allowed given the number of entries. This is used to calculate how many bits should be assigned for the bloom filter and the number of hash functions. This is usually set very low (default: 0.000000001), we like to tradeoff disk space for lower false positives. If the number of entries added to bloom filter exceeds the congfigured value (<code class="highlighter-rouge">hoodie.index.bloom.num_entries</code>), then this fpp may not be honored.</span></p>
 
 <h4 id="bloomIndexParallelism">bloomIndexParallelism(0)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.bloom.index.parallelism</code> <br />
@@ -641,7 +645,7 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 
 <h4 id="bloomIndexPruneByRanges">bloomIndexPruneByRanges(pruneRanges = true)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.bloom.index.prune.by.ranges</code> <br />
-<span style="color:grey">Only applies if index type is BLOOM. <br /> When true, range information from files to leveraged speed up index lookups. Particularly helpful, if the key has a monotonously increasing prefix, such as timestamp.</span></p>
+<span style="color:grey">Only applies if index type is BLOOM. <br /> When true, range information from files to leveraged speed up index lookups. Particularly helpful, if the key has a monotonously increasing prefix, such as timestamp. If the record key is completely random, it is better to turn this off.</span></p>
 
 <h4 id="bloomIndexUseCaching">bloomIndexUseCaching(useCaching = true)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.bloom.index.use.caching</code> <br />
@@ -654,10 +658,6 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <h4 id="bloomIndexBucketizedChecking">bloomIndexBucketizedChecking(bucketizedChecking = true)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.bloom.index.bucketized.checking</code> <br />
 <span style="color:grey">Only applies if index type is BLOOM. <br /> When true, bucketized bloom filtering is enabled. This reduces skew seen in sort based bloom index lookup</span></p>
-
-<h4 id="bloomIndexFilterType">bloomIndexFilterType(bucketizedChecking = BloomFilterTypeCode.SIMPLE)</h4>
-<p>Property: <code class="highlighter-rouge">hoodie.bloom.index.filter.type</code> <br />
-<span style="color:grey">Filter type used. Default is BloomFilterTypeCode.SIMPLE. Available values are [BloomFilterTypeCode.SIMPLE , BloomFilterTypeCode.DYNAMIC_V0]. Dynamic bloom filters auto size themselves based on number of keys</span></p>
 
 <h4 id="bloomIndexFilterDynamicMaxEntries">bloomIndexFilterDynamicMaxEntries(maxNumberOfEntries = 100000)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.bloom.index.filter.dynamic.max.entries</code> <br />
