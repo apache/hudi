@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.hive.common.StatsSetupConst;
 import org.apache.hadoop.hive.metastore.TableType;
 import org.apache.hadoop.hive.metastore.api.MetaException;
@@ -239,6 +240,9 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       newTb.setPartitionKeys(partitionSchema);
       newTb.putToParameters("EXTERNAL", "TRUE");
       newTb.setTableType(TableType.EXTERNAL_TABLE.toString());
+      LOG.info("newTb info:" + syncConfig.databaseName + "." + tableName);
+      LOG.info("newTb field info:" + StringUtils.join(fieldSchema,"|"));
+      LOG.info("newTb partition info:" + StringUtils.join(partitionSchema,"|"));
       client.createTable(newTb);
     } catch (Exception e) {
       LOG.error("failed to create table " + tableName, e);
@@ -297,15 +301,12 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
    */
   public boolean doesDataBaseExist(String databaseName) {
     try {
-      Database database = client.getDatabase(databaseName);
-      if (database != null && databaseName.equals(database.getName())) {
-        return true;
-      }
+      List<String> databases = client.getAllDatabases();
+      return databases.contains(databaseName.toLowerCase());
     } catch (TException e) {
       LOG.error("Failed to check if database exists " + databaseName, e);
       throw new HoodieHiveSyncException("Failed to check if database exists " + databaseName, e);
     }
-    return false;
   }
 
   public void createDataBase(String databaseName, String location, String description) {
