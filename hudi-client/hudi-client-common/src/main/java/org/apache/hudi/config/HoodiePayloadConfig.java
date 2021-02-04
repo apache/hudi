@@ -65,7 +65,7 @@ public class HoodiePayloadConfig extends DefaultHoodieConfig {
 
     public HoodiePayloadConfig build() {
       HoodiePayloadConfig config = new HoodiePayloadConfig(props);
-      setDefaultOnCondition(props, !props.containsKey(PAYLOAD_ORDERING_FIELD_PROP), DEFAULT_PAYLOAD_ORDERING_FIELD_VAL,
+      setDefaultOnCondition(props, !props.containsKey(PAYLOAD_ORDERING_FIELD_PROP), PAYLOAD_ORDERING_FIELD_PROP,
           String.valueOf(DEFAULT_PAYLOAD_ORDERING_FIELD_VAL));
       return config;
     }
