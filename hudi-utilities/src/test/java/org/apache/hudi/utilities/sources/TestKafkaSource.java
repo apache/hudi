@@ -108,9 +108,11 @@ public class TestKafkaSource extends UtilitiesTestBase {
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
 
     // 1. Extract without any checkpoint => get all the data, respecting sourceLimit
-    assertEquals(Option.empty(), kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
+    assertEquals(Option.empty(), kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE,
+        "_row_key", "timestamp").getBatch());
     testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
-    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 900);
+    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 900,
+        "_row_key", "timestamp");
     assertEquals(900, fetch1.getBatch().get().count());
     // Test Avro To DataFrame<Row> path
     Dataset<Row> fetch1AsRows = AvroConversionUtils.createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
@@ -125,7 +127,8 @@ public class TestKafkaSource extends UtilitiesTestBase {
 
     // 3. Extract with previous checkpoint => gives same data back (idempotent)
     InputBatch<JavaRDD<GenericRecord>> fetch3 =
-        kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
+        kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE,
+            "_row_key", "timestamp");
     assertEquals(fetch2.getBatch().get().count(), fetch3.getBatch().get().count());
     assertEquals(fetch2.getCheckpointForNextBatch(), fetch3.getCheckpointForNextBatch());
     // Same using Row API
@@ -136,7 +139,8 @@ public class TestKafkaSource extends UtilitiesTestBase {
 
     // 4. Extract with latest checkpoint => no new data returned
     InputBatch<JavaRDD<GenericRecord>> fetch4 =
-        kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE);
+        kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE,
+            "_row_key", "timestamp");
     assertEquals(Option.empty(), fetch4.getBatch());
     // Same using Row API
     InputBatch<Dataset<Row>> fetch4AsRows =
@@ -161,8 +165,10 @@ public class TestKafkaSource extends UtilitiesTestBase {
 
     // 1. Extract with a none data kafka checkpoint
     // => get a checkpoint string like "hoodie_test,0:0,1:0", latest checkpoint should be equals to earliest checkpoint
-    InputBatch<JavaRDD<GenericRecord>> earFetch0 = earliestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
-    InputBatch<JavaRDD<GenericRecord>> latFetch0 = latestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
+    InputBatch<JavaRDD<GenericRecord>> earFetch0 = earliestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE,
+        "_row_key", "timestamp");
+    InputBatch<JavaRDD<GenericRecord>> latFetch0 = latestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE,
+        "_row_key", "timestamp");
     assertEquals(earFetch0.getBatch(), latFetch0.getBatch());
     assertEquals(earFetch0.getCheckpointForNextBatch(), latFetch0.getCheckpointForNextBatch());
 
@@ -170,10 +176,12 @@ public class TestKafkaSource extends UtilitiesTestBase {
 
     // 2. Extract new checkpoint with a null / empty string pre checkpoint
     // => earliest fetch with max source limit will get all of data and a end offset checkpoint
-    InputBatch<JavaRDD<GenericRecord>> earFetch1 = earliestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
+    InputBatch<JavaRDD<GenericRecord>> earFetch1 = earliestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE,
+        "_row_key", "timestamp");
 
     // => [a null pre checkpoint] latest reset fetch will get a end offset checkpoint same to earliest
-    InputBatch<JavaRDD<GenericRecord>> latFetch1 = latestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
+    InputBatch<JavaRDD<GenericRecord>> latFetch1 = latestKafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE,
+        "_row_key", "timestamp");
     assertEquals(earFetch1.getCheckpointForNextBatch(), latFetch1.getCheckpointForNextBatch());
   }
 
@@ -193,7 +201,8 @@ public class TestKafkaSource extends UtilitiesTestBase {
     maxEventsFromKafkaSourceProp are set to Long.MAX_VALUE
      */
     testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
-    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
+    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE,
+        "_row_key", "timestamp");
     assertEquals(1000, fetch1.getBatch().get().count());
 
     // 2. Produce new data, extract new data based on sourceLimit
@@ -222,7 +231,8 @@ public class TestKafkaSource extends UtilitiesTestBase {
      and sourceLimit less than the generated insert records num.
      */
     testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 400)));
-    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 300);
+    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 300,
+        "_row_key", "timestamp");
     assertEquals(300, fetch1.getBatch().get().count());
 
     /*
@@ -250,7 +260,8 @@ public class TestKafkaSource extends UtilitiesTestBase {
 
     // 1. Extract without any checkpoint => get all the data, respecting sourceLimit
     testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
-    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 900);
+    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 900,
+        "_row_key", "timestamp");
     assertEquals(900, fetch1.getBatch().get().count());
 
     // 2. Produce new data, extract new data based on upper cap
@@ -261,23 +272,27 @@ public class TestKafkaSource extends UtilitiesTestBase {
 
     //fetch data respecting source limit where upper cap > sourceLimit
     InputBatch<JavaRDD<GenericRecord>> fetch3 =
-        kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch1.getCheckpointForNextBatch()), 400);
+        kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch1.getCheckpointForNextBatch()), 400,
+            "_row_key", "timestamp");
     assertEquals(400, fetch3.getBatch().get().count());
 
     //fetch data respecting source limit where upper cap < sourceLimit
     InputBatch<JavaRDD<GenericRecord>> fetch4 =
-        kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch2.getCheckpointForNextBatch()), 600);
+        kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch2.getCheckpointForNextBatch()), 600,
+            "_row_key", "timestamp");
     assertEquals(600, fetch4.getBatch().get().count());
 
     // 3. Extract with previous checkpoint => gives same data back (idempotent)
     InputBatch<JavaRDD<GenericRecord>> fetch5 =
-        kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
+        kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE,
+            "_row_key", "timestamp");
     assertEquals(fetch2.getBatch().get().count(), fetch5.getBatch().get().count());
     assertEquals(fetch2.getCheckpointForNextBatch(), fetch5.getCheckpointForNextBatch());
 
     // 4. Extract with latest checkpoint => no new data returned
     InputBatch<JavaRDD<GenericRecord>> fetch6 =
-        kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch4.getCheckpointForNextBatch()), Long.MAX_VALUE);
+        kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch4.getCheckpointForNextBatch()), Long.MAX_VALUE,
+            "_row_key", "timestamp");
     assertEquals(Option.empty(), fetch6.getBatch());
   }
 

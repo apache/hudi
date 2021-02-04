@@ -122,17 +122,19 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
 
     // 1. Extract without any checkpoint => get all the data, respecting sourceLimit
     assertEquals(Option.empty(),
-        sourceFormatAdapter.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
+        sourceFormatAdapter.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE, "_row_key", "timestamp")
+            .getBatch());
     // Test respecting sourceLimit
     int sourceLimit = 10;
     RemoteIterator<LocatedFileStatus> files = dfs.listFiles(generateOneFile("1", "000", 100), true);
     FileStatus file1Status = files.next();
     assertTrue(file1Status.getLen() > sourceLimit);
     assertEquals(Option.empty(),
-        sourceFormatAdapter.fetchNewDataInAvroFormat(Option.empty(), sourceLimit).getBatch());
+        sourceFormatAdapter.fetchNewDataInAvroFormat(Option.empty(), sourceLimit,"_row_key", "timestamp")
+            .getBatch());
     // Test fetching Avro format
     InputBatch<JavaRDD<GenericRecord>> fetch1 =
-        sourceFormatAdapter.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
+        sourceFormatAdapter.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE, "_row_key", "timestamp");
     assertEquals(100, fetch1.getBatch().get().count());
     // Test fetching Row format
     InputBatch<Dataset<Row>> fetch1AsRows =
@@ -148,7 +150,7 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
     generateOneFile("2", "001", 10000);
     // Test fetching Avro format
     InputBatch<JavaRDD<GenericRecord>> fetch2 = sourceFormatAdapter.fetchNewDataInAvroFormat(
-        Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
+        Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE, "_row_key", "timestamp");
     assertEquals(10000, fetch2.getBatch().get().count());
     // Test fetching Row format
     InputBatch<Dataset<Row>> fetch2AsRows = sourceFormatAdapter.fetchNewDataInRowFormat(
@@ -168,12 +170,12 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
 
     // 4. Extract with latest checkpoint => no new data returned
     InputBatch<JavaRDD<GenericRecord>> fetch4 = sourceFormatAdapter.fetchNewDataInAvroFormat(
-        Option.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE);
+        Option.of(fetch2.getCheckpointForNextBatch()), Long.MAX_VALUE, "_row_key", "timestamp");
     assertEquals(Option.empty(), fetch4.getBatch());
 
     // 5. Extract from the beginning
     InputBatch<JavaRDD<GenericRecord>> fetch5 = sourceFormatAdapter.fetchNewDataInAvroFormat(
-        Option.empty(), Long.MAX_VALUE);
+        Option.empty(), Long.MAX_VALUE, "_row_key", "timestamp");
     assertEquals(10100, fetch5.getBatch().get().count());
 
     // 6. Should skip files/directories whose names start with prefixes ("_", ".")
@@ -186,7 +188,7 @@ public abstract class AbstractDFSSourceTestBase extends UtilitiesTestBase {
     generateOneFile("foo/bar/3", "002", 1); // ok
     // fetch everything from the beginning
     InputBatch<JavaRDD<GenericRecord>> fetch6 = sourceFormatAdapter.fetchNewDataInAvroFormat(
-        Option.empty(), Long.MAX_VALUE);
+        Option.empty(), Long.MAX_VALUE, "_row_key", "timestamp");
     assertEquals(10101, fetch6.getBatch().get().count());
   }
 }
