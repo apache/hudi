@@ -28,7 +28,6 @@ import org.apache.spark.sql.{Row, SaveMode}
 class TestStreamingSource extends StreamTest {
 
   import testImplicits._
-  
   private val commonOptions = Map(
     RECORDKEY_FIELD_OPT_KEY -> "id",
     PRECOMBINE_FIELD_OPT_KEY -> "ts",
