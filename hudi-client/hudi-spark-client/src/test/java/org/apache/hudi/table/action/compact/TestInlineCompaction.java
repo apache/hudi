@@ -51,7 +51,7 @@ public class TestInlineCompaction extends CompactionTestBase {
   @Test
   public void testCompactionIsNotScheduledEarly() throws Exception {
     // Given: make two commits
-    HoodieWriteConfig cfg = getConfigForInlineCompaction(3, 60, CompactionTriggerStrategy.NUM);
+    HoodieWriteConfig cfg = getConfigForInlineCompaction(3, 60, CompactionTriggerStrategy.NUM_COMMITS);
     try (SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(cfg)) {
       List<HoodieRecord> records = dataGen.generateInserts(HoodieActiveTimeline.createNewInstantTime(), 100);
       HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
@@ -67,7 +67,7 @@ public class TestInlineCompaction extends CompactionTestBase {
   @Test
   public void testSuccessfulCompactionBasedOnNumCommits() throws Exception {
     // Given: make three commits
-    HoodieWriteConfig cfg = getConfigForInlineCompaction(3, 60, CompactionTriggerStrategy.NUM);
+    HoodieWriteConfig cfg = getConfigForInlineCompaction(3, 60, CompactionTriggerStrategy.NUM_COMMITS);
     List<String> instants = IntStream.range(0, 2).mapToObj(i -> HoodieActiveTimeline.createNewInstantTime()).collect(Collectors.toList());
 
     try (SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(cfg)) {
@@ -180,7 +180,7 @@ public class TestInlineCompaction extends CompactionTestBase {
     }
 
     // When: a third commit happens
-    HoodieWriteConfig inlineCfg = getConfigForInlineCompaction(2, 60, CompactionTriggerStrategy.NUM);
+    HoodieWriteConfig inlineCfg = getConfigForInlineCompaction(2, 60, CompactionTriggerStrategy.NUM_COMMITS);
     String instantTime3 = HoodieActiveTimeline.createNewInstantTime();
     try (SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(inlineCfg)) {
       HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());

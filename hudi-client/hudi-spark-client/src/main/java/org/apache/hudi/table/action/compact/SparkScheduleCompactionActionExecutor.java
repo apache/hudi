@@ -83,58 +83,53 @@ public class SparkScheduleCompactionActionExecutor<T extends HoodieRecordPayload
     return new HoodieCompactionPlan();
   }
 
-  public Tuple2<Integer, String> getLastDeltaCommitInfo(CompactionTriggerStrategy compactionTriggerStrategy) {
+  public Pair<Integer, String> getLatestDeltaCommitInfo(CompactionTriggerStrategy compactionTriggerStrategy) {
     Option<HoodieInstant> lastCompaction = table.getActiveTimeline().getCommitTimeline()
         .filterCompletedInstants().lastInstant();
     HoodieTimeline deltaCommits = table.getActiveTimeline().getDeltaCommitTimeline();
 
-    String lastCompactionTs;
+    String latestInstantTs;
     int deltaCommitsSinceLastCompaction = 0;
     if (lastCompaction.isPresent()) {
-      lastCompactionTs = lastCompaction.get().getTimestamp();
+      latestInstantTs = lastCompaction.get().getTimestamp();
+      deltaCommitsSinceLastCompaction = deltaCommits.findInstantsAfter(latestInstantTs, Integer.MAX_VALUE).countInstants();
     } else {
-      lastCompactionTs = deltaCommits.firstInstant().get().getTimestamp();
+      latestInstantTs = deltaCommits.firstInstant().get().getTimestamp();
+      deltaCommitsSinceLastCompaction = deltaCommits.findInstantsAfterOrEquals(latestInstantTs, Integer.MAX_VALUE).countInstants();
     }
-    if (compactionTriggerStrategy != CompactionTriggerStrategy.TIME_ELAPSED) {
-      if (lastCompaction.isPresent()) {
-        deltaCommitsSinceLastCompaction = deltaCommits.findInstantsAfter(lastCompactionTs, Integer.MAX_VALUE).countInstants();
-      } else {
-        deltaCommitsSinceLastCompaction = deltaCommits.findInstantsAfterOrEquals(lastCompactionTs, Integer.MAX_VALUE).countInstants();
-      }
-    }
-    return new Tuple2(deltaCommitsSinceLastCompaction, lastCompactionTs);
+    return Pair.of(deltaCommitsSinceLastCompaction, latestInstantTs);
   }
 
   public boolean needCompact(CompactionTriggerStrategy compactionTriggerStrategy) {
     boolean compactable;
     // get deltaCommitsSinceLastCompaction and lastCompactionTs
-    Tuple2<Integer, String> lastDeltaCommitInfo = getLastDeltaCommitInfo(compactionTriggerStrategy);
+    Pair<Integer, String> latestDeltaCommitInfo = getLatestDeltaCommitInfo(compactionTriggerStrategy);
     int inlineCompactDeltaCommitMax = config.getInlineCompactDeltaCommitMax();
     int inlineCompactDeltaSecondsMax = config.getInlineCompactDeltaSecondsMax();
     switch (compactionTriggerStrategy) {
-      case NUM:
-        compactable = inlineCompactDeltaCommitMax <= lastDeltaCommitInfo._1;
+      case NUM_COMMITS:
+        compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft();
         if (compactable) {
           LOG.info(String.format("The delta commits >= %s, trigger compaction scheduler.", inlineCompactDeltaCommitMax));
         }
         break;
       case TIME_ELAPSED:
-        compactable = inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(lastDeltaCommitInfo._2);
+        compactable = inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(latestDeltaCommitInfo.getRight());
         if (compactable) {
           LOG.info(String.format("The elapsed time >=%ss, trigger compaction scheduler.", inlineCompactDeltaSecondsMax));
         }
         break;
       case NUM_OR_TIME:
-        compactable = inlineCompactDeltaCommitMax <= lastDeltaCommitInfo._1
-            || inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(lastDeltaCommitInfo._2);
+        compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft()
+            || inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(latestDeltaCommitInfo.getRight());
         if (compactable) {
           LOG.info(String.format("The delta commits >= %s or elapsed_time >=%ss, trigger compaction scheduler.", inlineCompactDeltaCommitMax,
               inlineCompactDeltaSecondsMax));
         }
         break;
       case NUM_AND_TIME:
-        compactable = inlineCompactDeltaCommitMax <= lastDeltaCommitInfo._1
-            && inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(lastDeltaCommitInfo._2);
+        compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft()
+            && inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(latestDeltaCommitInfo.getRight());
         if (compactable) {
           LOG.info(String.format("The delta commits >= %s and elapsed_time >=%ss, trigger compaction scheduler.", inlineCompactDeltaCommitMax,
               inlineCompactDeltaSecondsMax));

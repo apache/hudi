@@ -19,5 +19,12 @@
 package org.apache.hudi.table.action.compact;
 
 public enum CompactionTriggerStrategy {
-    NUM, TIME_ELAPSED, NUM_AND_TIME, NUM_OR_TIME
+    // trigger compaction when reach N delta commits
+    NUM_COMMITS,
+    // trigger compaction when time elapsed > N seconds since last compaction
+    TIME_ELAPSED,
+    // trigger compaction when both NUM_COMMITS and TIME_ELAPSED are satisfied
+    NUM_AND_TIME,
+    // trigger compaction when NUM_COMMITS or TIME_ELAPSED is satisfied
+    NUM_OR_TIME
 }

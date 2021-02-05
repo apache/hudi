@@ -81,17 +81,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
    */
   public static String createNewInstantTime() {
-    return lastInstantTime.updateAndGet((oldVal) -> {
-      String newCommitTime;
-      do {
-        newCommitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
-      } while (HoodieTimeline.compareTimestamps(newCommitTime, LESSER_THAN_OR_EQUALS, oldVal));
-      return newCommitTime;
-    });
+    return createNewInstantTime(0);
   }
 
   /**
-   * Returns next instant time that adds milliseconds in the {@link #COMMIT_FORMATTER} format.
+   * Returns next instant time that adds N milliseconds in the {@link #COMMIT_FORMATTER} format.
    * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
    */
   public static String createNewInstantTime(long milliseconds) {
