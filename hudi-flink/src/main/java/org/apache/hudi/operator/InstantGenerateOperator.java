@@ -297,6 +297,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       fs.delete(fileStatus.getPath(), true);
     }
   }
+
   private Path generateCurrentMakerPath() {
     String baseDir = cfg.targetBasePath.endsWith("/")
             ? cfg.targetBasePath.substring(0, cfg.targetBasePath.length() - 1)
