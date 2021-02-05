@@ -329,7 +329,7 @@ public class HiveSchemaUtil {
    * Create a 'Map' schema from Parquet map field.
    */
   private static String createHiveMap(String keyType, String valueType) {
-    return "MAP<" + keyType + ", " + valueType + ">";
+    return "MAP<" + keyType + "," + valueType + ">";
   }
 
   /**
