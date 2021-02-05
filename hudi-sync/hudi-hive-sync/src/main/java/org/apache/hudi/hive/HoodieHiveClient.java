@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hive;
 
-import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.hive.common.StatsSetupConst;
 import org.apache.hadoop.hive.metastore.TableType;
 import org.apache.hadoop.hive.metastore.api.MetaException;
@@ -240,9 +239,6 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       newTb.setPartitionKeys(partitionSchema);
       newTb.putToParameters("EXTERNAL", "TRUE");
       newTb.setTableType(TableType.EXTERNAL_TABLE.toString());
-      LOG.info("newTb info:" + syncConfig.databaseName + "." + tableName);
-      LOG.info("newTb field info:" + StringUtils.join(fieldSchema,"|"));
-      LOG.info("newTb partition info:" + StringUtils.join(partitionSchema,"|"));
       client.createTable(newTb);
     } catch (Exception e) {
       LOG.error("failed to create table " + tableName, e);
