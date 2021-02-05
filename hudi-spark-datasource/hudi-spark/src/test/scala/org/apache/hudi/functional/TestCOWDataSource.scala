@@ -363,7 +363,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
   }
 
-  @Test def testTranslateSparkParamsToHudiParamsWithCustomKeyGenerator(): Unit = {
+  @Test def testSparkPartitonByWithCustomKeyGenerator(): Unit = {
     // Without fieldType, the default is SIMPLE
     var writer = getDataFrameWriter(classOf[CustomKeyGenerator].getName)
     writer.partitionBy("current_ts")
@@ -413,7 +413,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     }
   }
 
-  @Test def testTranslateSparkParamsToHudiParamsWithSimpleKeyGenerator() {
+  @Test def testSparkPartitonByWithSimpleKeyGenerator() {
     // Use the `driver` field as the partition key
     var writer = getDataFrameWriter(classOf[SimpleKeyGenerator].getName)
     writer.partitionBy("driver")
@@ -435,7 +435,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("default")).count() == 0)
   }
 
-  @Test def testTranslateSparkParamsToHudiParamsWithComplexKeyGenerator() {
+  @Test def testSparkPartitonByWithComplexKeyGenerator() {
     // Use the `driver` field as the partition key
     var writer = getDataFrameWriter(classOf[ComplexKeyGenerator].getName)
     writer.partitionBy("driver")
@@ -457,7 +457,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= concat(col("driver"), lit("/"), col("rider"))).count() == 0)
   }
 
-  @Test def testTranslateSparkParamsToHudiParamsWithTimestampBasedKeyGenerator() {
+  @Test def testSparkPartitonByWithTimestampBasedKeyGenerator() {
     val writer = getDataFrameWriter(classOf[TimestampBasedKeyGenerator].getName)
     writer.partitionBy("current_ts")
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
@@ -470,7 +470,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= udf_date_format(col("current_ts"))).count() == 0)
   }
 
-  @Test def testTranslateSparkParamsToHudiParamsWithGlobalDeleteKeyGenerator() {
+  @Test def testSparkPartitonByWithGlobalDeleteKeyGenerator() {
     val writer = getDataFrameWriter(classOf[GlobalDeleteKeyGenerator].getName)
     writer.partitionBy("driver")
       .save(basePath)
@@ -480,12 +480,22 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("")).count() == 0)
   }
 
-  @Test def testTranslateSparkParamsToHudiParamsWithNonpartitionedKeyGenerator() {
-    val writer = getDataFrameWriter(classOf[NonpartitionedKeyGenerator].getName)
-    writer.partitionBy("driver")
+  @Test def testSparkPartitonByWithNonpartitionedKeyGenerator() {
+    // Empty string column
+    var writer = getDataFrameWriter(classOf[NonpartitionedKeyGenerator].getName)
+    writer.partitionBy("")
       .save(basePath)
 
-    val recordsReadDF = spark.read.format("org.apache.hudi")
+    var recordsReadDF = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*")
+    assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("")).count() == 0)
+
+    // Non-existent column
+    writer = getDataFrameWriter(classOf[NonpartitionedKeyGenerator].getName)
+    writer.partitionBy("abc")
+      .save(basePath)
+
+    recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath + "/*")
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("")).count() == 0)
   }

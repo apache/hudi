@@ -212,6 +212,9 @@ object DataSourceWriteOptions {
 
       val partitionPathField =
         keyGeneratorClass match {
+          // Only CustomKeyGenerator needs special treatment, because it needs to be specified in a way
+          // such as "field1:PartitionKeyType1,field2:PartitionKeyType2".
+          // partitionBy can specify the partition like this: partitionBy("p1", "p2:SIMPLE", "p3:TIMESTAMP")
           case c if c == classOf[CustomKeyGenerator].getName =>
             partitionColumns.map(e => {
               if (e.contains(":")) {
