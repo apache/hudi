@@ -300,7 +300,7 @@ public class HiveSchemaUtil {
    */
   private static String createHiveStruct(List<Type> parquetFields, boolean supportTimestamp) {
     StringBuilder struct = new StringBuilder();
-    struct.append("STRUCT< ");
+    struct.append("STRUCT<");
     for (Type field : parquetFields) {
       // TODO: struct field name is only translated to support special char($)
       // We will need to extend it to other collection type
@@ -348,7 +348,7 @@ public class HiveSchemaUtil {
    * Create a 'Map' schema from Parquet map field.
    */
   private static String createHiveMap(String keyType, String valueType) {
-    return "MAP< " + keyType + ", " + valueType + ">";
+    return "MAP<" + keyType + ", " + valueType + ">";
   }
 
   /**
@@ -356,7 +356,7 @@ public class HiveSchemaUtil {
    */
   private static String createHiveArray(Type elementType, String elementName, boolean supportTimestamp) {
     StringBuilder array = new StringBuilder();
-    array.append("ARRAY< ");
+    array.append("ARRAY<");
     if (elementType.isPrimitive()) {
       array.append(convertField(elementType, supportTimestamp));
     } else {
