@@ -303,10 +303,10 @@ public class HiveSchemaUtil {
     for (Type field : parquetFields) {
       // TODO: struct field name is only translated to support special char($)
       // We will need to extend it to other collection type
-      struct.append(hiveCompatibleFieldName(field.getName(), true)).append(" : ");
-      struct.append(convertField(field, supportTimestamp)).append(", ");
+      struct.append(hiveCompatibleFieldName(field.getName(), true)).append(":");
+      struct.append(convertField(field, supportTimestamp)).append(",");
     }
-    struct.delete(struct.length() - 2, struct.length()); // Remove the last
+    struct.delete(struct.length() - 1, struct.length()); // Remove the last
     // ", "
     struct.append(">");
     String finalStr = struct.toString();
