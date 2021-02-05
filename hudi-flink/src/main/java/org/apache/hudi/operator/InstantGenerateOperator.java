@@ -126,7 +126,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   public void prepareSnapshotPreBarrier(long checkpointId) throws Exception {
     super.prepareSnapshotPreBarrier(checkpointId);
     String instantMarkerFileName = String.format("%d%s%d%s%d", indexOfThisSubtask, DELIMITER, checkpointId, DELIMITER, recordCounter.get());
-    Path path = new Path(new Path(HoodieTableMetaClient.AUXILIARYFOLDER_NAME, INSTANT_MARKER_FOLDER_NAME), instantMarkerFileName);
+    Path path = generateCurrentMakerFilePath(instantMarkerFileName);
     // create marker file
     fs.create(path, true);
     LOG.info("Subtask [{}] at checkpoint [{}] created marker file [{}]", indexOfThisSubtask, checkpointId, instantMarkerFileName);
@@ -245,7 +245,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   private boolean checkReceivedData(long checkpointId) throws InterruptedException, IOException {
     int numberOfParallelSubtasks = runtimeContext.getNumberOfParallelSubtasks();
     FileStatus[] fileStatuses;
-    Path instantMarkerPath = new Path(HoodieTableMetaClient.AUXILIARYFOLDER_NAME, INSTANT_MARKER_FOLDER_NAME);
+    Path instantMarkerPath = generateCurrentMakerPath();
     // waiting all subtask create marker file ready
     while (true) {
       Thread.sleep(500L);
@@ -296,5 +296,16 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
     for (FileStatus fileStatus : fileStatuses) {
       fs.delete(fileStatus.getPath(), true);
     }
+  }
+  private Path generateCurrentMakerPath() {
+    String baseDir = cfg.targetBasePath.endsWith("/")
+            ? cfg.targetBasePath.substring(0, cfg.targetBasePath.length() - 1)
+            : cfg.targetBasePath;
+    Path auxPath = new Path(baseDir, HoodieTableMetaClient.AUXILIARYFOLDER_NAME);
+    return new Path(auxPath, INSTANT_MARKER_FOLDER_NAME);
+  }
+
+  private Path generateCurrentMakerFilePath(String instantMarkerFileName) {
+    return new Path(generateCurrentMakerPath(), instantMarkerFileName);
   }
 }
