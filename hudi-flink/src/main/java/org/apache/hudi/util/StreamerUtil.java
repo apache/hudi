@@ -248,6 +248,6 @@ public class StreamerUtil {
 
   public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
     checkPropNames.forEach(prop ->
-        Preconditions.checkState(!props.containsKey(prop), "Required property " + prop + " is missing"));
+        Preconditions.checkState(props.containsKey(prop), "Required property " + prop + " is missing"));
   }
 }
