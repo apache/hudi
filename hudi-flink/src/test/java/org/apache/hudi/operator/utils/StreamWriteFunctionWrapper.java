@@ -18,7 +18,14 @@
 
 package org.apache.hudi.operator.utils;
 
-import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.operator.StreamWriteFunction;
+import org.apache.hudi.operator.StreamWriteOperatorCoordinator;
+import org.apache.hudi.operator.event.BatchWriteSuccessEvent;
+import org.apache.hudi.operator.partitioner.BucketAssignFunction;
+import org.apache.hudi.operator.transform.RowDataToHoodieFunction;
+
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
 import org.apache.flink.runtime.io.disk.iomanager.IOManagerAsync;
@@ -27,13 +34,9 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.testutils.MockEnvironment;
 import org.apache.flink.runtime.operators.testutils.MockEnvironmentBuilder;
 import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
-import org.apache.flink.streaming.api.operators.collect.utils.MockFunctionSnapshotContext;
 import org.apache.flink.streaming.api.operators.collect.utils.MockOperatorEventGateway;
-
-import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.operator.StreamWriteFunction;
-import org.apache.hudi.operator.StreamWriteOperatorCoordinator;
-import org.apache.hudi.operator.event.BatchWriteSuccessEvent;
+import org.apache.flink.table.data.RowData;
+import org.apache.flink.util.Collector;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -43,7 +46,6 @@ import java.util.concurrent.CompletableFuture;
  * @param <I> Input type
  */
 public class StreamWriteFunctionWrapper<I> {
-  private final TypeSerializer<I> serializer;
   private final Configuration conf;
 
   private final IOManager ioManager;
@@ -52,10 +54,18 @@ public class StreamWriteFunctionWrapper<I> {
   private final StreamWriteOperatorCoordinator coordinator;
   private final MockFunctionInitializationContext functionInitializationContext;
 
-  private StreamWriteFunction<Object, I, Object> function;
+  /** Function that converts row data to HoodieRecord. */
+  private RowDataToHoodieFunction<RowData, HoodieRecord<?>> toHoodieFunction;
+  /** Function that assigns bucket ID. */
+  private BucketAssignFunction<String, HoodieRecord<?>, HoodieRecord<?>> bucketAssignerFunction;
+  /** Stream write function. */
+  private StreamWriteFunction<Object, HoodieRecord<?>, Object> writeFunction;
 
-  public StreamWriteFunctionWrapper(String tablePath, TypeSerializer<I> serializer) throws Exception {
-    this.serializer = serializer;
+  public StreamWriteFunctionWrapper(String tablePath) throws Exception {
+    this(tablePath, TestConfigurations.getDefaultConf(tablePath));
+  }
+
+  public StreamWriteFunctionWrapper(String tablePath, Configuration conf) throws Exception {
     this.ioManager = new IOManagerAsync();
     MockEnvironment environment = new MockEnvironmentBuilder()
         .setTaskName("mockTask")
@@ -64,7 +74,7 @@ public class StreamWriteFunctionWrapper<I> {
         .build();
     this.runtimeContext = new MockStreamingRuntimeContext(false, 1, 0, environment);
     this.gateway = new MockOperatorEventGateway();
-    this.conf = TestConfigurations.getDefaultConf(tablePath);
+    this.conf = conf;
     // one function
     this.coordinator = new StreamWriteOperatorCoordinator(conf, 1);
     this.coordinator.start();
@@ -72,14 +82,37 @@ public class StreamWriteFunctionWrapper<I> {
   }
 
   public void openFunction() throws Exception {
-    function = new StreamWriteFunction<>(TestConfigurations.ROW_TYPE, this.conf);
-    function.setRuntimeContext(runtimeContext);
-    function.setOperatorEventGateway(gateway);
-    function.open(this.conf);
+    toHoodieFunction = new RowDataToHoodieFunction<>(TestConfigurations.ROW_TYPE, conf);
+    toHoodieFunction.setRuntimeContext(runtimeContext);
+    toHoodieFunction.open(conf);
+
+    bucketAssignerFunction = new BucketAssignFunction<>(conf);
+    bucketAssignerFunction.setRuntimeContext(runtimeContext);
+    bucketAssignerFunction.open(conf);
+    bucketAssignerFunction.initializeState(this.functionInitializationContext);
+
+    writeFunction = new StreamWriteFunction<>(conf);
+    writeFunction.setRuntimeContext(runtimeContext);
+    writeFunction.setOperatorEventGateway(gateway);
+    writeFunction.open(conf);
   }
 
   public void invoke(I record) throws Exception {
-    function.processElement(record, null, null);
+    HoodieRecord<?> hoodieRecord = toHoodieFunction.map((RowData) record);
+    HoodieRecord<?>[] hoodieRecords = new HoodieRecord[1];
+    Collector<HoodieRecord<?>> collector = new Collector<HoodieRecord<?>>() {
+      @Override
+      public void collect(HoodieRecord<?> record) {
+        hoodieRecords[0] = record;
+      }
+
+      @Override
+      public void close() {
+
+      }
+    };
+    bucketAssignerFunction.processElement(hoodieRecord, null, collector);
+    writeFunction.processElement(hoodieRecords[0], null, null);
   }
 
   public BatchWriteSuccessEvent[] getEventBuffer() {
@@ -92,19 +125,22 @@ public class StreamWriteFunctionWrapper<I> {
 
   @SuppressWarnings("rawtypes")
   public HoodieFlinkWriteClient getWriteClient() {
-    return this.function.getWriteClient();
+    return this.writeFunction.getWriteClient();
   }
 
   public void checkpointFunction(long checkpointId) throws Exception {
     // checkpoint the coordinator first
     this.coordinator.checkpointCoordinator(checkpointId, new CompletableFuture<>());
-    function.snapshotState(new MockFunctionSnapshotContext(checkpointId));
+    bucketAssignerFunction.snapshotState(null);
+
+    writeFunction.snapshotState(null);
     functionInitializationContext.getOperatorStateStore().checkpointBegin(checkpointId);
   }
 
   public void checkpointComplete(long checkpointId) {
     functionInitializationContext.getOperatorStateStore().checkpointSuccess(checkpointId);
     coordinator.checkpointComplete(checkpointId);
+    this.bucketAssignerFunction.notifyCheckpointComplete(checkpointId);
   }
 
   public void checkpointFails(long checkpointId) {
