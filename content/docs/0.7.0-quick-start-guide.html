@@ -642,7 +642,7 @@ steps in the upsert write path completely.</p>
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># pyspark
 </span><span class="n">export</span> <span class="n">PYSPARK_PYTHON</span><span class="o">=</span><span class="err">$</span><span class="p">(</span><span class="n">which</span> <span class="n">python3</span><span class="p">)</span>
 <span class="n">pyspark</span> \
-  <span class="o">--</span><span class="n">packages</span> <span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">hudi</span><span class="p">:</span><span class="n">hudi</span><span class="o">-</span><span class="n">spark</span><span class="o">-</span><span class="n">bundle_2</span><span class="mf">.12</span><span class="p">:</span><span class="mf">0.7.0</span><span class="p">,</span><span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">spark</span><span class="p">:</span><span class="n">spark</span><span class="o">-</span><span class="n">avro_2</span><span class="mf">.11</span><span class="p">:</span><span class="mf">3.0.1</span> \
+  <span class="o">--</span><span class="n">packages</span> <span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">hudi</span><span class="p">:</span><span class="n">hudi</span><span class="o">-</span><span class="n">spark</span><span class="o">-</span><span class="n">bundle_2</span><span class="mf">.12</span><span class="p">:</span><span class="mf">0.7.0</span><span class="p">,</span><span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">spark</span><span class="p">:</span><span class="n">spark</span><span class="o">-</span><span class="n">avro_2</span><span class="mf">.12</span><span class="p">:</span><span class="mf">3.0.1</span> \
   <span class="o">--</span><span class="n">conf</span> <span class="s">'spark.serializer=org.apache.spark.serializer.KryoSerializer'</span>
 </code></pre></div></div>
 
@@ -844,8 +844,8 @@ specific commit time and beginTime to “000” (denoting earliest possible comm
 <h2 id="where-to-go-from-here">Where to go from here?</h2>
 
 <p>You can also do the quickstart by <a href="https://github.com/apache/hudi#building-apache-hudi-from-source">building hudi yourself</a>, 
-and using <code class="highlighter-rouge">--jars &lt;path to hudi_code&gt;/packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-*.*.*-SNAPSHOT.jar</code> in the spark-shell command above
-instead of <code class="highlighter-rouge">--packages org.apache.hudi:hudi-spark-bundle_2.11:0.6.0</code>. Hudi also supports scala 2.12. Refer <a href="https://github.com/apache/hudi#build-with-scala-212">build with scala 2.12</a>
+and using <code class="highlighter-rouge">--jars &lt;path to hudi_code&gt;/packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.1?-*.*.*-SNAPSHOT.jar</code> in the spark-shell command above
+instead of <code class="highlighter-rouge">--packages org.apache.hudi:hudi-spark-bundle_2.12:0.7.0</code>. Hudi also supports scala 2.12. Refer <a href="https://github.com/apache/hudi#build-with-scala-212">build with scala 2.12</a>
 for more info.</p>
 
 <p>Also, we used Spark here to show case the capabilities of Hudi. However, Hudi can support multiple table types/query types and 
