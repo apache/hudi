@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
@@ -249,7 +250,17 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   public void deletePendingInstant(String tableType, String instant) {
     HoodieFlinkTable<T> table = HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context);
     String commitType = CommitUtils.getCommitActionType(HoodieTableType.valueOf(tableType));
-    table.getMetaClient().getActiveTimeline()
-        .deletePending(new HoodieInstant(HoodieInstant.State.REQUESTED, commitType, instant));
+    HoodieActiveTimeline activeTimeline = table.getMetaClient().getActiveTimeline();
+    activeTimeline.deletePending(HoodieInstant.State.INFLIGHT, commitType, instant);
+    activeTimeline.deletePending(HoodieInstant.State.REQUESTED, commitType, instant);
+  }
+
+  public void transitionRequestedToInflight(String tableType, String inFlightInstant) {
+    HoodieFlinkTable<T> table = HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context);
+    HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
+    String commitType = CommitUtils.getCommitActionType(HoodieTableType.valueOf(tableType));
+    HoodieInstant requested = new HoodieInstant(HoodieInstant.State.REQUESTED, commitType, inFlightInstant);
+    activeTimeline.transitionRequestedToInflight(requested, Option.empty(),
+        config.shouldAllowMultiWriteOnSameInstant());
   }
 }

@@ -28,7 +28,6 @@ import org.apache.flink.streaming.api.operators.SimpleUdfStreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamOperator;
 import org.apache.flink.streaming.api.operators.StreamOperatorParameters;
 import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
-import org.apache.flink.table.types.logical.RowType;
 
 /**
  * Factory class for {@link StreamWriteOperator}.
@@ -43,10 +42,9 @@ public class StreamWriteOperatorFactory<I>
   private final int numTasks;
 
   public StreamWriteOperatorFactory(
-      RowType rowType,
       Configuration conf,
       int numTasks) {
-    super(new StreamWriteOperator<>(rowType, conf));
+    super(new StreamWriteOperator<>(conf));
     this.operator = (StreamWriteOperator<I>) getOperator();
     this.conf = conf;
     this.numTasks = numTasks;

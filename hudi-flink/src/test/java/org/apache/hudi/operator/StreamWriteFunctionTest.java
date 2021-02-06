@@ -27,6 +27,7 @@ import org.apache.hudi.operator.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.operator.utils.TestConfigurations;
 import org.apache.hudi.operator.utils.TestData;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.table.data.RowData;
 import org.hamcrest.MatcherAssert;
@@ -56,24 +57,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class StreamWriteFunctionTest {
 
-  private static final Map<String, String> EXPECTED = new HashMap<>();
-
-  static {
-    EXPECTED.put("par1", "[id1,par1,id1,Danny,23,1,par1, id2,par1,id2,Stephen,33,2,par1]");
-    EXPECTED.put("par2", "[id3,par2,id3,Julian,53,3,par2, id4,par2,id4,Fabian,31,4,par2]");
-    EXPECTED.put("par3", "[id5,par3,id5,Sophia,18,5,par3, id6,par3,id6,Emma,20,6,par3]");
-    EXPECTED.put("par4", "[id7,par4,id7,Bob,44,7,par4, id8,par4,id8,Han,56,8,par4]");
-  }
+  private static final Map<String, String> EXPECTED1 = new HashMap<>();
 
   private static final Map<String, String> EXPECTED2 = new HashMap<>();
 
+  private static final Map<String, String> EXPECTED3 = new HashMap<>();
+
   static {
+    EXPECTED1.put("par1", "[id1,par1,id1,Danny,23,1,par1, id2,par1,id2,Stephen,33,2,par1]");
+    EXPECTED1.put("par2", "[id3,par2,id3,Julian,53,3,par2, id4,par2,id4,Fabian,31,4,par2]");
+    EXPECTED1.put("par3", "[id5,par3,id5,Sophia,18,5,par3, id6,par3,id6,Emma,20,6,par3]");
+    EXPECTED1.put("par4", "[id7,par4,id7,Bob,44,7,par4, id8,par4,id8,Han,56,8,par4]");
+
     EXPECTED2.put("par1", "[id1,par1,id1,Danny,24,1,par1, id2,par1,id2,Stephen,34,2,par1]");
     EXPECTED2.put("par2", "[id3,par2,id3,Julian,54,3,par2, id4,par2,id4,Fabian,32,4,par2]");
     EXPECTED2.put("par3", "[id5,par3,id5,Sophia,18,5,par3, id6,par3,id6,Emma,20,6,par3, "
         + "id9,par3,id9,Jane,19,6,par3]");
     EXPECTED2.put("par4", "[id10,par4,id10,Ella,38,7,par4, id11,par4,id11,Phoebe,52,8,par4, "
         + "id7,par4,id7,Bob,44,7,par4, id8,par4,id8,Han,56,8,par4]");
+
+    EXPECTED3.put("par1", "[id1,par1,id1,Danny,23,1,par1]");
   }
 
   private StreamWriteFunctionWrapper<RowData> funcWrapper;
@@ -83,9 +86,7 @@ public class StreamWriteFunctionTest {
 
   @BeforeEach
   public void before() throws Exception {
-    this.funcWrapper = new StreamWriteFunctionWrapper<>(
-        tempFile.getAbsolutePath(),
-        TestConfigurations.SERIALIZER);
+    this.funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath());
   }
 
   @AfterEach
@@ -211,7 +212,7 @@ public class StreamWriteFunctionTest {
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
     assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
-    checkWrittenData(tempFile, EXPECTED);
+    checkWrittenData(tempFile, EXPECTED1);
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
@@ -220,7 +221,43 @@ public class StreamWriteFunctionTest {
     funcWrapper.checkpointComplete(1);
     // the coordinator checkpoint commits the inflight instant.
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
-    checkWrittenData(tempFile, EXPECTED);
+    checkWrittenData(tempFile, EXPECTED1);
+  }
+
+  @Test
+  public void testInsertDuplicates() throws Exception {
+    // reset the config option
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setBoolean(FlinkOptions.INSERT_DROP_DUPS, true);
+    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
+
+    // open the function and ingest data
+    funcWrapper.openFunction();
+    for (RowData rowData : TestData.DATA_SET_THREE) {
+      funcWrapper.invoke(rowData);
+    }
+
+    assertEmptyDataFiles();
+    // this triggers the data write and event send
+    funcWrapper.checkpointFunction(1);
+
+    final OperatorEvent nextEvent = funcWrapper.getNextEvent();
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
+    checkWrittenData(tempFile, EXPECTED3, 1);
+
+    funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
+    assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
+
+    funcWrapper.checkpointComplete(1);
+
+    // insert duplicates again
+    for (RowData rowData : TestData.DATA_SET_THREE) {
+      funcWrapper.invoke(rowData);
+    }
+
+    funcWrapper.checkpointFunction(2);
+
+    checkWrittenData(tempFile, EXPECTED3, 1);
   }
 
   @Test
@@ -248,7 +285,7 @@ public class StreamWriteFunctionTest {
       funcWrapper.invoke(rowData);
     }
     // the data is not flushed yet
-    checkWrittenData(tempFile, EXPECTED);
+    checkWrittenData(tempFile, EXPECTED1);
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(2);
 

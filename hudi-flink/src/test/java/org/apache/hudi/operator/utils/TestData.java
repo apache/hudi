@@ -43,6 +43,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.IntStream;
 
 import static junit.framework.TestCase.assertEquals;
 import static org.hamcrest.CoreMatchers.is;
@@ -92,6 +93,13 @@ public class TestData {
           TimestampData.fromEpochMillis(8), StringData.fromString("par4"))
   );
 
+  public static List<RowData> DATA_SET_THREE = new ArrayList<>();
+  static {
+    IntStream.range(0, 5).forEach(i -> DATA_SET_THREE.add(
+        binaryRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+            TimestampData.fromEpochMillis(1), StringData.fromString("par1"))));
+  }
+
   /**
    * Checks the source data TestConfigurations.DATA_SET_ONE are written as expected.
    *
@@ -101,13 +109,29 @@ public class TestData {
    * @param expected The expected results mapping, the key should be the partition path
    */
   public static void checkWrittenData(File baseFile, Map<String, String> expected) throws IOException {
+    checkWrittenData(baseFile, expected, 4);
+  }
+
+  /**
+   * Checks the source data TestConfigurations.DATA_SET_ONE are written as expected.
+   *
+   * <p>Note: Replace it with the Flink reader when it is supported.
+   *
+   * @param baseFile   The file base to check, should be a directly
+   * @param expected   The expected results mapping, the key should be the partition path
+   * @param partitions The expected partition number
+   */
+  public static void checkWrittenData(
+      File baseFile,
+      Map<String, String> expected,
+      int partitions) throws IOException {
     assert baseFile.isDirectory();
     FileFilter filter = file -> !file.getName().startsWith(".");
     File[] partitionDirs = baseFile.listFiles(filter);
     assertNotNull(partitionDirs);
-    assertThat(partitionDirs.length, is(4));
+    assertThat(partitionDirs.length, is(partitions));
     for (File partitionDir : partitionDirs) {
-      File[] dataFiles = partitionDir.listFiles(file -> file.getName().endsWith(".parquet"));
+      File[] dataFiles = partitionDir.listFiles(filter);
       assertNotNull(dataFiles);
       File latestDataFile = Arrays.stream(dataFiles)
           .max(Comparator.comparing(f -> FSUtils.getCommitTime(f.getName())))
