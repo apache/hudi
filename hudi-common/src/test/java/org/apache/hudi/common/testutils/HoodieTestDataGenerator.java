@@ -138,7 +138,7 @@ public class HoodieTestDataGenerator {
 
   //Maintains all the existing keys schema wise
   private final Map<String, Map<Integer, KeyPartition>> existingKeysBySchema;
-  private final String[] partitionPaths;
+  private String[] partitionPaths;
   //maintains the count of existing keys schema wise
   private Map<String, Integer> numKeysBySchema;
 
@@ -803,6 +803,10 @@ public class HoodieTestDataGenerator {
           .toString(), RAND.nextLong()));
     });
     return list;
+  }
+
+  public void setPartitionPaths(String[] partitionPaths) {
+    this.partitionPaths = partitionPaths;
   }
 
   public String[] getPartitionPaths() {

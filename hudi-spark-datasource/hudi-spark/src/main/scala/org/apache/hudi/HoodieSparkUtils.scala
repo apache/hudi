@@ -23,11 +23,15 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.client.utils.SparkRowDeserializer
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeline}
+import org.apache.hudi.common.util.TablePathUtils
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.encoders.{ExpressionEncoder, RowEncoder}
+import org.apache.spark.sql.execution.datasources.InMemoryFileIndex.shouldFilterOut
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFileIndex}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 
@@ -77,11 +81,14 @@ object HoodieSparkUtils {
    * @return list of absolute file paths
    */
   def checkAndGlobPathIfNecessary(paths: Seq[String], fs: FileSystem): Seq[Path] = {
+    val globPaths =
     paths.flatMap(path => {
       val qualified = new Path(path).makeQualified(fs.getUri, fs.getWorkingDirectory)
       val globPaths = globPathIfNecessary(fs, qualified)
       globPaths
     })
+    val filteredGlobPaths = globPaths.filterNot( path => TablePathUtils.isHoodieMetaPath(path.toString) || shouldFilterOut(path.getName))
+    filteredGlobPaths
   }
 
   def createInMemoryFileIndex(sparkSession: SparkSession, globbedPaths: Seq[Path]): InMemoryFileIndex = {

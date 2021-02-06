@@ -17,18 +17,22 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.DataSourceWriteOptions.{KEYGENERATOR_CLASS_OPT_KEY, PARTITIONPATH_FIELD_OPT_KEY, PAYLOAD_CLASS_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, MergeOnReadSnapshotRelation}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.log4j.LogManager
 import org.apache.spark.sql._
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.execution.{DataSourceScanExec, QueryExecution}
 import org.apache.spark.sql.functions._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-
 
 import scala.collection.JavaConversions._
 
@@ -502,6 +506,80 @@ class TestMORDataSource extends HoodieClientTestBase {
     hudiSnapshotDF2.show(1)
   }
 
+  @Test
+  def testPrunePartitions() {
+    // First Operation:
+    // Producing parquet files to three hive style partitions like /partition=20150316/.
+    // SNAPSHOT view on MOR table with parquet files only.
+    dataGen.setPartitionPaths(Array("20150316","20150317","20160315"));
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY, "true")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+    val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .option("basePath", basePath)
+      .load(basePath + "/*/*")
+
+    hudiSnapshotDF1.createOrReplaceTempView("mor_test_partition_table");
+    val sql = "select tip_history from  mor_test_partition_table where partition = '20160315'"
+
+    val plan = new TestMORQueryExecution(spark,sql).sparkPlan
+    val mergeOnReadSnapshotRelation = plan.collect {
+      case scan: DataSourceScanExec => scan.relation
+    }.head.asInstanceOf[MergeOnReadSnapshotRelation]
+
+    val fileIndexPaths = mergeOnReadSnapshotRelation.getFileIndexPaths;
+
+    assertEquals(1,fileIndexPaths.length)
+    assertTrue(fileIndexPaths.get(0).contains("20160315"))
+  }
+
+  @Test
+  def testPreCombineFiledForReadMOR(): Unit = {
+    writeData((1, "a0",10, 100))
+    checkAnswer((1, "a0",10, 100))
+
+    writeData((1, "a0", 12, 99))
+    // The value has not update, because the version 99 < 100
+    checkAnswer((1, "a0",10, 100))
+
+    writeData((1, "a0", 12, 101))
+    // The value has update
+    checkAnswer((1, "a0", 12, 101))
+  }
+
+  private def writeData(data: (Int, String, Int, Int)): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val df = Seq(data).toDF("id", "name", "value", "version")
+    df.write.format("org.apache.hudi")
+      .options(commonOpts)
+      // use DefaultHoodieRecordPayload here
+      .option(PAYLOAD_CLASS_OPT_KEY, classOf[DefaultHoodieRecordPayload].getCanonicalName)
+      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .option(RECORDKEY_FIELD_OPT_KEY, "id")
+      .option(PRECOMBINE_FIELD_OPT_KEY, "version")
+      .option(PARTITIONPATH_FIELD_OPT_KEY, "")
+      .option(KEYGENERATOR_CLASS_OPT_KEY, classOf[NonpartitionedKeyGenerator].getName)
+      .mode(SaveMode.Append)
+      .save(basePath)
+  }
+
+  private def checkAnswer(expect: (Int, String, Int, Int)): Unit = {
+    val readDf = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*")
+    val row1 = readDf.select("id", "name", "value", "version").take(1)(0)
+    assertEquals(Row(expect.productIterator.toSeq: _*), row1)
+  }
+
   def verifySchemaAndTypes(df: DataFrame): Unit = {
     assertEquals("amount,currency,tip_history,_hoodie_commit_seqno",
       df.select("fare.amount", "fare.currency", "tip_history", "_hoodie_commit_seqno")
@@ -521,5 +599,13 @@ class TestMORDataSource extends HoodieClientTestBase {
   def verifyShow(df: DataFrame): Unit = {
     df.show(1)
     df.select("_hoodie_commit_seqno", "fare.amount", "fare.currency", "tip_history").show(1)
+  }
+}
+
+private class TestMORQueryExecution(sparkSession: SparkSession, logicalPlan: LogicalPlan)
+  extends QueryExecution(sparkSession, logicalPlan) {
+
+  def this(sparkSession: SparkSession, sql: String) {
+    this(sparkSession, sparkSession.sessionState.sqlParser.parsePlan(sql))
   }
 }

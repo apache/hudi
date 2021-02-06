@@ -65,6 +65,10 @@ public class TablePathUtils {
     return getTablePathFromPartitionPath(fs, directory);
   }
 
+  public static Boolean isHoodieMetaPath(String path) {
+    return isInsideTableMetadataFolder(path) || isTableMetadataFolder(path);
+  }
+
   private static boolean isTableMetadataFolder(String path) {
     return path != null && path.endsWith("/" + HoodieTableMetaClient.METAFOLDER_NAME);
   }
