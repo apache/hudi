@@ -17,17 +17,16 @@
 
 package org.apache.spark.sql.hudi.streaming
 
-import java.io.{BufferedWriter, InputStream, InputStreamReader, OutputStream, OutputStreamWriter}
+import java.io.{BufferedWriter, InputStream, OutputStream, OutputStreamWriter}
 import java.nio.charset.StandardCharsets
 import java.util.Date
 
-import org.apache.commons.io.IOUtils
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils, IncrementalRelation, MergeOnReadIncrementalRelation}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.TablePathUtils
+import org.apache.hudi.common.util.{FileIOUtils, TablePathUtils}
 import org.apache.spark.sql.hudi.streaming.HoodieStreamSource.VERSION
 import org.apache.spark.sql.hudi.streaming.HoodieSourceOffset.INIT_OFFSET
 import org.apache.spark.internal.Logging
@@ -60,11 +59,11 @@ class HoodieStreamSource(
     val fs = path.getFileSystem(hadoopConf)
     TablePathUtils.getTablePath(fs, path).get()
   }
-  @transient private lazy val metaClient = new HoodieTableMetaClient(hadoopConf, tablePath.toString)
+  private lazy val metaClient = new HoodieTableMetaClient(hadoopConf, tablePath.toString)
   private lazy val tableType = metaClient.getTableType
 
   @transient private var lastOffset: HoodieSourceOffset = _
-  @transient private lazy val initialPartitionOffsets = {
+  @transient private lazy val initialOffsets = {
     val metadataLog =
       new HDFSMetadataLog[HoodieSourceOffset](sqlContext.sparkSession, metadataPath) {
         override def serialize(metadata: HoodieSourceOffset, out: OutputStream): Unit = {
@@ -74,9 +73,19 @@ class HoodieStreamSource(
           writer.flush()
         }
 
+        /**
+          * Deserialize the init offset from the metadata file.
+          * The format in the metadata file is like this:
+          * ----------------------------------------------
+          * v1         -- The version info in the first line
+          * offsetJson -- The json string of HoodieSourceOffset in the rest of the file
+          * -----------------------------------------------
+          * @param in
+          * @return
+          */
         override def deserialize(in: InputStream): HoodieSourceOffset = {
-          val content = IOUtils.toString(new InputStreamReader(in, StandardCharsets.UTF_8))
-
+          val content = FileIOUtils.readAsUTFString(in)
+          // Get version from the first line
           val firstLineEnd = content.indexOf("\n")
           if (firstLineEnd > 0) {
             val version = getVersion(content.substring(0, firstLineEnd))
@@ -84,6 +93,7 @@ class HoodieStreamSource(
               throw new IllegalStateException(s"UnSupportVersion: max support version is: $VERSION" +
                 s" current version is: $version")
             }
+            // Get offset from the rest line in the file
             HoodieSourceOffset.fromJson(content.substring(firstLineEnd + 1))
           } else {
             throw new IllegalStateException(s"Bad metadata format, failed to find the version line.")
@@ -113,9 +123,11 @@ class HoodieStreamSource(
     }
   }
 
+  /**
+    * Get the latest offset from the hoodie table.
+    * @return
+    */
   override def getOffset: Option[Offset] = {
-    initialPartitionOffsets
-
     metaClient.reloadActiveTimeline()
     val activeInstants = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
     if (!activeInstants.empty()) {
@@ -124,16 +136,16 @@ class HoodieStreamSource(
         lastOffset = HoodieSourceOffset(currentLatestCommitTime)
       }
     } else { // if there are no active commits, use the init offset
-      lastOffset = initialPartitionOffsets
+      lastOffset = initialOffsets
     }
     Some(lastOffset)
   }
 
   override def getBatch(start: Option[Offset], end: Offset): DataFrame = {
-    initialPartitionOffsets
+    initialOffsets
 
     val startOffset = start.map(HoodieSourceOffset(_))
-      .getOrElse(initialPartitionOffsets)
+      .getOrElse(initialOffsets)
     val endOffset = HoodieSourceOffset(end)
 
     if (startOffset == endOffset) {
@@ -148,10 +160,10 @@ class HoodieStreamSource(
 
       val rdd = tableType match {
         case HoodieTableType.COPY_ON_WRITE =>
-          val encoder = HoodieSparkUtils.createRowEncoder(RowEncoder(schema))
+          val serDe = HoodieSparkUtils.createRowSerDe(RowEncoder(schema))
           new IncrementalRelation(sqlContext, incParams, schema, metaClient)
             .buildScan()
-            .map(encoder.serializeRow)
+            .map(serDe.serializeRow)
         case HoodieTableType.MERGE_ON_READ =>
           val requiredColumns = schema.fields.map(_.name)
           new MergeOnReadIncrementalRelation(sqlContext, incParams, schema, metaClient)

@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonInclude.Include
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
+import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.spark.sql.execution.streaming.{Offset, SerializedOffset}
 
 case class HoodieSourceOffset(commitTime: String) extends Offset {
@@ -64,5 +65,5 @@ object HoodieSourceOffset {
     }
   }
 
-  val INIT_OFFSET = HoodieSourceOffset("000")
+  val INIT_OFFSET = HoodieSourceOffset(HoodieTimeline.INIT_INSTANT_TS)
 }
