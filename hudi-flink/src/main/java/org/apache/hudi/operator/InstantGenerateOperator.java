@@ -245,7 +245,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   private boolean checkReceivedData(long checkpointId) throws InterruptedException, IOException {
     int numberOfParallelSubtasks = runtimeContext.getNumberOfParallelSubtasks();
     FileStatus[] fileStatuses;
-    Path instantMarkerPath = generateCurrentMakerPath();
+    Path instantMarkerPath = generateCurrentMakerDirPath();
     // waiting all subtask create marker file ready
     while (true) {
       Thread.sleep(500L);
