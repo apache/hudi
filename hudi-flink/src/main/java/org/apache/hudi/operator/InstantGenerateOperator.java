@@ -298,15 +298,12 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
     }
   }
 
-  private Path generateCurrentMakerPath() {
-    String baseDir = cfg.targetBasePath.endsWith("/")
-            ? cfg.targetBasePath.substring(0, cfg.targetBasePath.length() - 1)
-            : cfg.targetBasePath;
-    Path auxPath = new Path(baseDir, HoodieTableMetaClient.AUXILIARYFOLDER_NAME);
+  private Path generateCurrentMakerDirPath() {
+    Path auxPath = new Path(cfg.targetBasePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME);
     return new Path(auxPath, INSTANT_MARKER_FOLDER_NAME);
   }
 
   private Path generateCurrentMakerFilePath(String instantMarkerFileName) {
-    return new Path(generateCurrentMakerPath(), instantMarkerFileName);
+    return new Path(generateCurrentMakerDirPath(), instantMarkerFileName);
   }
 }
