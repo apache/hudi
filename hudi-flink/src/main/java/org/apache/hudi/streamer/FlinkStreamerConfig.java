@@ -71,8 +71,7 @@ public class FlinkStreamerConfig extends Configuration {
       + "hoodie client, schema provider, key generator and data source. For hoodie client props, sane defaults are "
       + "used, but recommend use to provide basic things like metrics endpoints, hive configs etc. For sources, refer"
       + "to individual classes, for supported properties.")
-  public String propsFilePath =
-      "file://" + System.getProperty("user.dir") + "/src/test/resources/delta-streamer-config/dfs-source.properties";
+  public String propsFilePath = "";
 
   @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
       + "(using the CLI parameter \"--props\") can also be passed command line using this parameter.")

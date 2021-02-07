@@ -22,9 +22,6 @@ import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.operator.event.BatchWriteSuccessEvent;
@@ -38,8 +35,6 @@ import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.util.Preconditions;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,6 +53,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
 
 /**
  * {@link OperatorCoordinator} for {@link StreamWriteFunction}.
@@ -121,7 +118,7 @@ public class StreamWriteOperatorCoordinator
     // writeClient
     initWriteClient();
     // init table, create it if not exists.
-    initTable();
+    initTableIfNotExists(this.conf);
   }
 
   @Override
@@ -139,6 +136,7 @@ public class StreamWriteOperatorCoordinator
           + " data has not finish writing, roll back the last write and throw";
       checkAndForceCommit(errMsg);
       this.inFlightInstant = this.writeClient.startCommit();
+      this.writeClient.transitionRequestedToInflight(conf.getString(FlinkOptions.TABLE_TYPE), this.inFlightInstant);
       this.inFlightCheckpoint = checkpointId;
       LOG.info("Create instant [{}], at checkpoint [{}]", this.inFlightInstant, checkpointId);
       result.complete(writeCheckpointBytes());
@@ -198,28 +196,6 @@ public class StreamWriteOperatorCoordinator
         new HoodieFlinkEngineContext(new FlinkTaskContextSupplier(null)),
         StreamerUtil.getHoodieClientConfig(this.conf),
         true);
-  }
-
-  private void initTable() throws IOException {
-    final String basePath = this.conf.getString(FlinkOptions.PATH);
-    final org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf();
-    // Hadoop FileSystem
-    try (FileSystem fs = FSUtils.getFs(basePath, hadoopConf)) {
-      if (!fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))) {
-        HoodieTableMetaClient.initTableType(
-            hadoopConf,
-            basePath,
-            HoodieTableType.valueOf(this.conf.getString(FlinkOptions.TABLE_TYPE)),
-            this.conf.getString(FlinkOptions.TABLE_NAME),
-            "archived",
-            this.conf.getString(FlinkOptions.PAYLOAD_CLASS),
-            1);
-        LOG.info("Table initialized");
-      } else {
-        LOG.info("Table [{}/{}] already exists, no need to initialize the table",
-            basePath, this.conf.getString(FlinkOptions.TABLE_NAME));
-      }
-    }
   }
 
   static byte[] readBytes(DataInputStream in, int size) throws IOException {

@@ -24,7 +24,6 @@ import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.operators.coordination.OperatorEventHandler;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.api.operators.StreamSink;
-import org.apache.flink.table.types.logical.RowType;
 
 /**
  * Operator for {@link StreamSink}.
@@ -36,8 +35,8 @@ public class StreamWriteOperator<I>
     implements OperatorEventHandler {
   private final StreamWriteFunction<Object, I, Object> sinkFunction;
 
-  public StreamWriteOperator(RowType rowType, Configuration conf) {
-    super(new StreamWriteFunction<>(rowType, conf));
+  public StreamWriteOperator(Configuration conf) {
+    super(new StreamWriteFunction<>(conf));
     this.sinkFunction = (StreamWriteFunction<Object, I, Object>) getUserFunction();
   }
 

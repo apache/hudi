@@ -22,9 +22,11 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.operator.FlinkOptions;
 import org.apache.hudi.operator.InstantGenerateOperator;
 import org.apache.hudi.operator.KeyedWriteProcessFunction;
 import org.apache.hudi.operator.KeyedWriteProcessOperator;
+import org.apache.hudi.operator.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.CommitSink;
 import org.apache.hudi.source.JsonStringToHoodieRecordMapFunction;
 import org.apache.hudi.util.StreamerUtil;
@@ -34,9 +36,11 @@ import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.tuple.Tuple3;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.filesystem.FsStateBackend;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 
 import java.util.List;
@@ -66,12 +70,16 @@ public class HoodieFlinkStreamer {
       env.setStateBackend(new FsStateBackend(cfg.flinkCheckPointPath));
     }
 
+    Configuration conf = FlinkOptions.fromStreamerConfig(cfg);
+    int numWriteTask = conf.getInteger(FlinkOptions.WRITE_TASK_PARALLELISM);
+
     TypedProperties props = StreamerUtil.appendKafkaProps(cfg);
 
     // add data source config
     props.put(HoodieWriteConfig.WRITE_PAYLOAD_CLASS, cfg.payloadClassName);
     props.put(HoodieWriteConfig.PRECOMBINE_FIELD_PROP, cfg.sourceOrderingField);
 
+    StreamerUtil.initTableIfNotExists(conf);
     // Read from kafka source
     DataStream<HoodieRecord> inputRecords =
         env.addSource(new FlinkKafkaConsumer<>(cfg.kafkaTopic, new SimpleStringSchema(), props))
@@ -86,13 +94,20 @@ public class HoodieFlinkStreamer {
 
         // Keyby partition path, to avoid multiple subtasks writing to a partition at the same time
         .keyBy(HoodieRecord::getPartitionPath)
-
+        // use the bucket assigner to generate bucket IDs
+        .transform(
+            "bucket_assigner",
+            TypeInformation.of(HoodieRecord.class),
+            new KeyedProcessOperator<>(new BucketAssignFunction<>(conf)))
+        .uid("uid_bucket_assigner")
+        // shuffle by fileId(bucket id)
+        .keyBy(record -> record.getCurrentLocation().getFileId())
         // write operator, where the write operation really happens
         .transform(KeyedWriteProcessOperator.NAME, TypeInformation.of(new TypeHint<Tuple3<String, List<WriteStatus>, Integer>>() {
         }), new KeyedWriteProcessOperator(new KeyedWriteProcessFunction()))
         .name("write_process")
         .uid("write_process_uid")
-        .setParallelism(env.getParallelism())
+        .setParallelism(numWriteTask)
 
         // Commit can only be executed once, so make it one parallelism
         .addSink(new CommitSink())

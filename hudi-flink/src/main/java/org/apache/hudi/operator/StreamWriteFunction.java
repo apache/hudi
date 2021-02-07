@@ -18,22 +18,18 @@
 
 package org.apache.hudi.operator;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.operator.event.BatchWriteSuccessEvent;
-import org.apache.hudi.util.RowDataToAvroConverters;
+import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 import org.apache.hudi.util.StreamerUtil;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
@@ -41,7 +37,6 @@ import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
-import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.Preconditions;
 import org.slf4j.Logger;
@@ -50,7 +45,9 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiFunction;
@@ -96,7 +93,7 @@ public class StreamWriteFunction<K, I, O> extends KeyedProcessFunction<K, I, O> 
   /**
    * Write buffer for a checkpoint.
    */
-  private transient List<HoodieRecord> buffer;
+  private transient Map<String, List<HoodieRecord>> buffer;
 
   /**
    * The buffer lock to control data buffering/flushing.
@@ -131,23 +128,6 @@ public class StreamWriteFunction<K, I, O> extends KeyedProcessFunction<K, I, O> 
   private transient BiFunction<List<HoodieRecord>, String, List<WriteStatus>> writeFunction;
 
   /**
-   * HoodieKey generator.
-   */
-  private transient KeyGenerator keyGenerator;
-
-  /**
-   * Row type of the input.
-   */
-  private final RowType rowType;
-
-  /**
-   * Avro schema of the input.
-   */
-  private final Schema avroSchema;
-
-  private transient RowDataToAvroConverters.RowDataToAvroConverter converter;
-
-  /**
    * The REQUESTED instant we write the data.
    */
   private volatile String currentInstant;
@@ -160,20 +140,15 @@ public class StreamWriteFunction<K, I, O> extends KeyedProcessFunction<K, I, O> 
   /**
    * Constructs a StreamingSinkFunction.
    *
-   * @param rowType The input row type
    * @param config  The config options
    */
-  public StreamWriteFunction(RowType rowType, Configuration config) {
-    this.rowType = rowType;
-    this.avroSchema = StreamerUtil.getSourceSchema(config);
+  public StreamWriteFunction(Configuration config) {
     this.config = config;
   }
 
   @Override
   public void open(Configuration parameters) throws IOException {
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
-    this.keyGenerator = StreamerUtil.createKeyGenerator(FlinkOptions.flatOptions(this.config));
-    this.converter = RowDataToAvroConverters.createConverter(this.rowType);
     initBuffer();
     initWriteClient();
     initWriteFunction();
@@ -211,7 +186,7 @@ public class StreamWriteFunction<K, I, O> extends KeyedProcessFunction<K, I, O> 
       if (onCheckpointing) {
         addToBufferCondition.await();
       }
-      this.buffer.add(toHoodieRecord(value));
+      putDataIntoBuffer(value);
     } finally {
       bufferLock.unlock();
     }
@@ -230,7 +205,7 @@ public class StreamWriteFunction<K, I, O> extends KeyedProcessFunction<K, I, O> 
 
   @VisibleForTesting
   @SuppressWarnings("rawtypes")
-  public List<HoodieRecord> getBuffer() {
+  public Map<String, List<HoodieRecord>> getBuffer() {
     return buffer;
   }
 
@@ -249,7 +224,7 @@ public class StreamWriteFunction<K, I, O> extends KeyedProcessFunction<K, I, O> 
   // -------------------------------------------------------------------------
 
   private void initBuffer() {
-    this.buffer = new ArrayList<>();
+    this.buffer = new LinkedHashMap<>();
     this.bufferLock = new ReentrantLock();
     this.addToBufferCondition = this.bufferLock.newCondition();
   }
@@ -277,32 +252,33 @@ public class StreamWriteFunction<K, I, O> extends KeyedProcessFunction<K, I, O> 
     }
   }
 
-  /**
-   * Converts the give record to a {@link HoodieRecord}.
-   *
-   * @param record The input record
-   * @return HoodieRecord based on the configuration
-   * @throws IOException if error occurs
-   */
-  @SuppressWarnings("rawtypes")
-  private HoodieRecord toHoodieRecord(I record) throws IOException {
-    boolean shouldCombine = this.config.getBoolean(FlinkOptions.INSERT_DROP_DUPS)
-        || WriteOperationType.fromValue(this.config.getString(FlinkOptions.OPERATION)) == WriteOperationType.UPSERT;
-    GenericRecord gr = (GenericRecord) this.converter.convert(this.avroSchema, record);
-    final String payloadClazz = this.config.getString(FlinkOptions.PAYLOAD_CLASS);
-    Comparable orderingVal = (Comparable) HoodieAvroUtils.getNestedFieldVal(gr,
-        this.config.getString(FlinkOptions.PRECOMBINE_FIELD), false);
-    HoodieRecordPayload payload = shouldCombine
-        ? StreamerUtil.createPayload(payloadClazz, gr, orderingVal)
-        : StreamerUtil.createPayload(payloadClazz, gr);
-    return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
+  private void putDataIntoBuffer(I value) {
+    HoodieRecord<?> record = (HoodieRecord<?>) value;
+    final String fileId = record.getCurrentLocation().getFileId();
+    final String key = StreamerUtil.generateBucketKey(record.getPartitionPath(), fileId);
+    if (!this.buffer.containsKey(key)) {
+      this.buffer.put(key, new ArrayList<>());
+    }
+    this.buffer.get(key).add(record);
   }
 
+  @SuppressWarnings("unchecked, rawtypes")
   private void flushBuffer() {
     final List<WriteStatus> writeStatus;
     if (buffer.size() > 0) {
-      writeStatus = writeFunction.apply(buffer, currentInstant);
-      buffer.clear();
+      writeStatus = new ArrayList<>();
+      this.buffer.values()
+          // The records are partitioned by the bucket ID and each batch sent to
+          // the writer belongs to one bucket.
+          .forEach(records -> {
+            if (records.size() > 0) {
+              if (config.getBoolean(FlinkOptions.INSERT_DROP_DUPS)) {
+                records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1);
+              }
+              writeStatus.addAll(writeFunction.apply(records, currentInstant));
+            }
+          });
+      this.buffer.clear();
     } else {
       LOG.info("No data to write in subtask [{}] for instant [{}]", taskID, currentInstant);
       writeStatus = Collections.emptyList();
