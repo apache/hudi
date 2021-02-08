@@ -151,7 +151,9 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
 
   public void updatePartitionToTable(String tableName, Partition newPart, String partitionLocation) {
     try {
-      StorageDescriptor sd = client.getPartition(syncConfig.databaseName, tableName, newPart.getValues()).getSd();
+      Partition oldPartition = client.getPartition(syncConfig.databaseName, tableName, newPart.getValues());
+      newPart.setParameters(oldPartition.getParameters());
+      StorageDescriptor sd = oldPartition.getSd();
       sd.setLocation(partitionLocation);
       newPart.setSd(sd);
       client.alter_partition(syncConfig.databaseName, tableName, newPart, null);

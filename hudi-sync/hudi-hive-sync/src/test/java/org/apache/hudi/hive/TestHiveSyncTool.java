@@ -97,7 +97,7 @@ public class TestHiveSyncTool {
         .named("list").named("element").named("list").named("int_list_list").named("ArrayOfArrayOfInts");
 
     schemaString = HiveSchemaUtil.generateSchemaString(schema);
-    assertEquals("int_list_list ARRAY< ARRAY< int>>", schemaString);
+    assertEquals("int_list_list ARRAY<ARRAY<int>>", schemaString);
 
     // A list of integers
     schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeated(PrimitiveType.PrimitiveTypeName.INT32)
