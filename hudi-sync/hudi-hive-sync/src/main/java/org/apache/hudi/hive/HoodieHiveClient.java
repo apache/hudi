@@ -149,15 +149,15 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     }
   }
 
-  public void updatePartitionToTable(String tableName, Partition newPart, String partitionLocation) throws TException {
+  public void updatePartitionToTable(String tableName, Partition newPart, String partitionLocation) {
     try {
-      StorageDescriptor sd = client.getTable(syncConfig.databaseName, tableName).getSd();
+      StorageDescriptor sd = client.getPartition(syncConfig.databaseName, tableName, newPart.getValues()).getSd();
       sd.setLocation(partitionLocation);
       newPart.setSd(sd);
       client.alter_partition(syncConfig.databaseName, tableName, newPart, null);
     } catch (Exception e) {
       LOG.error("updatePartitionToTable error", e);
-      throw new HoodieHiveSyncException("updatePartitionToTable error" + e.getMessage());
+      throw new HoodieHiveSyncException("updatePartitionToTable error " + e.getMessage());
     }
   }
 

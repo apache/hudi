@@ -89,7 +89,7 @@ public class TestHiveSyncTool {
         .named("ArrayOfInts");
 
     String schemaString = HiveSchemaUtil.generateSchemaString(schema);
-    assertEquals("int_list ARRAY< int>", schemaString);
+    assertEquals("int_list ARRAY<int>", schemaString);
 
     // A array of arrays
     schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup().requiredGroup()
@@ -173,7 +173,7 @@ public class TestHiveSyncTool {
     // verify backward compability - int64 converted to bigint type
     SchemaDifference schemaDifference = HiveSchemaUtil.getSchemaDifference(schema,
         Collections.emptyMap(), Collections.emptyList(), false);
-    assertEquals("bigint", schemaDifference.getAddColumnTypes().get("`my_element`"));
+    assertEquals("bigint", schemaDifference.getAddColumnTypes().get("my_element"));
     schemaDifference = HiveSchemaUtil.getSchemaDifference(schema,
         schemaDifference.getAddColumnTypes(), Collections.emptyList(), false);
     assertTrue(schemaDifference.isEmpty());
@@ -181,7 +181,7 @@ public class TestHiveSyncTool {
     // verify schema difference is calculated correctly when supportTimestamp is enabled
     schemaDifference = HiveSchemaUtil.getSchemaDifference(schema,
         Collections.emptyMap(), Collections.emptyList(), true);
-    assertEquals("TIMESTAMP", schemaDifference.getAddColumnTypes().get("`my_element`"));
+    assertEquals("TIMESTAMP", schemaDifference.getAddColumnTypes().get("my_element"));
     schemaDifference = HiveSchemaUtil.getSchemaDifference(schema,
         schemaDifference.getAddColumnTypes(), Collections.emptyList(), true);
     assertTrue(schemaDifference.isEmpty());
