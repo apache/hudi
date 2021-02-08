@@ -38,6 +38,8 @@ import org.apache.flink.streaming.api.operators.collect.utils.MockOperatorEventG
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.util.Collector;
 
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -77,11 +79,11 @@ public class StreamWriteFunctionWrapper<I> {
     this.conf = conf;
     // one function
     this.coordinator = new StreamWriteOperatorCoordinator(conf, 1);
-    this.coordinator.start();
     this.functionInitializationContext = new MockFunctionInitializationContext();
   }
 
   public void openFunction() throws Exception {
+    this.coordinator.start();
     toHoodieFunction = new RowDataToHoodieFunction<>(TestConfigurations.ROW_TYPE, conf);
     toHoodieFunction.setRuntimeContext(runtimeContext);
     toHoodieFunction.open(conf);
@@ -123,6 +125,10 @@ public class StreamWriteFunctionWrapper<I> {
     return this.gateway.getNextEvent();
   }
 
+  public Map<String, List<HoodieRecord>> getDataBuffer() {
+    return this.writeFunction.getBuffer();
+  }
+
   @SuppressWarnings("rawtypes")
   public HoodieFlinkWriteClient getWriteClient() {
     return this.writeFunction.getWriteClient();
@@ -141,6 +147,7 @@ public class StreamWriteFunctionWrapper<I> {
     functionInitializationContext.getOperatorStateStore().checkpointSuccess(checkpointId);
     coordinator.checkpointComplete(checkpointId);
     this.bucketAssignerFunction.notifyCheckpointComplete(checkpointId);
+    this.writeFunction.notifyCheckpointComplete(checkpointId);
   }
 
   public void checkpointFails(long checkpointId) {

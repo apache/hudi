@@ -34,6 +34,7 @@ import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.state.CheckpointListener;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
@@ -50,7 +51,9 @@ import java.util.Map;
 /**
  * A {@link KeyedProcessFunction} where the write operations really happens.
  */
-public class KeyedWriteProcessFunction extends KeyedProcessFunction<String, HoodieRecord, Tuple3<String, List<WriteStatus>, Integer>> implements CheckpointedFunction {
+public class KeyedWriteProcessFunction
+    extends KeyedProcessFunction<String, HoodieRecord, Tuple3<String, List<WriteStatus>, Integer>>
+    implements CheckpointedFunction, CheckpointListener {
 
   private static final Logger LOG = LoggerFactory.getLogger(KeyedWriteProcessFunction.class);
   /**
@@ -158,6 +161,11 @@ public class KeyedWriteProcessFunction extends KeyedProcessFunction<String, Hood
 
     // buffer the records
     putDataIntoBuffer(hoodieRecord);
+  }
+
+  @Override
+  public void notifyCheckpointComplete(long checkpointId) throws Exception {
+    this.writeClient.cleanHandles();
   }
 
   public boolean hasRecordsIn() {

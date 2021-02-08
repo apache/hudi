@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.clean.FlinkCleanActionExecutor;
@@ -61,14 +62,117 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
     super(config, context, metaClient);
   }
 
+  /**
+   * Upsert a batch of new records into Hoodie table at the supplied instantTime.
+   *
+   * <p>Specifies the write handle explicitly in order to have fine grained control with
+   * the underneath file.
+   *
+   * @param context     HoodieEngineContext
+   * @param writeHandle The write handle
+   * @param instantTime Instant Time for the action
+   * @param records     hoodieRecords to upsert
+   * @return HoodieWriteMetadata
+   */
+  public HoodieWriteMetadata<List<WriteStatus>> upsert(
+      HoodieEngineContext context,
+      HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+      String instantTime,
+      List<HoodieRecord<T>> records) {
+    return new FlinkUpsertCommitActionExecutor<>(context, writeHandle, config, this, instantTime, records).execute();
+  }
+
+  /**
+   * Insert a batch of new records into Hoodie table at the supplied instantTime.
+   *
+   * <p>Specifies the write handle explicitly in order to have fine grained control with
+   * the underneath file.
+   *
+   * @param context     HoodieEngineContext
+   * @param writeHandle The write handle
+   * @param instantTime Instant Time for the action
+   * @param records     hoodieRecords to upsert
+   * @return HoodieWriteMetadata
+   */
+  public HoodieWriteMetadata<List<WriteStatus>> insert(
+      HoodieEngineContext context,
+      HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+      String instantTime,
+      List<HoodieRecord<T>> records) {
+    return new FlinkInsertCommitActionExecutor<>(context, writeHandle, config, this, instantTime, records).execute();
+  }
+
+  /**
+   * Deletes a list of {@link HoodieKey}s from the Hoodie table, at the supplied instantTime {@link HoodieKey}s will be
+   * de-duped and non existent keys will be removed before deleting.
+   *
+   * <p>Specifies the write handle explicitly in order to have fine grained control with
+   * the underneath file.
+   *
+   * @param context     HoodieEngineContext
+   * @param writeHandle The write handle
+   * @param instantTime Instant Time for the action
+   * @param keys   {@link List} of {@link HoodieKey}s to be deleted
+   * @return HoodieWriteMetadata
+   */
+  public HoodieWriteMetadata<List<WriteStatus>> delete(
+      HoodieEngineContext context,
+      HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+      String instantTime,
+      List<HoodieKey> keys) {
+    return new FlinkDeleteCommitActionExecutor<>(context, writeHandle, config, this, instantTime, keys).execute();
+  }
+
+  /**
+   * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.
+   *
+   * <p>This implementation requires that the input records are already tagged, and de-duped if needed.
+   *
+   * <p>Specifies the write handle explicitly in order to have fine grained control with
+   * the underneath file.
+   *
+   * @param context    HoodieEngineContext
+   * @param instantTime Instant Time for the action
+   * @param preppedRecords  hoodieRecords to upsert
+   * @return HoodieWriteMetadata
+   */
+  public HoodieWriteMetadata<List<WriteStatus>> upsertPrepped(
+      HoodieEngineContext context,
+      HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+      String instantTime,
+      List<HoodieRecord<T>> preppedRecords) {
+    return new FlinkUpsertPreppedCommitActionExecutor<>(context, writeHandle, config, this, instantTime, preppedRecords).execute();
+  }
+
+  /**
+   * Inserts the given prepared records into the Hoodie table, at the supplied instantTime.
+   *
+   * <p>This implementation requires that the input records are already tagged, and de-duped if needed.
+   *
+   * <p>Specifies the write handle explicitly in order to have fine grained control with
+   * the underneath file.
+   *
+   * @param context    HoodieEngineContext
+   * @param instantTime Instant Time for the action
+   * @param preppedRecords  hoodieRecords to upsert
+   * @return HoodieWriteMetadata
+   */
+  public HoodieWriteMetadata<List<WriteStatus>> insertPrepped(
+      HoodieEngineContext context,
+      HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+      String instantTime,
+      List<HoodieRecord<T>> preppedRecords) {
+    return new FlinkInsertPreppedCommitActionExecutor<>(context, writeHandle, config, this, instantTime, preppedRecords).execute();
+  }
+
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> upsert(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> records) {
-    return new FlinkUpsertCommitActionExecutor<>(context, config, this, instantTime, records).execute();
+    throw new HoodieNotSupportedException("This method should not be invoked");
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> insert(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> records) {
-    return new FlinkInsertCommitActionExecutor<>(context, config, this, instantTime, records).execute();
+    throw new HoodieNotSupportedException("This method should not be invoked");
   }
 
   @Override
@@ -81,7 +185,7 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> delete(HoodieEngineContext context, String instantTime, List<HoodieKey> keys) {
-    return new FlinkDeleteCommitActionExecutor<>(context, config, this, instantTime, keys).execute();
+    throw new HoodieNotSupportedException("This method should not be invoked");
   }
 
   @Override
@@ -91,12 +195,12 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> upsertPrepped(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> preppedRecords) {
-    return new FlinkUpsertPreppedCommitActionExecutor<>(context, config, this, instantTime, preppedRecords).execute();
+    throw new HoodieNotSupportedException("This method should not be invoked");
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> insertPrepped(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> preppedRecords) {
-    return new FlinkInsertPreppedCommitActionExecutor<>(context, config, this, instantTime, preppedRecords).execute();
+    throw new HoodieNotSupportedException("This method should not be invoked");
   }
 
   @Override

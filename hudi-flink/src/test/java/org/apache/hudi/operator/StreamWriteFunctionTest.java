@@ -20,6 +20,7 @@ package org.apache.hudi.operator;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.operator.event.BatchWriteSuccessEvent;
@@ -150,7 +151,8 @@ public class StreamWriteFunctionTest {
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
 
     funcWrapper.checkpointComplete(2);
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.REQUESTED, null);
+    // started a new instant already
+    checkInflightInstant(funcWrapper.getWriteClient());
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
   }
 
@@ -187,12 +189,13 @@ public class StreamWriteFunctionTest {
       funcWrapper.invoke(rowData);
     }
 
-    // this triggers the data write and event send
-    funcWrapper.checkpointFunction(2);
-    // Do not sent the write event and fails the checkpoint
-    assertThrows(HoodieException.class,
-        () -> funcWrapper.checkpointFails(2),
-        "The last checkpoint was aborted, roll back the last write and throw");
+    // this triggers NPE cause there is no inflight instant
+    assertThrows(NullPointerException.class,
+        () -> funcWrapper.checkpointFunction(2),
+        "No inflight instant when flushing data");
+    // do not sent the write event and fails the checkpoint,
+    // behaves like the last checkpoint is successful.
+    funcWrapper.checkpointFails(2);
   }
 
   @Test
@@ -212,13 +215,13 @@ public class StreamWriteFunctionTest {
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
     assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
-    checkWrittenData(tempFile, EXPECTED1);
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
 
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.REQUESTED, instant);
     funcWrapper.checkpointComplete(1);
+    checkWrittenData(tempFile, EXPECTED1);
     // the coordinator checkpoint commits the inflight instant.
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
     checkWrittenData(tempFile, EXPECTED1);
@@ -241,14 +244,15 @@ public class StreamWriteFunctionTest {
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
 
-    final OperatorEvent nextEvent = funcWrapper.getNextEvent();
+    OperatorEvent nextEvent = funcWrapper.getNextEvent();
     assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
-    checkWrittenData(tempFile, EXPECTED3, 1);
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
 
     funcWrapper.checkpointComplete(1);
+
+    checkWrittenData(tempFile, EXPECTED3, 1);
 
     // insert duplicates again
     for (RowData rowData : TestData.DATA_SET_THREE) {
@@ -256,6 +260,10 @@ public class StreamWriteFunctionTest {
     }
 
     funcWrapper.checkpointFunction(2);
+
+    nextEvent = funcWrapper.getNextEvent();
+    funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
+    funcWrapper.checkpointComplete(2);
 
     checkWrittenData(tempFile, EXPECTED3, 1);
   }
@@ -306,9 +314,83 @@ public class StreamWriteFunctionTest {
     checkWrittenData(tempFile, EXPECTED2);
   }
 
+  @Test
+  public void testInsertWithMiniBatches() throws Exception {
+    // reset the config option
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.001); // 1Kb batch size
+    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
+
+    // open the function and ingest data
+    funcWrapper.openFunction();
+    // Each record is 424 bytes. so 3 records expect to trigger a mini-batch write
+    for (RowData rowData : TestData.DATA_SET_THREE) {
+      funcWrapper.invoke(rowData);
+    }
+
+    Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
+    assertThat("Should have 1 data bucket", dataBuffer.size(), is(1));
+    assertThat("2 records expect to flush out as a mini-batch",
+        dataBuffer.values().stream().findFirst().map(List::size).orElse(-1),
+        is(3));
+
+    // this triggers the data write and event send
+    funcWrapper.checkpointFunction(1);
+    assertThat("All data should be flushed out", dataBuffer.size(), is(0));
+
+    final OperatorEvent event1 = funcWrapper.getNextEvent(); // remove the first event first
+    final OperatorEvent event2 = funcWrapper.getNextEvent();
+    assertThat("The operator expect to send an event", event2, instanceOf(BatchWriteSuccessEvent.class));
+
+    funcWrapper.getCoordinator().handleEventFromOperator(0, event1);
+    funcWrapper.getCoordinator().handleEventFromOperator(0, event2);
+    assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
+
+    String instant = funcWrapper.getWriteClient()
+        .getInflightAndRequestedInstant("COPY_ON_WRITE");
+
+    funcWrapper.checkpointComplete(1);
+
+    Map<String, String> expected = new HashMap<>();
+    expected.put("par1", "[id1,par1,id1,Danny,23,1,par1, "
+        + "id1,par1,id1,Danny,23,1,par1, "
+        + "id1,par1,id1,Danny,23,1,par1, "
+        + "id1,par1,id1,Danny,23,1,par1, "
+        + "id1,par1,id1,Danny,23,1,par1]");
+    checkWrittenData(tempFile, expected, 1);
+
+    // started a new instant already
+    checkInflightInstant(funcWrapper.getWriteClient());
+    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
+
+    // insert duplicates again
+    for (RowData rowData : TestData.DATA_SET_THREE) {
+      funcWrapper.invoke(rowData);
+    }
+
+    funcWrapper.checkpointFunction(2);
+
+    final OperatorEvent event3 = funcWrapper.getNextEvent(); // remove the first event first
+    final OperatorEvent event4 = funcWrapper.getNextEvent();
+    final OperatorEvent event5 = funcWrapper.getNextEvent();
+    funcWrapper.getCoordinator().handleEventFromOperator(0, event3);
+    funcWrapper.getCoordinator().handleEventFromOperator(0, event4);
+    funcWrapper.getCoordinator().handleEventFromOperator(0, event5);
+    funcWrapper.checkpointComplete(2);
+
+    // Same the original base file content.
+    checkWrittenData(tempFile, expected, 1);
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
+
+  @SuppressWarnings("rawtypes")
+  private void checkInflightInstant(HoodieFlinkWriteClient writeClient) {
+    final String instant = writeClient.getInflightAndRequestedInstant("COPY_ON_WRITE");
+    assertNotNull(instant);
+  }
 
   @SuppressWarnings("rawtypes")
   private void checkInstantState(

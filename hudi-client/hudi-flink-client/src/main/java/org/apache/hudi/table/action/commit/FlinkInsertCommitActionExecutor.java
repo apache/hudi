@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -34,11 +35,12 @@ public class FlinkInsertCommitActionExecutor<T extends HoodieRecordPayload<T>> e
   private List<HoodieRecord<T>> inputRecords;
 
   public FlinkInsertCommitActionExecutor(HoodieEngineContext context,
+                                         HoodieWriteHandle<?, ?, ?, ?> writeHandle,
                                          HoodieWriteConfig config,
                                          HoodieTable table,
                                          String instantTime,
                                          List<HoodieRecord<T>> inputRecords) {
-    super(context, config, table, instantTime, WriteOperationType.INSERT);
+    super(context, writeHandle, config, table, instantTime, WriteOperationType.INSERT);
     this.inputRecords = inputRecords;
   }
 

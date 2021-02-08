@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -34,9 +35,10 @@ public class FlinkUpsertPreppedCommitActionExecutor<T extends HoodieRecordPayloa
   private final List<HoodieRecord<T>> preppedRecords;
 
   public FlinkUpsertPreppedCommitActionExecutor(HoodieEngineContext context,
+                                                HoodieWriteHandle<?, ?, ?, ?> writeHandle,
                                                 HoodieWriteConfig config, HoodieTable table,
                                                 String instantTime, List<HoodieRecord<T>> preppedRecords) {
-    super(context, config, table, instantTime, WriteOperationType.UPSERT_PREPPED);
+    super(context, writeHandle, config, table, instantTime, WriteOperationType.UPSERT_PREPPED);
     this.preppedRecords = preppedRecords;
   }
 
