@@ -19,6 +19,7 @@
 package org.apache.hudi.operator.utils;
 
 import org.apache.hudi.operator.FlinkOptions;
+import org.apache.hudi.streamer.FlinkStreamerConfig;
 
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.configuration.Configuration;
@@ -55,5 +56,17 @@ public class TestConfigurations {
     conf.setString(FlinkOptions.TABLE_NAME, "TestHoodieTable");
     conf.setString(FlinkOptions.PARTITION_PATH_FIELD, "partition");
     return conf;
+  }
+
+  public static FlinkStreamerConfig getDefaultStreamerConf(String tablePath) {
+    FlinkStreamerConfig streamerConf = new FlinkStreamerConfig();
+    streamerConf.targetBasePath = tablePath;
+    streamerConf.readSchemaFilePath = Objects.requireNonNull(Thread.currentThread()
+        .getContextClassLoader().getResource("test_read_schema.avsc")).toString();
+    streamerConf.targetTableName = "TestHoodieTable";
+    streamerConf.partitionPathField = "partition";
+    streamerConf.tableType = "COPY_ON_WRITE";
+    streamerConf.checkpointInterval = 4000L;
+    return streamerConf;
   }
 }

@@ -19,6 +19,7 @@
 package org.apache.hudi.operator;
 
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.exception.HoodieFlinkStreamerException;
+import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.api.java.tuple.Tuple3;
@@ -41,8 +43,10 @@ import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.LinkedList;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A {@link KeyedProcessFunction} where the write operations really happens.
@@ -53,7 +57,7 @@ public class KeyedWriteProcessFunction extends KeyedProcessFunction<String, Hood
   /**
    * Records buffer, will be processed in snapshotState function.
    */
-  private List<HoodieRecord> bufferedRecords = new LinkedList<>();
+  private Map<String, List<HoodieRecord>> bufferedRecords;
 
   /**
    * Flink collector help s to send data downstream.
@@ -89,6 +93,8 @@ public class KeyedWriteProcessFunction extends KeyedProcessFunction<String, Hood
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
 
+    this.bufferedRecords = new LinkedHashMap<>();
+
     indexOfThisSubtask = getRuntimeContext().getIndexOfThisSubtask();
 
     cfg = (FlinkStreamerConfig) getRuntimeContext().getExecutionConfig().getGlobalJobParameters();
@@ -115,17 +121,24 @@ public class KeyedWriteProcessFunction extends KeyedProcessFunction<String, Hood
         String instantTimestamp = latestInstant;
         LOG.info("Write records, subtask id = [{}]  checkpoint_id = [{}}] instant = [{}], record size = [{}]", indexOfThisSubtask, context.getCheckpointId(), instantTimestamp, bufferedRecords.size());
 
-        List<WriteStatus> writeStatus;
-        switch (cfg.operation) {
-          case INSERT:
-            writeStatus = writeClient.insert(bufferedRecords, instantTimestamp);
-            break;
-          case UPSERT:
-            writeStatus = writeClient.upsert(bufferedRecords, instantTimestamp);
-            break;
-          default:
-            throw new HoodieFlinkStreamerException("Unknown operation : " + cfg.operation);
-        }
+        final List<WriteStatus> writeStatus = new ArrayList<>();
+        this.bufferedRecords.values().forEach(records -> {
+          if (records.size() > 0) {
+            if (cfg.filterDupes) {
+              records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1);
+            }
+            switch (cfg.operation) {
+              case INSERT:
+                writeStatus.addAll(writeClient.insert(records, instantTimestamp));
+                break;
+              case UPSERT:
+                writeStatus.addAll(writeClient.upsert(records, instantTimestamp));
+                break;
+              default:
+                throw new HoodieFlinkStreamerException("Unknown operation : " + cfg.operation);
+            }
+          }
+        });
         output.collect(new Tuple3<>(instantTimestamp, writeStatus, indexOfThisSubtask));
         bufferedRecords.clear();
       }
@@ -147,7 +160,7 @@ public class KeyedWriteProcessFunction extends KeyedProcessFunction<String, Hood
     }
 
     // buffer the records
-    bufferedRecords.add(hoodieRecord);
+    putDataIntoBuffer(hoodieRecord);
   }
 
   public boolean hasRecordsIn() {
@@ -156,6 +169,15 @@ public class KeyedWriteProcessFunction extends KeyedProcessFunction<String, Hood
 
   public String getLatestInstant() {
     return latestInstant;
+  }
+
+  private void putDataIntoBuffer(HoodieRecord<?> record) {
+    final String fileId = record.getCurrentLocation().getFileId();
+    final String key = StreamerUtil.generateBucketKey(record.getPartitionPath(), fileId);
+    if (!this.bufferedRecords.containsKey(key)) {
+      this.bufferedRecords.put(key, new ArrayList<>());
+    }
+    this.bufferedRecords.get(key).add(record);
   }
 
   @Override

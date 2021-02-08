@@ -41,7 +41,6 @@ import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.FileStatus;
@@ -118,7 +117,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       writeClient = new HoodieFlinkWriteClient(new HoodieFlinkEngineContext(taskContextSupplier), hoodieClientConfig, true);
 
       // init table, create it if not exists.
-      initTable();
+      StreamerUtil.initTableIfNotExists(FlinkOptions.fromStreamerConfig(cfg));
 
       // create instant marker directory
       createInstantMarkerDir();
@@ -192,6 +191,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
    */
   private String startNewInstant(long checkpointId) {
     String newTime = writeClient.startCommit();
+    this.writeClient.transitionRequestedToInflight(this.cfg.tableType, newTime);
     LOG.info("create instant [{}], at checkpoint [{}]", newTime, checkpointId);
     return newTime;
   }
@@ -219,20 +219,6 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       }
     }
     throw new InterruptedException(String.format("Last instant costs more than %s second, stop task now", retryTimes * retryInterval));
-  }
-
-
-  /**
-   * Create table if not exists.
-   */
-  private void initTable() throws IOException {
-    if (!fs.exists(new Path(cfg.targetBasePath))) {
-      HoodieTableMetaClient.initTableType(new Configuration(serializableHadoopConf.get()), cfg.targetBasePath,
-          HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName, 1);
-      LOG.info("Table initialized");
-    } else {
-      LOG.info("Table already [{}/{}] exists, do nothing here", cfg.targetBasePath, cfg.targetTableName);
-    }
   }
 
   @Override
