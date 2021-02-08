@@ -18,6 +18,7 @@
 
 package org.apache.hudi.operator;
 
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
@@ -95,7 +96,9 @@ public class KeyedWriteProcessFunction extends KeyedProcessFunction<String, Hood
     HoodieFlinkEngineContext context =
         new HoodieFlinkEngineContext(new SerializableConfiguration(new org.apache.hadoop.conf.Configuration()), new FlinkTaskContextSupplier(getRuntimeContext()));
 
-    writeClient = new HoodieFlinkWriteClient<>(context, StreamerUtil.getHoodieClientConfig(cfg));
+    final Configuration conf = FlinkOptions.fromStreamerConfig(cfg);
+    final HoodieWriteConfig hoodieClientConfig = StreamerUtil.getHoodieClientConfig(conf);
+    writeClient = new HoodieFlinkWriteClient<>(context, hoodieClientConfig);
   }
 
   @Override

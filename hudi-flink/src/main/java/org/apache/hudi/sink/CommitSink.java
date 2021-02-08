@@ -23,8 +23,10 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieFlinkStreamerException;
+import org.apache.hudi.operator.FlinkOptions;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -77,7 +79,11 @@ public class CommitSink extends RichSinkFunction<Tuple3<String, List<WriteStatus
     writeParallelSize = getRuntimeContext().getExecutionConfig().getParallelism();
 
     // writeClient
-    writeClient = new HoodieFlinkWriteClient<>(new HoodieFlinkEngineContext(new FlinkTaskContextSupplier(null)), StreamerUtil.getHoodieClientConfig(cfg));
+    final Configuration conf = FlinkOptions.fromStreamerConfig(cfg);
+    final HoodieWriteConfig hoodieClientConfig = StreamerUtil.getHoodieClientConfig(conf);
+    final HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(new FlinkTaskContextSupplier(null));
+
+    writeClient = new HoodieFlinkWriteClient<>(context, hoodieClientConfig);
   }
 
   @Override

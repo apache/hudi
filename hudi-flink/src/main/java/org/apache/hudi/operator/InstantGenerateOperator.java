@@ -18,6 +18,7 @@
 
 package org.apache.hudi.operator;
 
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
@@ -112,7 +113,9 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       TaskContextSupplier taskContextSupplier = new FlinkTaskContextSupplier(null);
 
       // writeClient
-      writeClient = new HoodieFlinkWriteClient(new HoodieFlinkEngineContext(taskContextSupplier), StreamerUtil.getHoodieClientConfig(cfg), true);
+      final org.apache.flink.configuration.Configuration conf = FlinkOptions.fromStreamerConfig(cfg);
+      final HoodieWriteConfig hoodieClientConfig = StreamerUtil.getHoodieClientConfig(conf);
+      writeClient = new HoodieFlinkWriteClient(new HoodieFlinkEngineContext(taskContextSupplier), hoodieClientConfig, true);
 
       // init table, create it if not exists.
       initTable();
