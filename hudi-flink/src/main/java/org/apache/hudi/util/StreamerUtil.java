@@ -220,6 +220,7 @@ public class StreamerUtil {
                     .build())
             .forTable(conf.getString(FlinkOptions.TABLE_NAME))
             .withAutoCommit(false)
+            .withEmbeddedTimelineServerEnabled(conf.getBoolean(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLED, true))
             .withProps(flinkConf2TypedProperties(FlinkOptions.flatOptions(conf)));
 
     builder = builder.withSchema(getSourceSchema(conf).toString());
