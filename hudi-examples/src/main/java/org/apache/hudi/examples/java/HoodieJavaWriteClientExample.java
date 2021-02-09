@@ -20,6 +20,7 @@ package org.apache.hudi.examples.java;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.client.HoodieJavaWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -93,7 +94,8 @@ public class HoodieJavaWriteClientExample {
     List<HoodieRecord<HoodieAvroPayload>> recordsSoFar = new ArrayList<>(records);
     List<HoodieRecord<HoodieAvroPayload>> writeRecords =
         recordsSoFar.stream().map(r -> new HoodieRecord<HoodieAvroPayload>(r)).collect(Collectors.toList());
-    client.upsert(writeRecords, newCommitTime);
+    List<WriteStatus> insertStatus = client.upsert(writeRecords, newCommitTime);
+    client.commit(newCommitTime,insertStatus);
 
     // updates
     newCommitTime = client.startCommit();
