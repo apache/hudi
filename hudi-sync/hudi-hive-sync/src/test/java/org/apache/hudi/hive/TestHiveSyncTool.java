@@ -104,7 +104,7 @@ public class TestHiveSyncTool {
         .named("element").named("int_list").named("ArrayOfInts");
 
     schemaString = HiveSchemaUtil.generateSchemaString(schema);
-    assertEquals("int_list ARRAY< int>", schemaString);
+    assertEquals("int_list ARRAY<int>", schemaString);
 
     // A list of structs with two fields
     schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup()
