@@ -144,7 +144,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       }).collect(Collectors.toList());
       client.alter_partitions(syncConfig.databaseName, tableName, partitionList, null);
     } catch (TException e) {
-      LOG.info(syncConfig.databaseName + "." + tableName + " update partition failed", e);
+      LOG.error(syncConfig.databaseName + "." + tableName + " update partition failed", e);
       throw new HoodieHiveSyncException(syncConfig.databaseName + "." + tableName + " update partition failed", e);
     }
   }
@@ -216,7 +216,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       }
       client.alter_table_with_environmentContext(syncConfig.databaseName, tableName, table, environmentContext);
     } catch (Exception e) {
-      LOG.info("Failed to update table for " + tableName, e);
+      LOG.error("Failed to update table for " + tableName, e);
       throw new HoodieHiveSyncException("Failed to update table for " + tableName, e);
     }
   }
