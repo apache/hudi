@@ -132,7 +132,7 @@ public class TestHiveSyncTool {
         .named("one_tuple_list").named("ArrayOfOneTuples2");
 
     schemaString = HiveSchemaUtil.generateSchemaString(schema);
-    assertEquals("one_tuple_list ARRAY<STRUCT<str: binary>>", schemaString);
+    assertEquals("one_tuple_list ARRAY<STRUCT<str:binary>>", schemaString);
 
     // A list of structs with a single field
     // Unlike the above two cases, for this the element type is the type of the
