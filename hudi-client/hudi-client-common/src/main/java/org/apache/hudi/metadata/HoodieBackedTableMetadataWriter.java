@@ -316,6 +316,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     Map<String, List<FileStatus>> partitionToFileStatus = new HashMap<>();
     final int fileListingParallelism = metadataWriteConfig.getFileListingParallelism();
     SerializableConfiguration conf = new SerializableConfiguration(datasetMetaClient.getHadoopConf());
+    final String dirFilterRegex = datasetWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
 
     while (!pathsToList.isEmpty()) {
       int listingParallelism = Math.min(fileListingParallelism, pathsToList.size());
@@ -329,6 +330,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       // If the listing reveals a directory, add it to queue. If the listing reveals a hoodie partition, add it to
       // the results.
       dirToFileListing.forEach(p -> {
+        if (!dirFilterRegex.isEmpty() && p.getLeft().getName().matches(dirFilterRegex)) {
+          LOG.info("Ignoring directory " + p.getLeft() + " which matches the filter regex " + dirFilterRegex);
+          return;
+        }
+
         List<FileStatus> filesInDir = Arrays.stream(p.getRight()).parallel()
             .filter(fs -> !fs.getPath().getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE))
             .collect(Collectors.toList());
