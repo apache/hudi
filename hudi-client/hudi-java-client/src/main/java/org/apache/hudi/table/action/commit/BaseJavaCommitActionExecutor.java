@@ -120,7 +120,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
         handleInsertPartition(instantTime, partition, records.iterator(), partitioner).forEachRemaining(writeStatuses::addAll);
       }
     });
-    updateIndex(writeStatuses, result);
+    updateIndexAndCommitIfNeeded(writeStatuses, result);
     return result;
   }
 
@@ -130,6 +130,11 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
     List<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table);
     result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
     result.setWriteStatuses(statuses);
+  }
+
+  protected void updateIndexAndCommitIfNeeded(List<WriteStatus> writeStatuses, HoodieWriteMetadata<List<WriteStatus>> result) {
+    updateIndex(writeStatuses, result);
+    commitOnAutoCommit(result);
   }
 
   @Override
