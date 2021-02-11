@@ -29,6 +29,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Set;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -137,6 +138,12 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public HoodieDefaultTimeline findInstantsInRangeByFinishTs(String startTs, String endTs) {
+    return new HoodieDefaultTimeline(
+            instants.stream().filter(s -> HoodieTimeline.isInRange(s.getActionEndTimestamp(), startTs, endTs)), details);
+  }
+
+  @Override
   public HoodieDefaultTimeline findInstantsAfter(String instantTime, int numCommits) {
     return new HoodieDefaultTimeline(instants.stream()
         .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN, instantTime)).limit(numCommits),
@@ -160,6 +167,11 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public HoodieTimeline filter(Predicate<HoodieInstant> filter) {
     return new HoodieDefaultTimeline(instants.stream().filter(filter), details);
+  }
+
+  @Override
+  public HoodieTimeline filterByFinishTs(BiPredicate<String, String> filter, String ts) {
+    return new HoodieDefaultTimeline(instants.stream().filter(s -> filter.test(s.getActionEndTimestamp(), ts)), details);
   }
 
   /**

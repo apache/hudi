@@ -278,8 +278,8 @@ public class HoodieInputFormatUtils {
     // Total number of commits to return in this batch. Set this to -1 to get all the commits.
     Integer maxCommits = HoodieHiveUtils.readMaxCommits(job, tableName);
     LOG.info("Last Incremental timestamp was set as " + lastIncrementalTs);
-    return Option.of(timeline.findInstantsAfter(lastIncrementalTs, maxCommits)
-        .getInstants().collect(Collectors.toList()));
+    return Option.of(timeline.filterByFinishTs(HoodieTimeline.GREATER_THAN, lastIncrementalTs)
+            .getInstants().limit(maxCommits).collect(Collectors.toList()));
   }
 
   /**

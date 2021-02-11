@@ -92,7 +92,7 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
 
     // Check default values
     assertFalse(conf.isConsistencyCheckEnabled());
-    assertEquals(new Integer(1), HoodieCLI.layoutVersion.getVersion());
+    assertEquals(new Integer(2), HoodieCLI.layoutVersion.getVersion());
   }
 
   /**
@@ -109,7 +109,7 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
     assertEquals(tablePath, client.getBasePath());
     assertEquals(metaPath, client.getMetaPath());
     assertEquals(HoodieTableType.COPY_ON_WRITE, client.getTableType());
-    assertEquals(new Integer(1), client.getTimelineLayoutVersion().getVersion());
+    assertEquals(new Integer(2), client.getTimelineLayoutVersion().getVersion());
   }
 
   /**

@@ -67,7 +67,7 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
     DataSourceReadOptions.REALTIME_MERGE_OPT_KEY,
     DataSourceReadOptions.DEFAULT_REALTIME_MERGE_OPT_VAL)
 
-  private val commitsTimelineToReturn = commitTimeline.findInstantsInRange(
+  private val commitsTimelineToReturn = commitTimeline.findInstantsInRangeByFinishTs(
     optParams(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY),
     optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY, lastInstant.getTimestamp))
   log.debug(s"${commitsTimelineToReturn.getInstants.iterator().toList.map(f => f.toString).mkString(",")}")

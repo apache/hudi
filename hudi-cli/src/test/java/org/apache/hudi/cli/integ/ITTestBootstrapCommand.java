@@ -85,7 +85,7 @@ public class ITTestBootstrapCommand extends AbstractShellIntegrationTest {
     assertTrue(cr.isSuccess());
 
     // Connect & check Hudi table exist
-    new TableCommand().connect(tablePath, TimelineLayoutVersion.VERSION_1, false, 2000, 300000, 7);
+    new TableCommand().connect(tablePath, TimelineLayoutVersion.VERSION_2, false, 2000, 300000, 7);
     metaClient = HoodieCLI.getTableMetaClient();
     assertEquals(1, metaClient.getActiveTimeline().getCommitsTimeline().countInstants(), "Should have 1 commit.");
 

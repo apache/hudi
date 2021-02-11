@@ -38,6 +38,7 @@ public abstract class TimelineLayout implements Serializable {
   static {
     LAYOUT_MAP.put(new TimelineLayoutVersion(TimelineLayoutVersion.VERSION_0), new TimelineLayoutV0());
     LAYOUT_MAP.put(new TimelineLayoutVersion(TimelineLayoutVersion.VERSION_1), new TimelineLayoutV1());
+    LAYOUT_MAP.put(new TimelineLayoutVersion(TimelineLayoutVersion.VERSION_2), new TimelineLayoutV2());
   }
 
   public static TimelineLayout getLayout(TimelineLayoutVersion version) {
@@ -45,6 +46,8 @@ public abstract class TimelineLayout implements Serializable {
   }
 
   public abstract Stream<HoodieInstant> filterHoodieInstants(Stream<HoodieInstant> instantStream);
+
+  public abstract Stream<HoodieInstant> sortHoodieInstants(Stream<HoodieInstant> instantStream);
 
   /**
    * Table Layout where state transitions are managed by renaming files.
@@ -54,6 +57,11 @@ public abstract class TimelineLayout implements Serializable {
     @Override
     public Stream<HoodieInstant> filterHoodieInstants(Stream<HoodieInstant> instantStream) {
       return instantStream;
+    }
+
+    @Override
+    public Stream<HoodieInstant> sortHoodieInstants(Stream<HoodieInstant> instantStream) {
+      return instantStream.sorted();
     }
   }
 
@@ -73,6 +81,27 @@ public abstract class TimelineLayout implements Serializable {
             }
             return y;
           }).get());
+    }
+
+    @Override
+    public Stream<HoodieInstant> sortHoodieInstants(Stream<HoodieInstant> instantStream) {
+      return instantStream.sorted();
+    }
+  }
+
+  /**
+   * Table Layout where state transitions are managed by creating new files with END_INSTANT_TIME.
+   */
+  private static class TimelineLayoutV2 extends TimelineLayoutV1 {
+
+    @Override
+    public Stream<HoodieInstant> filterHoodieInstants(Stream<HoodieInstant> instantStream) {
+      return super.filterHoodieInstants(instantStream);
+    }
+
+    @Override
+    public Stream<HoodieInstant> sortHoodieInstants(Stream<HoodieInstant> instantStream) {
+      return instantStream.sorted(HoodieInstant.END_INSTANT_TIME_COMPARATOR);
     }
   }
 }

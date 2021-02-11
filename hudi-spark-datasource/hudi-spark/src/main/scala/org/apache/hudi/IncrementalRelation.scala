@@ -68,7 +68,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   private val lastInstant = commitTimeline.lastInstant().get()
 
-  private val commitsToReturn = commitTimeline.findInstantsInRange(
+  private val commitsToReturn = commitTimeline.findInstantsInRangeByFinishTs(
     optParams(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY),
     optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY, lastInstant.getTimestamp))
     .getInstants.iterator().toList

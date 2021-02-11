@@ -29,9 +29,10 @@ import java.util.Objects;
 public class TimelineLayoutVersion implements Serializable, Comparable<TimelineLayoutVersion> {
 
   public static final Integer VERSION_0 = 0; // pre 0.5.1  version format
-  public static final Integer VERSION_1 = 1; // current version with no renames
+  public static final Integer VERSION_1 = 1; // new version with no renames
+  public static final Integer VERSION_2 = 2; // current version with no renames and end commit times
 
-  public static final Integer CURR_VERSION = VERSION_1;
+  public static final Integer CURR_VERSION = VERSION_2;
   public static final TimelineLayoutVersion CURR_LAYOUT_VERSION = new TimelineLayoutVersion(CURR_VERSION);
 
   private Integer version;

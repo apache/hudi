@@ -167,6 +167,11 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline findInstantsInRange(String startTs, String endTs);
 
   /**
+   * Create a new Timeline with instants after startTs and before or on endTs by finished timestamp of actions.
+   */
+  HoodieTimeline findInstantsInRangeByFinishTs(String first, String endTs);
+
+  /**
    * Create a new Timeline with all the instants after startTs.
    */
   HoodieTimeline findInstantsAfter(String instantTime, int numCommits);
@@ -180,6 +185,11 @@ public interface HoodieTimeline extends Serializable {
    * Custom Filter of Instants.
    */
   HoodieTimeline filter(Predicate<HoodieInstant> filter);
+
+  /**
+   * Custom Filter of instants by their finished Timestamps.
+   */
+  HoodieTimeline filterByFinishTs(BiPredicate<String, String> filter, String ts);
 
   /**
    * If the timeline has any instants.

@@ -588,7 +588,7 @@ public class HoodieTableMetaClient implements Serializable {
     if (applyLayoutVersionFilters) {
       instantStream = TimelineLayout.getLayout(getTimelineLayoutVersion()).filterHoodieInstants(instantStream);
     }
-    return instantStream.sorted().collect(Collectors.toList());
+    return TimelineLayout.getLayout(getTimelineLayoutVersion()).sortHoodieInstants(instantStream).collect(Collectors.toList());
   }
 
   @Override
