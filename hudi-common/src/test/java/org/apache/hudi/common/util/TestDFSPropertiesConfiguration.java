@@ -25,10 +25,13 @@ import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.junit.Rule;
+import org.junit.contrib.java.lang.system.EnvironmentVariables;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 
@@ -46,6 +49,10 @@ public class TestDFSPropertiesConfiguration {
   private static HdfsTestService hdfsTestService;
   private static MiniDFSCluster dfsCluster;
   private static DistributedFileSystem dfs;
+
+  @Rule
+  public static final EnvironmentVariables ENVIRONMENT_VARIABLES
+      = new EnvironmentVariables();
 
   @BeforeAll
   public static void initClass() throws Exception {
@@ -70,10 +77,14 @@ public class TestDFSPropertiesConfiguration {
 
     filePath = new Path(dfsBasePath + "/t4.props");
     writePropertiesFile(filePath, new String[] {"double.prop=838.3", "include = t4.props"});
+
+    // set HUDI_CONF_DIR
+    String testPropsFilePath = new File("src/test/resources").getAbsolutePath();
+    ENVIRONMENT_VARIABLES.set(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME, testPropsFilePath);
   }
 
   @AfterAll
-  public static void cleanupClass() throws Exception {
+  public static void cleanupClass() {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
     }
@@ -91,7 +102,7 @@ public class TestDFSPropertiesConfiguration {
   @Test
   public void testParsing() {
     DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs, new Path(dfsBasePath + "/t1.props"));
-    TypedProperties props = cfg.getConfig();
+    TypedProperties props = cfg.getProps();
     assertEquals(5, props.size());
     assertThrows(IllegalArgumentException.class, () -> {
       props.getString("invalid.key");
@@ -119,7 +130,7 @@ public class TestDFSPropertiesConfiguration {
   @Test
   public void testIncludes() {
     DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs, new Path(dfsBasePath + "/t3.props"));
-    TypedProperties props = cfg.getConfig();
+    TypedProperties props = cfg.getProps();
 
     assertEquals(123, props.getInteger("int.prop"));
     assertEquals(243.4, props.getDouble("double.prop"), 0.001);
@@ -127,7 +138,17 @@ public class TestDFSPropertiesConfiguration {
     assertEquals("t3.value", props.getString("string.prop"));
     assertEquals(1354354354, props.getLong("long.prop"));
     assertThrows(IllegalStateException.class, () -> {
-      new DFSPropertiesConfiguration(dfs, new Path(dfsBasePath + "/t4.props"));
+      cfg.addPropsFromFile(new Path(dfsBasePath + "/t4.props"));
     }, "Should error out on a self-included file.");
+  }
+
+  @Test
+  public void testLoadGlobalConfFile() {
+    assertEquals(5, DFSPropertiesConfiguration.loadGlobalProps().size());
+    assertEquals("jdbc:hive2://localhost:10000", DFSPropertiesConfiguration.loadGlobalProps().get("hoodie.datasource.hive_sync.jdbcurl"));
+    assertEquals("true", DFSPropertiesConfiguration.loadGlobalProps().get("hoodie.datasource.hive_sync.use_jdbc"));
+    assertEquals("false", DFSPropertiesConfiguration.loadGlobalProps().get("hoodie.datasource.hive_sync.support_timestamp"));
+    assertEquals("BLOOM", DFSPropertiesConfiguration.loadGlobalProps().get("hoodie.index.type"));
+    assertEquals("true", DFSPropertiesConfiguration.loadGlobalProps().get("hoodie.metadata.enable"));
   }
 }

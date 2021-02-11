@@ -22,7 +22,7 @@ import java.util.Properties
 import org.apache.hudi.DataSourceOptionsHelper.allAlternatives
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
-import org.apache.hudi.common.config.{HoodieConfig, TypedProperties}
+import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.SparkSession
@@ -47,6 +47,7 @@ object HoodieWriterUtils {
     * @return
     */
   def parametersWithWriteDefaults(parameters: Map[String, String]): Map[String, String] = {
+    val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala
     Map(OPERATION.key -> OPERATION.defaultValue,
       TABLE_TYPE.key -> TABLE_TYPE.defaultValue,
       PRECOMBINE_FIELD.key -> PRECOMBINE_FIELD.defaultValue,
@@ -81,7 +82,7 @@ object HoodieWriterUtils {
       ENABLE_ROW_WRITER.key -> ENABLE_ROW_WRITER.defaultValue,
       RECONCILE_SCHEMA.key -> RECONCILE_SCHEMA.defaultValue.toString,
       DROP_PARTITION_COLUMNS.key -> DROP_PARTITION_COLUMNS.defaultValue
-    ) ++ DataSourceOptionsHelper.translateConfigurations(parameters)
+    ) ++ globalProps ++ DataSourceOptionsHelper.translateConfigurations(parameters)
   }
 
   def toProperties(params: Map[String, String]): TypedProperties = {
@@ -169,5 +170,24 @@ object HoodieWriterUtils {
         tableConfig.getString(key)
       }
     }
+  }
+
+  val sparkDatasourceConfigsToTableConfigsMap = Map(
+    TABLE_NAME -> HoodieTableConfig.NAME,
+    TABLE_TYPE -> HoodieTableConfig.TYPE,
+    PRECOMBINE_FIELD -> HoodieTableConfig.PRECOMBINE_FIELD,
+    PARTITIONPATH_FIELD -> HoodieTableConfig.PARTITION_FIELDS,
+    RECORDKEY_FIELD -> HoodieTableConfig.RECORDKEY_FIELDS,
+    PAYLOAD_CLASS_NAME -> HoodieTableConfig.PAYLOAD_CLASS_NAME
+  )
+  def mappingSparkDatasourceConfigsToTableConfigs(options: Map[String, String]): Map[String, String] = {
+    val includingTableConfigs = scala.collection.mutable.Map() ++ options
+    sparkDatasourceConfigsToTableConfigsMap.foreach(kv => {
+      if (options.containsKey(kv._1.key)) {
+        includingTableConfigs(kv._2.key) = options(kv._1.key)
+        includingTableConfigs.remove(kv._1.key)
+      }
+    })
+    includingTableConfigs.toMap
   }
 }

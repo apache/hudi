@@ -19,9 +19,9 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-
-import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
+import org.apache.hudi.{DataSourceWriteOptions, HoodieWriterUtils, SparkAdapterSupport}
 import org.apache.hudi.HoodieWriterUtils._
+import org.apache.hudi.common.config.DFSPropertiesConfiguration
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.hadoop.HoodieParquetInputFormat
@@ -47,7 +47,7 @@ import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.{SPARK_VERSION, SparkConf}
 
 import java.util.{Locale, Properties}
-
+import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.util.control.NonFatal
@@ -100,7 +100,8 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     // if CTAS, we treat the table we just created as nonexistent
     val isTableExists = if (ctas) false else tableExistsInPath(path, conf)
     var existingTableConfig = Map.empty[String, String]
-    val sqlOptions = HoodieOptionConfig.withDefaultSqlOptions(tblProperties)
+    val globalProps = HoodieOptionConfig.mappingTableConfigToSqlOption(HoodieWriterUtils.mappingSparkDatasourceConfigsToTableConfigs(DFSPropertiesConfiguration.getGlobalProps.asScala.toMap))
+    val sqlOptions = HoodieOptionConfig.withDefaultSqlOptions(globalProps ++ tblProperties)
     val catalogTableProps = HoodieOptionConfig.mappingSqlOptionToTableConfig(tblProperties)
 
     // get final schema and parameters
@@ -323,6 +324,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
   def extraTableConfig(sparkSession: SparkSession, isTableExists: Boolean,
       originTableConfig: Map[String, String] = Map.empty): Map[String, String] = {
     val extraConfig = mutable.Map.empty[String, String]
+    val globalProps = DFSPropertiesConfiguration.getGlobalProps.asScala.toMap
     if (isTableExists) {
       val allPartitionPaths = getAllPartitionPaths(sparkSession, table)
       if (originTableConfig.contains(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key)) {
@@ -340,18 +342,22 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
           String.valueOf(isUrlEncodeEnabled(allPartitionPaths, table))
       }
     } else {
-      extraConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key) = "true"
-      extraConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key) = HoodieTableConfig.URL_ENCODE_PARTITIONING.defaultValue()
+      extraConfig(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key) = globalProps.getOrDefault(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key, "true")
+      extraConfig(HoodieTableConfig.URL_ENCODE_PARTITIONING.key) = globalProps.getOrDefault(HoodieTableConfig.URL_ENCODE_PARTITIONING.key, HoodieTableConfig.URL_ENCODE_PARTITIONING.defaultValue)
     }
 
     if (originTableConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)) {
       extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) =
         HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(
           originTableConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
+    } else if (globalProps.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)) {
+      extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) =
+        HoodieSparkKeyGeneratorFactory.convertToSparkKeyGenerator(
+          globalProps(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
     } else {
       extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) = classOf[ComplexKeyGenerator].getCanonicalName
     }
-    extraConfig.toMap
+    globalProps ++ extraConfig.toMap
   }
 
   /**
@@ -374,7 +380,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.URL_ENCODE_PARTITIONING.key)
     checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key)
     // Save all the table config to the hoodie.properties.
-    val parameters = originTableConfig ++ tableOptions
+    val parameters = HoodieWriterUtils.mappingSparkDatasourceConfigsToTableConfigs(originTableConfig ++ tableOptions)
     val properties = new Properties()
     properties.putAll(parameters.asJava)
     HoodieTableMetaClient.withPropertyBuilder()

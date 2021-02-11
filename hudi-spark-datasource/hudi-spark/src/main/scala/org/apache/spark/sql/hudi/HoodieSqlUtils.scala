@@ -25,6 +25,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.common.config.DFSPropertiesConfiguration
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
@@ -273,7 +274,7 @@ object HoodieSqlUtils extends SparkAdapterSupport {
    */
   def withSparkConf(spark: SparkSession, options: Map[String, String])
                    (baseConfig: Map[String, String] = Map.empty): Map[String, String] = {
-    baseConfig ++ // Table options has the highest priority
+    baseConfig ++ DFSPropertiesConfiguration.getGlobalProps.asScala ++ // Table options has the highest priority
       (spark.sessionState.conf.getAllConfs ++ HoodieOptionConfig.mappingSqlOptionToHoodieParam(options))
         .filterKeys(_.startsWith("hoodie."))
   }
