@@ -20,8 +20,10 @@ package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
+import org.apache.hudi.common.table.timeline.versioning.InstantTimeFormatter;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -47,6 +49,7 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
@@ -62,6 +65,9 @@ import java.util.stream.Stream;
  * This class can be serialized and de-serialized and on de-serialization the FileSystem is re-initialized.
  */
 public class HoodieActiveTimeline extends HoodieDefaultTimeline {
+
+  public static final InstantTimeFormatter COMMIT_FORMATTER = new InstantTimeFormatter();
+  public static final Pattern COMMIT_TIME_PATTERN = Pattern.compile("^[0-9]{14}$ | ^[0-9]{17}$");
 
   public static final Set<String> VALID_EXTENSIONS_IN_ACTIVE_TIMELINE = new HashSet<>(Arrays.asList(
       COMMIT_EXTENSION, INFLIGHT_COMMIT_EXTENSION, REQUESTED_COMMIT_EXTENSION,
@@ -84,6 +90,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieActiveTimeline.class);
   protected HoodieTableMetaClient metaClient;
+  private HoodieActiveTimelineStateMachine hoodieActiveTimelineStateMachine;
 
   /**
    * Parse the timestamp of an Instant and return a {@code Date}.
@@ -161,6 +168,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     // convert them into HoodieInstant
     try {
       this.setInstants(metaClient.scanHoodieInstantsFromFileSystem(includedExtensions, applyLayoutFilters));
+      this.hoodieActiveTimelineStateMachine = HoodieActiveTimelineStateMachine.getInstance();
+      this.hoodieActiveTimelineStateMachine.initialize(this.getInstantsAsStream());
     } catch (IOException e) {
       throw new HoodieIOException("Failed to scan metadata", e);
     }
@@ -199,7 +208,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   public void createNewInstant(HoodieInstant instant) {
+    instant = InstantTimeGenerator.setActionEndTimeIfNeeded(instant);
     LOG.info("Creating a new instant " + instant);
+    instant = HoodieActiveTimelineStateMachine.getInstance().addNewActionInstant(instant);
     // Create the in-flight file
     createFileInMetaPath(instant.getFileName(), Option.empty(), false);
   }
@@ -220,13 +231,13 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     LOG.info("Marking instant complete " + instant);
     ValidationUtils.checkArgument(instant.isInflight(),
         "Could not mark an already completed instant as complete again " + instant);
-    transitionState(instant, HoodieTimeline.getCompletedInstant(instant), data);
+    transitionState(HoodieActiveTimelineStateMachine.getInstance().findInstant(instant).get(), HoodieTimeline.getCompletedInstant(instant), data);
     LOG.info("Completed " + instant);
   }
 
   public HoodieInstant revertToInflight(HoodieInstant instant) {
     LOG.info("Reverting instant to inflight " + instant);
-    HoodieInstant inflight = HoodieTimeline.getInflightInstant(instant, metaClient);
+    HoodieInstant inflight = getInflightInstant(instant, metaClient);
     revertCompleteToInflight(instant, inflight);
     LOG.info("Reverted " + instant + " to inflight " + inflight);
     return inflight;
@@ -638,6 +649,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
           metaClient.getFs().createImmutableFileInPath(getInstantFileNamePath(toInstant.getFileName()), data);
         }
         LOG.info("Create new file for toInstant ?" + getInstantFileNamePath(toInstant.getFileName()));
+        HoodieActiveTimelineStateMachine.getInstance().transition(fromInstant, toInstant);
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not complete " + fromInstant, e);
@@ -671,6 +683,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         }
 
         boolean success = metaClient.getFs().delete(commitFilePath, false);
+        HoodieActiveTimelineStateMachine.getInstance().removeInstant(completed);
         ValidationUtils.checkArgument(success, "State Reverting failed");
       }
     } catch (IOException e) {
@@ -704,8 +717,10 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public void saveToCompactionRequested(HoodieInstant instant, Option<byte[]> content, boolean overwrite) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION));
+    instant = InstantTimeGenerator.setActionEndTimeIfNeeded(instant);
     // Write workload to auxiliary folder
     createFileInAuxiliaryFolder(instant, content);
+    instant = HoodieActiveTimelineStateMachine.getInstance().addNewActionInstant(instant);
     createFileInMetaPath(instant.getFileName(), content, overwrite);
   }
 
@@ -724,13 +739,16 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Saves content for requested REPLACE instant.
    */
   public void saveToPendingReplaceCommit(HoodieInstant instant, Option<byte[]> content) {
+    instant = InstantTimeGenerator.setActionEndTimeIfNeeded(instant);
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
+    instant = HoodieActiveTimelineStateMachine.getInstance().addNewActionInstant(instant);
     createFileInMetaPath(instant.getFileName(), content, false);
   }
 
   public void saveToCleanRequested(HoodieInstant instant, Option<byte[]> content) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.CLEAN_ACTION));
     ValidationUtils.checkArgument(instant.getState().equals(State.REQUESTED));
+    HoodieInstant instant1 = HoodieActiveTimelineStateMachine.getInstance().addNewActionInstant(instant);
     // Plan is stored in meta path
     createFileInMetaPath(instant.getFileName(), content, false);
   }
@@ -823,6 +841,32 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     } catch (IOException e) {
       throw new HoodieIOException("Could not read commit details from " + detailPath, e);
     }
+  }
+
+  /**
+   * Returns the inflight instant corresponding to the instant being passed. Takes care of changes in action names
+   * between inflight and completed instants (compaction <=> commit) and (logcompaction <==> deltacommit).
+   * @param instant Hoodie Instant
+   * @param metaClient Hoodie metaClient to fetch tableType and fileSystem.
+   * @return Inflight Hoodie Instant
+   */
+  static HoodieInstant getInflightInstant(final HoodieInstant instant, final HoodieTableMetaClient metaClient) {
+    if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
+      if (instant.getAction().equals(COMMIT_ACTION)) {
+        return new HoodieInstant(true, COMPACTION_ACTION, instant.getTimestamp());
+      } else if (instant.getAction().equals(DELTA_COMMIT_ACTION)) {
+        // Deltacommit is used by both ingestion and logcompaction.
+        // So, distinguish both of them check for the inflight file being present.
+        HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
+        Option<HoodieInstant> logCompactionInstant = Option.fromJavaOptional(rawActiveTimeline.getInstantsAsStream()
+            .filter(hoodieInstant -> hoodieInstant.getTimestamp().equals(instant.getTimestamp())
+                && LOG_COMPACTION_ACTION.equals(hoodieInstant.getAction())).findFirst());
+        if (logCompactionInstant.isPresent()) {
+          return new HoodieInstant(true, LOG_COMPACTION_ACTION, instant.getTimestamp());
+        }
+      }
+    }
+    return new HoodieInstant(true, instant.getAction(), instant.getTimestamp());
   }
 
   public HoodieActiveTimeline reload() {

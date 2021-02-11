@@ -488,11 +488,8 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertEquals(HoodieTimeline.getCommitFromCommitFile(instantInflight.getFileName()), "5");
     assertEquals(HoodieTimeline.getCommitFromCommitFile(instantComplete.getFileName()), "5");
 
-    assertEquals(HoodieTimeline.makeFileNameAsComplete(instantInflight.getFileName()),
-            instantComplete.getFileName());
-
-    assertEquals(HoodieTimeline.makeFileNameAsInflight(instantComplete.getFileName()),
-            instantInflight.getFileName());
+    assertEquals(instantInflight.getFileName(), instantComplete.getFileName());
+    assertEquals(instantComplete.getFileName(), instantInflight.getFileName());
   }
 
   @Test

@@ -123,7 +123,7 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
     val commits: util.List[HoodieInstant] = timeline.getCommitsTimeline.filterCompletedInstants
       .getInstants.toArray().map(instant => instant.asInstanceOf[HoodieInstant]).toList.asJava
     val newCommits = new util.ArrayList[HoodieInstant](commits)
-    Collections.sort(newCommits, HoodieInstant.COMPARATOR.reversed)
+    Collections.sort(newCommits, HoodieInstant.START_INSTANT_TIME_COMPARATOR.reversed)
     (rows, newCommits)
   }
 

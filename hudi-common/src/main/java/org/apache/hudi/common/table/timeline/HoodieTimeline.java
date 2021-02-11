@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant.InstantTime;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -235,6 +235,11 @@ public interface HoodieTimeline extends Serializable {
    */
   HoodieTimeline findInstantsInRange(String startTs, String endTs);
 
+  /**`
+   * Create a new Timeline with instants after startTs and before or on endTs by finished timestamp of actions.
+   */
+  HoodieTimeline findInstantsInRangeByFinishTs(String first, String endTs);
+
   /**
    * Create a new Timeline with all the instants after startTs.
    */
@@ -269,6 +274,16 @@ public interface HoodieTimeline extends Serializable {
    * Filter this timeline to just include completed index instants.
    */
   HoodieTimeline filterCompletedIndexTimeline();
+
+  /**
+   * Custom Filter of instants by their finished Timestamps.
+   */
+  HoodieTimeline filterByFinishTs(BiPredicate<String, String> filter, String ts);
+
+  /**
+   * Custom Filter of instants by their finished timestamps upto given number of commits.
+   */
+  HoodieTimeline filterByFinishTs(BiPredicate<String, String> filter, String ts, int numCommits);
 
   /**
    * If the timeline has any instants.
@@ -392,45 +407,45 @@ public interface HoodieTimeline extends Serializable {
   }
 
   static HoodieInstant getCompletedInstant(final HoodieInstant instant) {
-    return new HoodieInstant(State.COMPLETED, instant.getAction(), instant.getTimestamp());
+    return InstantTimeGenerator.setActionEndTimeIfNeeded(new HoodieInstant(State.COMPLETED, instant.getAction(), instant.getTimestamp()));
   }
 
   static HoodieInstant getRequestedInstant(final HoodieInstant instant) {
-    return new HoodieInstant(State.REQUESTED, instant.getAction(), instant.getTimestamp());
+    return InstantTimeGenerator.setActionEndTimeIfNeeded(new HoodieInstant(State.REQUESTED, instant.getAction(), instant.getTimestamp()));
   }
 
   static HoodieInstant getCleanRequestedInstant(final String timestamp) {
-    return new HoodieInstant(State.REQUESTED, CLEAN_ACTION, timestamp);
+    return InstantTimeGenerator.setActionEndTimeIfNeeded(new HoodieInstant(State.REQUESTED, CLEAN_ACTION, timestamp));
   }
 
   static HoodieInstant getCleanInflightInstant(final String timestamp) {
-    return new HoodieInstant(State.INFLIGHT, CLEAN_ACTION, timestamp);
+    return InstantTimeGenerator.setActionEndTimeIfNeeded(new HoodieInstant(State.INFLIGHT, CLEAN_ACTION, timestamp));
   }
 
   static HoodieInstant getCompactionRequestedInstant(final String timestamp) {
-    return new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, timestamp);
+    return InstantTimeGenerator.setActionEndTimeIfNeeded(new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, timestamp));
   }
 
   static HoodieInstant getCompactionInflightInstant(final String timestamp) {
-    return new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, timestamp);
+    return InstantTimeGenerator.setActionEndTimeIfNeeded(new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, timestamp));
   }
 
   // Returns Log compaction requested instant
   static HoodieInstant getLogCompactionRequestedInstant(final String timestamp) {
-    return new HoodieInstant(State.REQUESTED, LOG_COMPACTION_ACTION, timestamp);
+    return InstantTimeGenerator.setActionEndTimeIfNeeded(new HoodieInstant(State.REQUESTED, LOG_COMPACTION_ACTION, timestamp));
   }
 
   // Returns Log compaction inflight instant
   static HoodieInstant getLogCompactionInflightInstant(final String timestamp) {
-    return new HoodieInstant(State.INFLIGHT, LOG_COMPACTION_ACTION, timestamp);
+    return InstantTimeGenerator.setActionEndTimeIfNeeded(new HoodieInstant(State.INFLIGHT, LOG_COMPACTION_ACTION, timestamp));
   }
 
   static HoodieInstant getReplaceCommitRequestedInstant(final String timestamp) {
-    return new HoodieInstant(State.REQUESTED, REPLACE_COMMIT_ACTION, timestamp);
+    return InstantTimeGenerator.setActionEndTimeIfNeeded(new HoodieInstant(State.REQUESTED, REPLACE_COMMIT_ACTION, timestamp));
   }
 
   static HoodieInstant getReplaceCommitInflightInstant(final String timestamp) {
-    return new HoodieInstant(State.INFLIGHT, REPLACE_COMMIT_ACTION, timestamp);
+    return InstantTimeGenerator.setActionEndTimeIfNeeded(new HoodieInstant(State.INFLIGHT, REPLACE_COMMIT_ACTION, timestamp));
   }
 
   static HoodieInstant getRollbackRequestedInstant(HoodieInstant instant) {
@@ -438,61 +453,41 @@ public interface HoodieTimeline extends Serializable {
   }
 
   static HoodieInstant getIndexRequestedInstant(final String timestamp) {
-    return new HoodieInstant(State.REQUESTED, INDEXING_ACTION, timestamp);
+    return InstantTimeGenerator.setActionEndTimeIfNeeded(new HoodieInstant(State.REQUESTED, INDEXING_ACTION, timestamp));
   }
 
   static HoodieInstant getIndexInflightInstant(final String timestamp) {
-    return new HoodieInstant(State.INFLIGHT, INDEXING_ACTION, timestamp);
-  }
-
-  /**
-   * Returns the inflight instant corresponding to the instant being passed. Takes care of changes in action names
-   * between inflight and completed instants (compaction <=> commit) and (logcompaction <==> deltacommit).
-   * @param instant Hoodie Instant
-   * @param metaClient Hoodie metaClient to fetch tableType and fileSystem.
-   * @return Inflight Hoodie Instant
-   */
-  static HoodieInstant getInflightInstant(final HoodieInstant instant, final HoodieTableMetaClient metaClient) {
-    if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
-      if (instant.getAction().equals(COMMIT_ACTION)) {
-        return new HoodieInstant(true, COMPACTION_ACTION, instant.getTimestamp());
-      } else if (instant.getAction().equals(DELTA_COMMIT_ACTION)) {
-        // Deltacommit is used by both ingestion and logcompaction.
-        // So, distinguish both of them check for the inflight file being present.
-        HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
-        Option<HoodieInstant> logCompactionInstant = Option.fromJavaOptional(rawActiveTimeline.getInstantsAsStream()
-            .filter(hoodieInstant -> hoodieInstant.getTimestamp().equals(instant.getTimestamp())
-                && LOG_COMPACTION_ACTION.equals(hoodieInstant.getAction())).findFirst());
-        if (logCompactionInstant.isPresent()) {
-          return new HoodieInstant(true, LOG_COMPACTION_ACTION, instant.getTimestamp());
-        }
-      }
-    }
-    return new HoodieInstant(true, instant.getAction(), instant.getTimestamp());
+    return InstantTimeGenerator.setActionEndTimeIfNeeded(new HoodieInstant(State.INFLIGHT, INDEXING_ACTION, timestamp));
   }
 
   static String makeCommitFileName(String instantTime) {
-    return StringUtils.join(instantTime, HoodieTimeline.COMMIT_EXTENSION);
+    // TODO : InstantTimeAdapter.getOrCreate(check StatMachine else InstantTimeGenrator);
+    return makeCommitFileName(InstantTimeGenerator.setActionEndTimeIfNeeded(
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_EXTENSION, instantTime)).getInstantTime());
   }
 
   static String makeInflightCommitFileName(String instantTime) {
-    return StringUtils.join(instantTime, HoodieTimeline.INFLIGHT_COMMIT_EXTENSION);
+    return makeInflightCommitFileName(InstantTimeGenerator.setActionEndTimeIfNeeded(
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.INFLIGHT_COMMIT_EXTENSION, instantTime)).getInstantTime());
   }
 
   static String makeRequestedCommitFileName(String instantTime) {
-    return StringUtils.join(instantTime, HoodieTimeline.REQUESTED_COMMIT_EXTENSION);
+    return makeInflightCommitFileName(InstantTimeGenerator.setActionEndTimeIfNeeded(
+        new HoodieInstant(State.REQUESTED, HoodieTimeline.REQUESTED_COMMIT_EXTENSION, instantTime)).getInstantTime());
   }
 
   static String makeCleanerFileName(String instant) {
     return StringUtils.join(instant, HoodieTimeline.CLEAN_EXTENSION);
   }
 
-  static String makeRequestedCleanerFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.REQUESTED_CLEAN_EXTENSION);
+  static String makeRequestedCleanerFileName(String instantTime) {
+    return makeInflightCommitFileName(InstantTimeGenerator.setActionEndTimeIfNeeded(
+        new HoodieInstant(State.REQUESTED, HoodieTimeline.REQUESTED_CLEAN_EXTENSION, instantTime)).getInstantTime());
   }
 
-  static String makeInflightCleanerFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.INFLIGHT_CLEAN_EXTENSION);
+  static String makeInflightCleanerFileName(String instantTime) {
+    return makeInflightCommitFileName(InstantTimeGenerator.setActionEndTimeIfNeeded(
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.INFLIGHT_CLEAN_EXTENSION, instantTime)).getInstantTime());
   }
 
   static String makeRollbackFileName(String instant) {
@@ -516,7 +511,8 @@ public interface HoodieTimeline extends Serializable {
   }
 
   static String makeSavePointFileName(String instantTime) {
-    return StringUtils.join(instantTime, HoodieTimeline.SAVEPOINT_EXTENSION);
+    return makeInflightCommitFileName(InstantTimeGenerator.setActionEndTimeIfNeeded(
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_EXTENSION, instantTime)).getInstantTime());
   }
 
   static String makeInflightDeltaFileName(String instantTime) {
@@ -532,7 +528,8 @@ public interface HoodieTimeline extends Serializable {
   }
 
   static String makeRequestedCompactionFileName(String instantTime) {
-    return StringUtils.join(instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION);
+    return makeInflightCommitFileName(InstantTimeGenerator.setActionEndTimeIfNeeded(
+        new HoodieInstant(State.REQUESTED, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION, instantTime)).getInstantTime());
   }
 
   // Log compaction action
@@ -552,32 +549,146 @@ public interface HoodieTimeline extends Serializable {
     return StringUtils.join(instant, HoodieTimeline.INFLIGHT_RESTORE_EXTENSION);
   }
 
-  static String makeReplaceFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.REPLACE_COMMIT_EXTENSION);
+  static String makeReplaceFileName(String instantTime) {
+    return makeInflightCommitFileName(InstantTimeGenerator.setActionEndTimeIfNeeded(
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_EXTENSION, instantTime)).getInstantTime());
   }
 
-  static String makeInflightReplaceFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION);
+  static String makeInflightReplaceFileName(String instantTime) {
+    return makeInflightCommitFileName(InstantTimeGenerator.setActionEndTimeIfNeeded(
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION, instantTime)).getInstantTime());
   }
 
-  static String makeRequestedReplaceFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION);
+  static String makeRequestedReplaceFileName(String instantTime) {
+    return makeInflightCommitFileName(InstantTimeGenerator.setActionEndTimeIfNeeded(
+        new HoodieInstant(State.REQUESTED, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION, instantTime)).getInstantTime());
   }
 
   static String makeDeltaFileName(String instantTime) {
-    return instantTime + HoodieTimeline.DELTA_COMMIT_EXTENSION;
+    return makeInflightCommitFileName(InstantTimeGenerator.setActionEndTimeIfNeeded(
+        new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_EXTENSION, instantTime)).getInstantTime());
   }
 
   static String getCommitFromCommitFile(String commitFileName) {
     return commitFileName.split("\\.")[0];
   }
 
-  static String makeFileNameAsComplete(String fileName) {
-    return fileName.replace(HoodieTimeline.INFLIGHT_EXTENSION, "");
+  static String makeCommitFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.COMMIT_EXTENSION, instantTime
+        .getStateTransitionTime());
   }
 
-  static String makeFileNameAsInflight(String fileName) {
-    return StringUtils.join(fileName, HoodieTimeline.INFLIGHT_EXTENSION);
+  static String makeInflightCommitFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.INFLIGHT_COMMIT_EXTENSION, instantTime
+        .getStateTransitionTime());
+  }
+
+  static String makeRequestedCommitFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.REQUESTED_COMMIT_EXTENSION, instantTime
+        .getStateTransitionTime());
+  }
+
+  static String makeCleanerFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.CLEAN_EXTENSION, instantTime
+        .getStateTransitionTime());
+  }
+
+  static String makeRequestedCleanerFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.REQUESTED_CLEAN_EXTENSION, instantTime
+        .getStateTransitionTime());
+  }
+
+  static String makeInflightCleanerFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.INFLIGHT_CLEAN_EXTENSION, instantTime
+        .getStateTransitionTime());
+  }
+
+  static String makeRollbackFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.ROLLBACK_EXTENSION, instantTime
+        .getStateTransitionTime());
+  }
+
+  static String makeInflightRollbackFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.INFLIGHT_ROLLBACK_EXTENSION, instantTime
+        .getStateTransitionTime());
+  }
+
+  static String makeRequestedRollbackFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.REQUESTED_ROLLBACK_EXTENSION, instantTime
+      .getStateTransitionTime());
+  }
+
+  static String makeInflightSavePointFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.INFLIGHT_SAVEPOINT_EXTENSION, instantTime
+        .getStateTransitionTime());
+  }
+
+  static String makeSavePointFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.SAVEPOINT_EXTENSION, instantTime
+        .getStateTransitionTime());
+  }
+
+  static String makeInflightDeltaFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.INFLIGHT_DELTA_COMMIT_EXTENSION, instantTime
+        .getStateTransitionTime());
+  }
+
+  static String makeRequestedDeltaFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.REQUESTED_DELTA_COMMIT_EXTENSION, instantTime
+        .getStateTransitionTime());
+  }
+
+  static String makeInflightCompactionFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.INFLIGHT_COMPACTION_EXTENSION, instantTime
+        .getStateTransitionTime());
+  }
+
+  static String makeRequestedCompactionFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.REQUESTED_COMPACTION_EXTENSION, instantTime
+        .getStateTransitionTime());
+  }
+
+  static String makeInflightLogCompactionFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.INFLIGHT_LOG_COMPACTION_EXTENSION, instantTime.getStateTransitionTime());
+  }
+
+  static String makeRequestedLogCompactionFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.REQUESTED_LOG_COMPACTION_EXTENSION, instantTime.getStateTransitionTime());
+  }
+
+  static String makeRestoreFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.RESTORE_EXTENSION, instantTime
+        .getStateTransitionTime());
+  }
+
+  static String makeInflightRestoreFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.INFLIGHT_RESTORE_EXTENSION, instantTime
+        .getStateTransitionTime());
+  }
+
+  static String makeRequestedRestoreFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.REQUESTED_RESTORE_EXTENSION, instantTime
+      .getStateTransitionTime());
+  }
+
+  static String makeReplaceFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.REPLACE_COMMIT_EXTENSION, instantTime
+        .getStateTransitionTime());
+  }
+
+  static String makeInflightReplaceFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION, instantTime
+        .getStateTransitionTime());
+  }
+
+  static String makeRequestedReplaceFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION, instantTime
+        .getStateTransitionTime());
+  }
+
+  static String makeDeltaFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.DELTA_COMMIT_EXTENSION, instantTime
+        .getStateTransitionTime());
   }
 
   static String makeIndexCommitFileName(String instant) {
@@ -602,5 +713,29 @@ public interface HoodieTimeline extends Serializable {
 
   static String makeRequestSchemaFileName(String instantTime) {
     return StringUtils.join(instantTime, HoodieTimeline.REQUESTED_SAVE_SCHEMA_ACTION_EXTENSION);
+  }
+
+  static String makeIndexCommitFileName(InstantTime instant) {
+    return StringUtils.join(instant.getActionStartTimestamp(), HoodieTimeline.INDEX_COMMIT_EXTENSION, instant.getStateTransitionTime());
+  }
+
+  static String makeInflightIndexFileName(InstantTime instant) {
+    return StringUtils.join(instant.getActionStartTimestamp(), HoodieTimeline.INFLIGHT_INDEX_COMMIT_EXTENSION, instant.getStateTransitionTime());
+  }
+
+  static String makeRequestedIndexFileName(InstantTime instant) {
+    return StringUtils.join(instant.getActionStartTimestamp(), HoodieTimeline.REQUESTED_INDEX_COMMIT_EXTENSION, instant.getStateTransitionTime());
+  }
+
+  static String makeSchemaFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.SAVE_SCHEMA_ACTION_EXTENSION, instantTime.getStateTransitionTime());
+  }
+
+  static String makeInflightSchemaFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.INFLIGHT_SAVE_SCHEMA_ACTION_EXTENSION, instantTime.getStateTransitionTime());
+  }
+
+  static String makeRequestSchemaFileName(InstantTime instantTime) {
+    return StringUtils.join(instantTime.getActionStartTimestamp(), HoodieTimeline.REQUESTED_SAVE_SCHEMA_ACTION_EXTENSION, instantTime.getStateTransitionTime());
   }
 }

@@ -110,7 +110,7 @@ public class ITTestHDFSParquetImportCommand extends HoodieCLIIntegrationTestBase
     assertTrue(Files.exists(Paths.get(metaPath)), "Hoodie table not exist.");
 
     // Load meta data
-    new TableCommand().connect(targetPath.toString(), TimelineLayoutVersion.VERSION_1, false, 2000, 300000, 7);
+    new TableCommand().connect(targetPath.toString(), TimelineLayoutVersion.VERSION_2, false, 2000, 300000, 7);
     metaClient = HoodieCLI.getTableMetaClient();
 
     assertEquals(1, metaClient.getActiveTimeline().getCommitsTimeline().countInstants(), "Should only 1 commit.");
@@ -134,7 +134,7 @@ public class ITTestHDFSParquetImportCommand extends HoodieCLIIntegrationTestBase
     dataImporter.dataImport(jsc, 0);
 
     // Load meta data
-    new TableCommand().connect(targetPath.toString(), TimelineLayoutVersion.VERSION_1, false, 2000, 300000, 7);
+    new TableCommand().connect(targetPath.toString(), TimelineLayoutVersion.VERSION_2, false, 2000, 300000, 7);
     metaClient = HoodieCLI.getTableMetaClient();
 
     // check if insert instant exist

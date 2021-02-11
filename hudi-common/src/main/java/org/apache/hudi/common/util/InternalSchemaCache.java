@@ -184,6 +184,7 @@ public class InternalSchemaCache {
     String avroSchema = "";
     Set<String> commitSet = Arrays.stream(validCommits.split(",")).collect(Collectors.toSet());
     List<String> validateCommitList = commitSet.stream().map(fileName -> {
+      // TODO: fetch extension based in HoodieInstantFormat
       String fileExtension = HoodieInstant.getTimelineFileExtension(fileName);
       return fileName.replace(fileExtension, "");
     }).collect(Collectors.toList());
@@ -192,6 +193,7 @@ public class InternalSchemaCache {
     Path hoodieMetaPath = new Path(tablePath, HoodieTableMetaClient.METAFOLDER_NAME);
     //step1:
     Path candidateCommitFile = commitSet.stream().filter(fileName -> {
+      // TODO: fetch extension based in HoodieInstantFormat
       String fileExtension = HoodieInstant.getTimelineFileExtension(fileName);
       return fileName.replace(fileExtension, "").equals(versionId + "");
     }).findFirst().map(f -> new Path(hoodieMetaPath, f)).orElse(null);

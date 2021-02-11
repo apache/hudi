@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.timeline;
 
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hadoop.fs.FileStatus;
 
 import java.io.Serializable;
@@ -38,17 +39,22 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
    * A COMPACTION action eventually becomes COMMIT when completed. So, when grouping instants
    * for state transitions, this needs to be taken into account
    */
-  private static final Map<String, String> COMPARABLE_ACTIONS = createComparableActionsMap();
+  public static final Map<String, String> COMPARABLE_ACTIONS = createComparableActionsMap();
 
   public static final Comparator<HoodieInstant> ACTION_COMPARATOR =
       Comparator.comparing(instant -> getComparableAction(instant.getAction()));
 
-  public static final Comparator<HoodieInstant> COMPARATOR = Comparator.comparing(HoodieInstant::getTimestamp)
+  public static final Comparator<HoodieInstant> START_INSTANT_TIME_COMPARATOR = Comparator.comparing(HoodieInstant::getTimestamp)
+      .thenComparing(ACTION_COMPARATOR).thenComparing(HoodieInstant::getState);
+
+  public static final Comparator<HoodieInstant> END_INSTANT_TIME_COMPARATOR = Comparator.comparing(HoodieInstant::getStateTransitionTime)
       .thenComparing(ACTION_COMPARATOR).thenComparing(HoodieInstant::getState);
 
   public static String getComparableAction(String action) {
     return COMPARABLE_ACTIONS.getOrDefault(action, action);
   }
+
+  public static State DEFAULT_INIT_STATE = State.COMPLETED;
 
   public static String getTimelineFileExtension(String fileName) {
     Objects.requireNonNull(fileName);
@@ -70,46 +76,75 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     NIL
   }
 
-  private State state = State.COMPLETED;
+  public static class InstantTime {
+
+    private String actionStartTimestamp;
+    private String stateTransitionTime;
+
+    private InstantTime(String stateTransitionTime) {
+      this.actionStartTimestamp = stateTransitionTime;
+    }
+
+    private InstantTime(String actionStartTimestamp, String stateTransitionTime) {
+      this.actionStartTimestamp = actionStartTimestamp;
+      this.stateTransitionTime = stateTransitionTime;
+    }
+
+    public static InstantTime from(String actionStartTimestamp) {
+      return new InstantTime(actionStartTimestamp);
+    }
+
+    public static InstantTime from(String actionStartTimestamp, String stateTransitionTime) {
+      return new InstantTime(actionStartTimestamp, stateTransitionTime);
+    }
+
+    public String getActionStartTimestamp() {
+      return actionStartTimestamp;
+    }
+
+    public String getStateTransitionTime() {
+      return stateTransitionTime;
+    }
+  }
+
+  private State state;
   private String action;
-  private String timestamp;
+  private InstantTime instantTime;
 
   /**
    * Load the instant from the meta FileStatus.
    */
   public HoodieInstant(FileStatus fileStatus) {
-    // First read the instant timestamp. [==>20170101193025<==].commit
-    String fileName = fileStatus.getPath().getName();
-    String fileExtension = getTimelineFileExtension(fileName);
-    timestamp = fileName.replace(fileExtension, "");
-
-    // Next read the action for this marker
-    action = fileExtension.replaceFirst(".", "");
-    if (action.equals("inflight")) {
-      // This is to support backwards compatibility on how in-flight commit files were written
-      // General rule is inflight extension is .<action>.inflight, but for commit it is .inflight
-      action = "commit";
-      state = State.INFLIGHT;
-    } else if (action.contains(HoodieTimeline.INFLIGHT_EXTENSION)) {
-      state = State.INFLIGHT;
-      action = action.replace(HoodieTimeline.INFLIGHT_EXTENSION, "");
-    } else if (action.contains(HoodieTimeline.REQUESTED_EXTENSION)) {
-      state = State.REQUESTED;
-      action = action.replace(HoodieTimeline.REQUESTED_EXTENSION, "");
-    }
+    this.action = HoodieInstantFormat.getInstantFormat(TimelineLayoutVersion.CURR_LAYOUT_VERSION).getAction(fileStatus);
+    this.state = HoodieInstantFormat.getInstantFormat(TimelineLayoutVersion.CURR_LAYOUT_VERSION).getState(fileStatus);
+    this.instantTime = InstantTime.from(HoodieInstantFormat.getInstantFormat(TimelineLayoutVersion.CURR_LAYOUT_VERSION).getActionStartTime(fileStatus),
+        HoodieInstantFormat.getInstantFormat(TimelineLayoutVersion.CURR_LAYOUT_VERSION).getStateTransitionTime(fileStatus));
   }
 
-  public HoodieInstant(boolean isInflight, String action, String timestamp) {
+  /**
+   * Load the instant from the meta FileStatus.
+   */
+  public HoodieInstant(FileStatus fileStatus, TimelineLayoutVersion timelineLayoutVersion) {
+    this.action = HoodieInstantFormat.getInstantFormat(timelineLayoutVersion).getAction(fileStatus);
+    this.state = HoodieInstantFormat.getInstantFormat(timelineLayoutVersion).getState(fileStatus);
+    this.instantTime = InstantTime.from(HoodieInstantFormat.getInstantFormat(timelineLayoutVersion).getActionStartTime(fileStatus),
+        HoodieInstantFormat.getInstantFormat(timelineLayoutVersion).getStateTransitionTime(fileStatus));
+  }
+
+  public HoodieInstant(boolean isInflight, String action, String actionStartTimestamp) {
     // TODO: vb - Preserving for avoiding cascading changes. This constructor will be updated in subsequent PR
-    this.state = isInflight ? State.INFLIGHT : State.COMPLETED;
-    this.action = action;
-    this.timestamp = timestamp;
+    this(isInflight ? State.INFLIGHT : State.COMPLETED, action, actionStartTimestamp, actionStartTimestamp);
   }
 
-  public HoodieInstant(State state, String action, String timestamp) {
+  @Deprecated
+  public HoodieInstant(State state, String action, String actionStartTimestamp) {
+    this(state, action, actionStartTimestamp, actionStartTimestamp);
+  }
+
+  public HoodieInstant(State state, String action, String actionStartTimestamp, String stateTransitionTime) {
     this.state = state;
     this.action = action;
-    this.timestamp = timestamp;
+    this.instantTime = InstantTime.from(actionStartTimestamp, stateTransitionTime);
   }
 
   public boolean isCompleted() {
@@ -129,66 +164,18 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   }
 
   public String getTimestamp() {
-    return timestamp;
+    return this.instantTime.getActionStartTimestamp();
+  }
+
+  public String getStateTransitionTime() {
+    return this.instantTime.getStateTransitionTime();
   }
 
   /**
    * Get the filename for this instant.
    */
   public String getFileName() {
-    if (HoodieTimeline.COMMIT_ACTION.equals(action)) {
-      return isInflight() ? HoodieTimeline.makeInflightCommitFileName(timestamp)
-          : isRequested() ? HoodieTimeline.makeRequestedCommitFileName(timestamp)
-              : HoodieTimeline.makeCommitFileName(timestamp);
-    } else if (HoodieTimeline.CLEAN_ACTION.equals(action)) {
-      return isInflight() ? HoodieTimeline.makeInflightCleanerFileName(timestamp)
-          : isRequested() ? HoodieTimeline.makeRequestedCleanerFileName(timestamp)
-              : HoodieTimeline.makeCleanerFileName(timestamp);
-    } else if (HoodieTimeline.ROLLBACK_ACTION.equals(action)) {
-      return isInflight() ? HoodieTimeline.makeInflightRollbackFileName(timestamp)
-          : isRequested() ? HoodieTimeline.makeRequestedRollbackFileName(timestamp)
-              : HoodieTimeline.makeRollbackFileName(timestamp);
-    } else if (HoodieTimeline.SAVEPOINT_ACTION.equals(action)) {
-      return isInflight() ? HoodieTimeline.makeInflightSavePointFileName(timestamp)
-          : HoodieTimeline.makeSavePointFileName(timestamp);
-    } else if (HoodieTimeline.DELTA_COMMIT_ACTION.equals(action)) {
-      return isInflight() ? HoodieTimeline.makeInflightDeltaFileName(timestamp)
-          : isRequested() ? HoodieTimeline.makeRequestedDeltaFileName(timestamp)
-              : HoodieTimeline.makeDeltaFileName(timestamp);
-    } else if (HoodieTimeline.COMPACTION_ACTION.equals(action)) {
-      if (isInflight()) {
-        return HoodieTimeline.makeInflightCompactionFileName(timestamp);
-      } else if (isRequested()) {
-        return HoodieTimeline.makeRequestedCompactionFileName(timestamp);
-      } else {
-        return HoodieTimeline.makeCommitFileName(timestamp);
-      }
-    } else if (HoodieTimeline.LOG_COMPACTION_ACTION.equals(action)) {
-      if (isInflight()) {
-        return HoodieTimeline.makeInflightLogCompactionFileName(timestamp);
-      } else if (isRequested()) {
-        return HoodieTimeline.makeRequestedLogCompactionFileName(timestamp);
-      } else {
-        return HoodieTimeline.makeDeltaFileName(timestamp);
-      }
-    } else if (HoodieTimeline.RESTORE_ACTION.equals(action)) {
-      return isInflight() ? HoodieTimeline.makeInflightRestoreFileName(timestamp)
-          : isRequested() ? HoodieTimeline.makeRequestedRestoreFileName(timestamp)
-          : HoodieTimeline.makeRestoreFileName(timestamp);
-    } else if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(action)) {
-      return isInflight() ? HoodieTimeline.makeInflightReplaceFileName(timestamp)
-          : isRequested() ? HoodieTimeline.makeRequestedReplaceFileName(timestamp)
-          : HoodieTimeline.makeReplaceFileName(timestamp);
-    } else if (HoodieTimeline.INDEXING_ACTION.equals(action)) {
-      return isInflight() ? HoodieTimeline.makeInflightIndexFileName(timestamp)
-          : isRequested() ? HoodieTimeline.makeRequestedIndexFileName(timestamp)
-          : HoodieTimeline.makeIndexCommitFileName(timestamp);
-    } else if (HoodieTimeline.SCHEMA_COMMIT_ACTION.equals(action)) {
-      return isInflight() ? HoodieTimeline.makeInflightSchemaFileName(timestamp)
-          : isRequested() ? HoodieTimeline.makeRequestSchemaFileName(timestamp)
-          : HoodieTimeline.makeSchemaFileName(timestamp);
-    }
-    throw new IllegalArgumentException("Cannot get file name for unknown action " + action);
+    return HoodieInstantFormat.getInstantFormat(TimelineLayoutVersion.CURR_LAYOUT_VERSION).getFileName(this);
   }
 
   private static final Map<String, String> createComparableActionsMap() {
@@ -207,25 +194,29 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       return false;
     }
     HoodieInstant that = (HoodieInstant) o;
-    return state == that.state && Objects.equals(action, that.action) && Objects.equals(timestamp, that.timestamp);
+    return state == that.state && Objects.equals(action, that.action) && Objects.equals(this.instantTime.getActionStartTimestamp(), that.instantTime.getActionStartTimestamp());
   }
 
   public State getState() {
     return state;
   }
 
+  public InstantTime getInstantTime() {
+    return instantTime;
+  }
+
   @Override
   public int hashCode() {
-    return Objects.hash(state, action, timestamp);
+    return Objects.hash(state, action, this.instantTime.getActionStartTimestamp());
   }
 
   @Override
   public int compareTo(HoodieInstant o) {
-    return COMPARATOR.compare(this, o);
+    return START_INSTANT_TIME_COMPARATOR.compare(this, o);
   }
 
   @Override
   public String toString() {
-    return "[" + ((isInflight() || isRequested()) ? "==>" : "") + timestamp + "__" + action + "__" + state + "]";
+    return "[" + ((isInflight() || isRequested()) ? "==>" : "") + this.instantTime.getActionStartTimestamp() + "__" + action + "__" + state + "]";
   }
 }
