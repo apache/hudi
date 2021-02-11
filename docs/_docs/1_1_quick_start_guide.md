@@ -343,7 +343,7 @@ hudi_options = {
   'hoodie.datasource.write.recordkey.field': 'uuid',
   'hoodie.datasource.write.partitionpath.field': 'partitionpath',
   'hoodie.datasource.write.table.name': tableName,
-  'hoodie.datasource.write.operation': 'insert',
+  'hoodie.datasource.write.operation': 'upsert',
   'hoodie.datasource.write.precombine.field': 'ts',
   'hoodie.upsert.shuffle.parallelism': 2, 
   'hoodie.insert.shuffle.parallelism': 2
