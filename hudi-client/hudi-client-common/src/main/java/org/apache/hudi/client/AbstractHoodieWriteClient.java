@@ -371,7 +371,6 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * Common method containing steps to be performed before write (upsert/insert/...
    *
    * @param instantTime Instant Time
-   * @param hoodieTable Hoodie Table
    * @return Write Status
    */
   protected void preWrite(String instantTime, WriteOperationType writeOperationType) {
@@ -719,7 +718,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    */
   protected abstract void completeCompaction(HoodieCommitMetadata metadata, O writeStatuses,
                                              HoodieTable<T, I, K, O> table, String compactionCommitTime);
-  
+
   /**
    * Rollback failed compactions. Inflight rollbacks for compactions revert the .inflight file to the .requested file
    *

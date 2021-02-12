@@ -14,12 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 dag_name: cow-long-running-example.yaml
-dag_rounds: 20
-dag_intermittent_delay_mins: 10
+dag_rounds: 50
+dag_intermittent_delay_mins: 1
 dag_content:
   first_insert:
     config:
-      record_size: 100
+      record_size: 1000
       num_partitions_insert: 1
       repeat_count: 1
       num_records_insert: 1000
@@ -27,7 +27,7 @@ dag_content:
     deps: none
   second_insert:
     config:
-      record_size: 100
+      record_size: 1000
       num_partitions_insert: 1
       repeat_count: 1
       num_records_insert: 10000
@@ -35,19 +35,26 @@ dag_content:
     type: InsertNode
   third_insert:
     config:
-      record_size: 100
+      record_size: 1000
       num_partitions_insert: 1
       repeat_count: 1
       num_records_insert: 300
     deps: second_insert
     type: InsertNode
+  first_hive_sync:
+    config:
+      queue_name: "adhoc"
+      engine: "mr"
+    type: HiveSyncNode
+    deps: third_insert
   first_validate:
     config:
+      validate_hive: true
     type: ValidateDatasetNode
-    deps: third_insert
+    deps: first_hive_sync
   first_upsert:
     config:
-      record_size: 100
+      record_size: 1000
       num_partitions_insert: 1
       num_records_insert: 300
       repeat_count: 1
@@ -58,11 +65,25 @@ dag_content:
   first_delete:
     config:
       num_partitions_delete: 1
-      num_records_delete: 2000
+      num_records_delete: 8000
     type: DeleteNode
     deps: first_upsert
+  second_hive_sync:
+    config:
+      queue_name: "adhoc"
+      engine: "mr"
+    type: HiveSyncNode
+    deps: first_delete
   second_validate:
     config:
+      validate_hive: true
       delete_input_data: true
     type: ValidateDatasetNode
-    deps: first_delete
+    deps: second_hive_sync
+  last_validate:
+    config:
+      execute_itr_count: 50
+      validate_clean: true
+      validate_archival: true
+    type: ValidateAsyncOperations
+    deps: second_validate

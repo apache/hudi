@@ -13,16 +13,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-dag_name: complex-dag-mor.yaml
-dag_rounds: 1
-dag_intermittent_delay_mins: 1
+dag_name: cow-clustering-example.yaml
+dag_rounds: 3
+dag_intermittent_delay_mins: 0
 dag_content:
   first_insert:
     config:
       record_size: 1000
       num_partitions_insert: 1
       repeat_count: 1
-      num_records_insert: 100
+      num_records_insert: 1000
     type: InsertNode
     deps: none
   second_insert:
@@ -30,7 +30,7 @@ dag_content:
       record_size: 1000
       num_partitions_insert: 1
       repeat_count: 1
-      num_records_insert: 1000
+      num_records_insert: 10000
     deps: first_insert
     type: InsertNode
   third_insert:
@@ -41,44 +41,36 @@ dag_content:
       num_records_insert: 300
     deps: second_insert
     type: InsertNode
+  first_delete:
+    config:
+      num_partitions_delete: 1
+      num_records_delete: 9000
+    type: DeleteNode
+    deps: third_insert
   first_hive_sync:
     config:
       queue_name: "adhoc"
       engine: "mr"
     type: HiveSyncNode
-    deps: third_insert
+    deps: first_delete
   first_validate:
     config:
+      validate_hive: true
     type: ValidateDatasetNode
     deps: first_hive_sync
-  first_upsert:
+  first_cluster:
     config:
-      record_size: 1000
-      num_partitions_insert: 1
-      num_records_insert: 300
-      repeat_count: 1
-      num_records_upsert: 100
-      num_partitions_upsert: 1
-    type: UpsertNode
+      execute_itr_count: 2
+    type: ClusteringNode
     deps: first_validate
-  first_schedule_compact:
-    config:
-    type: ScheduleCompactNode
-    deps: first_upsert
-  first_delete:
-    config:
-      num_partitions_delete: 1
-      num_records_delete: 500
-    type: DeleteNode
-    deps: first_schedule_compact
   second_hive_sync:
     config:
       queue_name: "adhoc"
       engine: "mr"
     type: HiveSyncNode
-    deps: first_delete
+    deps: first_cluster
   second_validate:
     config:
-      delete_input_data: true
+      validate_hive: true
     type: ValidateDatasetNode
     deps: second_hive_sync
