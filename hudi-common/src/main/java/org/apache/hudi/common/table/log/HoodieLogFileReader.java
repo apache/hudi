@@ -75,20 +75,28 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
                              boolean readBlockLazily, boolean reverseReader) throws IOException {
+    FSDataInputStream inputStreamLocal;
     FSDataInputStream fsDataInputStream = fs.open(logFile.getPath(), bufferSize);
     if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
-      this.inputStream = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
+      inputStreamLocal = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
           new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
     } else if (FSUtils.isGCSFileSystem(fs)) {
-      this.inputStream = new SchemeAwareFSDataInputStream(new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
-          new BufferedFSInputStream((FSInputStream) ((
-              (FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream()), bufferSize))), true);
+      try {
+        FSInputStream localFSInputStream = (FSInputStream)(((FSDataInputStream)fsDataInputStream.getWrappedStream()).getWrappedStream());
+        inputStreamLocal = new SchemeAwareFSDataInputStream(new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
+            new BufferedFSInputStream(localFSInputStream,bufferSize))), true);
+      } catch (ClassCastException e) {
+        // if we cannot cast  fsDataInputStream.getWrappedStream().getWrappedStream() to FSInputStream, fallback to using as is
+        LOG.warn("Cannot cast fsDataInputStream.getWrappedStream().getWrappedStream() to FSInputStream with GCSFileSystem, falling back to original "
+            + "fsDataInputStream");
+        inputStreamLocal = fsDataInputStream;
+      }
     } else {
       // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream
       // need to wrap in another BufferedFSInputStream the make bufferSize work?
-      this.inputStream = fsDataInputStream;
+      inputStreamLocal = fsDataInputStream;
     }
-
+    this.inputStream = inputStreamLocal;
     this.logFile = logFile;
     this.readerSchema = readerSchema;
     this.readBlockLazily = readBlockLazily;

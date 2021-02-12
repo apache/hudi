@@ -41,6 +41,7 @@ public class SchemeAwareFSDataInputStream extends FSDataInputStream {
     try {
       super.seek(desired);
     } catch (EOFException e) {
+      // with GCSFileSystem, accessing the last byte might throw EOFException and hence this fix.
       if (isGCSFileSystem) {
         super.seek(desired - 1);
       } else {
