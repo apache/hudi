@@ -177,7 +177,8 @@ class TestStructuredStreaming extends HoodieClientTestBase {
         numInstants = timeline.countInstants
         success = true
       }
-      val metaClient = new HoodieTableMetaClient(fs.getConf, tablePath, true)
+      val metaClient = new HoodieTableMetaClient.Builder().setConf(fs.getConf).setBasePath(tablePath)
+      .setLoadActiveTimelineOnLoad(true).build()
     } catch {
       case te: TableNotFoundException =>
         log.info("Got table not found exception. Retrying")
@@ -253,12 +254,14 @@ class TestStructuredStreaming extends HoodieClientTestBase {
       if (HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, destPath).getCompletedReplaceTimeline().countInstants() > 0) {
         assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(fs, destPath, "000").size())
         // check have at least one file group
-        this.metaClient = new HoodieTableMetaClient(fs.getConf, destPath, true)
+        this.metaClient = new HoodieTableMetaClient.Builder().setConf(fs.getConf).setBasePath(destPath)
+        .setLoadActiveTimelineOnLoad(true).build()
         assertTrue(getLatestFileGroupsFileId(partitionOfRecords).size > 0)
       } else {
         assertEquals(currNumCommits, HoodieDataSourceHelpers.listCommitsSince(fs, destPath, "000").size())
         // check have more than one file group
-        this.metaClient = new HoodieTableMetaClient(fs.getConf, destPath, true)
+        this.metaClient = new HoodieTableMetaClient.Builder().setConf(fs.getConf).setBasePath(destPath)
+        .setLoadActiveTimelineOnLoad(true).build()
         assertTrue(getLatestFileGroupsFileId(partitionOfRecords).size > 1)
       }
 

@@ -38,6 +38,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableMetaClient.Builder;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -324,7 +325,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     instantsToFiles = testMultipleWriteSteps(view1, Collections.singletonList("11"), true, "11");
 
     SyncableFileSystemView view2 =
-        getFileSystemView(new HoodieTableMetaClient(metaClient.getHadoopConf(), metaClient.getBasePath()));
+        getFileSystemView(new Builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePath()).build());
 
     // Run 2 more ingestion on MOR table. View1 is not yet synced but View2 is
     instantsToFiles.putAll(testMultipleWriteSteps(view2, Arrays.asList("12", "13"), true, "11"));
@@ -334,7 +335,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
 
     view2.sync();
     SyncableFileSystemView view3 =
-        getFileSystemView(new HoodieTableMetaClient(metaClient.getHadoopConf(), metaClient.getBasePath()));
+        getFileSystemView(new Builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePath()).build());
     view3.sync();
     areViewsConsistent(view1, view2, partitions.size() * fileIdsPerPartition.size());
 
@@ -346,7 +347,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     view1.sync();
     areViewsConsistent(view1, view2, partitions.size() * fileIdsPerPartition.size());
     SyncableFileSystemView view4 =
-        getFileSystemView(new HoodieTableMetaClient(metaClient.getHadoopConf(), metaClient.getBasePath()));
+        getFileSystemView(new Builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePath()).build());
     view4.sync();
 
     /*
@@ -360,7 +361,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     view1.sync();
     areViewsConsistent(view1, view2, partitions.size() * fileIdsPerPartition.size() * 2);
     SyncableFileSystemView view5 =
-        getFileSystemView(new HoodieTableMetaClient(metaClient.getHadoopConf(), metaClient.getBasePath()));
+        getFileSystemView(new Builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePath()).build());
     view5.sync();
 
     /*
@@ -383,7 +384,7 @@ public class TestIncrementalFSViewSync extends HoodieCommonTestHarness {
     view1.sync();
     areViewsConsistent(view1, view2, partitions.size() * fileIdsPerPartition.size() * 2);
     SyncableFileSystemView view6 =
-        getFileSystemView(new HoodieTableMetaClient(metaClient.getHadoopConf(), metaClient.getBasePath()));
+        getFileSystemView(new Builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePath()).build());
     view6.sync();
 
     /*

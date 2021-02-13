@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableMetaClient.Builder;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -94,7 +95,7 @@ public class TestMultiFS extends HoodieClientTestHarness {
 
       // Read from hdfs
       FileSystem fs = FSUtils.getFs(dfsBasePath, HoodieTestUtils.getDefaultHadoopConf());
-      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), dfsBasePath);
+      HoodieTableMetaClient metaClient = new Builder().setConf(fs.getConf()).setBasePath(dfsBasePath).build();
       HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
       Dataset<Row> readRecords = HoodieClientTestUtils.readCommit(dfsBasePath, sqlContext, timeline, readCommitTime);
       assertEquals(readRecords.count(), records.size(), "Should contain 100 records");
@@ -112,7 +113,7 @@ public class TestMultiFS extends HoodieClientTestHarness {
 
       LOG.info("Reading from path: " + tablePath);
       fs = FSUtils.getFs(tablePath, HoodieTestUtils.getDefaultHadoopConf());
-      metaClient = new HoodieTableMetaClient(fs.getConf(), tablePath);
+      metaClient = new Builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
       Dataset<Row> localReadRecords =
           HoodieClientTestUtils.readCommit(tablePath, sqlContext, timeline, writeCommitTime);
