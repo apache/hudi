@@ -767,7 +767,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public List<String> getDatadogMetricTags() {
     return Arrays.stream(props.getProperty(
-        HoodieMetricsDatadogConfig.DATADOG_METRIC_TAGS).split("\\s*,\\s*")).collect(Collectors.toList());
+        HoodieMetricsDatadogConfig.DATADOG_METRIC_TAGS, ",").split("\\s*,\\s*")).collect(Collectors.toList());
   }
 
   public String getMetricReporterClassName() {
