@@ -19,7 +19,7 @@ can be chosen/changed across each commit/deltacommit issued against the table.
 
  - **UPSERT** : This is the default operation where the input records are first tagged as inserts or updates by looking up the index. 
  The records are ultimately written after heuristics are run to determine how best to pack them on storage to optimize for things like file sizing. 
- This operation is recommended for use-cases like database change capture where the input almost certainly contains updates.
+ This operation is recommended for use-cases like database change capture where the input almost certainly contains updates. The target table will never show duplicates.
  - **INSERT** : This operation is very similar to upsert in terms of heuristics/file sizing but completely skips the index lookup step. Thus, it can be a lot faster than upserts 
  for use-cases like log de-duplication (in conjunction with options to filter duplicates mentioned below). This is also suitable for use-cases where the table can tolerate duplicates, but just 
  need the transactional writes/incremental pull/storage management capabilities of Hudi.
