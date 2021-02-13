@@ -87,6 +87,7 @@ Following table summarizes the trade-offs between these two table types
 | Trade-off     | CopyOnWrite      | MergeOnRead |
 |-------------- |------------------| ------------------|
 | Data Latency | Higher   | Lower |
+| Query Latency | Lower   | Higher |
 | Update cost (I/O) | Higher (rewrite entire parquet) | Lower (append to delta log) |
 | Parquet File Size | Smaller (high update(I/0) cost) | Larger (low update cost) |
 | Write Amplification | Higher | Lower (depending on compaction strategy) |
