@@ -44,7 +44,7 @@ locale                   : "en-US"
 title                    : # "Apache Hudi"
 title_separator          : "-"
 subtitle                 : "" # *version
-description              : "Apache Hudi brings upserts, deletes and stream processing to data lakes built on HDFS or cloud storage."
+description              : "Apache Hudi is the Data Lake Platform."
 url                      : https://hudi.apache.org # the base hostname & protocol for your site e.g. "https://github.com/apache/hudi.git"
 repository               : "apache/incubator-hudi"
 teaser                   : "/assets/images/500x300.png" # path of fallback teaser image, e.g. "/assets/images/500x300.png"
@@ -56,7 +56,7 @@ site_url                 : https://hudi.apache.org
 # Site QuickLinks
 author:
   name             : "Quick Links"
-  bio              : "Hudi *ingests* & *manages* storage of large analytical datasets over DFS."
+  bio              : "Hudi is the Data Lake Platform."
   links:
     - label: "Documentation"
       icon: "fa fa-book"
@@ -82,7 +82,7 @@ author:
 
 cn_author:
   name             : "Quick Links"
-  bio              : "Hudi *ingests* & *manages* storage of large analytical datasets over DFS."
+  bio              : "Hudi is the Data Lake Platform."
   links:
     - label: "Documentation"
       icon: "fa fa-book"
