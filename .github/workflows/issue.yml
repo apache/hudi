@@ -1,7 +1,7 @@
 name: Labeling new issue
 on:
   issues:
-    types: ['opened','edited']
+    types: ['opened']
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,4 +12,18 @@ jobs:
           ignore-comments: true
           labels-synonyms: '{"bug":["error","need fix","not working"],"enhancement":["upgrade"],"question":["help"]}'
           labels-not-allowed: '["awaiting user input"]'
+          default-labels: '["help wanted first time"]'
+on:
+  issues:
+    types: ['edited']
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: Renato66/auto-label@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          ignore-comments: true
+          labels-synonyms: '{"bug":["error","need fix","not working"],"enhancement":["upgrade"],"question":["help"]}'
           default-labels: '["help wanted"]'
+
