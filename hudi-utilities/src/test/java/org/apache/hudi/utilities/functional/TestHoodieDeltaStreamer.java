@@ -118,7 +118,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   public static final String PROPS_INVALID_TABLE_CONFIG_FILE = "test-invalid-table-config.properties";
   private static final String PROPS_FILENAME_TEST_INVALID = "test-invalid.properties";
   private static final String PROPS_FILENAME_TEST_CSV = "test-csv-dfs-source.properties";
-  private static final String PROPS_FILENAME_TEST_PARQUET = "test-parquet-dfs-source.properties";
+  protected static final String PROPS_FILENAME_TEST_PARQUET = "test-parquet-dfs-source.properties";
   private static final String PROPS_FILENAME_TEST_JSON_KAFKA = "test-json-kafka-dfs-source.properties";
   private static String PARQUET_SOURCE_ROOT;
   private static String JSON_KAFKA_SOURCE_ROOT;
@@ -214,7 +214,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     UtilitiesTestBase.Helpers.savePropsToDFS(invalidProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_INVALID);
 
     TypedProperties props1 = new TypedProperties();
-    populateCommonProps(props1);
+    populateCommonProps(props1, true, true);
     UtilitiesTestBase.Helpers.savePropsToDFS(props1, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE1);
 
     TypedProperties properties = new TypedProperties();
@@ -226,7 +226,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     invalidHiveSyncProps.setProperty("hoodie.deltastreamer.ingestion.uber_db.dummy_table_uber.configFile", dfsBasePath + "/config/invalid_hive_sync_uber_config.properties");
     UtilitiesTestBase.Helpers.savePropsToDFS(invalidHiveSyncProps, dfs, dfsBasePath + "/" + PROPS_INVALID_HIVE_SYNC_TEST_SOURCE1);
 
-    prepareParquetDFSFiles(PARQUET_NUM_RECORDS);
+    prepareParquetDFSFiles(PARQUET_NUM_RECORDS, PARQUET_SOURCE_ROOT);
   }
 
   private static void populateInvalidTableConfigFilePathProps(TypedProperties props) {
@@ -236,27 +236,31 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     props.setProperty("hoodie.deltastreamer.ingestion.uber_db.dummy_table_uber.configFile", dfsBasePath + "/config/invalid_uber_config.properties");
   }
 
-  private static void populateCommonProps(TypedProperties props) {
+  protected static void populateCommonProps(TypedProperties props, boolean setKafkaConfig, boolean setHiveConfig) {
     props.setProperty("hoodie.datasource.write.keygenerator.class", TestHoodieDeltaStreamer.TestGenerator.class.getName());
     props.setProperty("hoodie.deltastreamer.keygen.timebased.output.dateformat", "yyyyMMdd");
     props.setProperty("hoodie.deltastreamer.ingestion.tablesToBeIngested", "short_trip_db.dummy_table_short_trip,uber_db.dummy_table_uber");
     props.setProperty("hoodie.deltastreamer.ingestion.uber_db.dummy_table_uber.configFile", dfsBasePath + "/config/uber_config.properties");
     props.setProperty("hoodie.deltastreamer.ingestion.short_trip_db.dummy_table_short_trip.configFile", dfsBasePath + "/config/short_trip_uber_config.properties");
 
-    //Kafka source properties
-    props.setProperty("bootstrap.servers", testUtils.brokerAddress());
-    props.setProperty("hoodie.deltastreamer.source.kafka.auto.reset.offsets", "earliest");
-    props.setProperty("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
-    props.setProperty("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
-    props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents", String.valueOf(5000));
+    if (setKafkaConfig) {
+      //Kafka source properties
+      props.setProperty("bootstrap.servers", testUtils.brokerAddress());
+      props.setProperty("hoodie.deltastreamer.source.kafka.auto.reset.offsets", "earliest");
+      props.setProperty("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+      props.setProperty("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+      props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents", String.valueOf(5000));
+    }
 
-    // Hive Configs
-    props.setProperty(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), "jdbc:hive2://127.0.0.1:9999/");
-    props.setProperty(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), "testdb2");
-    props.setProperty(DataSourceWriteOptions.HIVE_ASSUME_DATE_PARTITION_OPT_KEY(), "false");
-    props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), "datestr");
-    props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
-        MultiPartKeysValueExtractor.class.getName());
+    if (setHiveConfig) {
+      // Hive Configs
+      props.setProperty(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), "jdbc:hive2://127.0.0.1:9999/");
+      props.setProperty(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), "testdb2");
+      props.setProperty(DataSourceWriteOptions.HIVE_ASSUME_DATE_PARTITION_OPT_KEY(), "false");
+      props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), "datestr");
+      props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
+          MultiPartKeysValueExtractor.class.getName());
+    }
   }
 
   @AfterAll
@@ -975,12 +979,25 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   private static void prepareParquetDFSFiles(int numRecords) throws IOException {
-    prepareParquetDFSFiles(numRecords, "1.parquet", false, null, null);
+    prepareParquetDFSFiles(numRecords, PARQUET_SOURCE_ROOT);
   }
 
-  private static void prepareParquetDFSFiles(int numRecords, String fileName, boolean useCustomSchema,
+  protected static void prepareParquetDFSFiles(int numRecords, String baseParquetPath) throws IOException {
+    prepareParquetDFSFiles(numRecords, baseParquetPath, "1.parquet", false, null, null);
+  }
+
+  protected static void prepareParquetDFSFiles(int numRecords, String baseParquetPath, String fileName, boolean useCustomSchema,
       String schemaStr, Schema schema) throws IOException {
-    String path = PARQUET_SOURCE_ROOT + "/" + fileName;
+    //String path = PARQUET_SOURCE_ROOT + "/" + fileName;
+    String path = baseParquetPath + "/" + fileName;
+    /*=======
+    protected static void prepareParquetDFSFiles(int numRecords, String baseParquetPath) throws IOException {
+      prepareParquetDFSFiles(numRecords, baseParquetPath, "1.parquet");
+    } */
+
+    /*protected static void prepareParquetDFSFiles(int numRecords, String baseParquetPath, String fileName) throws IOException {
+    String path = baseParquetPath + "/" + fileName;
+    // >>>>>>> 8e7fcc6a... Fixing NPE with MultiTableDeltaStreamer with ParquetSource*/
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     if (useCustomSchema) {
       Helpers.saveParquetToDFS(Helpers.toGenericRecords(
@@ -1005,14 +1022,27 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer) throws IOException {
+    //<<<<<<< HEAD
     prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc",
-        PROPS_FILENAME_TEST_PARQUET, PARQUET_SOURCE_ROOT);
+        PROPS_FILENAME_TEST_PARQUET, PARQUET_SOURCE_ROOT, false);
   }
 
   private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
-      String propsFileName, String parquetSourceRoot) throws IOException {
+      String propsFileName, String parquetSourceRoot, boolean addCommonProps) throws IOException {
+    /*=======
+    prepareParquetDFSSource(useSchemaProvider, hasTransformer, PARQUET_SOURCE_ROOT, PROPS_FILENAME_TEST_PARQUET, false);
+  }
+
+  protected void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String parquetSourceRoot, String propsFileName,
+      boolean addCommonProps) throws IOException {
+    >>>>>>> 8e7fcc6a... Fixing NPE with MultiTableDeltaStreamer with ParquetSource*/
     // Properties used for testing delta-streamer with Parquet source
     TypedProperties parquetProps = new TypedProperties();
+
+    if (addCommonProps) {
+      populateCommonProps(parquetProps, false, false);
+    }
+
     parquetProps.setProperty("include", "base.properties");
     parquetProps.setProperty("hoodie.embed.timeline.server","false");
     parquetProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
@@ -1042,7 +1072,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   private void prepareJsonKafkaDFSSource(String propsFileName, String autoResetValue, String topicName) throws IOException {
     // Properties used for testing delta-streamer with JsonKafka source
     TypedProperties props = new TypedProperties();
-    populateCommonProps(props);
+    populateCommonProps(props, true, true);
     props.setProperty("include", "base.properties");
     props.setProperty("hoodie.embed.timeline.server","false");
     props.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
@@ -1065,10 +1095,10 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     // prep parquet source
     PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFilesDfsToKafka" + testNum;
     int parquetRecords = 10;
-    prepareParquetDFSFiles(parquetRecords,"1.parquet", true, HoodieTestDataGenerator.TRIP_SCHEMA, HoodieTestDataGenerator.AVRO_TRIP_SCHEMA);
+    prepareParquetDFSFiles(parquetRecords, PARQUET_SOURCE_ROOT, "1.parquet", true, HoodieTestDataGenerator.TRIP_SCHEMA, HoodieTestDataGenerator.AVRO_TRIP_SCHEMA);
 
     prepareParquetDFSSource(true, false,"source_uber.avsc", "target_uber.avsc", PROPS_FILENAME_TEST_PARQUET,
-        PARQUET_SOURCE_ROOT);
+        PARQUET_SOURCE_ROOT, false);
     // delta streamer w/ parquest source
     String tableBasePath = dfsBasePath + "/test_dfs_to_kakfa" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(

@@ -75,9 +75,9 @@ public class HoodieMultiTableDeltaStreamer {
     FileSystem fs = FSUtils.getFs(commonPropsFile, jssc.hadoopConfiguration());
     configFolder = configFolder.charAt(configFolder.length() - 1) == '/' ? configFolder.substring(0, configFolder.length() - 1) : configFolder;
     checkIfPropsFileAndConfigFolderExist(commonPropsFile, configFolder, fs);
-    TypedProperties properties = UtilHelpers.readConfig(fs, new Path(commonPropsFile), new ArrayList<>()).getConfig();
+    TypedProperties commonProperties = UtilHelpers.readConfig(fs, new Path(commonPropsFile), new ArrayList<>()).getConfig();
     //get the tables to be ingested and their corresponding config files from this properties instance
-    populateTableExecutionContextList(properties, configFolder, fs, config);
+    populateTableExecutionContextList(commonProperties, configFolder, fs, config);
   }
 
   private void checkIfPropsFileAndConfigFolderExist(String commonPropsFile, String configFolder, FileSystem fs) throws IOException {
@@ -147,7 +147,7 @@ public class HoodieMultiTableDeltaStreamer {
   }
 
   private void populateSchemaProviderProps(HoodieDeltaStreamer.Config cfg, TypedProperties typedProperties) {
-    if (cfg.schemaProviderClassName.equals(SchemaRegistryProvider.class.getName())) {
+    if (cfg.schemaProviderClassName != null && cfg.schemaProviderClassName.equals(SchemaRegistryProvider.class.getName())) {
       String schemaRegistryBaseUrl = typedProperties.getString(Constants.SCHEMA_REGISTRY_BASE_URL_PROP);
       String schemaRegistrySuffix = typedProperties.getString(Constants.SCHEMA_REGISTRY_URL_SUFFIX_PROP);
       typedProperties.setProperty(Constants.SOURCE_SCHEMA_REGISTRY_URL_PROP, schemaRegistryBaseUrl + typedProperties.getString(Constants.KAFKA_TOPIC_PROP) + schemaRegistrySuffix);
