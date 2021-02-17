@@ -24,7 +24,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableMetaClient.Builder;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.exception.HoodieException;
@@ -172,7 +171,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
         try {
           HoodieTableMetaClient metaClient = metaClientCache.get(baseDir.toString());
           if (null == metaClient) {
-            metaClient = new Builder().setConf(fs.getConf()).setBasePath(baseDir.toString()).setLoadActiveTimelineOnLoad(true).build();
+            metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(baseDir.toString()).setLoadActiveTimelineOnLoad(true).build();
             metaClientCache.put(baseDir.toString(), metaClient);
           }
 

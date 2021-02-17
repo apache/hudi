@@ -20,7 +20,6 @@ package org.apache.hudi;
 
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableMetaClient.Builder;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -71,7 +70,7 @@ public class HoodieDataSourceHelpers {
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public static HoodieTimeline allCompletedCommitsCompactions(FileSystem fs, String basePath) {
-    HoodieTableMetaClient metaClient = new Builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
     if (metaClient.getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
       return metaClient.getActiveTimeline().getTimelineOfActions(
           CollectionUtils.createSet(HoodieActiveTimeline.COMMIT_ACTION,

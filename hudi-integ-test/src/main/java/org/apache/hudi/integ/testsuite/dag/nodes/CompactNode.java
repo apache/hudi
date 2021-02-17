@@ -20,7 +20,6 @@ package org.apache.hudi.integ.testsuite.dag.nodes;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableMetaClient.Builder;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
@@ -47,7 +46,7 @@ public class CompactNode extends DagNode<JavaRDD<WriteStatus>> {
   @Override
   public void execute(ExecutionContext executionContext, int curItrCount) throws Exception {
     HoodieTableMetaClient metaClient =
-        new Builder().setConf(executionContext.getHoodieTestSuiteWriter().getConfiguration()).setBasePath(executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath)
+        HoodieTableMetaClient.builder().setConf(executionContext.getHoodieTestSuiteWriter().getConfiguration()).setBasePath(executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath)
             .build();
     Option<HoodieInstant> lastInstant = metaClient.getActiveTimeline()
         .getCommitsAndCompactionTimeline().filterPendingCompactionTimeline().lastInstant();

@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableMetaClient.Builder;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -149,7 +148,7 @@ public class HoodieSnapshotExporter {
   }
 
   private Option<String> getLatestCommitTimestamp(FileSystem fs, Config cfg) {
-    final HoodieTableMetaClient tableMetadata = new Builder().setConf(fs.getConf()).setBasePath(cfg.sourceBasePath).build();
+    final HoodieTableMetaClient tableMetadata = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(cfg.sourceBasePath).build();
     Option<HoodieInstant> latestCommit = tableMetadata.getActiveTimeline().getCommitsAndCompactionTimeline()
         .filterCompletedInstants().lastInstant();
     return latestCommit.isPresent() ? Option.of(latestCommit.get().getTimestamp()) : Option.empty();
@@ -260,7 +259,7 @@ public class HoodieSnapshotExporter {
 
   private BaseFileOnlyView getBaseFileOnlyView(JavaSparkContext jsc, Config cfg) {
     FileSystem fs = FSUtils.getFs(cfg.sourceBasePath, jsc.hadoopConfiguration());
-    HoodieTableMetaClient tableMetadata = new Builder().setConf(fs.getConf()).setBasePath(cfg.sourceBasePath).build();
+    HoodieTableMetaClient tableMetadata = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(cfg.sourceBasePath).build();
     return new HoodieTableFileSystemView(tableMetadata, tableMetadata
         .getActiveTimeline().getCommitsAndCompactionTimeline().filterCompletedInstants());
   }

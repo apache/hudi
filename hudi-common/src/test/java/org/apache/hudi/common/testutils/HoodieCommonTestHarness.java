@@ -20,7 +20,6 @@ package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableMetaClient.Builder;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -84,7 +83,7 @@ public class HoodieCommonTestHarness {
   }
 
   protected void refreshFsView() throws IOException {
-    metaClient = new Builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
+    metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
   }
 
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline) throws IOException {

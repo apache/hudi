@@ -109,7 +109,7 @@ public abstract class AbstractHoodieLogRecordScanner {
       String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
-    this.hoodieTableMetaClient = new HoodieTableMetaClient.Builder().setConf(fs.getConf()).setBasePath(basePath).build();
+    this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
     // load class from the payload fully qualified class name
     this.payloadClassFQN = this.hoodieTableMetaClient.getTableConfig().getPayloadClass();
     this.totalLogFiles.addAndGet(logFilePaths.size());

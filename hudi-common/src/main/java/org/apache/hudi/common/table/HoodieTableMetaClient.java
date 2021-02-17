@@ -133,7 +133,7 @@ public class HoodieTableMetaClient implements Serializable {
   public HoodieTableMetaClient() {}
 
   public static HoodieTableMetaClient reload(HoodieTableMetaClient oldMetaClient) {
-    return new Builder().setConf(oldMetaClient.hadoopConf.get()).setBasePath(oldMetaClient.basePath).setLoadActiveTimelineOnLoad(oldMetaClient.loadActiveTimelineOnLoad)
+    return HoodieTableMetaClient.builder().setConf(oldMetaClient.hadoopConf.get()).setBasePath(oldMetaClient.basePath).setLoadActiveTimelineOnLoad(oldMetaClient.loadActiveTimelineOnLoad)
         .setConsistencyGuardConfig(oldMetaClient.consistencyGuardConfig).setLayoutVersion(Option.of(oldMetaClient.timelineLayoutVersion)).setPayloadClassName(null).build();
   }
 
@@ -451,7 +451,7 @@ public class HoodieTableMetaClient implements Serializable {
     HoodieTableConfig.createHoodieProperties(fs, metaPathDir, props);
     // We should not use fs.getConf as this might be different from the original configuration
     // used to create the fs in unit tests
-    HoodieTableMetaClient metaClient = new Builder().setConf(hadoopConf).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
     LOG.info("Finished initializing Table of type " + metaClient.getTableConfig().getTableType() + " from " + basePath);
     return metaClient;
   }
@@ -624,6 +624,10 @@ public class HoodieTableMetaClient implements Serializable {
 
   public void setActiveTimeline(HoodieActiveTimeline activeTimeline) {
     this.activeTimeline = activeTimeline;
+  }
+
+  public static Builder builder() {
+    return new Builder();
   }
 
   /**

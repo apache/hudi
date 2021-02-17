@@ -22,7 +22,6 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableMetaClient.Builder;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -188,7 +187,7 @@ public class HoodieJavaStreamingApp {
       executor.shutdownNow();
     }
 
-    HoodieTableMetaClient metaClient = new Builder().setConf(jssc.hadoopConfiguration()).setBasePath(tablePath).build();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jssc.hadoopConfiguration()).setBasePath(tablePath).build();
     if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
       // Ensure we have successfully completed one compaction commit
       ValidationUtils.checkArgument(metaClient.getActiveTimeline().getCommitTimeline().getInstants().count() == 1);
@@ -250,7 +249,7 @@ public class HoodieJavaStreamingApp {
         if (timeline.countInstants() >= numCommits) {
           return;
         }
-        HoodieTableMetaClient metaClient = new Builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
+        HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
         System.out.println("Instants :" + metaClient.getActiveTimeline().getInstants().collect(Collectors.toList()));
       } catch (TableNotFoundException te) {
         LOG.info("Got table not found exception. Retrying");

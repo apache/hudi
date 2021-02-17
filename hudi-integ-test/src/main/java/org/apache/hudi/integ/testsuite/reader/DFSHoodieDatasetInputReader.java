@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableMetaClient.Builder;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
@@ -80,7 +79,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
   public DFSHoodieDatasetInputReader(JavaSparkContext jsc, String basePath, String schemaStr) {
     this.jsc = jsc;
     this.schemaStr = schemaStr;
-    this.metaClient = new Builder().setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build();
+    this.metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build();
   }
 
   protected List<String> getPartitions(Option<Integer> partitionsLimit) throws IOException {

@@ -210,7 +210,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .mode(SaveMode.Append)
       .save(basePath)
 
-    val metaClient = new HoodieTableMetaClient.Builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath)
+    val metaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath)
     .setLoadActiveTimelineOnLoad(true).build();
     val commits = metaClient.getActiveTimeline.filterCompletedInstants().getInstants.toArray
       .map(instant => (instant.asInstanceOf[HoodieInstant]).getAction)
@@ -236,7 +236,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val metaClient = new HoodieTableMetaClient.Builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath)
+    val metaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath)
     .setLoadActiveTimelineOnLoad(true).build()
     val commits = metaClient.getActiveTimeline.filterCompletedInstants().getInstants.toArray
       .map(instant => (instant.asInstanceOf[HoodieInstant]).getAction)
@@ -291,7 +291,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val filterSecondPartitionCount = recordsForPartitionColumn.filter(row => row.get(0).equals(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)).size
     assertEquals(7, filterSecondPartitionCount)
 
-    val metaClient = new HoodieTableMetaClient.Builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath)
+    val metaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath)
     .setLoadActiveTimelineOnLoad(true).build()
     val commits = metaClient.getActiveTimeline.filterCompletedInstants().getInstants.toArray
       .map(instant => instant.asInstanceOf[HoodieInstant].getAction)
@@ -342,7 +342,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     val filterSecondPartitionCount = recordsForPartitionColumn.filter(row => row.get(0).equals(HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)).size
     assertEquals(7, filterSecondPartitionCount)
 
-    val metaClient = new HoodieTableMetaClient.Builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath)
+    val metaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath)
     .setLoadActiveTimelineOnLoad(true).build()
     val commits = metaClient.getActiveTimeline.filterCompletedInstants().getInstants.toArray
       .map(instant => instant.asInstanceOf[HoodieInstant].getAction)

@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableMetaClient.Builder;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -44,7 +43,8 @@ public abstract class HoodieJavaTable<T extends HoodieRecordPayload>
 
   public static <T extends HoodieRecordPayload> HoodieJavaTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
     HoodieTableMetaClient metaClient =
-        new Builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath()).setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
+        HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
+            .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion()))).build();
     return HoodieJavaTable.create(config, (HoodieJavaEngineContext) context, metaClient);
   }

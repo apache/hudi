@@ -20,7 +20,6 @@ package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableMetaClient.Builder;
 import org.apache.hudi.common.table.log.LogReaderUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.InputSplitUtils;
@@ -72,7 +71,7 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   private boolean usesCustomPayload() {
-    HoodieTableMetaClient metaClient = new Builder().setConf(jobConf).setBasePath(split.getBasePath()).build();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jobConf).setBasePath(split.getBasePath()).build();
     return !(metaClient.getTableConfig().getPayloadClass().contains(HoodieAvroPayload.class.getName())
         || metaClient.getTableConfig().getPayloadClass().contains("org.apache.hudi.OverwriteWithLatestAvroPayload"));
   }

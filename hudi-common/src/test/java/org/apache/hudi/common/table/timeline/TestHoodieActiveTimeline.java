@@ -19,7 +19,6 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableMetaClient.Builder;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -116,7 +115,8 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     HoodieInstant instant6 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "9");
     byte[] dummy = new byte[5];
     HoodieActiveTimeline oldTimeline = new HoodieActiveTimeline(
-        new Builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePath()).setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(metaClient.getConsistencyGuardConfig())
+        HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePath())
+            .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(metaClient.getConsistencyGuardConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(VERSION_0))).build());
     // Old Timeline writes both to aux and timeline folder
     oldTimeline.saveToCompactionRequested(instant6, Option.of(dummy));

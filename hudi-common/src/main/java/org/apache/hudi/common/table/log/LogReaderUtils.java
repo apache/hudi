@@ -21,7 +21,6 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableMetaClient.Builder;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Reader;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -65,7 +64,7 @@ public class LogReaderUtils {
 
   public static Schema readLatestSchemaFromLogFiles(String basePath, List<String> deltaFilePaths, Configuration config)
       throws IOException {
-    HoodieTableMetaClient metaClient = new Builder().setConf(config).setBasePath(basePath).build();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(config).setBasePath(basePath).build();
     List<String> deltaPaths = deltaFilePaths.stream().map(s -> new HoodieLogFile(new Path(s)))
         .sorted(HoodieLogFile.getReverseLogFileComparator()).map(s -> s.getPath().toString())
         .collect(Collectors.toList());

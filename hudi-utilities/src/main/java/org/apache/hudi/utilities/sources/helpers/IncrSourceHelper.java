@@ -19,7 +19,6 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableMetaClient.Builder;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
@@ -59,7 +58,7 @@ public class IncrSourceHelper {
       int numInstantsPerFetch, Option<String> beginInstant, boolean readLatestOnMissingBeginInstant) {
     ValidationUtils.checkArgument(numInstantsPerFetch > 0,
         "Make sure the config hoodie.deltastreamer.source.hoodieincr.num_instants is set to a positive value");
-    HoodieTableMetaClient srcMetaClient = new Builder().setConf(jssc.hadoopConfiguration()).setBasePath(srcBasePath).setLoadActiveTimelineOnLoad(true).build();
+    HoodieTableMetaClient srcMetaClient = HoodieTableMetaClient.builder().setConf(jssc.hadoopConfiguration()).setBasePath(srcBasePath).setLoadActiveTimelineOnLoad(true).build();
 
     final HoodieTimeline activeCommitTimeline =
         srcMetaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();

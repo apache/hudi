@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableMetaClient.Builder;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Functions.Function2;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -95,7 +94,7 @@ public class FileSystemViewManager {
    */
   public SyncableFileSystemView getFileSystemView(String basePath) {
     return globalViewMap.computeIfAbsent(basePath, (path) -> {
-      HoodieTableMetaClient metaClient = new Builder().setConf(conf.newCopy()).setBasePath(path).build();
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(conf.newCopy()).setBasePath(path).build();
       return viewCreator.apply(metaClient, viewStorageConfig);
     });
   }
