@@ -32,11 +32,14 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.FlinkLazyInsertIterable;
-import org.apache.hudi.io.FlinkCreateHandleFactory;
+import org.apache.hudi.io.ExplicitCreateHandleFactory;
+import org.apache.hudi.io.FlinkMergeHandle;
+import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
-import org.apache.hudi.io.HoodieSortedMergeHandle;
+import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -71,21 +74,26 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
 
   private static final Logger LOG = LogManager.getLogger(BaseFlinkCommitActionExecutor.class);
 
+  private HoodieWriteHandle<?, ?, ?, ?> writeHandle;
+
   public BaseFlinkCommitActionExecutor(HoodieEngineContext context,
+                                       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
                                        HoodieWriteConfig config,
                                        HoodieTable table,
                                        String instantTime,
                                        WriteOperationType operationType) {
-    super(context, config, table, instantTime, operationType, Option.empty());
+    this(context, writeHandle, config, table, instantTime, operationType, Option.empty());
   }
 
   public BaseFlinkCommitActionExecutor(HoodieEngineContext context,
+                                       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
                                        HoodieWriteConfig config,
                                        HoodieTable table,
                                        String instantTime,
                                        WriteOperationType operationType,
                                        Option extraMetadata) {
     super(context, config, table, instantTime, operationType, extraMetadata);
+    this.writeHandle = writeHandle;
   }
 
   @Override
@@ -182,6 +190,16 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
         case INSERT:
           return handleInsert(fileIdHint, recordItr);
         case UPDATE:
+          if (this.writeHandle instanceof HoodieCreateHandle) {
+            // During one checkpoint interval, an insert record could also be updated,
+            // for example, for an operation sequence of a record:
+            //    I, U,   | U, U
+            // - batch1 - | - batch2 -
+            // the first batch(batch1) operation triggers an INSERT bucket,
+            // the second batch batch2 tries to reuse the same bucket
+            // and append instead of UPDATE.
+            return handleInsert(fileIdHint, recordItr);
+          }
           return handleUpdate(partitionPath, fileIdHint, recordItr);
         default:
           throw new HoodieUpsertException("Unknown bucketType " + bucketType + " for partition :" + partitionPath);
@@ -203,7 +221,7 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
       return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
     }
     // these are updates
-    HoodieMergeHandle upsertHandle = getUpdateHandle(partitionPath, fileId, recordItr);
+    HoodieMergeHandle upsertHandle = getUpdateHandle(recordItr);
     return handleUpdateInternal(upsertHandle, fileId);
   }
 
@@ -225,11 +243,16 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
     return Collections.singletonList(upsertHandle.writeStatuses()).iterator();
   }
 
-  protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
+  protected FlinkMergeHandle getUpdateHandle(Iterator<HoodieRecord<T>> recordItr) {
     if (table.requireSortedRecords()) {
-      return new HoodieSortedMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier);
+      throw new HoodieNotSupportedException("Sort records are not supported in Flink streaming write");
     } else {
-      return new HoodieMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier);
+      FlinkMergeHandle writeHandle = (FlinkMergeHandle) this.writeHandle;
+      // add the incremental records.
+      if (!writeHandle.isNeedBootStrap()) {
+        writeHandle.rollOver(recordItr);
+      }
+      return writeHandle;
     }
   }
 
@@ -242,6 +265,6 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
       return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
     }
     return new FlinkLazyInsertIterable<>(recordItr, true, config, instantTime, table, idPfx,
-        taskContextSupplier, new FlinkCreateHandleFactory<>());
+        taskContextSupplier, new ExplicitCreateHandleFactory<>(writeHandle));
   }
 }

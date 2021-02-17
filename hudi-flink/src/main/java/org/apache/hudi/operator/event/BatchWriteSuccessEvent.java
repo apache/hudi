@@ -21,7 +21,9 @@ package org.apache.hudi.operator.event;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.util.ValidationUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -30,17 +32,38 @@ import java.util.List;
 public class BatchWriteSuccessEvent implements OperatorEvent {
   private static final long serialVersionUID = 1L;
 
-  private final List<WriteStatus> writeStatuses;
+  private List<WriteStatus> writeStatuses;
   private final int taskID;
   private final String instantTime;
+  private boolean isLastBatch;
 
   public BatchWriteSuccessEvent(
       int taskID,
       String instantTime,
       List<WriteStatus> writeStatuses) {
+    this(taskID, instantTime, writeStatuses, false);
+  }
+
+  /**
+   * Creates an event.
+   *
+   * @param taskID        The task ID
+   * @param instantTime   The instant time under which to write the data
+   * @param writeStatuses The write statues list
+   * @param isLastBatch   Whether the event reports the last batch
+   *                      within an checkpoint interval,
+   *                      if true, the whole data set of the checkpoint
+   *                      has been flushed successfully
+   */
+  public BatchWriteSuccessEvent(
+      int taskID,
+      String instantTime,
+      List<WriteStatus> writeStatuses,
+      boolean isLastBatch) {
     this.taskID = taskID;
     this.instantTime = instantTime;
-    this.writeStatuses = writeStatuses;
+    this.writeStatuses = new ArrayList<>(writeStatuses);
+    this.isLastBatch = isLastBatch;
   }
 
   public List<WriteStatus> getWriteStatuses() {
@@ -53,5 +76,29 @@ public class BatchWriteSuccessEvent implements OperatorEvent {
 
   public String getInstantTime() {
     return instantTime;
+  }
+
+  public boolean isLastBatch() {
+    return isLastBatch;
+  }
+
+  /**
+   * Merges this event with given {@link BatchWriteSuccessEvent} {@code other}.
+   *
+   * @param other The event to be merged
+   */
+  public void mergeWith(BatchWriteSuccessEvent other) {
+    ValidationUtils.checkArgument(this.instantTime.equals(other.instantTime));
+    ValidationUtils.checkArgument(this.taskID == other.taskID);
+    this.isLastBatch |= other.isLastBatch; // true if one of the event isLastBatch true.
+    List<WriteStatus> statusList = new ArrayList<>();
+    statusList.addAll(this.writeStatuses);
+    statusList.addAll(other.writeStatuses);
+    this.writeStatuses = statusList;
+  }
+
+  /** Returns whether the event is ready to commit. */
+  public boolean isReady(String currentInstant) {
+    return isLastBatch && this.instantTime.equals(currentInstant);
   }
 }

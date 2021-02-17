@@ -89,7 +89,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
 
   @Override
   public void snapshotState(FunctionSnapshotContext context) {
-    this.bucketAssigner.reset();
+    // no operation
   }
 
   @Override
@@ -144,6 +144,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   @Override
   public void notifyCheckpointComplete(long l) {
     // Refresh the table state when there are new commits.
+    this.bucketAssigner.reset();
     this.bucketAssigner.refreshTable();
   }
 }
