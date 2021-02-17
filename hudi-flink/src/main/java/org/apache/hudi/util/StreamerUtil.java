@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
@@ -53,6 +54,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
 
 /**
@@ -292,5 +294,10 @@ public class StreamerUtil {
   /** Generates the bucket ID using format {partition path}_{fileID}. */
   public static String generateBucketKey(String partitionPath, String fileId) {
     return String.format("%s_%s", partitionPath, fileId);
+  }
+
+  /** Returns whether the location represents an insert. */
+  public static boolean isInsert(HoodieRecordLocation loc) {
+    return Objects.equals(loc.getInstantTime(), "I");
   }
 }

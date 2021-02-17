@@ -18,8 +18,11 @@
 
 package org.apache.hudi.operator;
 
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.operator.event.BatchWriteSuccessEvent;
 import org.apache.hudi.operator.utils.TestConfigurations;
 import org.apache.hudi.util.StreamerUtil;
@@ -37,6 +40,9 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -59,6 +65,34 @@ public class StreamWriteOperatorCoordinatorTest {
   @AfterEach
   public void after() {
     coordinator.close();
+  }
+
+  @Test
+  void testInstantState() {
+    String instant = coordinator.getInstant();
+    assertNotEquals("", instant);
+
+    WriteStatus writeStatus = new WriteStatus(true, 0.1D);
+    writeStatus.setPartitionPath("par1");
+    writeStatus.setStat(new HoodieWriteStat());
+    OperatorEvent event0 =
+        new BatchWriteSuccessEvent(0, instant, Collections.singletonList(writeStatus), true);
+
+    WriteStatus writeStatus1 = new WriteStatus(false, 0.2D);
+    writeStatus1.setPartitionPath("par2");
+    writeStatus1.setStat(new HoodieWriteStat());
+    OperatorEvent event1 =
+        new BatchWriteSuccessEvent(1, instant, Collections.singletonList(writeStatus1), true);
+    coordinator.handleEventFromOperator(0, event0);
+    coordinator.handleEventFromOperator(1, event1);
+
+    coordinator.checkpointComplete(1);
+    String inflight = coordinator.getWriteClient()
+        .getInflightAndRequestedInstant("COPY_ON_WRITE");
+    String lastCompleted = coordinator.getWriteClient().getLastCompletedInstant("COPY_ON_WRITE");
+    assertThat("Instant should be complete", lastCompleted, is(instant));
+    assertNotEquals("", inflight, "Should start a new instant");
+    assertNotEquals(instant, inflight, "Should start a new instant");
   }
 
   @Test
@@ -88,14 +122,14 @@ public class StreamWriteOperatorCoordinatorTest {
   }
 
   @Test
-  public void testCheckpointInvalid() {
+  public void testCheckpointCompleteWithRetry() {
     final CompletableFuture<byte[]> future = new CompletableFuture<>();
     coordinator.checkpointCoordinator(1, future);
-    String inflightInstant = coordinator.getInFlightInstant();
+    String inflightInstant = coordinator.getInstant();
     OperatorEvent event = new BatchWriteSuccessEvent(0, inflightInstant, Collections.emptyList());
     coordinator.handleEventFromOperator(0, event);
-    final CompletableFuture<byte[]> future2 = new CompletableFuture<>();
-    coordinator.checkpointCoordinator(2, future2);
-    assertTrue(future2.isCompletedExceptionally());
+    assertThrows(HoodieException.class,
+        () -> coordinator.checkpointComplete(1),
+        "Try 3 to commit instant");
   }
 }

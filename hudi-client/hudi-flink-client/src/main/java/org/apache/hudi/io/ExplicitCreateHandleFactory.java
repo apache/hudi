@@ -24,18 +24,21 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
 /**
- * Create handle factory for Flink writer, use the specified fileID directly
- * because it is unique anyway.
+ * Create handle factory for Flink writer, use the specified write handle directly.
  */
-public class FlinkCreateHandleFactory<T extends HoodieRecordPayload, I, K, O>
+public class ExplicitCreateHandleFactory<T extends HoodieRecordPayload, I, K, O>
     extends CreateHandleFactory<T, I, K, O> {
+  private HoodieWriteHandle<T, I, K, O> writeHandle;
+
+  public ExplicitCreateHandleFactory(HoodieWriteHandle<T, I, K, O> writeHandle) {
+    this.writeHandle = writeHandle;
+  }
 
   @Override
   public HoodieWriteHandle<T, I, K, O> create(
       HoodieWriteConfig hoodieConfig, String commitTime,
       HoodieTable<T, I, K, O> hoodieTable, String partitionPath,
       String fileIdPrefix, TaskContextSupplier taskContextSupplier) {
-    return new HoodieCreateHandle(hoodieConfig, commitTime, hoodieTable, partitionPath,
-        fileIdPrefix, taskContextSupplier);
+    return writeHandle;
   }
 }

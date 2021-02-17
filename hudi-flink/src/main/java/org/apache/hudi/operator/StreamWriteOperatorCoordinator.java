@@ -80,12 +80,15 @@ public class StreamWriteOperatorCoordinator
    */
   private transient HoodieFlinkWriteClient writeClient;
 
+  /**
+   * Current data buffering checkpoint.
+   */
   private long inFlightCheckpoint = -1;
 
   /**
    * Current REQUESTED instant, for validation.
    */
-  private String inFlightInstant = "";
+  private String instant = "";
 
   /**
    * Event buffer for one round of checkpointing. When all the elements are non-null and have the same
@@ -119,6 +122,8 @@ public class StreamWriteOperatorCoordinator
     initWriteClient();
     // init table, create it if not exists.
     initTableIfNotExists(this.conf);
+    // start a new instant
+    startInstant();
   }
 
   @Override
@@ -132,20 +137,14 @@ public class StreamWriteOperatorCoordinator
   @Override
   public void checkpointCoordinator(long checkpointId, CompletableFuture<byte[]> result) {
     try {
-      final String errMsg = "A new checkpoint starts while the last checkpoint buffer"
-          + " data has not finish writing, roll back the last write and throw";
-      checkAndForceCommit(errMsg);
-      this.inFlightInstant = this.writeClient.startCommit();
-      this.writeClient.transitionRequestedToInflight(conf.getString(FlinkOptions.TABLE_TYPE), this.inFlightInstant);
       this.inFlightCheckpoint = checkpointId;
-      LOG.info("Create instant [{}], at checkpoint [{}]", this.inFlightInstant, checkpointId);
       result.complete(writeCheckpointBytes());
     } catch (Throwable throwable) {
       // when a checkpoint fails, throws directly.
       result.completeExceptionally(
           new CompletionException(
               String.format("Failed to checkpoint Instant %s for source %s",
-                  this.inFlightInstant, this.getClass().getSimpleName()), throwable));
+                  this.instant, this.getClass().getSimpleName()), throwable));
     }
   }
 
@@ -153,6 +152,15 @@ public class StreamWriteOperatorCoordinator
   public void checkpointComplete(long checkpointId) {
     // start to commit the instant.
     checkAndCommitWithRetry();
+    // start new instant.
+    startInstant();
+  }
+
+  private void startInstant() {
+    this.instant = this.writeClient.startCommit();
+    this.writeClient.transitionRequestedToInflight(conf.getString(FlinkOptions.TABLE_TYPE), this.instant);
+    LOG.info("Create instant [{}] for table [{}] with type [{}]", this.instant,
+            this.conf.getString(FlinkOptions.TABLE_NAME), conf.getString(FlinkOptions.TABLE_TYPE));
   }
 
   public void notifyCheckpointAborted(long checkpointId) {
@@ -175,10 +183,14 @@ public class StreamWriteOperatorCoordinator
     Preconditions.checkState(operatorEvent instanceof BatchWriteSuccessEvent,
         "The coordinator can only handle BatchWriteSuccessEvent");
     BatchWriteSuccessEvent event = (BatchWriteSuccessEvent) operatorEvent;
-    Preconditions.checkState(event.getInstantTime().equals(this.inFlightInstant),
+    Preconditions.checkState(event.getInstantTime().equals(this.instant),
         String.format("Receive an unexpected event for instant %s from task %d",
             event.getInstantTime(), event.getTaskID()));
-    this.eventBuffer[event.getTaskID()] = event;
+    if (this.eventBuffer[event.getTaskID()] != null) {
+      this.eventBuffer[event.getTaskID()].mergeWith(event);
+    } else {
+      this.eventBuffer[event.getTaskID()] = event;
+    }
   }
 
   @Override
@@ -218,7 +230,7 @@ public class StreamWriteOperatorCoordinator
          DataOutputStream out = new DataOutputViewStreamWrapper(baos)) {
 
       out.writeLong(this.inFlightCheckpoint);
-      byte[] serializedInstant = this.inFlightInstant.getBytes();
+      byte[] serializedInstant = this.instant.getBytes();
       out.writeInt(serializedInstant.length);
       out.write(serializedInstant);
       out.flush();
@@ -239,12 +251,12 @@ public class StreamWriteOperatorCoordinator
       int serializedInstantSize = in.readInt();
       byte[] serializedInstant = readBytes(in, serializedInstantSize);
       this.inFlightCheckpoint = checkpointID;
-      this.inFlightInstant = new String(serializedInstant);
+      this.instant = new String(serializedInstant);
     }
   }
 
   private void reset() {
-    this.inFlightInstant = "";
+    this.instant = "";
     this.eventBuffer = new BatchWriteSuccessEvent[this.parallelism];
   }
 
@@ -253,8 +265,8 @@ public class StreamWriteOperatorCoordinator
       // forced but still has inflight instant
       String inflightInstant = writeClient.getInflightAndRequestedInstant(this.conf.getString(FlinkOptions.TABLE_TYPE));
       if (inflightInstant != null) {
-        assert inflightInstant.equals(this.inFlightInstant);
-        writeClient.rollback(this.inFlightInstant);
+        assert inflightInstant.equals(this.instant);
+        writeClient.rollback(this.instant);
         throw new HoodieException(errMsg);
       }
       if (Arrays.stream(eventBuffer).allMatch(Objects::isNull)) {
@@ -277,6 +289,10 @@ public class StreamWriteOperatorCoordinator
         if (!checkReady()) {
           // Do not throw if the try times expires but the event buffer are still not ready,
           // because we have a force check when next checkpoint starts.
+          if (tryTimes == retryTimes) {
+            // Throw if the try times expires but the event buffer are still not ready
+            throw new HoodieException("Try " + retryTimes + " to commit instant [" + this.instant + "] failed");
+          }
           sleepFor(retryIntervalMillis);
           continue;
         }
@@ -284,9 +300,9 @@ public class StreamWriteOperatorCoordinator
         return;
       } catch (Throwable throwable) {
         String cause = throwable.getCause() == null ? "" : throwable.getCause().toString();
-        LOG.warn("Try to commit the instant {} failed, with times {} and cause {}", this.inFlightInstant, tryTimes, cause);
+        LOG.warn("Try to commit the instant {} failed, with times {} and cause {}", this.instant, tryTimes, cause);
         if (tryTimes == retryTimes) {
-          throw new HoodieException(throwable);
+          throw new HoodieException("Not all write tasks finish the batch write to commit", throwable);
         }
         sleepFor(retryIntervalMillis);
       }
@@ -307,8 +323,8 @@ public class StreamWriteOperatorCoordinator
 
   /** Checks the buffer is ready to commit. */
   private boolean checkReady() {
-    return Arrays.stream(eventBuffer).allMatch(event ->
-        event != null && event.getInstantTime().equals(this.inFlightInstant));
+    return Arrays.stream(eventBuffer)
+        .allMatch(event -> event != null && event.isReady(this.instant));
   }
 
   /** Performs the actual commit action. */
@@ -320,7 +336,7 @@ public class StreamWriteOperatorCoordinator
 
     if (writeResults.size() == 0) {
       // No data has written, clear the metadata file
-      this.writeClient.deletePendingInstant(this.conf.getString(FlinkOptions.TABLE_TYPE), this.inFlightInstant);
+      this.writeClient.deletePendingInstant(this.conf.getString(FlinkOptions.TABLE_TYPE), this.instant);
       reset();
       return;
     }
@@ -337,12 +353,12 @@ public class StreamWriteOperatorCoordinator
             + totalErrorRecords + "/" + totalRecords);
       }
 
-      boolean success = writeClient.commit(this.inFlightInstant, writeResults, Option.of(checkpointCommitMetadata));
+      boolean success = writeClient.commit(this.instant, writeResults, Option.of(checkpointCommitMetadata));
       if (success) {
         reset();
-        LOG.info("Commit instant [{}] success!", this.inFlightInstant);
+        LOG.info("Commit instant [{}] success!", this.instant);
       } else {
-        throw new HoodieException(String.format("Commit instant [%s] failed!", this.inFlightInstant));
+        throw new HoodieException(String.format("Commit instant [%s] failed!", this.instant));
       }
     } else {
       LOG.error("Error when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
@@ -355,8 +371,8 @@ public class StreamWriteOperatorCoordinator
         }
       });
       // Rolls back instant
-      writeClient.rollback(this.inFlightInstant);
-      throw new HoodieException(String.format("Commit instant [%s] failed and rolled back !", this.inFlightInstant));
+      writeClient.rollback(this.instant);
+      throw new HoodieException(String.format("Commit instant [%s] failed and rolled back !", this.instant));
     }
   }
 
@@ -366,8 +382,14 @@ public class StreamWriteOperatorCoordinator
   }
 
   @VisibleForTesting
-  public String getInFlightInstant() {
-    return inFlightInstant;
+  public String getInstant() {
+    return instant;
+  }
+
+  @VisibleForTesting
+  @SuppressWarnings("rawtypes")
+  public HoodieFlinkWriteClient getWriteClient() {
+    return writeClient;
   }
 
   /**
