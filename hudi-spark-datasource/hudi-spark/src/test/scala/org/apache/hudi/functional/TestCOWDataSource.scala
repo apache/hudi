@@ -86,6 +86,26 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
   }
 
+  //@Test
+  def testArchivalIssue(): Unit = {
+    println(s"Basepath : ${basePath}");
+    for (i <- 1 to 20) {
+      val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), 100)).toList
+      val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+      inputDF.write.format("hudi")
+        .options(commonOpts)
+        .option("hoodie.keep.min.commits", "2")
+        .option("hoodie.keep.max.commits", "3")
+        .option("hoodie.cleaner.commits.retained", "1")
+        .option("hoodie.datasource.write.row.writer.enable", "true")
+        .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
+        .mode(if (i == 0) SaveMode.Overwrite else SaveMode.Append)
+        .save(basePath)
+      println(s"Round ${i} of inserts.")
+    }
+    Thread.sleep(Int.MaxValue)
+  }
+
   @ParameterizedTest
   //TODO(metadata): Needs HUDI-1459 to be fixed
   //@ValueSource(booleans = Array(true, false))
