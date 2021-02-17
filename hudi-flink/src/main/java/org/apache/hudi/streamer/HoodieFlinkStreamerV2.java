@@ -74,7 +74,7 @@ public class HoodieFlinkStreamerV2 {
     Configuration conf = FlinkOptions.fromStreamerConfig(cfg);
     int numWriteTask = conf.getInteger(FlinkOptions.WRITE_TASK_PARALLELISM);
     StreamWriteOperatorFactory<HoodieRecord> operatorFactory =
-        new StreamWriteOperatorFactory<>(conf, numWriteTask);
+        new StreamWriteOperatorFactory<>(conf);
 
     DataStream<Object> dataStream = env.addSource(new FlinkKafkaConsumer<>(
         cfg.kafkaTopic,

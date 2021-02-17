@@ -398,20 +398,20 @@ public class StreamWriteOperatorCoordinator
   public static class Provider implements OperatorCoordinator.Provider {
     private final OperatorID operatorId;
     private final Configuration conf;
-    private final int numTasks;
 
-    public Provider(OperatorID operatorId, Configuration conf, int numTasks) {
+    public Provider(OperatorID operatorId, Configuration conf) {
       this.operatorId = operatorId;
       this.conf = conf;
-      this.numTasks = numTasks;
     }
 
+    @Override
     public OperatorID getOperatorId() {
       return this.operatorId;
     }
 
+    @Override
     public OperatorCoordinator create(Context context) {
-      return new StreamWriteOperatorCoordinator(this.conf, this.numTasks);
+      return new StreamWriteOperatorCoordinator(this.conf, context.currentParallelism());
     }
   }
 }
