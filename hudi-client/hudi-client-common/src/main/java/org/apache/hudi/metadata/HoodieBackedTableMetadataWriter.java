@@ -235,6 +235,29 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   protected void bootstrapIfNeeded(HoodieEngineContext engineContext, HoodieTableMetaClient datasetMetaClient) throws IOException {
     HoodieTimer timer = new HoodieTimer().startTimer();
     boolean exists = datasetMetaClient.getFs().exists(new Path(metadataWriteConfig.getBasePath(), HoodieTableMetaClient.METAFOLDER_NAME));
+    boolean rebootstrap = false;
+    if (exists) {
+      // If the un-synched instants have been archived then the metadata table will need to be bootstrapped again
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get())
+          .setBasePath(metadataWriteConfig.getBasePath()).build();
+      Option<HoodieInstant> latestMetadataInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
+      if (!latestMetadataInstant.isPresent()) {
+        LOG.warn("Metadata Table will need to be re-bootstrapped as no instants were found");
+        rebootstrap = true;
+      } else if (datasetMetaClient.getActiveTimeline().isBeforeTimelineStarts(latestMetadataInstant.get().getTimestamp())) {
+        LOG.warn("Metadata Table will need to be re-bootstrapped as un-synced instants have been archived."
+            + "latestMetadataInstant=" + latestMetadataInstant.get().getTimestamp()
+            + ", latestDatasetInstant=" + datasetMetaClient.getActiveTimeline().firstInstant().get().getTimestamp());
+        rebootstrap = true;
+      }
+    }
+
+    if (rebootstrap) {
+      LOG.info("Deleting Metadata Table directory so that it can be re-bootstrapped");
+      datasetMetaClient.getFs().delete(new Path(metadataWriteConfig.getBasePath()), true);
+      exists = false;
+    }
+
     if (!exists) {
       // Initialize for the first time by listing partitions and files directly from the file system
       bootstrapFromFilesystem(engineContext, datasetMetaClient);
