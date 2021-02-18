@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
@@ -46,6 +47,9 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   public static final String INLINE_COMPACT_PROP = "hoodie.compact.inline";
   // Run a compaction every N delta commits
   public static final String INLINE_COMPACT_NUM_DELTA_COMMITS_PROP = "hoodie.compact.inline.max.delta.commits";
+  // Run a compaction when time elapsed > N seconds since last compaction
+  public static final String INLINE_COMPACT_TIME_DELTA_SECONDS_PROP = "hoodie.compact.inline.max.delta.seconds";
+  public static final String INLINE_COMPACT_TRIGGER_STRATEGY_PROP = "hoodie.compact.inline.trigger.strategy";
   public static final String CLEANER_FILE_VERSIONS_RETAINED_PROP = "hoodie.cleaner.fileversions.retained";
   public static final String CLEANER_COMMITS_RETAINED_PROP = "hoodie.cleaner.commits.retained";
   public static final String CLEANER_INCREMENTAL_MODE = "hoodie.cleaner.incremental.mode";
@@ -109,6 +113,8 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_INLINE_COMPACT = "false";
   private static final String DEFAULT_INCREMENTAL_CLEANER = "true";
   private static final String DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS = "5";
+  private static final String DEFAULT_INLINE_COMPACT_TIME_DELTA_SECONDS = String.valueOf(60 * 60);
+  private static final String DEFAULT_INLINE_COMPACT_TRIGGER_STRATEGY = CompactionTriggerStrategy.NUM_COMMITS.name();
   private static final String DEFAULT_CLEANER_FILE_VERSIONS_RETAINED = "3";
   private static final String DEFAULT_CLEANER_COMMITS_RETAINED = "10";
   private static final String DEFAULT_MAX_COMMITS_TO_KEEP = "30";
@@ -161,6 +167,11 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
 
     public Builder withInlineCompaction(Boolean inlineCompaction) {
       props.setProperty(INLINE_COMPACT_PROP, String.valueOf(inlineCompaction));
+      return this;
+    }
+
+    public Builder withInlineCompactionTriggerStrategy(CompactionTriggerStrategy compactionTriggerStrategy) {
+      props.setProperty(INLINE_COMPACT_TRIGGER_STRATEGY_PROP, compactionTriggerStrategy.name());
       return this;
     }
 
@@ -235,6 +246,11 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withMaxDeltaSecondsBeforeCompaction(int maxDeltaSecondsBeforeCompaction) {
+      props.setProperty(INLINE_COMPACT_TIME_DELTA_SECONDS_PROP, String.valueOf(maxDeltaSecondsBeforeCompaction));
+      return this;
+    }
+
     public Builder withCompactionLazyBlockReadEnabled(Boolean compactionLazyBlockReadEnabled) {
       props.setProperty(COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, String.valueOf(compactionLazyBlockReadEnabled));
       return this;
@@ -271,6 +287,10 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
           DEFAULT_INLINE_COMPACT);
       setDefaultOnCondition(props, !props.containsKey(INLINE_COMPACT_NUM_DELTA_COMMITS_PROP),
           INLINE_COMPACT_NUM_DELTA_COMMITS_PROP, DEFAULT_INLINE_COMPACT_NUM_DELTA_COMMITS);
+      setDefaultOnCondition(props, !props.containsKey(INLINE_COMPACT_TIME_DELTA_SECONDS_PROP),
+          INLINE_COMPACT_TIME_DELTA_SECONDS_PROP, DEFAULT_INLINE_COMPACT_TIME_DELTA_SECONDS);
+      setDefaultOnCondition(props, !props.containsKey(INLINE_COMPACT_TRIGGER_STRATEGY_PROP),
+          INLINE_COMPACT_TRIGGER_STRATEGY_PROP, DEFAULT_INLINE_COMPACT_TRIGGER_STRATEGY);
       setDefaultOnCondition(props, !props.containsKey(CLEANER_POLICY_PROP), CLEANER_POLICY_PROP,
           DEFAULT_CLEANER_POLICY);
       setDefaultOnCondition(props, !props.containsKey(CLEANER_FILE_VERSIONS_RETAINED_PROP),

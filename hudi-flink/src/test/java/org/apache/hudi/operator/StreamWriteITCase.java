@@ -54,6 +54,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,13 +66,13 @@ import java.util.concurrent.TimeUnit;
  */
 public class StreamWriteITCase extends TestLogger {
 
-  private static final Map<String, String> EXPECTED = new HashMap<>();
+  private static final Map<String, List<String>> EXPECTED = new HashMap<>();
 
   static {
-    EXPECTED.put("par1", "[id1,par1,id1,Danny,23,1000,par1, id2,par1,id2,Stephen,33,2000,par1]");
-    EXPECTED.put("par2", "[id3,par2,id3,Julian,53,3000,par2, id4,par2,id4,Fabian,31,4000,par2]");
-    EXPECTED.put("par3", "[id5,par3,id5,Sophia,18,5000,par3, id6,par3,id6,Emma,20,6000,par3]");
-    EXPECTED.put("par4", "[id7,par4,id7,Bob,44,7000,par4, id8,par4,id8,Han,56,8000,par4]");
+    EXPECTED.put("par1", Arrays.asList("id1,par1,id1,Danny,23,1000,par1", "id2,par1,id2,Stephen,33,2000,par1"));
+    EXPECTED.put("par2", Arrays.asList("id3,par2,id3,Julian,53,3000,par2", "id4,par2,id4,Fabian,31,4000,par2"));
+    EXPECTED.put("par3", Arrays.asList("id5,par3,id5,Sophia,18,5000,par3", "id6,par3,id6,Emma,20,6000,par3"));
+    EXPECTED.put("par4", Arrays.asList("id7,par4,id7,Bob,44,7000,par4", "id8,par4,id8,Han,56,8000,par4"));
   }
 
   @TempDir
@@ -85,13 +86,14 @@ public class StreamWriteITCase extends TestLogger {
     execEnv.setParallelism(4);
     // set up checkpoint interval
     execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
+    execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
 
     // Read from file source
     RowType rowType =
         (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
             .getLogicalType();
     StreamWriteOperatorFactory<HoodieRecord> operatorFactory =
-        new StreamWriteOperatorFactory<>(conf, 4);
+        new StreamWriteOperatorFactory<>(conf);
 
     JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
         rowType,
@@ -137,7 +139,7 @@ public class StreamWriteITCase extends TestLogger {
       }
     }
 
-    TestData.checkWrittenData(tempFile, EXPECTED);
+    TestData.checkWrittenFullData(tempFile, EXPECTED);
   }
 
   @Test
@@ -215,6 +217,6 @@ public class StreamWriteITCase extends TestLogger {
       }
     }
 
-    TestData.checkWrittenData(tempFile, EXPECTED);
+    TestData.checkWrittenFullData(tempFile, EXPECTED);
   }
 }

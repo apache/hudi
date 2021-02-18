@@ -39,15 +39,12 @@ public class StreamWriteOperatorFactory<I>
 
   private final StreamWriteOperator<I> operator;
   private final Configuration conf;
-  private final int numTasks;
 
   public StreamWriteOperatorFactory(
-      Configuration conf,
-      int numTasks) {
+      Configuration conf) {
     super(new StreamWriteOperator<>(conf));
     this.operator = (StreamWriteOperator<I>) getOperator();
     this.conf = conf;
-    this.numTasks = numTasks;
   }
 
   @Override
@@ -65,7 +62,7 @@ public class StreamWriteOperatorFactory<I>
 
   @Override
   public OperatorCoordinator.Provider getCoordinatorProvider(String s, OperatorID operatorID) {
-    return new StreamWriteOperatorCoordinator.Provider(operatorID, this.conf, this.numTasks);
+    return new StreamWriteOperatorCoordinator.Provider(operatorID, this.conf);
   }
 
   @Override

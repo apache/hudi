@@ -25,6 +25,7 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.operator.event.BatchWriteSuccessEvent;
 import org.apache.hudi.table.action.commit.FlinkWriteHelper;
@@ -33,6 +34,7 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
+import org.apache.flink.runtime.state.CheckpointListener;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
@@ -48,6 +50,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiFunction;
@@ -58,33 +61,39 @@ import java.util.function.BiFunction;
  * <p><h2>Work Flow</h2>
  *
  * <p>The function firstly buffers the data as a batch of {@link HoodieRecord}s,
- * It flushes(write) the records batch when a Flink checkpoint starts. After a batch has been written successfully,
+ * It flushes(write) the records batch when a batch exceeds the configured size {@link FlinkOptions#WRITE_BATCH_SIZE}
+ * or a Flink checkpoint starts. After a batch has been written successfully,
  * the function notifies its operator coordinator {@link StreamWriteOperatorCoordinator} to mark a successful write.
  *
- * <p><h2>Exactly-once Semantics</h2>
+ * <p><h2>The Semantics</h2>
  *
  * <p>The task implements exactly-once semantics by buffering the data between checkpoints. The operator coordinator
  * starts a new instant on the time line when a checkpoint triggers, the coordinator checkpoints always
  * start before its operator, so when this function starts a checkpoint, a REQUESTED instant already exists.
- * The function process thread then block data buffering and the checkpoint thread starts flushing the existing data buffer.
- * When the existing data buffer write successfully, the process thread unblock and start buffering again for the next round checkpoint.
- * Because any checkpoint failures would trigger the write rollback, it implements the exactly-once semantics.
+ *
+ * <p>In order to improve the throughput, The function process thread does not block data buffering
+ * after the checkpoint thread starts flushing the existing data buffer. So there is possibility that the next checkpoint
+ * batch was written to current checkpoint. When a checkpoint failure triggers the write rollback, there may be some duplicate records
+ * (e.g. the eager write batch), the semantics is still correct using the UPSERT operation.
  *
  * <p><h2>Fault Tolerance</h2>
  *
- * <p>The operator coordinator checks the validity for the last instant when it starts a new one. The operator rolls back
- * the written data and throws when any error occurs. This means any checkpoint or task failure would trigger a failover.
- * The operator coordinator would try several times when committing the writestatus.
+ * <p>The operator coordinator checks and commits the last instant then starts a new one when a checkpoint finished successfully.
+ * The operator rolls back the written data and throws to trigger a failover when any error occurs.
+ * This means one Hoodie instant may span one or more checkpoints(some checkpoints notifications may be skipped).
+ * If a checkpoint timed out, the next checkpoint would help to rewrite the left buffer data (clean the buffer in the last
+ * step of the #flushBuffer method).
  *
- * <p>Note: The function task requires the input stream be partitioned by the partition fields to avoid different write tasks
- * write to the same file group that conflict. The general case for partition path is a datetime field,
- * so the sink task is very possible to have IO bottleneck, the more flexible solution is to shuffle the
- * data by the file group IDs.
+ * <p>The operator coordinator would try several times when committing the write status.
+ *
+ * <p>Note: The function task requires the input stream be shuffled by the file IDs.
  *
  * @param <I> Type of the input record
  * @see StreamWriteOperatorCoordinator
  */
-public class StreamWriteFunction<K, I, O> extends KeyedProcessFunction<K, I, O> implements CheckpointedFunction {
+public class StreamWriteFunction<K, I, O>
+    extends KeyedProcessFunction<K, I, O>
+    implements CheckpointedFunction, CheckpointListener {
 
   private static final long serialVersionUID = 1L;
 
@@ -138,9 +147,14 @@ public class StreamWriteFunction<K, I, O> extends KeyedProcessFunction<K, I, O> 
   private transient OperatorEventGateway eventGateway;
 
   /**
+   * The detector that tells if to flush the data as mini-batch.
+   */
+  private transient BufferSizeDetector detector;
+
+  /**
    * Constructs a StreamingSinkFunction.
    *
-   * @param config  The config options
+   * @param config The config options
    */
   public StreamWriteFunction(Configuration config) {
     this.config = config;
@@ -149,6 +163,7 @@ public class StreamWriteFunction<K, I, O> extends KeyedProcessFunction<K, I, O> 
   @Override
   public void open(Configuration parameters) throws IOException {
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
+    this.detector = new BufferSizeDetector(this.config.getDouble(FlinkOptions.WRITE_BATCH_SIZE));
     initBuffer();
     initWriteClient();
     initWriteFunction();
@@ -166,11 +181,8 @@ public class StreamWriteFunction<K, I, O> extends KeyedProcessFunction<K, I, O> 
       // Based on the fact that the coordinator starts the checkpoint first,
       // it would check the validity.
       this.onCheckpointing = true;
-      this.currentInstant = this.writeClient.getInflightAndRequestedInstant(this.config.get(FlinkOptions.TABLE_TYPE));
-      Preconditions.checkNotNull(this.currentInstant,
-          "No inflight instant when flushing data");
       // wait for the buffer data flush out and request a new instant
-      flushBuffer();
+      flushBuffer(true);
       // signal the task thread to start buffering
       addToBufferCondition.signal();
     } finally {
@@ -186,6 +198,7 @@ public class StreamWriteFunction<K, I, O> extends KeyedProcessFunction<K, I, O> 
       if (onCheckpointing) {
         addToBufferCondition.await();
       }
+      flushBufferOnCondition(value);
       putDataIntoBuffer(value);
     } finally {
       bufferLock.unlock();
@@ -197,6 +210,11 @@ public class StreamWriteFunction<K, I, O> extends KeyedProcessFunction<K, I, O> 
     if (this.writeClient != null) {
       this.writeClient.close();
     }
+  }
+
+  @Override
+  public void notifyCheckpointComplete(long checkpointId) {
+    this.writeClient.cleanHandles();
   }
 
   // -------------------------------------------------------------------------
@@ -252,6 +270,42 @@ public class StreamWriteFunction<K, I, O> extends KeyedProcessFunction<K, I, O> 
     }
   }
 
+  /**
+   * Tool to detect if to flush out the existing buffer.
+   * Sampling the record to compute the size with 0.01 percentage.
+   */
+  private static class BufferSizeDetector {
+    private final Random random = new Random(47);
+    private static final int DENOMINATOR = 100;
+
+    private final double batchSizeBytes;
+
+    private long lastRecordSize = -1L;
+    private long totalSize = 0L;
+
+    BufferSizeDetector(double batchSizeMb) {
+      this.batchSizeBytes = batchSizeMb * 1024 * 1024;
+    }
+
+    boolean detect(Object record) {
+      if (lastRecordSize == -1 || sampling()) {
+        lastRecordSize = ObjectSizeCalculator.getObjectSize(record);
+      }
+      totalSize += lastRecordSize;
+      return totalSize > this.batchSizeBytes;
+    }
+
+    boolean sampling() {
+      // 0.01 sampling percentage
+      return random.nextInt(DENOMINATOR) == 1;
+    }
+
+    void reset() {
+      this.lastRecordSize = -1L;
+      this.totalSize = 0L;
+    }
+  }
+
   private void putDataIntoBuffer(I value) {
     HoodieRecord<?> record = (HoodieRecord<?>) value;
     final String fileId = record.getCurrentLocation().getFileId();
@@ -262,8 +316,25 @@ public class StreamWriteFunction<K, I, O> extends KeyedProcessFunction<K, I, O> 
     this.buffer.get(key).add(record);
   }
 
+  /**
+   * Flush the data buffer if the buffer size is greater than
+   * the configured value {@link FlinkOptions#WRITE_BATCH_SIZE}.
+   *
+   * @param value HoodieRecord
+   */
+  private void flushBufferOnCondition(I value) {
+    boolean needFlush = this.detector.detect(value);
+    if (needFlush) {
+      flushBuffer(false);
+      this.detector.reset();
+    }
+  }
+
   @SuppressWarnings("unchecked, rawtypes")
-  private void flushBuffer() {
+  private void flushBuffer(boolean isFinalBatch) {
+    this.currentInstant = this.writeClient.getInflightAndRequestedInstant(this.config.get(FlinkOptions.TABLE_TYPE));
+    Preconditions.checkNotNull(this.currentInstant,
+        "No inflight instant when flushing data");
     final List<WriteStatus> writeStatus;
     if (buffer.size() > 0) {
       writeStatus = new ArrayList<>();
@@ -278,12 +349,13 @@ public class StreamWriteFunction<K, I, O> extends KeyedProcessFunction<K, I, O> 
               writeStatus.addAll(writeFunction.apply(records, currentInstant));
             }
           });
-      this.buffer.clear();
     } else {
       LOG.info("No data to write in subtask [{}] for instant [{}]", taskID, currentInstant);
       writeStatus = Collections.emptyList();
     }
-    this.eventGateway.sendEventToCoordinator(new BatchWriteSuccessEvent(this.taskID, currentInstant, writeStatus));
+    this.eventGateway.sendEventToCoordinator(
+        new BatchWriteSuccessEvent(this.taskID, currentInstant, writeStatus, isFinalBatch));
+    this.buffer.clear();
     this.currentInstant = "";
   }
 }

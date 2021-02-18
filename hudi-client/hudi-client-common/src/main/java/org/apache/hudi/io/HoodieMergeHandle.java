@@ -95,10 +95,10 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   protected HoodieFileWriter<IndexedRecord> fileWriter;
 
   protected Path newFilePath;
-  private Path oldFilePath;
+  protected Path oldFilePath;
   protected long recordsWritten = 0;
-  private long recordsDeleted = 0;
-  private long updatedRecordsWritten = 0;
+  protected long recordsDeleted = 0;
+  protected long updatedRecordsWritten = 0;
   protected long insertRecordsWritten = 0;
   protected boolean useWriterSchema;
   private HoodieBaseFile baseFileToMerge;
@@ -133,6 +133,13 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   }
 
   /**
+   * Returns the data file name.
+   */
+  protected String generatesDataFileName() {
+    return FSUtils.makeDataFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension());
+  }
+
+  /**
    * Extract old file path, initialize StorageWriter and WriteStatus.
    */
   private void init(String fileId, String partitionPath, HoodieBaseFile baseFileToMerge) {
@@ -149,7 +156,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       partitionMetadata.trySave(getPartitionId());
 
       oldFilePath = new Path(config.getBasePath() + "/" + partitionPath + "/" + latestValidFilePath);
-      String newFileName = FSUtils.makeDataFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension());
+      String newFileName = generatesDataFileName();
       String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
           + newFileName).toString();
       newFilePath = new Path(config.getBasePath(), relativePath);
@@ -177,18 +184,25 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   }
 
   /**
-   * Load the new incoming records in a map and return partitionPath.
+   * Initialize a spillable map for incoming records.
    */
-  private void init(String fileId, Iterator<HoodieRecord<T>> newRecordsItr) {
+  protected void initializeIncomingRecordsMap() {
     try {
       // Load the new records in a map
       long memoryForMerge = IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config.getProps());
       LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
       this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
-          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(writerSchema));
+              new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(writerSchema));
     } catch (IOException io) {
       throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
     }
+  }
+
+  /**
+   * Load the new incoming records in a map and return partitionPath.
+   */
+  protected void init(String fileId, Iterator<HoodieRecord<T>> newRecordsItr) {
+    initializeIncomingRecordsMap();
     while (newRecordsItr.hasNext()) {
       HoodieRecord<T> record = newRecordsItr.next();
       // update the new location of the record, so we know where to find it next

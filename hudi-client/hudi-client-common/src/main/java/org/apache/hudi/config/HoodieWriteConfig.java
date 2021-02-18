@@ -34,6 +34,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
+import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.hadoop.hbase.io.compress.Compression;
@@ -405,8 +406,16 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_PROP));
   }
 
+  public CompactionTriggerStrategy getInlineCompactTriggerStrategy() {
+    return CompactionTriggerStrategy.valueOf(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY_PROP));
+  }
+
   public int getInlineCompactDeltaCommitMax() {
     return Integer.parseInt(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP));
+  }
+
+  public int getInlineCompactDeltaSecondsMax() {
+    return Integer.parseInt(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_TIME_DELTA_SECONDS_PROP));
   }
 
   public CompactionStrategy getCompactionStrategy() {
@@ -767,7 +776,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public List<String> getDatadogMetricTags() {
     return Arrays.stream(props.getProperty(
-        HoodieMetricsDatadogConfig.DATADOG_METRIC_TAGS).split("\\s*,\\s*")).collect(Collectors.toList());
+        HoodieMetricsDatadogConfig.DATADOG_METRIC_TAGS, ",").split("\\s*,\\s*")).collect(Collectors.toList());
   }
 
   public String getMetricReporterClassName() {
