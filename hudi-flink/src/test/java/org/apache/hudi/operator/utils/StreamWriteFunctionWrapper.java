@@ -19,6 +19,7 @@
 package org.apache.hudi.operator.utils;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.operator.StreamWriteFunction;
 import org.apache.hudi.operator.StreamWriteOperatorCoordinator;
@@ -161,5 +162,17 @@ public class StreamWriteFunctionWrapper<I> {
 
   public StreamWriteOperatorCoordinator getCoordinator() {
     return coordinator;
+  }
+
+  public void clearIndexState() {
+    this.bucketAssignerFunction.clearIndexState();
+  }
+
+  public boolean isKeyInState(HoodieKey hoodieKey) {
+    return this.bucketAssignerFunction.isKeyInState(hoodieKey);
+  }
+
+  public boolean isAllPartitionsLoaded() {
+    return this.bucketAssignerFunction.isAllPartitionsLoaded();
   }
 }
