@@ -1,7 +1,7 @@
 ---
 title: "Apache Hudi Key Generators"
 excerpt: "Different key generators available with Apache Hudi"
-author: sivabalan, pratyaksh
+author: sivabalan
 category: blog
 ---
 
@@ -28,8 +28,7 @@ key generators.
 | ------------- |:-------------:| 
 | ```hoodie.datasource.write.recordkey.field```     | Refers to record key field. This is a mandatory field. | 
 | ```hoodie.datasource.write.partitionpath.field```     | Refers to partition path field. This is a mandatory field. | 
-| ```hoodie.datasource.write.keygenerator.class```| Refers to Key generator class(including full path). Could refer to any of the available ones or user defined one. This is a mandatory field.
- | 
+| ```hoodie.datasource.write.keygenerator.class``` | Refers to Key generator class(including full path). Could refer to any of the available ones or user defined one. This is a mandatory field. | 
 | ```hoodie.datasource.write.partitionpath.urlencode```| When set to true, partition path will be url encoded. Default value is false. |
 | ```hoodie.datasource.write.hive_style_partitioning```| When set to true, uses hive style partitioning. Partition field name will be prefixed to the value. Format: “<partition_path_field_name>=<partition_path_value>”. Default value is false.|
 
