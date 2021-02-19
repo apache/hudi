@@ -63,10 +63,9 @@ Configs to be set:
 | ```hoodie.deltastreamer.keygen.timebased.timezone```| Timezone of the data format| 
 | ```oodie.deltastreamer.keygen.timebased.input.dateformat```| Input date format |
 
-Lets go over some example values for TimestampBasedKeyGenerator.
+Let's go over some example values for TimestampBasedKeyGenerator.
 
-<br/>
-// Timestamp is GMT
+#### Timestamp is GMT
 
 | Config field | Value |
 | ------------- | -------------|
@@ -74,14 +73,13 @@ Lets go over some example values for TimestampBasedKeyGenerator.
 |```hoodie.deltastreamer.keygen.timebased.output.dateformat``` | "yyyy-MM-dd hh" |
 |```hoodie.deltastreamer.keygen.timebased.timezone```| "GMT+8:00" |
 
-Input Field value: “1578283932000L”
+Input Field value: “1578283932000L” <br/>
 Partition path generated from key generator: “2020-01-06 12”
 
-If input field value is null for some rows.
+If input field value is null for some rows. <br/>
 Partition path generated from key generator: “1970-01-01 08”
 
-<br/>
-// Timestamp is DATE_STRING
+#### Timestamp is DATE_STRING
 
 | Config field | Value |
 | ------------- | -------------|
@@ -90,15 +88,14 @@ Partition path generated from key generator: “1970-01-01 08”
 |```hoodie.deltastreamer.keygen.timebased.timezone```|  "GMT+8:00" |
 |```hoodie.deltastreamer.keygen.timebased.input.dateformat```|  "yyyy-MM-dd hh:mm:ss" |
 
-Input field value: “2020-01-06 12:12:12”
+Input field value: “2020-01-06 12:12:12” <br/>
 Partition path generated from key generator: “2020-01-06 12”
 
-If input field value is null for some rows.
+If input field value is null for some rows. <br/>
 Partition path generated from key generator: “1970-01-01 12:00:00”
 <br/>
-<br/>
 
-// Scalar examples
+#### Scalar examples
 
 | Config field | Value |
 | ------------- | -------------|
@@ -107,13 +104,67 @@ Partition path generated from key generator: “1970-01-01 12:00:00”
 |```hoodie.deltastreamer.keygen.timebased.timezone```| "GMT" |
 |```hoodie.deltastreamer.keygen.timebased.timestamp.scalar.time.unit```| "days" |
 
-Input field value: “20000L”
+Input field value: “20000L” <br/>
 Partition path generated from key generator: “2024-10-04 12”
 
-If input field value is null.
+If input field value is null. <br/>
 Partition path generated from key generator: “1970-01-02 12”
 
-// More to be filled in.
+#### ISO8601WithMsZ with Single Input format
+
+| Config field | Value |
+| ------------- | -------------|
+|```hoodie.deltastreamer.keygen.timebased.timestamp.type```| "DATE_STRING"|
+|```hoodie.deltastreamer.keygen.timebased.input.dateformat```| "yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
+|```hoodie.deltastreamer.keygen.timebased.input.dateformat.list.delimiter.regex```| "" |
+|```hoodie.deltastreamer.keygen.timebased.input.timezone```| "" |
+|```hoodie.deltastreamer.keygen.timebased.output.dateformat```| "yyyyMMddHH" |
+|```hoodie.deltastreamer.keygen.timebased.output.timezone```| "GMT" |
+
+Input field value: "2020-04-01T13:01:33.428Z" <br/>
+Partition path generated from key generator: "2020040113"
+
+#### ISO8601WithMsZ with Multiple Input formats
+
+| Config field | Value |
+| ------------- | -------------|
+|```hoodie.deltastreamer.keygen.timebased.timestamp.type```| "DATE_STRING"|
+|```hoodie.deltastreamer.keygen.timebased.input.dateformat```| "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
+|```hoodie.deltastreamer.keygen.timebased.input.dateformat.list.delimiter.regex```| "" |
+|```hoodie.deltastreamer.keygen.timebased.input.timezone```| "" |
+|```hoodie.deltastreamer.keygen.timebased.output.dateformat```| "yyyyMMddHH" |
+|```hoodie.deltastreamer.keygen.timebased.output.timezone```| "UTC" |
+
+Input field value: "2020-04-01T13:01:33.428Z" <br/>
+Partition path generated from key generator: "2020040113"
+
+#### ISO8601NoMs with offset using multiple input formats
+
+| Config field | Value |
+| ------------- | -------------|
+|```hoodie.deltastreamer.keygen.timebased.timestamp.type```| "DATE_STRING"|
+|```hoodie.deltastreamer.keygen.timebased.input.dateformat```| "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ" |
+|```hoodie.deltastreamer.keygen.timebased.input.dateformat.list.delimiter.regex```| "" |
+|```hoodie.deltastreamer.keygen.timebased.input.timezone```| "" |
+|```hoodie.deltastreamer.keygen.timebased.output.dateformat```| "yyyyMMddHH" |
+|```hoodie.deltastreamer.keygen.timebased.output.timezone```| "UTC" |
+
+Input field value: "2020-04-01T13:01:33-**05:00**" <br/>
+Partition path generated from key generator: "2020040118"
+
+#### Input as short date string and expect date in date format
+
+| Config field | Value |
+| ------------- | -------------|
+|```hoodie.deltastreamer.keygen.timebased.timestamp.type```| "DATE_STRING"|
+|```hoodie.deltastreamer.keygen.timebased.input.dateformat```| "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ,yyyyMMdd" |
+|```hoodie.deltastreamer.keygen.timebased.input.dateformat.list.delimiter.regex```| "" |
+|```hoodie.deltastreamer.keygen.timebased.input.timezone```| "UTC" |
+|```hoodie.deltastreamer.keygen.timebased.output.dateformat```| "MM/dd/yyyy" |
+|```hoodie.deltastreamer.keygen.timebased.output.timezone```| "UTC" |
+
+Input field value: "220200401" <br/>
+Partition path generated from key generator: "04/01/2020"
 
 ### [CustomKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/CustomKeyGenerator.java)
 This is a generic implementation of KeyGenerator where users are able to leverage the benefits of SimpleKeyGenerator, 
