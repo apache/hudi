@@ -102,7 +102,7 @@ public class DLASyncTool extends AbstractSyncTool {
           throw new InvalidTableException(hoodieDLAClient.getBasePath());
       }
     } catch (RuntimeException re) {
-      LOG.error("Got runtime exception when dla syncing", re);
+      throw new HoodieException("Got runtime exception when dla syncing " + cfg.tableName, re);
     } finally {
       hoodieDLAClient.close();
     }

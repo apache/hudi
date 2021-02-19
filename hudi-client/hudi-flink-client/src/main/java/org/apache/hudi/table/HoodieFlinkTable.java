@@ -36,7 +36,8 @@ import org.apache.hudi.index.HoodieIndex;
 import java.util.List;
 
 public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
-    extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
+    extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>
+    implements ExplicitWriteHandleTable<T> {
   protected HoodieFlinkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
   }

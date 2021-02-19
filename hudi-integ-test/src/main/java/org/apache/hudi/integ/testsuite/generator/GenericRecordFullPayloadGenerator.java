@@ -331,7 +331,7 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
    */
   public GenericRecord updateTimestamp(GenericRecord record, String fieldName) {
     long delta = TimeUnit.MILLISECONDS.convert(++partitionIndex % numDatePartitions, TimeUnit.DAYS);
-    record.put(fieldName, System.currentTimeMillis() - delta);
+    record.put(fieldName, (System.currentTimeMillis() - delta)/1000);
     return record;
   }
 

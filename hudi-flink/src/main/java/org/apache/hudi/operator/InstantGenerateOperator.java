@@ -18,7 +18,7 @@
 
 package org.apache.hudi.operator;
 
-import org.apache.hudi.HoodieFlinkStreamer;
+import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
@@ -40,7 +40,6 @@ import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.FileStatus;
@@ -66,7 +65,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   private static final Logger LOG = LoggerFactory.getLogger(InstantGenerateOperator.class);
   public static final String NAME = "InstantGenerateOperator";
 
-  private HoodieFlinkStreamer.Config cfg;
+  private FlinkStreamerConfig cfg;
   private HoodieFlinkWriteClient writeClient;
   private SerializableConfiguration serializableHadoopConf;
   private transient FileSystem fs;
@@ -78,7 +77,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   private static final String DELIMITER = "_";
   private static final String INSTANT_MARKER_FOLDER_NAME = ".instant_marker";
   private transient boolean isMain = false;
-  private transient AtomicLong recordCounter = new AtomicLong(0);
+  private AtomicLong recordCounter = new AtomicLong(0);
   private StreamingRuntimeContext runtimeContext;
   private int indexOfThisSubtask;
 
@@ -94,13 +93,13 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
   public void open() throws Exception {
     super.open();
     // get configs from runtimeContext
-    cfg = (HoodieFlinkStreamer.Config) runtimeContext.getExecutionConfig().getGlobalJobParameters();
+    cfg = (FlinkStreamerConfig) getRuntimeContext().getExecutionConfig().getGlobalJobParameters();
 
     // retry times
-    retryTimes = Integer.valueOf(cfg.blockRetryTime);
+    retryTimes = Integer.valueOf(cfg.instantRetryTimes);
 
     // retry interval
-    retryInterval = Integer.valueOf(cfg.blockRetryInterval);
+    retryInterval = Integer.valueOf(cfg.instantRetryInterval);
 
     // hadoopConf
     serializableHadoopConf = new SerializableConfiguration(StreamerUtil.getHadoopConf());
@@ -115,7 +114,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       writeClient = new HoodieFlinkWriteClient(new HoodieFlinkEngineContext(taskContextSupplier), StreamerUtil.getHoodieClientConfig(cfg), true);
 
       // init table, create it if not exists.
-      initTable();
+      StreamerUtil.initTableIfNotExists(FlinkOptions.fromStreamerConfig(cfg));
 
       // create instant marker directory
       createInstantMarkerDir();
@@ -189,6 +188,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
    */
   private String startNewInstant(long checkpointId) {
     String newTime = writeClient.startCommit();
+    this.writeClient.transitionRequestedToInflight(this.cfg.tableType, newTime);
     LOG.info("create instant [{}], at checkpoint [{}]", newTime, checkpointId);
     return newTime;
   }
@@ -216,20 +216,6 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       }
     }
     throw new InterruptedException(String.format("Last instant costs more than %s second, stop task now", retryTimes * retryInterval));
-  }
-
-
-  /**
-   * Create table if not exists.
-   */
-  private void initTable() throws IOException {
-    if (!fs.exists(new Path(cfg.targetBasePath))) {
-      HoodieTableMetaClient.initTableType(new Configuration(serializableHadoopConf.get()), cfg.targetBasePath,
-          HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName, 1);
-      LOG.info("Table initialized");
-    } else {
-      LOG.info("Table already [{}/{}] exists, do nothing here", cfg.targetBasePath, cfg.targetTableName);
-    }
   }
 
   @Override

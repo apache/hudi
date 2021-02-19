@@ -22,16 +22,17 @@ import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION_OPT_KEY}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.DataSource
-import org.apache.spark.sql.execution.streaming.Sink
+import org.apache.spark.sql.execution.streaming.{Sink, Source}
+import org.apache.spark.sql.hudi.streaming.HoodieStreamSource
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
+import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
 
 import scala.collection.JavaConverters._
 
@@ -44,7 +45,16 @@ class DefaultSource extends RelationProvider
   with CreatableRelationProvider
   with DataSourceRegister
   with StreamSinkProvider
+  with StreamSourceProvider
   with Serializable {
+
+  SparkSession.getActiveSession.foreach { spark =>
+    val sparkVersion = spark.version
+    if (sparkVersion.startsWith("0.") || sparkVersion.startsWith("1.") || sparkVersion.startsWith("2.")) {
+      // Enable "passPartitionByAsOptions" to support "write.partitionBy(...)"
+      spark.conf.set("spark.sql.legacy.sources.write.passPartitionByAsOptions", "true")
+    }
+  }
 
   private val log = LogManager.getLogger(classOf[DefaultSource])
 
@@ -126,12 +136,13 @@ class DefaultSource extends RelationProvider
                               optParams: Map[String, String],
                               df: DataFrame): BaseRelation = {
     val parameters = HoodieWriterUtils.parametersWithWriteDefaults(optParams)
+    val translatedOptions = DataSourceWriteOptions.translateSqlOptions(parameters)
     val dfWithoutMetaCols = df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala:_*)
 
-    if (parameters(OPERATION_OPT_KEY).equals(BOOTSTRAP_OPERATION_OPT_VAL)) {
-      HoodieSparkSqlWriter.bootstrap(sqlContext, mode, parameters, dfWithoutMetaCols)
+    if (translatedOptions(OPERATION_OPT_KEY).equals(BOOTSTRAP_OPERATION_OPT_VAL)) {
+      HoodieSparkSqlWriter.bootstrap(sqlContext, mode, translatedOptions, dfWithoutMetaCols)
     } else {
-      HoodieSparkSqlWriter.write(sqlContext, mode, parameters, dfWithoutMetaCols)
+      HoodieSparkSqlWriter.write(sqlContext, mode, translatedOptions, dfWithoutMetaCols)
     }
     new HoodieEmptyRelation(sqlContext, dfWithoutMetaCols.schema)
   }
@@ -141,9 +152,10 @@ class DefaultSource extends RelationProvider
                           partitionColumns: Seq[String],
                           outputMode: OutputMode): Sink = {
     val parameters = HoodieWriterUtils.parametersWithWriteDefaults(optParams)
+    val translatedOptions = DataSourceWriteOptions.translateSqlOptions(parameters)
     new HoodieStreamingSink(
       sqlContext,
-      parameters,
+      translatedOptions,
       partitionColumns,
       outputMode)
   }
@@ -180,5 +192,36 @@ class DefaultSource extends RelationProvider
         options = optParams)
         .resolveRelation()
     }
+  }
+
+  override def sourceSchema(sqlContext: SQLContext,
+                            schema: Option[StructType],
+                            providerName: String,
+                            parameters: Map[String, String]): (String, StructType) = {
+    val path = parameters.get("path")
+    if (path.isEmpty || path.get == null) {
+      throw new HoodieException(s"'path'  must be specified.")
+    }
+    val metaClient = new HoodieTableMetaClient(
+      sqlContext.sparkSession.sessionState.newHadoopConf(), path.get)
+    val schemaResolver = new TableSchemaResolver(metaClient)
+    val sqlSchema =
+      try {
+        val avroSchema = schemaResolver.getTableAvroSchema
+        AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
+      } catch {
+        case _: Exception =>
+          require(schema.isDefined, "Fail to resolve source schema")
+          schema.get
+      }
+    (shortName(), sqlSchema)
+  }
+
+  override def createSource(sqlContext: SQLContext,
+                            metadataPath: String,
+                            schema: Option[StructType],
+                            providerName: String,
+                            parameters: Map[String, String]): Source = {
+    new HoodieStreamSource(sqlContext, metadataPath, schema, parameters)
   }
 }

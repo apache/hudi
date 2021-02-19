@@ -35,7 +35,7 @@ public class ScheduleCompactNode extends DagNode<Option<String>> {
   }
 
   @Override
-  public void execute(ExecutionContext executionContext) throws Exception {
+  public void execute(ExecutionContext executionContext, int curItrCount) throws Exception {
     log.info("Executing schedule compact node {}", this.getName());
     // Can only be done with an instantiation of a new WriteClient hence cannot be done during DeltaStreamer
     // testing for now
@@ -48,7 +48,7 @@ public class ScheduleCompactNode extends DagNode<Option<String>> {
       HoodieCommitMetadata metadata = org.apache.hudi.common.model.HoodieCommitMetadata.fromBytes(metaClient
           .getActiveTimeline().getInstantDetails(lastInstant.get()).get(), HoodieCommitMetadata.class);
       Option<String> scheduledInstant = executionContext.getHoodieTestSuiteWriter().scheduleCompaction(Option.of(metadata
-              .getExtraMetadata()));
+          .getExtraMetadata()));
       if (scheduledInstant.isPresent()) {
         log.info("Scheduling compaction instant {}", scheduledInstant.get());
       }

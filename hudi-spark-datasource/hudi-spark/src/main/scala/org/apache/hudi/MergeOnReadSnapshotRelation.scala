@@ -24,10 +24,8 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
-
-import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
-import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -50,7 +48,8 @@ case class HoodieMergeOnReadTableState(tableStructSchema: StructType,
                                        requiredStructSchema: StructType,
                                        tableAvroSchema: String,
                                        requiredAvroSchema: String,
-                                       hoodieRealtimeFileSplits: List[HoodieMergeOnReadFileSplit])
+                                       hoodieRealtimeFileSplits: List[HoodieMergeOnReadFileSplit],
+                                       preCombineField: Option[String])
 
 class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
                                   val optParams: Map[String, String],
@@ -70,7 +69,16 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
     DataSourceReadOptions.DEFAULT_REALTIME_MERGE_OPT_VAL)
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
   private val fileIndex = buildFileIndex()
-
+  private val preCombineField = {
+    val preCombineFieldFromTableConfig = metaClient.getTableConfig.getPreCombineField
+    if (preCombineFieldFromTableConfig != null) {
+      Some(preCombineFieldFromTableConfig)
+    } else {
+      // get preCombineFiled from the options if this is a old table which have not store
+      // the field to hoodie.properties
+      optParams.get(DataSourceReadOptions.READ_PRE_COMBINE_FIELD)
+    }
+  }
   override def schema: StructType = tableStructSchema
 
   override def needConversion: Boolean = false
@@ -92,7 +100,8 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
       requiredStructSchema,
       tableAvroSchema.toString,
       requiredAvroSchema.toString,
-      fileIndex
+      fileIndex,
+      preCombineField
     )
     val fullSchemaParquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(
       sparkSession = sqlContext.sparkSession,
