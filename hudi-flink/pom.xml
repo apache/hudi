@@ -153,6 +153,13 @@
       <scope>provided</scope>
     </dependency>
 
+    <!-- Parquet -->
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
+      <scope>test</scope>
+    </dependency>
+
     <!-- Avro -->
     <dependency>
       <groupId>org.apache.avro</groupId>
