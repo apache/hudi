@@ -38,6 +38,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -57,6 +58,7 @@ import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaSet;
 import org.apache.hudi.utilities.sources.InputBatch;
+import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import com.codahale.metrics.Timer;
@@ -208,8 +210,9 @@ public class DeltaSync implements Serializable {
 
     this.transformer = UtilHelpers.createTransformer(cfg.transformerClassNames);
     this.keyGenerator = DataSourceUtils.createKeyGenerator(props);
-
     this.metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(this.schemaProvider));
+    this.formatAdapter = new SourceFormatAdapter(
+        UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics));
     this.conf = conf;
   }
 
@@ -249,18 +252,18 @@ public class DeltaSync implements Serializable {
     // Refresh Timeline
     refreshTimeline();
 
-    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> srcRecordsWithCkpt = readFromSource(commitTimelineOpt);
+    Pair<Pair<SchemaProvider, JavaRDD<HoodieRecord>>, Pair<String, String>> srcRecordsWithCkpt = readFromSource(commitTimelineOpt);
 
     if (null != srcRecordsWithCkpt) {
       // this is the first input batch. If schemaProvider not set, use it and register Avro Schema and start
       // compactor
       if (null == writeClient) {
-        this.schemaProvider = srcRecordsWithCkpt.getKey();
+        this.schemaProvider = srcRecordsWithCkpt.getKey().getLeft();
         // Setup HoodieWriteClient and compaction now that we decided on schema
         setupWriteClient();
       } else {
-        Schema newSourceSchema = srcRecordsWithCkpt.getKey().getSourceSchema();
-        Schema newTargetSchema = srcRecordsWithCkpt.getKey().getTargetSchema();
+        Schema newSourceSchema = srcRecordsWithCkpt.getKey().getLeft().getSourceSchema();
+        Schema newTargetSchema = srcRecordsWithCkpt.getKey().getLeft().getTargetSchema();
         if (!(processedSchema.isSchemaPresent(newSourceSchema))
             || !(processedSchema.isSchemaPresent(newTargetSchema))) {
           LOG.info("Seeing new schema. Source :" + newSourceSchema.toString(true)
@@ -272,8 +275,8 @@ public class DeltaSync implements Serializable {
         }
       }
 
-      result = writeToSink(srcRecordsWithCkpt.getRight().getRight(),
-          srcRecordsWithCkpt.getRight().getLeft(), metrics, overallTimerContext);
+      result = writeToSink(srcRecordsWithCkpt.getKey().getRight(),
+          srcRecordsWithCkpt.getRight().getLeft(), metrics, overallTimerContext, srcRecordsWithCkpt.getRight().getRight());
     }
 
     // Clear persistent RDDs
@@ -289,9 +292,10 @@ public class DeltaSync implements Serializable {
    * of schemaProvider, checkpointStr and hoodieRecord
    * @throws Exception in case of any Exception
    */
-  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> readFromSource(Option<HoodieTimeline> commitTimelineOpt) throws IOException {
+  public Pair<Pair<SchemaProvider, JavaRDD<HoodieRecord>>, Pair<String, String>> readFromSource(Option<HoodieTimeline> commitTimelineOpt) throws IOException {
     // Retrieve the previous round checkpoints, if any
     Option<String> resumeCheckpointStr = Option.empty();
+    String kafkaCheckpointTimestamp = props.getString(KafkaOffsetGen.Config.KAFKA_CHECKPOINT_TIMESTAMP, "");
     if (commitTimelineOpt.isPresent()) {
       // TODO: now not support replace action HUDI-1500
       Option<HoodieInstant> lastCommit = commitTimelineOpt.get()
@@ -299,7 +303,6 @@ public class DeltaSync implements Serializable {
       if (lastCommit.isPresent()) {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
             .fromBytes(commitTimelineOpt.get().getInstantDetails(lastCommit.get()).get(), HoodieCommitMetadata.class);
-        props.put(CHECKPOINT_RESET_KEY, commitMetadata.getMetadata(CHECKPOINT_RESET_KEY) == null ? "" : commitMetadata.getMetadata(CHECKPOINT_RESET_KEY));
         if (cfg.checkpoint != null && !cfg.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
           resumeCheckpointStr = Option.of(cfg.checkpoint);
         } else if (commitMetadata.getMetadata(CHECKPOINT_KEY) != null) {
@@ -315,23 +318,27 @@ public class DeltaSync implements Serializable {
                   + commitTimelineOpt.get().getInstants().collect(Collectors.toList()) + ", CommitMetadata="
                   + commitMetadata.toJsonString());
         }
+        if (!StringUtils.isNullOrEmpty(kafkaCheckpointTimestamp)) {
+          resumeCheckpointStr = Option.of(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY));
+        }
       }
     } else {
       HoodieTableMetaClient.initTableType(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath,
           HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName, cfg.baseFileFormat);
     }
 
-    this.formatAdapter = new SourceFormatAdapter(
-        UtilHelpers.createSource(cfg.sourceClassName, props, jssc, sparkSession, schemaProvider, metrics));
-
     if (!resumeCheckpointStr.isPresent() && cfg.checkpoint != null) {
       resumeCheckpointStr = Option.of(cfg.checkpoint);
     }
-    LOG.info("Checkpoint to resume from : " + resumeCheckpointStr);
+
+    if (StringUtils.isNullOrEmpty(kafkaCheckpointTimestamp)) {
+      LOG.info("Checkpoint to resume from : " + resumeCheckpointStr);
+    }
 
     final Option<JavaRDD<GenericRecord>> avroRDDOptional;
     final String checkpointStr;
     final SchemaProvider schemaProvider;
+    final String resumeKafkaCheckpointStr;
     if (transformer.isPresent()) {
       // Transformation is needed. Fetch New rows in Row Format, apply transformation and then convert them
       // to generic records for writing
@@ -341,6 +348,7 @@ public class DeltaSync implements Serializable {
       Option<Dataset<Row>> transformed =
           dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(jssc, sparkSession, data, props));
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
+      resumeKafkaCheckpointStr = dataAndCheckpoint.getResumeCheckpointStr();
       if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null) {
         // If the target schema is specified through Avro schema,
         // pass in the schema for the Row-to-Avro conversion
@@ -368,6 +376,7 @@ public class DeltaSync implements Serializable {
       InputBatch<JavaRDD<GenericRecord>> dataAndCheckpoint =
           formatAdapter.fetchNewDataInAvroFormat(resumeCheckpointStr, cfg.sourceLimit);
       avroRDDOptional = dataAndCheckpoint.getBatch();
+      resumeKafkaCheckpointStr = dataAndCheckpoint.getResumeCheckpointStr();
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       schemaProvider = dataAndCheckpoint.getSchemaProvider();
     }
@@ -380,7 +389,7 @@ public class DeltaSync implements Serializable {
 
     if ((!avroRDDOptional.isPresent()) || (avroRDDOptional.get().isEmpty())) {
       LOG.info("No new data, perform empty commit.");
-      return Pair.of(schemaProvider, Pair.of(checkpointStr, jssc.emptyRDD()));
+      return Pair.of(Pair.of(schemaProvider, jssc.emptyRDD()), Pair.of(checkpointStr, resumeKafkaCheckpointStr));
     }
 
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
@@ -392,7 +401,7 @@ public class DeltaSync implements Serializable {
       return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
     });
 
-    return Pair.of(schemaProvider, Pair.of(checkpointStr, records));
+    return Pair.of(Pair.of(schemaProvider, records), Pair.of(checkpointStr, resumeKafkaCheckpointStr));
   }
 
   /**
@@ -406,7 +415,8 @@ public class DeltaSync implements Serializable {
    */
   private Pair<Option<String>, JavaRDD<WriteStatus>> writeToSink(JavaRDD<HoodieRecord> records, String checkpointStr,
                                                                  HoodieDeltaStreamerMetrics metrics,
-                                                                 Timer.Context overallTimerContext) {
+                                                                 Timer.Context overallTimerContext,
+                                                                 String resumeKafkaCheckpointStr) {
     Option<String> scheduledCompactionInstant = Option.empty();
     // filter dupes if needed
     if (cfg.filterDupes) {
@@ -444,6 +454,8 @@ public class DeltaSync implements Serializable {
       checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
       if (cfg.checkpoint != null) {
         checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, cfg.checkpoint);
+      } else if (!StringUtils.isNullOrEmpty(resumeKafkaCheckpointStr)) {
+        checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, resumeKafkaCheckpointStr);
       }
 
       if (hasErrors) {

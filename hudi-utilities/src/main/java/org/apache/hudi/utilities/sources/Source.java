@@ -75,7 +75,7 @@ public abstract class Source<T> implements Serializable {
     InputBatch<T> batch = fetchNewData(lastCkptStr, sourceLimit);
     // If overriddenSchemaProvider is passed in CLI, use it
     return overriddenSchemaProvider == null ? batch
-        : new InputBatch<>(batch.getBatch(), batch.getCheckpointForNextBatch(), overriddenSchemaProvider);
+        : new InputBatch<>(batch.getBatch(), batch.getCheckpointForNextBatch(), overriddenSchemaProvider, batch.getResumeCheckpointStr());
   }
 
   public SourceType getSourceType() {

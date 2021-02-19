@@ -29,19 +29,36 @@ import org.apache.spark.api.java.JavaSparkContext;
 public class InputBatch<T> {
 
   private final Option<T> batch;
-  private final String checkpointForNextBatch;
   private final SchemaProvider schemaProvider;
+  private final String checkpointForNextBatch;
+  private final String resumeKafkaCheckpointStr;
 
   public InputBatch(Option<T> batch, String checkpointForNextBatch, SchemaProvider schemaProvider) {
     this.batch = batch;
     this.checkpointForNextBatch = checkpointForNextBatch;
     this.schemaProvider = schemaProvider;
+    this.resumeKafkaCheckpointStr = null;
   }
 
   public InputBatch(Option<T> batch, String checkpointForNextBatch) {
     this.batch = batch;
     this.checkpointForNextBatch = checkpointForNextBatch;
     this.schemaProvider = null;
+    this.resumeKafkaCheckpointStr = null;
+  }
+
+  public InputBatch(Option<T> batch, String checkpointForNextBatch, String resumeKafkaCheckpointStr) {
+    this.batch = batch;
+    this.checkpointForNextBatch = checkpointForNextBatch;
+    this.schemaProvider = null;
+    this.resumeKafkaCheckpointStr = resumeKafkaCheckpointStr;
+  }
+
+  public InputBatch(Option<T> batch, String checkpointForNextBatch, SchemaProvider schemaProvider, String resumeKafkaCheckpointStr) {
+    this.batch = batch;
+    this.checkpointForNextBatch = checkpointForNextBatch;
+    this.schemaProvider = schemaProvider;
+    this.resumeKafkaCheckpointStr = resumeKafkaCheckpointStr;
   }
 
   public Option<T> getBatch() {
@@ -50,6 +67,10 @@ public class InputBatch<T> {
 
   public String getCheckpointForNextBatch() {
     return checkpointForNextBatch;
+  }
+
+  public String getResumeCheckpointStr() {
+    return resumeKafkaCheckpointStr;
   }
 
   public SchemaProvider getSchemaProvider() {

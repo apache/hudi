@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.utilities.IdentitySplitter;
 import org.apache.hudi.common.util.collection.Pair;
@@ -55,6 +56,7 @@ import com.beust.jcommander.ParameterException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -553,6 +555,11 @@ public class HoodieDeltaStreamer implements Serializable {
           "'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed.");
 
       this.props = properties.get();
+      String kafkaCheckpointTimestamp = props.getString(KafkaOffsetGen.Config.KAFKA_CHECKPOINT_TIMESTAMP, "");
+      if (!StringUtils.isNullOrEmpty(cfg.checkpoint) && !StringUtils.isNullOrEmpty(kafkaCheckpointTimestamp)) {
+        throw new HoodieException("--checkpoint or hoodie.deltastreamer.source.kafka.checkpoint.timestamp cannot be present at the same time");
+      }
+
       LOG.info("Creating delta streamer with configs : " + props.toString());
       this.schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
           UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc), props, jssc, cfg.transformerClassNames);

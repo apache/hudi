@@ -63,7 +63,7 @@ public final class SourceFormatAdapter {
         InputBatch<JavaRDD<String>> r = ((JsonSource) source).fetchNext(lastCkptStr, sourceLimit);
         AvroConvertor convertor = new AvroConvertor(r.getSchemaProvider().getSourceSchema());
         return new InputBatch<>(Option.ofNullable(r.getBatch().map(rdd -> rdd.map(convertor::fromJson)).orElse(null)),
-            r.getCheckpointForNextBatch(), r.getSchemaProvider());
+            r.getCheckpointForNextBatch(), r.getSchemaProvider(), r.getResumeCheckpointStr());
       }
       case ROW: {
         InputBatch<Dataset<Row>> r = ((RowSource) source).fetchNext(lastCkptStr, sourceLimit);
