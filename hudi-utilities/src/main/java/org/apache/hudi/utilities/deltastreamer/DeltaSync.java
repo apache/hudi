@@ -310,6 +310,9 @@ public class DeltaSync implements Serializable {
           if (!commitMetadata.getMetadata(CHECKPOINT_KEY).isEmpty()) {
             resumeCheckpointStr = Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
           }
+        } else if (commitMetadata.getOperationType() == WriteOperationType.CLUSTER) {
+          // incase of CLUSTER commit, no checkpoint will be available in metadata.
+          resumeCheckpointStr = Option.empty();
         } else if (HoodieTimeline.compareTimestamps(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS,
             HoodieTimeline.LESSER_THAN, lastCommit.get().getTimestamp())) {
           throw new HoodieDeltaStreamerException(
