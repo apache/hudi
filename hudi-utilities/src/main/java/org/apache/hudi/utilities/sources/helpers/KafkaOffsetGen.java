@@ -197,6 +197,7 @@ public class KafkaOffsetGen {
         resumeCheckpointStr = getOffsetsByTimestamp(consumer, partitionInfoList, topicName, Long.parseLong(kafkaCheckpointTimestamp));
         if (!resumeCheckpointStr.equals(lastCheckpointStr)) {
           lastCheckpointStr = Option.of(resumeCheckpointStr);
+          LOG.info("Checkpoint to resume from : " + resumeCheckpointStr);
         }
       }
 
