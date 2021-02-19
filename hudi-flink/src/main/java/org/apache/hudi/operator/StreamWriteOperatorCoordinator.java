@@ -22,6 +22,7 @@ import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.operator.event.BatchWriteSuccessEvent;
@@ -48,6 +49,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -102,6 +104,11 @@ public class StreamWriteOperatorCoordinator
   private final int parallelism;
 
   /**
+   * Whether needs to schedule compaction task on finished checkpoints.
+   */
+  private final boolean needsScheduleCompaction;
+
+  /**
    * Constructs a StreamingSinkOperatorCoordinator.
    *
    * @param conf        The config options
@@ -112,6 +119,7 @@ public class StreamWriteOperatorCoordinator
       int parallelism) {
     this.conf = conf;
     this.parallelism = parallelism;
+    this.needsScheduleCompaction = isNeedsScheduleCompaction();
   }
 
   @Override
@@ -152,6 +160,10 @@ public class StreamWriteOperatorCoordinator
   public void checkpointComplete(long checkpointId) {
     // start to commit the instant.
     checkAndCommitWithRetry();
+    // if async compaction is on, schedule the compaction
+    if (needsScheduleCompaction) {
+      writeClient.scheduleCompaction(Option.empty());
+    }
     // start new instant.
     startInstant();
   }
@@ -201,6 +213,13 @@ public class StreamWriteOperatorCoordinator
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
+
+  private boolean isNeedsScheduleCompaction() {
+    return this.conf.getString(FlinkOptions.TABLE_TYPE)
+        .toUpperCase(Locale.ROOT)
+        .equals(HoodieTableType.MERGE_ON_READ.name())
+        && this.conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED);
+  }
 
   @SuppressWarnings("rawtypes")
   private void initWriteClient() {
