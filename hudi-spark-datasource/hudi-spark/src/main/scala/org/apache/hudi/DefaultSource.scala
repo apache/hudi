@@ -202,8 +202,8 @@ class DefaultSource extends RelationProvider
     if (path.isEmpty || path.get == null) {
       throw new HoodieException(s"'path'  must be specified.")
     }
-    val metaClient = new HoodieTableMetaClient(
-      sqlContext.sparkSession.sessionState.newHadoopConf(), path.get)
+    val metaClient = HoodieTableMetaClient.builder().setConf(
+      sqlContext.sparkSession.sessionState.newHadoopConf()).setBasePath(path.get).build()
     val schemaResolver = new TableSchemaResolver(metaClient)
     val sqlSchema =
       try {
