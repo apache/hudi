@@ -46,6 +46,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema.Builder;
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
@@ -279,8 +280,12 @@ public class UtilitiesTestBase {
     }
 
     public static void saveParquetToDFS(List<GenericRecord> records, Path targetFile) throws IOException {
+      saveParquetToDFS(records, targetFile, HoodieTestDataGenerator.AVRO_SCHEMA);
+    }
+
+    public static void saveParquetToDFS(List<GenericRecord> records, Path targetFile, Schema schema) throws IOException {
       try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(targetFile)
-          .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA)
+          .withSchema(schema)
           .withConf(HoodieTestUtils.getDefaultHadoopConf())
           .withWriteMode(Mode.OVERWRITE)
           .build()) {
@@ -308,9 +313,9 @@ public class UtilitiesTestBase {
       return props;
     }
 
-    public static GenericRecord toGenericRecord(HoodieRecord hoodieRecord) {
+    public static GenericRecord toGenericRecord(HoodieRecord hoodieRecord, Schema schema) {
       try {
-        Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA);
+        Option<IndexedRecord> recordOpt = hoodieRecord.getData().getInsertValue(schema);
         return (GenericRecord) recordOpt.get();
       } catch (IOException e) {
         return null;
@@ -318,9 +323,13 @@ public class UtilitiesTestBase {
     }
 
     public static List<GenericRecord> toGenericRecords(List<HoodieRecord> hoodieRecords) {
+      return toGenericRecords(hoodieRecords, HoodieTestDataGenerator.AVRO_SCHEMA);
+    }
+
+    public static List<GenericRecord> toGenericRecords(List<HoodieRecord> hoodieRecords, Schema schema) {
       List<GenericRecord> records = new ArrayList<>();
       for (HoodieRecord hoodieRecord : hoodieRecords) {
-        records.add(toGenericRecord(hoodieRecord));
+        records.add(toGenericRecord(hoodieRecord, schema));
       }
       return records;
     }
@@ -334,7 +343,8 @@ public class UtilitiesTestBase {
     }
 
     public static String[] jsonifyRecords(List<HoodieRecord> records) {
-      return records.stream().map(Helpers::toJsonString).toArray(String[]::new);
+      String[] recs = records.stream().map(Helpers::toJsonString).toArray(String[]::new);
+      return recs;
     }
   }
 }

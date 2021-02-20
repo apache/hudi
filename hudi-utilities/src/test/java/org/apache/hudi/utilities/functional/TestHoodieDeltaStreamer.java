@@ -48,14 +48,17 @@ import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.CsvDFSSource;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 import org.apache.hudi.utilities.sources.InputBatch;
+import org.apache.hudi.utilities.sources.JsonKafkaSource;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.sources.TestDataSource;
+import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.hudi.utilities.testutils.sources.DistributedTestDataSource;
 import org.apache.hudi.utilities.testutils.sources.config.SourceConfigs;
 import org.apache.hudi.utilities.transform.SqlQueryBasedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -116,9 +119,12 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   private static final String PROPS_FILENAME_TEST_INVALID = "test-invalid.properties";
   private static final String PROPS_FILENAME_TEST_CSV = "test-csv-dfs-source.properties";
   private static final String PROPS_FILENAME_TEST_PARQUET = "test-parquet-dfs-source.properties";
+  private static final String PROPS_FILENAME_TEST_JSON_KAFKA = "test-json-kafka-dfs-source.properties";
   private static String PARQUET_SOURCE_ROOT;
+  private static String JSON_KAFKA_SOURCE_ROOT;
   private static final int PARQUET_NUM_RECORDS = 5;
   private static final int CSV_NUM_RECORDS = 3;
+  private static final int JSON_KAFKA_NUM_RECORDS = 5;
   // Required fields
   private static final String TGT_BASE_PATH_PARAM = "--target-base-path";
   private static final String TGT_BASE_PATH_VALUE = "s3://mybucket/blah";
@@ -143,6 +149,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   public static void initClass() throws Exception {
     UtilitiesTestBase.initClass(true);
     PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFiles";
+    JSON_KAFKA_SOURCE_ROOT = dfsBasePath + "/jsonKafkaFiles";
     testUtils = new KafkaTestUtils();
     testUtils.setup();
 
@@ -966,27 +973,52 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   private static void prepareParquetDFSFiles(int numRecords) throws IOException {
-    String path = PARQUET_SOURCE_ROOT + "/1.parquet";
+    prepareParquetDFSFiles(numRecords, "1.parquet", false, null, null);
+  }
+
+  private static void prepareParquetDFSFiles(int numRecords, String fileName, boolean useCustomSchema,
+      String schemaStr, Schema schema) throws IOException {
+    String path = PARQUET_SOURCE_ROOT + "/" + fileName;
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    Helpers.saveParquetToDFS(Helpers.toGenericRecords(
-        dataGenerator.generateInserts("000", numRecords)), new Path(path));
+    if(useCustomSchema) {
+      Helpers.saveParquetToDFS(Helpers.toGenericRecords(
+          dataGenerator.generateInsertsAsPerSchema("000", numRecords, schemaStr),
+          schema), new Path(path), HoodieTestDataGenerator.AVRO_TRIP_SCHEMA);
+    } else{
+      Helpers.saveParquetToDFS(Helpers.toGenericRecords(
+          dataGenerator.generateInserts("000", numRecords)), new Path(path));
+    }
+  }
+
+  private static void prepareJsonKafkaDFSFiles(int numRecords, boolean createTopic) throws IOException {
+    if(createTopic) {
+      testUtils.createTopic("topic1", 2);
+    }
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    testUtils.sendMessages("topic1", Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", numRecords, HoodieTestDataGenerator.TRIP_SCHEMA)));
   }
 
   private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer) throws IOException {
+    prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc",
+        PROPS_FILENAME_TEST_PARQUET, PARQUET_SOURCE_ROOT);
+  }
+
+  private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
+      String propsFileName, String parquetSourceRoot) throws IOException {
     // Properties used for testing delta-streamer with Parquet source
     TypedProperties parquetProps = new TypedProperties();
     parquetProps.setProperty("include", "base.properties");
     parquetProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
     parquetProps.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
+    //parquetProps.setProperty("hoodie.datasource.write.partitionpath.field", "timestamp");
     if (useSchemaProvider) {
-      parquetProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
+      parquetProps.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/" + sourceSchemaFile);
       if (hasTransformer) {
-        parquetProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
+        parquetProps.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/" + targetSchemaFile);
       }
     }
-    parquetProps.setProperty("hoodie.deltastreamer.source.dfs.root", PARQUET_SOURCE_ROOT);
-
-    UtilitiesTestBase.Helpers.savePropsToDFS(parquetProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_PARQUET);
+    parquetProps.setProperty("hoodie.deltastreamer.source.dfs.root", parquetSourceRoot);
+    UtilitiesTestBase.Helpers.savePropsToDFS(parquetProps, dfs, dfsBasePath + "/" + propsFileName);
   }
 
   private void testParquetDFSSource(boolean useSchemaProvider, List<String> transformerClassNames) throws Exception {
@@ -998,7 +1030,96 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
             useSchemaProvider, 100000, false, null, null, "timestamp"), jsc);
     deltaStreamer.sync();
     TestHelpers.assertRecordCount(PARQUET_NUM_RECORDS, tableBasePath + "/*/*.parquet", sqlContext);
+
+    // 2nd batch
+    prepareParquetDFSFiles(20, "2.parquet", false, null, null);
+    deltaStreamer.sync();
+    TestHelpers.assertRecordCount(PARQUET_NUM_RECORDS + 20, tableBasePath + "/*/*.parquet", sqlContext);
+
+
+
     testNum++;
+  }
+
+  private void prepareJsonKafkaDFSSource(String propsFileName, String autoResetValue) throws IOException {
+    // Properties used for testing delta-streamer with JsonKafka source
+    TypedProperties props = new TypedProperties();
+    populateCommonProps(props);
+    props.setProperty("include", "base.properties");
+    props.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
+    props.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
+    props.setProperty("hoodie.deltastreamer.source.dfs.root", JSON_KAFKA_SOURCE_ROOT);
+    props.setProperty("hoodie.deltastreamer.source.kafka.topic","topic1");
+    props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source_uber.avsc");
+    props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target_uber.avsc");
+    props.setProperty("auto.offset.reset", autoResetValue);
+
+    UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/" + propsFileName);
+  }
+
+  private void testParquetSourceToKafkaSource(boolean latest) throws Exception {
+    PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFilesDfsToKafka";
+    int parquetRecords = 10;
+    prepareParquetDFSFiles(parquetRecords,"1.parquet", true, HoodieTestDataGenerator.TRIP_SCHEMA, HoodieTestDataGenerator.AVRO_TRIP_SCHEMA);
+
+    prepareParquetDFSSource(true, false,"source_uber.avsc", "target_uber.avsc", PROPS_FILENAME_TEST_PARQUET,
+        PARQUET_SOURCE_ROOT);
+    String tableBasePath = dfsBasePath + "/test_dfs_to_kakfa";
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
+        TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
+            Collections.EMPTY_LIST, PROPS_FILENAME_TEST_PARQUET, false,
+            false, 100000, false, null, null, "timestamp"), jsc);
+    deltaStreamer.sync();
+    TestHelpers.assertRecordCount(parquetRecords, tableBasePath + "/*/*.parquet", sqlContext);
+    deltaStreamer.shutdownGracefully();
+
+    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, true);
+    prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, latest? "latest":"earliest");
+    deltaStreamer = new HoodieDeltaStreamer(
+        TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
+            Collections.EMPTY_LIST, PROPS_FILENAME_TEST_JSON_KAFKA, false,
+            true, 100000, false, null, null, "timestamp"), jsc);
+    deltaStreamer.sync();
+    // if auto reset value is set to LATEST, this all kafka records so far may not be synced.
+    int totalExpectedRecords = latest? (parquetRecords + JSON_KAFKA_NUM_RECORDS) : parquetRecords;
+    TestHelpers.assertRecordCount(totalExpectedRecords, tableBasePath + "/*/*.parquet", sqlContext);
+
+    prepareJsonKafkaDFSFiles(20, false);
+    totalExpectedRecords += 20;
+    deltaStreamer.sync();
+    TestHelpers.assertRecordCount(totalExpectedRecords, tableBasePath + "/*/*.parquet", sqlContext);
+  }
+
+  @Test
+  public void testJsonKafkaDFSSource() throws Exception {
+    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, true);
+    prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, "earliest");
+    String tableBasePath = dfsBasePath + "/test_json_kafka_table" + testNum;
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
+        TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
+            Collections.EMPTY_LIST, PROPS_FILENAME_TEST_JSON_KAFKA, false,
+            true, 100000, false, null, null, "timestamp"), jsc);
+    deltaStreamer.sync();
+    TestHelpers.assertRecordCount(JSON_KAFKA_NUM_RECORDS, tableBasePath + "/*/*.parquet", sqlContext);
+
+    int totalRecords = JSON_KAFKA_NUM_RECORDS;
+    //for(int i =0;i< 3;i++) {
+      int records = 10;
+      totalRecords += records;
+      prepareJsonKafkaDFSFiles(records, false);
+      deltaStreamer.sync();
+      TestHelpers.assertRecordCount(totalRecords, tableBasePath + "/*/*.parquet", sqlContext);
+    //}
+  }
+
+  @Test
+  public void testParquetSourceToKafkaSourceEarliestAutoResetValue() throws Exception {
+    testParquetSourceToKafkaSource(false);
+  }
+
+  @Test
+  public void testParquetSourceToKafkaSourceLatestAutoResetValue() throws Exception {
+    testParquetSourceToKafkaSource(true);
   }
 
   @Test

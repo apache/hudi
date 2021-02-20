@@ -146,11 +146,14 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table =
         getTableAndInitCtx(WriteOperationType.UPSERT, instantTime);
     table.validateUpsertSchema();
+    System.out.println("Before Pre write ");
     preWrite(instantTime, WriteOperationType.UPSERT);
+    System.out.println("Pre write complete ");
     HoodieWriteMetadata<JavaRDD<WriteStatus>> result = table.upsert(context, instantTime, records);
     if (result.getIndexLookupDuration().isPresent()) {
       metrics.updateIndexMetrics(LOOKUP_STR, result.getIndexLookupDuration().get().toMillis());
     }
+    System.out.println("Write complete . beofre post write ");
     return postWrite(result, instantTime, table);
   }
 
@@ -159,8 +162,11 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> table =
         getTableAndInitCtx(WriteOperationType.UPSERT_PREPPED, instantTime);
     table.validateUpsertSchema();
+    System.out.println("Before Pre write UPSERT PREPPED ");
     preWrite(instantTime, WriteOperationType.UPSERT_PREPPED);
+    System.out.println("Pre write complete UPSERT PREPPED ");
     HoodieWriteMetadata<JavaRDD<WriteStatus>> result = table.upsertPrepped(context,instantTime, preppedRecords);
+    System.out.println("Write complete . beofre post write UPSRT PREPPED ");
     return postWrite(result, instantTime, table);
   }
 

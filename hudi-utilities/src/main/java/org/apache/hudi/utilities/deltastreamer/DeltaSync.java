@@ -339,8 +339,19 @@ public class DeltaSync implements Serializable {
       InputBatch<Dataset<Row>> dataAndCheckpoint =
           formatAdapter.fetchNewDataInRowFormat(resumeCheckpointStr, cfg.sourceLimit);
 
+      List<Row> rows = dataAndCheckpoint.getBatch().get().collectAsList();
+      for(Row row: rows) {
+        System.out.println("Rows 111 " + row.mkString(","));
+      }
+
       Option<Dataset<Row>> transformed =
           dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(jssc, sparkSession, data, props));
+
+      for(Row row: transformed.get().collectAsList()) {
+        System.out.println("transformed Row 222 " + row.mkString(","));
+      }
+
+
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null) {
         // If the target schema is specified through Avro schema,
@@ -370,6 +381,7 @@ public class DeltaSync implements Serializable {
           formatAdapter.fetchNewDataInAvroFormat(resumeCheckpointStr, cfg.sourceLimit);
       avroRDDOptional = dataAndCheckpoint.getBatch();
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
+      System.out.println("Checkpoint str " + checkpointStr);
       schemaProvider = dataAndCheckpoint.getSchemaProvider();
     }
 
@@ -386,10 +398,16 @@ public class DeltaSync implements Serializable {
 
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
+
+    for(GenericRecord genRec: avroRDD.collect()) {
+      System.out.println("GenRec 333 " + genRec.toString());
+    }
+
     JavaRDD<HoodieRecord> records = avroRDD.map(gr -> {
       HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
           (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false))
           : DataSourceUtils.createPayload(cfg.payloadClassName, gr);
+      System.out.println("Key generator generated key " + keyGenerator.getKey(gr).toString());
       return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
     });
 

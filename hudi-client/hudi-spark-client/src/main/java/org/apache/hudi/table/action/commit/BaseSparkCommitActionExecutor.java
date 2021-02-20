@@ -120,9 +120,13 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     WorkloadProfile profile = null;
     if (isWorkloadProfileNeeded()) {
       context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile");
+
+      System.out.println("Building workload profile ");
       profile = new WorkloadProfile(buildProfile(inputRecordsRDD), operationType);
       LOG.info("Workload profile :" + profile);
       saveWorkloadProfileMetadataToInflight(profile, instantTime);
+
+      System.out.println("Completed building workload profile ");
     }
 
     // handle records update with clustering
@@ -234,6 +238,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   @Override
   protected void commit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<JavaRDD<WriteStatus>> result) {
     context.setJobStatus(this.getClass().getSimpleName(), "Commit write status collect");
+    System.out.println("Committing on auto commit ");
     commit(extraMetadata, result, result.getWriteStatuses().map(WriteStatus::getStat).collect());
   }
 
@@ -242,6 +247,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     LOG.info("Committing " + instantTime + ", action Type " + actionType);
     result.setCommitted(true);
     result.setWriteStats(writeStats);
+    System.out.println("Finalizing write ");
     // Finalize write
     finalizeWrite(instantTime, writeStats, result);
 
@@ -250,7 +256,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       HoodieCommitMetadata metadata = CommitUtils.buildMetadata(writeStats, result.getPartitionToReplaceFileIds(),
           extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());
-
+      System.out.println("Commit metadata " + metadata.toJsonString());
       activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
       LOG.info("Committed " + instantTime);
@@ -296,6 +302,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
                                                   Iterator<HoodieRecord<T>> recordItr)
       throws IOException {
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
+    System.out.println("Handling upsert for partition " + partitionPath);
     if (!recordItr.hasNext()) {
       LOG.info("Empty partition with fileId => " + fileId);
       return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
@@ -307,6 +314,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
 
   protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?,?,?,?> upsertHandle, String fileId)
       throws IOException {
+    System.out.println("Handling upsert for file " + fileId+". going to merge  ");
     if (upsertHandle.getOldFilePath() == null) {
       throw new HoodieUpsertException(
           "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
@@ -319,6 +327,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
       LOG.info("Upsert Handle has partition path as null " + upsertHandle.getOldFilePath() + ", "
           + upsertHandle.writeStatuses());
     }
+    System.out.println("Handling upsert for file " + fileId+". Complete  ");
 
     return Collections.singletonList(upsertHandle.writeStatuses()).iterator();
   }
@@ -343,6 +352,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   @Override
   public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr)
       throws Exception {
+    System.out.println("Handling INSERT for partition " + idPfx);
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
       LOG.info("Empty partition");

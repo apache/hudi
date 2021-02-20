@@ -47,8 +47,12 @@ public abstract class AbstractWriteHelper<T extends HoodieRecordPayload, I, K, O
       Instant lookupBegin = Instant.now();
       I taggedRecords = dedupedRecords;
       if (performTagging) {
+        System.out.println("Just before tagging ");
         // perform index loop up to get existing location of records
         taggedRecords = tag(dedupedRecords, context, table);
+        System.out.println("tagging Complete ");
+      } else{
+        System.out.println("No tagging ");
       }
       Duration indexLookupDuration = Duration.between(lookupBegin, Instant.now());
 
