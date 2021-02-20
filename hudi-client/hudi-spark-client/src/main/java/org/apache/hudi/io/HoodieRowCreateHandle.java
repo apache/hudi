@@ -172,7 +172,9 @@ public class HoodieRowCreateHandle implements Serializable {
   private Path makeNewPath(String partitionPath) {
     Path path = FSUtils.getPartitionPath(writeConfig.getBasePath(), partitionPath);
     try {
-      fs.mkdirs(path); // create a new partition as needed.
+      if (!fs.exists(path)) {
+        fs.mkdirs(path); // create a new partition as needed.
+      }
     } catch (IOException e) {
       throw new HoodieIOException("Failed to make dir " + path, e);
     }

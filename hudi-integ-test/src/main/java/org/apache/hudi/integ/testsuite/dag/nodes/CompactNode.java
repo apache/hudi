@@ -40,10 +40,11 @@ public class CompactNode extends DagNode<JavaRDD<WriteStatus>> {
    * if it has one.
    *
    * @param executionContext Execution context to run this compaction
+   * @param curItrCount cur interation count.
    * @throws Exception  will be thrown if any error occurred.
    */
   @Override
-  public void execute(ExecutionContext executionContext) throws Exception {
+  public void execute(ExecutionContext executionContext, int curItrCount) throws Exception {
     HoodieTableMetaClient metaClient = new HoodieTableMetaClient(executionContext.getHoodieTestSuiteWriter().getConfiguration(),
         executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath);
     Option<HoodieInstant> lastInstant = metaClient.getActiveTimeline()

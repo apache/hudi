@@ -20,8 +20,8 @@ package org.apache.hudi.functional
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieStorageConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.TableNotFoundException
 import org.apache.hudi.testutils.HoodieClientTestBase
@@ -243,17 +243,24 @@ class TestStructuredStreaming extends HoodieClientTestBase {
     val f2 = Future {
       inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
       // wait for spark streaming to process one microbatch
-      val currNumCommits = waitTillAtleastNCommits(fs, destPath, 1, 120, 5)
+      var currNumCommits = waitTillAtleastNCommits(fs, destPath, 1, 120, 5)
       assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, destPath, "000"))
 
       inputDF2.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
       // wait for spark streaming to process second microbatch
-      waitTillAtleastNCommits(fs, destPath, currNumCommits + 1, 120, 5)
-      assertEquals(2, HoodieDataSourceHelpers.listCommitsSince(fs, destPath, "000").size())
-
-      // check have more than one file group
-      this.metaClient = new HoodieTableMetaClient(fs.getConf, destPath, true)
-      assertTrue(getLatestFileGroupsFileId(partitionOfRecords).size > 1)
+      currNumCommits = waitTillAtleastNCommits(fs, destPath, currNumCommits + 1, 120, 5)
+      // for inline clustering, clustering may be complete along with 2nd commit
+      if (HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, destPath).getCompletedReplaceTimeline().countInstants() > 0) {
+        assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(fs, destPath, "000").size())
+        // check have at least one file group
+        this.metaClient = new HoodieTableMetaClient(fs.getConf, destPath, true)
+        assertTrue(getLatestFileGroupsFileId(partitionOfRecords).size > 0)
+      } else {
+        assertEquals(currNumCommits, HoodieDataSourceHelpers.listCommitsSince(fs, destPath, "000").size())
+        // check have more than one file group
+        this.metaClient = new HoodieTableMetaClient(fs.getConf, destPath, true)
+        assertTrue(getLatestFileGroupsFileId(partitionOfRecords).size > 1)
+      }
 
       // check clustering result
       checkClusteringResult(destPath)

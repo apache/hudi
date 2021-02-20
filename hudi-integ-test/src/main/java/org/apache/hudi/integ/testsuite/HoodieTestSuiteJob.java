@@ -82,6 +82,7 @@ public class HoodieTestSuiteJob {
   private BuiltinKeyGenerator keyGenerator;
 
   public HoodieTestSuiteJob(HoodieTestSuiteConfig cfg, JavaSparkContext jsc) throws IOException {
+    log.warn("Running spark job w/ app id " + jsc.sc().applicationId());
     this.cfg = cfg;
     this.jsc = jsc;
     cfg.propsFilePath = FSUtils.addSchemeIfLocalPath(cfg.propsFilePath).toString();

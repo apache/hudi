@@ -45,7 +45,6 @@ import org.apache.hadoop.fs.PathFilter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
@@ -72,13 +71,13 @@ public class HoodieTableMetaClient implements Serializable {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LogManager.getLogger(HoodieTableMetaClient.class);
   public static final String METAFOLDER_NAME = ".hoodie";
-  public static final String TEMPFOLDER_NAME = METAFOLDER_NAME + File.separator + ".temp";
-  public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + File.separator + ".aux";
-  public static final String BOOTSTRAP_INDEX_ROOT_FOLDER_PATH = AUXILIARYFOLDER_NAME + File.separator + ".bootstrap";
+  public static final String TEMPFOLDER_NAME = METAFOLDER_NAME + Path.SEPARATOR + ".temp";
+  public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + Path.SEPARATOR + ".aux";
+  public static final String BOOTSTRAP_INDEX_ROOT_FOLDER_PATH = AUXILIARYFOLDER_NAME + Path.SEPARATOR + ".bootstrap";
 
   public static final String BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH = BOOTSTRAP_INDEX_ROOT_FOLDER_PATH
-      + File.separator + ".partitions";
-  public static final String BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH = BOOTSTRAP_INDEX_ROOT_FOLDER_PATH + File.separator
+      + Path.SEPARATOR + ".partitions";
+  public static final String BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH = BOOTSTRAP_INDEX_ROOT_FOLDER_PATH + Path.SEPARATOR
       + ".fileids";
 
   public static final String MARKER_EXTN = ".marker";
@@ -118,10 +117,10 @@ public class HoodieTableMetaClient implements Serializable {
                                ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
                                String payloadClassName) {
     LOG.info("Loading HoodieTableMetaClient from " + basePath);
-    this.basePath = basePath;
     this.consistencyGuardConfig = consistencyGuardConfig;
     this.hadoopConf = new SerializableConfiguration(conf);
-    Path basePathDir = new Path(this.basePath);
+    Path basePathDir = new Path(basePath);
+    this.basePath = basePathDir.toString();
     this.metaPath = new Path(basePath, METAFOLDER_NAME).toString();
     Path metaPathDir = new Path(this.metaPath);
     this.fs = getFs();
@@ -197,7 +196,7 @@ public class HoodieTableMetaClient implements Serializable {
    * @return Temp Folder path
    */
   public String getTempFolderPath() {
-    return basePath + File.separator + TEMPFOLDER_NAME;
+    return basePath + Path.SEPARATOR + TEMPFOLDER_NAME;
   }
 
   /**
@@ -207,28 +206,28 @@ public class HoodieTableMetaClient implements Serializable {
    * @return
    */
   public String getMarkerFolderPath(String instantTs) {
-    return String.format("%s%s%s", getTempFolderPath(), File.separator, instantTs);
+    return String.format("%s%s%s", getTempFolderPath(), Path.SEPARATOR, instantTs);
   }
 
   /**
    * @return Auxiliary Meta path
    */
   public String getMetaAuxiliaryPath() {
-    return basePath + File.separator + AUXILIARYFOLDER_NAME;
+    return basePath + Path.SEPARATOR + AUXILIARYFOLDER_NAME;
   }
 
   /**
    * @return Bootstrap Index By Partition Folder
    */
   public String getBootstrapIndexByPartitionFolderPath() {
-    return basePath + File.separator + BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH;
+    return basePath + Path.SEPARATOR + BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH;
   }
 
   /**
    * @return Bootstrap Index By Hudi File Id Folder
    */
   public String getBootstrapIndexByFileIdFolderNameFolderPath() {
-    return basePath + File.separator + BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH;
+    return basePath + Path.SEPARATOR + BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH;
   }
 
   /**
@@ -328,38 +327,71 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public static HoodieTableMetaClient initTableTypeWithBootstrap(Configuration hadoopConf, String basePath, HoodieTableType tableType,
                                                                  String tableName, String archiveLogFolder, String payloadClassName,
+                                                                 String baseFileFormat, String preCombineField, String bootstrapIndexClass,
+                                                                 String bootstrapBasePath) throws IOException {
+    return initTableType(hadoopConf, basePath, tableType, tableName,
+        archiveLogFolder, payloadClassName, null,
+      baseFileFormat, preCombineField, bootstrapIndexClass, bootstrapBasePath);
+  }
+
+  public static HoodieTableMetaClient initTableTypeWithBootstrap(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+                                                                 String tableName, String archiveLogFolder, String payloadClassName,
                                                                  String baseFileFormat, String bootstrapIndexClass,
                                                                  String bootstrapBasePath) throws IOException {
     return initTableType(hadoopConf, basePath, tableType, tableName,
-        archiveLogFolder, payloadClassName, null, baseFileFormat, bootstrapIndexClass, bootstrapBasePath);
+      archiveLogFolder, payloadClassName, null,
+      baseFileFormat, null, bootstrapIndexClass, bootstrapBasePath);
+  }
+
+  public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+                                                    String tableName, String archiveLogFolder, String payloadClassName,
+                                                    String baseFileFormat, String preCombineField) throws IOException {
+    return initTableType(hadoopConf, basePath, tableType, tableName,
+        archiveLogFolder, payloadClassName, null, baseFileFormat, preCombineField,
+       null, null);
   }
 
   public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, HoodieTableType tableType,
                                                     String tableName, String archiveLogFolder, String payloadClassName,
                                                     String baseFileFormat) throws IOException {
     return initTableType(hadoopConf, basePath, tableType, tableName,
-        archiveLogFolder, payloadClassName, null, baseFileFormat, null, null);
+      archiveLogFolder, payloadClassName, null, baseFileFormat, null,
+      null, null);
   }
 
   /**
    * Used primarily by tests, examples.
    */
   public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+                                                    String tableName, String payloadClassName, String preCombineField) throws IOException {
+    return initTableType(hadoopConf, basePath, tableType, tableName, null, payloadClassName,
+        null, preCombineField);
+  }
+
+  public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, HoodieTableType tableType,
                                                     String tableName, String payloadClassName) throws IOException {
     return initTableType(hadoopConf, basePath, tableType, tableName, null, payloadClassName,
-        null, null, null, null);
+      null, (String) null);
+  }
+
+  public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, HoodieTableType tableType,
+                                                    String tableName, String archiveLogFolder, String payloadClassName,
+                                                    String preCombineField, Integer timelineLayoutVersion) throws IOException {
+    return initTableType(hadoopConf, basePath, tableType, tableName, archiveLogFolder, payloadClassName,
+        timelineLayoutVersion, null, preCombineField, null, null);
   }
 
   public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, HoodieTableType tableType,
                                                     String tableName, String archiveLogFolder, String payloadClassName,
                                                     Integer timelineLayoutVersion) throws IOException {
     return initTableType(hadoopConf, basePath, tableType, tableName, archiveLogFolder, payloadClassName,
-        timelineLayoutVersion, null, null, null);
+      timelineLayoutVersion, null, null, null, null);
   }
 
   private static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, HoodieTableType tableType,
                                                      String tableName, String archiveLogFolder, String payloadClassName,
-                                                     Integer timelineLayoutVersion, String baseFileFormat,
+                                                     Integer timelineLayoutVersion,
+                                                     String baseFileFormat, String preCombineField,
                                                      String bootstrapIndexClass, String bootstrapBasePath) throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tableName);
@@ -389,6 +421,9 @@ public class HoodieTableMetaClient implements Serializable {
       properties.put(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH, bootstrapBasePath);
     }
 
+    if (null != preCombineField) {
+      properties.put(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD, preCombineField);
+    }
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
   }
 

@@ -23,9 +23,11 @@ import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hive.HiveSyncTool
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
-import org.apache.hudi.keygen.SimpleKeyGenerator
+import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.Config
+import org.apache.hudi.keygen.{CustomKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.log4j.LogManager
+import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 
 /**
   * List of options that can be passed to the Hoodie datasource,
@@ -63,6 +65,8 @@ object DataSourceReadOptions {
   val DEFAULT_REALTIME_MERGE_OPT_VAL = REALTIME_PAYLOAD_COMBINE_OPT_VAL
 
   val READ_PATHS_OPT_KEY = "hoodie.datasource.read.paths"
+
+  val READ_PRE_COMBINE_FIELD = HoodieWriteConfig.PRECOMBINE_FIELD_PROP
 
   @Deprecated
   val VIEW_TYPE_OPT_KEY = "hoodie.datasource.view.type"
@@ -190,6 +194,42 @@ object DataSourceWriteOptions {
     }
   }
 
+  /**
+    * Translate spark parameters to hudi parameters
+    *
+    * @param optParams Parameters to be translated
+    * @return Parameters after translation
+    */
+  def translateSqlOptions(optParams: Map[String, String]): Map[String, String] = {
+    var translatedOptParams = optParams
+    // translate the api partitionBy of spark DataFrameWriter to PARTITIONPATH_FIELD_OPT_KEY
+    if (optParams.contains(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)) {
+      val partitionColumns = optParams.get(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)
+        .map(SparkDataSourceUtils.decodePartitioningColumns)
+        .getOrElse(Nil)
+      val keyGeneratorClass = optParams.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY,
+        DataSourceWriteOptions.DEFAULT_KEYGENERATOR_CLASS_OPT_VAL)
+
+      val partitionPathField =
+        keyGeneratorClass match {
+          // Only CustomKeyGenerator needs special treatment, because it needs to be specified in a way
+          // such as "field1:PartitionKeyType1,field2:PartitionKeyType2".
+          // partitionBy can specify the partition like this: partitionBy("p1", "p2:SIMPLE", "p3:TIMESTAMP")
+          case c if c == classOf[CustomKeyGenerator].getName =>
+            partitionColumns.map(e => {
+              if (e.contains(":")) {
+                e
+              } else {
+                s"$e:SIMPLE"
+              }
+            }).mkString(",")
+          case _ =>
+            partitionColumns.mkString(",")
+        }
+      translatedOptParams = optParams ++ Map(PARTITIONPATH_FIELD_OPT_KEY -> partitionPathField)
+    }
+    translatedOptParams
+  }
 
   /**
     * Hive table name, to register the table into.
