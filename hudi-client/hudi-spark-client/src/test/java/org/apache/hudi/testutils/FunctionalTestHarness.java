@@ -56,7 +56,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NA
 
 public class FunctionalTestHarness implements SparkProvider, DFSProvider, HoodieMetaClientProvider, HoodieWriteClientProvider {
 
-  private static transient SparkSession spark;
+  protected static transient SparkSession spark;
   private static transient SQLContext sqlContext;
   private static transient JavaSparkContext jsc;
   protected static transient HoodieSparkEngineContext context;
@@ -126,7 +126,7 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
 
   @Override
   public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) throws IOException {
-    return new SparkRDDWriteClient(context(), cfg, false);
+    return new SparkRDDWriteClient(context(), cfg);
   }
 
   @BeforeEach

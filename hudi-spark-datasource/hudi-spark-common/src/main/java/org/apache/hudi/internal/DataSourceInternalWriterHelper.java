@@ -60,7 +60,7 @@ public class DataSourceInternalWriterHelper {
       SparkSession sparkSession, Configuration configuration) {
     this.instantTime = instantTime;
     this.operationType = WriteOperationType.BULK_INSERT;
-    this.writeClient  = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(new JavaSparkContext(sparkSession.sparkContext())), writeConfig, true);
+    this.writeClient  = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(new JavaSparkContext(sparkSession.sparkContext())), writeConfig);
     writeClient.setOperationType(operationType);
     writeClient.startCommitWithTime(instantTime);
     this.metaClient = HoodieTableMetaClient.builder().setConf(configuration).setBasePath(writeConfig.getBasePath()).build();

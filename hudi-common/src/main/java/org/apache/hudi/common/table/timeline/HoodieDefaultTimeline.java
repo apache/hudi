@@ -107,7 +107,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
-  public HoodieDefaultTimeline getCommitsAndCompactionTimeline() {
+  public HoodieDefaultTimeline getWriteTimeline() {
     Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
     return new HoodieDefaultTimeline(instants.stream().filter(s -> validActions.contains(s.getAction())), details);
   }
@@ -278,6 +278,11 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public boolean containsInstant(HoodieInstant instant) {
     return instants.stream().anyMatch(s -> s.equals(instant));
+  }
+
+  @Override
+  public boolean containsInstant(String ts) {
+    return instants.stream().anyMatch(s -> s.getTimestamp().equals(ts));
   }
 
   @Override

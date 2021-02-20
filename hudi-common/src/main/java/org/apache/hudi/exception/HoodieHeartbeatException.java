@@ -16,11 +16,35 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.model;
+package org.apache.hudi.exception;
+
+import java.io.Serializable;
 
 /**
- * Hoodie cleaning policies.
+ * <p>
+ * Exception thrown for Hoodie hearbeat failures. The root of the exception hierarchy.
+ * </p>
+ * <p>
+ * Hoodie Write/Read clients will throw this exception if any of its operations fail. This is a runtime (unchecked)
+ * exception.
+ * </p>
  */
-public enum HoodieCleaningPolicy {
-  KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_COMMITS;
+public class HoodieHeartbeatException extends RuntimeException implements Serializable {
+
+  public HoodieHeartbeatException() {
+    super();
+  }
+
+  public HoodieHeartbeatException(String message) {
+    super(message);
+  }
+
+  public HoodieHeartbeatException(String message, Throwable t) {
+    super(message, t);
+  }
+
+  public HoodieHeartbeatException(Throwable t) {
+    super(t);
+  }
+
 }

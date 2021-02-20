@@ -178,7 +178,7 @@ public class HoodieInputFormatUtils {
    * @return
    */
   public static HoodieDefaultTimeline filterInstantsTimeline(HoodieDefaultTimeline timeline) {
-    HoodieDefaultTimeline commitsAndCompactionTimeline = timeline.getCommitsAndCompactionTimeline();
+    HoodieDefaultTimeline commitsAndCompactionTimeline = timeline.getWriteTimeline();
     Option<HoodieInstant> pendingCompactionInstant = commitsAndCompactionTimeline
         .filterPendingCompactionTimeline().firstInstant();
     if (pendingCompactionInstant.isPresent()) {

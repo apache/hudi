@@ -18,6 +18,8 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -52,9 +54,6 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
-
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -610,13 +609,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     }
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true), true)) {
-      // Start the next commit which will rollback the previous one and also should update the metadata table by
-      // updating it with HoodieRollbackMetadata.
       String newCommitTime = client.startCommit();
-
-      // Dangling commit but metadata should be valid at this time
-      validateMetadata(client);
-
       // Next insert
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 5);
       List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), newCommitTime).collect();

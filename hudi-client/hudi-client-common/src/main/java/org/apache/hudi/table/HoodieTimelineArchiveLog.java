@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieRollingStatMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -168,13 +169,17 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
     Option<HoodieInstant> oldestPendingCompactionInstant =
         table.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
+    Option<HoodieInstant> oldestInflightCommitInstant =
+        table.getActiveTimeline()
+            .getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
+            .filterInflights().firstInstant();
 
     // We cannot have any holes in the commit timeline. We cannot archive any commits which are
     // made after the first savepoint present.
     Option<HoodieInstant> firstSavepoint = table.getCompletedSavepointTimeline().firstInstant();
     if (!commitTimeline.empty() && commitTimeline.countInstants() > maxInstantsToKeep) {
       // Actually do the commits
-      return commitTimeline.getInstants()
+      Stream<HoodieInstant> instantToArchiveStream = commitTimeline.getInstants()
           .filter(s -> {
             // if no savepoint present, then dont filter
             return !(firstSavepoint.isPresent() && HoodieTimeline.compareTimestamps(firstSavepoint.get().getTimestamp(), LESSER_THAN_OR_EQUALS, s.getTimestamp()));
@@ -183,7 +188,15 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
             return oldestPendingCompactionInstant
                 .map(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), GREATER_THAN, s.getTimestamp()))
                 .orElse(true);
-          }).limit(commitTimeline.countInstants() - minInstantsToKeep);
+          });
+      // We need this to ensure that when multiple writers are performing conflict resolution, eligible instants don't
+      // get archived, i.e, instants after the oldestInflight are retained on the timeline
+      if (config.getFailedWritesCleanPolicy() == HoodieFailedWritesCleaningPolicy.LAZY) {
+        instantToArchiveStream = instantToArchiveStream.filter(s -> oldestInflightCommitInstant.map(instant ->
+            HoodieTimeline.compareTimestamps(instant.getTimestamp(), GREATER_THAN, s.getTimestamp()))
+            .orElse(true));
+      }
+      return instantToArchiveStream.limit(commitTimeline.countInstants() - minInstantsToKeep);
     } else {
       return Stream.empty();
     }

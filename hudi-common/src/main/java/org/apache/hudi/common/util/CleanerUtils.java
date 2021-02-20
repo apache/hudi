@@ -25,8 +25,10 @@ import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.model.CleanFileInfo;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataMigrator;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataV1MigrationHandler;
@@ -37,6 +39,8 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 
 public class CleanerUtils {
   public static final Integer CLEAN_METADATA_VERSION_1 = CleanMetadataV1MigrationHandler.VERSION;
@@ -111,5 +115,37 @@ public class CleanerUtils {
    */
   public static List<HoodieCleanFileInfo> convertToHoodieCleanFileInfoList(List<CleanFileInfo> cleanFileInfoList) {
     return cleanFileInfoList.stream().map(CleanFileInfo::toHoodieFileCleanInfo).collect(Collectors.toList());
+  }
+
+  /**
+   * Execute {@link HoodieFailedWritesCleaningPolicy} to rollback failed writes for different actions.
+   * @param cleaningPolicy
+   * @param actionType
+   * @param rollbackFailedWritesFunc
+   */
+  public static void rollbackFailedWrites(HoodieFailedWritesCleaningPolicy cleaningPolicy, String actionType,
+                                          Functions.Function0<Boolean> rollbackFailedWritesFunc) {
+    switch (actionType) {
+      case HoodieTimeline.CLEAN_ACTION:
+        if (cleaningPolicy.isEager()) {
+          // No need to do any special cleanup for failed operations during clean
+          return;
+        } else if (cleaningPolicy.isLazy()) {
+          // Perform rollback of failed operations for all types of actions during clean
+          rollbackFailedWritesFunc.apply();
+          return;
+        }
+        // No action needed for cleaning policy NEVER
+        break;
+      case COMMIT_ACTION:
+        // For any other actions, perform rollback of failed writes
+        if (cleaningPolicy.isEager()) {
+          rollbackFailedWritesFunc.apply();
+          return;
+        }
+        break;
+      default:
+        throw new IllegalArgumentException("Unsupported action type " + actionType);
+    }
   }
 }
