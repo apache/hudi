@@ -51,6 +51,9 @@ public class KafkaOffsetGen {
 
   private static final Logger LOG = LogManager.getLogger(KafkaOffsetGen.class);
 
+  /**
+   * kafka checkpoint Pattern.
+   */
   private final Pattern pattern = Pattern.compile(".*,.*:.*");
 
   public static class CheckpointUtils {
@@ -142,7 +145,7 @@ public class KafkaOffsetGen {
    * Kafka reset offset strategies.
    */
   enum KafkaResetOffsetStrategies {
-    LATEST, EARLIEST, NONE
+    LATEST, EARLIEST
   }
 
   /**
@@ -233,7 +236,7 @@ public class KafkaOffsetGen {
   private Map<TopicPartition, Long> checkupValidOffsets(KafkaConsumer consumer,
                                                         Option<String> lastCheckpointStr, Set<TopicPartition> topicPartitions) {
     Map<TopicPartition, Long> earliestOffsets = consumer.beginningOffsets(topicPartitions);
-    if (checkTopicCheckPoint(lastCheckpointStr)) {
+    if (checkTopicCheckpoint(lastCheckpointStr)) {
       Map<TopicPartition, Long> checkpointOffsets = CheckpointUtils.strToOffsets(lastCheckpointStr.get());
       boolean checkpointOffsetReseter = checkpointOffsets.entrySet().stream()
               .anyMatch(offset -> offset.getValue() < earliestOffsets.get(offset.getKey()));
@@ -273,7 +276,7 @@ public class KafkaOffsetGen {
     return result.containsKey(topicName);
   }
 
-  public boolean checkTopicCheckPoint(Option<String> lastCheckpointStr) {
+  private boolean checkTopicCheckpoint(Option<String> lastCheckpointStr) {
     Matcher matcher = pattern.matcher(lastCheckpointStr.get());
     return matcher.matches();
   }
