@@ -95,7 +95,7 @@ public class TableCommand implements CommandMarker {
 
     boolean existing = false;
     try {
-      new HoodieTableMetaClient(HoodieCLI.conf, path);
+      HoodieTableMetaClient.builder().setConf(HoodieCLI.conf).setBasePath(path).build();
       existing = true;
     } catch (TableNotFoundException dfe) {
       // expected

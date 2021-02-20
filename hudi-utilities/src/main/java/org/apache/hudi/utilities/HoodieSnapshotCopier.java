@@ -83,7 +83,7 @@ public class HoodieSnapshotCopier implements Serializable {
                        final boolean verifyMetadataFileListing) throws IOException {
     FileSystem fs = FSUtils.getFs(baseDir, jsc.hadoopConfiguration());
     final SerializableConfiguration serConf = new SerializableConfiguration(jsc.hadoopConfiguration());
-    final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs.getConf(), baseDir);
+    final HoodieTableMetaClient tableMetadata = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(baseDir).build();
     final BaseFileOnlyView fsView = new HoodieTableFileSystemView(tableMetadata,
         tableMetadata.getActiveTimeline().getCommitsAndCompactionTimeline().filterCompletedInstants());
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);

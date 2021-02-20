@@ -37,7 +37,6 @@ import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
@@ -80,7 +79,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
   public DFSHoodieDatasetInputReader(JavaSparkContext jsc, String basePath, String schemaStr) {
     this.jsc = jsc;
     this.schemaStr = schemaStr;
-    this.metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    this.metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build();
   }
 
   protected List<String> getPartitions(Option<Integer> partitionsLimit) throws IOException {

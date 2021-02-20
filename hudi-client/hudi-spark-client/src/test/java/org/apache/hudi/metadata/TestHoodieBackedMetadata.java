@@ -118,13 +118,13 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
 
     // Metadata table should not exist until created for the first time
     assertFalse(fs.exists(new Path(metadataTableBasePath)), "Metadata table should not exist");
-    assertThrows(TableNotFoundException.class, () -> new HoodieTableMetaClient(hadoopConf, metadataTableBasePath));
+    assertThrows(TableNotFoundException.class, () -> HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build());
 
     // Metadata table is not created if disabled by config
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, false))) {
       client.startCommitWithTime("001");
       assertFalse(fs.exists(new Path(metadataTableBasePath)), "Metadata table should not be created");
-      assertThrows(TableNotFoundException.class, () -> new HoodieTableMetaClient(hadoopConf, metadataTableBasePath));
+      assertThrows(TableNotFoundException.class, () -> HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build());
     }
 
     // Metadata table created when enabled by config & sync is called
@@ -565,8 +565,8 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       }
     }
 
-    HoodieTableMetaClient metadataMetaClient = new HoodieTableMetaClient(hadoopConf, metadataTableBasePath);
-    HoodieTableMetaClient datasetMetaClient = new HoodieTableMetaClient(hadoopConf, config.getBasePath());
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
+    HoodieTableMetaClient datasetMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(config.getBasePath()).build();
     HoodieActiveTimeline metadataTimeline = metadataMetaClient.getActiveTimeline();
     // check that there are compactions.
     assertTrue(metadataTimeline.getCommitTimeline().filterCompletedInstants().countInstants() > 0);
@@ -869,7 +869,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
 
     // Metadata table should be in sync with the dataset
     assertTrue(metadata(client).isInSync());
-    HoodieTableMetaClient metadataMetaClient = new HoodieTableMetaClient(hadoopConf, metadataTableBasePath);
+    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
 
     // Metadata table is MOR
     assertEquals(metadataMetaClient.getTableType(), HoodieTableType.MERGE_ON_READ, "Metadata Table should be MOR");

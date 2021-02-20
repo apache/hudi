@@ -84,7 +84,7 @@ class DefaultSource extends RelationProvider
     val tablePath = DataSourceUtils.getTablePath(fs, globPaths.toArray)
     log.info("Obtained hudi table path: " + tablePath)
 
-    val metaClient = new HoodieTableMetaClient(fs.getConf, tablePath)
+    val metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(tablePath).build()
     val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
     log.info("Is bootstrapped table => " + isBootstrappedTable)
 
@@ -104,7 +104,7 @@ class DefaultSource extends RelationProvider
     } else if(parameters(QUERY_TYPE_OPT_KEY).equals(QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)) {
       getBaseFileOnlyView(sqlContext, parameters, schema, readPaths, isBootstrappedTable, globPaths, metaClient)
     } else if (parameters(QUERY_TYPE_OPT_KEY).equals(QUERY_TYPE_INCREMENTAL_OPT_VAL)) {
-      val metaClient = new HoodieTableMetaClient(fs.getConf, tablePath)
+      val metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(tablePath).build()
       if (metaClient.getTableType.equals(HoodieTableType.MERGE_ON_READ)) {
         new MergeOnReadIncrementalRelation(sqlContext, optParams, schema, metaClient)
       } else {
@@ -202,8 +202,8 @@ class DefaultSource extends RelationProvider
     if (path.isEmpty || path.get == null) {
       throw new HoodieException(s"'path'  must be specified.")
     }
-    val metaClient = new HoodieTableMetaClient(
-      sqlContext.sparkSession.sessionState.newHadoopConf(), path.get)
+    val metaClient = HoodieTableMetaClient.builder().setConf(
+      sqlContext.sparkSession.sessionState.newHadoopConf()).setBasePath(path.get).build()
     val schemaResolver = new TableSchemaResolver(metaClient)
     val sqlSchema =
       try {

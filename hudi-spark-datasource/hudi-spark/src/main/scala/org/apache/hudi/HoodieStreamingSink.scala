@@ -175,8 +175,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
       }))
 
       // First time, scan .hoodie folder and get all pending compactions
-      val metaClient = new HoodieTableMetaClient(sqlContext.sparkContext.hadoopConfiguration,
-        client.getConfig.getBasePath)
+      val metaClient = HoodieTableMetaClient.builder().setConf(sqlContext.sparkContext.hadoopConfiguration)
+        .setBasePath(client.getConfig.getBasePath).build()
       val pendingInstants :java.util.List[HoodieInstant] =
         CompactionUtils.getPendingCompactionInstantTimes(metaClient)
       pendingInstants.foreach((h : HoodieInstant) => asyncCompactorService.enqueuePendingCompaction(h))

@@ -44,7 +44,7 @@ public class InitialCheckpointFromAnotherHoodieTimelineProvider extends InitialC
   @Override
   public void init(Configuration config) throws HoodieException {
     super.init(config);
-    this.anotherDsHoodieMetaclient = new HoodieTableMetaClient(config, path.toString());
+    this.anotherDsHoodieMetaclient = HoodieTableMetaClient.builder().setConf(config).setBasePath(path.toString()).build();
   }
 
   @Override
