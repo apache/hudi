@@ -1438,4 +1438,9 @@ var store = [{
         "excerpt":"Background Apache Hudi brings stream processing to big data, providing fresh data while being an order of magnitude efficient over traditional batch processing. In a data lake/warehouse, one of the key trade-offs is between ingestion speed and query performance. Data ingestion typically prefers small files to improve parallelism and make...","categories": ["blog"],
         "tags": [],
         "url": "https://hudi.apache.org/blog/hudi-clustering-intro/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Apache Hudi Key Generators",
+        "excerpt":"Every record in Hudi is uniquely identified by a HoodieKey, which is a pair of record key and partition path where the record belongs to. Hudi has imposed this constraint so that updates and deletes can be applied to the record of interest. Hudi relies on the partition path field...","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/hudi-key-generators/",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},]
