@@ -106,7 +106,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       ValidationUtils.checkArgument(!this.metadataWriteConfig.useFileListingMetadata(), "File listing cannot be used for Metadata Table");
 
       initRegistry();
-      HoodieTableMetaClient datasetMetaClient = new HoodieTableMetaClient(hadoopConf, datasetWriteConfig.getBasePath());
+      HoodieTableMetaClient datasetMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(datasetWriteConfig.getBasePath()).build();
       initialize(engineContext, datasetMetaClient);
       if (enabled) {
         // This is always called even in case the table was created for the first time. This is because

@@ -346,7 +346,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   }
 
   public HoodieTableMetaClient getHoodieMetaClient(Configuration conf, String basePath) {
-    metaClient = new HoodieTableMetaClient(conf, basePath);
+    metaClient = HoodieTableMetaClient.builder().setConf(conf).setBasePath(basePath).build();
     return metaClient;
   }
 

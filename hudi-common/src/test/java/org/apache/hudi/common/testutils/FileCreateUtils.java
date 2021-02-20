@@ -224,7 +224,7 @@ public class FileCreateUtils {
   public static Map<String, Long> getBaseFileCountsForPaths(String basePath, FileSystem fs, String... paths) {
     Map<String, Long> toReturn = new HashMap<>();
     try {
-      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath, true);
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
       for (String path : paths) {
         TableFileSystemView.BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(metaClient,
             metaClient.getCommitsTimeline().filterCompletedInstants(), fs.globStatus(new org.apache.hadoop.fs.Path(path)));

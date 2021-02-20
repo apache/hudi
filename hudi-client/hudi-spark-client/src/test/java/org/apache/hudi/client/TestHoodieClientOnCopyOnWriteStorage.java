@@ -410,7 +410,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     final HoodieWriteConfig cfg = hoodieWriteConfig;
     final String instantTime = "007";
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jsc.hadoopConfiguration(), basePath);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build();
     String basePathStr = basePath;
     HoodieTable table = getHoodieTable(metaClient, cfg);
     jsc.parallelize(Arrays.asList(1)).map(e -> {
@@ -894,7 +894,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertNoWriteErrors(statuses);
 
     assertEquals(2, statuses.size(), "2 files needs to be committed.");
-    HoodieTableMetaClient metadata = new HoodieTableMetaClient(hadoopConf, basePath);
+    HoodieTableMetaClient metadata = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
 
     HoodieTable table = getHoodieTable(metadata, config);
     BaseFileOnlyView fileSystemView = table.getBaseFileOnlyView();
@@ -1001,7 +1001,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             + readRowKeysFromParquet(hadoopConf, new Path(basePath, statuses.get(1).getStat().getPath())).size(),
         "file should contain 340 records");
 
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
     HoodieTable table = getHoodieTable(metaClient, config);
     List<HoodieBaseFile> files = table.getBaseFileOnlyView()
         .getLatestBaseFilesBeforeOrOn(testPartitionPath, commitTime3).collect(Collectors.toList());
@@ -1428,7 +1428,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
-      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath);
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
       HoodieSparkTable table = HoodieSparkTable.create(cfg, context, metaClient);
 
       String instantTime = "000";
@@ -1533,7 +1533,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testConsistencyCheckDuringFinalize(boolean enableOptimisticConsistencyGuard) throws Exception {
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
     String instantTime = "000";
     HoodieWriteConfig cfg = getConfigBuilder().withAutoCommit(false).withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
         .withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard).build()).build();
@@ -1559,7 +1559,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
   private void testRollbackAfterConsistencyCheckFailureUsingFileList(boolean rollbackUsingMarkers, boolean enableOptimisticConsistencyGuard) throws Exception {
     String instantTime = "000";
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
     HoodieWriteConfig cfg = !enableOptimisticConsistencyGuard ? getConfigBuilder().withRollbackUsingMarkers(rollbackUsingMarkers).withAutoCommit(false)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true)
             .withMaxConsistencyCheckIntervalMs(1).withInitialConsistencyCheckIntervalMs(1).withEnableOptimisticConsistencyGuard(enableOptimisticConsistencyGuard).build()).build() :

@@ -401,7 +401,7 @@ public class CommitsCommand implements CommandMarker {
   public String compareCommits(@CliOption(key = {"path"}, help = "Path of the table to compare to") final String path) {
 
     HoodieTableMetaClient source = HoodieCLI.getTableMetaClient();
-    HoodieTableMetaClient target = new HoodieTableMetaClient(HoodieCLI.conf, path);
+    HoodieTableMetaClient target = HoodieTableMetaClient.builder().setConf(HoodieCLI.conf).setBasePath(path).build();
     HoodieTimeline targetTimeline = target.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     HoodieTimeline sourceTimeline = source.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     String targetLatestCommit =
@@ -426,7 +426,7 @@ public class CommitsCommand implements CommandMarker {
 
   @CliCommand(value = "commits sync", help = "Compare commits with another Hoodie table")
   public String syncCommits(@CliOption(key = {"path"}, help = "Path of the table to compare to") final String path) {
-    HoodieCLI.syncTableMetadata = new HoodieTableMetaClient(HoodieCLI.conf, path);
+    HoodieCLI.syncTableMetadata = HoodieTableMetaClient.builder().setConf(HoodieCLI.conf).setBasePath(path).build();
     HoodieCLI.state = HoodieCLI.CLIState.SYNC;
     return "Load sync state between " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " and "
         + HoodieCLI.syncTableMetadata.getTableConfig().getTableName();

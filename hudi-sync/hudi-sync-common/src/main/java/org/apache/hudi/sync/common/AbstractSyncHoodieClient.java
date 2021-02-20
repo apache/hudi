@@ -53,7 +53,7 @@ public abstract class AbstractSyncHoodieClient {
 
   public AbstractSyncHoodieClient(String basePath, boolean assumeDatePartitioning, boolean useFileListingFromMetadata,
                                   boolean verifyMetadataFileListing, FileSystem fs) {
-    this.metaClient = new HoodieTableMetaClient(fs.getConf(), basePath, true);
+    this.metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
     this.tableType = metaClient.getTableType();
     this.basePath = basePath;
     this.assumeDatePartitioning = assumeDatePartitioning;
