@@ -65,7 +65,7 @@ public class HoodieWriteCommitKafkaCallback implements HoodieWriteCommitCallback
     try (KafkaProducer<String, String> producer = createProducer(props)) {
       ProducerRecord<String, String> record = buildProducerRecord(props, callbackMsg);
       producer.send(record);
-      LOG.info(String.format("Send callback message %s succeed", callbackMsg));
+      LOG.info("Send callback message succeed");
     } catch (Exception e) {
       LOG.error("Send kafka callback msg failed : ", e);
     }
