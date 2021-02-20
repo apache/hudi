@@ -31,7 +31,7 @@ import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.sync.common.SchemaDifference;
-import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.dla.util.DLASchemaUtil;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.log4j.LogManager;
@@ -161,7 +161,7 @@ public class DLASyncTool extends AbstractSyncTool {
     } else {
       // Check if the table schema has evolved
       Map<String, String> tableSchema = hoodieDLAClient.getTableSchema(tableName);
-      SchemaDifference schemaDiff = HiveSchemaUtil.getSchemaDifference(schema, tableSchema, cfg.partitionFields, cfg.supportTimestamp);
+      SchemaDifference schemaDiff = DLASchemaUtil.getSchemaDifference(schema, tableSchema, cfg.partitionFields, cfg.supportTimestamp);
       if (!schemaDiff.isEmpty()) {
         LOG.info("Schema difference found for " + tableName);
         hoodieDLAClient.updateTableDefinition(tableName, schemaDiff);
