@@ -111,7 +111,7 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
       TaskContextSupplier taskContextSupplier = new FlinkTaskContextSupplier(null);
 
       // writeClient
-      writeClient = new HoodieFlinkWriteClient(new HoodieFlinkEngineContext(taskContextSupplier), StreamerUtil.getHoodieClientConfig(cfg), true);
+      writeClient = new HoodieFlinkWriteClient(new HoodieFlinkEngineContext(taskContextSupplier), StreamerUtil.getHoodieClientConfig(cfg));
 
       // init table, create it if not exists.
       StreamerUtil.initTableIfNotExists(FlinkOptions.fromStreamerConfig(cfg));

@@ -19,8 +19,25 @@
 package org.apache.hudi.common.model;
 
 /**
- * Hoodie cleaning policies.
+ * Policy controlling how to perform cleaning for failed writes.
  */
-public enum HoodieCleaningPolicy {
-  KEEP_LATEST_FILE_VERSIONS, KEEP_LATEST_COMMITS;
+public enum HoodieFailedWritesCleaningPolicy {
+  // performs cleaning of failed writes inline every write operation
+  EAGER,
+  // performs cleaning of failed writes lazily during clean
+  LAZY,
+  // Does not clean failed writes
+  NEVER;
+
+  public boolean isEager() {
+    return this == EAGER;
+  }
+
+  public boolean isLazy() {
+    return this == LAZY;
+  }
+
+  public boolean isNever() {
+    return this == NEVER;
+  }
 }

@@ -103,6 +103,9 @@ public class TestHBaseIndex extends FunctionalTestHarness {
       utility.deleteTable(TABLE_NAME);
       utility.shutdownMiniCluster();
     }
+    if (spark != null) {
+      spark.close();
+    }
   }
 
   @BeforeAll
@@ -538,9 +541,9 @@ public class TestHBaseIndex extends FunctionalTestHarness {
     final Map<String, Integer> fileIdPartitionMap = index.mapFileWithInsertsToUniquePartition(writeStatusRDD);
     int numWriteStatusWithInserts = (int) index.getHBasePutAccessParallelism(writeStatusRDD)._2;
     JavaRDD<WriteStatus> partitionedRDD = writeStatusRDD.mapToPair(w -> new Tuple2<>(w.getFileId(), w))
-                                              .partitionBy(new SparkHoodieHBaseIndex
-                                                                   .WriteStatusPartitioner(fileIdPartitionMap,
-                                                  numWriteStatusWithInserts)).map(w -> w._2());
+        .partitionBy(new SparkHoodieHBaseIndex
+            .WriteStatusPartitioner(fileIdPartitionMap,
+            numWriteStatusWithInserts)).map(w -> w._2());
     assertEquals(numWriteStatusWithInserts, partitionedRDD.getNumPartitions());
     int[] partitionIndexesBeforeRepartition = writeStatusRDD.partitions().stream().mapToInt(p -> p.index()).toArray();
     assertEquals(parallelism, partitionIndexesBeforeRepartition.length);
@@ -576,9 +579,9 @@ public class TestHBaseIndex extends FunctionalTestHarness {
     final Map<String, Integer> fileIdPartitionMap = index.mapFileWithInsertsToUniquePartition(writeStatusRDD);
     int numWriteStatusWithInserts = (int) index.getHBasePutAccessParallelism(writeStatusRDD)._2;
     JavaRDD<WriteStatus> partitionedRDD = writeStatusRDD.mapToPair(w -> new Tuple2<>(w.getFileId(), w))
-                                              .partitionBy(new SparkHoodieHBaseIndex
-                                                                   .WriteStatusPartitioner(fileIdPartitionMap,
-                                                  numWriteStatusWithInserts)).map(w -> w._2());
+        .partitionBy(new SparkHoodieHBaseIndex
+            .WriteStatusPartitioner(fileIdPartitionMap,
+            numWriteStatusWithInserts)).map(w -> w._2());
     assertEquals(numWriteStatusWithInserts, partitionedRDD.getNumPartitions());
     int[] partitionIndexesBeforeRepartition = writeStatusRDD.partitions().stream().mapToInt(p -> p.index()).toArray();
     assertEquals(parallelism, partitionIndexesBeforeRepartition.length);

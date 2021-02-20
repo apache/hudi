@@ -249,7 +249,7 @@ public class FileSystemViewCommand implements CommandMarker {
     } else if (excludeCompaction) {
       timeline = metaClient.getActiveTimeline().getCommitsTimeline();
     } else {
-      timeline = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline();
+      timeline = metaClient.getActiveTimeline().getWriteTimeline();
     }
 
     if (!includeInflight) {

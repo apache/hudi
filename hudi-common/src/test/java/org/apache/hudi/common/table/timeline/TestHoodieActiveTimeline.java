@@ -201,7 +201,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     // return the correct set of Instant
     checkTimeline.accept(timeline.getCommitsTimeline(),
             CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION));
-    checkTimeline.accept(timeline.getCommitsAndCompactionTimeline(),
+    checkTimeline.accept(timeline.getWriteTimeline(),
             CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION));
     checkTimeline.accept(timeline.getCommitTimeline(),  CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION));
     checkTimeline.accept(timeline.getDeltaCommitTimeline(), Collections.singleton(HoodieTimeline.DELTA_COMMIT_ACTION));

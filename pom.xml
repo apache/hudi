@@ -124,6 +124,7 @@
     <hbase.version>1.2.3</hbase.version>
     <codehaus-jackson.version>1.9.13</codehaus-jackson.version>
     <h2.version>1.4.199</h2.version>
+    <awaitility.version>3.1.2</awaitility.version>
     <skipTests>false</skipTests>
     <skipUTs>${skipTests}</skipUTs>
     <skipFTs>${skipTests}</skipFTs>
@@ -969,6 +970,15 @@
         <version>4.0.0</version>
         <scope>test</scope>
       </dependency>
+
+      <!-- Other Utils -->
+      <dependency>
+        <groupId>org.awaitility</groupId>
+        <artifactId>awaitility</artifactId>
+        <version>${awaitility.version}</version>
+        <scope>test</scope>
+      </dependency>
+
     </dependencies>
   </dependencyManagement>
 

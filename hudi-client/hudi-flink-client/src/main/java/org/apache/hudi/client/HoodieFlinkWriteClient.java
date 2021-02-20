@@ -74,14 +74,16 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     this(context, clientConfig, false);
   }
 
+  @Deprecated
   public HoodieFlinkWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig, boolean rollbackPending) {
-    super(context, writeConfig, rollbackPending);
+    super(context, writeConfig);
     this.bucketToHandles = new HashMap<>();
   }
 
+  @Deprecated
   public HoodieFlinkWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig, boolean rollbackPending,
                                 Option<EmbeddedTimelineService> timelineService) {
-    super(context, writeConfig, rollbackPending, timelineService);
+    super(context, writeConfig, timelineService);
   }
 
   /**

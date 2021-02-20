@@ -49,7 +49,7 @@ public class CompactNode extends DagNode<JavaRDD<WriteStatus>> {
         HoodieTableMetaClient.builder().setConf(executionContext.getHoodieTestSuiteWriter().getConfiguration()).setBasePath(executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath)
             .build();
     Option<HoodieInstant> lastInstant = metaClient.getActiveTimeline()
-        .getCommitsAndCompactionTimeline().filterPendingCompactionTimeline().lastInstant();
+        .getWriteTimeline().filterPendingCompactionTimeline().lastInstant();
     if (lastInstant.isPresent()) {
       log.info("Compacting instant {}", lastInstant.get());
       this.result = executionContext.getHoodieTestSuiteWriter().compact(Option.of(lastInstant.get().getTimestamp()));

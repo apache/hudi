@@ -273,7 +273,7 @@ public class CompactionCommand implements CommandMarker {
                                      int limit,
                                      boolean headerOnly) {
 
-    Stream<HoodieInstant> instantsStream = timeline.getCommitsAndCompactionTimeline().getReverseOrderedInstants();
+    Stream<HoodieInstant> instantsStream = timeline.getWriteTimeline().getReverseOrderedInstants();
     List<Pair<HoodieInstant, HoodieCompactionPlan>> compactionPlans = instantsStream
             .map(instant -> Pair.of(instant, compactionPlanReader.apply(instant)))
             .filter(pair -> pair.getRight() != null)
