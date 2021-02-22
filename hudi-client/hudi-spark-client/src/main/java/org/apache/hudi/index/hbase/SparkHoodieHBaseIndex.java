@@ -548,7 +548,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
     int multiGetBatchSize = config.getHbaseIndexGetBatchSize();
     boolean rollbackSync = config.getHBaseIndexRollbackSync();
 
-    if (!config.getHbaseIndexUpdatePartitionPath()) {
+    if (!config.getHBaseIndexRollbackSync()) {
       return true;
     }
 

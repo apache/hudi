@@ -219,6 +219,11 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder hbaseIndexRollbackSync(boolean rollbackSync) {
+      props.setProperty(HBASE_INDEX_ROLLBACK_SYNC, String.valueOf(rollbackSync));
+      return this;
+    }
+
     public Builder withQPSResourceAllocatorType(String qpsResourceAllocatorClass) {
       props.setProperty(HBASE_INDEX_QPS_ALLOCATOR_CLASS, qpsResourceAllocatorClass);
       return this;

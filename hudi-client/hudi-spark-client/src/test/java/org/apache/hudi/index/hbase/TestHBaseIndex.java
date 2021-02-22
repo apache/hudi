@@ -198,8 +198,8 @@ public class TestHBaseIndex extends FunctionalTestHarness {
     JavaRDD<HoodieRecord> newWriteRecords = jsc().parallelize(newRecords, 1);
     JavaRDD<HoodieRecord> oldWriteRecords = jsc().parallelize(oldRecords, 1);
 
-    HoodieWriteConfig config = getConfig(true);
-    SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(getConfig(true));
+    HoodieWriteConfig config = getConfig(true, false);
+    SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(getConfig(true, false));
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config);) {
       // allowed path change test
@@ -225,7 +225,7 @@ public class TestHBaseIndex extends FunctionalTestHarness {
       assertEquals(numRecords, taggedRecords.stream().filter(record -> !record.getKey().getPartitionPath().equals(oldPartitionPath)).count());
 
       // not allowed path change test
-      index = new SparkHoodieHBaseIndex<>(getConfig(false));
+      index = new SparkHoodieHBaseIndex<>(getConfig(false, false));
       List<HoodieRecord> notAllowPathChangeRecords = index.tagLocation(newWriteRecords, context, hoodieTable).collect();
       assertEquals(numRecords, notAllowPathChangeRecords.stream().count());
       assertEquals(numRecords, taggedRecords.stream().filter(hoodieRecord -> hoodieRecord.isCurrentLocationKnown()
@@ -277,8 +277,8 @@ public class TestHBaseIndex extends FunctionalTestHarness {
     final int numRecords = 10;
     final String oldPartitionPath = "1970/01/01";
     final String emptyHoodieRecordPayloadClasssName = EmptyHoodieRecordPayload.class.getName();
-    HoodieWriteConfig config = getConfig(true);
-    SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(getConfig(true));
+    HoodieWriteConfig config = getConfig(true, true);
+    SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config);) {
       final String firstCommitTime = writeClient.startCommit();
@@ -783,18 +783,18 @@ public class TestHBaseIndex extends FunctionalTestHarness {
   }
 
   private HoodieWriteConfig getConfig() {
-    return getConfigBuilder(100, false).build();
+    return getConfigBuilder(100, false, false).build();
   }
 
   private HoodieWriteConfig getConfig(int hbaseIndexBatchSize) {
-    return getConfigBuilder(hbaseIndexBatchSize, false).build();
+    return getConfigBuilder(hbaseIndexBatchSize, false, false).build();
   }
 
-  private HoodieWriteConfig getConfig(boolean updatePartitionPath) {
-    return getConfigBuilder(100,  updatePartitionPath).build();
+  private HoodieWriteConfig getConfig(boolean updatePartitionPath, boolean rollbackSync) {
+    return getConfigBuilder(100,  updatePartitionPath, rollbackSync).build();
   }
 
-  private HoodieWriteConfig.Builder getConfigBuilder(int hbaseIndexBatchSize, boolean updatePartitionPath) {
+  private HoodieWriteConfig.Builder getConfigBuilder(int hbaseIndexBatchSize, boolean updatePartitionPath, boolean rollbackSync) {
     return HoodieWriteConfig.newBuilder().withPath(basePath()).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(1, 1).withDeleteParallelism(1)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1024 * 1024)
@@ -809,6 +809,7 @@ public class TestHBaseIndex extends FunctionalTestHarness {
                 .hbaseZkZnodeParent(hbaseConfig.get("zookeeper.znode.parent", ""))
                 .hbaseZkQuorum(hbaseConfig.get("hbase.zookeeper.quorum")).hbaseTableName(TABLE_NAME)
                 .hbaseIndexUpdatePartitionPath(updatePartitionPath)
+                .hbaseIndexRollbackSync(rollbackSync)
                 .hbaseIndexGetBatchSize(hbaseIndexBatchSize).build())
             .build());
   }
