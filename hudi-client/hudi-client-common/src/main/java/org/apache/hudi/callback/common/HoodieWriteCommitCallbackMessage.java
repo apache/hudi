@@ -45,7 +45,7 @@ public class HoodieWriteCommitCallbackMessage implements Serializable {
   private String basePath;
 
   /**
-   * partitionPath in hudi table.
+   * HoodieWriteStat.
    */
   private List<HoodieWriteStat> hoodieWriteStat;
 
