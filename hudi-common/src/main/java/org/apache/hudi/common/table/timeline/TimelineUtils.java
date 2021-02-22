@@ -49,7 +49,7 @@ public class TimelineUtils {
    * Does not include internal operations such as clean in the timeline.
    */
   public static List<String> getPartitionsWritten(HoodieTimeline timeline) {
-    HoodieTimeline timelineToSync = timeline.getCommitsAndCompactionTimeline();
+    HoodieTimeline timelineToSync = timeline.getWriteTimeline();
     return getAffectedPartitions(timelineToSync);
   }
 

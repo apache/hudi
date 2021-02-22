@@ -110,7 +110,7 @@ public class CompactionTestUtils {
       }
     });
 
-    metaClient = new HoodieTableMetaClient(metaClient.getHadoopConf(), metaClient.getBasePath(), true);
+    metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePath()).setLoadActiveTimelineOnLoad(true).build();
     Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> pendingCompactionMap =
         CompactionUtils.getAllPendingCompactionOperations(metaClient);
 

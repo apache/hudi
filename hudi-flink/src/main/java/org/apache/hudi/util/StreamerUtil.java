@@ -18,6 +18,9 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
@@ -51,12 +54,14 @@ import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
 
 /**
  * Utilities for Flink stream read and write.
  */
 public class StreamerUtil {
+  private static final String DEFAULT_ARCHIVE_LOG_FOLDER = "archived";
 
   private static final Logger LOG = LoggerFactory.getLogger(StreamerUtil.class);
 
@@ -68,6 +73,9 @@ public class StreamerUtil {
   }
 
   public static TypedProperties getProps(FlinkStreamerConfig cfg) {
+    if (cfg.propsFilePath.isEmpty()) {
+      return new TypedProperties();
+    }
     return readConfig(
         FSUtils.getFs(cfg.propsFilePath, getHadoopConf()),
         new Path(cfg.propsFilePath), cfg.configs).getConfig();
@@ -208,6 +216,10 @@ public class StreamerUtil {
     }
   }
 
+  public static HoodieWriteConfig getHoodieClientConfig(FlinkStreamerConfig conf) {
+    return getHoodieClientConfig(FlinkOptions.fromStreamerConfig(conf));
+  }
+
   public static HoodieWriteConfig getHoodieClientConfig(Configuration conf) {
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder()
@@ -248,6 +260,44 @@ public class StreamerUtil {
 
   public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
     checkPropNames.forEach(prop ->
-        Preconditions.checkState(!props.containsKey(prop), "Required property " + prop + " is missing"));
+        Preconditions.checkState(props.containsKey(prop), "Required property " + prop + " is missing"));
+  }
+
+  /**
+   * Initialize the table if it does not exist.
+   *
+   * @param conf the configuration
+   * @throws IOException if errors happens when writing metadata
+   */
+  public static void initTableIfNotExists(Configuration conf) throws IOException {
+    final String basePath = conf.getString(FlinkOptions.PATH);
+    final org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf();
+    // Hadoop FileSystem
+    try (FileSystem fs = FSUtils.getFs(basePath, hadoopConf)) {
+      if (!fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))) {
+        HoodieTableMetaClient.initTableType(
+            hadoopConf,
+            basePath,
+            HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)),
+            conf.getString(FlinkOptions.TABLE_NAME),
+            DEFAULT_ARCHIVE_LOG_FOLDER,
+            conf.getString(FlinkOptions.PAYLOAD_CLASS),
+            1);
+        LOG.info("Table initialized under base path {}", basePath);
+      } else {
+        LOG.info("Table [{}/{}] already exists, no need to initialize the table",
+            basePath, conf.getString(FlinkOptions.TABLE_NAME));
+      }
+    }
+  }
+
+  /** Generates the bucket ID using format {partition path}_{fileID}. */
+  public static String generateBucketKey(String partitionPath, String fileId) {
+    return String.format("%s_%s", partitionPath, fileId);
+  }
+
+  /** Returns whether the location represents an insert. */
+  public static boolean isInsert(HoodieRecordLocation loc) {
+    return Objects.equals(loc.getInstantTime(), "I");
   }
 }

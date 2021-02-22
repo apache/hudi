@@ -124,6 +124,7 @@
     <hbase.version>1.2.3</hbase.version>
     <codehaus-jackson.version>1.9.13</codehaus-jackson.version>
     <h2.version>1.4.199</h2.version>
+    <awaitility.version>3.1.2</awaitility.version>
     <skipTests>false</skipTests>
     <skipUTs>${skipTests}</skipUTs>
     <skipFTs>${skipTests}</skipFTs>
@@ -526,6 +527,27 @@
         <artifactId>spark-sql_${scala.binary.version}</artifactId>
         <version>${spark.version}</version>
         <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-sql_${scala.binary.version}</artifactId>
+        <classifier>tests</classifier>
+        <version>${spark.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-core_${scala.binary.version}</artifactId>
+        <classifier>tests</classifier>
+        <version>${spark.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-catalyst_${scala.binary.version}</artifactId>
+        <classifier>tests</classifier>
+        <version>${spark.version}</version>
+        <scope>test</scope>
       </dependency>
 
       <!-- Spark (Packages) -->
@@ -948,6 +970,15 @@
         <version>4.0.0</version>
         <scope>test</scope>
       </dependency>
+
+      <!-- Other Utils -->
+      <dependency>
+        <groupId>org.awaitility</groupId>
+        <artifactId>awaitility</artifactId>
+        <version>${awaitility.version}</version>
+        <scope>test</scope>
+      </dependency>
+
     </dependencies>
   </dependencyManagement>
   <repositories>

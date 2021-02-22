@@ -70,7 +70,7 @@ public class FlexibleSchemaRecordGenerationIterator implements Iterator<GenericR
     if (lastRecord == null) {
       GenericRecord record = partitionPathsNonEmpty
           ? this.generator.getNewPayloadWithTimestamp(this.firstPartitionPathField)
-          : this.generator.getNewPayload();
+          : this.generator.getNewPayload(partitionPathFieldNames);
       lastRecord = record;
       return record;
     } else {

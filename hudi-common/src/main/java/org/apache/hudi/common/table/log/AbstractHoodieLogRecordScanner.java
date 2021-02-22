@@ -18,6 +18,11 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -33,12 +38,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -53,6 +52,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
+import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.COMMAND_BLOCK;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.CORRUPT_BLOCK;
 
 /**
@@ -109,7 +109,7 @@ public abstract class AbstractHoodieLogRecordScanner {
       String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
-    this.hoodieTableMetaClient = new HoodieTableMetaClient(fs.getConf(), basePath);
+    this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
     // load class from the payload fully qualified class name
     this.payloadClassFQN = this.hoodieTableMetaClient.getTableConfig().getPayloadClass();
     this.totalLogFiles.addAndGet(logFilePaths.size());
@@ -125,6 +125,9 @@ public abstract class AbstractHoodieLogRecordScanner {
    */
   public void scan() {
     HoodieLogFormatReader logFormatReaderWrapper = null;
+    HoodieTimeline commitsTimeline = this.hoodieTableMetaClient.getCommitsTimeline();
+    HoodieTimeline completedInstantsTimeline = commitsTimeline.filterCompletedInstants();
+    HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
       // iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(fs,
@@ -144,6 +147,14 @@ public abstract class AbstractHoodieLogRecordScanner {
         )) {
           // hit a block with instant time greater than should be processed, stop processing further
           break;
+        }
+        if (r.getBlockType() != CORRUPT_BLOCK && r.getBlockType() != COMMAND_BLOCK) {
+          String instantTime = r.getLogBlockHeader().get(INSTANT_TIME);
+          if (!completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime)
+              || inflightInstantsTimeline.containsInstant(instantTime)) {
+            // hit an uncommitted block possibly from a failed write, move to the next one and skip processing this one
+            continue;
+          }
         }
         switch (r.getBlockType()) {
           case HFILE_DATA_BLOCK:

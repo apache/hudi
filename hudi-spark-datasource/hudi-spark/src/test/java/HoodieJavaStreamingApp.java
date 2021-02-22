@@ -187,7 +187,7 @@ public class HoodieJavaStreamingApp {
       executor.shutdownNow();
     }
 
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jssc.hadoopConfiguration(), tablePath);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jssc.hadoopConfiguration()).setBasePath(tablePath).build();
     if (tableType.equals(HoodieTableType.MERGE_ON_READ.name())) {
       // Ensure we have successfully completed one compaction commit
       ValidationUtils.checkArgument(metaClient.getActiveTimeline().getCommitTimeline().getInstants().count() == 1);
@@ -249,7 +249,7 @@ public class HoodieJavaStreamingApp {
         if (timeline.countInstants() >= numCommits) {
           return;
         }
-        HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), tablePath, true);
+        HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build();
         System.out.println("Instants :" + metaClient.getActiveTimeline().getInstants().collect(Collectors.toList()));
       } catch (TableNotFoundException te) {
         LOG.info("Got table not found exception. Retrying");

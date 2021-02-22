@@ -16,13 +16,15 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.utils;
+package org.apache.hudi.exception;
 
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.catalyst.InternalRow;
+public class HoodieCompactException extends HoodieException {
 
-import java.io.Serializable;
+  public HoodieCompactException(String msg) {
+    super(msg);
+  }
 
-public interface SparkRowDeserializer extends Serializable {
-  Row deserializeRow(InternalRow internalRow);
+  public HoodieCompactException(String msg, Throwable e) {
+    super(msg, e);
+  }
 }

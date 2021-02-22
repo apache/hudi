@@ -408,11 +408,11 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
 
-    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline();
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getWriteTimeline();
     assertEquals(8, timeline.countInstants(), "Loaded 6 commits and the count should match");
     boolean result = archiveLog.archiveIfRequired(context);
     assertTrue(result);
-    timeline = metaClient.getActiveTimeline().reload().getCommitsAndCompactionTimeline();
+    timeline = metaClient.getActiveTimeline().reload().getWriteTimeline();
     assertFalse(timeline.containsInstant(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "100")),
         "Instants before oldest pending compaction can be removed");
     assertEquals(7, timeline.countInstants(),

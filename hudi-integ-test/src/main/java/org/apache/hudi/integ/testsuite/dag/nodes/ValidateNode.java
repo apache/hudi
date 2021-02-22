@@ -40,9 +40,10 @@ public class ValidateNode<R> extends DagNode {
    * was set to true or default, but the parent nodes have not completed yet.
    *
    * @param executionContext Context to execute this node
+   * @param curItrCount current iteration count.
    */
   @Override
-  public void execute(ExecutionContext executionContext) {
+  public void execute(ExecutionContext executionContext, int curItrCount) {
     if (this.getParentNodes().size() > 0 && (Boolean) this.config.getOtherConfigs().getOrDefault("WAIT_FOR_PARENTS",
         true)) {
       for (DagNode node : (List<DagNode>) this.getParentNodes()) {

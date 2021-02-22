@@ -58,7 +58,7 @@ public class IncrSourceHelper {
       int numInstantsPerFetch, Option<String> beginInstant, boolean readLatestOnMissingBeginInstant) {
     ValidationUtils.checkArgument(numInstantsPerFetch > 0,
         "Make sure the config hoodie.deltastreamer.source.hoodieincr.num_instants is set to a positive value");
-    HoodieTableMetaClient srcMetaClient = new HoodieTableMetaClient(jssc.hadoopConfiguration(), srcBasePath, true);
+    HoodieTableMetaClient srcMetaClient = HoodieTableMetaClient.builder().setConf(jssc.hadoopConfiguration()).setBasePath(srcBasePath).setLoadActiveTimelineOnLoad(true).build();
 
     final HoodieTimeline activeCommitTimeline =
         srcMetaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants();

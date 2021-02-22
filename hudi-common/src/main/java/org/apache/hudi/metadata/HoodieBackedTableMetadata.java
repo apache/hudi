@@ -93,7 +93,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     if (enabled && this.metaClient == null) {
       this.metadataBasePath = HoodieTableMetadata.getMetadataTableBasePath(datasetBasePath);
       try {
-        this.metaClient = new HoodieTableMetaClient(hadoopConf.get(), metadataBasePath);
+        this.metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(metadataBasePath).build();
         HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline());
         latestFileSystemMetadataSlices = fsView.getLatestFileSlices(MetadataPartitionType.FILES.partitionPath()).collect(Collectors.toList());
       } catch (TableNotFoundException e) {

@@ -62,7 +62,7 @@ public class ValidateDatasetNode extends DagNode<Boolean> {
   }
 
   @Override
-  public void execute(ExecutionContext context) throws Exception {
+  public void execute(ExecutionContext context, int curItrCount) throws Exception {
 
     SparkSession session = SparkSession.builder().sparkContext(context.getJsc().sc()).getOrCreate();
 
@@ -111,17 +111,19 @@ public class ValidateDatasetNode extends DagNode<Boolean> {
       throw new AssertionError("Hudi contents does not match contents input data. ");
     }
 
-    String database = context.getWriterContext().getProps().getString(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY());
-    String tableName = context.getWriterContext().getProps().getString(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY());
-    log.warn("Validating hive table with db : " + database + " and table : " + tableName);
-    Dataset<Row> cowDf = session.sql("SELECT * FROM " + database + "." + tableName);
-    Dataset<Row> trimmedCowDf = cowDf.drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
-        .drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.FILENAME_METADATA_FIELD);
-    intersectionDf = inputSnapshotDf.intersect(trimmedDf);
-    // the intersected df should be same as inputDf. if not, there is some mismatch.
-    if (inputSnapshotDf.except(intersectionDf).count() != 0) {
-      log.error("Data set validation failed for COW hive table. Total count in hudi " + trimmedCowDf.count() + ", input df count " + inputSnapshotDf.count());
-      throw new AssertionError("Hudi hive table contents does not match contents input data. ");
+    if (config.isValidateHive()) {
+      String database = context.getWriterContext().getProps().getString(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY());
+      String tableName = context.getWriterContext().getProps().getString(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY());
+      log.warn("Validating hive table with db : " + database + " and table : " + tableName);
+      Dataset<Row> cowDf = session.sql("SELECT * FROM " + database + "." + tableName);
+      Dataset<Row> trimmedCowDf = cowDf.drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
+          .drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.FILENAME_METADATA_FIELD);
+      intersectionDf = inputSnapshotDf.intersect(trimmedDf);
+      // the intersected df should be same as inputDf. if not, there is some mismatch.
+      if (inputSnapshotDf.except(intersectionDf).count() != 0) {
+        log.error("Data set validation failed for COW hive table. Total count in hudi " + trimmedCowDf.count() + ", input df count " + inputSnapshotDf.count());
+        throw new AssertionError("Hudi hive table contents does not match contents input data. ");
+      }
     }
 
     // if delete input data is enabled, erase input data.
