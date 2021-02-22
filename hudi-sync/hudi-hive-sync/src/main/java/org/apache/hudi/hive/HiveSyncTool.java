@@ -60,7 +60,7 @@ public class HiveSyncTool extends AbstractSyncTool {
   private final HiveSyncConfig cfg;
   private HoodieHiveClient hoodieHiveClient = null;
   private String snapshotTableName = null;
-  private Option<String> roTableTableName = null;
+  private Option<String> roTableName = null;
 
   public HiveSyncTool(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
     super(configuration.getAllProperties(), fs);
@@ -85,11 +85,11 @@ public class HiveSyncTool extends AbstractSyncTool {
       switch (hoodieHiveClient.getTableType()) {
         case COPY_ON_WRITE:
           this.snapshotTableName = cfg.tableName;
-          this.roTableTableName = Option.empty();
+          this.roTableName = Option.empty();
           break;
         case MERGE_ON_READ:
           this.snapshotTableName = cfg.tableName + SUFFIX_SNAPSHOT_TABLE;
-          this.roTableTableName = cfg.skipROSuffix ? Option.of(cfg.tableName) :
+          this.roTableName = cfg.skipROSuffix ? Option.of(cfg.tableName) :
               Option.of(cfg.tableName + SUFFIX_READ_OPTIMIZED_TABLE);
           break;
         default:
@@ -109,7 +109,7 @@ public class HiveSyncTool extends AbstractSyncTool {
             break;
           case MERGE_ON_READ:
             // sync a RO table for MOR
-            syncHoodieTable(roTableTableName.get(), false);
+            syncHoodieTable(roTableName.get(), false);
             // sync a RT table for MOR
             syncHoodieTable(snapshotTableName, true);
             break;
