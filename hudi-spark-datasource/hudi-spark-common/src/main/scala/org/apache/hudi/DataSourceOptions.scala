@@ -68,6 +68,9 @@ object DataSourceReadOptions {
 
   val READ_PRE_COMBINE_FIELD = HoodieWriteConfig.PRECOMBINE_FIELD_PROP
 
+  val ENABLE_HOODIE_FILE_INDEX = "hoodie.file.index.enable"
+  val DEFAULT_ENABLE_HOODIE_FILE_INDEX = true
+
   @Deprecated
   val VIEW_TYPE_OPT_KEY = "hoodie.datasource.view.type"
   @Deprecated
