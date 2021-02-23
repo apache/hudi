@@ -207,6 +207,10 @@ public class BucketAssigner {
     this.table = HoodieFlinkTable.create(this.config, this.context);
   }
 
+  public HoodieTable<?, ?, ?, ?> getTable() {
+    return table;
+  }
+
   /**
    * Returns a list of small files in the given partition path.
    */
