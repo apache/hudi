@@ -117,7 +117,7 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
    * When set to true, the rollback method will delete the last failed task index .
    * The default value is false. Because deleting the index will add extra load on the Hbase cluster for each rollback.
   */
-  public static final String HBASE_INDEX_ROLLBACK_SYNC = "hbase.index.rollback.sync";
+  public static final String HBASE_INDEX_ROLLBACK_SYNC = "hoodie.index.hbase.rollback.sync";
   public static final Boolean DEFAULT_HBASE_INDEX_ROLLBACK_SYNC = false;
 
   public HoodieHBaseIndexConfig(final Properties props) {

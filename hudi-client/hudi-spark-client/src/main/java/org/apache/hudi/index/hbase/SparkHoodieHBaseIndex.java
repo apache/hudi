@@ -549,6 +549,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
     boolean rollbackSync = config.getHBaseIndexRollbackSync();
 
     if (!config.getHBaseIndexRollbackSync()) {
+      // Default Rollback in HbaseIndex is managed via method {@link #checkIfValidCommit()}
       return true;
     }
 
