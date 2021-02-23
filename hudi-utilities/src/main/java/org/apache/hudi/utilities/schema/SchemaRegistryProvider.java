@@ -25,6 +25,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
+import org.apache.hudi.utilities.sources.helpers.AvroKafkaSourceHelpers;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
@@ -42,11 +43,18 @@ public class SchemaRegistryProvider extends SchemaProvider {
    * Configs supported.
    */
   public static class Config {
-
     private static final String SRC_SCHEMA_REGISTRY_URL_PROP = "hoodie.deltastreamer.schemaprovider.registry.url";
-    private static final String TARGET_SCHEMA_REGISTRY_URL_PROP =
-        "hoodie.deltastreamer.schemaprovider.registry.targetUrl";
+    private static final String TARGET_SCHEMA_REGISTRY_URL_PROP = "hoodie.deltastreamer.schemaprovider.registry.targetUrl";
+    private static final String CACHE_SCHEMAS = "hoodie.deltastreamer.schemaprovider.registry.cache_enabled";
   }
+
+  private Schema sourceSchema;
+  private Schema targetSchema;
+  private final boolean cacheDisabled;
+  private final boolean injectKafkaFieldSchema;
+  private final String registryUrl;
+  private final String targetRegistryUrl;
+  private final boolean noTargetSchema;
 
   private static String fetchSchemaFromRegistry(String registryUrl) throws IOException {
     URL registry = new URL(registryUrl);
@@ -58,30 +66,67 @@ public class SchemaRegistryProvider extends SchemaProvider {
   public SchemaRegistryProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SRC_SCHEMA_REGISTRY_URL_PROP));
+    this.cacheDisabled = !props.getBoolean(Config.CACHE_SCHEMAS, false);
+    this.injectKafkaFieldSchema = props.getBoolean(AvroKafkaSourceHelpers.INJECT_KAFKA_FIELDS, false);
+    this.registryUrl = config.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
+    this.targetRegistryUrl = config.getString(Config.TARGET_SCHEMA_REGISTRY_URL_PROP, registryUrl);
+    this.noTargetSchema = targetRegistryUrl.equals("null");
   }
 
-  private static Schema getSchema(String registryUrl) throws IOException {
-    return new Schema.Parser().parse(fetchSchemaFromRegistry(registryUrl));
+  private static Schema getSchema(String registryUrl, boolean injectKafkaFieldSchema) throws IOException {
+    Schema schema = new Schema.Parser().parse(fetchSchemaFromRegistry(registryUrl));
+    if (injectKafkaFieldSchema) {
+      return AvroKafkaSourceHelpers.addKafkaMetadataFields(schema);
+    }
+    return schema;
   }
 
   @Override
   public Schema getSourceSchema() {
-    String registryUrl = config.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
+    if (cacheDisabled) {
+      return getSourceSchemaFromRegistry();
+    }
+    if (sourceSchema == null) {
+      synchronized (this) {
+        if (sourceSchema == null) {
+          sourceSchema = getSourceSchemaFromRegistry();
+        }
+      }
+    }
+    return sourceSchema;
+  }
+
+  @Override
+  public Schema getTargetSchema() {
+    if (noTargetSchema) {
+      return null;
+    }
+    if (cacheDisabled) {
+      return getTargetSchemaFromRegistry();
+    }
+    if (targetSchema == null) {
+      synchronized (this) {
+        if (targetSchema == null) {
+          targetSchema = getTargetSchemaFromRegistry();
+        }
+      }
+    }
+    return targetSchema;
+  }
+
+  private Schema getSourceSchemaFromRegistry() {
     try {
-      return getSchema(registryUrl);
+      return getSchema(registryUrl, injectKafkaFieldSchema);
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading source schema from registry :" + registryUrl, ioe);
     }
   }
 
-  @Override
-  public Schema getTargetSchema() {
-    String registryUrl = config.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
-    String targetRegistryUrl = config.getString(Config.TARGET_SCHEMA_REGISTRY_URL_PROP, registryUrl);
+  private Schema getTargetSchemaFromRegistry() {
     try {
-      return getSchema(targetRegistryUrl);
+      return getSchema(targetRegistryUrl, injectKafkaFieldSchema);
     } catch (IOException ioe) {
-      throw new HoodieIOException("Error reading target schema from registry :" + registryUrl, ioe);
+      throw new HoodieIOException("Error reading target schema from registry :" + targetRegistryUrl, ioe);
     }
   }
 }

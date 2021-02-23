@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.utilities.sources.helpers.AvroKafkaSourceHelpers;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -62,6 +63,9 @@ public class SqlQueryBasedTransformer implements Transformer {
     LOG.info("Registering tmp table : " + tmpTable);
     rowDataset.registerTempTable(tmpTable);
     String sqlStr = transformerSQL.replaceAll(SRC_PATTERN, tmpTable);
+    if (properties.getBoolean(AvroKafkaSourceHelpers.INJECT_KAFKA_FIELDS, false)) {
+      sqlStr = AvroKafkaSourceHelpers.transform(sqlStr);
+    }
     LOG.info("SQL Query for transformation : (" + sqlStr + ")");
     return sparkSession.sql(sqlStr);
   }

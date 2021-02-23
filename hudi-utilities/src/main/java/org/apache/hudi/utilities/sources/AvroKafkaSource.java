@@ -20,8 +20,10 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.sources.helpers.AvroKafkaSourceHelpers;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 
@@ -42,18 +44,34 @@ import org.apache.spark.streaming.kafka010.OffsetRange;
  */
 public class AvroKafkaSource extends AvroSource {
 
+  private static final String KAFKA_AVRO_VALUE_DESERIALIZER = "hoodie.deltastreamer.source.value.deserializer";
   private static final Logger LOG = LogManager.getLogger(AvroKafkaSource.class);
-
   private final KafkaOffsetGen offsetGen;
-
   private final HoodieDeltaStreamerMetrics metrics;
+  private final boolean injectKafkaData;
 
   public AvroKafkaSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
       SchemaProvider schemaProvider, HoodieDeltaStreamerMetrics metrics) {
     super(props, sparkContext, sparkSession, schemaProvider);
-    this.metrics = metrics;
+
     props.put("key.deserializer", StringDeserializer.class);
-    props.put("value.deserializer", KafkaAvroDeserializer.class);
+    String deserializerClassName = props.getString(KAFKA_AVRO_VALUE_DESERIALIZER, "");
+
+    if (deserializerClassName.isEmpty()) {
+      props.put("value.deserializer", KafkaAvroDeserializer.class);
+    } else {
+      try {
+        props.put("value.deserializer", Class.forName(deserializerClassName));
+      } catch (ClassNotFoundException e) {
+        String error = "Could not load custom avro kafka deserializer: " + deserializerClassName;
+        LOG.error(error);
+        throw new HoodieException(error, e);
+      }
+    }
+
+    this.metrics = metrics;
+    this.injectKafkaData = props.getBoolean(AvroKafkaSourceHelpers.INJECT_KAFKA_FIELDS, false);
+
     offsetGen = new KafkaOffsetGen(props);
   }
 
@@ -70,6 +88,10 @@ public class AvroKafkaSource extends AvroSource {
   }
 
   private JavaRDD<GenericRecord> toRDD(OffsetRange[] offsetRanges) {
+    if (injectKafkaData) {
+      return KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
+          LocationStrategies.PreferConsistent()).map(AvroKafkaSourceHelpers::addKafkaFields);
+    }
     return KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
             LocationStrategies.PreferConsistent()).map(obj -> (GenericRecord) obj.value());
   }
