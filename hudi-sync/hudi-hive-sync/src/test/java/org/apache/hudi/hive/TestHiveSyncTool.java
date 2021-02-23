@@ -625,10 +625,10 @@ public class TestHiveSyncTool {
         "Table " + HiveTestUtil.hiveSyncConfig.tableName + " should not exist initially");
     // Lets do the sync
 
-    HiveTestUtil.hiveSyncConfig.useJdbc = true;
-    HiveTestUtil.hiveSyncConfig.ignoreConnectException = true;
-    HiveTestUtil.hiveSyncConfig.jdbcUrl = HiveTestUtil.hiveSyncConfig.jdbcUrl.replace("9999","9031");
-    HiveSyncTool tool = new HiveSyncTool(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    HiveSyncConfig syncToolConfig = HiveSyncConfig.copy(HiveTestUtil.hiveSyncConfig);
+    syncToolConfig.ignoreConnectException = true;
+    syncToolConfig.jdbcUrl = HiveTestUtil.hiveSyncConfig.jdbcUrl.replace("9999","9031");
+    HiveSyncTool tool = new HiveSyncTool(syncToolConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     tool.syncHoodieTable();
 
     assertFalse(hiveClient.doesTableExist(HiveTestUtil.hiveSyncConfig.tableName),
