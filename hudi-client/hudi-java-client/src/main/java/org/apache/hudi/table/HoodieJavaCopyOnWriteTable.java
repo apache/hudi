@@ -39,10 +39,17 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.clean.JavaCleanActionExecutor;
 import org.apache.hudi.table.action.commit.JavaDeleteCommitActionExecutor;
+import org.apache.hudi.table.action.commit.JavaBulkInsertCommitActionExecutor;
+import org.apache.hudi.table.action.commit.JavaBulkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaInsertCommitActionExecutor;
+import org.apache.hudi.table.action.commit.JavaInsertOverwriteCommitActionExecutor;
+import org.apache.hudi.table.action.commit.JavaInsertOverwriteTableCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaUpsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaUpsertPreppedCommitActionExecutor;
+import org.apache.hudi.table.action.restore.JavaCopyOnWriteRestoreActionExecutor;
+import org.apache.hudi.table.action.rollback.JavaCopyOnWriteRollbackActionExecutor;
+import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
 
 import java.util.List;
 import java.util.Map;
@@ -75,7 +82,8 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
                                                            String instantTime,
                                                            List<HoodieRecord<T>> records,
                                                            Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> bulkInsertPartitioner) {
-    throw new HoodieNotSupportedException("BulkInsert is not supported yet");
+    return new JavaBulkInsertCommitActionExecutor((HoodieJavaEngineContext) context, config,
+        this, instantTime, records, bulkInsertPartitioner).execute();
   }
 
   @Override
@@ -112,21 +120,24 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
                                                                   String instantTime,
                                                                   List<HoodieRecord<T>> preppedRecords,
                                                                   Option<BulkInsertPartitioner<List<HoodieRecord<T>>>> bulkInsertPartitioner) {
-    throw new HoodieNotSupportedException("BulkInsertPrepped is not supported yet");
+    return new JavaBulkInsertPreppedCommitActionExecutor((HoodieJavaEngineContext) context, config,
+        this, instantTime, preppedRecords, bulkInsertPartitioner).execute();
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> insertOverwrite(HoodieEngineContext context,
                                                                 String instantTime,
                                                                 List<HoodieRecord<T>> records) {
-    throw new HoodieNotSupportedException("InsertOverwrite is not supported yet");
+    return new JavaInsertOverwriteCommitActionExecutor(
+        context, config, this, instantTime, records).execute();
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> insertOverwriteTable(HoodieEngineContext context,
                                                                      String instantTime,
                                                                      List<HoodieRecord<T>> records) {
-    throw new HoodieNotSupportedException("InsertOverwrite is not supported yet");
+    return new JavaInsertOverwriteTableCommitActionExecutor(
+        context, config, this, instantTime, records).execute();
   }
 
   @Override
@@ -175,7 +186,8 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
                                          String rollbackInstantTime,
                                          HoodieInstant commitInstant,
                                          boolean deleteInstants) {
-    throw new HoodieNotSupportedException("Rollback is not supported yet");
+    return new JavaCopyOnWriteRollbackActionExecutor(
+        context, config, this, rollbackInstantTime, commitInstant, deleteInstants).execute();
   }
 
   @Override
@@ -183,13 +195,15 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
                                            String instantToSavepoint,
                                            String user,
                                            String comment) {
-    throw new HoodieNotSupportedException("Savepoint is not supported yet");
+    return new SavepointActionExecutor(
+        context, config, this, instantToSavepoint, user, comment).execute();
   }
 
   @Override
   public HoodieRestoreMetadata restore(HoodieEngineContext context,
                                        String restoreInstantTime,
                                        String instantToRestore) {
-    throw new HoodieNotSupportedException("Restore is not supported yet");
+    return new JavaCopyOnWriteRestoreActionExecutor((HoodieJavaEngineContext) context,
+        config, this, restoreInstantTime, instantToRestore).execute();
   }
 }
