@@ -33,7 +33,7 @@ public class MockFunctionInitializationContext implements FunctionInitialization
 
   @Override
   public boolean isRestored() {
-    throw new UnsupportedOperationException();
+    return false;
   }
 
   @Override

@@ -27,7 +27,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.table.HoodieTable;
 
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import static java.util.stream.Collectors.toList;
@@ -36,6 +36,27 @@ import static java.util.stream.Collectors.toList;
  * Hoodie Index Utilities.
  */
 public class HoodieIndexUtils {
+
+  /**
+   * Fetches Pair of partition path and {@link HoodieBaseFile}s for interested partitions.
+   *
+   * @param partition   Partition of interest
+   * @param context     Instance of {@link HoodieEngineContext} to use
+   * @param hoodieTable Instance of {@link HoodieTable} of interest
+   * @return the list of {@link HoodieBaseFile}
+   */
+  public static List<HoodieBaseFile> getLatestBaseFilesForPartition(
+      final String partition,
+      final HoodieTable hoodieTable) {
+    Option<HoodieInstant> latestCommitTime = hoodieTable.getMetaClient().getCommitsTimeline()
+        .filterCompletedInstants().lastInstant();
+    if (latestCommitTime.isPresent()) {
+      return hoodieTable.getBaseFileOnlyView()
+          .getLatestBaseFilesBeforeOrOn(partition, latestCommitTime.get().getTimestamp())
+          .collect(toList());
+    }
+    return Collections.emptyList();
+  }
 
   /**
    * Fetches Pair of partition path and {@link HoodieBaseFile}s for interested partitions.
@@ -50,15 +71,11 @@ public class HoodieIndexUtils {
                                                                                       final HoodieTable hoodieTable) {
     context.setJobStatus(HoodieIndexUtils.class.getSimpleName(), "Load latest base files from all partitions");
     return context.flatMap(partitions, partitionPath -> {
-      Option<HoodieInstant> latestCommitTime = hoodieTable.getMetaClient().getCommitsTimeline()
-          .filterCompletedInstants().lastInstant();
-      List<Pair<String, HoodieBaseFile>> filteredFiles = new ArrayList<>();
-      if (latestCommitTime.isPresent()) {
-        filteredFiles = hoodieTable.getBaseFileOnlyView()
-            .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.get().getTimestamp())
-            .map(f -> Pair.of(partitionPath, f))
-            .collect(toList());
-      }
+      List<Pair<String, HoodieBaseFile>> filteredFiles =
+          getLatestBaseFilesForPartition(partitionPath, hoodieTable).stream()
+              .map(baseFile -> Pair.of(partitionPath, baseFile))
+              .collect(toList());
+
       return filteredFiles.stream();
     }, Math.max(partitions.size(), 1));
   }
