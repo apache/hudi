@@ -25,14 +25,19 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.operator.FlinkOptions;
 import org.apache.hudi.table.HoodieFlinkTable;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.data.binary.BinaryRowData;
+import org.apache.flink.table.data.conversion.DataStructureConverter;
+import org.apache.flink.table.data.conversion.DataStructureConverters;
 import org.apache.flink.table.data.writer.BinaryRowWriter;
 import org.apache.flink.table.data.writer.BinaryWriter;
 import org.apache.flink.table.runtime.types.InternalSerializers;
@@ -112,27 +117,46 @@ public class TestData {
             TimestampData.fromEpochMillis(1), StringData.fromString("par1"))));
   }
 
-  public static List<RowData> DATA_SET_FOUR = Arrays.asList(
-      // update: advance the age by 1
-      binaryRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
-          TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
-      binaryRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 34,
-          TimestampData.fromEpochMillis(3), StringData.fromString("par1")),
-      binaryRow(StringData.fromString("id3"), StringData.fromString("Julian"), 54,
-          TimestampData.fromEpochMillis(4), StringData.fromString("par2")),
-      binaryRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 32,
-          TimestampData.fromEpochMillis(5), StringData.fromString("par2")),
-      // same with before
-      binaryRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
-          TimestampData.fromEpochMillis(6), StringData.fromString("par3")),
-      // new data
-      binaryRow(StringData.fromString("id9"), StringData.fromString("Jane"), 19,
-          TimestampData.fromEpochMillis(6), StringData.fromString("par3")),
-      binaryRow(StringData.fromString("id10"), StringData.fromString("Ella"), 38,
-          TimestampData.fromEpochMillis(7), StringData.fromString("par4")),
-      binaryRow(StringData.fromString("id11"), StringData.fromString("Phoebe"), 52,
-          TimestampData.fromEpochMillis(8), StringData.fromString("par4"))
-  );
+  /**
+   * Returns string format of a list of RowData.
+   */
+  public static String rowDataToString(List<RowData> rows) {
+    DataStructureConverter<Object, Object> converter =
+        DataStructureConverters.getConverter(TestConfigurations.ROW_DATA_TYPE);
+    return rows.stream()
+        .map(row -> converter.toExternal(row).toString())
+        .sorted(Comparator.naturalOrder())
+        .collect(Collectors.toList()).toString();
+  }
+
+  /**
+   * Write a list of row data with Hoodie format base on the given configuration.
+   *
+   * @param dataBuffer  The data buffer to write
+   * @param conf        The flink configuration
+   * @throws Exception if error occurs
+   */
+  public static void writeData(
+      List<RowData> dataBuffer,
+      Configuration conf) throws Exception {
+    StreamWriteFunctionWrapper<RowData> funcWrapper = new StreamWriteFunctionWrapper<>(
+        conf.getString(FlinkOptions.PATH),
+        conf);
+    funcWrapper.openFunction();
+
+    for (RowData rowData : dataBuffer) {
+      funcWrapper.invoke(rowData);
+    }
+
+    // this triggers the data write and event send
+    funcWrapper.checkpointFunction(1);
+
+    final OperatorEvent nextEvent = funcWrapper.getNextEvent();
+    funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
+    funcWrapper.checkpointComplete(1);
+
+    funcWrapper.close();
+  }
 
   /**
    * Checks the source data TestConfigurations.DATA_SET_ONE are written as expected.
