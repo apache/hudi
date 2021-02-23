@@ -626,7 +626,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     inputDF1.write.format("org.apache.hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY, "org.apache.hudi.keygen.CustomKeyGenerator")
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "current_ts:SIMPLE")
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "current_ts:TIMESTAMP")
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, "EPOCHMILLISECONDS")
       .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyyMMdd")
       .mode(SaveMode.Overwrite)
