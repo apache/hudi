@@ -1,13 +1,8 @@
 ---
-
 title: "Optimize Data lake layout using Clustering in Apache Hudi"
-
 excerpt: "Introduce clustering feature to change data layout"
-
-author: satishkotha
-
+author: satish.kotha
 category: blog
-
 ---
 
 # Background

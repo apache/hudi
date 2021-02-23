@@ -1,7 +1,7 @@
 ---
 title: "Employing the right indexes for fast updates, deletes in Apache Hudi"
 excerpt: "Detailing different indexing mechanisms in Hudi and when to use each of them"
-author: sivabalan
+author: vinoth
 category: blog
 ---
 
