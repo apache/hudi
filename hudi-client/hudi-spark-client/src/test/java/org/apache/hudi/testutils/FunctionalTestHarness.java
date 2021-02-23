@@ -117,10 +117,12 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
 
   @Override
   public HoodieTableMetaClient getHoodieMetaClient(Configuration hadoopConf, String basePath, Properties props) throws IOException {
-    props.putIfAbsent(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP_NAME, PARQUET.toString());
-    props.putIfAbsent(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, RAW_TRIPS_TEST_NAME);
-    props.putIfAbsent(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, COPY_ON_WRITE.name());
-    props.putIfAbsent(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, HoodieAvroPayload.class.getName());
+    props = HoodieTableConfig.propertyBuilder().fromProperties(props)
+      .setTableName(RAW_TRIPS_TEST_NAME)
+      .setTableType(COPY_ON_WRITE)
+      .setPayloadClass(HoodieAvroPayload.class)
+      .setBaseFileFormat(PARQUET.toString())
+      .build();
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, props);
   }
 

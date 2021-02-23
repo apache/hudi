@@ -19,7 +19,7 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
@@ -275,14 +275,13 @@ public class StreamerUtil {
     // Hadoop FileSystem
     try (FileSystem fs = FSUtils.getFs(basePath, hadoopConf)) {
       if (!fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))) {
-        HoodieTableMetaClient.initTableType(
-            hadoopConf,
-            basePath,
-            HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)),
-            conf.getString(FlinkOptions.TABLE_NAME),
-            DEFAULT_ARCHIVE_LOG_FOLDER,
-            conf.getString(FlinkOptions.PAYLOAD_CLASS),
-            1);
+        HoodieTableConfig.propertyBuilder()
+          .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
+          .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
+          .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS))
+          .setArchiveLogFolder(DEFAULT_ARCHIVE_LOG_FOLDER)
+          .setTimelineLayoutVersion(1)
+          .initTable(hadoopConf, basePath);
         LOG.info("Table initialized under base path {}", basePath);
       } else {
         LOG.info("Table [{}/{}] already exists, no need to initialize the table",

@@ -22,7 +22,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -79,9 +79,12 @@ public class TestHoodieSnapshotExporter extends FunctionalTestHarness {
     sourcePath = dfsBasePath() + "/source/";
     targetPath = dfsBasePath() + "/target/";
     dfs().mkdirs(new Path(sourcePath));
-    HoodieTableMetaClient
-        .initTableType(jsc().hadoopConfiguration(), sourcePath, HoodieTableType.COPY_ON_WRITE, TABLE_NAME,
-            HoodieAvroPayload.class.getName());
+
+    HoodieTableConfig.propertyBuilder()
+      .setTableType(HoodieTableType.COPY_ON_WRITE)
+      .setTableName(TABLE_NAME)
+      .setPayloadClass(HoodieAvroPayload.class)
+      .initTable(jsc().hadoopConfiguration(), sourcePath);
 
     // Prepare data as source Hudi dataset
     HoodieWriteConfig cfg = getHoodieWriteConfig(sourcePath);

@@ -22,7 +22,7 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
-import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.TableNotFoundException;
 
@@ -106,10 +106,13 @@ public class TableCommand implements CommandMarker {
       throw new IllegalStateException("Table already existing in path : " + path);
     }
 
-    final HoodieTableType tableType = HoodieTableType.valueOf(tableTypeStr);
-    HoodieTableMetaClient.initTableType(HoodieCLI.conf, path, tableType, name, archiveFolder,
-        payloadClass, layoutVersion);
-
+    HoodieTableConfig.propertyBuilder()
+      .setTableType(tableTypeStr)
+      .setTableName(name)
+      .setArchiveLogFolder(archiveFolder)
+      .setPayloadClassName(payloadClass)
+      .setTimelineLayoutVersion(layoutVersion)
+      .initTable(HoodieCLI.conf, path);
     // Now connect to ensure loading works
     return connect(path, layoutVersion, false, 0, 0, 0);
   }

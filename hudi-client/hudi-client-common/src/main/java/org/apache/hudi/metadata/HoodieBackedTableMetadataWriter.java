@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -265,9 +266,14 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     String createInstantTime = latestInstant.map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
     LOG.info("Creating a new metadata table in " + metadataWriteConfig.getBasePath() + " at instant " + createInstantTime);
 
-    HoodieTableMetaClient.initTableType(hadoopConf.get(), metadataWriteConfig.getBasePath(),
-        HoodieTableType.MERGE_ON_READ, tableName, "archived", HoodieMetadataPayload.class.getName(),
-        HoodieFileFormat.HFILE.toString());
+    HoodieTableConfig.propertyBuilder()
+      .setTableType(HoodieTableType.MERGE_ON_READ)
+      .setTableName(tableName)
+      .setArchiveLogFolder("archived")
+      .setPayloadClassName(HoodieMetadataPayload.class.getName())
+      .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
+      .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
+
     initTableMetadata();
 
     // List all partitions in the basePath of the containing dataset

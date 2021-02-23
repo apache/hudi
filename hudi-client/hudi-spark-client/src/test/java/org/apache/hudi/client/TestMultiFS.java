@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -75,8 +76,11 @@ public class TestMultiFS extends HoodieClientTestHarness {
   @Test
   public void readLocalWriteHDFS() throws Exception {
     // Initialize table and filesystem
-    HoodieTableMetaClient.initTableType(hadoopConf, dfsBasePath, HoodieTableType.valueOf(tableType),
-        tableName, HoodieAvroPayload.class.getName());
+    HoodieTableConfig.propertyBuilder()
+      .setTableType(tableType)
+      .setTableName(tableName)
+      .setPayloadClass(HoodieAvroPayload.class)
+      .initTable(hadoopConf, dfsBasePath);
 
     // Create write client to write some records in
     HoodieWriteConfig cfg = getHoodieWriteConfig(dfsBasePath);
@@ -100,8 +104,11 @@ public class TestMultiFS extends HoodieClientTestHarness {
       assertEquals(readRecords.count(), records.size(), "Should contain 100 records");
 
       // Write to local
-      HoodieTableMetaClient.initTableType(hadoopConf, tablePath, HoodieTableType.valueOf(tableType),
-          tableName, HoodieAvroPayload.class.getName());
+      HoodieTableConfig.propertyBuilder()
+        .setTableType(tableType)
+        .setTableName(tableName)
+        .setPayloadClass(HoodieAvroPayload.class)
+        .initTable(hadoopConf, tablePath);
 
       String writeCommitTime = localWriteClient.startCommit();
       LOG.info("Starting write commit " + writeCommitTime);

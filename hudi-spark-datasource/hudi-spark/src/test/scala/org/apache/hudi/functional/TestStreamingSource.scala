@@ -20,7 +20,7 @@ package org.apache.hudi.functional
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM, INSERT_PARALLELISM, TABLE_NAME, UPSERT_PARALLELISM}
 import org.apache.spark.sql.streaming.StreamTest
 import org.apache.spark.sql.{Row, SaveMode}
@@ -44,8 +44,11 @@ class TestStreamingSource extends StreamTest {
   test("test cow stream source") {
     withTempDir { inputDir =>
       val tablePath = s"${inputDir.getCanonicalPath}/test_cow_stream"
-      HoodieTableMetaClient.initTableType(spark.sessionState.newHadoopConf(), tablePath,
-        COPY_ON_WRITE, getTableName(tablePath), DataSourceWriteOptions.DEFAULT_PAYLOAD_OPT_VAL)
+      HoodieTableConfig.propertyBuilder()
+          .setTableType(COPY_ON_WRITE)
+          .setTableName(getTableName(tablePath))
+          .setPayloadClassName(DataSourceWriteOptions.DEFAULT_PAYLOAD_OPT_VAL)
+          .initTable(spark.sessionState.newHadoopConf(), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
       val df = spark.readStream
@@ -91,8 +94,11 @@ class TestStreamingSource extends StreamTest {
   test("test mor stream source") {
     withTempDir { inputDir =>
       val tablePath = s"${inputDir.getCanonicalPath}/test_mor_stream"
-      HoodieTableMetaClient.initTableType(spark.sessionState.newHadoopConf(), tablePath,
-        MERGE_ON_READ, getTableName(tablePath), DataSourceWriteOptions.DEFAULT_PAYLOAD_OPT_VAL)
+      HoodieTableConfig.propertyBuilder()
+        .setTableType(MERGE_ON_READ)
+        .setTableName(getTableName(tablePath))
+        .setPayloadClassName(DataSourceWriteOptions.DEFAULT_PAYLOAD_OPT_VAL)
+        .initTable(spark.sessionState.newHadoopConf(), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
       val df = spark.readStream

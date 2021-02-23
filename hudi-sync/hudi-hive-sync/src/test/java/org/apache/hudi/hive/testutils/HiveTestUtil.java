@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
@@ -126,8 +127,11 @@ public class HiveTestUtil {
 
   public static void clear() throws IOException {
     fileSystem.delete(new Path(hiveSyncConfig.basePath), true);
-    HoodieTableMetaClient.initTableType(configuration, hiveSyncConfig.basePath, HoodieTableType.COPY_ON_WRITE,
-        hiveSyncConfig.tableName, HoodieAvroPayload.class.getName());
+    HoodieTableConfig.propertyBuilder()
+      .setTableType(HoodieTableType.COPY_ON_WRITE)
+      .setTableName(hiveSyncConfig.tableName)
+      .setPayloadClass(HoodieAvroPayload.class)
+      .initTable(configuration, hiveSyncConfig.basePath);
 
     HoodieHiveClient client = new HoodieHiveClient(hiveSyncConfig, hiveServer.getHiveConf(), fileSystem);
     for (String tableName : createdTablesSet) {
@@ -161,8 +165,12 @@ public class HiveTestUtil {
       throws IOException, URISyntaxException {
     Path path = new Path(hiveSyncConfig.basePath);
     FileIOUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
-    HoodieTableMetaClient.initTableType(configuration, hiveSyncConfig.basePath, HoodieTableType.COPY_ON_WRITE,
-        hiveSyncConfig.tableName, HoodieAvroPayload.class.getName());
+    HoodieTableConfig.propertyBuilder()
+      .setTableType(HoodieTableType.COPY_ON_WRITE)
+      .setTableName(hiveSyncConfig.tableName)
+      .setPayloadClass(HoodieAvroPayload.class)
+      .initTable(configuration, hiveSyncConfig.basePath);
+
     boolean result = fileSystem.mkdirs(path);
     checkResult(result);
     DateTime dateTime = DateTime.now();
@@ -177,8 +185,11 @@ public class HiveTestUtil {
       throws IOException, URISyntaxException, InterruptedException {
     Path path = new Path(hiveSyncConfig.basePath);
     FileIOUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
-    HoodieTableMetaClient.initTableType(configuration, hiveSyncConfig.basePath, HoodieTableType.MERGE_ON_READ,
-        hiveSyncConfig.tableName, HoodieAvroPayload.class.getName());
+    HoodieTableConfig.propertyBuilder()
+      .setTableType(HoodieTableType.MERGE_ON_READ)
+      .setTableName(hiveSyncConfig.tableName)
+      .setPayloadClass(HoodieAvroPayload.class)
+      .initTable(configuration, hiveSyncConfig.basePath);
 
     boolean result = fileSystem.mkdirs(path);
     checkResult(result);

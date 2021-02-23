@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -85,8 +85,11 @@ public class HoodieWriteClientExample {
       Path path = new Path(tablePath);
       FileSystem fs = FSUtils.getFs(tablePath, jsc.hadoopConfiguration());
       if (!fs.exists(path)) {
-        HoodieTableMetaClient.initTableType(jsc.hadoopConfiguration(), tablePath, HoodieTableType.valueOf(tableType),
-                tableName, HoodieAvroPayload.class.getName());
+        HoodieTableConfig.propertyBuilder()
+          .setTableType(tableType)
+          .setTableName(tableName)
+          .setPayloadClass(HoodieAvroPayload.class)
+          .initTable(jsc.hadoopConfiguration(), tablePath);
       }
 
       // Create the write client to write some records in

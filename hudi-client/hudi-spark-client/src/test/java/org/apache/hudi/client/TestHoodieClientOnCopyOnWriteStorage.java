@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -349,9 +350,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
         .withProps(config.getProps()).withTimelineLayoutVersion(
         VERSION_0).build();
-    HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(), metaClient.getTableType(),
-        metaClient.getTableConfig().getTableName(), metaClient.getArchivePath(),
-        metaClient.getTableConfig().getPayloadClass(), VERSION_0);
+    HoodieTableConfig.propertyBuilder()
+      .fromMetaClient(metaClient)
+      .setTimelineLayoutVersion(VERSION_0)
+      .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
+
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 
     // Write 1 (only inserts)
@@ -493,10 +496,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieWriteConfig hoodieWriteConfig = getConfigBuilder()
         .withProps(config.getProps()).withMergeAllowDuplicateOnInserts(true).withTimelineLayoutVersion(
             VERSION_0).build();
+    HoodieTableConfig.propertyBuilder()
+      .fromMetaClient(metaClient)
+      .setTimelineLayoutVersion(VERSION_0)
+      .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
 
-    HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(), metaClient.getTableType(),
-        metaClient.getTableConfig().getTableName(), metaClient.getArchivePath(),
-        metaClient.getTableConfig().getPayloadClass(), VERSION_0);
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 
     // Write 1 (only inserts)
@@ -629,9 +633,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             .withBloomIndexUpdatePartitionPath(true)
             .withGlobalSimpleIndexUpdatePartitionPath(true)
             .build()).withTimelineLayoutVersion(VERSION_0).build();
-    HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(),
-        metaClient.getTableType(), metaClient.getTableConfig().getTableName(), metaClient.getArchivePath(),
-        metaClient.getTableConfig().getPayloadClass(), VERSION_0);
+
+    HoodieTableConfig.propertyBuilder()
+      .fromMetaClient(metaClient)
+      .setTimelineLayoutVersion(VERSION_0)
+      .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
     // Set rollback to LAZY so no inflights are deleted
     hoodieWriteConfig.getProps().put(HoodieCompactionConfig.FAILED_WRITES_CLEANER_POLICY_PROP,
         HoodieFailedWritesCleaningPolicy.LAZY.name());
