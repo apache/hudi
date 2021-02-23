@@ -114,8 +114,6 @@ public class HiveSyncTool extends AbstractSyncTool {
   private void syncHoodieTable(String tableName, boolean useRealtimeInputFormat) {
     LOG.info("Trying to sync hoodie table " + tableName + " with base path " + hoodieHiveClient.getBasePath()
         + " of type " + hoodieHiveClient.getTableType());
-    // Check if the necessary table exists
-    boolean tableExists = hoodieHiveClient.doesTableExist(tableName);
 
     // check if the database exists else create it
     if (cfg.autoCreateDatabase) {
@@ -130,6 +128,9 @@ public class HiveSyncTool extends AbstractSyncTool {
         throw new HoodieHiveSyncException("hive database does not exist " + cfg.databaseName);
       }
     }
+
+    // Check if the necessary table exists
+    boolean tableExists = hoodieHiveClient.doesTableExist(tableName);
 
     // Get the parquet schema for this table looking at the latest commit
     MessageType schema = hoodieHiveClient.getDataSchema();
