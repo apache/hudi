@@ -120,13 +120,13 @@ public class HiveSyncTool extends AbstractSyncTool {
     // check if the database exists else create it
     if (cfg.autoCreateDatabase) {
       try {
-        hoodieHiveClient.createDataBase(cfg.databaseName,null,"automatically created by hoodie");
+        hoodieHiveClient.createDatabase(cfg.databaseName,null,"automatically created by hoodie");
       } catch (Exception e) {
         // this is harmless since table creation will fail anyways, creation of DB is needed for in-memory testing
         LOG.warn("Unable to create database " + cfg.databaseName, e);
       }
     } else {
-      if (!hoodieHiveClient.doesDataBaseExist(cfg.databaseName)) {
+      if (!hoodieHiveClient.doesDatabaseExist(cfg.databaseName)) {
         throw new HoodieHiveSyncException("hive database does not exist " + cfg.databaseName);
       }
     }

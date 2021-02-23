@@ -47,7 +47,6 @@ import java.util.stream.Collectors;
 public class HiveSchemaUtil {
 
   private static final Logger LOG = LogManager.getLogger(HiveSchemaUtil.class);
-  public static final String HIVE_ESCAPE_CHARACTER = "`";
 
   /**
    * Get the schema difference between the storage schema and hive table schema.

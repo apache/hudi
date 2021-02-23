@@ -302,7 +302,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
    * @param databaseName
    * @return  true if the configured database exists
    */
-  public boolean doesDataBaseExist(String databaseName) {
+  public boolean doesDatabaseExist(String databaseName) {
     try {
       List<String> databases = client.getAllDatabases();
       return databases.contains(databaseName.toLowerCase());
@@ -312,8 +312,8 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     }
   }
 
-  public void createDataBase(String databaseName, String location, String description) {
-    if (doesDataBaseExist(databaseName)) {
+  public void createDatabase(String databaseName, String location, String description) {
+    if (doesDatabaseExist(databaseName)) {
       LOG.info("hive database " + databaseName + "already exists");
       return;
     }
@@ -326,8 +326,8 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     }
   }
 
-  public void dropDataBase(String databaseName) {
-    if (doesDataBaseExist(databaseName)) {
+  public void dropDatabase(String databaseName) {
+    if (doesDatabaseExist(databaseName)) {
       try {
         client.dropDatabase(databaseName);
       } catch (TException e) {
@@ -338,11 +338,11 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   }
 
   public void dropTable(String fullTableName) {
-    String dataBaseName = fullTableName.split("\\.")[0];
-    String tableName = fullTableName.split("\\.")[1];
     try {
+      String dataBaseName = fullTableName.split("\\.")[0];
+      String tableName = fullTableName.split("\\.")[1];
       client.dropTable(dataBaseName, tableName);
-    } catch (TException e) {
+    } catch (Exception e) {
       LOG.error("Failed to drop table " + fullTableName, e);
       throw new HoodieHiveSyncException("Failed to drop table " + fullTableName, e);
     }

@@ -131,8 +131,8 @@ public class HiveTestUtil {
       client.dropTable(tableName);
     }
     createdTablesSet.clear();
-    client.dropDataBase(hiveSyncConfig.databaseName);
-    client.createDataBase(hiveSyncConfig.databaseName, null, "");
+    client.dropDatabase(hiveSyncConfig.databaseName);
+    client.createDatabase(hiveSyncConfig.databaseName, null, "");
   }
 
   public static HiveConf getHiveConf() {
