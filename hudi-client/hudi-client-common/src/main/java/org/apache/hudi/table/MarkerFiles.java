@@ -166,10 +166,12 @@ public class MarkerFiles implements Serializable {
 
   public List<String> allMarkerFilePaths() throws IOException {
     List<String> markerFiles = new ArrayList<>();
-    FSUtils.processFiles(fs, markerDirPath.toString(), fileStatus -> {
-      markerFiles.add(stripMarkerFolderPrefix(fileStatus.getPath().toString()));
-      return true;
-    }, false);
+    if (doesMarkerDirExist()) {
+      FSUtils.processFiles(fs, markerDirPath.toString(), fileStatus -> {
+        markerFiles.add(stripMarkerFolderPrefix(fileStatus.getPath().toString()));
+        return true;
+      }, false);
+    }
     return markerFiles;
   }
 
