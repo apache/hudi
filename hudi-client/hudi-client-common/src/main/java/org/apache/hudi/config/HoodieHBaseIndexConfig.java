@@ -113,6 +113,13 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
   public static final String HBASE_INDEX_UPDATE_PARTITION_PATH = "hoodie.hbase.index.update.partition.path";
   public static final Boolean DEFAULT_HBASE_INDEX_UPDATE_PARTITION_PATH = false;
 
+  /**
+   * When set to true, the rollback method will delete the last failed task index .
+   * The default value is false. Because deleting the index will add extra load on the Hbase cluster for each rollback.
+  */
+  public static final String HBASE_INDEX_ROLLBACK_SYNC = "hoodie.index.hbase.rollback.sync";
+  public static final Boolean DEFAULT_HBASE_INDEX_ROLLBACK_SYNC = false;
+
   public HoodieHBaseIndexConfig(final Properties props) {
     super(props);
   }
@@ -212,6 +219,11 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder hbaseIndexRollbackSync(boolean rollbackSync) {
+      props.setProperty(HBASE_INDEX_ROLLBACK_SYNC, String.valueOf(rollbackSync));
+      return this;
+    }
+
     public Builder withQPSResourceAllocatorType(String qpsResourceAllocatorClass) {
       props.setProperty(HBASE_INDEX_QPS_ALLOCATOR_CLASS, qpsResourceAllocatorClass);
       return this;
@@ -277,6 +289,8 @@ public class HoodieHBaseIndexConfig extends DefaultHoodieConfig {
           String.valueOf(DEFAULT_HBASE_INDEX_QPS_ALLOCATOR_CLASS));
       setDefaultOnCondition(props, !props.containsKey(HBASE_INDEX_UPDATE_PARTITION_PATH), HBASE_INDEX_UPDATE_PARTITION_PATH,
           String.valueOf(DEFAULT_HBASE_INDEX_UPDATE_PARTITION_PATH));
+      setDefaultOnCondition(props, !props.containsKey(HBASE_INDEX_ROLLBACK_SYNC), HBASE_INDEX_ROLLBACK_SYNC,
+          String.valueOf(DEFAULT_HBASE_INDEX_ROLLBACK_SYNC));
       return config;
     }
 
