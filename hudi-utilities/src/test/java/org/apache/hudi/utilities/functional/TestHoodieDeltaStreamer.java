@@ -142,9 +142,9 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   private static final String HOODIE_CONF_VALUE2 = "hoodie.datasource.write.recordkey.field=Field1,Field2,Field3";
   private static final Logger LOG = LogManager.getLogger(TestHoodieDeltaStreamer.class);
   public static KafkaTestUtils testUtils;
-  private static String topicName;
+  protected static String topicName;
 
-  private static int testNum = 1;
+  protected static int testNum = 1;
 
   @BeforeAll
   public static void initClass() throws Exception {
