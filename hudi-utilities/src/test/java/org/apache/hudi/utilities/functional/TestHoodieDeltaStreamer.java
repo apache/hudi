@@ -142,6 +142,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   private static final String HOODIE_CONF_VALUE2 = "hoodie.datasource.write.recordkey.field=Field1,Field2,Field3";
   private static final Logger LOG = LogManager.getLogger(TestHoodieDeltaStreamer.class);
   public static KafkaTestUtils testUtils;
+  private static String topicName;
 
   private static int testNum = 1;
 
@@ -152,6 +153,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     JSON_KAFKA_SOURCE_ROOT = dfsBasePath + "/jsonKafkaFiles";
     testUtils = new KafkaTestUtils();
     testUtils.setup();
+    topicName = "topic" + testNum;
 
     // prepare the configs.
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/base.properties", dfs, dfsBasePath + "/base.properties");
@@ -990,16 +992,16 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     }
   }
 
-  private static void prepareJsonKafkaDFSFiles(int numRecords, boolean createTopic) throws IOException {
+  private static void prepareJsonKafkaDFSFiles(int numRecords, boolean createTopic, String topicName) throws IOException {
     if (createTopic) {
       try {
-        testUtils.createTopic("topic1", 2);
+        testUtils.createTopic(topicName, 2);
       } catch (TopicExistsException e) {
         // no op
       }
     }
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    testUtils.sendMessages("topic1", Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", numRecords, HoodieTestDataGenerator.TRIP_SCHEMA)));
+    testUtils.sendMessages(topicName, Helpers.jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", numRecords, HoodieTestDataGenerator.TRIP_SCHEMA)));
   }
 
   private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer) throws IOException {
@@ -1012,6 +1014,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     // Properties used for testing delta-streamer with Parquet source
     TypedProperties parquetProps = new TypedProperties();
     parquetProps.setProperty("include", "base.properties");
+    parquetProps.setProperty("hoodie.embed.timeline.server","false");
     parquetProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
     parquetProps.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
     if (useSchemaProvider) {
@@ -1036,15 +1039,16 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     testNum++;
   }
 
-  private void prepareJsonKafkaDFSSource(String propsFileName, String autoResetValue) throws IOException {
+  private void prepareJsonKafkaDFSSource(String propsFileName, String autoResetValue, String topicName) throws IOException {
     // Properties used for testing delta-streamer with JsonKafka source
     TypedProperties props = new TypedProperties();
     populateCommonProps(props);
     props.setProperty("include", "base.properties");
+    props.setProperty("hoodie.embed.timeline.server","false");
     props.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
     props.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
     props.setProperty("hoodie.deltastreamer.source.dfs.root", JSON_KAFKA_SOURCE_ROOT);
-    props.setProperty("hoodie.deltastreamer.source.kafka.topic","topic1");
+    props.setProperty("hoodie.deltastreamer.source.kafka.topic",topicName);
     props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source_uber.avsc");
     props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target_uber.avsc");
     props.setProperty("auto.offset.reset", autoResetValue);
@@ -1057,7 +1061,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
    * @param autoResetToLatest true if auto reset value to be set to LATEST. false to leave it as default(i.e. EARLIEST)
    * @throws Exception
    */
-  private void testDeltaStreamerWithParquetSourceAndTransitionToKafkaSource(boolean autoResetToLatest) throws Exception {
+  private void testDeltaStreamerTransitionFromParquetToKafkaSource(boolean autoResetToLatest) throws Exception {
     // prep parquet source
     PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFilesDfsToKafka" + testNum;
     int parquetRecords = 10;
@@ -1076,8 +1080,9 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     deltaStreamer.shutdownGracefully();
 
     // prep json kafka source
-    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, true);
-    prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, autoResetToLatest ? "latest" : "earliest");
+    topicName = "topic" + testNum;
+    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, true, topicName);
+    prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, autoResetToLatest ? "latest" : "earliest", topicName);
     // delta streamer w/ json kafka source
     deltaStreamer = new HoodieDeltaStreamer(
         TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
@@ -1089,7 +1094,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     TestHelpers.assertRecordCount(totalExpectedRecords, tableBasePath + "/*/*.parquet", sqlContext);
 
     // verify 2nd batch to test LATEST auto reset value.
-    prepareJsonKafkaDFSFiles(20, false);
+    prepareJsonKafkaDFSFiles(20, false, topicName);
     totalExpectedRecords += 20;
     deltaStreamer.sync();
     TestHelpers.assertRecordCount(totalExpectedRecords, tableBasePath + "/*/*.parquet", sqlContext);
@@ -1098,8 +1103,9 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
   @Test
   public void testJsonKafkaDFSSource() throws Exception {
-    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, true);
-    prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, "earliest");
+    topicName = "topic" + testNum;
+    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, true, topicName);
+    prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, "earliest",topicName);
     String tableBasePath = dfsBasePath + "/test_json_kafka_table" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
         TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
@@ -1111,19 +1117,19 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     int totalRecords = JSON_KAFKA_NUM_RECORDS;
     int records = 10;
     totalRecords += records;
-    prepareJsonKafkaDFSFiles(records, false);
+    prepareJsonKafkaDFSFiles(records, false, topicName);
     deltaStreamer.sync();
     TestHelpers.assertRecordCount(totalRecords, tableBasePath + "/*/*.parquet", sqlContext);
   }
 
   @Test
   public void testParquetSourceToKafkaSourceEarliestAutoResetValue() throws Exception {
-    testDeltaStreamerWithParquetSourceAndTransitionToKafkaSource(false);
+    testDeltaStreamerTransitionFromParquetToKafkaSource(false);
   }
 
   @Test
   public void testParquetSourceToKafkaSourceLatestAutoResetValue() throws Exception {
-    testDeltaStreamerWithParquetSourceAndTransitionToKafkaSource(true);
+    testDeltaStreamerTransitionFromParquetToKafkaSource(true);
   }
 
   @Test
