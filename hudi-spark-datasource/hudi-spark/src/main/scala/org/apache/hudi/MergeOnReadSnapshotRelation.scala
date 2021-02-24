@@ -18,6 +18,7 @@
 
 package org.apache.hudi
 
+import com.google.common.annotations.VisibleForTesting
 import org.apache.hudi.common.model.HoodieBaseFile
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
@@ -33,11 +34,13 @@ import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.hudi.utils.PushDownUtils
-import org.apache.spark.sql.{Row, SQLContext}
+import org.apache.spark.sql.{Row, SQLContext, SparkSession}
 import org.apache.spark.sql.sources.{BaseRelation, CatalystScan, Filter, PrunedFilteredScan}
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{StructField, StructType}
 
+import java.util.Locale
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
 case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
                                       logPaths: Option[List[String]],
@@ -57,7 +60,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
                                   val optParams: Map[String, String],
                                   val userSchema: StructType,
                                   val globPaths: Seq[Path],
-                                  val metaClient: HoodieTableMetaClient)
+                                  val metaClient: HoodieTableMetaClient)(val sparkSession: SparkSession)
   extends BaseRelation with CatalystScan with Logging {
 
   private val conf = sqlContext.sparkContext.hadoopConfiguration
@@ -70,6 +73,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
     DataSourceReadOptions.REALTIME_MERGE_OPT_KEY,
     DataSourceReadOptions.DEFAULT_REALTIME_MERGE_OPT_VAL)
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
+  private val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sqlContext.sparkSession, Some(tableStructSchema), optParams, globPaths)
   private var fileIndex: List[HoodieMergeOnReadFileSplit] = _
   private val preCombineField = {
     val preCombineFieldFromTableConfig = metaClient.getTableConfig.getPreCombineField
@@ -81,7 +85,22 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
       optParams.get(DataSourceReadOptions.READ_PRE_COMBINE_FIELD)
     }
   }
-  override def schema: StructType = tableStructSchema
+
+  val partitionStructSchema = inMemoryFileIndex.partitionSpec().partitionColumns
+  val overlappedPartCols = mutable.Map.empty[String, StructField]
+  partitionStructSchema.foreach { partitionField =>
+    if (tableStructSchema.exists(getColName(_) == getColName(partitionField))) {
+      overlappedPartCols += getColName(partitionField) -> partitionField
+    }
+  }
+
+  // When data and partition schemas have overlapping columns, the output
+  // schema respects the order of the data schema for the overlapping columns, and it
+  // respects the data types of the partition schema.
+  override def schema: StructType = {
+    StructType(tableStructSchema.map(f => overlappedPartCols.getOrElse(getColName(f), f)) ++
+      partitionStructSchema.filterNot(f => overlappedPartCols.contains(getColName(f))))
+  }
 
   override def needConversion: Boolean = false
 
@@ -110,7 +129,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
     val fullSchemaParquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(
       sparkSession = sqlContext.sparkSession,
       dataSchema = tableStructSchema,
-      partitionSchema = StructType(Nil),
+      partitionSchema = partitionStructSchema,
       requiredSchema = tableStructSchema,
       filters = pushedFilters,
       options = optParams,
@@ -119,7 +138,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
     val requiredSchemaParquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(
       sparkSession = sqlContext.sparkSession,
       dataSchema = tableStructSchema,
-      partitionSchema = StructType(Nil),
+      partitionSchema = partitionStructSchema,
       requiredSchema = requiredStructSchema,
       filters = pushedFilters,
       options = optParams,
@@ -137,8 +156,6 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
   }
 
   def buildFileIndex(filters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
-    val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sqlContext.sparkSession, Some(tableStructSchema), optParams, globPaths)
-    // current it is inconvenient to get partitionKeyFilters and dataFilters thought lower level spark class/api. just use the all filters
     val fileStatuses = inMemoryFileIndex.listFiles(filters, filters).flatMap(_.files)
     if (fileStatuses.isEmpty) {
       throw new HoodieException("No files found for reading in user provided path.")
@@ -160,6 +177,14 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
     fileSplits
   }
 
-  // just for test
+  private def getColName(f: StructField): String = {
+    if (sparkSession.sessionState.conf.caseSensitiveAnalysis) {
+      f.name
+    } else {
+      f.name.toLowerCase(Locale.ROOT)
+    }
+  }
+
+  @VisibleForTesting
   def getFileIndexPaths = fileIndex.map(x => x.dataFile.get.filePath)
 }

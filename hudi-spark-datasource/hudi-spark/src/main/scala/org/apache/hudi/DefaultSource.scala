@@ -96,7 +96,7 @@ class DefaultSource extends RelationProvider
             " Falling back to Read Optimized query.")
           new HoodieBootstrapRelation(sqlContext, schema, globPaths, metaClient, optParams)
         } else {
-          new MergeOnReadSnapshotRelation(sqlContext, optParams, schema, globPaths, metaClient)
+          new MergeOnReadSnapshotRelation(sqlContext, optParams, schema, globPaths, metaClient)(sqlContext.sparkSession)
         }
       } else {
         getBaseFileOnlyView(sqlContext, parameters, schema, readPaths, isBootstrappedTable, globPaths, metaClient)
