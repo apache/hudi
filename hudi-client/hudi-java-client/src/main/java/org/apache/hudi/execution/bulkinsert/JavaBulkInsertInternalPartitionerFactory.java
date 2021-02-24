@@ -16,11 +16,26 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.engine;
+package org.apache.hudi.execution.bulkinsert;
+
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.table.BulkInsertPartitioner;
 
 /**
- * Hoodie data processing engine. support only Apache Spark and Apache Flink for now.
+ * A factory to generate built-in partitioner to repartition input records into at least
+ * expected number of output spark partitions for bulk insert operation.
  */
-public enum EngineType {
-  SPARK, FLINK, JAVA
+public abstract class JavaBulkInsertInternalPartitionerFactory {
+
+  public static BulkInsertPartitioner get(BulkInsertSortMode sortMode) {
+    switch (sortMode) {
+      case NONE:
+        return new JavaNonSortPartitioner();
+      case GLOBAL_SORT:
+        return new JavaGlobalSortPartitioner();
+      default:
+        throw new HoodieException("The bulk insert sort mode \"" + sortMode.name()
+            + "\" is not supported in java client.");
+    }
+  }
 }

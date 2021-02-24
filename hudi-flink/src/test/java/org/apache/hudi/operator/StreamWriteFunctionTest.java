@@ -20,6 +20,7 @@ package org.apache.hudi.operator;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.exception.HoodieException;
@@ -48,6 +49,7 @@ import static org.apache.hudi.operator.utils.TestData.checkWrittenData;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -382,6 +384,68 @@ public class StreamWriteFunctionTest {
     checkWrittenData(tempFile, expected, 1);
   }
 
+  @Test
+  public void testIndexStateBootstrap() throws Exception {
+    // open the function and ingest data
+    funcWrapper.openFunction();
+    for (RowData rowData : TestData.DATA_SET_ONE) {
+      funcWrapper.invoke(rowData);
+    }
+
+    assertEmptyDataFiles();
+    // this triggers the data write and event send
+    funcWrapper.checkpointFunction(1);
+
+    OperatorEvent nextEvent = funcWrapper.getNextEvent();
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
+
+    funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
+    assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
+
+    funcWrapper.checkpointComplete(1);
+
+    // Mark the index state as not fully loaded to trigger re-load from the filesystem.
+    funcWrapper.clearIndexState();
+
+    // upsert another data buffer
+    for (RowData rowData : TestData.DATA_SET_TWO) {
+      funcWrapper.invoke(rowData);
+    }
+    checkIndexLoaded(
+        new HoodieKey("id1", "par1"),
+        new HoodieKey("id2", "par1"),
+        new HoodieKey("id3", "par2"),
+        new HoodieKey("id4", "par2"),
+        new HoodieKey("id5", "par3"),
+        new HoodieKey("id6", "par3"),
+        new HoodieKey("id7", "par4"),
+        new HoodieKey("id8", "par4"));
+    // the data is not flushed yet
+    checkWrittenData(tempFile, EXPECTED1);
+    // this triggers the data write and event send
+    funcWrapper.checkpointFunction(2);
+
+    String instant = funcWrapper.getWriteClient()
+        .getInflightAndRequestedInstant("COPY_ON_WRITE");
+
+    nextEvent = funcWrapper.getNextEvent();
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
+    checkWrittenData(tempFile, EXPECTED2);
+
+    funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
+    assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
+
+    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.REQUESTED, instant);
+    assertFalse(funcWrapper.isAllPartitionsLoaded(),
+        "All partitions assume to be loaded into the index state");
+    funcWrapper.checkpointComplete(2);
+    // the coordinator checkpoint commits the inflight instant.
+    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
+    checkWrittenData(tempFile, EXPECTED2);
+    assertTrue(funcWrapper.isAllPartitionsLoaded(),
+        "All partitions assume to be loaded into the index state");
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -418,5 +482,12 @@ public class StreamWriteFunctionTest {
     File[] dataFiles = tempFile.listFiles(file -> !file.getName().startsWith("."));
     assertNotNull(dataFiles);
     assertThat(dataFiles.length, is(0));
+  }
+
+  private void checkIndexLoaded(HoodieKey... keys) {
+    for (HoodieKey key : keys) {
+      assertTrue(funcWrapper.isKeyInState(key),
+          "Key: " + key + " assumes to be in the index state");
+    }
   }
 }
