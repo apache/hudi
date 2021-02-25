@@ -91,8 +91,8 @@ public class StreamWriteFunctionWrapper<I> {
 
     bucketAssignerFunction = new BucketAssignFunction<>(conf);
     bucketAssignerFunction.setRuntimeContext(runtimeContext);
-    bucketAssignerFunction.open(conf);
     bucketAssignerFunction.initializeState(this.functionInitializationContext);
+    bucketAssignerFunction.open(conf);
 
     writeFunction = new StreamWriteFunction<>(conf);
     writeFunction.setRuntimeContext(runtimeContext);
