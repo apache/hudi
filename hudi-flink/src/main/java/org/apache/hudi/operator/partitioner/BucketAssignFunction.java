@@ -55,6 +55,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -108,7 +109,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
    * All the partition paths when the task starts. It is used to help checking whether all the partitions
    * are loaded into the state.
    */
-  private transient List<String> initialPartitionsToLoad;
+  private transient Set<String> initialPartitionsToLoad;
 
   /**
    * State to book-keep which partition is loaded into the index state {@code indexState}.
@@ -138,15 +139,10 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
         new SerializableConfiguration(this.hadoopConf),
         new FlinkTaskContextSupplier(getRuntimeContext()));
     this.bucketAssigner = new BucketAssigner(context, writeConfig);
-    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(this.context,
-        this.conf.getString(FlinkOptions.PATH), false, false, false);
-    final int parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
-    final int maxParallelism = getRuntimeContext().getMaxNumberOfParallelSubtasks();
-    final int taskID = getRuntimeContext().getIndexOfThisSubtask();
-    // reference: org.apache.flink.streaming.api.datastream.KeyedStream
-    this.initialPartitionsToLoad = allPartitionPaths.stream()
-        .filter(partition -> KeyGroupRangeAssignment.assignKeyToParallelOperator(partition, maxParallelism, parallelism) == taskID)
-        .collect(Collectors.toList());
+
+    // initialize and check the partitions load state
+    loadInitialPartitions();
+    checkPartitionsLoaded();
   }
 
   @Override
@@ -184,7 +180,9 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     final HoodieKey hoodieKey = record.getKey();
     final BucketInfo bucketInfo;
     final HoodieRecordLocation location;
-    if (!allPartitionsLoaded && !partitionLoadState.contains(hoodieKey.getPartitionPath())) {
+    if (!allPartitionsLoaded
+        && initialPartitionsToLoad.contains(hoodieKey.getPartitionPath()) // this is an existing partition
+        && !partitionLoadState.contains(hoodieKey.getPartitionPath())) {
       // If the partition records are never loaded, load the records first.
       loadRecords(hoodieKey.getPartitionPath());
     }
@@ -251,6 +249,21 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   }
 
   /**
+   * Loads the existing partitions for this task.
+   */
+  private void loadInitialPartitions() {
+    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(this.context,
+        this.conf.getString(FlinkOptions.PATH), false, false, false);
+    final int parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
+    final int maxParallelism = getRuntimeContext().getMaxNumberOfParallelSubtasks();
+    final int taskID = getRuntimeContext().getIndexOfThisSubtask();
+    // reference: org.apache.flink.streaming.api.datastream.KeyedStream
+    this.initialPartitionsToLoad = allPartitionPaths.stream()
+        .filter(partition -> KeyGroupRangeAssignment.assignKeyToParallelOperator(partition, maxParallelism, parallelism) == taskID)
+        .collect(Collectors.toSet());
+  }
+
+  /**
    * Checks whether all the partitions of the table are loaded into the state,
    * set the flag {@code allPartitionsLoaded} to true if it is.
    */
@@ -277,6 +290,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   public void clearIndexState() {
     this.allPartitionsLoaded = false;
     this.indexState.clear();
+    loadInitialPartitions();
   }
 
   @VisibleForTesting
