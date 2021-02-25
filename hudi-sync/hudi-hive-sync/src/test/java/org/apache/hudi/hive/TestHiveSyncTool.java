@@ -626,7 +626,7 @@ public class TestHiveSyncTool {
     // Lets do the sync
 
     HiveSyncConfig syncToolConfig = HiveSyncConfig.copy(HiveTestUtil.hiveSyncConfig);
-    syncToolConfig.ignoreConnectException = true;
+    syncToolConfig.ignoreExceptions = true;
     syncToolConfig.jdbcUrl = HiveTestUtil.hiveSyncConfig.jdbcUrl.replace("9999","9031");
     HiveSyncTool tool = new HiveSyncTool(syncToolConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     tool.syncHoodieTable();

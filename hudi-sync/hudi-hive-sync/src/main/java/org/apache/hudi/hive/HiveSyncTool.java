@@ -68,8 +68,8 @@ public class HiveSyncTool extends AbstractSyncTool {
     try {
       this.hoodieHiveClient = new HoodieHiveClient(cfg, configuration, fs);
     } catch (RuntimeException e) {
-      if (cfg.ignoreConnectException) {
-        LOG.error("Got runtime exception when hive syncing", e);
+      if (cfg.ignoreExceptions) {
+        LOG.error("Got runtime exception when hive syncing, but continuing as ignoreExceptions config is set ", e);
       } else {
         throw new HoodieHiveSyncException("Got runtime exception when hive syncing", e);
       }
