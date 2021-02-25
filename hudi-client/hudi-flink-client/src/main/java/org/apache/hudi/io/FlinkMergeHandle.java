@@ -94,7 +94,8 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
    * Use the fileId + "-" + rollNumber as the new fileId of a mini-batch write.
    */
   protected String generatesDataFileName() {
-    return FSUtils.makeDataFileName(instantTime, writeToken, fileId + "-" + rollNumber, hoodieTable.getBaseFileExtension());
+    final String fileID = this.needBootStrap ? fileId : fileId + "-" + rollNumber;
+    return FSUtils.makeDataFileName(instantTime, writeToken, fileID, hoodieTable.getBaseFileExtension());
   }
 
   public boolean isNeedBootStrap() {
@@ -178,6 +179,12 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
   }
 
   public void finishWrite() {
+    // The file visibility should be kept by the configured ConsistencyGuard instance.
+    if (rolloverPaths.size() == 1) {
+      // only one flush action, no need to roll over
+      return;
+    }
+
     for (int i = 0; i < rolloverPaths.size() - 1; i++) {
       Path path = rolloverPaths.get(i);
       try {
