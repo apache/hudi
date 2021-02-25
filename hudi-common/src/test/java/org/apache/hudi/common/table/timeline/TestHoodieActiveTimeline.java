@@ -114,9 +114,10 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         metaClient.getArchivePath(), metaClient.getTableConfig().getPayloadClass(), VERSION_0);
     HoodieInstant instant6 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "9");
     byte[] dummy = new byte[5];
-    HoodieActiveTimeline oldTimeline = new HoodieActiveTimeline(new HoodieTableMetaClient(metaClient.getHadoopConf(),
-        metaClient.getBasePath(), true, metaClient.getConsistencyGuardConfig(),
-        Option.of(new TimelineLayoutVersion(VERSION_0))));
+    HoodieActiveTimeline oldTimeline = new HoodieActiveTimeline(
+        HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(metaClient.getBasePath())
+            .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(metaClient.getConsistencyGuardConfig())
+            .setLayoutVersion(Option.of(new TimelineLayoutVersion(VERSION_0))).build());
     // Old Timeline writes both to aux and timeline folder
     oldTimeline.saveToCompactionRequested(instant6, Option.of(dummy));
     // Now use latest timeline version
@@ -200,7 +201,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     // return the correct set of Instant
     checkTimeline.accept(timeline.getCommitsTimeline(),
             CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION));
-    checkTimeline.accept(timeline.getCommitsAndCompactionTimeline(),
+    checkTimeline.accept(timeline.getWriteTimeline(),
             CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION));
     checkTimeline.accept(timeline.getCommitTimeline(),  CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION));
     checkTimeline.accept(timeline.getDeltaCommitTimeline(), Collections.singleton(HoodieTimeline.DELTA_COMMIT_ACTION));

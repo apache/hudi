@@ -36,19 +36,17 @@ import org.apache.hudi.index.HoodieIndex;
 import java.util.List;
 
 public abstract class HoodieFlinkTable<T extends HoodieRecordPayload>
-    extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
+    extends HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>
+    implements ExplicitWriteHandleTable<T> {
   protected HoodieFlinkTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     super(config, context, metaClient);
   }
 
   public static <T extends HoodieRecordPayload> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(
-        context.getHadoopConf().get(),
-        config.getBasePath(),
-        true,
-        config.getConsistencyGuardConfig(),
-        Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion()))
-    );
+    HoodieTableMetaClient metaClient =
+        HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
+            .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
+            .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion()))).build();
     return HoodieFlinkTable.create(config, context, metaClient);
   }
 

@@ -41,8 +41,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndex;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -73,13 +75,20 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     super(context, clientConfig);
   }
 
+  @Deprecated
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig, boolean rollbackPending) {
-    super(context, writeConfig, rollbackPending);
+    super(context, writeConfig);
   }
 
+  @Deprecated
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig, boolean rollbackPending,
                              Option<EmbeddedTimelineService> timelineService) {
-    super(context, writeConfig, rollbackPending, timelineService);
+    super(context, writeConfig, timelineService);
+  }
+
+  public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
+                             Option<EmbeddedTimelineService> timelineService) {
+    super(context, writeConfig, timelineService);
   }
 
   /**
@@ -129,9 +138,6 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
    */
   @Override
   public void bootstrap(Option<Map<String, String>> extraMetadata) {
-    if (rollbackPending) {
-      rollBackInflightBootstrap();
-    }
     getTableAndInitCtx(WriteOperationType.UPSERT, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS).bootstrap(context, extraMetadata);
   }
 
@@ -395,7 +401,11 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   @Override
   public void syncTableMetadata() {
     // Open up the metadata table again, for syncing
-    SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
+    try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context)) {
+      LOG.info("Successfully synced to metadata table");
+    } catch (Exception e) {
+      throw new HoodieMetadataException("Error syncing to metadata table.", e);
+    }
   }
 
   @Override

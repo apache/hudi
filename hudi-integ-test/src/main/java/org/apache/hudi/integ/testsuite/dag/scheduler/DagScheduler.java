@@ -101,7 +101,8 @@ public class DagScheduler {
         while (queue.size() > 0) {
           DagNode nodeToExecute = queue.poll();
           log.warn("Executing node \"" + nodeToExecute.getConfig().getOtherConfigs().get(CONFIG_NAME) + "\" :: " + nodeToExecute.getConfig());
-          futures.add(service.submit(() -> executeNode(nodeToExecute)));
+          int finalCurRound = curRound;
+          futures.add(service.submit(() -> executeNode(nodeToExecute, finalCurRound)));
           if (nodeToExecute.getChildNodes().size() > 0) {
             childNodes.addAll(nodeToExecute.getChildNodes());
           }
@@ -114,7 +115,7 @@ public class DagScheduler {
       } while (queue.size() > 0);
       log.info("Finished workloads for round num " + curRound);
       if (curRound < workflowDag.getRounds()) {
-        new DelayNode(workflowDag.getIntermittentDelayMins()).execute(executionContext);
+        new DelayNode(workflowDag.getIntermittentDelayMins()).execute(executionContext, curRound);
       }
 
       // After each level, report and flush the metrics
@@ -128,14 +129,14 @@ public class DagScheduler {
    *
    * @param node The node to be executed
    */
-  private void executeNode(DagNode node) {
+  private void executeNode(DagNode node, int curRound) {
     if (node.isCompleted()) {
       throw new RuntimeException("DagNode already completed! Cannot re-execute");
     }
     try {
       int repeatCount = node.getConfig().getRepeatCount();
       while (repeatCount > 0) {
-        node.execute(executionContext);
+        node.execute(executionContext, curRound);
         log.info("Finished executing {}", node.getName());
         repeatCount--;
       }

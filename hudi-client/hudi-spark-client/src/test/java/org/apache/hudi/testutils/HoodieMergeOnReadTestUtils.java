@@ -66,7 +66,7 @@ public class HoodieMergeOnReadTestUtils {
   public static List<GenericRecord> getRecordsUsingInputFormat(Configuration conf, List<String> inputPaths, String basePath, JobConf jobConf, boolean realtime, Schema rawSchema,
                                                                String rawHiveColumnTypes, boolean projectCols, List<String> projectedColumns) {
 
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(conf, basePath);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(conf).setBasePath(basePath).build();
     FileInputFormat inputFormat = HoodieInputFormatUtils.getInputFormat(metaClient.getTableConfig().getBaseFileFormat(), realtime, jobConf);
 
     Schema schema = HoodieAvroUtils.addMetadataFields(rawSchema);

@@ -18,7 +18,9 @@
 
 package org.apache.hudi.timeline.service;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -128,9 +130,9 @@ public class TimelineService {
 
   public int startService() throws IOException {
     app = Javalin.create();
-    FileSystemViewHandler router = new FileSystemViewHandler(app, conf, fsViewsManager);
+    RequestHandler requestHandler = new RequestHandler(app, conf, fsViewsManager);
     app.get("/", ctx -> ctx.result("Hello World"));
-    router.register();
+    requestHandler.register();
     int realServerPort = startServiceOnPort(serverPort);
     LOG.info("Starting Timeline server on port :" + realServerPort);
     this.serverPort = realServerPort;
@@ -142,24 +144,28 @@ public class TimelineService {
   }
 
   public static FileSystemViewManager buildFileSystemViewManager(Config config, SerializableConfiguration conf) {
+    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(conf.get());
+    // Just use defaults for now
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().build();
+
     switch (config.viewStorageType) {
       case MEMORY:
         FileSystemViewStorageConfig.Builder inMemConfBuilder = FileSystemViewStorageConfig.newBuilder();
         inMemConfBuilder.withStorageType(FileSystemViewStorageType.MEMORY);
-        return FileSystemViewManager.createViewManager(conf, inMemConfBuilder.build());
+        return FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, inMemConfBuilder.build());
       case SPILLABLE_DISK: {
         FileSystemViewStorageConfig.Builder spillableConfBuilder = FileSystemViewStorageConfig.newBuilder();
         spillableConfBuilder.withStorageType(FileSystemViewStorageType.SPILLABLE_DISK)
             .withBaseStoreDir(config.baseStorePathForFileGroups)
             .withMaxMemoryForView(config.maxViewMemPerTableInMB * 1024 * 1024L)
             .withMemFractionForPendingCompaction(config.memFractionForCompactionPerTable);
-        return FileSystemViewManager.createViewManager(conf, spillableConfBuilder.build());
+        return FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, spillableConfBuilder.build());
       }
       case EMBEDDED_KV_STORE: {
         FileSystemViewStorageConfig.Builder rocksDBConfBuilder = FileSystemViewStorageConfig.newBuilder();
         rocksDBConfBuilder.withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE)
             .withRocksDBPath(config.rocksDBPath);
-        return FileSystemViewManager.createViewManager(conf, rocksDBConfBuilder.build());
+        return FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, rocksDBConfBuilder.build());
       }
       default:
         throw new IllegalArgumentException("Invalid view manager storage type :" + config.viewStorageType);

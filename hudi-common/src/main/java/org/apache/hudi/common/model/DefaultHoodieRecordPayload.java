@@ -42,7 +42,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   }
 
   public DefaultHoodieRecordPayload(Option<GenericRecord> record) {
-    this(record.isPresent() ? record.get() : null, (record1) -> 0); // natural order
+    this(record.isPresent() ? record.get() : null, 0); // natural order
   }
 
   @Override

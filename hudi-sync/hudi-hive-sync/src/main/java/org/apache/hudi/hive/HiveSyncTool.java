@@ -21,6 +21,7 @@ package org.apache.hudi.hive;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
@@ -104,7 +105,7 @@ public class HiveSyncTool extends AbstractSyncTool {
           throw new InvalidTableException(hoodieHiveClient.getBasePath());
       }
     } catch (RuntimeException re) {
-      LOG.error("Got runtime exception when hive syncing", re);
+      throw new HoodieException("Got runtime exception when hive syncing " + cfg.tableName, re);
     } finally {
       hoodieHiveClient.close();
     }
@@ -113,8 +114,6 @@ public class HiveSyncTool extends AbstractSyncTool {
   private void syncHoodieTable(String tableName, boolean useRealtimeInputFormat) {
     LOG.info("Trying to sync hoodie table " + tableName + " with base path " + hoodieHiveClient.getBasePath()
         + " of type " + hoodieHiveClient.getTableType());
-    // Check if the necessary table exists
-    boolean tableExists = hoodieHiveClient.doesTableExist(tableName);
 
     // check if the database exists else create it
     if (cfg.autoCreateDatabase) {
@@ -129,6 +128,9 @@ public class HiveSyncTool extends AbstractSyncTool {
         throw new HoodieHiveSyncException("hive database does not exist " + cfg.databaseName);
       }
     }
+
+    // Check if the necessary table exists
+    boolean tableExists = hoodieHiveClient.doesTableExist(tableName);
 
     // Get the parquet schema for this table looking at the latest commit
     MessageType schema = hoodieHiveClient.getDataSchema();

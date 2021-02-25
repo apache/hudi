@@ -16,13 +16,11 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.utils;
-
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.catalyst.InternalRow;
+package org.apache.hudi.common.function;
 
 import java.io.Serializable;
 
-public interface SparkRowDeserializer extends Serializable {
-  Row deserializeRow(InternalRow internalRow);
+@FunctionalInterface
+public interface SerializableSupplier<T> extends Serializable {
+  T get();
 }

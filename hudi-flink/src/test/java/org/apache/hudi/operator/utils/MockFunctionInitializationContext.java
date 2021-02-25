@@ -15,16 +15,34 @@
  * limitations under the License.
  */
 
-package org.apache.hudi
+package org.apache.hudi.operator.utils;
 
-import org.apache.hudi.client.utils.SparkRowDeserializer
+import org.apache.flink.api.common.state.KeyedStateStore;
+import org.apache.flink.runtime.state.FunctionInitializationContext;
 
-import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
+/**
+ * A {@link FunctionInitializationContext} for testing purpose.
+ */
+public class MockFunctionInitializationContext implements FunctionInitializationContext {
 
-class Spark2RowDeserializer(val encoder: ExpressionEncoder[Row]) extends SparkRowDeserializer {
-  def deserializeRow(internalRow: InternalRow): Row = {
-    encoder.fromRow(internalRow)
+  private final MockOperatorStateStore operatorStateStore;
+
+  public MockFunctionInitializationContext() {
+    operatorStateStore = new MockOperatorStateStore();
+  }
+
+  @Override
+  public boolean isRestored() {
+    return false;
+  }
+
+  @Override
+  public MockOperatorStateStore getOperatorStateStore() {
+    return operatorStateStore;
+  }
+
+  @Override
+  public KeyedStateStore getKeyedStateStore() {
+    return operatorStateStore;
   }
 }

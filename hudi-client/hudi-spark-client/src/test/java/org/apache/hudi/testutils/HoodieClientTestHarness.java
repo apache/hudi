@@ -327,26 +327,22 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     }
   }
 
-  public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
-    return getHoodieWriteClient(cfg, false);
-  }
-
   public HoodieReadClient getHoodieReadClient(String basePath) {
     readClient = new HoodieReadClient(context, basePath, SQLContext.getOrCreate(jsc.sc()));
     return readClient;
   }
 
-  public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean rollbackInflightCommit) {
+  public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
     if (null != writeClient) {
       writeClient.close();
       writeClient = null;
     }
-    writeClient = new SparkRDDWriteClient(context, cfg, rollbackInflightCommit);
+    writeClient = new SparkRDDWriteClient(context, cfg);
     return writeClient;
   }
 
   public HoodieTableMetaClient getHoodieMetaClient(Configuration conf, String basePath) {
-    metaClient = new HoodieTableMetaClient(conf, basePath);
+    metaClient = HoodieTableMetaClient.builder().setConf(conf).setBasePath(basePath).build();
     return metaClient;
   }
 

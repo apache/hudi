@@ -21,6 +21,7 @@ package org.apache.hudi.client;
 import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -48,6 +49,7 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
   protected final transient Configuration hadoopConf;
   protected final HoodieWriteConfig config;
   protected final String basePath;
+  protected final HoodieHeartbeatClient heartbeatClient;
 
   /**
    * Timeline Server has the same lifetime as that of Client. Any operations done on the same timeline service will be
@@ -70,6 +72,8 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
     this.config = clientConfig;
     this.timelineServer = timelineServer;
     shouldStopTimelineServer = !timelineServer.isPresent();
+    this.heartbeatClient = new HoodieHeartbeatClient(this.fs, this.basePath,
+        clientConfig.getHoodieClientHeartbeatIntervalInMs(), clientConfig.getHoodieClientHeartbeatTolerableMisses());
     startEmbeddedServerView();
     initWrapperFSMetrics();
   }
@@ -128,12 +132,16 @@ public abstract class AbstractHoodieClient implements Serializable, AutoCloseabl
   }
 
   protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
-    return new HoodieTableMetaClient(hadoopConf, config.getBasePath(), loadActiveTimelineOnLoad,
-        config.getConsistencyGuardConfig(),
-        Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())));
+    return HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(config.getBasePath())
+        .setLoadActiveTimelineOnLoad(loadActiveTimelineOnLoad).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
+        .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion()))).build();
   }
 
   public Option<EmbeddedTimelineService> getTimelineServer() {
     return timelineServer;
+  }
+
+  public HoodieHeartbeatClient getHeartbeatClient() {
+    return heartbeatClient;
   }
 }

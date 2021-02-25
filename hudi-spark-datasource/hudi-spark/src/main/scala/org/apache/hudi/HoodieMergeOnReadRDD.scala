@@ -26,6 +26,7 @@ import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder}
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.common.model.HoodiePayloadProps
 import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.{AvroDeserializer, AvroSerializer}
@@ -33,6 +34,8 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.vectorized.ColumnarBatch
+
+import java.util.Properties
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -48,7 +51,14 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
   extends RDD[InternalRow](sc, Nil) {
 
   private val confBroadcast = sc.broadcast(new SerializableWritable(config))
-
+  private val preCombineField = tableState.preCombineField
+  private val payloadProps = if (preCombineField.isDefined) {
+    val properties = new Properties()
+    properties.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP, preCombineField.get)
+    Some(properties)
+  } else {
+    None
+  }
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val mergeOnReadPartition = split.asInstanceOf[HoodieMergeOnReadPartition]
     mergeOnReadPartition.split match {
@@ -285,7 +295,12 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
 
       private def mergeRowWithLog(curRow: InternalRow, curKey: String) = {
         val historyAvroRecord = serializer.serialize(curRow).asInstanceOf[GenericRecord]
-        logRecords.get(curKey).getData.combineAndGetUpdateValue(historyAvroRecord, tableAvroSchema)
+        if (payloadProps.isDefined) {
+          logRecords.get(curKey).getData.combineAndGetUpdateValue(historyAvroRecord,
+            tableAvroSchema, payloadProps.get)
+        } else {
+          logRecords.get(curKey).getData.combineAndGetUpdateValue(historyAvroRecord, tableAvroSchema)
+        }
       }
     }
 }

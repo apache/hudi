@@ -20,6 +20,7 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
@@ -32,12 +33,13 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
@@ -50,6 +52,8 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,32 +69,41 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   private static final Logger LOG = LogManager.getLogger(HoodieBackedTableMetadata.class);
 
-  private final String metadataBasePath;
+  private String metadataBasePath;
+  // Metadata table's timeline and metaclient
   private HoodieTableMetaClient metaClient;
+  private List<FileSlice> latestFileSystemMetadataSlices;
 
   // Readers for the base and log file which store the metadata
   private transient HoodieFileReader<GenericRecord> baseFileReader;
   private transient HoodieMetadataMergedLogRecordScanner logRecordScanner;
 
-  public HoodieBackedTableMetadata(Configuration conf, String datasetBasePath, String spillableMapDirectory, boolean enabled,
-                                   boolean validateLookups, boolean assumeDatePartitioning) {
-    this(new HoodieLocalEngineContext(conf), datasetBasePath, spillableMapDirectory, enabled, validateLookups,
-        false, assumeDatePartitioning);
+  public HoodieBackedTableMetadata(Configuration conf, HoodieMetadataConfig metadataConfig,
+                                   String datasetBasePath, String spillableMapDirectory) {
+    this(new HoodieLocalEngineContext(conf), metadataConfig, datasetBasePath, spillableMapDirectory);
   }
 
-  public HoodieBackedTableMetadata(HoodieEngineContext engineContext, String datasetBasePath, String spillableMapDirectory,
-                                   boolean enabled, boolean validateLookups, boolean enableMetrics, boolean assumeDatePartitioning) {
-    super(engineContext, datasetBasePath, spillableMapDirectory, enabled, validateLookups, enableMetrics, assumeDatePartitioning);
-    this.metadataBasePath = HoodieTableMetadata.getMetadataTableBasePath(datasetBasePath);
-    if (enabled) {
+  public HoodieBackedTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
+                                   String datasetBasePath, String spillableMapDirectory) {
+    super(engineContext, metadataConfig, datasetBasePath, spillableMapDirectory);
+    initIfNeeded();
+  }
+
+  private void initIfNeeded() {
+    if (enabled && this.metaClient == null) {
+      this.metadataBasePath = HoodieTableMetadata.getMetadataTableBasePath(datasetBasePath);
       try {
-        this.metaClient = new HoodieTableMetaClient(hadoopConf.get(), metadataBasePath);
+        this.metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(metadataBasePath).build();
+        HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline());
+        latestFileSystemMetadataSlices = fsView.getLatestFileSlices(MetadataPartitionType.FILES.partitionPath()).collect(Collectors.toList());
       } catch (TableNotFoundException e) {
         LOG.warn("Metadata table was not found at path " + metadataBasePath);
         this.enabled = false;
+        this.metaClient = null;
       } catch (Exception e) {
         LOG.error("Failed to initialize metadata table at path " + metadataBasePath, e);
         this.enabled = false;
+        this.metaClient = null;
       }
     } else {
       LOG.info("Metadata table is disabled.");
@@ -98,60 +111,67 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  protected Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKeyFromMetadata(String key) throws IOException {
-    openBaseAndLogFiles();
-
-    // Retrieve record from base file
-    HoodieRecord<HoodieMetadataPayload> hoodieRecord = null;
-    if (baseFileReader != null) {
+  protected Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKeyFromMetadata(String key) {
+    try {
+      List<Long> timings = new ArrayList<>();
       HoodieTimer timer = new HoodieTimer().startTimer();
-      Option<GenericRecord> baseRecord = baseFileReader.getRecordByKey(key);
-      if (baseRecord.isPresent()) {
-        hoodieRecord = SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(),
-            metaClient.getTableConfig().getPayloadClass());
-        metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BASEFILE_READ_STR, timer.endTimer()));
-      }
-    }
+      openFileSliceIfNeeded();
+      timings.add(timer.endTimer());
 
-    // Retrieve record from log file
-    Option<HoodieRecord<HoodieMetadataPayload>> logHoodieRecord = logRecordScanner.getRecordByKey(key);
-    if (logHoodieRecord.isPresent()) {
-      if (hoodieRecord != null) {
-        // Merge the payloads
-        HoodieRecordPayload mergedPayload = logHoodieRecord.get().getData().preCombine(hoodieRecord.getData());
-        hoodieRecord = new HoodieRecord(hoodieRecord.getKey(), mergedPayload);
-      } else {
-        hoodieRecord = logHoodieRecord.get();
+      timer.startTimer();
+      // Retrieve record from base file
+      HoodieRecord<HoodieMetadataPayload> hoodieRecord = null;
+      if (baseFileReader != null) {
+        HoodieTimer readTimer = new HoodieTimer().startTimer();
+        Option<GenericRecord> baseRecord = baseFileReader.getRecordByKey(key);
+        if (baseRecord.isPresent()) {
+          hoodieRecord = SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(),
+              metaClient.getTableConfig().getPayloadClass());
+          metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BASEFILE_READ_STR, readTimer.endTimer()));
+        }
       }
-    }
+      timings.add(timer.endTimer());
 
-    return Option.ofNullable(hoodieRecord);
+      // Retrieve record from log file
+      timer.startTimer();
+      if (logRecordScanner != null) {
+        Option<HoodieRecord<HoodieMetadataPayload>> logHoodieRecord = logRecordScanner.getRecordByKey(key);
+        if (logHoodieRecord.isPresent()) {
+          if (hoodieRecord != null) {
+            // Merge the payloads
+            HoodieRecordPayload mergedPayload = logHoodieRecord.get().getData().preCombine(hoodieRecord.getData());
+            hoodieRecord = new HoodieRecord(hoodieRecord.getKey(), mergedPayload);
+          } else {
+            hoodieRecord = logHoodieRecord.get();
+          }
+        }
+      }
+      timings.add(timer.endTimer());
+      LOG.info(String.format("Metadata read for key %s took [open, baseFileRead, logMerge] %s ms", key, timings));
+      return Option.ofNullable(hoodieRecord);
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Error merging records from metadata table for key :" + key, ioe);
+    } finally {
+      closeIfNeeded();
+    }
   }
 
   /**
    * Open readers to the base and log files.
    */
-  protected synchronized void openBaseAndLogFiles() throws IOException {
-    if (logRecordScanner != null) {
-      // Already opened
+  private synchronized void openFileSliceIfNeeded() throws IOException {
+    if (metadataConfig.enableReuse() && baseFileReader != null) {
+      // we will reuse what's open.
       return;
     }
 
-    HoodieTimer timer = new HoodieTimer().startTimer();
-
     // Metadata is in sync till the latest completed instant on the dataset
-    HoodieTableMetaClient datasetMetaClient = new HoodieTableMetaClient(hadoopConf.get(), datasetBasePath);
-    String latestInstantTime = datasetMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant()
-        .map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
-
-    // Find the latest file slice
-    HoodieTimeline timeline = metaClient.reloadActiveTimeline();
-    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline());
-    List<FileSlice> latestSlices = fsView.getLatestFileSlices(MetadataPartitionType.FILES.partitionPath()).collect(Collectors.toList());
-    ValidationUtils.checkArgument(latestSlices.size() == 1);
+    HoodieTimer timer = new HoodieTimer().startTimer();
+    String latestInstantTime = getLatestDatasetInstantTime();
+    ValidationUtils.checkArgument(latestFileSystemMetadataSlices.size() == 1, "must be at-least one validata metadata file slice");
 
     // If the base file is present then create a reader
-    Option<HoodieBaseFile> basefile = latestSlices.get(0).getBaseFile();
+    Option<HoodieBaseFile> basefile = latestFileSystemMetadataSlices.get(0).getBaseFile();
     if (basefile.isPresent()) {
       String basefilePath = basefile.get().getPath();
       baseFileReader = HoodieFileReaderFactory.getFileReader(hadoopConf.get(), new Path(basefilePath));
@@ -159,18 +179,16 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     }
 
     // Open the log record scanner using the log files from the latest file slice
-    List<String> logFilePaths = latestSlices.get(0).getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
+    List<String> logFilePaths = latestFileSystemMetadataSlices.get(0).getLogFiles()
+        .sorted(HoodieLogFile.getLogFileComparator())
         .map(o -> o.getPath().toString())
         .collect(Collectors.toList());
-
-    Option<HoodieInstant> lastInstant = timeline.filterCompletedInstants().lastInstant();
+    Option<HoodieInstant> lastInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
     String latestMetaInstantTimestamp = lastInstant.map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
 
     // Load the schema
     Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
-
-    logRecordScanner =
-        new HoodieMetadataMergedLogRecordScanner(metaClient.getFs(), metadataBasePath,
+    logRecordScanner = new HoodieMetadataMergedLogRecordScanner(metaClient.getFs(), metadataBasePath,
             logFilePaths, schema, latestMetaInstantTimestamp, MAX_MEMORY_SIZE_IN_BYTES, BUFFER_SIZE,
             spillableMapDirectory, null);
 
@@ -180,27 +198,42 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     metrics.ifPresent(metrics -> metrics.updateMetrics(HoodieMetadataMetrics.SCAN_STR, timer.endTimer()));
   }
 
-  public void closeReaders() {
+  private void closeIfNeeded() {
+    try {
+      if (!metadataConfig.enableReuse()) {
+        close();
+      }
+    } catch (Exception e) {
+      throw new HoodieException("Error closing resources during metadata table merge", e);
+    }
+  }
+
+  @Override
+  public void close() throws Exception {
     if (baseFileReader != null) {
       baseFileReader.close();
       baseFileReader = null;
     }
-    logRecordScanner = null;
+    if (logRecordScanner != null) {
+      logRecordScanner.close();
+      logRecordScanner = null;
+    }
   }
 
   /**
    * Return an ordered list of instants which have not been synced to the Metadata Table.
-   * @param datasetMetaClient {@code HoodieTableMetaClient} for the dataset
    */
-  protected List<HoodieInstant> findInstantsToSync(HoodieTableMetaClient datasetMetaClient) {
-    HoodieActiveTimeline metaTimeline = metaClient.reloadActiveTimeline();
+  protected List<HoodieInstant> findInstantsToSync() {
+    initIfNeeded();
+
+    // if there are no instants yet, return empty list, since there is nothing to sync here.
+    if (!enabled || !metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
+      return Collections.EMPTY_LIST;
+    }
 
     // All instants on the data timeline, which are greater than the last instant on metadata timeline
     // are candidates for sync.
-    Option<HoodieInstant> latestMetadataInstant = metaTimeline.filterCompletedInstants().lastInstant();
-    ValidationUtils.checkArgument(latestMetadataInstant.isPresent(),
-        "At least one completed instant should exist on the metadata table, before syncing.");
-    String latestMetadataInstantTime = latestMetadataInstant.get().getTimestamp();
+    String latestMetadataInstantTime = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get().getTimestamp();
     HoodieDefaultTimeline candidateTimeline = datasetMetaClient.getActiveTimeline().findInstantsAfter(latestMetadataInstantTime, Integer.MAX_VALUE);
     Option<HoodieInstant> earliestIncompleteInstant = candidateTimeline.filterInflightsAndRequested().firstInstant();
 
@@ -234,10 +267,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   public SerializableConfiguration getHadoopConf() {
     return hadoopConf;
-  }
-
-  public String getDatasetBasePath() {
-    return datasetBasePath;
   }
 
   public HoodieTableMetaClient getMetaClient() {

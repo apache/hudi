@@ -43,7 +43,7 @@ public class HiveQueryNode extends DagNode<Boolean> {
   }
 
   @Override
-  public void execute(ExecutionContext executionContext) throws Exception {
+  public void execute(ExecutionContext executionContext, int curItrCount) throws Exception {
     log.info("Executing hive query node {}", this.getName());
     this.hiveServiceProvider.startLocalHiveServiceIfNeeded(executionContext.getHoodieTestSuiteWriter().getConfiguration());
     HiveSyncConfig hiveSyncConfig = DataSourceUtils
