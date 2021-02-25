@@ -24,7 +24,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, MergeOnReadSnapshotRelation}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.keygen.{ExtPartitionsKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.keygen.{InferPartitionsKeyGeneratorForTesting, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.log4j.LogManager
 import org.apache.spark.sql._
@@ -545,9 +545,8 @@ class TestMORDataSource extends HoodieClientTestBase {
   @Test
   def testPrunePartitionsWithInferedSchema() {
     // First Operation:
-    // Producing parquet files to three hive style partitions like /partition=20150316/.
+    // Producing parquet files to three hive style partitions like year=2015/month=03/day=16 from partition column value (2015/03/16).
     // SNAPSHOT view on MOR table with parquet files only.
-//    dataGen.setPartitionPaths(Array("20150316","20150317","20160315"));
     val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
@@ -555,7 +554,7 @@ class TestMORDataSource extends HoodieClientTestBase {
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
       .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
-      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY, classOf[ExtPartitionsKeyGenerator].getName)
+      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY, classOf[InferPartitionsKeyGeneratorForTesting].getName)
       .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY, "true")
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -579,7 +578,8 @@ class TestMORDataSource extends HoodieClientTestBase {
     val fileIndexPaths = mergeOnReadSnapshotRelation.getFileIndexPaths;
 
     assertEquals(2,fileIndexPaths.length)
-  //  assertTrue(fileIndexPaths.get(0).contains("20160315"))
+    assertTrue(fileIndexPaths.get(0).contains("year=2015/month=03"))
+    assertTrue(fileIndexPaths.get(1).contains("year=2015/month=03"))
   }
 
   @Test
