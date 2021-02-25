@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
@@ -53,6 +54,7 @@ public class KafkaOffsetGen {
 
   /**
    * kafka checkpoint Pattern.
+   * Format: topic_name,partition_num:offset,partition_num:offset,....
    */
   private final Pattern pattern = Pattern.compile(".*,.*:.*");
 
@@ -155,7 +157,8 @@ public class KafkaOffsetGen {
 
     private static final String KAFKA_TOPIC_NAME = "hoodie.deltastreamer.source.kafka.topic";
     private static final String MAX_EVENTS_FROM_KAFKA_SOURCE_PROP = "hoodie.deltastreamer.kafka.source.maxEvents";
-    private static final KafkaResetOffsetStrategies DEFAULT_AUTO_RESET_OFFSET = KafkaResetOffsetStrategies.LATEST;
+    private static final String KAFKA_AUTO_RESET_OFFSETS = "hoodie.deltastreamer.source.kafka.auto.reset.offsets";
+    private static final KafkaResetOffsetStrategies DEFAULT_KAFKA_AUTO_RESET_OFFSETS = KafkaResetOffsetStrategies.LATEST;
     public static final long DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE = 5000000;
     public static long maxEventsFromKafkaSource = DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE;
   }
@@ -163,7 +166,7 @@ public class KafkaOffsetGen {
   private final HashMap<String, Object> kafkaParams;
   private final TypedProperties props;
   protected final String topicName;
-  private final KafkaResetOffsetStrategies autoResetValue;
+  private KafkaResetOffsetStrategies autoResetValue;
 
   public KafkaOffsetGen(TypedProperties props) {
     this.props = props;
@@ -174,7 +177,18 @@ public class KafkaOffsetGen {
     }
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.KAFKA_TOPIC_NAME));
     topicName = props.getString(Config.KAFKA_TOPIC_NAME);
-    autoResetValue = KafkaResetOffsetStrategies.valueOf(props.getString("auto.offset.reset", Config.DEFAULT_AUTO_RESET_OFFSET.toString()).toUpperCase());
+    String kafkaAutoResetOffsetsStr = props.getString(Config.KAFKA_AUTO_RESET_OFFSETS, Config.DEFAULT_KAFKA_AUTO_RESET_OFFSETS.name());
+    boolean found = false;
+    for (KafkaResetOffsetStrategies entry: KafkaResetOffsetStrategies.values()) {
+      if (entry.name().toLowerCase().equals(kafkaAutoResetOffsetsStr)) {
+        found = true;
+        autoResetValue = entry;
+        break;
+      }
+    }
+    if (!found) {
+      throw new HoodieDeltaStreamerException(Config.KAFKA_AUTO_RESET_OFFSETS + " config set to unknown value " + kafkaAutoResetOffsetsStr);
+    }
   }
 
   public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long sourceLimit, HoodieDeltaStreamerMetrics metrics) {
