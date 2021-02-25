@@ -130,7 +130,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
       sparkSession = sqlContext.sparkSession,
       dataSchema = tableStructSchema,
       partitionSchema = partitionStructSchema,
-      requiredSchema = tableStructSchema,
+      requiredSchema = requiredStructSchema,
       filters = pushedFilters,
       options = optParams,
       hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
@@ -156,7 +156,13 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
   }
 
   def buildFileIndex(filters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
-    val fileStatuses = inMemoryFileIndex.listFiles(filters, filters).flatMap(_.files)
+    val selectedPartitions = inMemoryFileIndex.listFiles(filters, filters)
+    val selectedPartitionsPathMap = selectedPartitions.flatMap(x=>{
+      val files = x.files
+      val fileMap = files.map(file=>{(file.getPath.getName,x.values)})
+      fileMap
+    }).toMap
+    val fileStatuses = selectedPartitions.flatMap(_.files)
     if (fileStatuses.isEmpty) {
       throw new HoodieException("No files found for reading in user provided path.")
     }
@@ -170,7 +176,8 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
     val fileSplits = fileGroup.map(kv => {
       val baseFile = kv._1
       val logPaths = if (kv._2.isEmpty) Option.empty else Option(kv._2.asScala.toList)
-      val partitionedFile = PartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen)
+      val partitionValues = selectedPartitionsPathMap.get(baseFile.getFileName).get
+      val partitionedFile = PartitionedFile(partitionValues, baseFile.getPath, 0, baseFile.getFileLen)
       HoodieMergeOnReadFileSplit(Option(partitionedFile), logPaths, latestCommit,
         metaClient.getBasePath, maxCompactionMemoryInBytes, mergeType)
     }).toList

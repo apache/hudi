@@ -87,8 +87,7 @@ object HoodieSparkUtils {
       val globPaths = globPathIfNecessary(fs, qualified)
       globPaths
     })
-    val filteredGlobPaths = globPaths.filterNot( path => TablePathUtils.isHoodieMetaPath(path.toString) || shouldFilterOut(path.getName))
-    filteredGlobPaths
+    globPaths.filterNot( path => TablePathUtils.isHoodieMetaPath(path.toString) || shouldFilterOut(path.getName))
   }
 
   def createInMemoryFileIndex(sparkSession: SparkSession, globbedPaths: Seq[Path]): InMemoryFileIndex = {

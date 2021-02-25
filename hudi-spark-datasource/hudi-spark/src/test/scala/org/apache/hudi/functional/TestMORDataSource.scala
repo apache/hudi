@@ -17,14 +17,20 @@
 
 package org.apache.hudi.functional
 
+import java.text.MessageFormat
+
+import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.DataSourceWriteOptions.{KEYGENERATOR_CLASS_OPT_KEY, PARTITIONPATH_FIELD_OPT_KEY, PAYLOAD_CLASS_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY}
+import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, MergeOnReadSnapshotRelation}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.keygen.{InferPartitionsKeyGeneratorForTesting, NonpartitionedKeyGenerator, SimpleKeyGenerator}
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
+import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.log4j.LogManager
 import org.apache.spark.sql._
@@ -529,7 +535,8 @@ class TestMORDataSource extends HoodieClientTestBase {
       .load(basePath + "/*/*")
 
     hudiSnapshotDF1.createOrReplaceTempView("mor_test_partition_table");
-    val sql = "select tip_history from  mor_test_partition_table where partition = '20160315'"
+    val sql = "select * from mor_test_partition_table where partition > '20150415'"
+    spark.sql(sql).show(10)
 
     val plan = new TestMORQueryExecution(spark,sql).sparkPlan
     val mergeOnReadSnapshotRelation = plan.collect {
@@ -538,14 +545,27 @@ class TestMORDataSource extends HoodieClientTestBase {
 
     val fileIndexPaths = mergeOnReadSnapshotRelation.getFileIndexPaths;
 
+    //    path
+    //    └── to
+    //      └── table
+    //      ├── partition=20150316
+    //        └── data.parquet
+    //      ├── partition=20150317
+    //        └── data.parquet
+    //      ├── partition=20160315
+    //        └── data.parquet
+
+    // there will only remain ../partition=20160315/data.parquet when filter partition > '20150415'
     assertEquals(1,fileIndexPaths.length)
     assertTrue(fileIndexPaths.get(0).contains("20160315"))
   }
 
   @Test
   def testPrunePartitionsWithInferedSchema() {
+    spark.conf.set("spark.sql.parquet.enableVectorizedReader", true)
+    assertTrue(spark.conf.get("spark.sql.parquet.enableVectorizedReader").toBoolean)
     // First Operation:
-    // Producing parquet files to three hive style partitions like year=2015/month=03/day=16 from partition column value (2015/03/16).
+    // Producing parquet files to three hive style partitions like year=2015/month=03/day=16 from split partition column value (2015/03/16).
     // SNAPSHOT view on MOR table with parquet files only.
     val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
@@ -558,17 +578,16 @@ class TestMORDataSource extends HoodieClientTestBase {
       .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY, "true")
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    println(basePath)
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .option("basePath", basePath)
       .option("mergeSchema", "true")
       .load(basePath + "/*/*/*/*")
-    hudiSnapshotDF1.printSchema()
 
     hudiSnapshotDF1.createOrReplaceTempView("mor_test_partition_table");
-    val sql = "select tip_history from  mor_test_partition_table where year = '2015' and month = '03'"
+    hudiSnapshotDF1.printSchema()
+    val sql = "select tip_history,year,month,day from mor_test_partition_table where year < '2016' and month > '01'"
 
     val plan = new TestMORQueryExecution(spark,sql).sparkPlan
     val mergeOnReadSnapshotRelation = plan.collect {
@@ -577,6 +596,22 @@ class TestMORDataSource extends HoodieClientTestBase {
 
     val fileIndexPaths = mergeOnReadSnapshotRelation.getFileIndexPaths;
 
+    // we have three partition values: "2015/03/16","2015/03/17","2016/03/15", path view as follow:
+    //    path
+    //    └── to
+    //      └── table
+    //      ├── year=2015
+    //    │   ├── month=03
+    //          ├── day=16
+    //    │   │   └── data.parquet
+    //          ├── day=17
+    //    │   │   └── data.parquet
+    //      ├── year=2016
+    //    │   ├── month=03
+    //          ├── day=15
+    //    │   │   └── data.parquet
+
+    // there will remain year=2015/month=03/day=16/data.parquet and ../day=17/data.parquet when filter year < '2016' and month > '01'"
     assertEquals(2,fileIndexPaths.length)
     assertTrue(fileIndexPaths.get(0).contains("year=2015/month=03"))
     assertTrue(fileIndexPaths.get(1).contains("year=2015/month=03"))
@@ -639,6 +674,25 @@ class TestMORDataSource extends HoodieClientTestBase {
   def verifyShow(df: DataFrame): Unit = {
     df.show(1)
     df.select("_hoodie_commit_seqno", "fare.amount", "fare.currency", "tip_history").show(1)
+  }
+}
+
+/**
+ * This Key Generator class is use for data schema is not contain partition schema.
+ */
+private class InferPartitionsKeyGeneratorForTesting (val props: TypedProperties, val recordKeyField: String)
+  extends SimpleKeyGenerator(props) {
+
+  private var partitionPathTemplate = "year={0}/month={1}/day={2}"
+
+  def this(props: TypedProperties) {
+    this(props, props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY))
+  }
+
+  override def getPartitionPath(record: GenericRecord): String = {
+    val dateVal = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathFields.get(0), true)
+    val dateArr = dateVal.split("/")
+    MessageFormat.format(partitionPathTemplate, dateArr(0), dateArr(1), dateArr(2))
   }
 }
 
