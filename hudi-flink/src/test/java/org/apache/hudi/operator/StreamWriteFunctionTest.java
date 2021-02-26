@@ -49,7 +49,6 @@ import static org.apache.hudi.operator.utils.TestData.checkWrittenData;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -87,9 +86,12 @@ public class StreamWriteFunctionTest {
   @TempDir
   File tempFile;
 
+  private String tempFilePath;
+
   @BeforeEach
   public void before() throws Exception {
-    this.funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath());
+    tempFilePath = tempFile.getAbsolutePath();
+    this.funcWrapper = new StreamWriteFunctionWrapper<>(tempFilePath);
   }
 
   @AfterEach
@@ -232,9 +234,9 @@ public class StreamWriteFunctionTest {
   @Test
   public void testInsertDuplicates() throws Exception {
     // reset the config option
-    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    Configuration conf = TestConfigurations.getDefaultConf(tempFilePath);
     conf.setBoolean(FlinkOptions.INSERT_DROP_DUPS, true);
-    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
+    funcWrapper = new StreamWriteFunctionWrapper<>(tempFilePath, conf);
 
     // open the function and ingest data
     funcWrapper.openFunction();
@@ -319,9 +321,9 @@ public class StreamWriteFunctionTest {
   @Test
   public void testInsertWithMiniBatches() throws Exception {
     // reset the config option
-    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    Configuration conf = TestConfigurations.getDefaultConf(tempFilePath);
     conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.001); // 1Kb batch size
-    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
+    funcWrapper = new StreamWriteFunctionWrapper<>(tempFilePath, conf);
 
     // open the function and ingest data
     funcWrapper.openFunction();
@@ -407,6 +409,7 @@ public class StreamWriteFunctionTest {
     // Mark the index state as not fully loaded to trigger re-load from the filesystem.
     funcWrapper.clearIndexState();
 
+    funcWrapper.openFunction();
     // upsert another data buffer
     for (RowData rowData : TestData.DATA_SET_TWO) {
       funcWrapper.invoke(rowData);
@@ -436,7 +439,7 @@ public class StreamWriteFunctionTest {
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
 
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.REQUESTED, instant);
-    assertFalse(funcWrapper.isAllPartitionsLoaded(),
+    assertTrue(funcWrapper.isAllPartitionsLoaded(),
         "All partitions assume to be loaded into the index state");
     funcWrapper.checkpointComplete(2);
     // the coordinator checkpoint commits the inflight instant.

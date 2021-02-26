@@ -121,8 +121,6 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
    */
   private boolean allPartitionsLoaded = false;
 
-  private transient boolean needInitialPartition;
-
   public BucketAssignFunction(Configuration conf) {
     this.conf = conf;
     this.isChangingRecords = WriteOperationType.isChangingRecords(
@@ -165,18 +163,11 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     MapStateDescriptor<String, Integer> partitionLoadStateDesc =
         new MapStateDescriptor<>("partitionLoadState", Types.STRING, Types.INT);
     partitionLoadState = context.getKeyedStateStore().getMapState(partitionLoadStateDesc);
-    if (context.isRestored()) {
-      needInitialPartition = true;
-    }
   }
 
   @SuppressWarnings("unchecked")
   @Override
   public void processElement(I value, Context ctx, Collector<O> out) throws Exception {
-    if (needInitialPartition) {
-      checkPartitionsLoaded();
-      needInitialPartition = false;
-    }
     // 1. put the record into the BucketAssigner;
     // 2. look up the state for location, if the record has a location, just send it out;
     // 3. if it is an INSERT, decide the location using the BucketAssigner then send it out.
@@ -187,6 +178,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     if (!allPartitionsLoaded && !partitionLoadState.contains(hoodieKey.getPartitionPath())) {
       // If the partition records are never loaded, load the records first.
       loadRecords(hoodieKey.getPartitionPath());
+      checkPartitionsLoaded();
     }
     // Only changing records need looking up the index for the location,
     // append only records are always recognized as INSERT.
@@ -222,7 +214,6 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     // Refresh the table state when there are new commits.
     this.bucketAssigner.reset();
     this.bucketAssigner.refreshTable();
-    this.needInitialPartition = true;
   }
 
   /**
