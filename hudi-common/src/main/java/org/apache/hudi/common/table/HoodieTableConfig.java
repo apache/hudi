@@ -266,7 +266,6 @@ public class HoodieTableConfig implements Serializable {
   }
 
   public static class PropertyBuilder {
-    private Properties baseProperties = new Properties();
     private HoodieTableType tableType;
     private String tableName;
     private String archiveLogFolder;
@@ -342,8 +341,15 @@ public class HoodieTableConfig implements Serializable {
     }
 
     public PropertyBuilder fromProperties(Properties properties) {
-      this.baseProperties = properties;
-      return this;
+      return setTableName(properties.getProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME))
+        .setTableType(properties.getProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME))
+        .setArchiveLogFolder(properties.getProperty(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME))
+        .setPayloadClassName(properties.getProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME))
+        .setTimelineLayoutVersion(Integer.parseInt(properties.getProperty(HoodieTableConfig.HOODIE_TIMELINE_LAYOUT_VERSION)))
+        .setBaseFileFormat(properties.getProperty(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP_NAME))
+        .setBootstrapIndexClass(properties.getProperty(HoodieTableConfig.HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME))
+        .setBootstrapBasePath(properties.getProperty(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH))
+        .setPreCombineField(properties.getProperty(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD));
     }
 
     public Properties build() {
@@ -351,9 +357,6 @@ public class HoodieTableConfig implements Serializable {
       ValidationUtils.checkArgument(tableName != null, "tableName is null");
 
       Properties properties = new Properties();
-      if (baseProperties != null) {
-        properties.putAll(baseProperties);
-      }
       properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tableName);
       properties.setProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
       properties.setProperty(HoodieTableConfig.HOODIE_TABLE_VERSION_PROP_NAME, String.valueOf(HoodieTableVersion.current().versionCode()));

@@ -102,10 +102,10 @@ public class HoodieTestUtils {
                                            Properties properties)
       throws IOException {
     properties = HoodieTableConfig.propertyBuilder()
-      .fromProperties(properties)
       .setTableName(RAW_TRIPS_TEST_NAME)
       .setTableType(tableType)
       .setPayloadClass(HoodieAvroPayload.class)
+      .fromProperties(properties)
       .build();
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
   }
