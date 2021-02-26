@@ -70,7 +70,7 @@ public class AvroKafkaSource extends AvroSource {
     }
 
     this.metrics = metrics;
-    this.injectKafkaData = props.getBoolean(AvroKafkaSourceHelpers.INJECT_KAFKA_FIELDS, false);
+    this.injectKafkaData = props.getBoolean(AvroKafkaSourceHelpers.INJECT_KAFKA_META_FIELDS, false);
 
     offsetGen = new KafkaOffsetGen(props);
   }

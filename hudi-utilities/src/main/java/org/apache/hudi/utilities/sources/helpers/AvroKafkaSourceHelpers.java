@@ -29,39 +29,39 @@ import java.util.Map;
 
 public class AvroKafkaSourceHelpers {
 
-  public static final String INJECT_KAFKA_FIELDS = "hoodie.deltastreamer.source.inject_kafka_fields";
+  public static final String INJECT_KAFKA_META_FIELDS = "hoodie.deltastreamer.source.inject_kafka_fields";
 
-  public static final String KAFKA_PARTITION = "_hudi_kafka_partition";
-  public static final String KAFKA_OFFSET = "_hudi_kafka_offset";
-  public static final String KAFKA_TOPIC = "_hudi_kafka_topic";
-  public static final String KAFKA_KEY = "_hudi_kafka_key";
-  private static final String KAFKA_FIELDS_PATTERN = "<KAFKA_FIELDS>";
+  public static final String KAFKA_PARTITION_META_FIELD = "_hudi_kafka_partition";
+  public static final String KAFKA_OFFSET_META_FIELD = "_hudi_kafka_offset";
+  public static final String KAFKA_TOPIC_META_FIELD = "_hudi_kafka_topic";
+  public static final String KAFKA_KEY_META_FIELD = "_hudi_kafka_key";
+  private static final String KAFKA_META_FIELDS_PATTERN = "<KAFKA_FIELDS>";
 
-  private static final String ALL_KAFKA_FIELDS = String.join(
+  private static final String ALL_KAFKA_META_FIELDS = String.join(
       ",",
-      AvroKafkaSourceHelpers.KAFKA_PARTITION,
-      AvroKafkaSourceHelpers.KAFKA_OFFSET,
-      AvroKafkaSourceHelpers.KAFKA_TOPIC,
-      AvroKafkaSourceHelpers.KAFKA_KEY);
+      AvroKafkaSourceHelpers.KAFKA_PARTITION_META_FIELD,
+      AvroKafkaSourceHelpers.KAFKA_OFFSET_META_FIELD,
+      AvroKafkaSourceHelpers.KAFKA_TOPIC_META_FIELD,
+      AvroKafkaSourceHelpers.KAFKA_KEY_META_FIELD);
 
   public static String transform(String sql) {
-    return sql.replaceAll(KAFKA_FIELDS_PATTERN, ALL_KAFKA_FIELDS);
+    return sql.replaceAll(KAFKA_META_FIELDS_PATTERN, ALL_KAFKA_META_FIELDS);
   }
 
   public static GenericRecord addKafkaFields(ConsumerRecord<Object, Object> obj) {
     GenericRecord record = (GenericRecord) obj.value();
-    record.put(AvroKafkaSourceHelpers.KAFKA_OFFSET, obj.offset());
-    record.put(AvroKafkaSourceHelpers.KAFKA_PARTITION, obj.partition());
-    record.put(AvroKafkaSourceHelpers.KAFKA_TOPIC, obj.topic());
-    record.put(AvroKafkaSourceHelpers.KAFKA_KEY, obj.key());
+    record.put(AvroKafkaSourceHelpers.KAFKA_OFFSET_META_FIELD, obj.offset());
+    record.put(AvroKafkaSourceHelpers.KAFKA_PARTITION_META_FIELD, obj.partition());
+    record.put(AvroKafkaSourceHelpers.KAFKA_TOPIC_META_FIELD, obj.topic());
+    record.put(AvroKafkaSourceHelpers.KAFKA_KEY_META_FIELD, obj.key());
     return record;
   }
 
   private static boolean isKafkaMetadataField(String fieldName) {
-    return AvroKafkaSourceHelpers.KAFKA_PARTITION.equals(fieldName)
-        || AvroKafkaSourceHelpers.KAFKA_OFFSET.equals(fieldName)
-        || AvroKafkaSourceHelpers.KAFKA_TOPIC.equals(fieldName)
-        || AvroKafkaSourceHelpers.KAFKA_KEY.equals(fieldName);
+    return AvroKafkaSourceHelpers.KAFKA_PARTITION_META_FIELD.equals(fieldName)
+        || AvroKafkaSourceHelpers.KAFKA_OFFSET_META_FIELD.equals(fieldName)
+        || AvroKafkaSourceHelpers.KAFKA_TOPIC_META_FIELD.equals(fieldName)
+        || AvroKafkaSourceHelpers.KAFKA_KEY_META_FIELD.equals(fieldName);
   }
 
   /**
@@ -84,25 +84,25 @@ public class AvroKafkaSourceHelpers {
 
     final Schema.Field partitionField =
         new Schema.Field(
-            AvroKafkaSourceHelpers.KAFKA_PARTITION,
+            AvroKafkaSourceHelpers.KAFKA_PARTITION_META_FIELD,
             Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.INT))),
             "",
             Schema.NULL_VALUE);
     final Schema.Field offsetField =
         new Schema.Field(
-            AvroKafkaSourceHelpers.KAFKA_OFFSET,
+            AvroKafkaSourceHelpers.KAFKA_OFFSET_META_FIELD,
             Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.LONG))),
             "",
             Schema.NULL_VALUE);
     final Schema.Field topicField =
         new Schema.Field(
-            AvroKafkaSourceHelpers.KAFKA_TOPIC,
+            AvroKafkaSourceHelpers.KAFKA_TOPIC_META_FIELD,
             Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))),
             "",
             Schema.NULL_VALUE);
     final Schema.Field keyField =
         new Schema.Field(
-            AvroKafkaSourceHelpers.KAFKA_KEY,
+            AvroKafkaSourceHelpers.KAFKA_KEY_META_FIELD,
             Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING))),
             "",
             Schema.NULL_VALUE);

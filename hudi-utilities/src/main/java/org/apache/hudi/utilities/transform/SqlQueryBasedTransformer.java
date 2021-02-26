@@ -63,7 +63,7 @@ public class SqlQueryBasedTransformer implements Transformer {
     LOG.info("Registering tmp table : " + tmpTable);
     rowDataset.registerTempTable(tmpTable);
     String sqlStr = transformerSQL.replaceAll(SRC_PATTERN, tmpTable);
-    if (properties.getBoolean(AvroKafkaSourceHelpers.INJECT_KAFKA_FIELDS, false)) {
+    if (properties.getBoolean(AvroKafkaSourceHelpers.INJECT_KAFKA_META_FIELDS, false)) {
       sqlStr = AvroKafkaSourceHelpers.transform(sqlStr);
     }
     LOG.info("SQL Query for transformation : (" + sqlStr + ")");

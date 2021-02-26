@@ -44,7 +44,6 @@ import java.util.Objects;
 public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
 
   private static final String SCHEMA_PROVIDER_CLASS_PROP = "hoodie.deltastreamer.schemaprovider.class";
-
   private final DecoderFactory decoderFactory = DecoderFactory.get();
   private Schema sourceSchema;
 
@@ -85,84 +84,7 @@ public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
       byte[] payload,
       Schema readerSchema)
       throws SerializationException {
-    // Even if the caller requests schema & version, if the payload is null we cannot include it.
-    // The caller must handle
-    // this case.
-    if (payload == null) {
-      return null;
-    }
-    int id = -1;
-    try {
-      ByteBuffer buffer = getByteBuffer(payload);
-      id = buffer.getInt();
-      Schema schema = schemaRegistry.getByID(id);
-
-      int length = buffer.limit() - 1 - idSize;
-      final Object result;
-      if (schema.getType().equals(Schema.Type.BYTES)) {
-        byte[] bytes = new byte[length];
-        buffer.get(bytes, 0, length);
-        result = bytes;
-      } else {
-        int start = buffer.position() + buffer.arrayOffset();
-        DatumReader reader = new GenericDatumReader(schema, sourceSchema);
-        Object object =
-            reader.read(null, decoderFactory.binaryDecoder(buffer.array(), start, length, null));
-
-        if (schema.getType().equals(Schema.Type.STRING)) {
-          object = object.toString(); // Utf8 -> String
-        }
-        result = object;
-      }
-
-      if (includeSchemaAndVersion) {
-        // Annotate the schema with the version. Note that we only do this if the schema +
-        // version are requested, i.e. in Kafka Connect converters. This is critical because that
-        // code *will not* rely on exact schema equality. Regular deserializers *must not* include
-        // this information because it would return schemas which are not equivalent.
-        //
-        // Note, however, that we also do not fill in the connect.version field. This allows the
-        // Converter to let a version provided by a Kafka Connect source take priority over the
-        // schema registry's ordering (which is implicit by auto-registration time rather than
-        // explicit from the Connector).
-        Integer version = schemaRegistry.getVersion(getSubjectName(topic, isKey), schema);
-        if (schema.getType() == Schema.Type.UNION) {
-          // Can't set additional properties on a union schema since it's just a list, so set it
-          // on the first non-null entry
-          for (Schema memberSchema : schema.getTypes()) {
-            if (memberSchema.getType() != Schema.Type.NULL) {
-              memberSchema.addProp(
-                  SCHEMA_REGISTRY_SCHEMA_VERSION_PROP,
-                  JsonNodeFactory.instance.numberNode(version));
-              break;
-            }
-          }
-        } else {
-          schema.addProp(
-              SCHEMA_REGISTRY_SCHEMA_VERSION_PROP, JsonNodeFactory.instance.numberNode(version));
-        }
-        if (schema.getType().equals(Schema.Type.RECORD)) {
-          return result;
-        } else {
-          return new NonRecordContainer(schema, result);
-        }
-      } else {
-        return result;
-      }
-    } catch (IOException | RuntimeException e) {
-      // avro deserialization may throw AvroRuntimeException, NullPointerException, etc
-      throw new SerializationException("Error deserializing Avro message for id " + id, e);
-    } catch (RestClientException e) {
-      throw new SerializationException("Error retrieving Avro schema for id " + id, e);
-    }
-  }
-
-  private ByteBuffer getByteBuffer(byte[] payload) {
-    ByteBuffer buffer = ByteBuffer.wrap(payload);
-    if (buffer.get() != MAGIC_BYTE) {
-      throw new SerializationException("Unknown magic byte!");
-    }
-    return buffer;
+    return super.deserialize(includeSchemaAndVersion, topic, isKey, payload, sourceSchema);
   }
 
   private TypedProperties getConvertToTypedProperties(Map<String, ?> configs) {

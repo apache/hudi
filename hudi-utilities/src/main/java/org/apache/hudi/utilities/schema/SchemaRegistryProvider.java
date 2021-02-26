@@ -67,7 +67,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
     super(props, jssc);
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SRC_SCHEMA_REGISTRY_URL_PROP));
     this.cacheDisabled = !props.getBoolean(Config.CACHE_SCHEMAS, false);
-    this.injectKafkaFieldSchema = props.getBoolean(AvroKafkaSourceHelpers.INJECT_KAFKA_FIELDS, false);
+    this.injectKafkaFieldSchema = props.getBoolean(AvroKafkaSourceHelpers.INJECT_KAFKA_META_FIELDS, false);
     this.registryUrl = config.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
     this.targetRegistryUrl = config.getString(Config.TARGET_SCHEMA_REGISTRY_URL_PROP, registryUrl);
     this.noTargetSchema = targetRegistryUrl.equals("null");
