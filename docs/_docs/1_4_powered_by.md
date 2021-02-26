@@ -145,6 +145,8 @@ Meanwhile, we build a set of data access standards based on Hudi, which provides
 
 21. ["Meetup talk by Nishith Agarwal"](https://www.meetup.com/UberEvents/events/274924537/) - Uber Data Platforms Meetup, Dec 2020
 
+22. ["Apache Hudi learning series: Understanding Hudi internals By Abhishek Modi, Balajee Nagasubramaniam, Prashant Wason, Satish Kotha, Nishith Agarwal"]("https://www.slideshare.net/NishithAgarwal3/hudi-architecture-fundamentals-and-capabilities") - Uber Meetup, Virtual, Feb 2021
+
 ## Articles
 
 You can check out [our blog pages](https://hudi.apache.org/blog.html) for content written by our committers/contributors.
@@ -165,6 +167,7 @@ You can check out [our blog pages](https://hudi.apache.org/blog.html) for conten
 14. ["Can Big Data Solutions Be Affordable?"](https://www.analyticsinsight.net/can-big-data-solutions-be-affordable/)
 15. ["Building High-Performance Data Lake Using Apache Hudi and Alluxio at T3Go"](https://www.alluxio.io/blog/building-high-performance-data-lake-using-apache-hudi-and-alluxio-at-t3go/)
 16. ["Data Lake Change Capture using Apache Hudi & Amazon AMS/EMR Part 2"](https://towardsdatascience.com/data-lake-change-data-capture-cdc-using-apache-hudi-on-amazon-emr-part-2-process-65e4662d7b4b)
+17. ["Building a large scale transactional data lake at Uber using Apache Hudi"](https://eng.uber.com/apache-hudi-graduation/) - Engineering Blog By Nishith Agarwal
 
 ## Powered by
 
