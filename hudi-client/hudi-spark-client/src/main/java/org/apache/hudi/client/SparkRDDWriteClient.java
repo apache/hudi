@@ -26,6 +26,7 @@ import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.model.DistributedMetricsReporter;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
@@ -50,6 +51,7 @@ import org.apache.hudi.index.SparkHoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metrics.HoodieDistributedMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -74,14 +76,15 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     AbstractHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
 
   private static final Logger LOG = LogManager.getLogger(SparkRDDWriteClient.class);
+  protected transient HoodieDistributedMetrics distributedMetrics;
 
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
-    super(context, clientConfig);
+    this(context, clientConfig, Option.empty());
   }
 
   @Deprecated
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig, boolean rollbackPending) {
-    super(context, writeConfig);
+    this(context, writeConfig, rollbackPending, Option.empty());
   }
 
   @Deprecated
@@ -435,6 +438,14 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     } else {
       writeTimer = metrics.getDeltaCommitCtx();
     }
+    if (config.isMetricsOn() && config.isExecutorMetricsEnabled()) {
+      if (!getHoodieDistributedMetrics().isPresent()) {
+        distributedMetrics = (HoodieDistributedMetrics) Registry.getRegistry(
+            DistributedMetricsReporter.DISTRIBUTED_METRICS_REGISTRY_NAME, HoodieDistributedMetrics.class.getName());
+        distributedMetrics.registerWithSpark(context, config);
+      }
+      table.setDistributedMetricsRegistry(DistributedMetricsReporter.DISTRIBUTED_METRICS_REGISTRY_NAME, distributedMetrics);
+    }
     return table;
   }
 
@@ -479,5 +490,9 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
       HoodieWrapperFileSystem.setMetricsRegistry(registry, registryMeta);
     }
+  }
+
+  public Option<HoodieDistributedMetrics> getHoodieDistributedMetrics() {
+    return Option.ofNullable(distributedMetrics);
   }
 }

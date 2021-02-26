@@ -22,6 +22,8 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.model.DistributedMetricsReporter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.IOType;
@@ -46,6 +48,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -203,5 +206,27 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   protected HoodieFileWriter createNewFileWriter(String instantTime, Path path, HoodieTable<T, I, K, O> hoodieTable,
       HoodieWriteConfig config, Schema schema, TaskContextSupplier taskContextSupplier) throws IOException {
     return HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, schema, taskContextSupplier);
+  }
+
+  protected void reportWriteMetrics(long recordsWritten, long cumulativeWriteTimeInMSec, long fileSizeInBytes) {
+    Option<Registry> registry = hoodieTable.getDistributedMetricsRegistry(
+        DistributedMetricsReporter.DISTRIBUTED_METRICS_REGISTRY_NAME);
+
+    if (registry.isPresent()) {
+      // instantiate reporter
+      DistributedMetricsReporter distributedMetricsReporter = new DistributedMetricsReporter(registry,
+          hoodieTable.getMetaClient().getTableConfig().getTableName(), getStageId(), getPartitionId());
+
+      // update additional properties
+      HashMap<String, Object> props = distributedMetricsReporter.getPropertiesMap();
+      props.put(DistributedMetricsReporter.IO_TYPE, getIOType());
+      props.put(DistributedMetricsReporter.WriteMetrics.TOTAL_RECORDS_WRITTEN, recordsWritten);
+      props.put(DistributedMetricsReporter.WriteMetrics.PARQUET_CUMULATIVE_WRITE_TIME_IN_USEC,
+          cumulativeWriteTimeInMSec * 1000);
+      props.put(DistributedMetricsReporter.WriteMetrics.TOTAL_BYTES_WRITTEN, fileSizeInBytes);
+
+      // report write metrics
+      distributedMetricsReporter.reportWriteMetrics();
+    }
   }
 }

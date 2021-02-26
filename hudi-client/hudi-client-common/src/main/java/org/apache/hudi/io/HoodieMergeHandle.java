@@ -336,8 +336,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       }
 
       long fileSizeInBytes = FSUtils.getFileSize(fs, newFilePath);
-      HoodieWriteStat stat = writeStatus.getStat();
 
+      HoodieWriteStat stat = writeStatus.getStat();
       stat.setTotalWriteBytes(fileSizeInBytes);
       stat.setFileSizeInBytes(fileSizeInBytes);
       stat.setNumWrites(recordsWritten);
@@ -345,11 +345,15 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       stat.setNumUpdateWrites(updatedRecordsWritten);
       stat.setNumInserts(insertRecordsWritten);
       stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
+
+      performMergeDataValidationCheck(writeStatus);
+
       RuntimeStats runtimeStats = new RuntimeStats();
       runtimeStats.setTotalUpsertTime(timer.endTimer());
       stat.setRuntimeStats(runtimeStats);
 
-      performMergeDataValidationCheck(writeStatus);
+      // report write metrics
+      reportWriteMetrics(recordsWritten, runtimeStats.getTotalUpsertTime(), fileSizeInBytes);
 
       LOG.info(String.format("MergeHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
           stat.getFileId(), runtimeStats.getTotalUpsertTime()));

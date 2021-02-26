@@ -197,6 +197,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
    * @throws IOException if error occurs
    */
   protected void setupWriteStatus() throws IOException {
+    long fileSizeInBytes = computeFileSizeInBytes();
     HoodieWriteStat stat = new HoodieWriteStat();
     stat.setPartitionPath(writeStatus.getPartitionPath());
     stat.setNumWrites(recordsWritten);
@@ -206,12 +207,15 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
     stat.setFileId(writeStatus.getFileId());
     stat.setPath(new Path(config.getBasePath()), path);
     stat.setTotalWriteBytes(computeTotalWriteBytes());
-    stat.setFileSizeInBytes(computeFileSizeInBytes());
+    stat.setFileSizeInBytes(fileSizeInBytes);
     stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
     RuntimeStats runtimeStats = new RuntimeStats();
     runtimeStats.setTotalCreateTime(timer.endTimer());
     stat.setRuntimeStats(runtimeStats);
     writeStatus.setStat(stat);
+
+    // record write metrics
+    reportWriteMetrics(recordsWritten, runtimeStats.getTotalCreateTime(), fileSizeInBytes);
   }
 
   protected long computeTotalWriteBytes() throws IOException {
