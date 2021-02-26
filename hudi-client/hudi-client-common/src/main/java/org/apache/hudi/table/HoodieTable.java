@@ -656,6 +656,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   public HoodieLogBlockType getLogDataBlockFormat() {
     switch (getBaseFileFormat()) {
       case PARQUET:
+      case ORC:
         return HoodieLogBlockType.AVRO_DATA_BLOCK;
       case HFILE:
         return HoodieLogBlockType.HFILE_DATA_BLOCK;
