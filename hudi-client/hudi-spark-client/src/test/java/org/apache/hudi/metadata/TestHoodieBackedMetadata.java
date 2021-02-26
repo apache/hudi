@@ -148,14 +148,22 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     final String nonPartitionDirectory = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0] + "-nonpartition";
     Files.createDirectories(Paths.get(basePath, nonPartitionDirectory));
 
+    // Three directories which are partitions but will be ignored due to filter
+    final String filterDirRegex = ".*-filterDir\\d|\\..*";
+    final String filteredDirectoryOne = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0] + "-filterDir1";
+    final String filteredDirectoryTwo = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0] + "-filterDir2";
+    final String filteredDirectoryThree = ".backups";
+
     // Create some commits
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
-    testTable.withPartitionMetaFiles("p1", "p2")
+    testTable.withPartitionMetaFiles("p1", "p2", filteredDirectoryOne, filteredDirectoryTwo, filteredDirectoryThree)
         .addCommit("001").withBaseFilesInPartition("p1", 10).withBaseFilesInPartition("p2", 10, 10)
         .addCommit("002").withBaseFilesInPartition("p1", 10).withBaseFilesInPartition("p2", 10, 10, 10)
         .addInflightCommit("003").withBaseFilesInPartition("p1", 10).withBaseFilesInPartition("p2", 10);
 
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
+    final HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withDirectoryFilterRegex(filterDirRegex).build()).build();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
       client.startCommitWithTime("005");
 
       List<String> partitions = metadataWriter(client).metadata().getAllPartitionPaths();
@@ -163,6 +171,13 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
           "Must not contain the non-partition " + nonPartitionDirectory);
       assertTrue(partitions.contains("p1"), "Must contain partition p1");
       assertTrue(partitions.contains("p2"), "Must contain partition p2");
+
+      assertFalse(partitions.contains(filteredDirectoryOne),
+          "Must not contain the filtered directory " + filteredDirectoryOne);
+      assertFalse(partitions.contains(filteredDirectoryTwo),
+          "Must not contain the filtered directory " + filteredDirectoryTwo);
+      assertFalse(partitions.contains(filteredDirectoryThree),
+          "Must not contain the filtered directory " + filteredDirectoryThree);
 
       FileStatus[] statuses = metadata(client).getAllFilesInPartition(new Path(basePath, "p1"));
       assertTrue(statuses.length == 2);
