@@ -145,7 +145,7 @@ Meanwhile, we build a set of data access standards based on Hudi, which provides
 
 21. ["Meetup talk by Nishith Agarwal"](https://www.meetup.com/UberEvents/events/274924537/) - Uber Data Platforms Meetup, Dec 2020
 
-22. ["Apache Hudi learning series: Understanding Hudi internals By Abhishek Modi, Balajee Nagasubramaniam, Prashant Wason, Satish Kotha, Nishith Agarwal"]("https://www.slideshare.net/NishithAgarwal3/hudi-architecture-fundamentals-and-capabilities") - Uber Meetup, Virtual, Feb 2021
+22. ["Apache Hudi learning series: Understanding Hudi internals"](https://www.slideshare.net/NishithAgarwal3/hudi-architecture-fundamentals-and-capabilities) - By Abhishek Modi, Balajee Nagasubramaniam, Prashant Wason, Satish Kotha, Nishith Agarwal, Feb 2021, Uber Meetup
 
 ## Articles
 
