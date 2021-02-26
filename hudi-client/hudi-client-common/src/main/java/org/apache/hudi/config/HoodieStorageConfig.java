@@ -39,10 +39,19 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
   public static final String DEFAULT_PARQUET_BLOCK_SIZE_BYTES = DEFAULT_PARQUET_FILE_MAX_BYTES;
   public static final String PARQUET_PAGE_SIZE_BYTES = "hoodie.parquet.page.size";
   public static final String DEFAULT_PARQUET_PAGE_SIZE_BYTES = String.valueOf(1 * 1024 * 1024);
+
   public static final String HFILE_FILE_MAX_BYTES = "hoodie.hfile.max.file.size";
   public static final String HFILE_BLOCK_SIZE_BYTES = "hoodie.hfile.block.size";
   public static final String DEFAULT_HFILE_BLOCK_SIZE_BYTES = String.valueOf(1 * 1024 * 1024);
   public static final String DEFAULT_HFILE_FILE_MAX_BYTES = String.valueOf(120 * 1024 * 1024);
+
+  public static final String ORC_FILE_MAX_BYTES = "hoodie.orc.max.file.size";
+  public static final String DEFAULT_ORC_FILE_MAX_BYTES = String.valueOf(120 * 1024 * 1024);
+  public static final String ORC_STRIPE_SIZE = "hoodie.orc.stripe.size";
+  public static final String DEFAULT_ORC_STRIPE_SIZE = String.valueOf(64 * 1024 * 1024);
+  public static final String ORC_BLOCK_SIZE = "hoodie.orc.block.size";
+  public static final String DEFAULT_ORC_BLOCK_SIZE = DEFAULT_ORC_FILE_MAX_BYTES;
+
   // used to size log files
   public static final String LOGFILE_SIZE_MAX_BYTES = "hoodie.logfile.max.size";
   public static final String DEFAULT_LOGFILE_SIZE_MAX_BYTES = String.valueOf(1024 * 1024 * 1024); // 1 GB
@@ -54,9 +63,11 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
   public static final String DEFAULT_STREAM_COMPRESSION_RATIO = String.valueOf(0.1);
   public static final String PARQUET_COMPRESSION_CODEC = "hoodie.parquet.compression.codec";
   public static final String HFILE_COMPRESSION_ALGORITHM = "hoodie.hfile.compression.algorithm";
+  public static final String ORC_COMPRESSION_CODEC = "hoodie.orc.compression.codec";
   // Default compression codec for parquet
   public static final String DEFAULT_PARQUET_COMPRESSION_CODEC = "gzip";
   public static final String DEFAULT_HFILE_COMPRESSION_ALGORITHM = "GZ";
+  public static final String DEFAULT_ORC_COMPRESSION_CODEC = "ZLIB";
   public static final String LOGFILE_TO_PARQUET_COMPRESSION_RATIO = "hoodie.logfile.to.parquet.compression.ratio";
   // Default compression ratio for log file to parquet, general 3x
   public static final String DEFAULT_LOGFILE_TO_PARQUET_COMPRESSION_RATIO = String.valueOf(0.35);
@@ -140,6 +151,26 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder orcMaxFileSize(long maxFileSize) {
+      props.setProperty(ORC_FILE_MAX_BYTES, String.valueOf(maxFileSize));
+      return this;
+    }
+
+    public Builder orcStripeSize(int orcStripeSize) {
+      props.setProperty(ORC_STRIPE_SIZE, String.valueOf(orcStripeSize));
+      return this;
+    }
+
+    public Builder orcBlockSize(int orcBlockSize) {
+      props.setProperty(ORC_BLOCK_SIZE, String.valueOf(orcBlockSize));
+      return this;
+    }
+
+    public Builder orcCompressionCodec(String orcCompressionCodec) {
+      props.setProperty(ORC_COMPRESSION_CODEC, orcCompressionCodec);
+      return this;
+    }
+
     public HoodieStorageConfig build() {
       HoodieStorageConfig config = new HoodieStorageConfig(props);
       setDefaultOnCondition(props, !props.containsKey(PARQUET_FILE_MAX_BYTES), PARQUET_FILE_MAX_BYTES,
@@ -165,6 +196,15 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
           DEFAULT_HFILE_COMPRESSION_ALGORITHM);
       setDefaultOnCondition(props, !props.containsKey(HFILE_FILE_MAX_BYTES), HFILE_FILE_MAX_BYTES,
           DEFAULT_HFILE_FILE_MAX_BYTES);
+
+      setDefaultOnCondition(props, !props.containsKey(ORC_FILE_MAX_BYTES), ORC_FILE_MAX_BYTES,
+          DEFAULT_ORC_FILE_MAX_BYTES);
+      setDefaultOnCondition(props, !props.containsKey(ORC_STRIPE_SIZE), ORC_STRIPE_SIZE,
+          DEFAULT_ORC_STRIPE_SIZE);
+      setDefaultOnCondition(props, !props.containsKey(ORC_BLOCK_SIZE), ORC_BLOCK_SIZE,
+          DEFAULT_ORC_BLOCK_SIZE);
+      setDefaultOnCondition(props, !props.containsKey(ORC_COMPRESSION_CODEC), ORC_COMPRESSION_CODEC,
+          DEFAULT_ORC_COMPRESSION_CODEC);
 
       return config;
     }
