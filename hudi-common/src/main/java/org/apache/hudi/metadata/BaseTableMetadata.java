@@ -101,11 +101,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       try {
         return fetchAllPartitionPaths();
       } catch (Exception e) {
-        if (metadataConfig.enableFallback()) {
-          LOG.error("Failed to retrieve list of partition from metadata", e);
-        } else {
-          throw new HoodieMetadataException("Failed to retrieve list of partition from metadata", e);
-        }
+        throw new HoodieMetadataException("Failed to retrieve list of partition from metadata", e);
       }
     }
     return new FileSystemBackedTableMetadata(getEngineContext(), hadoopConf, datasetBasePath,
@@ -129,11 +125,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       try {
         return fetchAllFilesInPartition(partitionPath);
       } catch (Exception e) {
-        if (metadataConfig.enableFallback()) {
-          LOG.error("Failed to retrieve files in partition " + partitionPath + " from metadata", e);
-        } else {
-          throw new HoodieMetadataException("Failed to retrieve files in partition " + partitionPath + " from metadata", e);
-        }
+        throw new HoodieMetadataException("Failed to retrieve files in partition " + partitionPath + " from metadata", e);
       }
     }
 
@@ -293,6 +285,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
   protected abstract List<HoodieInstant> findInstantsToSync();
 
+  @Override
   public boolean isInSync() {
     return enabled && findInstantsToSync().isEmpty();
   }

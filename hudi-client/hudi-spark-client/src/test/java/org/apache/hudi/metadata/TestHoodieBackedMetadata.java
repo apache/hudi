@@ -969,8 +969,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(useFileListingMetadata)
-            .enableMetrics(enableMetrics)
-            .enableFallback(false).build())
+            .enableMetrics(enableMetrics).build())
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(enableMetrics)
             .withExecutorMetrics(true).usePrefix("unit-test").build());
   }
