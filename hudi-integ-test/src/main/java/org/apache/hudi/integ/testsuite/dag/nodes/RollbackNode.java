@@ -23,7 +23,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 import org.apache.hudi.integ.testsuite.helpers.DFSTestSuitePathSelector;
@@ -42,15 +41,17 @@ public class RollbackNode extends DagNode<Option<HoodieInstant>> {
    * Method helps to rollback the last commit instant in the timeline, if it has one.
    *
    * @param executionContext Execution context to perform this rollback
+   * @param curItrCount current iteration count.
    * @throws Exception will be thrown if any error occurred
    */
   @Override
-  public void execute(ExecutionContext executionContext) throws Exception {
+  public void execute(ExecutionContext executionContext, int curItrCount) throws Exception {
     log.info("Executing rollback node {}", this.getName());
     // Can only be done with an instantiation of a new WriteClient hence cannot be done during DeltaStreamer
     // testing for now
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(executionContext.getHoodieTestSuiteWriter().getConfiguration(),
-        executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath);
+    HoodieTableMetaClient metaClient =
+        HoodieTableMetaClient.builder().setConf(executionContext.getHoodieTestSuiteWriter().getConfiguration()).setBasePath(executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath)
+            .build();
     Option<HoodieInstant> lastInstant = metaClient.getActiveTimeline().getCommitsTimeline().lastInstant();
     if (lastInstant.isPresent()) {
       log.info("Rolling back last instant {}", lastInstant.get());

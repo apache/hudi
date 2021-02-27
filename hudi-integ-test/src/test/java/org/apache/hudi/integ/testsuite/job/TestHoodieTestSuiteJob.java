@@ -173,7 +173,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     cfg.workloadDagGenerator = ComplexDagGenerator.class.getName();
     HoodieTestSuiteJob hoodieTestSuiteJob = new HoodieTestSuiteJob(cfg, jsc);
     hoodieTestSuiteJob.runTestSuite();
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(new Configuration(), cfg.targetBasePath);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(cfg.targetBasePath).build();
     assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().getInstants().count(), 2);
   }
 
@@ -192,7 +192,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     }
     HoodieTestSuiteJob hoodieTestSuiteJob = new HoodieTestSuiteJob(cfg, jsc);
     hoodieTestSuiteJob.runTestSuite();
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(new Configuration(), cfg.targetBasePath);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(cfg.targetBasePath).build();
     assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().getInstants().count(), 1);
   }
 
@@ -207,7 +207,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     cfg.workloadYamlPath = dfsBasePath + "/" + COW_DAG_FILE_NAME;
     HoodieTestSuiteJob hoodieTestSuiteJob = new HoodieTestSuiteJob(cfg, jsc);
     hoodieTestSuiteJob.runTestSuite();
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(new Configuration(), cfg.targetBasePath);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(cfg.targetBasePath).build();
     //assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().getInstants().count(), 5);
   }
 
@@ -222,7 +222,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     cfg.workloadYamlPath = dfsBasePath + "/" + MOR_DAG_FILE_NAME;
     HoodieTestSuiteJob hoodieTestSuiteJob = new HoodieTestSuiteJob(cfg, jsc);
     hoodieTestSuiteJob.runTestSuite();
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(new Configuration(), cfg.targetBasePath);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(cfg.targetBasePath).build();
     //assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().getInstants().count(), 7);
   }
 

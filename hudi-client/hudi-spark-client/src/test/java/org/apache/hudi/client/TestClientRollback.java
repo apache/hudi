@@ -21,6 +21,7 @@ package org.apache.hudi.client;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -200,14 +201,11 @@ public class TestClientRollback extends HoodieClientTestBase {
         .withBaseFilesInPartitions(partitionAndFileId3);
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
-    try (SparkRDDWriteClient client = getHoodieWriteClient(config, false)) {
-
-      // Rollback commit 1 (this should fail, since commit2 is still around)
-      assertThrows(HoodieRollbackException.class, () -> {
-        client.rollback(commitTime1);
-      }, "Should have thrown an exception ");
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
 
       // Rollback commit3
       client.rollback(commitTime3);
@@ -290,12 +288,14 @@ public class TestClientRollback extends HoodieClientTestBase {
         .addInflightCommit(commitTime3)
         .withBaseFilesInPartitions(partitionAndFileId3);
 
-    // Turn auto rollback off
+    // Set Failed Writes rollback to LAZY
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build()).build();
 
     final String commitTime4 = "20160506030621";
-    try (SparkRDDWriteClient client = getHoodieWriteClient(config, false)) {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       client.startCommitWithTime(commitTime4);
       // Check results, nothing changed
       assertTrue(testTable.commitExists(commitTime1));
@@ -306,9 +306,11 @@ public class TestClientRollback extends HoodieClientTestBase {
       assertTrue(testTable.baseFilesExist(partitionAndFileId3, commitTime3));
     }
 
-    // Turn auto rollback on
+    // Set Failed Writes rollback to EAGER
+    config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
     final String commitTime5 = "20160506030631";
-    try (SparkRDDWriteClient client = getHoodieWriteClient(config, true)) {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       client.startCommitWithTime(commitTime5);
       assertTrue(testTable.commitExists(commitTime1));
       assertFalse(testTable.inflightCommitExists(commitTime2));

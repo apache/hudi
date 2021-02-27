@@ -57,7 +57,7 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
                                HoodieWriteConfig writeConfig,
                                boolean rollbackPending,
                                Option<EmbeddedTimelineService> timelineService) {
-    super(context, writeConfig, rollbackPending, timelineService);
+    super(context, writeConfig, timelineService);
   }
 
   @Override

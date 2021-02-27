@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.FlinkHoodieIndex;
@@ -54,9 +53,7 @@ public class FlinkInMemoryStateIndex<T extends HoodieRecordPayload> extends Flin
     if (context.getRuntimeContext() != null) {
       MapStateDescriptor<HoodieKey, HoodieRecordLocation> indexStateDesc =
           new MapStateDescriptor<>("indexState", TypeInformation.of(HoodieKey.class), TypeInformation.of(HoodieRecordLocation.class));
-      if (context.getRuntimeContext() != null) {
-        mapState = context.getRuntimeContext().getMapState(indexStateDesc);
-      }
+      mapState = context.getRuntimeContext().getMapState(indexStateDesc);
     }
   }
 
@@ -64,47 +61,14 @@ public class FlinkInMemoryStateIndex<T extends HoodieRecordPayload> extends Flin
   public List<HoodieRecord<T>> tagLocation(List<HoodieRecord<T>> records,
                                            HoodieEngineContext context,
                                            HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> hoodieTable) throws HoodieIndexException {
-    return context.map(records, record -> {
-      try {
-        if (mapState.contains(record.getKey())) {
-          record.unseal();
-          record.setCurrentLocation(mapState.get(record.getKey()));
-          record.seal();
-        }
-      } catch (Exception e) {
-        LOG.error(String.format("Tag record location failed, key = %s, %s", record.getRecordKey(), e.getMessage()));
-      }
-      return record;
-    }, 0);
+    throw new UnsupportedOperationException("No need to tag location for FlinkInMemoryStateIndex");
   }
 
   @Override
   public List<WriteStatus> updateLocation(List<WriteStatus> writeStatuses,
                                           HoodieEngineContext context,
                                           HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> hoodieTable) throws HoodieIndexException {
-    return context.map(writeStatuses, writeStatus -> {
-      for (HoodieRecord record : writeStatus.getWrittenRecords()) {
-        if (!writeStatus.isErrored(record.getKey())) {
-          HoodieKey key = record.getKey();
-          Option<HoodieRecordLocation> newLocation = record.getNewLocation();
-          if (newLocation.isPresent()) {
-            try {
-              mapState.put(key, newLocation.get());
-            } catch (Exception e) {
-              LOG.error(String.format("Update record location failed, key = %s, %s", record.getRecordKey(), e.getMessage()));
-            }
-          } else {
-            // Delete existing index for a deleted record
-            try {
-              mapState.remove(key);
-            } catch (Exception e) {
-              LOG.error(String.format("Remove record location failed, key = %s, %s", record.getRecordKey(), e.getMessage()));
-            }
-          }
-        }
-      }
-      return writeStatus;
-    }, 0);
+    throw new UnsupportedOperationException("No need to update location for FlinkInMemoryStateIndex");
   }
 
   @Override
@@ -130,6 +94,6 @@ public class FlinkInMemoryStateIndex<T extends HoodieRecordPayload> extends Flin
    */
   @Override
   public boolean isImplicitWithStorage() {
-    return false;
+    return true;
   }
 }

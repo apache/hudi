@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -34,6 +35,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
+import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.hadoop.hbase.io.compress.Compression;
@@ -130,6 +132,16 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   // Data validation check performed during merges before actual commits
   private static final String MERGE_DATA_VALIDATION_CHECK_ENABLED = "hoodie.merge.data.validation.enabled";
   private static final String DEFAULT_MERGE_DATA_VALIDATION_CHECK_ENABLED = "false";
+
+  // Allow duplicates with inserts while merging with existing records
+  private static final String MERGE_ALLOW_DUPLICATE_ON_INSERTS = "hoodie.merge.allow.duplicate.on.inserts";
+  private static final String DEFAULT_MERGE_ALLOW_DUPLICATE_ON_INSERTS = "false";
+
+  public static final String CLIENT_HEARTBEAT_INTERVAL_IN_MS_PROP = "hoodie.client.heartbeat.interval_in_ms";
+  public static final Integer DEFAULT_CLIENT_HEARTBEAT_INTERVAL_IN_MS = 60 * 1000;
+
+  public static final String CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES_PROP = "hoodie.client.heartbeat.tolerable.misses";
+  public static final Integer DEFAULT_CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES = 2;
 
   /**
    * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
@@ -330,6 +342,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(MERGE_DATA_VALIDATION_CHECK_ENABLED));
   }
 
+  public boolean allowDuplicateInserts() {
+    return Boolean.parseBoolean(props.getProperty(MERGE_ALLOW_DUPLICATE_ON_INSERTS));
+  }
+
   public EngineType getEngineType() {
     return engineType;
   }
@@ -397,8 +413,16 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_PROP));
   }
 
+  public CompactionTriggerStrategy getInlineCompactTriggerStrategy() {
+    return CompactionTriggerStrategy.valueOf(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY_PROP));
+  }
+
   public int getInlineCompactDeltaCommitMax() {
     return Integer.parseInt(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP));
+  }
+
+  public int getInlineCompactDeltaSecondsMax() {
+    return Integer.parseInt(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_TIME_DELTA_SECONDS_PROP));
   }
 
   public CompactionStrategy getCompactionStrategy() {
@@ -452,6 +476,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public String getClusteringUpdatesStrategyClass() {
     return props.getProperty(HoodieClusteringConfig.CLUSTERING_UPDATES_STRATEGY_PROP);
+  }
+
+  public HoodieFailedWritesCleaningPolicy getFailedWritesCleanPolicy() {
+    return HoodieFailedWritesCleaningPolicy
+        .valueOf(props.getProperty(HoodieCompactionConfig.FAILED_WRITES_CLEANER_POLICY_PROP));
   }
 
   /**
@@ -526,6 +555,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public int getHbaseIndexGetBatchSize() {
     return Integer.parseInt(props.getProperty(HoodieHBaseIndexConfig.HBASE_GET_BATCH_SIZE_PROP));
+  }
+
+  public Boolean getHBaseIndexRollbackSync() {
+    return Boolean.parseBoolean(props.getProperty(HoodieHBaseIndexConfig.HBASE_INDEX_ROLLBACK_SYNC));
   }
 
   public int getHbaseIndexPutBatchSize() {
@@ -759,7 +792,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public List<String> getDatadogMetricTags() {
     return Arrays.stream(props.getProperty(
-        HoodieMetricsDatadogConfig.DATADOG_METRIC_TAGS).split("\\s*,\\s*")).collect(Collectors.toList());
+        HoodieMetricsDatadogConfig.DATADOG_METRIC_TAGS, ",").split("\\s*,\\s*")).collect(Collectors.toList());
   }
 
   public String getMetricReporterClassName() {
@@ -888,6 +921,18 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Long.valueOf(props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE_PROP));
   }
 
+  public int getMetadataCleanerCommitsRetained() {
+    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED_PROP));
+  }
+
+  public Long getHoodieClientHeartbeatIntervalInMs() {
+    return Long.valueOf(props.getProperty(CLIENT_HEARTBEAT_INTERVAL_IN_MS_PROP));
+  }
+
+  public Integer getHoodieClientHeartbeatTolerableMisses() {
+    return Integer.valueOf(props.getProperty(CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES_PROP));
+  }
+
   /**
    * File listing metadata configs.
    */
@@ -917,10 +962,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public int getMetadataMinCommitsToKeep() {
     return Integer.parseInt(props.getProperty(HoodieMetadataConfig.MIN_COMMITS_TO_KEEP_PROP));
-  }
-
-  public int getMetadataCleanerCommitsRetained() {
-    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED_PROP));
   }
 
   public static class Builder {
@@ -1180,6 +1221,21 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withMergeAllowDuplicateOnInserts(boolean routeInsertsToNewFiles) {
+      props.setProperty(MERGE_ALLOW_DUPLICATE_ON_INSERTS, String.valueOf(routeInsertsToNewFiles));
+      return this;
+    }
+
+    public Builder withHeartbeatIntervalInMs(Integer heartbeatIntervalInMs) {
+      props.setProperty(CLIENT_HEARTBEAT_INTERVAL_IN_MS_PROP, String.valueOf(heartbeatIntervalInMs));
+      return this;
+    }
+
+    public Builder withHeartbeatTolerableMisses(Integer heartbeatTolerableMisses) {
+      props.setProperty(CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES_PROP, String.valueOf(heartbeatTolerableMisses));
+      return this;
+    }
+
     public Builder withProperties(Properties properties) {
       this.props.putAll(properties);
       return this;
@@ -1234,6 +1290,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           BULKINSERT_SORT_MODE, DEFAULT_BULKINSERT_SORT_MODE);
       setDefaultOnCondition(props, !props.containsKey(MERGE_DATA_VALIDATION_CHECK_ENABLED),
           MERGE_DATA_VALIDATION_CHECK_ENABLED, DEFAULT_MERGE_DATA_VALIDATION_CHECK_ENABLED);
+      setDefaultOnCondition(props, !props.containsKey(MERGE_ALLOW_DUPLICATE_ON_INSERTS),
+          MERGE_ALLOW_DUPLICATE_ON_INSERTS, DEFAULT_MERGE_ALLOW_DUPLICATE_ON_INSERTS);
+      setDefaultOnCondition(props, !props.containsKey(CLIENT_HEARTBEAT_INTERVAL_IN_MS_PROP),
+          CLIENT_HEARTBEAT_INTERVAL_IN_MS_PROP, String.valueOf(DEFAULT_CLIENT_HEARTBEAT_INTERVAL_IN_MS));
+      setDefaultOnCondition(props, !props.containsKey(CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES_PROP),
+          CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES_PROP, String.valueOf(DEFAULT_CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES));
 
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().withEngineType(engineType).fromProperties(props).build());
@@ -1261,6 +1323,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION, DEFAULT_EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION);
       setDefaultOnCondition(props, !props.containsKey(TIMELINE_LAYOUT_VERSION), TIMELINE_LAYOUT_VERSION,
           String.valueOf(TimelineLayoutVersion.CURR_VERSION));
+
     }
 
     private void validate() {

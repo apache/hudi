@@ -18,21 +18,31 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.hudi.client.FlinkTaskContextSupplier;
+import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
+import org.apache.hudi.index.bloom.TestFlinkHoodieBloomIndex;
 
+import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.test.util.MiniClusterWithClientResource;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 
@@ -40,7 +50,11 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
 
+/**
+ * The test harness for resource initialization and cleanup.
+ */
 public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implements Serializable {
 
   protected static final Logger LOG = LogManager.getLogger(HoodieFlinkClientTestHarness.class);
@@ -48,6 +62,17 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
   protected transient Configuration hadoopConf = null;
   protected transient FileSystem fs;
   protected transient MiniClusterWithClientResource flinkCluster = null;
+  protected transient HoodieFlinkEngineContext context = null;
+  protected transient ExecutorService executorService;
+  protected transient HoodieFlinkWriteClient writeClient;
+  protected transient HoodieTableFileSystemView tableView;
+
+  protected final FlinkTaskContextSupplier supplier = new FlinkTaskContextSupplier(null);
+
+  // dfs
+  protected transient HdfsTestService hdfsTestService;
+  protected transient MiniDFSCluster dfsCluster;
+  protected transient DistributedFileSystem dfs;
 
   @BeforeEach
   public void setTestMethodName(TestInfo testInfo) {
@@ -69,6 +94,7 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
   protected void initFileSystem() {
     hadoopConf = new Configuration();
     initFileSystemWithConfiguration(hadoopConf);
+    context = new HoodieFlinkEngineContext(supplier);
   }
 
   private void initFileSystemWithConfiguration(Configuration configuration) {
@@ -116,6 +142,19 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
     }
   }
 
+  /**
+   * Cleanups resource group for the subclasses of  {@link TestFlinkHoodieBloomIndex}.
+   */
+  public void cleanupResources() throws java.io.IOException {
+    cleanupClients();
+    cleanupFlinkContexts();
+    cleanupTestDataGenerator();
+    cleanupFileSystem();
+    cleanupDFS();
+    cleanupExecutorService();
+    System.gc();
+  }
+
   protected void cleanupFlinkMiniCluster() {
     if (flinkCluster != null) {
       flinkCluster.after();
@@ -131,6 +170,61 @@ public class HoodieFlinkClientTestHarness extends HoodieCommonTestHarness implem
     @Override
     public synchronized void invoke(HoodieRecord value, Context context) throws Exception {
       valuesList.add(value);
+    }
+  }
+
+  /**
+   * Cleanups hoodie clients.
+   */
+  protected void cleanupClients() throws java.io.IOException {
+    if (metaClient != null) {
+      metaClient = null;
+    }
+    if (writeClient != null) {
+      writeClient.close();
+      writeClient = null;
+    }
+    if (tableView != null) {
+      tableView.close();
+      tableView = null;
+    }
+  }
+
+  /**
+   * Cleanups the distributed file system.
+   *
+   * @throws IOException
+   */
+  protected void cleanupDFS() throws java.io.IOException {
+    if (hdfsTestService != null) {
+      hdfsTestService.stop();
+      dfsCluster.shutdown();
+      hdfsTestService = null;
+      dfsCluster = null;
+      dfs = null;
+    }
+    // Need to closeAll to clear FileSystem.Cache, required because DFS and LocalFS used in the
+    // same JVM
+    FileSystem.closeAll();
+  }
+
+  /**
+   * Cleanups the executor service.
+   */
+  protected void cleanupExecutorService() {
+    if (this.executorService != null) {
+      this.executorService.shutdownNow();
+      this.executorService = null;
+    }
+  }
+
+  /**
+   * Cleanups Flink contexts.
+   */
+  protected void cleanupFlinkContexts() {
+    if (context != null) {
+      LOG.info("Closing flink engine context used in previous test-case");
+      context = null;
     }
   }
 }

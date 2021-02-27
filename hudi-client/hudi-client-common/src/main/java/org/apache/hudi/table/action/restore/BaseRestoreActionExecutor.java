@@ -63,7 +63,7 @@ public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I
     restoreTimer.startTimer();
 
     // Get all the commits on the timeline after the provided commit time
-    List<HoodieInstant> instantsToRollback = table.getActiveTimeline().getCommitsAndCompactionTimeline()
+    List<HoodieInstant> instantsToRollback = table.getActiveTimeline().getWriteTimeline()
         .getReverseOrderedInstants()
         .filter(instant -> HoodieActiveTimeline.GREATER_THAN.test(instant.getTimestamp(), restoreInstantTime))
         .collect(Collectors.toList());

@@ -114,10 +114,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> implements Part
   private int addUpdateBucket(String partitionPath, String fileIdHint) {
     int bucket = totalBuckets;
     updateLocationToBucket.put(fileIdHint, bucket);
-    BucketInfo bucketInfo = new BucketInfo();
-    bucketInfo.bucketType = BucketType.UPDATE;
-    bucketInfo.fileIdPrefix = fileIdHint;
-    bucketInfo.partitionPath = partitionPath;
+    BucketInfo bucketInfo = new BucketInfo(BucketType.UPDATE, fileIdHint, partitionPath);
     bucketInfoMap.put(totalBuckets, bucketInfo);
     totalBuckets++;
     return bucket;
@@ -184,10 +181,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> implements Part
             } else {
               recordsPerBucket.add(totalUnassignedInserts - (insertBuckets - 1) * insertRecordsPerBucket);
             }
-            BucketInfo bucketInfo = new BucketInfo();
-            bucketInfo.bucketType = BucketType.INSERT;
-            bucketInfo.partitionPath = partitionPath;
-            bucketInfo.fileIdPrefix = FSUtils.createNewFileIdPfx();
+            BucketInfo bucketInfo = new BucketInfo(BucketType.INSERT, FSUtils.createNewFileIdPfx(), partitionPath);
             bucketInfoMap.put(totalBuckets, bucketInfo);
             totalBuckets++;
           }

@@ -80,9 +80,6 @@ public class FSUtils {
   private static final PathFilter ALLOW_ALL_FILTER = file -> true;
 
   public static Configuration prepareHadoopConf(Configuration conf) {
-    conf.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
-    conf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
-
     // look for all properties, prefixed to be picked up
     for (Entry<String, String> prop : System.getenv().entrySet()) {
       if (prop.getKey().startsWith(HOODIE_ENV_PROPS_PREFIX)) {
@@ -607,8 +604,8 @@ public class FSUtils {
    * Helper to filter out paths under metadata folder when running fs.globStatus.
    * @param fs  File System
    * @param globPath Glob Path
-   * @return
-   * @throws IOException
+   * @return the file status list of globPath exclude the meta folder
+   * @throws IOException when having trouble listing the path
    */
   public static List<FileStatus> getGlobStatusExcludingMetaFolder(FileSystem fs, Path globPath) throws IOException {
     FileStatus[] statuses = fs.globStatus(globPath);

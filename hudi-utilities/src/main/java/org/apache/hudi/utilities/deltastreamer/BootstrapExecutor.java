@@ -138,7 +138,7 @@ public class BootstrapExecutor  implements Serializable {
    */
   public void execute() throws IOException {
     initializeTable();
-    SparkRDDWriteClient bootstrapClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jssc), bootstrapConfig, true);
+    SparkRDDWriteClient bootstrapClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jssc), bootstrapConfig);
 
     try {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();

@@ -94,7 +94,7 @@ public class FileSystemViewManager {
    */
   public SyncableFileSystemView getFileSystemView(String basePath) {
     return globalViewMap.computeIfAbsent(basePath, (path) -> {
-      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(conf.newCopy(), path);
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(conf.newCopy()).setBasePath(path).build();
       return viewCreator.apply(metaClient, viewStorageConfig);
     });
   }

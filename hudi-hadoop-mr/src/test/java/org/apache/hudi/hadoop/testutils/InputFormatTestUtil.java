@@ -125,7 +125,12 @@ public class InputFormatTestUtil {
 
   public static File prepareParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
       int numberOfRecords, String commitNumber) throws IOException {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString());
+    return prepareParquetTable(basePath, schema, numberOfFiles, numberOfRecords, commitNumber, HoodieTableType.COPY_ON_WRITE);
+  }
+
+  public static File prepareParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
+                                         int numberOfRecords, String commitNumber, HoodieTableType tableType) throws IOException {
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), tableType);
     java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", "01"));
     createData(schema, partitionPath, numberOfFiles, numberOfRecords, commitNumber);
     return partitionPath.toFile();
@@ -133,7 +138,12 @@ public class InputFormatTestUtil {
 
   public static File prepareSimpleParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
       int numberOfRecords, String commitNumber) throws Exception {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString());
+    return prepareSimpleParquetTable(basePath, schema, numberOfFiles, numberOfRecords, commitNumber, HoodieTableType.COPY_ON_WRITE);
+  }
+
+  public static File prepareSimpleParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
+                                               int numberOfRecords, String commitNumber, HoodieTableType tableType) throws Exception {
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), tableType);
     java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", "01"));
     createSimpleData(schema, partitionPath, numberOfFiles, numberOfRecords, commitNumber);
     return partitionPath.toFile();
@@ -141,7 +151,12 @@ public class InputFormatTestUtil {
 
   public static File prepareNonPartitionedParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
       int numberOfRecords, String commitNumber) throws IOException {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString());
+    return prepareNonPartitionedParquetTable(basePath, schema, numberOfFiles, numberOfRecords, commitNumber, HoodieTableType.COPY_ON_WRITE);
+  }
+
+  public static File prepareNonPartitionedParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
+                                                       int numberOfRecords, String commitNumber, HoodieTableType tableType) throws IOException {
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), tableType);
     createData(schema, basePath, numberOfFiles, numberOfRecords, commitNumber);
     return basePath.toFile();
   }

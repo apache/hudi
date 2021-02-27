@@ -22,5 +22,5 @@ package org.apache.hudi.common.engine;
  * Hoodie data processing engine. support only Apache Spark and Apache Flink for now.
  */
 public enum EngineType {
-  SPARK, FLINK
+  SPARK, FLINK, JAVA
 }

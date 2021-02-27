@@ -178,7 +178,7 @@ public class HoodieInputFormatUtils {
    * @return
    */
   public static HoodieDefaultTimeline filterInstantsTimeline(HoodieDefaultTimeline timeline) {
-    HoodieDefaultTimeline commitsAndCompactionTimeline = timeline.getCommitsAndCompactionTimeline();
+    HoodieDefaultTimeline commitsAndCompactionTimeline = timeline.getWriteTimeline();
     Option<HoodieInstant> pendingCompactionInstant = commitsAndCompactionTimeline
         .filterPendingCompactionTimeline().firstInstant();
     if (pendingCompactionInstant.isPresent()) {
@@ -324,7 +324,7 @@ public class HoodieInputFormatUtils {
     }
     Path baseDir = HoodieHiveUtils.getNthParent(dataPath, levels);
     LOG.info("Reading hoodie metadata from path " + baseDir.toString());
-    return new HoodieTableMetaClient(fs.getConf(), baseDir.toString());
+    return HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(baseDir.toString()).build();
   }
 
   public static FileStatus getFileStatus(HoodieBaseFile baseFile) throws IOException {

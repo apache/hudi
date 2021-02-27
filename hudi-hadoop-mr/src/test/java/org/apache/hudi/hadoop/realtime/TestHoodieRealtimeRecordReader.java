@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.collection.Pair;
@@ -126,9 +127,11 @@ public class TestHoodieRealtimeRecordReader {
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String baseInstant = "100";
-    File partitionDir = partitioned ? InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, 100, baseInstant)
-        : InputFormatTestUtil.prepareNonPartitionedParquetTable(basePath, schema, 1, 100, baseInstant);
-    InputFormatTestUtil.commit(basePath, baseInstant);
+    File partitionDir = partitioned ? InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, 100, baseInstant,
+        HoodieTableType.MERGE_ON_READ)
+        : InputFormatTestUtil.prepareNonPartitionedParquetTable(basePath, schema, 1, 100, baseInstant,
+        HoodieTableType.MERGE_ON_READ);
+    FileCreateUtils.createDeltaCommit(basePath.toString(), baseInstant);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
 
@@ -163,6 +166,7 @@ public class TestHoodieRealtimeRecordReader {
         long size = writer.getCurrentSize();
         writer.close();
         assertTrue(size > 0, "block - size should be > 0");
+        FileCreateUtils.createDeltaCommit(basePath.toString(), instantTime);
 
         // create a split with baseFile (parquet file written earlier) and new log file(s)
         fileSlice.addLogFile(writer.getLogFile());
@@ -214,8 +218,9 @@ public class TestHoodieRealtimeRecordReader {
     final int numRecords = 1000;
     final int firstBatchLastRecordKey = numRecords - 1;
     final int secondBatchLastRecordKey = 2 * numRecords - 1;
-    File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, numRecords, instantTime);
-    InputFormatTestUtil.commit(basePath, instantTime);
+    File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, numRecords, instantTime,
+        HoodieTableType.MERGE_ON_READ);
+    FileCreateUtils.createDeltaCommit(basePath.toString(), instantTime);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
 
@@ -227,6 +232,7 @@ public class TestHoodieRealtimeRecordReader {
     long size = writer.getCurrentSize();
     writer.close();
     assertTrue(size > 0, "block - size should be > 0");
+    FileCreateUtils.createDeltaCommit(basePath.toString(), newCommitTime);
 
     // create a split with baseFile (parquet file written earlier) and new log file(s)
     String logFilePath = writer.getLogFile().getPath().toString();
@@ -291,7 +297,8 @@ public class TestHoodieRealtimeRecordReader {
     String instantTime = "100";
     int numberOfRecords = 100;
     int numberOfLogRecords = numberOfRecords / 2;
-    File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, numberOfRecords, instantTime);
+    File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, numberOfRecords,
+        instantTime, HoodieTableType.MERGE_ON_READ);
     InputFormatTestUtil.commit(basePath, instantTime);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
@@ -421,7 +428,8 @@ public class TestHoodieRealtimeRecordReader {
     int numberOfRecords = 100;
     int numberOfLogRecords = numberOfRecords / 2;
     File partitionDir =
-        InputFormatTestUtil.prepareSimpleParquetTable(basePath, schema, 1, numberOfRecords, instantTime);
+        InputFormatTestUtil.prepareSimpleParquetTable(basePath, schema, 1, numberOfRecords,
+            instantTime, HoodieTableType.MERGE_ON_READ);
     InputFormatTestUtil.commit(basePath, instantTime);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());

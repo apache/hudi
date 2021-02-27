@@ -137,7 +137,7 @@ public class HoodieClusteringJob {
   }
 
   private String getSchemaFromLatestInstant() throws Exception {
-    HoodieTableMetaClient metaClient =  new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.basePath, true);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(cfg.basePath).setLoadActiveTimelineOnLoad(true).build();
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
     if (metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
       throw new HoodieException("Cannot run clustering without any completed commits");

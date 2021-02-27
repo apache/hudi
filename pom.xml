@@ -105,14 +105,15 @@
     <metrics.version>4.1.1</metrics.version>
     <prometheus.version>0.8.0</prometheus.version>
     <http.version>4.4.1</http.version>
-    <spark.version>2.4.4</spark.version>
-    <flink.version>1.12.0</flink.version>
+    <spark.version>${spark2.version}</spark.version>
+    <flink.version>1.11.2</flink.version>
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.0.0</spark3.version>
     <avro.version>1.8.2</avro.version>
-    <scala.version>2.11.12</scala.version>
-    <scala.binary.version>2.11</scala.binary.version>
+    <scala11.version>2.11.12</scala11.version>
     <scala12.version>2.12.10</scala12.version>
+    <scala.version>${scala11.version}</scala.version>
+    <scala.binary.version>2.11</scala.binary.version>
     <apache-rat-plugin.version>0.12</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
     <scalatest.version>3.0.1</scalatest.version>
@@ -123,10 +124,12 @@
     <hbase.version>1.2.3</hbase.version>
     <codehaus-jackson.version>1.9.13</codehaus-jackson.version>
     <h2.version>1.4.199</h2.version>
+    <awaitility.version>3.1.2</awaitility.version>
     <skipTests>false</skipTests>
     <skipUTs>${skipTests}</skipUTs>
     <skipFTs>${skipTests}</skipFTs>
     <skipITs>${skipTests}</skipITs>
+    <skip.hudi-spark2.unit.tests>${skipTests}</skip.hudi-spark2.unit.tests>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <main.basedir>${project.basedir}</main.basedir>
     <spark.bundle.hive.scope>provided</spark.bundle.hive.scope>
@@ -148,6 +151,32 @@
     <url>git@github.com:apache/hudi.git</url>
     <tag>HEAD</tag>
   </scm>
+
+  <issueManagement>
+    <system>JIRA</system>
+    <url>https://issues.apache.org/jira/browse/HUDI</url>
+  </issueManagement>
+
+  <mailingLists>
+    <mailingList>
+      <name>Dev Mailing List</name>
+      <post>dev@hudi.apache.org</post>
+      <subscribe>dev-subscribe@hudi.apache.org</subscribe>
+      <unsubscribe>dev-unsubscribe@hudi.apache.org</unsubscribe>
+    </mailingList>
+    <mailingList>
+      <name>User Mailing List</name>
+      <post>users@hudi.apache.org</post>
+      <subscribe>users-subscribe@hudi.apache.org</subscribe>
+      <unsubscribe>users-unsubscribe@hudi.apache.org</unsubscribe>
+    </mailingList>
+    <mailingList>
+      <name>Commits Mailing List</name>
+      <post>commits@hudi.apache.org</post>
+      <subscribe>commits-subscribe@hudi.apache.org</subscribe>
+      <unsubscribe>commits-unsubscribe@hudi.apache.org</unsubscribe>
+    </mailingList>
+  </mailingLists>
 
   <build>
     <plugins>
@@ -498,6 +527,27 @@
         <artifactId>spark-sql_${scala.binary.version}</artifactId>
         <version>${spark.version}</version>
         <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-sql_${scala.binary.version}</artifactId>
+        <classifier>tests</classifier>
+        <version>${spark.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-core_${scala.binary.version}</artifactId>
+        <classifier>tests</classifier>
+        <version>${spark.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-catalyst_${scala.binary.version}</artifactId>
+        <classifier>tests</classifier>
+        <version>${spark.version}</version>
+        <scope>test</scope>
       </dependency>
 
       <!-- Spark (Packages) -->
@@ -920,6 +970,15 @@
         <version>4.0.0</version>
         <scope>test</scope>
       </dependency>
+
+      <!-- Other Utils -->
+      <dependency>
+        <groupId>org.awaitility</groupId>
+        <artifactId>awaitility</artifactId>
+        <version>${awaitility.version}</version>
+        <scope>test</scope>
+      </dependency>
+
     </dependencies>
   </dependencyManagement>
   <repositories>
@@ -947,14 +1006,6 @@
     <repository>
       <id>confluent</id>
       <url>https://packages.confluent.io/maven/</url>
-    </repository>
-    <repository>
-      <id>libs-milestone</id>
-      <url>https://repo.spring.io/libs-milestone/</url>
-    </repository>
-    <repository>
-      <id>libs-release</id>
-      <url>https://repo.spring.io/libs-release/</url>
     </repository>
   </repositories>
 
@@ -1199,6 +1250,40 @@
       </build>
     </profile>
     <profile>
+      <id>azp-unit-tests</id>
+      <properties>
+        <skipUTs>false</skipUTs>
+        <skipFTs>true</skipFTs>
+        <skipITs>true</skipITs>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <dependencies>
+              <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter-engine</artifactId>
+                <version>${junit.jupiter.version}</version>
+              </dependency>
+            </dependencies>
+            <configuration combine.self="append">
+              <skip>${skipUTs}</skip>
+              <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
+              <excludedGroups>functional</excludedGroups>
+              <excludes>
+                <exclude>**/*FunctionalTestSuite.java</exclude>
+                <exclude>**/IT*.java</exclude>
+                <exclude>**/testsuite/**/Test*.java</exclude>
+                <exclude>**/TestPushGateWayReporter.java</exclude>
+              </excludes>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
       <id>javadocs</id>
       <build>
         <plugins>
@@ -1361,6 +1446,7 @@
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
+        <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
       </properties>
       <activation>
         <property>

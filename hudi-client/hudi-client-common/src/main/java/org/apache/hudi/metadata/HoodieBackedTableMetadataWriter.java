@@ -30,6 +30,7 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -106,7 +107,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       ValidationUtils.checkArgument(!this.metadataWriteConfig.useFileListingMetadata(), "File listing cannot be used for Metadata Table");
 
       initRegistry();
-      HoodieTableMetaClient datasetMetaClient = new HoodieTableMetaClient(hadoopConf, datasetWriteConfig.getBasePath());
+      HoodieTableMetaClient datasetMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(datasetWriteConfig.getBasePath()).build();
       initialize(engineContext, datasetMetaClient);
       if (enabled) {
         // This is always called even in case the table was created for the first time. This is because
@@ -155,6 +156,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             .withAutoClean(false)
             .withCleanerParallelism(parallelism)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
             .retainCommits(writeConfig.getMetadataCleanerCommitsRetained())
             .archiveCommitsWith(writeConfig.getMetadataMinCommitsToKeep(), writeConfig.getMetadataMaxCommitsToKeep())
             // we will trigger compaction manually, to control the instant times
@@ -316,6 +318,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     Map<String, List<FileStatus>> partitionToFileStatus = new HashMap<>();
     final int fileListingParallelism = metadataWriteConfig.getFileListingParallelism();
     SerializableConfiguration conf = new SerializableConfiguration(datasetMetaClient.getHadoopConf());
+    final String dirFilterRegex = datasetWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
 
     while (!pathsToList.isEmpty()) {
       int listingParallelism = Math.min(fileListingParallelism, pathsToList.size());
@@ -329,6 +332,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       // If the listing reveals a directory, add it to queue. If the listing reveals a hoodie partition, add it to
       // the results.
       dirToFileListing.forEach(p -> {
+        if (!dirFilterRegex.isEmpty() && p.getLeft().getName().matches(dirFilterRegex)) {
+          LOG.info("Ignoring directory " + p.getLeft() + " which matches the filter regex " + dirFilterRegex);
+          return;
+        }
+
         List<FileStatus> filesInDir = Arrays.stream(p.getRight()).parallel()
             .filter(fs -> !fs.getPath().getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE))
             .collect(Collectors.toList());
