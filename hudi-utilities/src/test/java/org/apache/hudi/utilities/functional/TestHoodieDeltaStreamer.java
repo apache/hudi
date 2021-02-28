@@ -87,7 +87,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -255,7 +254,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   protected static void populateCommonKafkaProps(TypedProperties props) {
     //Kafka source properties
     props.setProperty("bootstrap.servers", testUtils.brokerAddress());
-    props.setProperty("auto.offset.reset", "earliest");
+    props.setProperty("hoodie.deltastreamer.source.kafka.auto.reset.offsets", "earliest");
     props.setProperty("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
     props.setProperty("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
     props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents", String.valueOf(5000));
@@ -992,22 +991,11 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
   protected static void prepareParquetDFSFiles(int numRecords, String baseParquetPath) throws IOException {
     prepareParquetDFSFiles(numRecords, baseParquetPath, FIRST_PARQUET_FILE_NAME, false, null, null);
-    //prepareParquetDFSFiles(numRecords, baseParquetPath, FIRST_PARQUET_FILE_NAME);
-    //>>>>>>> 56190e5e... Addressing comments
   }
 
   protected static void prepareParquetDFSFiles(int numRecords, String baseParquetPath, String fileName, boolean useCustomSchema,
       String schemaStr, Schema schema) throws IOException {
-    //String path = PARQUET_SOURCE_ROOT + "/" + fileName;
     String path = baseParquetPath + "/" + fileName;
-    /*=======
-    protected static void prepareParquetDFSFiles(int numRecords, String baseParquetPath) throws IOException {
-      prepareParquetDFSFiles(numRecords, baseParquetPath, "1.parquet");
-    } */
-
-    /*protected static void prepareParquetDFSFiles(int numRecords, String baseParquetPath, String fileName) throws IOException {
-    String path = baseParquetPath + "/" + fileName;
-    // >>>>>>> 8e7fcc6a... Fixing NPE with MultiTableDeltaStreamer with ParquetSource*/
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     if (useCustomSchema) {
       Helpers.saveParquetToDFS(Helpers.toGenericRecords(
@@ -1032,20 +1020,12 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer) throws IOException {
-    //<<<<<<< HEAD
     prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc",
         PROPS_FILENAME_TEST_PARQUET, PARQUET_SOURCE_ROOT, false);
   }
 
   private void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String sourceSchemaFile, String targetSchemaFile,
       String propsFileName, String parquetSourceRoot, boolean addCommonProps) throws IOException {
-    /*=======
-    prepareParquetDFSSource(useSchemaProvider, hasTransformer, PARQUET_SOURCE_ROOT, PROPS_FILENAME_TEST_PARQUET, false);
-  }
-
-  protected void prepareParquetDFSSource(boolean useSchemaProvider, boolean hasTransformer, String parquetSourceRoot, String propsFileName,
-      boolean addCommonProps) throws IOException {
-    >>>>>>> 8e7fcc6a... Fixing NPE with MultiTableDeltaStreamer with ParquetSource*/
     // Properties used for testing delta-streamer with Parquet source
     TypedProperties parquetProps = new TypedProperties();
 
@@ -1105,7 +1085,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     // prep parquet source
     PARQUET_SOURCE_ROOT = dfsBasePath + "/parquetFilesDfsToKafka" + testNum;
     int parquetRecords = 10;
-    prepareParquetDFSFiles(parquetRecords, PARQUET_SOURCE_ROOT, "1.parquet", true, HoodieTestDataGenerator.TRIP_SCHEMA, HoodieTestDataGenerator.AVRO_TRIP_SCHEMA);
+    prepareParquetDFSFiles(parquetRecords, PARQUET_SOURCE_ROOT, FIRST_PARQUET_FILE_NAME, true, HoodieTestDataGenerator.TRIP_SCHEMA, HoodieTestDataGenerator.AVRO_TRIP_SCHEMA);
 
     prepareParquetDFSSource(true, false,"source_uber.avsc", "target_uber.avsc", PROPS_FILENAME_TEST_PARQUET,
         PARQUET_SOURCE_ROOT, false);
