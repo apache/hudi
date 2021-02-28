@@ -87,6 +87,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -120,6 +121,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   private static final String PROPS_FILENAME_TEST_CSV = "test-csv-dfs-source.properties";
   protected static final String PROPS_FILENAME_TEST_PARQUET = "test-parquet-dfs-source.properties";
   private static final String PROPS_FILENAME_TEST_JSON_KAFKA = "test-json-kafka-dfs-source.properties";
+  private static final String FIRST_PARQUET_FILE_NAME = "1.parquet";
   private static String PARQUET_SOURCE_ROOT;
   private static String JSON_KAFKA_SOURCE_ROOT;
   private static final int PARQUET_NUM_RECORDS = 5;
@@ -214,7 +216,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     UtilitiesTestBase.Helpers.savePropsToDFS(invalidProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_INVALID);
 
     TypedProperties props1 = new TypedProperties();
-    populateCommonProps(props1, true, true);
+    populateAllCommonProps(props1);
     UtilitiesTestBase.Helpers.savePropsToDFS(props1, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE1);
 
     TypedProperties properties = new TypedProperties();
@@ -236,31 +238,37 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     props.setProperty("hoodie.deltastreamer.ingestion.uber_db.dummy_table_uber.configFile", dfsBasePath + "/config/invalid_uber_config.properties");
   }
 
-  protected static void populateCommonProps(TypedProperties props, boolean setKafkaConfig, boolean setHiveConfig) {
+  private static void populateAllCommonProps(TypedProperties props) {
+    populateCommonProps(props);
+    populateCommonKafkaProps(props);
+    populateCommonHiveProps(props);
+  }
+
+  protected static void populateCommonProps(TypedProperties props) {
     props.setProperty("hoodie.datasource.write.keygenerator.class", TestHoodieDeltaStreamer.TestGenerator.class.getName());
     props.setProperty("hoodie.deltastreamer.keygen.timebased.output.dateformat", "yyyyMMdd");
     props.setProperty("hoodie.deltastreamer.ingestion.tablesToBeIngested", "short_trip_db.dummy_table_short_trip,uber_db.dummy_table_uber");
     props.setProperty("hoodie.deltastreamer.ingestion.uber_db.dummy_table_uber.configFile", dfsBasePath + "/config/uber_config.properties");
     props.setProperty("hoodie.deltastreamer.ingestion.short_trip_db.dummy_table_short_trip.configFile", dfsBasePath + "/config/short_trip_uber_config.properties");
+  }
 
-    if (setKafkaConfig) {
-      //Kafka source properties
-      props.setProperty("bootstrap.servers", testUtils.brokerAddress());
-      props.setProperty("hoodie.deltastreamer.source.kafka.auto.reset.offsets", "earliest");
-      props.setProperty("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
-      props.setProperty("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
-      props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents", String.valueOf(5000));
-    }
+  protected static void populateCommonKafkaProps(TypedProperties props) {
+    //Kafka source properties
+    props.setProperty("bootstrap.servers", testUtils.brokerAddress());
+    props.setProperty("auto.offset.reset", "earliest");
+    props.setProperty("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+    props.setProperty("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+    props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents", String.valueOf(5000));
+  }
 
-    if (setHiveConfig) {
-      // Hive Configs
-      props.setProperty(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), "jdbc:hive2://127.0.0.1:9999/");
-      props.setProperty(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), "testdb2");
-      props.setProperty(DataSourceWriteOptions.HIVE_ASSUME_DATE_PARTITION_OPT_KEY(), "false");
-      props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), "datestr");
-      props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
-          MultiPartKeysValueExtractor.class.getName());
-    }
+  protected static void populateCommonHiveProps(TypedProperties props) {
+    // Hive Configs
+    props.setProperty(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), "jdbc:hive2://127.0.0.1:9999/");
+    props.setProperty(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), "testdb2");
+    props.setProperty(DataSourceWriteOptions.HIVE_ASSUME_DATE_PARTITION_OPT_KEY(), "false");
+    props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), "datestr");
+    props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
+        MultiPartKeysValueExtractor.class.getName());
   }
 
   @AfterAll
@@ -983,7 +991,9 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   protected static void prepareParquetDFSFiles(int numRecords, String baseParquetPath) throws IOException {
-    prepareParquetDFSFiles(numRecords, baseParquetPath, "1.parquet", false, null, null);
+    prepareParquetDFSFiles(numRecords, baseParquetPath, FIRST_PARQUET_FILE_NAME, false, null, null);
+    //prepareParquetDFSFiles(numRecords, baseParquetPath, FIRST_PARQUET_FILE_NAME);
+    //>>>>>>> 56190e5e... Addressing comments
   }
 
   protected static void prepareParquetDFSFiles(int numRecords, String baseParquetPath, String fileName, boolean useCustomSchema,
@@ -1040,7 +1050,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     TypedProperties parquetProps = new TypedProperties();
 
     if (addCommonProps) {
-      populateCommonProps(parquetProps, false, false);
+      populateCommonProps(parquetProps);
     }
 
     parquetProps.setProperty("include", "base.properties");
@@ -1072,7 +1082,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   private void prepareJsonKafkaDFSSource(String propsFileName, String autoResetValue, String topicName) throws IOException {
     // Properties used for testing delta-streamer with JsonKafka source
     TypedProperties props = new TypedProperties();
-    populateCommonProps(props, true, true);
+    populateAllCommonProps(props);
     props.setProperty("include", "base.properties");
     props.setProperty("hoodie.embed.timeline.server","false");
     props.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");

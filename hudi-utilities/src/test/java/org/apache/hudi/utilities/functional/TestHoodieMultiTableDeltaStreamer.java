@@ -215,7 +215,7 @@ public class TestHoodieMultiTableDeltaStreamer extends TestHoodieDeltaStreamer {
 
   private String populateCommonPropsAndWriteToFile() throws IOException {
     TypedProperties commonProps = new TypedProperties();
-    populateCommonProps(commonProps, false, false);
+    populateCommonProps(commonProps);
     UtilitiesTestBase.Helpers.savePropsToDFS(commonProps, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_PARQUET);
     return PROPS_FILENAME_TEST_PARQUET;
   }
