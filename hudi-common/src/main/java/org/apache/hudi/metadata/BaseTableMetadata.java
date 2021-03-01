@@ -62,6 +62,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   protected final HoodieMetadataConfig metadataConfig;
   // Directory used for Spillable Map when merging records
   protected final String spillableMapDirectory;
+  private String syncedInstantTime;
 
   protected boolean enabled;
   private TimelineMergedTableMetadata timelineMergedMetadata;
@@ -285,16 +286,43 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
   private void openTimelineScanner() {
     if (timelineMergedMetadata == null) {
-      List<HoodieInstant> unSyncedInstants = findInstantsToSync();
+      List<HoodieInstant> unSyncedInstants = findInstantsToSyncForReader();
       timelineMergedMetadata =
           new TimelineMergedTableMetadata(datasetMetaClient, unSyncedInstants, getSyncedInstantTime(), null);
+
+      syncedInstantTime = unSyncedInstants.isEmpty() ? getLatestDatasetInstantTime()
+          : unSyncedInstants.get(unSyncedInstants.size() - 1).getTimestamp();
     }
   }
 
-  protected abstract List<HoodieInstant> findInstantsToSync();
+  /**
+   * Return the timestamp of the latest synced instant.
+   */
+  @Override
+  public Option<String> getSyncedInstantTime() {
+    if (!enabled) {
+      return Option.empty();
+    }
+
+    return Option.ofNullable(syncedInstantTime);
+  }
+
+  /**
+   * Return the instants which are not-synced to the {@code HoodieTableMetadata}.
+   *
+   * This is the list of all completed but un-synched instants.
+   */
+  protected abstract List<HoodieInstant> findInstantsToSyncForReader();
+
+  /**
+   * Return the instants which are not-synced to the {@code HoodieTableMetadataWriter}.
+   *
+   * This is the list of all completed but un-synched instants which do not have any incomplete instants in between them.
+   */
+  protected abstract List<HoodieInstant> findInstantsToSyncForWriter();
 
   public boolean isInSync() {
-    return enabled && findInstantsToSync().isEmpty();
+    return enabled && findInstantsToSyncForWriter().isEmpty();
   }
 
   protected HoodieEngineContext getEngineContext() {

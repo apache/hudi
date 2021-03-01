@@ -491,6 +491,8 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
 
     // Various table operations without metadata table enabled
     String restoreToInstant;
+    String inflightActionTimestamp;
+    String beforeInflightActionTimestamp;
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, false))) {
       // updates
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
@@ -523,6 +525,10 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
         assertTrue(metadata(client).isInSync());
       }
 
+      // Record a timestamp for creating an inflight instance for sync testing
+      inflightActionTimestamp = HoodieActiveTimeline.createNewInstantTime();
+      beforeInflightActionTimestamp = newCommitTime;
+
       // Deletes
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       records = dataGen.generateDeletes(newCommitTime, 5);
@@ -554,9 +560,41 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       assertTrue(metadata(client).isInSync());
     }
 
+    // If there is an incomplete operation, the Metadata Table is not updated beyond that operations but the
+    // in-memory merge should consider all the completed operations.
+    Path inflightCleanPath = new Path(metaClient.getMetaPath(), HoodieTimeline.makeInflightCleanerFileName(inflightActionTimestamp));
+    fs.create(inflightCleanPath).close();
+
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
       // Restore cannot be done until the metadata table is in sync. See HUDI-1502 for details
       client.syncTableMetadata();
+
+      // Table should sync only before the inflightActionTimestamp
+      HoodieBackedTableMetadataWriter writer =
+          (HoodieBackedTableMetadataWriter)SparkHoodieBackedTableMetadataWriter.create(hadoopConf, client.getConfig(), context);
+      assertEquals(writer.getLatestSyncedInstantTime().get(), beforeInflightActionTimestamp);
+
+      // Reader should sync to all the completed instants
+      HoodieTableMetadata metadata  = HoodieTableMetadata.create(context, client.getConfig().getMetadataConfig(),
+          client.getConfig().getBasePath(), FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR);
+      assertEquals(metadata.getSyncedInstantTime().get(), newCommitTime);
+
+      // Remove the inflight instance holding back table sync
+      fs.delete(inflightCleanPath, false);
+      client.syncTableMetadata();
+
+      writer =
+          (HoodieBackedTableMetadataWriter)SparkHoodieBackedTableMetadataWriter.create(hadoopConf, client.getConfig(), context);
+      assertEquals(writer.getLatestSyncedInstantTime().get(), newCommitTime);
+
+      // Reader should sync to all the completed instants
+      metadata  = HoodieTableMetadata.create(context, client.getConfig().getMetadataConfig(),
+          client.getConfig().getBasePath(), FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR);
+      assertEquals(metadata.getSyncedInstantTime().get(), newCommitTime);
+    }
+
+    // Enable metadata table and ensure it is synced
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
       client.restoreToInstant(restoreToInstant);
       assertFalse(metadata(client).isInSync());
 
