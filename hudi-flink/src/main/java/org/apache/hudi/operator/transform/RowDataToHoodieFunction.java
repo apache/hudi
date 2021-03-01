@@ -98,8 +98,13 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord<?
         || WriteOperationType.fromValue(this.config.getString(FlinkOptions.OPERATION)) == WriteOperationType.UPSERT;
     GenericRecord gr = (GenericRecord) this.converter.convert(this.avroSchema, record);
     final String payloadClazz = this.config.getString(FlinkOptions.PAYLOAD_CLASS);
-    Comparable orderingVal = (Comparable) HoodieAvroUtils.getNestedFieldVal(gr,
-        this.config.getString(FlinkOptions.PRECOMBINE_FIELD), false);
+    Comparable orderingVal = null;
+    String preCmpField = this.config.getString(FlinkOptions.PRECOMBINE_FIELD);
+    if (preCmpField.contains(",")) {
+      orderingVal = (Comparable) HoodieAvroUtils.getMultiNestedFieldVal(gr, preCmpField, false);
+    } else {
+      orderingVal = (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, preCmpField, false);
+    }
     HoodieRecordPayload payload = shouldCombine
         ? StreamerUtil.createPayload(payloadClazz, gr, orderingVal)
         : StreamerUtil.createPayload(payloadClazz, gr);

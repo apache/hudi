@@ -146,8 +146,15 @@ private[hudi] object HoodieSparkSqlWriter {
           val shouldCombine = parameters(INSERT_DROP_DUPS_OPT_KEY).toBoolean || operation.equals(WriteOperationType.UPSERT);
           val hoodieAllIncomingRecords = genericRecords.map(gr => {
             val hoodieRecord = if (shouldCombine) {
-              val orderingVal = HoodieAvroUtils.getNestedFieldVal(gr, parameters(PRECOMBINE_FIELD_OPT_KEY), false)
-                .asInstanceOf[Comparable[_]]
+              val fieldKey = parameters(PRECOMBINE_FIELD_OPT_KEY)
+              var orderingVal: Comparable[_] = null
+              if (fieldKey.contains(",")) {
+                orderingVal = HoodieAvroUtils.getMultiNestedFieldVal(gr, fieldKey, false)
+                  .asInstanceOf[Comparable[_]]
+              } else {
+                orderingVal = HoodieAvroUtils.getNestedFieldVal(gr, fieldKey, false)
+                  .asInstanceOf[Comparable[_]]
+              }
               DataSourceUtils.createHoodieRecord(gr,
                 orderingVal, keyGenerator.getKey(gr),
                 parameters(PAYLOAD_CLASS_OPT_KEY))

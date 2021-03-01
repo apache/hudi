@@ -438,6 +438,74 @@ public class HoodieAvroUtils {
   }
 
   /**
+   * Obtain the list of value , which read from multi fields.
+   * MultifieldNames need with ',' , then split to a list of field.
+   * all fields need find the value, otherwise return null or throw exception.
+   * @param record input
+   * @param multiFieldNames e.g: C1,C2,C3
+   * @param returnNullIfNotFound ignore invalid field
+   * @return a value list
+   */
+  public static Object getMultiNestedFieldVal(
+      GenericRecord record, String multiFieldNames, boolean returnNullIfNotFound) {
+    String[] fieldNames = multiFieldNames.split(",");
+    List<Object> objs = new ComparableArrayList<>();
+    for (String fieldName : fieldNames) {
+      String[] parts = fieldName.split("\\.");
+      GenericRecord valueNode = record;
+      int i = 0;
+      boolean addObj = false;
+      for (; i < parts.length; i++) {
+        String part = parts[i];
+        Object val = valueNode.get(part);
+        if (val == null) {
+          break;
+        }
+
+        // return, if last part of name
+        if (i == parts.length - 1) {
+          Schema fieldSchema = valueNode.getSchema().getField(part).schema();
+          objs.add(convertValueForSpecificDataTypes(fieldSchema, val));
+          addObj = true;
+        } else {
+          // VC: Need a test here
+          if (!(val instanceof GenericRecord)) {
+            throw new HoodieException("Cannot find a record at part value :" + part);
+          }
+          valueNode = (GenericRecord) val;
+        }
+      }
+
+      if (!addObj) {
+        if (returnNullIfNotFound) {
+          return null;
+        } else {
+          throw new HoodieException(
+              fieldName
+                  + "(Part -"
+                  + parts[i]
+                  + ") field not found in record. Acceptable fields were :"
+                  + valueNode.getSchema().getFields().stream()
+                  .map(Field::name)
+                  .collect(Collectors.toList()));
+        }
+      }
+    }
+    if (fieldNames.length > 0 && objs.size() > 0) {
+      return objs;
+    }
+
+    if (returnNullIfNotFound) {
+      return null;
+    } else {
+      throw new HoodieException(
+          multiFieldNames
+              + " field not found in record. Please check data");
+    }
+  }
+
+
+  /**
    * This method converts values for fields with certain Avro/Parquet data types that require special handling.
    *
    * @param fieldSchema avro field schema
