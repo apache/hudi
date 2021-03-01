@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.restore;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -96,17 +95,6 @@ public abstract class BaseRestoreActionExecutor<T extends HoodieRecordPayload, I
     table.getActiveTimeline().saveAsComplete(new HoodieInstant(true, HoodieTimeline.RESTORE_ACTION, instantTime),
         TimelineMetadataUtils.serializeRestoreMetadata(restoreMetadata));
     LOG.info("Commits " + instantsRolledBack + " rollback is complete. Restored table to " + restoreInstantTime);
-
-    if (!table.getActiveTimeline().getCleanerTimeline().empty()) {
-      LOG.info("Cleaning up older restore meta files");
-      // Cleanup of older cleaner meta files
-      // TODO - make the commit archival generic and archive rollback metadata
-      FSUtils.deleteOlderRollbackMetaFiles(
-          table.getMetaClient().getFs(),
-          table.getMetaClient().getMetaPath(),
-          table.getActiveTimeline().getRestoreTimeline().getInstants()
-      );
-    }
     return restoreMetadata;
   }
 }
