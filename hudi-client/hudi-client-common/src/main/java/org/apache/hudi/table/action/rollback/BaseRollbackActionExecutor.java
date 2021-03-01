@@ -23,7 +23,6 @@ import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -38,7 +37,6 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.BaseActionExecutor;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -201,12 +199,6 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
           new HoodieInstant(true, HoodieTimeline.ROLLBACK_ACTION, instantTime),
           TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
       LOG.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");
-      if (!table.getActiveTimeline().getCleanerTimeline().empty()) {
-        LOG.info("Cleaning up older rollback meta files");
-        FSUtils.deleteOlderRollbackMetaFiles(table.getMetaClient().getFs(),
-            table.getMetaClient().getMetaPath(),
-            table.getActiveTimeline().getRollbackTimeline().getInstants());
-      }
     } catch (IOException e) {
       throw new HoodieIOException("Error executing rollback at instant " + instantTime, e);
     }
