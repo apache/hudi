@@ -56,7 +56,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
   private final String targetRegistryUrl;
   private final boolean noTargetSchema;
 
-  private static String fetchSchemaFromRegistry(String registryUrl) throws IOException {
+  public String fetchSchemaFromRegistry(String registryUrl) throws IOException {
     URL registry = new URL(registryUrl);
     ObjectMapper mapper = new ObjectMapper();
     JsonNode node = mapper.readTree(registry.openStream());
@@ -73,10 +73,10 @@ public class SchemaRegistryProvider extends SchemaProvider {
     this.noTargetSchema = targetRegistryUrl.equals("null");
   }
 
-  private static Schema getSchema(String registryUrl, boolean injectKafkaFieldSchema) throws IOException {
+  private Schema getSchema(String registryUrl) throws IOException {
     Schema schema = new Schema.Parser().parse(fetchSchemaFromRegistry(registryUrl));
     if (injectKafkaFieldSchema) {
-      return AvroKafkaSourceHelpers.addKafkaMetadataFields(schema);
+      schema = AvroKafkaSourceHelpers.addKafkaMetadataFields(schema);
     }
     return schema;
   }
@@ -116,7 +116,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   private Schema getSourceSchemaFromRegistry() {
     try {
-      return getSchema(registryUrl, injectKafkaFieldSchema);
+      return getSchema(registryUrl);
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading source schema from registry :" + registryUrl, ioe);
     }
@@ -124,7 +124,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
 
   private Schema getTargetSchemaFromRegistry() {
     try {
-      return getSchema(targetRegistryUrl, injectKafkaFieldSchema);
+      return getSchema(targetRegistryUrl);
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading target schema from registry :" + targetRegistryUrl, ioe);
     }

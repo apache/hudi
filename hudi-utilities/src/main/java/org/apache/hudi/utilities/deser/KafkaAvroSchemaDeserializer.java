@@ -16,24 +16,18 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.utilities.decoders;
+package org.apache.hudi.utilities.deser;
 
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
-import io.confluent.kafka.serializers.NonRecordContainer;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericDatumReader;
-import org.apache.avro.io.DatumReader;
-import org.apache.avro.io.DecoderFactory;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.kafka.common.errors.SerializationException;
-import org.codehaus.jackson.node.JsonNodeFactory;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
@@ -44,7 +38,6 @@ import java.util.Objects;
 public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
 
   private static final String SCHEMA_PROVIDER_CLASS_PROP = "hoodie.deltastreamer.schemaprovider.class";
-  private final DecoderFactory decoderFactory = DecoderFactory.get();
   private Schema sourceSchema;
 
   public KafkaAvroSchemaDeserializer() {}
@@ -58,7 +51,7 @@ public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
           props.getString(SCHEMA_PROVIDER_CLASS_PROP), props, null);
       sourceSchema = Objects.requireNonNull(schemaProvider).getSourceSchema();
     } catch (IOException e) {
-      throw new RuntimeException(e);
+      throw new HoodieException(e);
     }
   }
 

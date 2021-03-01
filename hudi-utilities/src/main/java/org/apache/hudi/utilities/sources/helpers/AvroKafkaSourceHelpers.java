@@ -35,9 +35,9 @@ public class AvroKafkaSourceHelpers {
   public static final String KAFKA_OFFSET_META_FIELD = "_hudi_kafka_offset";
   public static final String KAFKA_TOPIC_META_FIELD = "_hudi_kafka_topic";
   public static final String KAFKA_KEY_META_FIELD = "_hudi_kafka_key";
-  private static final String KAFKA_META_FIELDS_PATTERN = "<KAFKA_FIELDS>";
+  public static final String KAFKA_META_FIELDS_PATTERN = "<KAFKA_FIELDS>";
 
-  private static final String ALL_KAFKA_META_FIELDS = String.join(
+  public static final String ALL_KAFKA_META_FIELDS = String.join(
       ",",
       AvroKafkaSourceHelpers.KAFKA_PARTITION_META_FIELD,
       AvroKafkaSourceHelpers.KAFKA_OFFSET_META_FIELD,

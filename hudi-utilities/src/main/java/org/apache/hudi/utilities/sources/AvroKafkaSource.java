@@ -21,13 +21,13 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.utilities.deser.KafkaAvroSchemaDeserializer;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.AvroKafkaSourceHelpers;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 
-import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.log4j.LogManager;
@@ -58,7 +58,7 @@ public class AvroKafkaSource extends AvroSource {
     String deserializerClassName = props.getString(KAFKA_AVRO_VALUE_DESERIALIZER, "");
 
     if (deserializerClassName.isEmpty()) {
-      props.put("value.deserializer", KafkaAvroDeserializer.class);
+      props.put("value.deserializer", KafkaAvroSchemaDeserializer.class);
     } else {
       try {
         props.put("value.deserializer", Class.forName(deserializerClassName));
