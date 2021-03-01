@@ -36,7 +36,6 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -266,7 +265,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     String createInstantTime = latestInstant.map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
     LOG.info("Creating a new metadata table in " + metadataWriteConfig.getBasePath() + " at instant " + createInstantTime);
 
-    HoodieTableConfig.propertyBuilder()
+    HoodieTableMetaClient.withPropertyBuilder()
       .setTableType(HoodieTableType.MERGE_ON_READ)
       .setTableName(tableName)
       .setArchiveLogFolder("archived")

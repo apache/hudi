@@ -21,7 +21,7 @@ package org.apache.hudi.integ.testsuite;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.integ.testsuite.dag.DagUtils;
@@ -93,7 +93,7 @@ public class HoodieTestSuiteJob {
     this.keyGenerator = (BuiltinKeyGenerator) DataSourceUtils.createKeyGenerator(props);
 
     if (!fs.exists(new Path(cfg.targetBasePath))) {
-      HoodieTableConfig.propertyBuilder()
+      HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
         .setArchiveLogFolder("archived")

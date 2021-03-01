@@ -101,7 +101,7 @@ public class HoodieTestUtils {
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
                                            Properties properties)
       throws IOException {
-    properties = HoodieTableConfig.propertyBuilder()
+    properties = HoodieTableMetaClient.withPropertyBuilder()
       .setTableName(RAW_TRIPS_TEST_NAME)
       .setTableType(tableType)
       .setPayloadClass(HoodieAvroPayload.class)

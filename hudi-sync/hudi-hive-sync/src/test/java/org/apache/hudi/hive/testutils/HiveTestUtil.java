@@ -30,7 +30,6 @@ import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
@@ -127,7 +126,7 @@ public class HiveTestUtil {
 
   public static void clear() throws IOException {
     fileSystem.delete(new Path(hiveSyncConfig.basePath), true);
-    HoodieTableConfig.propertyBuilder()
+    HoodieTableMetaClient.withPropertyBuilder()
       .setTableType(HoodieTableType.COPY_ON_WRITE)
       .setTableName(hiveSyncConfig.tableName)
       .setPayloadClass(HoodieAvroPayload.class)
@@ -165,7 +164,7 @@ public class HiveTestUtil {
       throws IOException, URISyntaxException {
     Path path = new Path(hiveSyncConfig.basePath);
     FileIOUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
-    HoodieTableConfig.propertyBuilder()
+    HoodieTableMetaClient.withPropertyBuilder()
       .setTableType(HoodieTableType.COPY_ON_WRITE)
       .setTableName(hiveSyncConfig.tableName)
       .setPayloadClass(HoodieAvroPayload.class)
@@ -185,7 +184,7 @@ public class HiveTestUtil {
       throws IOException, URISyntaxException, InterruptedException {
     Path path = new Path(hiveSyncConfig.basePath);
     FileIOUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
-    HoodieTableConfig.propertyBuilder()
+    HoodieTableMetaClient.withPropertyBuilder()
       .setTableType(HoodieTableType.MERGE_ON_READ)
       .setTableName(hiveSyncConfig.tableName)
       .setPayloadClass(HoodieAvroPayload.class)

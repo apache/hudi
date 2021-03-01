@@ -22,7 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -150,7 +150,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     tableType = HoodieTableType.MERGE_ON_READ;
 
     // Create the table
-    HoodieTableConfig.propertyBuilder()
+    HoodieTableMetaClient.withPropertyBuilder()
       .fromMetaClient(metaClient)
       .setTableType(HoodieTableType.MERGE_ON_READ)
       .setTimelineLayoutVersion(VERSION_1)
@@ -297,7 +297,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   @Test
   public void testCopyOnWriteTable() throws Exception {
     // Create the table
-    HoodieTableConfig.propertyBuilder()
+    HoodieTableMetaClient.withPropertyBuilder()
       .fromMetaClient(metaClient)
       .setTimelineLayoutVersion(VERSION_1)
       .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());

@@ -22,7 +22,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -80,7 +80,7 @@ public class TestHoodieSnapshotExporter extends FunctionalTestHarness {
     targetPath = dfsBasePath() + "/target/";
     dfs().mkdirs(new Path(sourcePath));
 
-    HoodieTableConfig.propertyBuilder()
+    HoodieTableMetaClient.withPropertyBuilder()
       .setTableType(HoodieTableType.COPY_ON_WRITE)
       .setTableName(TABLE_NAME)
       .setPayloadClass(HoodieAvroPayload.class)

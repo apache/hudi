@@ -19,7 +19,6 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
@@ -275,7 +274,7 @@ public class StreamerUtil {
     // Hadoop FileSystem
     try (FileSystem fs = FSUtils.getFs(basePath, hadoopConf)) {
       if (!fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))) {
-        HoodieTableConfig.propertyBuilder()
+        HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
           .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
           .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS))

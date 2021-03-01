@@ -22,7 +22,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -76,7 +75,7 @@ public class TestMultiFS extends HoodieClientTestHarness {
   @Test
   public void readLocalWriteHDFS() throws Exception {
     // Initialize table and filesystem
-    HoodieTableConfig.propertyBuilder()
+    HoodieTableMetaClient.withPropertyBuilder()
       .setTableType(tableType)
       .setTableName(tableName)
       .setPayloadClass(HoodieAvroPayload.class)
@@ -104,7 +103,7 @@ public class TestMultiFS extends HoodieClientTestHarness {
       assertEquals(readRecords.count(), records.size(), "Should contain 100 records");
 
       // Write to local
-      HoodieTableConfig.propertyBuilder()
+      HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(tableType)
         .setTableName(tableName)
         .setPayloadClass(HoodieAvroPayload.class)
