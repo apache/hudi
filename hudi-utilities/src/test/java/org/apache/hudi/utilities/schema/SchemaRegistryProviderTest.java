@@ -25,23 +25,25 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.junit.jupiter.api.Assertions.*;
 
 class SchemaRegistryProviderTest {
 
-  final static String AVRO_SCHEMA = "{\n" +
-      "     \"type\": \"record\",\n" +
-      "     \"namespace\": \"com.example\",\n" +
-      "     \"name\": \"FullName\",\n" +
-      "     \"fields\": [\n" +
-      "       { \"name\": \"first\", \"type\": \"string\" },\n" +
-      "       { \"name\": \"last\", \"type\": \"string\" }\n" +
-      "     ]\n" +
-      "}";
+  private static final String AVRO_SCHEMA = "{\n"
+      + "     \"type\": \"record\",\n"
+      + "     \"namespace\": \"com.example\",\n"
+      + "     \"name\": \"FullName\",\n"
+      + "     \"fields\": [\n"
+      + "       { \"name\": \"first\", \"type\": \"string\" },\n"
+      + "       { \"name\": \"last\", \"type\": \"string\" }\n"
+      + "     ]\n"
+      + "}";
 
   TypedProperties initProps() {
     TypedProperties tp = new TypedProperties();
