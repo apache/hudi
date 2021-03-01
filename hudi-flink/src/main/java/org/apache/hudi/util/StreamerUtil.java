@@ -36,6 +36,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.operator.FlinkOptions;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
+import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -54,6 +55,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Properties;
 
@@ -229,6 +231,10 @@ public class StreamerUtil {
             .withCompactionConfig(
                 HoodieCompactionConfig.newBuilder()
                     .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS))
+                    .withInlineCompactionTriggerStrategy(
+                        CompactionTriggerStrategy.valueOf(conf.getString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY).toUpperCase(Locale.ROOT)))
+                    .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_COMMITS))
+                    .withMaxDeltaSecondsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_SECONDS))
                     .build())
             .forTable(conf.getString(FlinkOptions.TABLE_NAME))
             .withAutoCommit(false)

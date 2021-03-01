@@ -22,10 +22,12 @@ import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieFlinkTable;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
@@ -36,6 +38,7 @@ import org.apache.flink.table.data.writer.BinaryWriter;
 import org.apache.flink.table.runtime.types.InternalSerializers;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.Strings;
 import org.apache.parquet.avro.AvroParquetReader;
@@ -49,6 +52,8 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static junit.framework.TestCase.assertEquals;
@@ -106,6 +111,28 @@ public class TestData {
         binaryRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
             TimestampData.fromEpochMillis(1), StringData.fromString("par1"))));
   }
+
+  public static List<RowData> DATA_SET_FOUR = Arrays.asList(
+      // update: advance the age by 1
+      binaryRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
+          TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
+      binaryRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 34,
+          TimestampData.fromEpochMillis(3), StringData.fromString("par1")),
+      binaryRow(StringData.fromString("id3"), StringData.fromString("Julian"), 54,
+          TimestampData.fromEpochMillis(4), StringData.fromString("par2")),
+      binaryRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 32,
+          TimestampData.fromEpochMillis(5), StringData.fromString("par2")),
+      // same with before
+      binaryRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+          TimestampData.fromEpochMillis(6), StringData.fromString("par3")),
+      // new data
+      binaryRow(StringData.fromString("id9"), StringData.fromString("Jane"), 19,
+          TimestampData.fromEpochMillis(6), StringData.fromString("par3")),
+      binaryRow(StringData.fromString("id10"), StringData.fromString("Ella"), 38,
+          TimestampData.fromEpochMillis(7), StringData.fromString("par4")),
+      binaryRow(StringData.fromString("id11"), StringData.fromString("Phoebe"), 52,
+          TimestampData.fromEpochMillis(8), StringData.fromString("par4"))
+  );
 
   /**
    * Checks the source data TestConfigurations.DATA_SET_ONE are written as expected.
@@ -199,6 +226,75 @@ public class TestData {
 
     });
 
+  }
+
+  /**
+   * Checks the MERGE_ON_READ source data are written as expected.
+   *
+   * <p>Note: Replace it with the Flink reader when it is supported.
+   *
+   * @param fs         The file system
+   * @param latestInstant The latest committed instant of current table
+   * @param baseFile   The file base to check, should be a directory
+   * @param expected   The expected results mapping, the key should be the partition path
+   * @param partitions The expected partition number
+   * @param schema     The read schema
+   */
+  public static void checkWrittenDataMOR(
+      FileSystem fs,
+      String latestInstant,
+      File baseFile,
+      Map<String, String> expected,
+      int partitions,
+      Schema schema) {
+    assert baseFile.isDirectory() : "Base path should be a directory";
+    FileFilter partitionFilter = file -> !file.getName().startsWith(".");
+    File[] partitionDirs = baseFile.listFiles(partitionFilter);
+    assertNotNull(partitionDirs);
+    assertThat(partitionDirs.length, is(partitions));
+    for (File partitionDir : partitionDirs) {
+      File[] dataFiles = partitionDir.listFiles(file ->
+          file.getName().contains(".log.") && !file.getName().startsWith(".."));
+      assertNotNull(dataFiles);
+      HoodieMergedLogRecordScanner scanner = getScanner(
+          fs, baseFile.getPath(), Arrays.stream(dataFiles).map(File::getAbsolutePath)
+              .sorted(Comparator.naturalOrder()).collect(Collectors.toList()),
+          schema, latestInstant);
+      List<String> readBuffer = scanner.getRecords().values().stream()
+          .map(hoodieRecord -> {
+            try {
+              return filterOutVariables((GenericRecord) hoodieRecord.getData().getInsertValue(schema, new Properties()).get());
+            } catch (IOException e) {
+              throw new RuntimeException(e);
+            }
+          })
+          .sorted(Comparator.naturalOrder())
+          .collect(Collectors.toList());
+      assertThat(readBuffer.toString(), is(expected.get(partitionDir.getName())));
+    }
+  }
+
+  /**
+   * Returns the scanner to read avro log files.
+   */
+  private static HoodieMergedLogRecordScanner getScanner(
+      FileSystem fs,
+      String basePath,
+      List<String> logPaths,
+      Schema readSchema,
+      String instant) {
+    return HoodieMergedLogRecordScanner.newBuilder()
+        .withFileSystem(fs)
+        .withBasePath(basePath)
+        .withLogFilePaths(logPaths)
+        .withReaderSchema(readSchema)
+        .withLatestInstantTime(instant)
+        .withReadBlocksLazily(false)
+        .withReverseReader(false)
+        .withBufferSize(16 * 1024 * 1024)
+        .withMaxMemorySizeInBytes(1024 * 1024L)
+        .withSpillableMapBasePath("/tmp/")
+        .build();
   }
 
   /**

@@ -51,8 +51,8 @@ public class FlinkOptions {
       .key("path")
       .stringType()
       .noDefaultValue()
-      .withDescription("Base path for the target hoodie table."
-          + "\nThe path would be created if it does not exist,\n"
+      .withDescription("Base path for the target hoodie table.\n"
+          + "The path would be created if it does not exist,\n"
           + "otherwise a Hoodie table expects to be initialized successfully");
 
   // ------------------------------------------------------------------------
@@ -164,6 +164,42 @@ public class FlinkOptions {
       .doubleType()
       .defaultValue(128D) // 128MB
       .withDescription("Batch buffer size in MB to flush data into the underneath filesystem");
+
+  // ------------------------------------------------------------------------
+  //  Compaction Options
+  // ------------------------------------------------------------------------
+
+  public static final ConfigOption<Boolean> COMPACTION_ASYNC_ENABLED = ConfigOptions
+      .key("compaction.async.enabled")
+      .booleanType()
+      .defaultValue(true) // default true for MOR write
+      .withDescription("Async Compaction, enabled by default for MOR");
+
+  public static final String NUM_COMMITS = "num_commits";
+  public static final String TIME_ELAPSED = "time_elapsed";
+  public static final String NUM_AND_TIME = "num_and_time";
+  public static final String NUM_OR_TIME = "num_or_time";
+  public static final ConfigOption<String> COMPACTION_TRIGGER_STRATEGY = ConfigOptions
+      .key("compaction.trigger.strategy")
+      .stringType()
+      .defaultValue(NUM_COMMITS) // default true for MOR write
+      .withDescription("Strategy to trigger compaction, options are 'num_commits': trigger compaction when reach N delta commits;\n"
+          + "'time_elapsed': trigger compaction when time elapsed > N seconds since last compaction;\n"
+          + "'num_and_time': trigger compaction when both NUM_COMMITS and TIME_ELAPSED are satisfied;\n"
+          + "'num_or_time': trigger compaction when NUM_COMMITS or TIME_ELAPSED is satisfied.\n"
+          + "Default is 'num_commits'");
+
+  public static final ConfigOption<Integer> COMPACTION_DELTA_COMMITS = ConfigOptions
+      .key("compaction.delta_commits")
+      .intType()
+      .defaultValue(5)
+      .withDescription("Max delta commits needed to trigger compaction, default 5 commits");
+
+  public static final ConfigOption<Integer> COMPACTION_DELTA_SECONDS = ConfigOptions
+      .key("compaction.delta_seconds")
+      .intType()
+      .defaultValue(3600) // default 1 hour
+      .withDescription("Max delta seconds time needed to trigger compaction, default 1 hour");
 
   // -------------------------------------------------------------------------
   //  Utilities

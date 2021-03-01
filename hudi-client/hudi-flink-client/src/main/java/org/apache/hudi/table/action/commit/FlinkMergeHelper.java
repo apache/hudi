@@ -65,14 +65,13 @@ public class FlinkMergeHelper<T extends HoodieRecordPayload> extends AbstractMer
                        HoodieMergeHandle<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> upsertHandle) throws IOException {
     final boolean externalSchemaTransformation = table.getConfig().shouldUseExternalSchemaTransformation();
     Configuration cfgForHoodieFile = new Configuration(table.getHadoopConf());
-    FlinkMergeHandle<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> mergeHandle =
-        (FlinkMergeHandle<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>>) upsertHandle;
+    HoodieMergeHandle<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> mergeHandle = upsertHandle;
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
 
     final GenericDatumWriter<GenericRecord> gWriter;
     final GenericDatumReader<GenericRecord> gReader;
     Schema readSchema;
-    if (mergeHandle.isNeedBootStrap()
+    if (isNeedBootStrap(mergeHandle)
         && (externalSchemaTransformation || baseFile.getBootstrapBaseFile().isPresent())) {
       readSchema = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), mergeHandle.getOldFilePath()).getSchema();
       gWriter = new GenericDatumWriter<>(readSchema);
@@ -87,7 +86,7 @@ public class FlinkMergeHelper<T extends HoodieRecordPayload> extends AbstractMer
     HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.<GenericRecord>getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
     try {
       final Iterator<GenericRecord> readerIterator;
-      if (mergeHandle.isNeedBootStrap() && baseFile.getBootstrapBaseFile().isPresent()) {
+      if (isNeedBootStrap(mergeHandle) && baseFile.getBootstrapBaseFile().isPresent()) {
         readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readSchema, externalSchemaTransformation);
       } else {
         readerIterator = reader.getRecordIterator(readSchema);
@@ -114,6 +113,10 @@ public class FlinkMergeHelper<T extends HoodieRecordPayload> extends AbstractMer
         wrapper.shutdownNow();
       }
     }
+  }
+
+  private static boolean isNeedBootStrap(HoodieMergeHandle<?, ?, ?, ?> mergeHandle) {
+    return mergeHandle instanceof FlinkMergeHandle && ((FlinkMergeHandle) mergeHandle).isNeedBootStrap();
   }
 
 }
