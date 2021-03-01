@@ -199,6 +199,13 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   }
 
   /**
+   * Whether there is need to update the record location.
+   */
+  boolean needsUpdateLocation() {
+    return true;
+  }
+
+  /**
    * Load the new incoming records in a map and return partitionPath.
    */
   protected void init(String fileId, Iterator<HoodieRecord<T>> newRecordsItr) {
@@ -206,9 +213,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     while (newRecordsItr.hasNext()) {
       HoodieRecord<T> record = newRecordsItr.next();
       // update the new location of the record, so we know where to find it next
-      record.unseal();
-      record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
-      record.seal();
+      if (needsUpdateLocation()) {
+        record.unseal();
+        record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
+        record.seal();
+      }
       // NOTE: Once Records are added to map (spillable-map), DO NOT change it as they won't persist
       keyToNewRecords.put(record.getRecordKey(), record);
     }

@@ -22,6 +22,7 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.operator.event.BatchWriteSuccessEvent;
@@ -45,7 +46,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.operator.utils.TestData.checkWrittenData;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -58,13 +58,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test cases for StreamingSinkFunction.
  */
-public class StreamWriteFunctionTest {
+public class TestWriteCopyOnWrite {
 
-  private static final Map<String, String> EXPECTED1 = new HashMap<>();
+  protected static final Map<String, String> EXPECTED1 = new HashMap<>();
 
-  private static final Map<String, String> EXPECTED2 = new HashMap<>();
+  protected static final Map<String, String> EXPECTED2 = new HashMap<>();
 
-  private static final Map<String, String> EXPECTED3 = new HashMap<>();
+  protected static final Map<String, String> EXPECTED3 = new HashMap<>();
 
   static {
     EXPECTED1.put("par1", "[id1,par1,id1,Danny,23,1,par1, id2,par1,id2,Stephen,33,2,par1]");
@@ -82,14 +82,27 @@ public class StreamWriteFunctionTest {
     EXPECTED3.put("par1", "[id1,par1,id1,Danny,23,1,par1]");
   }
 
-  private StreamWriteFunctionWrapper<RowData> funcWrapper;
+  protected Configuration conf;
+
+  protected StreamWriteFunctionWrapper<RowData> funcWrapper;
 
   @TempDir
   File tempFile;
 
   @BeforeEach
   public void before() throws Exception {
-    this.funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath());
+    final String basePath = tempFile.getAbsolutePath();
+    conf = TestConfigurations.getDefaultConf(basePath);
+    conf.setString(FlinkOptions.TABLE_TYPE, getTableType());
+    setUp(conf);
+    this.funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
+  }
+
+  /**
+   * Override to have custom configuration.
+   */
+  protected void setUp(Configuration conf) {
+    // for sub-class extension
   }
 
   @AfterEach
@@ -114,7 +127,7 @@ public class StreamWriteFunctionTest {
     funcWrapper.checkpointFunction(1);
 
     String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant("COPY_ON_WRITE");
+        .getInflightAndRequestedInstant(getTableType());
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
     MatcherAssert.assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
@@ -140,7 +153,7 @@ public class StreamWriteFunctionTest {
     funcWrapper.checkpointFunction(2);
 
     String instant2 = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant("COPY_ON_WRITE");
+        .getInflightAndRequestedInstant(getTableType());
     assertNotEquals(instant, instant2);
 
     final OperatorEvent nextEvent2 = funcWrapper.getNextEvent();
@@ -169,7 +182,7 @@ public class StreamWriteFunctionTest {
     funcWrapper.checkpointFunction(1);
 
     String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant("COPY_ON_WRITE");
+        .getInflightAndRequestedInstant(getTableType());
     assertNotNull(instant);
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
@@ -191,10 +204,8 @@ public class StreamWriteFunctionTest {
       funcWrapper.invoke(rowData);
     }
 
-    // this triggers NPE cause there is no inflight instant
-    assertThrows(NullPointerException.class,
-        () -> funcWrapper.checkpointFunction(2),
-        "No inflight instant when flushing data");
+    // this returns early cause there is no inflight instant
+    funcWrapper.checkpointFunction(2);
     // do not sent the write event and fails the checkpoint,
     // behaves like the last checkpoint is successful.
     funcWrapper.checkpointFails(2);
@@ -213,7 +224,7 @@ public class StreamWriteFunctionTest {
     funcWrapper.checkpointFunction(1);
 
     String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant("COPY_ON_WRITE");
+        .getInflightAndRequestedInstant(getTableType());
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
     assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
@@ -232,7 +243,6 @@ public class StreamWriteFunctionTest {
   @Test
   public void testInsertDuplicates() throws Exception {
     // reset the config option
-    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setBoolean(FlinkOptions.INSERT_DROP_DUPS, true);
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
@@ -300,11 +310,10 @@ public class StreamWriteFunctionTest {
     funcWrapper.checkpointFunction(2);
 
     String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant("COPY_ON_WRITE");
+        .getInflightAndRequestedInstant(getTableType());
 
     nextEvent = funcWrapper.getNextEvent();
     assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
-    checkWrittenData(tempFile, EXPECTED2);
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
@@ -319,7 +328,6 @@ public class StreamWriteFunctionTest {
   @Test
   public void testInsertWithMiniBatches() throws Exception {
     // reset the config option
-    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.001); // 1Kb batch size
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
@@ -349,16 +357,11 @@ public class StreamWriteFunctionTest {
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
 
     String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant("COPY_ON_WRITE");
+        .getInflightAndRequestedInstant(getTableType());
 
     funcWrapper.checkpointComplete(1);
 
-    Map<String, String> expected = new HashMap<>();
-    expected.put("par1", "[id1,par1,id1,Danny,23,1,par1, "
-        + "id1,par1,id1,Danny,23,1,par1, "
-        + "id1,par1,id1,Danny,23,1,par1, "
-        + "id1,par1,id1,Danny,23,1,par1, "
-        + "id1,par1,id1,Danny,23,1,par1]");
+    Map<String, String> expected = getMiniBatchExpected();
     checkWrittenData(tempFile, expected, 1);
 
     // started a new instant already
@@ -382,6 +385,16 @@ public class StreamWriteFunctionTest {
 
     // Same the original base file content.
     checkWrittenData(tempFile, expected, 1);
+  }
+
+  Map<String, String> getMiniBatchExpected() {
+    Map<String, String> expected = new HashMap<>();
+    expected.put("par1", "[id1,par1,id1,Danny,23,1,par1, "
+        + "id1,par1,id1,Danny,23,1,par1, "
+        + "id1,par1,id1,Danny,23,1,par1, "
+        + "id1,par1,id1,Danny,23,1,par1, "
+        + "id1,par1,id1,Danny,23,1,par1]");
+    return expected;
   }
 
   @Test
@@ -452,7 +465,7 @@ public class StreamWriteFunctionTest {
 
   @SuppressWarnings("rawtypes")
   private void checkInflightInstant(HoodieFlinkWriteClient writeClient) {
-    final String instant = writeClient.getInflightAndRequestedInstant("COPY_ON_WRITE");
+    final String instant = writeClient.getInflightAndRequestedInstant(getTableType());
     assertNotNull(instant);
   }
 
@@ -464,10 +477,10 @@ public class StreamWriteFunctionTest {
     final String instant;
     switch (state) {
       case REQUESTED:
-        instant = writeClient.getInflightAndRequestedInstant("COPY_ON_WRITE");
+        instant = writeClient.getInflightAndRequestedInstant(getTableType());
         break;
       case COMPLETED:
-        instant = writeClient.getLastCompletedInstant("COPY_ON_WRITE");
+        instant = writeClient.getLastCompletedInstant(getTableType());
         break;
       default:
         throw new AssertionError("Unexpected state");
@@ -475,10 +488,22 @@ public class StreamWriteFunctionTest {
     assertThat(instant, is(instantStr));
   }
 
+  protected String getTableType() {
+    return HoodieTableType.COPY_ON_WRITE.name();
+  }
+
+  protected void checkWrittenData(File baseFile, Map<String, String> expected) throws Exception {
+    checkWrittenData(baseFile, expected, 4);
+  }
+
+  protected void checkWrittenData(File baseFile, Map<String, String> expected, int partitions) throws Exception {
+    TestData.checkWrittenData(baseFile, expected, partitions);
+  }
+
   /**
    * Asserts the data files are empty.
    */
-  private void assertEmptyDataFiles() {
+  protected void assertEmptyDataFiles() {
     File[] dataFiles = tempFile.listFiles(file -> !file.getName().startsWith("."));
     assertNotNull(dataFiles);
     assertThat(dataFiles.length, is(0));

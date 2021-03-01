@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -136,7 +137,10 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     this.context = new HoodieFlinkEngineContext(
         new SerializableConfiguration(this.hadoopConf),
         new FlinkTaskContextSupplier(getRuntimeContext()));
-    this.bucketAssigner = new BucketAssigner(context, writeConfig);
+    this.bucketAssigner = BucketAssigners.create(
+        HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)),
+        context,
+        writeConfig);
 
     // initialize and check the partitions load state
     loadInitialPartitions();
@@ -145,7 +149,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
 
   @Override
   public void snapshotState(FunctionSnapshotContext context) {
-    // no operation
+    this.bucketAssigner.reset();
   }
 
   @Override
@@ -209,7 +213,6 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   @Override
   public void notifyCheckpointComplete(long l) {
     // Refresh the table state when there are new commits.
-    this.bucketAssigner.reset();
     this.bucketAssigner.refreshTable();
     checkPartitionsLoaded();
   }

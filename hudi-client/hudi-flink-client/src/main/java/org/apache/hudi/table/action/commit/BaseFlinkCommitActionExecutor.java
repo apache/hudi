@@ -35,7 +35,7 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.FlinkLazyInsertIterable;
-import org.apache.hudi.io.ExplicitCreateHandleFactory;
+import org.apache.hudi.io.ExplicitWriteHandleFactory;
 import org.apache.hudi.io.FlinkMergeHandle;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
@@ -74,7 +74,7 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
 
   private static final Logger LOG = LogManager.getLogger(BaseFlinkCommitActionExecutor.class);
 
-  private HoodieWriteHandle<?, ?, ?, ?> writeHandle;
+  protected HoodieWriteHandle<?, ?, ?, ?> writeHandle;
 
   public BaseFlinkCommitActionExecutor(HoodieEngineContext context,
                                        HoodieWriteHandle<?, ?, ?, ?> writeHandle,
@@ -107,22 +107,13 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
     final BucketType bucketType = record.getCurrentLocation().getInstantTime().equals("I")
         ? BucketType.INSERT
         : BucketType.UPDATE;
-    if (WriteOperationType.isChangingRecords(operationType)) {
-      handleUpsertPartition(
-          instantTime,
-          partitionPath,
-          fileId, bucketType,
-          inputRecords.iterator())
-          .forEachRemaining(writeStatuses::addAll);
-    } else {
-      handleUpsertPartition(
-          instantTime,
-          partitionPath,
-          fileId,
-          bucketType,
-          inputRecords.iterator())
-          .forEachRemaining(writeStatuses::addAll);
-    }
+    handleUpsertPartition(
+        instantTime,
+        partitionPath,
+        fileId,
+        bucketType,
+        inputRecords.iterator())
+        .forEachRemaining(writeStatuses::addAll);
     setUpWriteMetadata(writeStatuses, result);
     return result;
   }
@@ -265,6 +256,6 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
       return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
     }
     return new FlinkLazyInsertIterable<>(recordItr, true, config, instantTime, table, idPfx,
-        taskContextSupplier, new ExplicitCreateHandleFactory<>(writeHandle));
+        taskContextSupplier, new ExplicitWriteHandleFactory<>(writeHandle));
   }
 }

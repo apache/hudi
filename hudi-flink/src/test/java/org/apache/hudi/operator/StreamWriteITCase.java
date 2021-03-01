@@ -20,6 +20,12 @@ package org.apache.hudi.operator;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.operator.compact.CompactFunction;
+import org.apache.hudi.operator.compact.CompactionCommitEvent;
+import org.apache.hudi.operator.compact.CompactionCommitSink;
+import org.apache.hudi.operator.compact.CompactionPlanEvent;
+import org.apache.hudi.operator.compact.CompactionPlanOperator;
 import org.apache.hudi.operator.partitioner.BucketAssignFunction;
 import org.apache.hudi.operator.transform.RowDataToHoodieFunction;
 import org.apache.hudi.operator.utils.TestConfigurations;
@@ -211,6 +217,83 @@ public class StreamWriteITCase extends TestLogger {
     if (client.getJobStatus().get() != JobStatus.FAILED) {
       try {
         TimeUnit.SECONDS.sleep(8);
+        client.cancel();
+      } catch (Throwable var1) {
+        // ignored
+      }
+    }
+
+    TestData.checkWrittenFullData(tempFile, EXPECTED);
+  }
+
+  @Test
+  public void testMergeOnReadWriteWithCompaction() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
+    conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment();
+    execEnv.getConfig().disableObjectReuse();
+    execEnv.setParallelism(4);
+    // set up checkpoint interval
+    execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
+    execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
+
+    // Read from file source
+    RowType rowType =
+        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
+            .getLogicalType();
+    StreamWriteOperatorFactory<HoodieRecord> operatorFactory =
+        new StreamWriteOperatorFactory<>(conf);
+
+    JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
+        rowType,
+        new RowDataTypeInfo(rowType),
+        false,
+        true,
+        TimestampFormat.ISO_8601
+    );
+    String sourcePath = Objects.requireNonNull(Thread.currentThread()
+        .getContextClassLoader().getResource("test_source.data")).toString();
+
+    TextInputFormat format = new TextInputFormat(new Path(sourcePath));
+    format.setFilesFilter(FilePathFilter.createDefaultFilter());
+    TypeInformation<String> typeInfo = BasicTypeInfo.STRING_TYPE_INFO;
+    format.setCharsetName("UTF-8");
+
+    execEnv
+        // use PROCESS_CONTINUOUSLY mode to trigger checkpoint
+        .readFile(format, sourcePath, FileProcessingMode.PROCESS_CONTINUOUSLY, 1000, typeInfo)
+        .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
+        .setParallelism(4)
+        .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class))
+        // Key-by partition path, to avoid multiple subtasks write to a partition at the same time
+        .keyBy(HoodieRecord::getPartitionPath)
+        .transform(
+            "bucket_assigner",
+            TypeInformation.of(HoodieRecord.class),
+            new KeyedProcessOperator<>(new BucketAssignFunction<>(conf)))
+        .uid("uid_bucket_assigner")
+        // shuffle by fileId(bucket id)
+        .keyBy(record -> record.getCurrentLocation().getFileId())
+        .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
+        .uid("uid_hoodie_stream_write")
+        .transform("compact_plan_generate",
+            TypeInformation.of(CompactionPlanEvent.class),
+            new CompactionPlanOperator(conf))
+        .uid("uid_compact_plan_generate")
+        .setParallelism(1) // plan generate must be singleton
+        .keyBy(event -> event.getOperation().hashCode())
+        .transform("compact_task",
+            TypeInformation.of(CompactionCommitEvent.class),
+            new KeyedProcessOperator<>(new CompactFunction(conf)))
+        .addSink(new CompactionCommitSink(conf))
+        .name("compact_commit")
+        .setParallelism(1);
+
+    JobClient client = execEnv.executeAsync(execEnv.getStreamGraph(conf.getString(FlinkOptions.TABLE_NAME)));
+    if (client.getJobStatus().get() != JobStatus.FAILED) {
+      try {
+        TimeUnit.SECONDS.sleep(20); // wait long enough for the compaction to finish
         client.cancel();
       } catch (Throwable var1) {
         // ignored
