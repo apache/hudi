@@ -35,13 +35,16 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.utilities.sources.helpers.DFSPathSelector.Config.ROOT_INPUT_PATH_PROP;
+import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.DATE_FORMAT;
 import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.DATE_PARTITION_DEPTH;
+import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.DEFAULT_DATE_FORMAT;
 import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.DEFAULT_DATE_PARTITION_DEPTH;
 import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.DEFAULT_LOOKBACK_DAYS;
 import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.DEFAULT_PARTITIONS_LIST_PARALLELISM;
@@ -65,6 +68,7 @@ public class DatePartitionPathSelector extends DFSPathSelector {
 
   private static volatile Logger LOG = LogManager.getLogger(DatePartitionPathSelector.class);
 
+  private final String dateFormat;
   private final int datePartitionDepth;
   private final int numPrevDaysToList;
   private final LocalDate fromDate;
@@ -73,6 +77,9 @@ public class DatePartitionPathSelector extends DFSPathSelector {
 
   /** Configs supported. */
   public static class Config {
+    public static final String DATE_FORMAT = "hoodie.deltastreamer.source.dfs.datepartitioned.date.format";
+    public static final String DEFAULT_DATE_FORMAT = "yyyy-MM-dd";
+
     public static final String DATE_PARTITION_DEPTH =
         "hoodie.deltastreamer.source.dfs.datepartitioned.selector.depth";
     public static final int DEFAULT_DATE_PARTITION_DEPTH = 0; // Implies no (date) partition
@@ -83,7 +90,6 @@ public class DatePartitionPathSelector extends DFSPathSelector {
 
     public static final String CURRENT_DATE =
         "hoodie.deltastreamer.source.dfs.datepartitioned.selector.currentdate";
-
 
     public static final String PARTITIONS_LIST_PARALLELISM =
         "hoodie.deltastreamer.source.dfs.datepartitioned.selector.parallelism";
@@ -96,6 +102,7 @@ public class DatePartitionPathSelector extends DFSPathSelector {
      * datePartitionDepth = 0 is same as basepath and there is no partition. In which case
      * this path selector would be a no-op and lists all paths under the table basepath.
      */
+    dateFormat = props.getString(DATE_FORMAT, DEFAULT_DATE_FORMAT);
     datePartitionDepth = props.getInteger(DATE_PARTITION_DEPTH, DEFAULT_DATE_PARTITION_DEPTH);
     // If not specified the current date is assumed by default.
     currentDate = LocalDate.parse(props.getString(Config.CURRENT_DATE, LocalDate.now().toString()));
@@ -193,14 +200,15 @@ public class DatePartitionPathSelector extends DFSPathSelector {
           String[] splits = s.split("/");
           String datePartition = splits[splits.length - 1];
           LocalDate partitionDate;
+          DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(dateFormat);
           if (datePartition.contains("=")) {
             String[] moreSplit = datePartition.split("=");
             ValidationUtils.checkArgument(
                 moreSplit.length == 2,
                 "Partition Field (" + datePartition + ") not in expected format");
-            partitionDate = LocalDate.parse(moreSplit[1]);
+            partitionDate = LocalDate.parse(moreSplit[1], dateFormatter);
           } else {
-            partitionDate = LocalDate.parse(datePartition);
+            partitionDate = LocalDate.parse(datePartition, dateFormatter);
           }
           return (partitionDate.isEqual(fromDate) || partitionDate.isAfter(fromDate))
               && (partitionDate.isEqual(currentDate) || partitionDate.isBefore(currentDate));
