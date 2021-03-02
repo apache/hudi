@@ -51,6 +51,30 @@
                     ]
                 }
             }]
-        }
+        },
+         {   "name": "rangeIndexMetadata",
+             "doc": "Contains information about range of values for a given column within dataset",
+             "type": ["null", {
+                     "type": "record",
+                     "name": "HoodieRangeIndexInfo",
+                     "fields": [
+                         {
+                             "name": "min",
+                             "type": "long",
+                             "doc": "Min value in file"
+                         },
+                         {
+                             "name": "max",
+                             "type": "long",
+                             "doc": "Max value in file"
+                         },
+                         {
+                             "name": "isDeleted",
+                             "type": "boolean",
+                             "doc": "True if this file has been deleted"
+                         }
+                     ]
+             }]
+         }
     ]
 }
