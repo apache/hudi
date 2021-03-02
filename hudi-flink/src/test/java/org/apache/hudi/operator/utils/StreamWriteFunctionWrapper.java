@@ -19,7 +19,10 @@
 package org.apache.hudi.operator.utils;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.operator.FlinkOptions;
 import org.apache.hudi.operator.StreamWriteFunction;
 import org.apache.hudi.operator.StreamWriteOperatorCoordinator;
 import org.apache.hudi.operator.event.BatchWriteSuccessEvent;
@@ -63,6 +66,8 @@ public class StreamWriteFunctionWrapper<I> {
   /** Stream write function. */
   private StreamWriteFunction<Object, HoodieRecord<?>, Object> writeFunction;
 
+  private CompactFunctionWrapper compactFunctionWrapper;
+
   public StreamWriteFunctionWrapper(String tablePath) throws Exception {
     this(tablePath, TestConfigurations.getDefaultConf(tablePath));
   }
@@ -80,6 +85,7 @@ public class StreamWriteFunctionWrapper<I> {
     // one function
     this.coordinator = new StreamWriteOperatorCoordinator(conf, 1);
     this.functionInitializationContext = new MockFunctionInitializationContext();
+    this.compactFunctionWrapper = new CompactFunctionWrapper(this.conf);
   }
 
   public void openFunction() throws Exception {
@@ -97,6 +103,10 @@ public class StreamWriteFunctionWrapper<I> {
     writeFunction.setRuntimeContext(runtimeContext);
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.open(conf);
+
+    if (conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED)) {
+      compactFunctionWrapper.openFunction();
+    }
   }
 
   public void invoke(I record) throws Exception {
@@ -148,6 +158,13 @@ public class StreamWriteFunctionWrapper<I> {
     coordinator.checkpointComplete(checkpointId);
     this.bucketAssignerFunction.notifyCheckpointComplete(checkpointId);
     this.writeFunction.notifyCheckpointComplete(checkpointId);
+    if (conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED)) {
+      try {
+        compactFunctionWrapper.compact(checkpointId);
+      } catch (Exception e) {
+        throw new HoodieException(e);
+      }
+    }
   }
 
   public void checkpointFails(long checkpointId) {
@@ -161,5 +178,17 @@ public class StreamWriteFunctionWrapper<I> {
 
   public StreamWriteOperatorCoordinator getCoordinator() {
     return coordinator;
+  }
+
+  public void clearIndexState() {
+    this.bucketAssignerFunction.clearIndexState();
+  }
+
+  public boolean isKeyInState(HoodieKey hoodieKey) {
+    return this.bucketAssignerFunction.isKeyInState(hoodieKey);
+  }
+
+  public boolean isAllPartitionsLoaded() {
+    return this.bucketAssignerFunction.isAllPartitionsLoaded();
   }
 }

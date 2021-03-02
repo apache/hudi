@@ -65,7 +65,7 @@ public class BucketAssigner {
    */
   private final HashMap<String, BucketInfo> bucketInfoMap;
 
-  private HoodieTable<?, ?, ?, ?> table;
+  protected HoodieTable<?, ?, ?, ?> table;
 
   /**
    * Fink engine context.
@@ -75,7 +75,7 @@ public class BucketAssigner {
   /**
    * The write config.
    */
-  private final HoodieWriteConfig config;
+  protected final HoodieWriteConfig config;
 
   /**
    * The average record size.
@@ -205,6 +205,10 @@ public class BucketAssigner {
    */
   public void refreshTable() {
     this.table = HoodieFlinkTable.create(this.config, this.context);
+  }
+
+  public HoodieTable<?, ?, ?, ?> getTable() {
+    return table;
   }
 
   /**

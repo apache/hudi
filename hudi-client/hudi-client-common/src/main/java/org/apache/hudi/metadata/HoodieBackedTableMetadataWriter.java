@@ -235,6 +235,29 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   protected void bootstrapIfNeeded(HoodieEngineContext engineContext, HoodieTableMetaClient datasetMetaClient) throws IOException {
     HoodieTimer timer = new HoodieTimer().startTimer();
     boolean exists = datasetMetaClient.getFs().exists(new Path(metadataWriteConfig.getBasePath(), HoodieTableMetaClient.METAFOLDER_NAME));
+    boolean rebootstrap = false;
+    if (exists) {
+      // If the un-synched instants have been archived then the metadata table will need to be bootstrapped again
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get())
+          .setBasePath(metadataWriteConfig.getBasePath()).build();
+      Option<HoodieInstant> latestMetadataInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
+      if (!latestMetadataInstant.isPresent()) {
+        LOG.warn("Metadata Table will need to be re-bootstrapped as no instants were found");
+        rebootstrap = true;
+      } else if (datasetMetaClient.getActiveTimeline().isBeforeTimelineStarts(latestMetadataInstant.get().getTimestamp())) {
+        LOG.warn("Metadata Table will need to be re-bootstrapped as un-synced instants have been archived."
+            + "latestMetadataInstant=" + latestMetadataInstant.get().getTimestamp()
+            + ", latestDatasetInstant=" + datasetMetaClient.getActiveTimeline().firstInstant().get().getTimestamp());
+        rebootstrap = true;
+      }
+    }
+
+    if (rebootstrap) {
+      LOG.info("Deleting Metadata Table directory so that it can be re-bootstrapped");
+      datasetMetaClient.getFs().delete(new Path(metadataWriteConfig.getBasePath()), true);
+      exists = false;
+    }
+
     if (!exists) {
       // Initialize for the first time by listing partitions and files directly from the file system
       bootstrapFromFilesystem(engineContext, datasetMetaClient);
@@ -318,6 +341,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     Map<String, List<FileStatus>> partitionToFileStatus = new HashMap<>();
     final int fileListingParallelism = metadataWriteConfig.getFileListingParallelism();
     SerializableConfiguration conf = new SerializableConfiguration(datasetMetaClient.getHadoopConf());
+    final String dirFilterRegex = datasetWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
 
     while (!pathsToList.isEmpty()) {
       int listingParallelism = Math.min(fileListingParallelism, pathsToList.size());
@@ -331,6 +355,11 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       // If the listing reveals a directory, add it to queue. If the listing reveals a hoodie partition, add it to
       // the results.
       dirToFileListing.forEach(p -> {
+        if (!dirFilterRegex.isEmpty() && p.getLeft().getName().matches(dirFilterRegex)) {
+          LOG.info("Ignoring directory " + p.getLeft() + " which matches the filter regex " + dirFilterRegex);
+          return;
+        }
+
         List<FileStatus> filesInDir = Arrays.stream(p.getRight()).parallel()
             .filter(fs -> !fs.getPath().getName().equals(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE))
             .collect(Collectors.toList());

@@ -26,11 +26,11 @@ import org.apache.hudi.table.HoodieTable;
 /**
  * Create handle factory for Flink writer, use the specified write handle directly.
  */
-public class ExplicitCreateHandleFactory<T extends HoodieRecordPayload, I, K, O>
-    extends CreateHandleFactory<T, I, K, O> {
+public class ExplicitWriteHandleFactory<T extends HoodieRecordPayload, I, K, O>
+    extends WriteHandleFactory<T, I, K, O> {
   private HoodieWriteHandle<T, I, K, O> writeHandle;
 
-  public ExplicitCreateHandleFactory(HoodieWriteHandle<T, I, K, O> writeHandle) {
+  public ExplicitWriteHandleFactory(HoodieWriteHandle<T, I, K, O> writeHandle) {
     this.writeHandle = writeHandle;
   }
 

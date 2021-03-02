@@ -58,64 +58,78 @@ public class HiveSyncTool extends AbstractSyncTool {
   public static final String SUFFIX_READ_OPTIMIZED_TABLE = "_ro";
 
   private final HiveSyncConfig cfg;
-  private final HoodieHiveClient hoodieHiveClient;
-  private final String snapshotTableName;
-  private final Option<String> roTableTableName;
+  private HoodieHiveClient hoodieHiveClient = null;
+  private String snapshotTableName = null;
+  private Option<String> roTableName = null;
 
   public HiveSyncTool(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
     super(configuration.getAllProperties(), fs);
-    this.hoodieHiveClient = new HoodieHiveClient(cfg, configuration, fs);
+
+    try {
+      this.hoodieHiveClient = new HoodieHiveClient(cfg, configuration, fs);
+    } catch (RuntimeException e) {
+      if (cfg.ignoreExceptions) {
+        LOG.error("Got runtime exception when hive syncing, but continuing as ignoreExceptions config is set ", e);
+      } else {
+        throw new HoodieHiveSyncException("Got runtime exception when hive syncing", e);
+      }
+    }
+
     this.cfg = cfg;
     // Set partitionFields to empty, when the NonPartitionedExtractor is used
     if (NonPartitionedExtractor.class.getName().equals(cfg.partitionValueExtractorClass)) {
       LOG.warn("Set partitionFields to empty, since the NonPartitionedExtractor is used");
       cfg.partitionFields = new ArrayList<>();
     }
-    switch (hoodieHiveClient.getTableType()) {
-      case COPY_ON_WRITE:
-        this.snapshotTableName = cfg.tableName;
-        this.roTableTableName = Option.empty();
-        break;
-      case MERGE_ON_READ:
-        this.snapshotTableName = cfg.tableName + SUFFIX_SNAPSHOT_TABLE;
-        this.roTableTableName = cfg.skipROSuffix ? Option.of(cfg.tableName) :
-            Option.of(cfg.tableName + SUFFIX_READ_OPTIMIZED_TABLE);
-        break;
-      default:
-        LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
-        throw new InvalidTableException(hoodieHiveClient.getBasePath());
+    if (hoodieHiveClient != null) {
+      switch (hoodieHiveClient.getTableType()) {
+        case COPY_ON_WRITE:
+          this.snapshotTableName = cfg.tableName;
+          this.roTableName = Option.empty();
+          break;
+        case MERGE_ON_READ:
+          this.snapshotTableName = cfg.tableName + SUFFIX_SNAPSHOT_TABLE;
+          this.roTableName = cfg.skipROSuffix ? Option.of(cfg.tableName) :
+              Option.of(cfg.tableName + SUFFIX_READ_OPTIMIZED_TABLE);
+          break;
+        default:
+          LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
+          throw new InvalidTableException(hoodieHiveClient.getBasePath());
+      }
     }
   }
 
   @Override
   public void syncHoodieTable() {
     try {
-      switch (hoodieHiveClient.getTableType()) {
-        case COPY_ON_WRITE:
-          syncHoodieTable(snapshotTableName, false);
-          break;
-        case MERGE_ON_READ:
-          // sync a RO table for MOR
-          syncHoodieTable(roTableTableName.get(), false);
-          // sync a RT table for MOR
-          syncHoodieTable(snapshotTableName, true);
-          break;
-        default:
-          LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
-          throw new InvalidTableException(hoodieHiveClient.getBasePath());
+      if (hoodieHiveClient != null) {
+        switch (hoodieHiveClient.getTableType()) {
+          case COPY_ON_WRITE:
+            syncHoodieTable(snapshotTableName, false);
+            break;
+          case MERGE_ON_READ:
+            // sync a RO table for MOR
+            syncHoodieTable(roTableName.get(), false);
+            // sync a RT table for MOR
+            syncHoodieTable(snapshotTableName, true);
+            break;
+          default:
+            LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
+            throw new InvalidTableException(hoodieHiveClient.getBasePath());
+        }
       }
     } catch (RuntimeException re) {
       throw new HoodieException("Got runtime exception when hive syncing " + cfg.tableName, re);
     } finally {
-      hoodieHiveClient.close();
+      if (hoodieHiveClient != null) {
+        hoodieHiveClient.close();
+      }
     }
   }
 
   private void syncHoodieTable(String tableName, boolean useRealtimeInputFormat) {
     LOG.info("Trying to sync hoodie table " + tableName + " with base path " + hoodieHiveClient.getBasePath()
         + " of type " + hoodieHiveClient.getTableType());
-    // Check if the necessary table exists
-    boolean tableExists = hoodieHiveClient.doesTableExist(tableName);
 
     // check if the database exists else create it
     if (cfg.autoCreateDatabase) {
@@ -130,6 +144,9 @@ public class HiveSyncTool extends AbstractSyncTool {
         throw new HoodieHiveSyncException("hive database does not exist " + cfg.databaseName);
       }
     }
+
+    // Check if the necessary table exists
+    boolean tableExists = hoodieHiveClient.doesTableExist(tableName);
 
     // Get the parquet schema for this table looking at the latest commit
     MessageType schema = hoodieHiveClient.getDataSchema();

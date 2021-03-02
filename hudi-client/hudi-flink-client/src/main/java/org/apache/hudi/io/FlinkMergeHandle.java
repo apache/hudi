@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
@@ -94,7 +93,8 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
    * Use the fileId + "-" + rollNumber as the new fileId of a mini-batch write.
    */
   protected String generatesDataFileName() {
-    return FSUtils.makeDataFileName(instantTime, writeToken, fileId + "-" + rollNumber, hoodieTable.getBaseFileExtension());
+    final String fileID = this.needBootStrap ? fileId : fileId + "-" + rollNumber;
+    return FSUtils.makeDataFileName(instantTime, writeToken, fileID, hoodieTable.getBaseFileExtension());
   }
 
   public boolean isNeedBootStrap() {
@@ -108,29 +108,10 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
     return writeStatus;
   }
 
-  /**
-   * The difference with the parent method is that there is no need to set up
-   * locations for the records.
-   *
-   * @param fileId        The file ID
-   * @param newRecordsItr The incremental records iterator
-   */
-  @Override
-  protected void init(String fileId, Iterator<HoodieRecord<T>> newRecordsItr) {
-    initializeIncomingRecordsMap();
-    while (newRecordsItr.hasNext()) {
-      HoodieRecord<T> record = newRecordsItr.next();
-      // NOTE: Once Records are added to map (spillable-map), DO NOT change it as they won't persist
-      keyToNewRecords.put(record.getRecordKey(), record);
-    }
-    LOG.info(String.format("Number of entries in MemoryBasedMap => %d\n"
-            + "Total size in bytes of MemoryBasedMap => %d\n"
-            + "Number of entries in DiskBasedMap => %d\n"
-            + "Size of file spilled to disk => %d",
-            ((ExternalSpillableMap) keyToNewRecords).getInMemoryMapNumEntries(),
-            ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize(),
-            ((ExternalSpillableMap) keyToNewRecords).getDiskBasedMapNumEntries(),
-            ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes()));
+  boolean needsUpdateLocation() {
+    // No need to update location for Flink hoodie records because all the records are pre-tagged
+    // with the desired locations.
+    return false;
   }
 
   /**
@@ -178,6 +159,12 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
   }
 
   public void finishWrite() {
+    // The file visibility should be kept by the configured ConsistencyGuard instance.
+    if (rolloverPaths.size() == 1) {
+      // only one flush action, no need to roll over
+      return;
+    }
+
     for (int i = 0; i < rolloverPaths.size() - 1; i++) {
       Path path = rolloverPaths.get(i);
       try {

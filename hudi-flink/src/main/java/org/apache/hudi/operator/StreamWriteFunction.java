@@ -40,7 +40,6 @@ import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
-import org.apache.flink.util.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -333,8 +332,11 @@ public class StreamWriteFunction<K, I, O>
   @SuppressWarnings("unchecked, rawtypes")
   private void flushBuffer(boolean isFinalBatch) {
     this.currentInstant = this.writeClient.getInflightAndRequestedInstant(this.config.get(FlinkOptions.TABLE_TYPE));
-    Preconditions.checkNotNull(this.currentInstant,
-        "No inflight instant when flushing data");
+    if (this.currentInstant == null) {
+      // in case there are empty checkpoints that has no input data
+      LOG.info("No inflight instant when flushing data, cancel.");
+      return;
+    }
     final List<WriteStatus> writeStatus;
     if (buffer.size() > 0) {
       writeStatus = new ArrayList<>();

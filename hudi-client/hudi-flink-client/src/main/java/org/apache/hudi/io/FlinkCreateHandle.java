@@ -90,13 +90,12 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
    */
   private WriteStatus getIncrementalWriteStatus() {
     try {
-      long fileSizeInBytes = FSUtils.getFileSize(fs, path);
-      setUpWriteStatus(fileSizeInBytes);
+      setUpWriteStatus();
       // reset the write status
       recordsWritten = 0;
       recordsDeleted = 0;
       insertRecordsWritten = 0;
-      this.lastFileSize = fileSizeInBytes;
+      timer = new HoodieTimer().startTimer();
       writeStatus.setTotalErrorRecords(0);
       return writeStatus;
     } catch (IOException e) {
@@ -107,10 +106,12 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
   /**
    * Set up the write status.
    *
-   * @param fileSizeInBytes File size in bytes
    * @throws IOException if error occurs
    */
-  private void setUpWriteStatus(long fileSizeInBytes) throws IOException {
+  private void setUpWriteStatus() throws IOException {
+    long fileSizeInBytes = FSUtils.getFileSize(fs, path);
+    long incFileSizeInBytes = fileSizeInBytes - lastFileSize;
+    this.lastFileSize = fileSizeInBytes;
     HoodieWriteStat stat = new HoodieWriteStat();
     stat.setPartitionPath(writeStatus.getPartitionPath());
     stat.setNumWrites(recordsWritten);
@@ -119,13 +120,12 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
     stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
     stat.setFileId(writeStatus.getFileId());
     stat.setPath(new Path(config.getBasePath()), path);
-    stat.setTotalWriteBytes(fileSizeInBytes - lastFileSize);
+    stat.setTotalWriteBytes(incFileSizeInBytes);
     stat.setFileSizeInBytes(fileSizeInBytes);
     stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
     HoodieWriteStat.RuntimeStats runtimeStats = new HoodieWriteStat.RuntimeStats();
     runtimeStats.setTotalCreateTime(timer.endTimer());
     stat.setRuntimeStats(runtimeStats);
-    timer = new HoodieTimer().startTimer();
     writeStatus.setStat(stat);
   }
 
