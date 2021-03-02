@@ -54,10 +54,7 @@ public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
   }
 
   /**
-   * Pretty much copy-paste from the {@link AbstractKafkaAvroDeserializer} except line 87:
-   * DatumReader reader = new GenericDatumReader(schema, sourceSchema);
-   * <p>
-   * We need to inject reader schema during deserialization or later stages of the pipeline break.
+   * We need to inject sourceSchema instead of reader schema during deserialization or later stages of the pipeline.
    *
    * @param includeSchemaAndVersion
    * @param topic
