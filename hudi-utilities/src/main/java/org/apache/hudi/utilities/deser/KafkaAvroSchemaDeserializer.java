@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.deser;
 
-import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import org.apache.avro.Schema;
 import org.apache.hudi.common.config.TypedProperties;
