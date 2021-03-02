@@ -44,7 +44,7 @@ import org.apache.spark.streaming.kafka010.OffsetRange;
  */
 public class AvroKafkaSource extends AvroSource {
 
-  private static final String KAFKA_AVRO_VALUE_DESERIALIZER = "hoodie.deltastreamer.source.value.deserializer";
+  private static final String KAFKA_AVRO_VALUE_DESERIALIZER = "hoodie.deltastreamer.source.value.deserializer.class";
   private static final Logger LOG = LogManager.getLogger(AvroKafkaSource.class);
   private final KafkaOffsetGen offsetGen;
   private final HoodieDeltaStreamerMetrics metrics;

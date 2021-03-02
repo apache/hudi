@@ -56,11 +56,8 @@ public class SchemaRegistryProvider extends SchemaProvider {
   private final String targetRegistryUrl;
   private final boolean noTargetSchema;
 
-  public String fetchSchemaFromRegistry(String registryUrl) throws IOException {
-    URL registry = new URL(registryUrl);
-    ObjectMapper mapper = new ObjectMapper();
-    JsonNode node = mapper.readTree(registry.openStream());
-    return node.get("schema").asText();
+  public SchemaRegistryProvider(TypedProperties props) {
+    this(props, null);
   }
 
   public SchemaRegistryProvider(TypedProperties props, JavaSparkContext jssc) {
@@ -71,6 +68,13 @@ public class SchemaRegistryProvider extends SchemaProvider {
     this.registryUrl = config.getString(Config.SRC_SCHEMA_REGISTRY_URL_PROP);
     this.targetRegistryUrl = config.getString(Config.TARGET_SCHEMA_REGISTRY_URL_PROP, registryUrl);
     this.noTargetSchema = targetRegistryUrl.equals("null");
+  }
+
+  public String fetchSchemaFromRegistry(String registryUrl) throws IOException {
+    URL registry = new URL(registryUrl);
+    ObjectMapper mapper = new ObjectMapper();
+    JsonNode node = mapper.readTree(registry.openStream());
+    return node.get("schema").asText();
   }
 
   private Schema getSchema(String registryUrl) throws IOException {

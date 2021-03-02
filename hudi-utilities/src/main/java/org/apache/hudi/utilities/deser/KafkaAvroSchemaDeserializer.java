@@ -22,12 +22,11 @@ import io.confluent.kafka.serializers.AbstractKafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import org.apache.avro.Schema;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.kafka.common.errors.SerializationException;
 
-import java.io.IOException;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
@@ -47,10 +46,10 @@ public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
     super.configure(configs, isKey);
     try {
       TypedProperties props = getConvertToTypedProperties(configs);
-      SchemaProvider schemaProvider = UtilHelpers.createSchemaProvider(
-          props.getString(SCHEMA_PROVIDER_CLASS_PROP), props, null);
+      String className = props.getString(SCHEMA_PROVIDER_CLASS_PROP);
+      SchemaProvider schemaProvider = (SchemaProvider) ReflectionUtils.loadClass(className, props);
       sourceSchema = Objects.requireNonNull(schemaProvider).getSourceSchema();
-    } catch (IOException e) {
+    } catch (Throwable e) {
       throw new HoodieException(e);
     }
   }
