@@ -143,7 +143,7 @@ public class DatePartitionPathSelector extends DFSPathSelector {
         break;
       }
 
-      maxModificationTime = f.getModificationTime();
+      maxModificationTime = Math.max(maxModificationTime, f.getModificationTime());
       currentBytes += f.getLen();
       filteredFiles.add(f);
     }
