@@ -50,7 +50,7 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
    * Used as a part of config in CustomKeyGenerator.java.
    */
   public enum PartitionKeyType {
-    SIMPLE, TIMESTAMP
+    SIMPLE, TIMESTAMP, RANGE
   }
 
   public CustomAvroKeyGenerator(TypedProperties props) {
@@ -90,6 +90,9 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
           } catch (IOException e) {
             throw new HoodieKeyGeneratorException("Unable to initialise TimestampBasedKeyGenerator class", e);
           }
+          break;
+        case RANGE:
+          partitionPath.append(new RangePartitionAvroKeyGenerator(config, partitionPathField).getPartitionPath(record));
           break;
         default:
           throw new HoodieKeyGeneratorException("Please provide valid PartitionKeyType with fields! You provided: " + keyType);

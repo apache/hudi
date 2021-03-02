@@ -91,6 +91,13 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
     return properties;
   }
 
+  private TypedProperties getPropertiesForRangePartitionKeyGen() {
+    TypedProperties properties = getCommonProps(false);
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp:range");
+    populateNecessaryPropsForTimestampBasedKeyGen(properties);
+    return properties;
+  }
+
   private TypedProperties getPropertiesForNonPartitionedKeyGen() {
     TypedProperties properties = getCommonProps(false);
     properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "");
@@ -119,6 +126,18 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
     Row row = KeyGeneratorTestUtilities.getRow(record);
     Assertions.assertEquals(keyGenerator.getRecordKey(row), "key1");
     Assertions.assertEquals(keyGenerator.getPartitionPath(row), "ts_ms=20200321");
+  }
+
+  @Test
+  public void testRangePartitionKeyGenerator() {
+    BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getPropertiesForRangePartitionKeyGen());
+    GenericRecord record = getRecord();
+    HoodieKey key = keyGenerator.getKey(record);
+    Assertions.assertEquals(key.getRecordKey(), "key1");
+    Assertions.assertEquals(key.getPartitionPath(), "rangePartition=43");
+    Row row = KeyGeneratorTestUtilities.getRow(record);
+    Assertions.assertEquals(keyGenerator.getRecordKey(row), "key1");
+    Assertions.assertEquals(keyGenerator.getPartitionPath(row), "rangePartition=43");
   }
 
   @Test

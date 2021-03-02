@@ -65,4 +65,15 @@ public class KeyGeneratorTestUtilities {
     }
     return new GenericRowWithSchema(values, structType);
   }
+
+  public static Row genericRecordToRow(GenericRecord baseRecord, Schema schema, StructType structType) {
+    Function1<Object, Object> convertor = AvroConversionHelper.createConverterToRow(schema, structType);
+    Row row = (Row) convertor.apply(baseRecord);
+    int fieldCount = structType.fieldNames().length;
+    Object[] values = new Object[fieldCount];
+    for (int i = 0; i < fieldCount; i++) {
+      values[i] = row.get(i);
+    }
+    return new GenericRowWithSchema(values, structType);
+  }
 }

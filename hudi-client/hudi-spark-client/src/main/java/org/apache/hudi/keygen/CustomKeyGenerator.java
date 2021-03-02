@@ -116,6 +116,13 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
             throw new HoodieKeyGeneratorException("Unable to initialise TimestampBasedKeyGenerator class", ioe);
           }
           break;
+        case RANGE:
+          if (record.isPresent()) {
+            partitionPath.append(new RangePartitionKeyGenerator(config, partitionPathField).getPartitionPath(record.get()));
+          } else {
+            partitionPath.append(new RangePartitionKeyGenerator(config, partitionPathField).getPartitionPath(row.get()));
+          }
+          break;
         default:
           throw new HoodieKeyGeneratorException("Please provide valid PartitionKeyType with fields! You provided: " + keyType);
       }
