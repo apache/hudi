@@ -177,7 +177,7 @@ public class KafkaOffsetGen {
     }
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.KAFKA_TOPIC_NAME));
     topicName = props.getString(Config.KAFKA_TOPIC_NAME);
-    String kafkaAutoResetOffsetsStr = props.getString(Config.KAFKA_AUTO_RESET_OFFSETS, Config.DEFAULT_KAFKA_AUTO_RESET_OFFSETS.name());
+    String kafkaAutoResetOffsetsStr = props.getString(Config.KAFKA_AUTO_RESET_OFFSETS, Config.DEFAULT_KAFKA_AUTO_RESET_OFFSETS.name().toLowerCase());
     boolean found = false;
     for (KafkaResetOffsetStrategies entry: KafkaResetOffsetStrategies.values()) {
       if (entry.name().toLowerCase().equals(kafkaAutoResetOffsetsStr)) {
