@@ -24,6 +24,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+import org.apache.hudi.avro.model.HoodieFileInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRangeIndexInfo;
 import org.apache.hudi.client.SparkTaskContextSupplier;
@@ -39,9 +40,11 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -78,8 +81,9 @@ public class TestHoodieFileWriterFactory extends HoodieClientTestBase {
     assertTrue(thrown.getMessage().contains("format not supported yet."));
   }
   
+  // key: full file path (/tmp/.../partition0000/file-000.parquet, value: column range 
   @Test
-  public void testPerformanceRange() throws IOException {
+  public void testPerformanceRangeKeyPartitionFile() throws IOException {
     final String instantTime = "100";
     final HoodieWriteConfig cfg = getConfig();
     final Path hfilePath = new Path(basePath + "/hfile_partition/f1_1-0-1_000.hfile");
@@ -89,7 +93,7 @@ public class TestHoodieFileWriterFactory extends HoodieClientTestBase {
     Random random = new Random();
     
     int numPartitions = 1000;
-    int avgFilesPerPartition = 10000;
+    int avgFilesPerPartition = 10;
 
     long startTime = System.currentTimeMillis();
     List<String> partitions = new ArrayList<>();
@@ -108,39 +112,160 @@ public class TestHoodieFileWriterFactory extends HoodieClientTestBase {
         GenericRecord rec = new GenericData.Record(HoodieMetadataRecord.SCHEMA$);
         rec.put("key", key.getRecordKey());
         rec.put("type", 2);
-        rec.put("rangeIndexMetadata", HoodieRangeIndexInfo.newBuilder().setMax(max).setMin(min).setIsDeleted(false).build());
+        rec.put("rangeIndexMetadata", HoodieRangeIndexInfo.newBuilder().setMax("" + max).setMin("" + min).setIsDeleted(false).build());
         hfileWriter.writeAvro(key.getRecordKey(), rec);
       }
     }
     
     hfileWriter.close();
     long durationInMs = System.currentTimeMillis() - startTime;
-    System.out.println("Time taken to write: " + durationInMs + " ms");
-
+    System.out.println("Time taken to generate & write: " + durationInMs + " ms. file path: " + hfilePath
+        + " File size: " + FSUtils.getFileSize(metaClient.getFs(), hfilePath));
+    
     CacheConfig cacheConfig = new CacheConfig(hadoopConf);
     cacheConfig.setCacheDataInL1(false);
     HoodieHFileReader reader = new HoodieHFileReader(hadoopConf, hfilePath, cacheConfig);
-    Map<String, GenericRecord> records = reader.getRecordsInRange(partitions.get(0), partitions.get(partitions.size() - 1));
-    assertEquals(numPartitions * avgFilesPerPartition, records.size());
     long duration  = 0;
     int numRuns = 1000;
     long numRecordsInRange = 0;
     for (int i = 0; i < numRuns; i++) {
       int partitionPicked = Math.max(0, partitions.size() - 30);
       long start = System.currentTimeMillis();
-      records = reader.getRecordsInRange(partitions.get(partitionPicked), partitions.get(partitions.size() - 1));
+      Map<String, GenericRecord> records = reader.getRecordsInRange(partitions.get(partitionPicked), partitions.get(partitions.size() - 1));
       duration += (System.currentTimeMillis() - start);
       numRecordsInRange += records.size();
     }
     double avgDuration = duration / (double) numRuns;
     double avgRecordsFetched = numRecordsInRange / (double) numRuns;
-    System.out.println("Average time taken to lookup a key: " + avgDuration + "ms. Avg number records: " + avgRecordsFetched);
-//    for (Map.Entry<String, GenericRecord> record : records.entrySet()) {
-//      System.out.println(record.getKey() + " " + record.getValue());
-//    }
+    System.out.println("Average time taken to lookup a range: " + avgDuration + "ms. Avg number records: " + avgRecordsFetched);
   }
 
+  // key: partition (partition0000), value: map (filePath -> column range)
+  @Test
+  public void testPerformanceRangeKeyPartition() throws IOException {
+    final String instantTime = "100";
+    final HoodieWriteConfig cfg = getConfig();
+    final Path hfilePath = new Path(basePath + "/hfile_partition/f1_1-0-1_000.hfile");
+    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    HoodieHFileWriter<HoodieRecordPayload, IndexedRecord> hfileWriter = (HoodieHFileWriter<HoodieRecordPayload, IndexedRecord>) HoodieFileWriterFactory.getFileWriter(instantTime,
+        hfilePath, table, cfg, HoodieMetadataRecord.SCHEMA$, supplier);
+    Random random = new Random();
 
+    int numPartitions = 1;
+    int avgFilesPerPartition = 10;
+
+    long startTime = System.currentTimeMillis();
+    List<String> partitions = new ArrayList<>();
+    for (int i = 0; i < numPartitions; i++) {
+      String partitionPath = "partition-" + String.format("%010d", i);
+      partitions.add(partitionPath);
+      Map<String, HoodieRangeIndexInfo> fileToRangeInfo = new HashMap<>();
+      for (int j = 0; j < avgFilesPerPartition; j++) {
+        String filePath = "file-" + String.format("%010d", j) + "_1-0-1_000.parquet";
+        int max = random.nextInt();
+        if (max < 0) {
+          max = -max;
+        }
+        int min = random.nextInt(max);
+        fileToRangeInfo.put(filePath, HoodieRangeIndexInfo.newBuilder().setMax("" + max).setMin("" + min).setIsDeleted(false).build());
+      }
+
+      HoodieKey key = new HoodieKey(partitionPath, partitionPath);
+      GenericRecord rec = new GenericData.Record(HoodieMetadataRecord.SCHEMA$);
+      rec.put("key", key.getRecordKey());
+      rec.put("type", 2);
+      rec.put("partitionRangeIndexMetadata", fileToRangeInfo);
+      hfileWriter.writeAvro(key.getRecordKey(), rec);
+    }
+
+    hfileWriter.close();
+    long durationInMs = System.currentTimeMillis() - startTime;
+    System.out.println("Time taken to generate & write: " + durationInMs + " ms. file path: " + hfilePath
+        + " File size: " + FSUtils.getFileSize(metaClient.getFs(), hfilePath));
+    
+    CacheConfig cacheConfig = new CacheConfig(hadoopConf);
+    cacheConfig.setCacheDataInL1(false);
+    HoodieHFileReader reader = new HoodieHFileReader(hadoopConf, hfilePath, cacheConfig);
+    GenericRecord record = (GenericRecord) reader.getRecordByKey(partitions.get(0), reader.getSchema()).get();
+    assertEquals(avgFilesPerPartition, ((Map<String, HoodieRangeIndexInfo> )record.get("partitionRangeIndexMetadata")).size());
+    long duration  = 0;
+    int numRuns = 1000;
+    long numRecordsInRange = 0;
+    for (int i = 0; i < numRuns; i++) {
+      int partitionPicked = Math.max(0, partitions.size() - 30);
+      long start = System.currentTimeMillis();
+      Map<String, GenericRecord> records = (Map<String, GenericRecord>) 
+          reader.getRecordsInRange(partitions.get(partitionPicked), partitions.get(partitions.size() - 1));
+      numRecordsInRange += records.size();
+      duration += (System.currentTimeMillis() - start);
+    }
+    double avgDuration = duration / (double) numRuns;
+    double avgRecordsFetched = numRecordsInRange / (double) numRuns;
+    System.out.println("Average time taken to lookup a range: " + avgDuration + "ms. Avg number records: " + avgRecordsFetched);
+  }
+
+  // key: column range (400), value: list (filePaths containing that range)
+  @Test
+  public void testPerformanceRangeKeyColumnRange() throws IOException {
+    final String instantTime = "100";
+    final HoodieWriteConfig cfg = getConfig();
+    final Path hfilePath = new Path(basePath + "/hfile_partition/f1_1-0-1_000.hfile");
+    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    HoodieHFileWriter<HoodieRecordPayload, IndexedRecord> hfileWriter = (HoodieHFileWriter<HoodieRecordPayload, IndexedRecord>) HoodieFileWriterFactory.getFileWriter(instantTime,
+        hfilePath, table, cfg, HoodieMetadataRecord.SCHEMA$, supplier);
+    Random random = new Random();
+
+    int numKeys = 300;
+    int minFilesPerRange = 10;
+    int maxFilesPerRange = 30;
+
+    int currentStart = 0;
+    long startTime = System.currentTimeMillis();
+    List<String> keys = new ArrayList<>();
+    for (int i = 0; i < numKeys; i++) {
+      String key = "ID-" + String.format("%010d", currentStart);
+      int numFiles = minFilesPerRange + random.nextInt(maxFilesPerRange - minFilesPerRange);
+      List<HoodieFileInfo> files = new ArrayList<>();
+      for (int j = 0; j < numFiles; j++) {
+        files.add(HoodieFileInfo.newBuilder().setFilePath(UUID.randomUUID().toString()).setIsDeleted(false).build());
+      }
+      GenericRecord rec = new GenericData.Record(HoodieMetadataRecord.SCHEMA$);
+      rec.put("key", key);
+      rec.put("type", 4);
+      rec.put("rangeToFileInfo", files);
+      hfileWriter.writeAvro(key, rec);
+      if (i % 10 == 0) {
+        keys.add(key);
+      }
+      currentStart += 1000;
+    }
+
+    hfileWriter.close();
+    long durationInMs = System.currentTimeMillis() - startTime;
+    System.out.println("Time taken to generate & write: " + durationInMs + " ms. file path: " + hfilePath 
+        + " File size: " + FSUtils.getFileSize(metaClient.getFs(), hfilePath));
+
+    CacheConfig cacheConfig = new CacheConfig(hadoopConf);
+    cacheConfig.setCacheDataInL1(false);
+    HoodieHFileReader reader = new HoodieHFileReader(hadoopConf, hfilePath, cacheConfig);
+    long duration  = 0;
+    int numRuns = 1000;
+    long numRecords = 0;
+    for (int i = 0; i < numRuns; i++) {
+      int minKeyPicked = random.nextInt(keys.size() / 2);
+      int maxKeyPicked = minKeyPicked + random.nextInt(keys.size() / 2 - 1);
+      long start = System.currentTimeMillis();
+      Map<String, GenericRecord> records = (Map<String, GenericRecord>)
+          reader.getRecordsInRange(keys.get(minKeyPicked), keys.get(maxKeyPicked));
+      numRecords += records.size();
+      duration += (System.currentTimeMillis() - start);
+    }
+    double avgDuration = duration / (double) numRuns;
+    double avgRecordsFetched = numRecords / (double) numRuns;
+    System.out.println("Average time taken to lookup a range: " + avgDuration + "ms. Avg number records: " + avgRecordsFetched);
+  }
+
+  // measure time for single key lookup
   @Test
   public void testPerformanceSingleKey() throws IOException {
     final String instantTime = "100";
@@ -152,7 +277,7 @@ public class TestHoodieFileWriterFactory extends HoodieClientTestBase {
     Random random = new Random();
 
     int numPartitions = 10000;
-    int avgFilesPerPartition = 100000;
+    int avgFilesPerPartition = 10;
 
     long startTime = System.currentTimeMillis();
     List<String> allKeys = new ArrayList<>();
@@ -160,7 +285,7 @@ public class TestHoodieFileWriterFactory extends HoodieClientTestBase {
       String partitionPath = "partition-" + String.format("%010d", i);
       for (int j = 0; j < avgFilesPerPartition; j++) {
         String filePath = "file-" + String.format("%010d", j) + "_1-0-1_000.parquet";
-        int max = random.nextInt();
+        int max = random.nextInt() + 1;
         if (max < 0) {
           max = -max;
         }
@@ -173,7 +298,7 @@ public class TestHoodieFileWriterFactory extends HoodieClientTestBase {
         }
         rec.put("key", key.getRecordKey());
         rec.put("type", 2);
-        rec.put("rangeIndexMetadata", HoodieRangeIndexInfo.newBuilder().setMax(max).setMin(min).setIsDeleted(false).build());
+        rec.put("rangeIndexMetadata", HoodieRangeIndexInfo.newBuilder().setMax("" + max).setMin("" + min).setIsDeleted(false).build());
         hfileWriter.writeAvro(key.getRecordKey(), rec);
       }
     }

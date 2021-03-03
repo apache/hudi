@@ -234,12 +234,12 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     
     Map<String, R> keyToValueMap = new HashMap<>();
     while (true) {
-      String key = scanner.getKeyString();
-      if (key.compareTo(endKey) > 0) {
+      R record = getRecordFromCell(scanner.getKeyValue(), getSchema(), getSchema());
+      String recordKey = record.get(0).toString();
+      if (recordKey.compareTo(endKey) > 0) {
         return keyToValueMap;
       }
-      R record = getRecordFromCell(scanner.getKeyValue(), getSchema(), getSchema());
-      keyToValueMap.put(key, record);
+      keyToValueMap.put(recordKey, record);
       if (!scanner.next()) {
         break;
       }
