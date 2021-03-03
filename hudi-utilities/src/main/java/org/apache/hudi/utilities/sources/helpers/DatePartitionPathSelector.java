@@ -62,7 +62,10 @@ import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelecto
  * <p>The date based partition is expected to be of the format '<date string>=yyyy-mm-dd' or
  * 'yyyy-mm-dd'. The date partition can be at any level. For ex. the partition path can be of the
  * form `<basepath>/<partition-field1>/<date-based-partition>/<partition-field3>/` or
- * `<basepath>/<<date-based-partition>/`
+ * `<basepath>/<<date-based-partition>/`.
+ *
+ * <p>The date based partition format can be configured via this property
+ * hoodie.deltastreamer.source.dfs.datepartitioned.date.format
  */
 public class DatePartitionPathSelector extends DFSPathSelector {
 
@@ -137,20 +140,19 @@ public class DatePartitionPathSelector extends DFSPathSelector {
           FileSystem fs = new Path(path).getFileSystem(serializedConf.get());
           return listEligibleFiles(fs, new Path(path), lastCheckpointTime).stream();
         }, partitionsListParallelism);
-    // sort them by modification time.
-    eligibleFiles.sort(Comparator.comparingLong(FileStatus::getModificationTime));
+    // sort them by modification time ascending.
+    List<FileStatus> sortedEligibleFiles = eligibleFiles.stream()
+        .sorted(Comparator.comparingLong(FileStatus::getModificationTime)).collect(Collectors.toList());
 
     // Filter based on checkpoint & input size, if needed
     long currentBytes = 0;
-    long maxModificationTime = Long.MIN_VALUE;
     List<FileStatus> filteredFiles = new ArrayList<>();
-    for (FileStatus f : eligibleFiles) {
+    for (FileStatus f : sortedEligibleFiles) {
       if (currentBytes + f.getLen() >= sourceLimit) {
         // we have enough data, we are done
         break;
       }
 
-      maxModificationTime = f.getModificationTime();
       currentBytes += f.getLen();
       filteredFiles.add(f);
     }
@@ -163,7 +165,7 @@ public class DatePartitionPathSelector extends DFSPathSelector {
 
     // read the files out.
     String pathStr = filteredFiles.stream().map(f -> f.getPath().toString()).collect(Collectors.joining(","));
-
+    long maxModificationTime = filteredFiles.get(filteredFiles.size() - 1).getModificationTime();
     return new ImmutablePair<>(Option.ofNullable(pathStr), String.valueOf(maxModificationTime));
   }
 
