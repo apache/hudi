@@ -13,11 +13,12 @@ might result in lot of small files if no special management is done.
 
 # Apache Hudi file size management
 
-Hudi avoids such small files and always writes properly sized files, taking a slight hit on ingestion but guaranteeing 
-SLAs for your read queries. Common approaches to writing very small files and then later stitching them together only 
-solve for system scalability issues posed by small files and also let queries slow down by exposing small files to 
-them anyway. You could leverage clustering feature that’s part of Hudi, but since you can’t run it frequently, self 
-managed file sizing will be critical for anyone who is looking to manage their data lakes.
+Hudi provides ways to write properly sized files during ingestion to guarantee SLAs for your read queries. Common 
+approaches to writing very small files and then later stitching them together solve for system scalability issues posed 
+by small files but might violate query SLA's by exposing small files to them. One can leverage Hudi's clustering feature
+that’s part of Hudi, but if you want to have a) self managed file sizing b) Avoid exposing small files to queries, 
+automatic file sizing feature is a savior.
+
 
 Hudi has the ability to maintain a configured target file size, when performing inserts/upsert operations. 
 (Note: bulk_insert operation does not provide this functionality and is designed as a simpler replacement for 
@@ -45,8 +46,7 @@ set the config value for soft file limit to 0.
 
 ## File size management in Hudi
 
-The algorithm is generally applicable to any partitions and so our illustration is just going to focus on a single 
-partition only. Let’s say this is the layout of data files for a given partition.
+Let’s say this is the layout of data files for a given partition.
 
 ![Initial layout](/assets/images/blog/hudi-file-sizing/initial_layout.png)
 _Figure: Initial data file sizes for a given partition of interest_
@@ -54,15 +54,14 @@ _Figure: Initial data file sizes for a given partition of interest_
 Let’s assume the configured values for max file size and small file size limit is 120Mb and 100Mb. File_1’s current 
 size is 40Mb, File_2’s size is 80Mb, File_3’s size is 90Mb, File_4’s size is 130Mb and File_5’s size is 105Mb.
 
-Let’s see what happens when a new write batch is ingested to hudi. This is done in multiple steps. First, updates are 
-assigned to respective files followed which inserts are assgined with the data files.
+Let’s see what happens when a new write batch is ingested to hudi. 
 
 Step1: Assigning updates to files. In this step, index is looked up to find the tagged location and records are 
 assigned to respective files. Note: Updates are not going to alter the file size as unique records per file will remain
 the same.
 
 Step2:  Determine small files for the partition of interest. The soft file limit config value will be leveraged here 
-to determine what constitutes as a small file. Given the config value is set to 100Mb, the small files are File_1(40Mb)
+to determine eligible small files.. Given the config value is set to 100Mb, the small files are File_1(40Mb)
 and File_2(80Mb) and file_3’s (90Mb). No new inserts will go into any of the other existing files as they don’t qualify 
 for small files.
 
@@ -86,11 +85,9 @@ _Figure: Remaining records are assigned to new files_
 Hudi has a custom partitioner which will be leveraged by the execution engine and records will be distributed according
 to the assignment done as per the algorithm shown above.
 
-After this ingestion is complete, except File_8, every other file is nicely sized to its optimum size. This process is
-followed during every ingestion to ensure there are no small files in your Hudi data lake or atleast future ingestions 
-will try to bin pack records to small files to ensure optimum file sizes. Thus, your read SLAs will stay within bounds
-as there are no small files with Hudi.
+After this round of ingestion is complete, all files except File_8 are nicely sized to the optimum size. This process is
+followed during every ingestion to ensure there are no small files in your Hudi data lake. This will help keep your 
+read SLA's bounded.
 
-It’s an operational nightmare to manage this manually or stitch at more frequent intervals and hence hudi provides such
-auto file sizing capability for your data lakes. Hopefully the blog gave you a good sneak peek into how hudi manages 
-small files and assists in boosting your read latencies.  
+Hopefully the blog gave you a good sneak peek into how hudi manages small files and assists in boosting your read 
+latencies.  
