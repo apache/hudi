@@ -21,20 +21,28 @@ package org.apache.hudi.client;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
 
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+
 import java.io.Serializable;
+import java.time.DateTimeException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY;
+
 /**
  * Status of a write operation.
  */
 public class WriteStatus implements Serializable {
 
+  private static final Logger LOG = LogManager.getLogger(WriteStatus.class);
   private static final long serialVersionUID = 1L;
   private static final long RANDOM_SEED = 9038412832L;
 
@@ -77,6 +85,18 @@ public class WriteStatus implements Serializable {
       writtenRecords.add(record);
     }
     totalRecords++;
+
+    // get the min and max event time for calculating latency and freshness
+    if (optionalRecordMetadata.isPresent()) {
+      String eventTimeVal = optionalRecordMetadata.get().getOrDefault(METADATA_EVENT_TIME_KEY, null);
+      try {
+        long eventTime = DateTimeUtils.parseDateTime(eventTimeVal).toEpochMilli();
+        stat.setMinEventTime(eventTime);
+        stat.setMaxEventTime(eventTime);
+      } catch (DateTimeException | IllegalArgumentException e) {
+        LOG.debug(String.format("Fail to parse event time value: %s", eventTimeVal), e);
+      }
+    }
   }
 
   /**
