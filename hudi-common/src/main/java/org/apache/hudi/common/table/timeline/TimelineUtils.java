@@ -22,9 +22,12 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -43,6 +46,7 @@ import java.util.stream.Stream;
  * 2) Incremental reads - InputFormats can use this API to query
  */
 public class TimelineUtils {
+  private static final Logger LOG = LogManager.getLogger(TimelineUtils.class);
 
   /**
    * Returns partitions that have new data strictly after commitTime.
@@ -117,11 +121,25 @@ public class TimelineUtils {
   }
 
   /**
-   * Get extra metadata for specified key from latest commit/deltacommit instant.
+   * Get extra metadata for specified key from latest commit/deltacommit/replacecommit(eg. insert_overwrite) instant.
    */
   public static Option<String> getExtraMetadataFromLatest(HoodieTableMetaClient metaClient, String extraMetadataKey) {
-    return metaClient.getCommitsTimeline().filterCompletedInstants().getReverseOrderedInstants().findFirst().map(instant ->
+    return metaClient.getCommitsTimeline().filterCompletedInstants().getReverseOrderedInstants()       
+        // exclude clustering commits for returning user stored extra metadata 
+        .filter(instant -> !isClusteringCommit(metaClient, instant))
+        .findFirst().map(instant ->
         getMetadataValue(metaClient, extraMetadataKey, instant)).orElse(Option.empty());
+  }
+
+
+  /**
+   * Get extra metadata for specified key from latest commit/deltacommit/replacecommit instant including internal commits
+   * such as clustering.
+   */
+  public static Option<String> getExtraMetadataFromLatestIncludeClustering(HoodieTableMetaClient metaClient, String extraMetadataKey) {
+    return metaClient.getCommitsTimeline().filterCompletedInstants().getReverseOrderedInstants()
+        .findFirst().map(instant ->
+            getMetadataValue(metaClient, extraMetadataKey, instant)).orElse(Option.empty());
   }
 
   /**
@@ -134,12 +152,29 @@ public class TimelineUtils {
 
   private static Option<String> getMetadataValue(HoodieTableMetaClient metaClient, String extraMetadataKey, HoodieInstant instant) {
     try {
+      LOG.info("reading checkpoint info for:"  + instant + " key: " + extraMetadataKey);
       HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
           metaClient.getCommitsTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
 
       return Option.ofNullable(commitMetadata.getExtraMetadata().get(extraMetadataKey));
     } catch (IOException e) {
       throw new HoodieIOException("Unable to parse instant metadata " + instant, e);
+    }
+  }
+  
+  private static boolean isClusteringCommit(HoodieTableMetaClient metaClient, HoodieInstant instant) {
+    try {
+      if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
+        // replacecommit is used for multiple operations: insert_overwrite/cluster etc. 
+        // Check operation type to see if this instant is related to clustering.
+        HoodieReplaceCommitMetadata replaceMetadata = HoodieReplaceCommitMetadata.fromBytes(
+            metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+        return WriteOperationType.CLUSTER.equals(replaceMetadata.getOperationType());
+      }
+      
+      return false;
+    } catch (IOException e) {
+      throw new HoodieIOException("Unable to read instant information: " + instant + " for " + metaClient.getBasePath(), e);
     }
   }
 }
