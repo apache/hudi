@@ -21,6 +21,7 @@ package org.apache.hudi.common.util;
 
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.Objects;
 
 public class DateTimeUtils {
 
@@ -29,9 +30,7 @@ public class DateTimeUtils {
    * @param s Input String should be Epoch time in millisecond or ISO-8601 format.
    */
   public static Instant parseDateTime(String s) throws DateTimeParseException {
-    if (s == null) {
-      throw new IllegalArgumentException("Input String cannot be null.");
-    }
+    ValidationUtils.checkArgument(Objects.nonNull(s), "Input String cannot be null.");
     try {
       return Instant.ofEpochMilli(Long.parseLong(s));
     } catch (NumberFormatException e) {
