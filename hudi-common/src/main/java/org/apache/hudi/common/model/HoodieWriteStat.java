@@ -143,6 +143,18 @@ public class HoodieWriteStat implements Serializable {
    */
   private long fileSizeInBytes;
 
+  /**
+   * The earliest of incoming records' event times (Epoch ms) for calculating latency.
+   */
+  @Nullable
+  private Long minEventTime;
+
+  /**
+   * The latest of incoming records' event times (Epoch ms) for calculating freshness.
+   */
+  @Nullable
+  private Long maxEventTime;
+
   @Nullable
   @JsonIgnore
   private RuntimeStats runtimeStats;
@@ -301,6 +313,30 @@ public class HoodieWriteStat implements Serializable {
 
   public void setFileSizeInBytes(long fileSizeInBytes) {
     this.fileSizeInBytes = fileSizeInBytes;
+  }
+
+  public Long getMinEventTime() {
+    return minEventTime;
+  }
+
+  public void setMinEventTime(Long minEventTime) {
+    if (this.minEventTime == null) {
+      this.minEventTime = minEventTime;
+    } else {
+      this.minEventTime = Math.min(minEventTime, this.minEventTime);
+    }
+  }
+
+  public Long getMaxEventTime() {
+    return maxEventTime;
+  }
+
+  public void setMaxEventTime(Long maxEventTime) {
+    if (this.maxEventTime == null) {
+      this.maxEventTime = maxEventTime;
+    } else {
+      this.maxEventTime = Math.max(maxEventTime, this.maxEventTime);
+    }
   }
 
   @Nullable
