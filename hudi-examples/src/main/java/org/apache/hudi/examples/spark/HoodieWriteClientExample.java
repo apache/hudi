@@ -85,8 +85,11 @@ public class HoodieWriteClientExample {
       Path path = new Path(tablePath);
       FileSystem fs = FSUtils.getFs(tablePath, jsc.hadoopConfiguration());
       if (!fs.exists(path)) {
-        HoodieTableMetaClient.initTableType(jsc.hadoopConfiguration(), tablePath, HoodieTableType.valueOf(tableType),
-                tableName, HoodieAvroPayload.class.getName());
+        HoodieTableMetaClient.withPropertyBuilder()
+          .setTableType(tableType)
+          .setTableName(tableName)
+          .setPayloadClass(HoodieAvroPayload.class)
+          .initTable(jsc.hadoopConfiguration(), tablePath);
       }
 
       // Create the write client to write some records in
