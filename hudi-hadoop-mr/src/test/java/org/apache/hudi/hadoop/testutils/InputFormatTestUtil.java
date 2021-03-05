@@ -122,6 +122,26 @@ public class InputFormatTestUtil {
         String.format(HoodieHiveUtils.HOODIE_MAX_COMMIT_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
     jobConf.setInt(maxCommitPulls, numberOfCommitsToPull);
   }
+  
+  public static void setupSnapshotIncludePendingCommits(JobConf jobConf, String instantTime) {
+    setupSnapshotScanMode(jobConf, true);
+    String validateTimestampName =
+        String.format(HoodieHiveUtils.HOODIE_CONSUME_COMMIT, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
+    jobConf.set(validateTimestampName, instantTime);
+  }
+
+  public static void setupSnapshotScanMode(JobConf jobConf) {
+    setupSnapshotScanMode(jobConf, false);
+  }
+  
+  private static void setupSnapshotScanMode(JobConf jobConf, boolean includePending) {
+    String modePropertyName =
+        String.format(HoodieHiveUtils.HOODIE_CONSUME_MODE_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
+    jobConf.set(modePropertyName, HoodieHiveUtils.SNAPSHOT_SCAN_MODE);
+    String includePendingCommitsName =
+        String.format(HoodieHiveUtils.HOODIE_CONSUME_PENDING_COMMITS, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
+    jobConf.setBoolean(includePendingCommitsName, includePending);
+  }
 
   public static File prepareParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
       int numberOfRecords, String commitNumber) throws IOException {

@@ -177,6 +177,11 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline findInstantsBefore(String instantTime);
 
   /**
+   * Create new timeline with all instants before or equals specified time.
+   */
+  HoodieTimeline findInstantsBeforeOrEquals(String instantTime);
+  
+  /**
    * Custom Filter of Instants.
    */
   HoodieTimeline filter(Predicate<HoodieInstant> filter);
