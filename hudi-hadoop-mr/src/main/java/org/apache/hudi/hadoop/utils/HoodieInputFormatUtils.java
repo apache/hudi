@@ -439,8 +439,9 @@ public class HoodieInputFormatUtils {
           LOG.debug("Hoodie Metadata initialized with completed commit instant as :" + metaClient);
         }
 
+        HoodieTimeline timeline = HoodieHiveUtils.getTableTimeline(metaClient.getTableConfig().getTableName(), job, metaClient);
         HoodieTableFileSystemView fsView = fsViewCache.computeIfAbsent(metaClient, tableMetaClient ->
-            FileSystemViewManager.createInMemoryFileSystemView(engineContext, tableMetaClient, buildMetadataConfig(job)));
+            FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext, tableMetaClient, buildMetadataConfig(job), timeline));
         List<HoodieBaseFile> filteredBaseFiles = new ArrayList<>();
         for (Path p : entry.getValue()) {
           String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), p);
