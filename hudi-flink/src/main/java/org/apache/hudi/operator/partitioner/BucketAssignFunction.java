@@ -144,7 +144,6 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
 
     // initialize and check the partitions load state
     loadInitialPartitions();
-    checkPartitionsLoaded();
   }
 
   @Override

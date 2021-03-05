@@ -28,4 +28,5 @@
   <suppress checks="IllegalImport" files="Option.java" />
   <!-- java.util.Optional part of DataSource V2 API signature -->
   <suppress checks="IllegalImport" files="DefaultSource.java" />
+  <suppress checks="IllegalTokenText" files="FilePathUtils.java"/>
 </suppressions>

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.operator;
 
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -56,6 +55,17 @@ public class FlinkOptions {
           + "otherwise a Hoodie table expects to be initialized successfully");
 
   // ------------------------------------------------------------------------
+  //  Common Options
+  // ------------------------------------------------------------------------
+
+  public static final ConfigOption<String> PARTITION_DEFAULT_NAME = ConfigOptions
+      .key("partition.default.name")
+      .stringType()
+      .defaultValue("__DEFAULT_PARTITION__")
+      .withDescription("The default partition name in case the dynamic partition"
+          + " column value is null/empty string");
+
+  // ------------------------------------------------------------------------
   //  Read Options
   // ------------------------------------------------------------------------
   public static final ConfigOption<String> READ_SCHEMA_FILE_PATH = ConfigOptions
@@ -63,6 +73,44 @@ public class FlinkOptions {
       .stringType()
       .noDefaultValue()
       .withDescription("Avro schema file path, the parsed schema is used for deserializing");
+
+  public static final String QUERY_TYPE_SNAPSHOT = "snapshot";
+  public static final String QUERY_TYPE_READ_OPTIMIZED = "read_optimized";
+  public static final String QUERY_TYPE_INCREMENTAL = "incremental";
+  public static final ConfigOption<String> QUERY_TYPE = ConfigOptions
+      .key("hoodie.datasource.query.type")
+      .stringType()
+      .defaultValue(QUERY_TYPE_SNAPSHOT)
+      .withDescription("Decides how data files need to be read, in\n"
+          + "1) Snapshot mode (obtain latest view, based on row & columnar data);\n"
+          + "2) incremental mode (new data since an instantTime);\n"
+          + "3) Read Optimized mode (obtain latest view, based on columnar data)\n."
+          + "Default: snapshot");
+
+  public static final String REALTIME_SKIP_MERGE = "skip_merge";
+  public static final String REALTIME_PAYLOAD_COMBINE = "payload_combine";
+  public static final ConfigOption<String> MERGE_TYPE = ConfigOptions
+      .key("hoodie.datasource.merge.type")
+      .stringType()
+      .defaultValue(REALTIME_PAYLOAD_COMBINE)
+      .withDescription("For Snapshot query on merge on read table. Use this key to define how the payloads are merged, in\n"
+          + "1) skip_merge: read the base file records plus the log file records;\n"
+          + "2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the\n"
+          + "   log file records(combines the two records with same key for base and log file records), then read the left log file records");
+
+  public static final ConfigOption<Boolean> HIVE_STYLE_PARTITION = ConfigOptions
+      .key("hoodie.datasource.hive_style_partition")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether the partition path is with Hive style, e.g. '{partition key}={partition value}', default false");
+
+  public static final ConfigOption<Boolean> UTC_TIMEZONE = ConfigOptions
+      .key("read.utc-timezone")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Use UTC timezone or local timezone to the conversion between epoch"
+          + " time and LocalDateTime. Hive 0.x/1.x/2.x use local timezone. But Hive 3.x"
+          + " use UTC timezone, by default true");
 
   // ------------------------------------------------------------------------
   //  Write Options
@@ -73,11 +121,13 @@ public class FlinkOptions {
       .noDefaultValue()
       .withDescription("Table name to register to Hive metastore");
 
+  public static final String TABLE_TYPE_COPY_ON_WRITE = "COPY_ON_WRITE";
+  public static final String TABLE_TYPE_MERGE_ON_READ = "MERGE_ON_READ";
   public static final ConfigOption<String> TABLE_TYPE = ConfigOptions
       .key("write.table.type")
       .stringType()
-      .defaultValue(HoodieTableType.COPY_ON_WRITE.name())
-      .withDescription("Type of table to write, COPY_ON_WRITE (or) MERGE_ON_READ");
+      .defaultValue(TABLE_TYPE_COPY_ON_WRITE)
+      .withDescription("Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ");
 
   public static final ConfigOption<String> OPERATION = ConfigOptions
       .key("write.operation")
@@ -249,6 +299,13 @@ public class FlinkOptions {
    * Collects the config options that start with 'properties.' into a 'key'='value' list.
    */
   public static Map<String, String> getHoodieProperties(Map<String, String> options) {
+    return getHoodiePropertiesWithPrefix(options, PROPERTIES_PREFIX);
+  }
+
+  /**
+   * Collects the config options that start with specified prefix {@code prefix} into a 'key'='value' list.
+   */
+  public static Map<String, String> getHoodiePropertiesWithPrefix(Map<String, String> options, String prefix) {
     final Map<String, String> hoodieProperties = new HashMap<>();
 
     if (hasPropertyOptions(options)) {
@@ -256,7 +313,7 @@ public class FlinkOptions {
           .filter(key -> key.startsWith(PROPERTIES_PREFIX))
           .forEach(key -> {
             final String value = options.get(key);
-            final String subKey = key.substring((PROPERTIES_PREFIX).length());
+            final String subKey = key.substring((prefix).length());
             hoodieProperties.put(subKey, value);
           });
     }
@@ -283,7 +340,7 @@ public class FlinkOptions {
   }
 
   /** Creates a new configuration that is initialized with the options of the given map. */
-  private static Configuration fromMap(Map<String, String> map) {
+  public static Configuration fromMap(Map<String, String> map) {
     final Configuration configuration = new Configuration();
     map.forEach(configuration::setString);
     return configuration;
