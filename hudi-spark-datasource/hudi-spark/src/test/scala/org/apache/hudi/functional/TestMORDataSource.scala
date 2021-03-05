@@ -34,8 +34,7 @@ import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.log4j.LogManager
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.execution.{DataSourceScanExec, QueryExecution}
+import org.apache.spark.sql.execution.DataSourceScanExec
 import org.apache.spark.sql.functions._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -508,7 +507,7 @@ class TestMORDataSource extends HoodieClientTestBase {
     assertEquals(sampleRow.getBoolean(2), sampleRow.get(2))
 
     // test show()
-    hudiSnapshotDF1.show(1)HoodieSparkUtils
+    hudiSnapshotDF1.show(1)
     hudiSnapshotDF2.show(1)
   }
 
