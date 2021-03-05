@@ -20,13 +20,22 @@ package org.apache.spark.sql.execution.hudi.utils
 
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources.DataSourceStrategy
+import org.apache.spark.sql.execution.datasources.DataSourceStrategy.translateFilter
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 
+/**
+ * This util object is use DataSourceStrategy protected translateFilter method
+ * [https://github.com/apache/spark/blob/v2.4.4/sql/core/src/main/scala/org/apache/spark/sql/execution/datasources/DataSourceStrategy.scala#L439]
+ */
 object PushDownUtils {
 
-  def transformFilter(relation: BaseRelation, filterPredicates: Seq[Expression]): Array[Filter] = {
-    val (unhandledPredicates, pushedFilters, handledFilters) =
-      DataSourceStrategy.selectFilters(relation, filterPredicates)
-    pushedFilters.toArray
+  /**
+   * Tries to translate a Catalyst Seq[Expression] into data source Array[Filter].
+   */
+  def transformFilter(filterPredicates: Seq[Expression]): Array[Filter] = {
+    val translatedMap: Map[Expression, Filter] = filterPredicates.flatMap { p =>
+      translateFilter(p).map(f => p -> f)
+    }.toMap
+   translatedMap.values.toArray
   }
 }

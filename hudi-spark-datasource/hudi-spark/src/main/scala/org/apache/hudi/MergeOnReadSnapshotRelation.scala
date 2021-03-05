@@ -106,7 +106,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
 
   override def buildScan(requiredColumns: Seq[Attribute], filters: Seq[Expression]): RDD[Row] = {
     fileIndex = buildFileIndex(filters)
-    val pushedFilters  = PushDownUtils.transformFilter(this,filters)
+    val pushedFilters  = PushDownUtils.transformFilter(filters)
     log.debug(s" buildScan requiredColumns = ${requiredColumns.mkString(",")}")
     log.debug(s" buildScan filters = ${pushedFilters.mkString(",")}")
     var requiredStructSchema = StructType(Seq())

@@ -508,12 +508,12 @@ class TestMORDataSource extends HoodieClientTestBase {
     assertEquals(sampleRow.getBoolean(2), sampleRow.get(2))
 
     // test show()
-    hudiSnapshotDF1.show(1)
+    hudiSnapshotDF1.show(1)HoodieSparkUtils
     hudiSnapshotDF2.show(1)
   }
 
   @Test
-  def testPrunePartitions() {
+  def testPrunePartitionsWithDataSchemaIncludePartitionsSchema() {
     // First Operation:
     // Producing parquet files to three hive style partitions like /partition=20150316/.
     // SNAPSHOT view on MOR table with parquet files only.
@@ -536,9 +536,8 @@ class TestMORDataSource extends HoodieClientTestBase {
 
     hudiSnapshotDF1.createOrReplaceTempView("mor_test_partition_table");
     val sql = "select * from mor_test_partition_table where partition > '20150415'"
-    spark.sql(sql).show(10)
 
-    val plan = new TestMORQueryExecution(spark,sql).sparkPlan
+    val plan = spark.sql(sql).queryExecution.sparkPlan
     val mergeOnReadSnapshotRelation = plan.collect {
       case scan: DataSourceScanExec => scan.relation
     }.head.asInstanceOf[MergeOnReadSnapshotRelation]
@@ -561,7 +560,7 @@ class TestMORDataSource extends HoodieClientTestBase {
   }
 
   @Test
-  def testPrunePartitionsWithInferedSchema() {
+  def testPrunePartitionsWithAppendedPartitionsSchema() {
     spark.conf.set("spark.sql.parquet.enableVectorizedReader", true)
     assertTrue(spark.conf.get("spark.sql.parquet.enableVectorizedReader").toBoolean)
     // First Operation:
@@ -589,7 +588,7 @@ class TestMORDataSource extends HoodieClientTestBase {
     hudiSnapshotDF1.printSchema()
     val sql = "select tip_history,year,month,day from mor_test_partition_table where year < '2016' and month > '01'"
 
-    val plan = new TestMORQueryExecution(spark,sql).sparkPlan
+    val plan = spark.sql(sql).queryExecution.sparkPlan
     val mergeOnReadSnapshotRelation = plan.collect {
       case scan: DataSourceScanExec => scan.relation
     }.head.asInstanceOf[MergeOnReadSnapshotRelation]
@@ -693,14 +692,5 @@ private class InferPartitionsKeyGeneratorForTesting (val props: TypedProperties,
     val dateVal = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathFields.get(0), true)
     val dateArr = dateVal.split("/")
     MessageFormat.format(partitionPathTemplate, dateArr(0), dateArr(1), dateArr(2))
-  }
-}
-
-
-private class TestMORQueryExecution(sparkSession: SparkSession, logicalPlan: LogicalPlan)
-  extends QueryExecution(sparkSession, logicalPlan) {
-
-  def this(sparkSession: SparkSession, sql: String) {
-    this(sparkSession, sparkSession.sessionState.sqlParser.parsePlan(sql))
   }
 }
