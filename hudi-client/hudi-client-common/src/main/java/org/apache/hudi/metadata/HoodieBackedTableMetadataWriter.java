@@ -288,9 +288,14 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     String createInstantTime = latestInstant.map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
     LOG.info("Creating a new metadata table in " + metadataWriteConfig.getBasePath() + " at instant " + createInstantTime);
 
-    HoodieTableMetaClient.initTableType(hadoopConf.get(), metadataWriteConfig.getBasePath(),
-        HoodieTableType.MERGE_ON_READ, tableName, "archived", HoodieMetadataPayload.class.getName(),
-        HoodieFileFormat.HFILE.toString());
+    HoodieTableMetaClient.withPropertyBuilder()
+      .setTableType(HoodieTableType.MERGE_ON_READ)
+      .setTableName(tableName)
+      .setArchiveLogFolder("archived")
+      .setPayloadClassName(HoodieMetadataPayload.class.getName())
+      .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
+      .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
+
     initTableMetadata();
 
     // List all partitions in the basePath of the containing dataset

@@ -21,7 +21,6 @@ package org.apache.hudi.integ.testsuite;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -94,8 +93,11 @@ public class HoodieTestSuiteJob {
     this.keyGenerator = (BuiltinKeyGenerator) DataSourceUtils.createKeyGenerator(props);
 
     if (!fs.exists(new Path(cfg.targetBasePath))) {
-      HoodieTableMetaClient.initTableType(jsc.hadoopConfiguration(), cfg.targetBasePath,
-          HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived");
+      HoodieTableMetaClient.withPropertyBuilder()
+        .setTableType(cfg.tableType)
+        .setTableName(cfg.targetTableName)
+        .setArchiveLogFolder("archived")
+        .initTable(jsc.hadoopConfiguration(), cfg.targetBasePath);
     }
 
     if (cfg.cleanInput) {

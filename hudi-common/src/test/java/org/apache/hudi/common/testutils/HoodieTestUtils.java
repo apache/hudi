@@ -101,9 +101,12 @@ public class HoodieTestUtils {
   public static HoodieTableMetaClient init(Configuration hadoopConf, String basePath, HoodieTableType tableType,
                                            Properties properties)
       throws IOException {
-    properties.putIfAbsent(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, RAW_TRIPS_TEST_NAME);
-    properties.putIfAbsent(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
-    properties.putIfAbsent(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, HoodieAvroPayload.class.getName());
+    properties = HoodieTableMetaClient.withPropertyBuilder()
+      .setTableName(RAW_TRIPS_TEST_NAME)
+      .setTableType(tableType)
+      .setPayloadClass(HoodieAvroPayload.class)
+      .fromProperties(properties)
+      .build();
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
   }
 

@@ -109,9 +109,11 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         "Check the instants stream");
 
     // Backwards compatibility testing for reading compaction plans
-    metaClient = HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(),
-        metaClient.getBasePath(), metaClient.getTableType(), metaClient.getTableConfig().getTableName(),
-        metaClient.getArchivePath(), metaClient.getTableConfig().getPayloadClass(), VERSION_0);
+    metaClient = HoodieTableMetaClient.withPropertyBuilder()
+      .fromMetaClient(metaClient)
+      .setTimelineLayoutVersion(VERSION_0)
+      .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
+
     HoodieInstant instant6 = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "9");
     byte[] dummy = new byte[5];
     HoodieActiveTimeline oldTimeline = new HoodieActiveTimeline(

@@ -150,9 +150,11 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     tableType = HoodieTableType.MERGE_ON_READ;
 
     // Create the table
-    HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(),
-        HoodieTableType.MERGE_ON_READ, metaClient.getTableConfig().getTableName(),
-        metaClient.getArchivePath(), metaClient.getTableConfig().getPayloadClass(), VERSION_1);
+    HoodieTableMetaClient.withPropertyBuilder()
+      .fromMetaClient(metaClient)
+      .setTableType(HoodieTableType.MERGE_ON_READ)
+      .setTimelineLayoutVersion(VERSION_1)
+      .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
 
     HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA);
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
@@ -295,9 +297,10 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   @Test
   public void testCopyOnWriteTable() throws Exception {
     // Create the table
-    HoodieTableMetaClient.initTableType(metaClient.getHadoopConf(), metaClient.getBasePath(),
-        HoodieTableType.COPY_ON_WRITE, metaClient.getTableConfig().getTableName(),
-        metaClient.getArchivePath(), metaClient.getTableConfig().getPayloadClass(), VERSION_1);
+    HoodieTableMetaClient.withPropertyBuilder()
+      .fromMetaClient(metaClient)
+      .setTimelineLayoutVersion(VERSION_1)
+      .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
 
     HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA);
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
