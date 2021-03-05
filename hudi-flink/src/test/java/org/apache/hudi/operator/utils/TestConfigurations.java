@@ -20,13 +20,17 @@ package org.apache.hudi.operator.utils;
 
 import org.apache.hudi.operator.FlinkOptions;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
+import org.apache.hudi.utils.factory.ContinuousFileSourceFactory;
 
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
+import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -36,14 +40,56 @@ public class TestConfigurations {
   private TestConfigurations() {
   }
 
-  public static final RowType ROW_TYPE = (RowType) DataTypes.ROW(
+  public static final DataType ROW_DATA_TYPE = DataTypes.ROW(
       DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),// record key
       DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
       DataTypes.FIELD("age", DataTypes.INT()),
       DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // precombine field
       DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
-      .notNull()
-      .getLogicalType();
+      .notNull();
+
+  public static final RowType ROW_TYPE = (RowType) ROW_DATA_TYPE.getLogicalType();
+
+  public static final TableSchema TABLE_SCHEMA = TableSchema.builder()
+      .fields(
+          ROW_TYPE.getFieldNames().toArray(new String[0]),
+          ROW_DATA_TYPE.getChildren().toArray(new DataType[0]))
+      .build();
+
+  public static String getCreateHoodieTableDDL(String tableName, Map<String, String> options) {
+    String createTable = "create table " + tableName + "(\n"
+        + "  uuid varchar(20),\n"
+        + "  name varchar(10),\n"
+        + "  age int,\n"
+        + "  ts timestamp(3),\n"
+        + "  `partition` varchar(20)\n"
+        + ")\n"
+        + "PARTITIONED BY (`partition`)\n"
+        + "with (\n"
+        + "  'connector' = 'hudi'";
+    StringBuilder builder = new StringBuilder(createTable);
+    if (options.size() != 0) {
+      options.forEach((k, v) -> builder.append(",\n")
+          .append("  '").append(k).append("' = '").append(v).append("'"));
+    }
+    builder.append("\n)");
+    return builder.toString();
+  }
+
+  public static String getFileSourceDDL(String tableName) {
+    String sourcePath = Objects.requireNonNull(Thread.currentThread()
+        .getContextClassLoader().getResource("test_source.data")).toString();
+    return "create table " + tableName + "(\n"
+        + "  uuid varchar(20),\n"
+        + "  name varchar(10),\n"
+        + "  age int,\n"
+        + "  ts timestamp(3),\n"
+        + "  `partition` varchar(20)\n"
+        + ") with (\n"
+        + "  'connector' = '" + ContinuousFileSourceFactory.FACTORY_ID + "',\n"
+        + "  'path' = '" + sourcePath + "'\n"
+        + ")";
+  }
 
   public static final RowDataSerializer SERIALIZER = new RowDataSerializer(new ExecutionConfig(), ROW_TYPE);
 

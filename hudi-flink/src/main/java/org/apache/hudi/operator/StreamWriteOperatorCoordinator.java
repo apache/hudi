@@ -22,7 +22,6 @@ import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.operator.event.BatchWriteSuccessEvent;
@@ -49,7 +48,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -104,6 +102,11 @@ public class StreamWriteOperatorCoordinator
   private final int parallelism;
 
   /**
+   * Whether the coordinator executes with the bounded data set.
+   */
+  private final boolean isBounded;
+
+  /**
    * Whether needs to schedule compaction task on finished checkpoints.
    */
   private final boolean needsScheduleCompaction;
@@ -113,13 +116,16 @@ public class StreamWriteOperatorCoordinator
    *
    * @param conf        The config options
    * @param parallelism The operator task number
+   * @param isBounded   Whether the input data source is bounded
    */
   public StreamWriteOperatorCoordinator(
       Configuration conf,
-      int parallelism) {
+      int parallelism,
+      boolean isBounded) {
     this.conf = conf;
     this.parallelism = parallelism;
-    this.needsScheduleCompaction = isNeedsScheduleCompaction();
+    this.needsScheduleCompaction = StreamerUtil.needsScheduleCompaction(conf);
+    this.isBounded = isBounded;
   }
 
   @Override
@@ -136,6 +142,12 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void close() {
+    if (isBounded) {
+      // start to commit the instant.
+      checkAndCommitWithRetry();
+      // no compaction scheduling for batch mode
+    }
+    // teardown the resource
     if (writeClient != null) {
       writeClient.close();
     }
@@ -213,13 +225,6 @@ public class StreamWriteOperatorCoordinator
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
-
-  private boolean isNeedsScheduleCompaction() {
-    return this.conf.getString(FlinkOptions.TABLE_TYPE)
-        .toUpperCase(Locale.ROOT)
-        .equals(HoodieTableType.MERGE_ON_READ.name())
-        && this.conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED);
-  }
 
   @SuppressWarnings("rawtypes")
   private void initWriteClient() {
@@ -349,6 +354,7 @@ public class StreamWriteOperatorCoordinator
   /** Performs the actual commit action. */
   private void doCommit() {
     List<WriteStatus> writeResults = Arrays.stream(eventBuffer)
+        .filter(Objects::nonNull)
         .map(BatchWriteSuccessEvent::getWriteStatuses)
         .flatMap(Collection::stream)
         .collect(Collectors.toList());
@@ -417,10 +423,12 @@ public class StreamWriteOperatorCoordinator
   public static class Provider implements OperatorCoordinator.Provider {
     private final OperatorID operatorId;
     private final Configuration conf;
+    private final boolean isBounded;
 
-    public Provider(OperatorID operatorId, Configuration conf) {
+    public Provider(OperatorID operatorId, Configuration conf, boolean isBounded) {
       this.operatorId = operatorId;
       this.conf = conf;
+      this.isBounded = isBounded;
     }
 
     @Override
@@ -430,7 +438,7 @@ public class StreamWriteOperatorCoordinator
 
     @Override
     public OperatorCoordinator create(Context context) {
-      return new StreamWriteOperatorCoordinator(this.conf, context.currentParallelism());
+      return new StreamWriteOperatorCoordinator(this.conf, context.currentParallelism(), isBounded);
     }
   }
 }

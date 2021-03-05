@@ -34,6 +34,7 @@ import org.apache.hudi.sink.CommitSink;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.source.ContinuousFileSource;
 
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.common.io.FilePathFilter;
@@ -111,14 +112,11 @@ public class StreamWriteITCase extends TestLogger {
     String sourcePath = Objects.requireNonNull(Thread.currentThread()
         .getContextClassLoader().getResource("test_source.data")).toString();
 
-    TextInputFormat format = new TextInputFormat(new Path(sourcePath));
-    format.setFilesFilter(FilePathFilter.createDefaultFilter());
-    TypeInformation<String> typeInfo = BasicTypeInfo.STRING_TYPE_INFO;
-    format.setCharsetName("UTF-8");
-
     DataStream<Object> dataStream = execEnv
-        // use PROCESS_CONTINUOUSLY mode to trigger checkpoint
-        .readFile(format, sourcePath, FileProcessingMode.PROCESS_CONTINUOUSLY, 1000, typeInfo)
+        // use continuous file source to trigger checkpoint
+        .addSource(new ContinuousFileSource.BoundedSourceFunction(new Path(sourcePath), 2))
+        .name("continuous_file_source")
+        .setParallelism(1)
         .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
         .setParallelism(4)
         .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class))
@@ -136,14 +134,8 @@ public class StreamWriteITCase extends TestLogger {
     execEnv.addOperator(dataStream.getTransformation());
 
     JobClient client = execEnv.executeAsync(execEnv.getStreamGraph(conf.getString(FlinkOptions.TABLE_NAME)));
-    if (client.getJobStatus().get() != JobStatus.FAILED) {
-      try {
-        TimeUnit.SECONDS.sleep(8);
-        client.cancel();
-      } catch (Throwable var1) {
-        // ignored
-      }
-    }
+    // wait for the streaming job to finish
+    client.getJobExecutionResult(Thread.currentThread().getContextClassLoader()).get();
 
     TestData.checkWrittenFullData(tempFile, EXPECTED);
   }
@@ -175,14 +167,11 @@ public class StreamWriteITCase extends TestLogger {
     String sourcePath = Objects.requireNonNull(Thread.currentThread()
         .getContextClassLoader().getResource("test_source.data")).toString();
 
-    TextInputFormat format = new TextInputFormat(new Path(sourcePath));
-    format.setFilesFilter(FilePathFilter.createDefaultFilter());
-    TypeInformation<String> typeInfo = BasicTypeInfo.STRING_TYPE_INFO;
-    format.setCharsetName("UTF-8");
-
     execEnv
-        // use PROCESS_CONTINUOUSLY mode to trigger checkpoint
-        .readFile(format, sourcePath, FileProcessingMode.PROCESS_CONTINUOUSLY, 1000, typeInfo)
+        // use continuous file source to trigger checkpoint
+        .addSource(new ContinuousFileSource.BoundedSourceFunction(new Path(sourcePath), 2))
+        .name("continuous_file_source")
+        .setParallelism(1)
         .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
         .setParallelism(4)
         .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class))
@@ -214,14 +203,8 @@ public class StreamWriteITCase extends TestLogger {
         .setParallelism(1);
 
     JobClient client = execEnv.executeAsync(execEnv.getStreamGraph(conf.getString(FlinkOptions.TABLE_NAME)));
-    if (client.getJobStatus().get() != JobStatus.FAILED) {
-      try {
-        TimeUnit.SECONDS.sleep(8);
-        client.cancel();
-      } catch (Throwable var1) {
-        // ignored
-      }
-    }
+    // wait for the streaming job to finish
+    client.getJobExecutionResult(Thread.currentThread().getContextClassLoader()).get();
 
     TestData.checkWrittenFullData(tempFile, EXPECTED);
   }

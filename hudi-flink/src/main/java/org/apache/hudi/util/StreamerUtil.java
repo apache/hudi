@@ -21,6 +21,9 @@ package org.apache.hudi.util;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.TablePathUtils;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
@@ -305,5 +308,32 @@ public class StreamerUtil {
   /** Returns whether the location represents an insert. */
   public static boolean isInsert(HoodieRecordLocation loc) {
     return Objects.equals(loc.getInstantTime(), "I");
+  }
+
+  public static String getTablePath(FileSystem fs, Path[] userProvidedPaths) throws IOException {
+    LOG.info("Getting table path..");
+    for (Path path : userProvidedPaths) {
+      try {
+        Option<Path> tablePath = TablePathUtils.getTablePath(fs, path);
+        if (tablePath.isPresent()) {
+          return tablePath.get().toString();
+        }
+      } catch (HoodieException he) {
+        LOG.warn("Error trying to get table path from " + path.toString(), he);
+      }
+    }
+
+    throw new TableNotFoundException("Unable to find a hudi table for the user provided paths.");
+  }
+
+  /**
+   * Returns whether needs to schedule the async compaction.
+   * @param conf The flink configuration.
+   */
+  public static boolean needsScheduleCompaction(Configuration conf) {
+    return conf.getString(FlinkOptions.TABLE_TYPE)
+        .toUpperCase(Locale.ROOT)
+        .equals(HoodieTableType.MERGE_ON_READ.name())
+        && conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED);
   }
 }

@@ -216,6 +216,14 @@ public class StreamWriteFunction<K, I, O>
     this.writeClient.cleanHandles();
   }
 
+  /**
+   * End input action for batch source.
+   */
+  public void endInput() {
+    flushBuffer(true);
+    this.writeClient.cleanHandles();
+  }
+
   // -------------------------------------------------------------------------
   //  Getter/Setter
   // -------------------------------------------------------------------------

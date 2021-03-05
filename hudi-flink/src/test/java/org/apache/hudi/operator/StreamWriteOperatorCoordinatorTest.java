@@ -58,7 +58,7 @@ public class StreamWriteOperatorCoordinatorTest {
   @BeforeEach
   public void before() throws Exception {
     coordinator = new StreamWriteOperatorCoordinator(
-        TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), 2);
+        TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), 2, false);
     coordinator.start();
   }
 

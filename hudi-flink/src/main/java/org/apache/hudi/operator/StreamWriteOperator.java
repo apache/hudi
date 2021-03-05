@@ -22,6 +22,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.operators.coordination.OperatorEventHandler;
+import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.api.operators.StreamSink;
 
@@ -32,7 +33,7 @@ import org.apache.flink.streaming.api.operators.StreamSink;
  */
 public class StreamWriteOperator<I>
     extends KeyedProcessOperator<Object, I, Object>
-    implements OperatorEventHandler {
+    implements OperatorEventHandler, BoundedOneInput {
   private final StreamWriteFunction<Object, I, Object> sinkFunction;
 
   public StreamWriteOperator(Configuration conf) {
@@ -47,5 +48,10 @@ public class StreamWriteOperator<I>
 
   void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
     sinkFunction.setOperatorEventGateway(operatorEventGateway);
+  }
+
+  @Override
+  public void endInput() throws Exception {
+    sinkFunction.endInput();
   }
 }
