@@ -77,19 +77,12 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
                              boolean readBlockLazily, boolean reverseReader) throws IOException {
     FSDataInputStream inputStreamLocal;
     FSDataInputStream fsDataInputStream = fs.open(logFile.getPath(), bufferSize);
+
     if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
       inputStreamLocal = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
-          new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
-    } else if (FSUtils.isGCSFileSystem(fs)) {
-      try {
-        FSInputStream localFSInputStream = (FSInputStream)(((FSDataInputStream)fsDataInputStream.getWrappedStream()).getWrappedStream());
-        inputStreamLocal = new SchemeAwareFSDataInputStream(new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
-            new BufferedFSInputStream(localFSInputStream,bufferSize))), true);
-      } catch (ClassCastException e) {
-        // if we cannot cast  fsDataInputStream.getWrappedStream().getWrappedStream() to FSInputStream, fallback to using as is
-        LOG.warn("Cannot cast fsDataInputStream.getWrappedStream().getWrappedStream() to FSInputStream with GCSFileSystem, falling back to original "
-            + "fsDataInputStream");
-        inputStreamLocal = fsDataInputStream;
+              new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
+      if (FSUtils.isGCSFileSystem(fs)) {
+        inputStreamLocal = new SchemeAwareFSDataInputStream(inputStreamLocal, true);
       }
     } else {
       // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream
