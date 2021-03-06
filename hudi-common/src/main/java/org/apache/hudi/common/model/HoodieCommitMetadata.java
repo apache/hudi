@@ -36,6 +36,7 @@ import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -337,6 +338,10 @@ public class HoodieCommitMetadata implements Serializable {
     return Pair.of(
         minEventTime == Long.MAX_VALUE ? Option.empty() : Option.of(minEventTime),
         maxEventTime == Long.MIN_VALUE ? Option.empty() : Option.of(maxEventTime));
+  }
+
+  public HashSet<String> getWritePartitionPaths() {
+    return new HashSet<>(partitionToWriteStats.keySet());
   }
 
   @Override

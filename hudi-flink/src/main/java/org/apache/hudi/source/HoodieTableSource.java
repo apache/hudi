@@ -21,14 +21,18 @@ package org.apache.hudi.source;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.HoodieROTablePathFilter;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.hudi.operator.FlinkOptions;
+import org.apache.hudi.operator.StreamReadMonitoringFunction;
+import org.apache.hudi.operator.StreamReadOperator;
 import org.apache.hudi.source.format.FilePathUtils;
 import org.apache.hudi.source.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.source.format.mor.MergeOnReadInputFormat;
@@ -48,10 +52,11 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.InputFormatSourceFunction;
+import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
 import org.apache.flink.table.api.DataTypes;
-import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.Expression;
@@ -75,7 +80,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -148,6 +152,11 @@ public class HoodieTableSource implements
     this.hadoopConf = StreamerUtil.getHadoopConf();
     this.metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
     this.maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(new JobConf(this.hadoopConf));
+    if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING)) {
+      ValidationUtils.checkArgument(
+          conf.getString(FlinkOptions.TABLE_TYPE).equalsIgnoreCase(FlinkOptions.TABLE_TYPE_MERGE_ON_READ),
+          "Streaming read is only supported for table type: " + FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    }
   }
 
   @Override
@@ -155,14 +164,29 @@ public class HoodieTableSource implements
     @SuppressWarnings("unchecked")
     TypeInformation<RowData> typeInfo =
         (TypeInformation<RowData>) TypeInfoDataTypeConverter.fromDataTypeToTypeInfo(getProducedDataType());
-    InputFormatSourceFunction<RowData> func = new InputFormatSourceFunction<>(getInputFormat(), typeInfo);
-    DataStreamSource<RowData> source = execEnv.addSource(func, explainSource(), typeInfo);
-    return source.name(explainSource());
+    if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING)) {
+      StreamReadMonitoringFunction monitoringFunction = new StreamReadMonitoringFunction(
+          conf, path, metaClient, maxCompactionMemoryInBytes);
+      OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) getInputFormat(true));
+      SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, "streaming_source")
+          .setParallelism(1)
+          .uid("uid_streaming_source")
+          .transform("split_reader", typeInfo, factory)
+          .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS))
+          .uid("uid_split_reader");
+      return new DataStreamSource<>(source);
+    } else {
+      InputFormatSourceFunction<RowData> func = new InputFormatSourceFunction<>(getInputFormat(), typeInfo);
+      DataStreamSource<RowData> source = execEnv.addSource(func, explainSource(), typeInfo);
+      return source.name("streaming_source")
+          .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS))
+          .uid("uid_streaming_source");
+    }
   }
 
   @Override
   public boolean isBounded() {
-    return true;
+    return !conf.getBoolean(FlinkOptions.READ_AS_STREAMING);
   }
 
   @Override
@@ -189,24 +213,7 @@ public class HoodieTableSource implements
 
   @Override
   public List<Map<String, String>> getPartitions() {
-    try {
-      return FilePathUtils
-          .searchPartKeyValueAndPaths(
-              path.getFileSystem(),
-              path,
-              conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITION),
-              partitionKeys.toArray(new String[0]))
-          .stream()
-          .map(tuple2 -> tuple2.f0)
-          .map(spec -> {
-            LinkedHashMap<String, String> ret = new LinkedHashMap<>();
-            spec.forEach((k, v) -> ret.put(k, defaultPartName.equals(v) ? null : v));
-            return ret;
-          })
-          .collect(Collectors.toList());
-    } catch (Exception e) {
-      throw new TableException("Fetch partitions fail.", e);
-    }
+    return FilePathUtils.getPartitions(path, conf, partitionKeys, defaultPartName);
   }
 
   @Override
@@ -269,7 +276,7 @@ public class HoodieTableSource implements
             : Option.of(kv.getValue());
         return new MergeOnReadInputSplit(cnt.getAndAdd(1),
             baseFile.getPath(), logPaths, latestCommit,
-            metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType);
+            metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, null);
       }).collect(Collectors.toList());
     } else {
       // all the files are logs
@@ -285,15 +292,19 @@ public class HoodieTableSource implements
                   .collect(Collectors.toList()));
               return new MergeOnReadInputSplit(cnt.getAndAdd(1),
                   null, logPaths, latestCommit,
-                  metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType);
+                  metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, null);
             }).collect(Collectors.toList()); })
           .flatMap(Collection::stream)
           .collect(Collectors.toList());
     }
   }
 
-  @VisibleForTesting
   public InputFormat<RowData, ?> getInputFormat() {
+    return getInputFormat(false);
+  }
+
+  @VisibleForTesting
+  public InputFormat<RowData, ?> getInputFormat(boolean isStreaming) {
     // When this table has no partition, just return an empty source.
     if (!partitionKeys.isEmpty() && getOrFetchPartitions().isEmpty()) {
       return new CollectionInputFormat<>(Collections.emptyList(), null);
@@ -317,13 +328,20 @@ public class HoodieTableSource implements
 
     final String queryType = this.conf.getString(FlinkOptions.QUERY_TYPE);
     if (queryType.equals(FlinkOptions.QUERY_TYPE_SNAPSHOT)) {
-      switch (this.conf.getString(FlinkOptions.TABLE_TYPE)) {
-        case FlinkOptions.TABLE_TYPE_MERGE_ON_READ:
-          final List<MergeOnReadInputSplit> inputSplits = buildFileIndex(paths);
-          if (inputSplits.size() == 0) {
-            // When there is no input splits, just return an empty source.
-            LOG.warn("No input inputs generate for MERGE_ON_READ input format, returns empty collection instead");
-            return new CollectionInputFormat<>(Collections.emptyList(), null);
+      final HoodieTableType tableType = HoodieTableType.valueOf(this.conf.getString(FlinkOptions.TABLE_TYPE));
+      switch (tableType) {
+        case MERGE_ON_READ:
+          final List<MergeOnReadInputSplit> inputSplits;
+          if (!isStreaming) {
+            inputSplits = buildFileIndex(paths);
+            if (inputSplits.size() == 0) {
+              // When there is no input splits, just return an empty source.
+              LOG.warn("No input splits generate for MERGE_ON_READ input format, returns empty collection instead");
+              return new CollectionInputFormat<>(Collections.emptyList(), null);
+            }
+          } else {
+            // streaming reader would build the splits automatically.
+            inputSplits = Collections.emptyList();
           }
           final MergeOnReadTableState hoodieTableState = new MergeOnReadTableState(
               rowType,
@@ -335,10 +353,10 @@ public class HoodieTableSource implements
               this.conf,
               paths,
               hoodieTableState,
-              rowDataType.getChildren(), // use the explicit fields data type because the AvroSchemaConvertr is not very stable.
+              rowDataType.getChildren(), // use the explicit fields data type because the AvroSchemaConverter is not very stable.
               "default",
               this.limit);
-        case FlinkOptions.TABLE_TYPE_COPY_ON_WRITE:
+        case COPY_ON_WRITE:
           FileInputFormat<RowData> format = new CopyOnWriteInputFormat(
               paths,
               this.schema.getFieldNames(),
@@ -373,27 +391,9 @@ public class HoodieTableSource implements
    */
   @VisibleForTesting
   public Path[] getReadPaths() {
-    if (partitionKeys.isEmpty()) {
-      return new Path[] {path};
-    } else {
-      return getOrFetchPartitions().stream()
-          .map(HoodieTableSource.this::validateAndReorderPartitions)
-          .map(kvs -> FilePathUtils.generatePartitionPath(kvs, conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITION)))
-          .map(n -> new Path(path, n))
-          .toArray(Path[]::new);
-    }
-  }
-
-  private LinkedHashMap<String, String> validateAndReorderPartitions(Map<String, String> part) {
-    LinkedHashMap<String, String> map = new LinkedHashMap<>();
-    for (String k : partitionKeys) {
-      if (!part.containsKey(k)) {
-        throw new TableException("Partition keys are: " + partitionKeys
-            + ", incomplete partition spec: " + part);
-      }
-      map.put(k, part.get(k));
-    }
-    return map;
+    return partitionKeys.isEmpty()
+        ? new Path[] {path}
+        : FilePathUtils.partitionPath2ReadPath(path, conf, partitionKeys, getOrFetchPartitions());
   }
 
   private static class LatestFileFilter extends FilePathFilter {

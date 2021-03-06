@@ -18,6 +18,7 @@
 
 package org.apache.hudi.operator;
 
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -68,6 +69,12 @@ public class FlinkOptions {
   // ------------------------------------------------------------------------
   //  Read Options
   // ------------------------------------------------------------------------
+  public static final ConfigOption<Integer> READ_TASKS = ConfigOptions
+      .key("read.tasks")
+      .intType()
+      .defaultValue(4)
+      .withDescription("Parallelism of tasks that do actual read, default is 4");
+
   public static final ConfigOption<String> READ_SCHEMA_FILE_PATH = ConfigOptions
       .key("read.schema.file.path")
       .stringType()
@@ -112,6 +119,25 @@ public class FlinkOptions {
           + " time and LocalDateTime. Hive 0.x/1.x/2.x use local timezone. But Hive 3.x"
           + " use UTC timezone, by default true");
 
+  public static final ConfigOption<Boolean> READ_AS_STREAMING = ConfigOptions
+      .key("read.streaming.enabled")
+      .booleanType()
+      .defaultValue(false)// default read as batch
+      .withDescription("Whether to read as streaming source, default false");
+
+  public static final ConfigOption<Integer> READ_STREAMING_CHECK_INTERVAL = ConfigOptions
+      .key("read.streaming.check-interval")
+      .intType()
+      .defaultValue(60)// default 1 minute
+      .withDescription("Check interval for streaming read of SECOND, default 1 minute");
+
+  public static final ConfigOption<String> READ_STREAMING_START_COMMIT = ConfigOptions
+      .key("read.streaming.start-commit")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Start commit instant for streaming read, the commit time format should be 'yyyyMMddHHmmss', "
+          + "by default reading from the latest instant");
+
   // ------------------------------------------------------------------------
   //  Write Options
   // ------------------------------------------------------------------------
@@ -121,8 +147,8 @@ public class FlinkOptions {
       .noDefaultValue()
       .withDescription("Table name to register to Hive metastore");
 
-  public static final String TABLE_TYPE_COPY_ON_WRITE = "COPY_ON_WRITE";
-  public static final String TABLE_TYPE_MERGE_ON_READ = "MERGE_ON_READ";
+  public static final String TABLE_TYPE_COPY_ON_WRITE = HoodieTableType.COPY_ON_WRITE.name();
+  public static final String TABLE_TYPE_MERGE_ON_READ = HoodieTableType.MERGE_ON_READ.name();
   public static final ConfigOption<String> TABLE_TYPE = ConfigOptions
       .key("write.table.type")
       .stringType()
@@ -203,8 +229,8 @@ public class FlinkOptions {
       .defaultValue(SimpleAvroKeyGenerator.class.getName())
       .withDescription("Key generator class, that implements will extract the key out of incoming record");
 
-  public static final ConfigOption<Integer> WRITE_TASK_PARALLELISM = ConfigOptions
-      .key("write.task.parallelism")
+  public static final ConfigOption<Integer> WRITE_TASKS = ConfigOptions
+      .key("write.tasks")
       .intType()
       .defaultValue(4)
       .withDescription("Parallelism of tasks that do actual write, default is 4");
@@ -290,7 +316,7 @@ public class FlinkOptions {
     conf.setString(FlinkOptions.RECORD_KEY_FIELD, config.recordKeyField);
     conf.setString(FlinkOptions.PARTITION_PATH_FIELD, config.partitionPathField);
     conf.setString(FlinkOptions.KEYGEN_CLASS, config.keygenClass);
-    conf.setInteger(FlinkOptions.WRITE_TASK_PARALLELISM, config.writeTaskNum);
+    conf.setInteger(FlinkOptions.WRITE_TASKS, config.writeTaskNum);
 
     return conf;
   }
