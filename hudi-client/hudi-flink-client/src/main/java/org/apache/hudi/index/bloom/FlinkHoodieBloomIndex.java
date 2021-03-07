@@ -44,8 +44,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import scala.Tuple2;
-
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.toList;
@@ -106,14 +104,14 @@ public class FlinkHoodieBloomIndex<T extends HoodieRecordPayload> extends FlinkH
     List<String> affectedPartitionPathList = new ArrayList<>(recordsPerPartition.keySet());
 
     // Step 2: Load all involved files as <Partition, filename> pairs
-    List<Tuple2<String, BloomIndexFileInfo>> fileInfoList =
+    List<Pair<String, BloomIndexFileInfo>> fileInfoList =
         loadInvolvedFiles(affectedPartitionPathList, context, hoodieTable);
     final Map<String, List<BloomIndexFileInfo>> partitionToFileInfo =
-        fileInfoList.stream().collect(groupingBy(Tuple2::_1, mapping(Tuple2::_2, toList())));
+        fileInfoList.stream().collect(groupingBy(Pair::getLeft, mapping(Pair::getRight, toList())));
 
     // Step 3: Obtain a List, for each incoming record, that already exists, with the file id,
     // that contains it.
-    List<Tuple2<String, HoodieKey>> fileComparisons =
+    List<Pair<String, HoodieKey>> fileComparisons =
             explodeRecordsWithFileComparisons(partitionToFileInfo, partitionRecordKeyMap);
     return findMatchingFilesForRecordKeys(fileComparisons, hoodieTable);
   }
@@ -122,7 +120,7 @@ public class FlinkHoodieBloomIndex<T extends HoodieRecordPayload> extends FlinkH
    * Load all involved files as <Partition, filename> pair List.
    */
   //TODO duplicate code with spark, we can optimize this method later
-  List<Tuple2<String, BloomIndexFileInfo>> loadInvolvedFiles(List<String> partitions, final HoodieEngineContext context,
+  List<Pair<String, BloomIndexFileInfo>> loadInvolvedFiles(List<String> partitions, final HoodieEngineContext context,
                                                              final HoodieTable hoodieTable) {
     // Obtain the latest data files from all the partitions.
     List<Pair<String, String>> partitionPathFileIDList = getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable).stream()
@@ -136,15 +134,15 @@ public class FlinkHoodieBloomIndex<T extends HoodieRecordPayload> extends FlinkH
         try {
           HoodieRangeInfoHandle rangeInfoHandle = new HoodieRangeInfoHandle(config, hoodieTable, pf);
           String[] minMaxKeys = rangeInfoHandle.getMinMaxKeys();
-          return new Tuple2<>(pf.getKey(), new BloomIndexFileInfo(pf.getValue(), minMaxKeys[0], minMaxKeys[1]));
+          return Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue(), minMaxKeys[0], minMaxKeys[1]));
         } catch (MetadataNotFoundException me) {
           LOG.warn("Unable to find range metadata in file :" + pf);
-          return new Tuple2<>(pf.getKey(), new BloomIndexFileInfo(pf.getValue()));
+          return Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue()));
         }
       }, Math.max(partitionPathFileIDList.size(), 1));
     } else {
       return partitionPathFileIDList.stream()
-          .map(pf -> new Tuple2<>(pf.getKey(), new BloomIndexFileInfo(pf.getValue()))).collect(toList());
+          .map(pf -> Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue()))).collect(toList());
     }
   }
 
@@ -186,19 +184,19 @@ public class FlinkHoodieBloomIndex<T extends HoodieRecordPayload> extends FlinkH
    * Sub-partition to ensure the records can be looked up against files & also prune file<=>record comparisons based on
    * recordKey ranges in the index info.
    */
-  List<Tuple2<String, HoodieKey>> explodeRecordsWithFileComparisons(
+  List<Pair<String, HoodieKey>> explodeRecordsWithFileComparisons(
       final Map<String, List<BloomIndexFileInfo>> partitionToFileIndexInfo,
       Map<String, List<String>> partitionRecordKeyMap) {
     IndexFileFilter indexFileFilter =
         config.useBloomIndexTreebasedFilter() ? new IntervalTreeBasedIndexFileFilter(partitionToFileIndexInfo)
             : new ListBasedIndexFileFilter(partitionToFileIndexInfo);
 
-    List<Tuple2<String, HoodieKey>> fileRecordPairs = new ArrayList<>();
+    List<Pair<String, HoodieKey>> fileRecordPairs = new ArrayList<>();
     partitionRecordKeyMap.keySet().forEach(partitionPath ->  {
       List<String> hoodieRecordKeys = partitionRecordKeyMap.get(partitionPath);
       hoodieRecordKeys.forEach(hoodieRecordKey -> {
         indexFileFilter.getMatchingFilesAndPartition(partitionPath, hoodieRecordKey).forEach(partitionFileIdPair -> {
-          fileRecordPairs.add(new Tuple2<>(partitionFileIdPair.getRight(),
+          fileRecordPairs.add(Pair.of(partitionFileIdPair.getRight(),
                   new HoodieKey(hoodieRecordKey, partitionPath)));
         });
       });
@@ -210,10 +208,10 @@ public class FlinkHoodieBloomIndex<T extends HoodieRecordPayload> extends FlinkH
    * Find out <RowKey, filename> pair.
    */
   Map<HoodieKey, HoodieRecordLocation> findMatchingFilesForRecordKeys(
-      List<Tuple2<String, HoodieKey>> fileComparisons,
+      List<Pair<String, HoodieKey>> fileComparisons,
       HoodieTable hoodieTable) {
 
-    fileComparisons = fileComparisons.stream().sorted((o1, o2) -> o1._1.compareTo(o2._1)).collect(toList());
+    fileComparisons = fileComparisons.stream().sorted((o1, o2) -> o1.getLeft().compareTo(o2.getLeft())).collect(toList());
 
     List<HoodieKeyLookupHandle.KeyLookupResult> keyLookupResults = new ArrayList<>();
 
@@ -244,17 +242,17 @@ public class FlinkHoodieBloomIndex<T extends HoodieRecordPayload> extends FlinkH
     records.forEach(r -> keyRecordPairMap.put(r.getKey(), r));
     // Here as the record might have more data than rowKey (some rowKeys' fileId is null),
     // so we do left outer join.
-    List<Tuple2<HoodieRecord<T>, HoodieRecordLocation>> newList = new ArrayList<>();
+    List<Pair<HoodieRecord<T>, HoodieRecordLocation>> newList = new ArrayList<>();
     keyRecordPairMap.keySet().forEach(k -> {
       if (keyFilenamePair.containsKey(k)) {
-        newList.add(new Tuple2(keyRecordPairMap.get(k), keyFilenamePair.get(k)));
+        newList.add(Pair.of(keyRecordPairMap.get(k), keyFilenamePair.get(k)));
       } else {
-        newList.add(new Tuple2(keyRecordPairMap.get(k), null));
+        newList.add(Pair.of(keyRecordPairMap.get(k), null));
       }
     });
     List<HoodieRecord<T>> res = Lists.newArrayList();
-    for (Tuple2<HoodieRecord<T>, HoodieRecordLocation> v : newList) {
-      res.add(HoodieIndexUtils.getTaggedRecord(v._1, Option.ofNullable(v._2)));
+    for (Pair<HoodieRecord<T>, HoodieRecordLocation> v : newList) {
+      res.add(HoodieIndexUtils.getTaggedRecord(v.getLeft(), Option.ofNullable(v.getRight())));
     }
     return res;
   }
