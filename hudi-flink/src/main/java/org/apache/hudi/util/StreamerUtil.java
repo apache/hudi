@@ -19,6 +19,7 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.exception.HoodieException;
