@@ -33,14 +33,12 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import scala.Tuple2;
-
 /**
  * Function performing actual checking of list containing (fileId, hoodieKeys) against the actual files.
  */
 //TODO we can move this class into the hudi-client-common and reuse it for spark client
 public class HoodieFlinkBloomIndexCheckFunction
-        implements Function<Iterator<Tuple2<String, HoodieKey>>, Iterator<List<KeyLookupResult>>> {
+        implements Function<Iterator<Pair<String, HoodieKey>>, Iterator<List<KeyLookupResult>>> {
 
   private final HoodieTable hoodieTable;
 
@@ -52,25 +50,25 @@ public class HoodieFlinkBloomIndexCheckFunction
   }
 
   @Override
-  public Iterator<List<KeyLookupResult>> apply(Iterator<Tuple2<String, HoodieKey>> fileParitionRecordKeyTripletItr) {
+  public Iterator<List<KeyLookupResult>> apply(Iterator<Pair<String, HoodieKey>> fileParitionRecordKeyTripletItr) {
     return new LazyKeyCheckIterator(fileParitionRecordKeyTripletItr);
   }
 
   @Override
-  public <V> Function<V, Iterator<List<KeyLookupResult>>> compose(Function<? super V, ? extends Iterator<Tuple2<String, HoodieKey>>> before) {
+  public <V> Function<V, Iterator<List<KeyLookupResult>>> compose(Function<? super V, ? extends Iterator<Pair<String, HoodieKey>>> before) {
     return null;
   }
 
   @Override
-  public <V> Function<Iterator<Tuple2<String, HoodieKey>>, V> andThen(Function<? super Iterator<List<KeyLookupResult>>, ? extends V> after) {
+  public <V> Function<Iterator<Pair<String, HoodieKey>>, V> andThen(Function<? super Iterator<List<KeyLookupResult>>, ? extends V> after) {
     return null;
   }
 
-  class LazyKeyCheckIterator extends LazyIterableIterator<Tuple2<String, HoodieKey>, List<KeyLookupResult>> {
+  class LazyKeyCheckIterator extends LazyIterableIterator<Pair<String, HoodieKey>, List<KeyLookupResult>> {
 
     private HoodieKeyLookupHandle keyLookupHandle;
 
-    LazyKeyCheckIterator(Iterator<Tuple2<String, HoodieKey>> filePartitionRecordKeyTripletItr) {
+    LazyKeyCheckIterator(Iterator<Pair<String, HoodieKey>> filePartitionRecordKeyTripletItr) {
       super(filePartitionRecordKeyTripletItr);
     }
 
@@ -84,10 +82,10 @@ public class HoodieFlinkBloomIndexCheckFunction
       try {
         // process one file in each go.
         while (inputItr.hasNext()) {
-          Tuple2<String, HoodieKey> currentTuple = inputItr.next();
-          String fileId = currentTuple._1;
-          String partitionPath = currentTuple._2.getPartitionPath();
-          String recordKey = currentTuple._2.getRecordKey();
+          Pair<String, HoodieKey> currentTuple = inputItr.next();
+          String fileId = currentTuple.getLeft();
+          String partitionPath = currentTuple.getRight().getPartitionPath();
+          String recordKey = currentTuple.getRight().getRecordKey();
           Pair<String, String> partitionPathFilePair = Pair.of(partitionPath, fileId);
 
           // lazily init state
