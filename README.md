@@ -21,7 +21,6 @@ Hudi manages the storage of large analytical datasets on DFS (Cloud stores, HDFS
 
 <https://hudi.apache.org/>
 
-[![Build Status](https://travis-ci.com/apache/hudi.svg?branch=master)](https://travis-ci.com/apache/hudi)
 [![Build Status](https://dev.azure.com/apache-hudi-ci-org/apache-hudi-ci/_apis/build/status/apachehudi-ci.hudi-mirror?branchName=master)](https://dev.azure.com/apache-hudi-ci-org/apache-hudi-ci/_build/latest?definitionId=1&branchName=master)
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/org.apache.hudi/hudi/badge.svg)](http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22org.apache.hudi%22)
