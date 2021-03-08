@@ -46,22 +46,26 @@ public class RollbackNode extends DagNode<Option<HoodieInstant>> {
    */
   @Override
   public void execute(ExecutionContext executionContext, int curItrCount) throws Exception {
-    log.info("Executing rollback node {}", this.getName());
+    int numRollbacks = config.getNumRollbacks();
+    log.info(String.format("Executing rollback node %s with %d rollbacks", this.getName(), numRollbacks));
     // Can only be done with an instantiation of a new WriteClient hence cannot be done during DeltaStreamer
     // testing for now
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder().setConf(executionContext.getHoodieTestSuiteWriter().getConfiguration()).setBasePath(executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath)
             .build();
-    Option<HoodieInstant> lastInstant = metaClient.getActiveTimeline().getCommitsTimeline().lastInstant();
-    if (lastInstant.isPresent()) {
-      log.info("Rolling back last instant {}", lastInstant.get());
-      log.info("Cleaning up generated data for the instant being rolled back {}", lastInstant.get());
-      ValidationUtils.checkArgument(executionContext.getWriterContext().getProps().getOrDefault(DFSPathSelector.Config.SOURCE_INPUT_SELECTOR,
-          DFSPathSelector.class.getName()).toString().equalsIgnoreCase(DFSTestSuitePathSelector.class.getName()), "Test Suite only supports DFSTestSuitePathSelector");
-      executionContext.getHoodieTestSuiteWriter().getWriteClient(this).rollback(lastInstant.get().getTimestamp());
-      metaClient.getFs().delete(new Path(executionContext.getWriterContext().getCfg().inputBasePath,
-          executionContext.getWriterContext().getHoodieTestSuiteWriter().getLastCheckpoint().orElse("")), true);
-      this.result = lastInstant;
+    for (int i = 0; i < numRollbacks; i++) {
+      metaClient.reloadActiveTimeline();
+      Option<HoodieInstant> lastInstant = metaClient.getActiveTimeline().getCommitsTimeline().lastInstant();
+      if (lastInstant.isPresent()) {
+        log.info("Rolling back last instant {}", lastInstant.get());
+        log.info("Cleaning up generated data for the instant being rolled back {}", lastInstant.get());
+        ValidationUtils.checkArgument(executionContext.getWriterContext().getProps().getOrDefault(DFSPathSelector.Config.SOURCE_INPUT_SELECTOR,
+            DFSPathSelector.class.getName()).toString().equalsIgnoreCase(DFSTestSuitePathSelector.class.getName()), "Test Suite only supports DFSTestSuitePathSelector");
+        executionContext.getHoodieTestSuiteWriter().getWriteClient(this).rollback(lastInstant.get().getTimestamp());
+        metaClient.getFs().delete(new Path(executionContext.getWriterContext().getCfg().inputBasePath,
+            executionContext.getWriterContext().getHoodieTestSuiteWriter().getLastCheckpoint().orElse("")), true);
+        this.result = lastInstant;
+      }
     }
   }
 

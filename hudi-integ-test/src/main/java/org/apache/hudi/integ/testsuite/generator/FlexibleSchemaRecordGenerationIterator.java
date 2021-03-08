@@ -44,18 +44,20 @@ public class FlexibleSchemaRecordGenerationIterator implements Iterator<GenericR
   private String firstPartitionPathField;
 
   public FlexibleSchemaRecordGenerationIterator(long maxEntriesToProduce, String schema) {
-    this(maxEntriesToProduce, GenericRecordFullPayloadGenerator.DEFAULT_PAYLOAD_SIZE, schema, null, 0);
+    this(maxEntriesToProduce, GenericRecordFullPayloadGenerator.DEFAULT_PAYLOAD_SIZE, schema, null,
+        GenericRecordFullPayloadGenerator.DEFAULT_NUM_DATE_PARTITIONS,
+        GenericRecordFullPayloadGenerator.DEFAULT_START_PARTITION);
   }
 
   public FlexibleSchemaRecordGenerationIterator(long maxEntriesToProduce, int minPayloadSize, String schemaStr,
-      List<String> partitionPathFieldNames, int numPartitions) {
+      List<String> partitionPathFieldNames, int numPartitions, int startPartition) {
     this.counter = maxEntriesToProduce;
     this.partitionPathFieldNames = new HashSet<>(partitionPathFieldNames);
     if(partitionPathFieldNames != null && partitionPathFieldNames.size() > 0) {
       this.firstPartitionPathField = partitionPathFieldNames.get(0);
     }
     Schema schema = new Schema.Parser().parse(schemaStr);
-    this.generator = new GenericRecordFullPayloadGenerator(schema, minPayloadSize, numPartitions);
+    this.generator = new GenericRecordFullPayloadGenerator(schema, minPayloadSize, numPartitions, startPartition);
   }
 
   @Override

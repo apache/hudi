@@ -471,4 +471,20 @@ hdfs dfs -rm -r /user/hive/warehouse/hudi-integ-test-suite/input/
 As of now, "ValidateDatasetNode" uses spark data source and hive tables for comparison. Hence COW and real time view in 
 MOR can be tested.
               
-                        
+To run test suite jobs for validating all versions of schema, a DAG with insert, upsert nodes can be supplied with every version of schema to be evaluated, with "--saferSchemaEvolution" flag indicating the job is for schema validations.  First run of the job will populate the dataset with data files with every version of schema and perform an upsert operation for verifying schema evolution. 
+
+Second and subsequent runs will verify that the data can be inserted with latest version of schema and perform an upsert operation to evolve all older version of schema (created by older run) to the latest version of schema.
+
+Sample DAG:
+```
+rollback with num_rollbacks = 2
+insert with schema_version = <version>
+....
+upsert with fraction_upsert_per_file = 0.5
+```
+
+Spark submit with the flag:
+```
+--saferSchemaEvolution
+```
+
