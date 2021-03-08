@@ -27,6 +27,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.JobConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile}
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
@@ -61,8 +62,17 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
   private val jobConf = new JobConf(conf)
   // use schema from latest metadata, if not present, read schema from the data file
   private val schemaUtil = new TableSchemaResolver(metaClient)
-  private val tableAvroSchema = schemaUtil.getTableAvroSchema
-  private val tableStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
+  private lazy val tableAvroSchema = {
+    try {
+      schemaUtil.getTableAvroSchema
+    } catch {
+      case _: Throwable => // If there is no commit in the table, we cann't get the schema
+        // with schemaUtil, use the userSchema instead.
+        SchemaConverters.toAvroType(userSchema)
+    }
+  }
+
+  private lazy val tableStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
   private val mergeType = optParams.getOrElse(
     DataSourceReadOptions.REALTIME_MERGE_OPT_KEY,
     DataSourceReadOptions.DEFAULT_REALTIME_MERGE_OPT_VAL)
@@ -163,18 +173,23 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
         metaClient.getActiveTimeline.getCommitsTimeline
           .filterCompletedInstants, fileStatuses.toArray)
       val latestFiles: List[HoodieBaseFile] = fsView.getLatestBaseFiles.iterator().asScala.toList
-      val latestCommit = fsView.getLastInstant.get().getTimestamp
-      val fileGroup = HoodieRealtimeInputFormatUtils.groupLogsByBaseFile(conf, latestFiles.asJava).asScala
-      val fileSplits = fileGroup.map(kv => {
-        val baseFile = kv._1
-        val logPaths = if (kv._2.isEmpty) Option.empty else Option(kv._2.asScala.toList)
 
-        val filePath = MergeOnReadSnapshotRelation.getFilePath(baseFile.getFileStatus.getPath)
-        val partitionedFile = PartitionedFile(InternalRow.empty, filePath, 0, baseFile.getFileLen)
-        HoodieMergeOnReadFileSplit(Option(partitionedFile), logPaths, latestCommit,
-          metaClient.getBasePath, maxCompactionMemoryInBytes, mergeType)
-      }).toList
-      fileSplits
+      if (!fsView.getLastInstant.isPresent) { // Return empty list if the table has no commit
+        List.empty
+      } else {
+        val latestCommit = fsView.getLastInstant.get().getTimestamp
+        val fileGroup = HoodieRealtimeInputFormatUtils.groupLogsByBaseFile(conf, latestFiles.asJava).asScala
+        val fileSplits = fileGroup.map(kv => {
+          val baseFile = kv._1
+          val logPaths = if (kv._2.isEmpty) Option.empty else Option(kv._2.asScala.toList)
+          val filePath = MergeOnReadSnapshotRelation.getFilePath(baseFile.getFileStatus.getPath)
+
+          val partitionedFile = PartitionedFile(InternalRow.empty, filePath, 0, baseFile.getFileLen)
+          HoodieMergeOnReadFileSplit(Option(partitionedFile), logPaths, latestCommit,
+            metaClient.getBasePath, maxCompactionMemoryInBytes, mergeType)
+        }).toList
+        fileSplits
+      }
     }
   }
 }

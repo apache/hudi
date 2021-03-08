@@ -165,6 +165,15 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static final String DEFAULT_WRITE_META_KEY_PREFIXES = "";
 
   /**
+   * The specified write schema. In most case, we do not need set this parameter,
+   * but for the case the write schema is not equal to the specified table schema, we can
+   * specify the write schema by this parameter.
+   *
+   * Currently the MergeIntoHoodieTableCommand use this to specify the write schema.
+   */
+  public static final String WRITE_SCHEMA_PROP = "hoodie.write.schema";
+
+  /**
    * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
    * multiple write operations (upsert/buk-insert/...) to be executed within a single commit.
    * <p>
@@ -228,6 +237,20 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public void setSchema(String schemaStr) {
     props.setProperty(AVRO_SCHEMA, schemaStr);
+  }
+
+  /**
+   * Get the write schema for written records.
+   *
+   * If the WRITE_SCHEMA has specified, we use the WRITE_SCHEMA.
+   * Or else we use the AVRO_SCHEMA as the write schema.
+   * @return
+   */
+  public String getWriteSchema() {
+    if (props.containsKey(WRITE_SCHEMA_PROP)) {
+      return props.getProperty(WRITE_SCHEMA_PROP);
+    }
+    return getSchema();
   }
 
   public boolean getAvroSchemaValidate() {
