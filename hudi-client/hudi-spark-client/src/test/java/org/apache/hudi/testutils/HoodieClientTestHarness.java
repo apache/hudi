@@ -48,6 +48,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 import scala.Tuple2;
@@ -85,6 +86,11 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected transient HdfsTestService hdfsTestService;
   protected transient MiniDFSCluster dfsCluster;
   protected transient DistributedFileSystem dfs;
+
+  @AfterAll
+  public static void tearDownAll() throws IOException {
+    FileSystem.closeAll();
+  }
 
   @BeforeEach
   public void setTestMethodName(TestInfo testInfo) {
@@ -246,7 +252,6 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
    * @throws IOException
    */
   protected void initDFS() throws IOException {
-    FileSystem.closeAll();
     hdfsTestService = new HdfsTestService();
     dfsCluster = hdfsTestService.start(true);
 
