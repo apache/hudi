@@ -76,8 +76,8 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
                              boolean readBlockLazily, boolean reverseReader) throws IOException {
     FSDataInputStream fsDataInputStream = fs.open(logFile.getPath(), bufferSize);
-    this.inputStream = getFSDataInputStream(fsDataInputStream, fs, bufferSize);
     this.logFile = logFile;
+    this.inputStream = getFSDataInputStream(fsDataInputStream, fs, bufferSize);
     this.readerSchema = readerSchema;
     this.readBlockLazily = readBlockLazily;
     this.reverseReader = reverseReader;
@@ -106,7 +106,8 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private FSDataInputStream getFSDataInputStream(FSDataInputStream fsDataInputStream, FileSystem fs, int bufferSize) {
     FSDataInputStream toReturnInputStream;
     if (FSUtils.isGCSFileSystem(fs)) {
-      toReturnInputStream = getFSDataInputStreamForGCSFs(fsDataInputStream, fs, bufferSize);
+      // in GCS FS, we might need to interceptor seek offsets as we might get EOF exception
+      toReturnInputStream = new SchemeAwareFSDataInputStream(getFSDataInputStreamForGCSFs(fsDataInputStream, bufferSize), true);
     } else {
       if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
         toReturnInputStream = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
@@ -124,11 +125,10 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
    * GCS FileSystem needs some special handling for seek and hence this method assists to fetch the right {@link FSDataInputStream} to be
    * used by wrapping with required input streams.
    * @param fsDataInputStream original instance of {@link FSDataInputStream}.
-   * @param fs instance of {@link FileSystem} in use.
    * @param bufferSize buffer size to be used.
    * @return the right {@link FSDataInputStream} as required.
    */
-  private FSDataInputStream getFSDataInputStreamForGCSFs(FSDataInputStream fsDataInputStream, FileSystem fs, int bufferSize) {
+  private FSDataInputStream getFSDataInputStreamForGCSFs(FSDataInputStream fsDataInputStream, int bufferSize) {
     FSDataInputStream toReturnInputStream;
     // incase of GCS FS, there are two flows. a. fsDataInputStream.getWrappedStream() instanceof FSInputStream
     // b. fsDataInputStream.getWrappedStream() not an instanceof FSInputStream, but an instance of FSDataInputStream.
@@ -146,8 +146,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
       // need to wrap in another BufferedFSInputStream the make bufferSize work?
       toReturnInputStream = fsDataInputStream;
     }
-    // in GCS FS, we might need to interceptor seek offsets as we might get EOF exception
-    return new SchemeAwareFSDataInputStream(toReturnInputStream, true);
+    return toReturnInputStream;
   }
 
   @Override
