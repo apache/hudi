@@ -22,6 +22,7 @@ package org.apache.hudi.common.testutils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -163,8 +164,8 @@ public class HoodieTestTable {
     return this;
   }
 
-  public HoodieTestTable addReplaceCommit(String instantTime, HoodieReplaceCommitMetadata metadata) throws Exception {
-    createRequestedReplaceCommit(basePath, instantTime);
+  public HoodieTestTable addReplaceCommit(String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata, HoodieReplaceCommitMetadata metadata) throws Exception {
+    createRequestedReplaceCommit(basePath, instantTime, requestedReplaceMetadata);
     createInflightReplaceCommit(basePath, instantTime);
     createReplaceCommit(basePath, instantTime, metadata);
     currentInstantTime = instantTime;
