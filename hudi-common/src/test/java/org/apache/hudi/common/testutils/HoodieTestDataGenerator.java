@@ -114,6 +114,8 @@ public class HoodieTestDataGenerator {
       TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
   public static final String TRIP_FLATTENED_SCHEMA =
       TRIP_SCHEMA_PREFIX + FARE_FLATTENED_SCHEMA + TRIP_SCHEMA_SUFFIX;
+  public static final String TRIP_EVOLVED_EXAMPLE_SCHEMA = TRIP_EXAMPLE_SCHEMA.substring(0, TRIP_EXAMPLE_SCHEMA.length() - 2)
+      + ",{\"name\":\"rider_evolved\",\"type\":\"string\"}]}";
 
   public static final String TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"tripUberRec\",\"fields\":["
       + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
@@ -126,8 +128,8 @@ public class HoodieTestDataGenerator {
   public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,double,double,double,double,int,bigint,float,binary,int,bigint,decimal(10,6),"
       + "map<string,string>,struct<amount:double,currency:string>,array<struct<amount:double,currency:string>>,boolean";
 
-
   public static final Schema AVRO_SCHEMA = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
+  public static final Schema AVRO_EVOLVED_SCHEMA = new Schema.Parser().parse(TRIP_EVOLVED_EXAMPLE_SCHEMA);
   public static final Schema AVRO_SCHEMA_WITH_METADATA_FIELDS =
       HoodieAvroUtils.addMetadataFields(AVRO_SCHEMA);
   public static final Schema AVRO_SHORT_TRIP_SCHEMA = new Schema.Parser().parse(SHORT_TRIP_SCHEMA);
@@ -178,6 +180,8 @@ public class HoodieTestDataGenerator {
       return generatePayloadForTripSchema(key, commitTime);
     } else if (SHORT_TRIP_SCHEMA.equals(schemaStr)) {
       return generatePayloadForShortTripSchema(key, commitTime);
+    } else if (TRIP_EVOLVED_EXAMPLE_SCHEMA.equals(schemaStr)) {
+      return generateRandomValueForEvolvedSchema(key, commitTime, isFlattened);
     }
 
     return null;
@@ -211,6 +215,15 @@ public class HoodieTestDataGenerator {
         key.getRecordKey(), "rider-" + instantTime, "driver-" + instantTime, 0,
         false, isFlattened);
     return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
+  }
+
+  public static RawTripTestPayload generateRandomValueForEvolvedSchema(
+      HoodieKey key, String instantTime, boolean isFlattened) throws IOException {
+    GenericRecord rec = generateGenericRecord(
+        key.getRecordKey(), "rider-" + instantTime, "driver-" + instantTime, 0,
+        false, isFlattened, true);
+    rec.put("rider_evolved", "rider-" + instantTime + "_evolved");
+    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EVOLVED_EXAMPLE_SCHEMA);
   }
 
   /**
@@ -249,9 +262,15 @@ public class HoodieTestDataGenerator {
   }
 
   public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
+      long timestamp, boolean isDeleteRecord,
+      boolean isFlattened) {
+    return generateGenericRecord(rowKey, riderName, driverName, timestamp, isDeleteRecord, isFlattened, false);
+  }
+
+  public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
                                                     long timestamp, boolean isDeleteRecord,
-                                                    boolean isFlattened) {
-    GenericRecord rec = new GenericData.Record(isFlattened ? FLATTENED_AVRO_SCHEMA : AVRO_SCHEMA);
+                                                    boolean isFlattened, boolean isEvolvedSchema) {
+    GenericRecord rec = new GenericData.Record(isEvolvedSchema ? AVRO_EVOLVED_SCHEMA : (isFlattened ? FLATTENED_AVRO_SCHEMA : AVRO_SCHEMA));
     rec.put("_row_key", rowKey);
     rec.put("timestamp", timestamp);
     rec.put("rider", riderName);
@@ -315,6 +334,21 @@ public class HoodieTestDataGenerator {
     rec.put("driver", driverName);
     rec.put("fare", RAND.nextDouble() * 100);
     rec.put("_hoodie_is_deleted", false);
+    return rec;
+  }
+
+  /*
+   * Generate random record using TRIP_EVOLVED_SCHEMA
+   */
+  public GenericRecord generateRecordForEvolvedTripSchema(String rowKey, String riderName, String driverName, long timestamp) {
+    GenericRecord rec = new GenericData.Record(AVRO_EVOLVED_SCHEMA);
+    rec.put("_row_key", rowKey);
+    rec.put("timestamp", timestamp);
+    rec.put("rider", riderName);
+    rec.put("driver", driverName);
+    rec.put("fare", RAND.nextDouble() * 100);
+    rec.put("_hoodie_is_deleted", false);
+    rec.put("rider_evolved", riderName + "_evolved");
     return rec;
   }
 

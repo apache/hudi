@@ -35,7 +35,7 @@ import java.util.Objects;
  */
 public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
   private static final String SCHEMA_PROVIDER_CLASS_PROP = "hoodie.deltastreamer.schemaprovider.class";
-  private Schema sourceSchema;
+  protected Schema sourceSchema;
 
   public KafkaAvroSchemaDeserializer() {}
 
@@ -74,7 +74,7 @@ public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
     return super.deserialize(includeSchemaAndVersion, topic, isKey, payload, sourceSchema);
   }
 
-  private TypedProperties getConvertToTypedProperties(Map<String, ?> configs) {
+  protected TypedProperties getConvertToTypedProperties(Map<String, ?> configs) {
     TypedProperties typedProperties = new TypedProperties();
     for (Entry<String, ?> entry : configs.entrySet()) {
       typedProperties.put(entry.getKey(), entry.getValue());
