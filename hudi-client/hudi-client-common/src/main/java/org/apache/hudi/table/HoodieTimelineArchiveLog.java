@@ -400,9 +400,14 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
         break;
       }
       case HoodieTimeline.REPLACE_COMMIT_ACTION: {
-        HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
-            .fromBytes(commitTimeline.getInstantDetails(hoodieInstant).get(), HoodieReplaceCommitMetadata.class);
-        archivedMetaWrapper.setHoodieReplaceCommitMetadata(ReplaceArchivalHelper.convertReplaceCommitMetadata(replaceCommitMetadata));
+        if (hoodieInstant.isRequested()) {
+          archivedMetaWrapper.setHoodieRequestedReplaceMetadata(
+              TimelineMetadataUtils.deserializeRequestedReplaceMetadata(commitTimeline.getInstantDetails(hoodieInstant).get()));
+        } else if (hoodieInstant.isCompleted()) {
+          HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
+              .fromBytes(commitTimeline.getInstantDetails(hoodieInstant).get(), HoodieReplaceCommitMetadata.class);
+          archivedMetaWrapper.setHoodieReplaceCommitMetadata(ReplaceArchivalHelper.convertReplaceCommitMetadata(replaceCommitMetadata));
+        }
         archivedMetaWrapper.setActionType(ActionType.replacecommit.name());
         break;
       }

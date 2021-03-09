@@ -77,7 +77,6 @@
             <import>${basedir}/src/main/avro/HoodieRollbackMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieRestoreMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieReplaceCommitMetadata.avsc</import>
-            <import>${basedir}/src/main/avro/HoodieArchivedMetaEntry.avsc</import>
             <import>${basedir}/src/main/avro/HoodiePath.avsc</import>
             <import>${basedir}/src/main/avro/HoodieFSPermission.avsc</import>
             <import>${basedir}/src/main/avro/HoodieFileStatus.avsc</import>
@@ -90,6 +89,7 @@
             <import>${basedir}/src/main/avro/HoodieClusteringPlan.avsc</import>
             <import>${basedir}/src/main/avro/HoodieRequestedReplaceMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieArchivedMetaEntry.avsc</import>
           </imports>
         </configuration>
       </plugin>
