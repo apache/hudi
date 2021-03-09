@@ -144,9 +144,8 @@ public class TestGenericRecordPayloadGenerator {
     List<Long> insertTimeStamps = new ArrayList<>();
     List<Long> updateTimeStamps = new ArrayList<>();
     List<GenericRecord> records = new ArrayList<>();
-    Long startMillis = System.currentTimeMillis() - TimeUnit.MILLISECONDS
-        .convert(GenericRecordFullPayloadGenerator.DEFAULT_NUM_DATE_PARTITIONS, TimeUnit.DAYS);
-
+    Long startSeconds = 0L;
+    Long endSeconds = TimeUnit.SECONDS.convert(10, TimeUnit.DAYS);
     // Generate 10 new records
     IntStream.range(0, 10).forEach(a -> {
       GenericRecord record = payloadGenerator.getNewPayloadWithTimestamp("timestamp");
@@ -165,7 +164,6 @@ public class TestGenericRecordPayloadGenerator {
     assertTrue(insertRowKeys.containsAll(updateRowKeys));
     // The timestamp field for the insert payloads should not all match with the update payloads
     assertFalse(insertTimeStamps.containsAll(updateTimeStamps));
-    Long currentMillis = System.currentTimeMillis();
-    assertTrue(insertTimeStamps.stream().allMatch(t -> t >= startMillis  && t <= currentMillis));
+    assertTrue(insertTimeStamps.stream().allMatch(t -> t >= startSeconds  && t <= endSeconds));
   }
 }

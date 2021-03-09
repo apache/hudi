@@ -18,17 +18,26 @@
 
 package org.apache.hudi.integ.testsuite;
 
+import org.apache.avro.Schema;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.integ.testsuite.dag.DagUtils;
 import org.apache.hudi.integ.testsuite.dag.WorkflowDag;
 import org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator;
 import org.apache.hudi.integ.testsuite.dag.WriterContext;
+import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
+import org.apache.hudi.integ.testsuite.dag.nodes.RollbackNode;
 import org.apache.hudi.integ.testsuite.dag.scheduler.DagScheduler;
+import org.apache.hudi.integ.testsuite.dag.scheduler.SaferSchemaDagScheduler;
 import org.apache.hudi.integ.testsuite.reader.DeltaInputType;
 import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
@@ -47,6 +56,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 
 /**
  * This is the entry point for running a Hudi Test Suite. Although this class has similarities with {@link HoodieDeltaStreamer} this class does not extend it since do not want to create a dependency
@@ -79,6 +90,7 @@ public class HoodieTestSuiteJob {
   private transient HiveConf hiveConf;
 
   private BuiltinKeyGenerator keyGenerator;
+  private transient HoodieTableMetaClient metaClient;
 
   public HoodieTestSuiteJob(HoodieTestSuiteConfig cfg, JavaSparkContext jsc) throws IOException {
     log.warn("Running spark job w/ app id " + jsc.sc().applicationId());
@@ -92,13 +104,11 @@ public class HoodieTestSuiteJob {
     this.hiveConf = getDefaultHiveConf(jsc.hadoopConfiguration());
     this.keyGenerator = (BuiltinKeyGenerator) DataSourceUtils.createKeyGenerator(props);
 
-    if (!fs.exists(new Path(cfg.targetBasePath))) {
-      HoodieTableMetaClient.withPropertyBuilder()
+    metaClient = HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
         .setArchiveLogFolder("archived")
         .initTable(jsc.hadoopConfiguration(), cfg.targetBasePath);
-    }
 
     if (cfg.cleanInput) {
       Path inputPath = new Path(cfg.inputBasePath);
@@ -113,6 +123,28 @@ public class HoodieTestSuiteJob {
         fs.delete(outputPath, true);
       }
     }
+  }
+
+  int getSchemaVersionFromCommit(int nthCommit) throws Exception {
+    int version = 0;
+    try {
+      HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitsTimeline();
+      // Pickup the schema version from nth commit from last (most recent insert/upsert will be rolled back).
+      HoodieInstant prevInstant = timeline.nthFromLastInstant(nthCommit).get();
+      HoodieCommitMetadata commit = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(prevInstant).get(),
+          HoodieCommitMetadata.class);
+      Map<String, String> extraMetadata = commit.getExtraMetadata();
+      String avroSchemaStr = extraMetadata.get(HoodieCommitMetadata.SCHEMA_KEY);
+      Schema avroSchema = new Schema.Parser().parse(avroSchemaStr);
+      version = Integer.parseInt(avroSchema.getObjectProp("schemaVersion").toString());
+      // DAG will generate & ingest data for 2 versions (n-th version being validated, n-1).
+      log.info(String.format("Last used schemaVersion from latest commit file was %d. Optimizing the DAG.", version));
+    } catch (Exception e) {
+      // failed to open the commit to read schema version.
+      // continue executing the DAG without any changes.
+      log.info("Last used schemaVersion could not be validated from commit file.  Skipping SaferSchema Optimization.");
+    }
+    return version;
   }
 
   private static HiveConf getDefaultHiveConf(Configuration cfg) {
@@ -150,8 +182,22 @@ public class HoodieTestSuiteJob {
       long startTime = System.currentTimeMillis();
       WriterContext writerContext = new WriterContext(jsc, props, cfg, keyGenerator, sparkSession);
       writerContext.initContext(jsc);
-      DagScheduler dagScheduler = new DagScheduler(workflowDag, writerContext, jsc);
-      dagScheduler.schedule();
+      if (this.cfg.saferSchemaEvolution) {
+        int numRollbacks = 2; // rollback most recent upsert/insert, by default.
+
+        // if root is RollbackNode, get num_rollbacks
+        List<DagNode> root = workflowDag.getNodeList();
+        if (!root.isEmpty() && root.get(0) instanceof RollbackNode) {
+          numRollbacks = root.get(0).getConfig().getNumRollbacks();
+        }
+
+        int version = getSchemaVersionFromCommit(numRollbacks - 1);
+        SaferSchemaDagScheduler dagScheduler = new SaferSchemaDagScheduler(workflowDag, writerContext, jsc, version);
+        dagScheduler.schedule();
+      } else {
+        DagScheduler dagScheduler = new DagScheduler(workflowDag, writerContext, jsc);
+        dagScheduler.schedule();
+      }
       log.info("Finished scheduling all tasks, Time taken {}", System.currentTimeMillis() - startTime);
     } catch (Exception e) {
       log.error("Failed to run Test Suite ", e);
@@ -211,5 +257,10 @@ public class HoodieTestSuiteJob {
     @Parameter(names = {"--clean-output"}, description = "Clean the output folders and delete all files within it "
         + "before starting the Job")
     public Boolean cleanOutput = false;
+
+    @Parameter(names = {"--saferSchemaEvolution"}, description = "Optimize the DAG for safer schema evolution."
+        + "(If not provided, assumed to be false.)",
+        required = false)
+    public Boolean saferSchemaEvolution = false;
   }
 }

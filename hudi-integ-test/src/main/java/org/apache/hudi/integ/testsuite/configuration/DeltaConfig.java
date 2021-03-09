@@ -92,6 +92,8 @@ public class DeltaConfig implements Serializable {
     private static String EXECUTE_ITR_COUNT = "execute_itr_count";
     private static String VALIDATE_ARCHIVAL = "validate_archival";
     private static String VALIDATE_CLEAN = "validate_clean";
+    private static String SCHEMA_VERSION = "schema_version";
+    private static String NUM_ROLLBACKS = "num_rollbacks";
 
     private Map<String, Object> configsMap;
 
@@ -131,6 +133,14 @@ public class DeltaConfig implements Serializable {
       return Integer.valueOf(configsMap.getOrDefault(NUM_PARTITIONS_UPSERT, 0).toString());
     }
 
+    public int getSchemaVersion() {
+      return Integer.valueOf(configsMap.getOrDefault(SCHEMA_VERSION, Integer.MAX_VALUE).toString());
+    }
+
+    public int getNumRollbacks() {
+      return Integer.valueOf(configsMap.getOrDefault(NUM_ROLLBACKS, 1).toString());
+    }
+
     public int getStartPartition() {
       return Integer.valueOf(configsMap.getOrDefault(START_PARTITION, 0).toString());
     }
@@ -140,7 +150,7 @@ public class DeltaConfig implements Serializable {
     }
 
     public int getNumUpsertFiles() {
-      return Integer.valueOf(configsMap.getOrDefault(NUM_FILES_UPSERT, 0).toString());
+      return Integer.valueOf(configsMap.getOrDefault(NUM_FILES_UPSERT, 1).toString());
     }
 
     public double getFractionUpsertPerFile() {
@@ -245,6 +255,16 @@ public class DeltaConfig implements Serializable {
 
       public Builder withNumDeletePartitions(int numDeletePartitions) {
         this.configsMap.put(NUM_PARTITIONS_DELETE, numDeletePartitions);
+        return this;
+      }
+
+      public Builder withSchemaVersion(int version) {
+        this.configsMap.put(SCHEMA_VERSION, version);
+        return this;
+      }
+
+      public Builder withNumRollbacks(int numRollbacks) {
+        this.configsMap.put(NUM_ROLLBACKS, numRollbacks);
         return this;
       }
 
