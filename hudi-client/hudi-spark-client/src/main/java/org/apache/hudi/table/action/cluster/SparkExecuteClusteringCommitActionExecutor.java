@@ -94,7 +94,7 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
         .map(inputGroup -> runClusteringForGroupAsync(inputGroup, clusteringPlan.getStrategy().getStrategyParams()))
         .map(CompletableFuture::join)
         .reduce((rdd1, rdd2) -> rdd1.union(rdd2)).orElse(engineContext.emptyRDD());
-    
+
     HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = buildWriteMetadata(writeStatusRDD);
     JavaRDD<WriteStatus> statuses = updateIndex(writeStatusRDD, writeMetadata);
     writeMetadata.setWriteStats(statuses.map(WriteStatus::getStat).collect());
@@ -103,7 +103,7 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
     commitOnAutoCommit(writeMetadata);
     if (!writeMetadata.getCommitMetadata().isPresent()) {
       HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(writeStatusRDD.map(WriteStatus::getStat).collect(), writeMetadata.getPartitionToReplaceFileIds(),
-          extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());
+          extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType(), config.updatePartialFields(), table.getMetaClient());
       writeMetadata.setCommitMetadata(Option.of(commitMetadata));
     }
     return writeMetadata;
@@ -112,7 +112,7 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
   /**
    * Validate actions taken by clustering. In the first implementation, we validate at least one new file is written.
    * But we can extend this to add more validation. E.g. number of records read = number of records written etc.
-   * 
+   *
    * We can also make these validations in BaseCommitActionExecutor to reuse pre-commit hooks for multiple actions.
    */
   private void validateWriteResult(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata) {

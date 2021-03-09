@@ -50,7 +50,7 @@ public class TestCommitUtils {
         Option.empty(),
         WriteOperationType.INSERT,
         TRIP_SCHEMA,
-        HoodieTimeline.DELTA_COMMIT_ACTION);
+        HoodieTimeline.DELTA_COMMIT_ACTION, false, null);
 
     assertFalse(commitMetadata instanceof HoodieReplaceCommitMetadata);
     assertEquals(2, commitMetadata.getPartitionToWriteStats().size());
@@ -74,7 +74,7 @@ public class TestCommitUtils {
         Option.empty(),
         WriteOperationType.INSERT,
         TRIP_SCHEMA,
-        HoodieTimeline.REPLACE_COMMIT_ACTION);
+        HoodieTimeline.REPLACE_COMMIT_ACTION, false, null);
 
     assertTrue(commitMetadata instanceof HoodieReplaceCommitMetadata);
     HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) commitMetadata;

@@ -23,6 +23,8 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.exception.HoodieException;
@@ -58,13 +60,24 @@ public class CommitUtils {
                                                    Option<Map<String, String>> extraMetadata,
                                                    WriteOperationType operationType,
                                                    String schemaToStoreInCommit,
-                                                   String commitActionType) {
+                                                   String commitActionType,
+                                                   Boolean updatePartialFields,
+                                                   HoodieTableMetaClient metaClient) {
 
     HoodieCommitMetadata commitMetadata = buildMetadataFromStats(writeStats, partitionToReplaceFileIds, commitActionType, operationType);
 
     // add in extra metadata
     if (extraMetadata.isPresent()) {
       extraMetadata.get().forEach(commitMetadata::addMetadata);
+    }
+    //commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaToStoreInCommit);
+    if (updatePartialFields) {
+      try {
+        TableSchemaResolver resolver = new TableSchemaResolver(metaClient);
+        schemaToStoreInCommit = resolver.getTableAvroSchemaWithoutMetadataFields().toString();
+      } catch (Exception e) {
+        // ignore exception.
+      }
     }
     commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaToStoreInCommit);
     commitMetadata.setOperationType(operationType);
