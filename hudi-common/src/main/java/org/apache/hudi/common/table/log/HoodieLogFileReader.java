@@ -80,15 +80,26 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
     if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
       inputStreamLocal = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
-              new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
-      if (FSUtils.isGCSFileSystem(fs)) {
-        inputStreamLocal = new SchemeAwareFSDataInputStream(inputStreamLocal, true);
-      }
+          new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
+    } else if (FSUtils.isGCSFileSystem(fs) && fsDataInputStream.getWrappedStream() instanceof FSDataInputStream
+        && ((FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream() instanceof FSInputStream) {
+      // incase of GCS FS, there are two flows. a. fsDataInputStream.getWrappedStream() instanceof FSInputStream
+      // b. fsDataInputStream.getWrappedStream() not an instanceof FSInputStream, but an instance of FSDataInputStream.
+      // 2nd flow is this else block. (a) is handled in the first if block.
+      FSInputStream inputStream = (FSInputStream)((FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream();
+      inputStreamLocal = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
+          new BufferedFSInputStream(inputStream, bufferSize)));
     } else {
       // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream
       // need to wrap in another BufferedFSInputStream the make bufferSize work?
       inputStreamLocal = fsDataInputStream;
     }
+
+    // incase of GCS FS, wrap it over SchemeAwareFSDataInputStream to intercept the seek and offset by 1 for EOF issues.
+    if (FSUtils.isGCSFileSystem(fs)) {
+      inputStreamLocal = new SchemeAwareFSDataInputStream(inputStreamLocal, true);
+    }
+
     this.inputStream = inputStreamLocal;
     this.logFile = logFile;
     this.readerSchema = readerSchema;
