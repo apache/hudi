@@ -20,7 +20,11 @@ package org.apache.hudi.source;
 
 import org.apache.hudi.operator.FlinkOptions;
 import org.apache.hudi.operator.utils.TestConfigurations;
+import org.apache.hudi.operator.utils.TestData;
+import org.apache.hudi.utils.TestUtils;
+import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 
+import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.TableResult;
@@ -34,16 +38,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
-import java.util.Comparator;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.apache.hudi.operator.utils.TestData.assertRowsEquals;
 
 /**
  * IT cases for Hoodie table source and sink.
@@ -73,6 +77,68 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   File tempFile;
 
   @Test
+  void testStreamWriteAndRead() throws Exception {
+    // create filesystem table named source
+    String createSource = TestConfigurations.getFileSourceDDL("source");
+    streamTableEnv.executeSql(createSource);
+
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.READ_SCHEMA_FILE_PATH.key(),
+        Objects.requireNonNull(Thread.currentThread()
+            .getContextClassLoader().getResource("test_read_schema.avsc")).toString());
+    options.put(FlinkOptions.READ_AS_STREAMING.key(), "true");
+    options.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
+    streamTableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 select * from source";
+    execInsertSql(streamTableEnv, insertInto);
+
+    List<Row> rows = execSelectSql(streamTableEnv, "select * from t1", 10);
+    assertRowsEquals(rows, TestData.DATA_SET_FOUR);
+
+    // insert another batch of data
+    execInsertSql(streamTableEnv, insertInto);
+    List<Row> rows2 = execSelectSql(streamTableEnv, "select * from t1", 10);
+    assertRowsEquals(rows2, TestData.DATA_SET_FOUR);
+  }
+
+  @Test
+  void testStreamReadAppendData() throws Exception {
+    // create filesystem table named source
+    String createSource = TestConfigurations.getFileSourceDDL("source");
+    String createSource2 = TestConfigurations.getFileSourceDDL("source2", "test_source2.data");
+    streamTableEnv.executeSql(createSource);
+    streamTableEnv.executeSql(createSource2);
+
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.READ_SCHEMA_FILE_PATH.key(),
+        Objects.requireNonNull(Thread.currentThread()
+            .getContextClassLoader().getResource("test_read_schema.avsc")).toString());
+    options.put(FlinkOptions.READ_AS_STREAMING.key(), "true");
+    options.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    String createHoodieTable = TestConfigurations.getCreateHoodieTableDDL("t1", options);
+    streamTableEnv.executeSql(createHoodieTable);
+    String insertInto = "insert into t1 select * from source";
+    // execute 2 times
+    execInsertSql(streamTableEnv, insertInto);
+    // remember the commit
+    String specifiedCommit = TestUtils.getFirstCommit(tempFile.getAbsolutePath());
+    // another update batch
+    String insertInto2 = "insert into t1 select * from source2";
+    execInsertSql(streamTableEnv, insertInto2);
+    // now we consume starting from the oldest commit
+    options.put(FlinkOptions.READ_STREAMING_START_COMMIT.key(), specifiedCommit);
+    String createHoodieTable2 = TestConfigurations.getCreateHoodieTableDDL("t2", options);
+    streamTableEnv.executeSql(createHoodieTable2);
+    List<Row> rows = execSelectSql(streamTableEnv, "select * from t2", 10);
+    // all the data with same keys are appended within one data bucket and one log file,
+    // so when consume, the same keys are merged
+    assertRowsEquals(rows, TestData.DATA_SET_FIVE);
+  }
+
+  @Test
   void testStreamWriteBatchRead() {
     // create filesystem table named source
     String createSource = TestConfigurations.getFileSourceDDL("source");
@@ -90,15 +156,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
 
     List<Row> rows = CollectionUtil.iterableToList(
         () -> streamTableEnv.sqlQuery("select * from t1").execute().collect());
-    final String expected = "[id1,Danny,23,1970-01-01T00:00:01,par1, "
-        + "id2,Stephen,33,1970-01-01T00:00:02,par1, "
-        + "id3,Julian,53,1970-01-01T00:00:03,par2, "
-        + "id4,Fabian,31,1970-01-01T00:00:04,par2, "
-        + "id5,Sophia,18,1970-01-01T00:00:05,par3, "
-        + "id6,Emma,20,1970-01-01T00:00:06,par3, "
-        + "id7,Bob,44,1970-01-01T00:00:07,par4, "
-        + "id8,Han,56,1970-01-01T00:00:08,par4]";
-    assertRowsEquals(rows, expected);
+    assertRowsEquals(rows, TestData.DATA_SET_FOUR);
   }
 
   @Test
@@ -124,29 +182,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
 
     List<Row> rows = CollectionUtil.iterableToList(
         () -> batchTableEnv.sqlQuery("select * from t1").execute().collect());
-    final String expected = "[id1,Danny,23,1970-01-01T00:00:01,par1, "
-        + "id2,Stephen,33,1970-01-01T00:00:02,par1, "
-        + "id3,Julian,53,1970-01-01T00:00:03,par2, "
-        + "id4,Fabian,31,1970-01-01T00:00:04,par2, "
-        + "id5,Sophia,18,1970-01-01T00:00:05,par3, "
-        + "id6,Emma,20,1970-01-01T00:00:06,par3, "
-        + "id7,Bob,44,1970-01-01T00:00:07,par4, "
-        + "id8,Han,56,1970-01-01T00:00:08,par4]";
-    assertRowsEquals(rows, expected);
-  }
-
-  /**
-   * Sort the {@code rows} using field at index 0 and asserts
-   * it equals with the expected string {@code expected}.
-   *
-   * @param rows     Actual result rows
-   * @param expected Expected string of the sorted rows
-   */
-  private static void assertRowsEquals(List<Row> rows, String expected) {
-    String rowsString = rows.stream()
-        .sorted(Comparator.comparing(o -> o.getField(0).toString()))
-        .collect(Collectors.toList()).toString();
-    assertThat(rowsString, is(expected));
+    assertRowsEquals(rows, TestData.DATA_SET_FOUR);
   }
 
   private void execInsertSql(TableEnvironment tEnv, String insert) {
@@ -158,5 +194,17 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     } catch (InterruptedException | ExecutionException ex) {
       throw new RuntimeException(ex);
     }
+  }
+
+  private List<Row> execSelectSql(TableEnvironment tEnv, String select, long timeout) throws InterruptedException {
+    tEnv.executeSql(TestConfigurations.getCollectSinkDDL("sink"));
+    TableResult tableResult = tEnv.executeSql("insert into sink " + select);
+    // wait for the timeout then cancels the job
+    TimeUnit.SECONDS.sleep(timeout);
+    tableResult.getJobClient().ifPresent(JobClient::cancel);
+    tEnv.executeSql("DROP TABLE IF EXISTS sink");
+    return CollectSinkTableFactory.RESULT.values().stream()
+        .flatMap(Collection::stream)
+        .collect(Collectors.toList());
   }
 }

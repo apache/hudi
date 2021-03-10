@@ -19,6 +19,7 @@
 package org.apache.hudi.source.format;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.operator.FlinkOptions;
 
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.core.fs.FileStatus;
@@ -35,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Reference the Flink {@link org.apache.flink.table.utils.PartitionPathUtils}
@@ -316,5 +318,111 @@ public class FilePathUtils {
     String name = fileStatus.getPath().getName();
     // the log files is hidden file
     return name.startsWith("_") || name.startsWith(".") && !name.contains(".log.");
+  }
+
+  /**
+   * Returns the partition path key and values as a list of map, each map item in the list
+   * is a mapping of the partition key name to its actual partition value. For example, say
+   * there is a file path with partition keys [key1, key2, key3]:
+   *
+   * <p><pre>
+   *   -- file:/// ... key1=val1/key2=val2/key3=val3
+   *   -- file:/// ... key1=val4/key2=val5/key3=val6
+   * </pre>
+   *
+   * <p>The return list should be [{key1:val1, key2:val2, key3:val3}, {key1:val4, key2:val5, key3:val6}].
+   *
+   * @param path The base path
+   * @param conf The configuration
+   * @param partitionKeys The partition key list
+   * @param defaultParName The default partition name for nulls
+   */
+  public static List<Map<String, String>> getPartitions(
+      Path path,
+      org.apache.flink.configuration.Configuration conf,
+      List<String> partitionKeys,
+      String defaultParName) {
+    try {
+      return FilePathUtils
+          .searchPartKeyValueAndPaths(
+              path.getFileSystem(),
+              path,
+              conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITION),
+              partitionKeys.toArray(new String[0]))
+          .stream()
+          .map(tuple2 -> tuple2.f0)
+          .map(spec -> {
+            LinkedHashMap<String, String> ret = new LinkedHashMap<>();
+            spec.forEach((k, v) -> ret.put(k, defaultParName.equals(v) ? null : v));
+            return ret;
+          })
+          .collect(Collectors.toList());
+    } catch (Exception e) {
+      throw new TableException("Fetch partitions fail.", e);
+    }
+  }
+
+  /**
+   * Reorder the partition key value mapping based on the given partition keys sequence.
+   *
+   * @param partitionKVs  The partition key and value mapping
+   * @param partitionKeys The partition key list
+   */
+  public static LinkedHashMap<String, String> validateAndReorderPartitions(
+      Map<String, String> partitionKVs,
+      List<String> partitionKeys) {
+    LinkedHashMap<String, String> map = new LinkedHashMap<>();
+    for (String k : partitionKeys) {
+      if (!partitionKVs.containsKey(k)) {
+        throw new TableException("Partition keys are: " + partitionKeys
+            + ", incomplete partition spec: " + partitionKVs);
+      }
+      map.put(k, partitionKVs.get(k));
+    }
+    return map;
+  }
+
+  /**
+   * Returns all the file paths that is the parents of the data files.
+   *
+   * @param path The base path
+   * @param conf The configuration
+   * @param partitionKeys The partition key list
+   * @param defaultParName The default partition name for nulls
+   */
+  public static Path[] getReadPaths(
+      Path path,
+      org.apache.flink.configuration.Configuration conf,
+      List<String> partitionKeys,
+      String defaultParName) {
+    if (partitionKeys.isEmpty()) {
+      return new Path[] {path};
+    } else {
+      List<Map<String, String>> partitionPaths =
+          getPartitions(path, conf, partitionKeys, defaultParName);
+      return partitionPath2ReadPath(path, conf, partitionKeys, partitionPaths);
+    }
+  }
+
+  /**
+   * Transforms the given partition key value mapping to read paths.
+   *
+   * @param path The base path
+   * @param conf The hadoop configuration
+   * @param partitionKeys The partition key list
+   * @param partitionPaths The partition key value mapping
+   *
+   * @see #getReadPaths
+   */
+  public static Path[] partitionPath2ReadPath(
+      Path path,
+      org.apache.flink.configuration.Configuration conf,
+      List<String> partitionKeys,
+      List<Map<String, String>> partitionPaths) {
+    return partitionPaths.stream()
+        .map(m -> validateAndReorderPartitions(m, partitionKeys))
+        .map(kvs -> FilePathUtils.generatePartitionPath(kvs, conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITION)))
+        .map(n -> new Path(path, n))
+        .toArray(Path[]::new);
   }
 }

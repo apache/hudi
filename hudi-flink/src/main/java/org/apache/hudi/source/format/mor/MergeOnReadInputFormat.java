@@ -287,6 +287,17 @@ public class MergeOnReadInputFormat
             // delete record found, skipping
             return hasNext();
           } else {
+            // should improve the code when log scanner supports
+            // seeking by log blocks with commit time which is more
+            // efficient.
+            if (split.getInstantRange().isPresent()) {
+              // based on the fact that commit time is always the first field
+              String commitTime = curAvroRecord.get().get(0).toString();
+              if (!split.getInstantRange().get().isInRange(commitTime)) {
+                // filter out the records that are not in range
+                return hasNext();
+              }
+            }
             GenericRecord requiredAvroRecord = buildAvroRecordBySchema(
                 curAvroRecord.get(),
                 requiredSchema,

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.format;
 
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.operator.FlinkOptions;
 import org.apache.hudi.operator.utils.TestConfigurations;
 import org.apache.hudi.operator.utils.TestData;
@@ -32,7 +33,7 @@ import org.apache.flink.table.data.RowData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -48,7 +49,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 /**
  * Test cases for MergeOnReadInputFormat and ParquetInputFormat.
  */
-public class InputFormatTest {
+public class TestInputFormat {
 
   private HoodieTableSource tableSource;
   private Configuration conf;
@@ -56,9 +57,9 @@ public class InputFormatTest {
   @TempDir
   File tempFile;
 
-  void beforeEach(String tableType) throws IOException {
+  void beforeEach(HoodieTableType tableType) throws IOException {
     conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.setString(FlinkOptions.TABLE_TYPE, tableType);
+    conf.setString(FlinkOptions.TABLE_TYPE, tableType.name());
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false); // close the async compaction
 
     StreamerUtil.initTableIfNotExists(conf);
@@ -71,10 +72,8 @@ public class InputFormatTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {
-      FlinkOptions.TABLE_TYPE_COPY_ON_WRITE,
-      FlinkOptions.TABLE_TYPE_MERGE_ON_READ})
-  void testRead(String tableType) throws Exception {
+  @EnumSource(value = HoodieTableType.class)
+  void testRead(HoodieTableType tableType) throws Exception {
     beforeEach(tableType);
 
     TestData.writeData(TestData.DATA_SET_ONE, conf);
@@ -113,7 +112,7 @@ public class InputFormatTest {
 
   @Test
   void testReadBaseAndLogFiles() throws Exception {
-    beforeEach(FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    beforeEach(HoodieTableType.MERGE_ON_READ);
 
     // write parquet first with compaction
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
@@ -153,10 +152,8 @@ public class InputFormatTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {
-      FlinkOptions.TABLE_TYPE_COPY_ON_WRITE,
-      FlinkOptions.TABLE_TYPE_MERGE_ON_READ})
-  void testReadWithPartitionPrune(String tableType) throws Exception {
+  @EnumSource(value = HoodieTableType.class)
+  void testReadWithPartitionPrune(HoodieTableType tableType) throws Exception {
     beforeEach(tableType);
 
     TestData.writeData(TestData.DATA_SET_ONE, conf);

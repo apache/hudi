@@ -65,7 +65,7 @@ public class HoodieTableSink implements AppendStreamTableSink<RowData>, Partitio
   public DataStreamSink<?> consumeDataStream(DataStream<RowData> dataStream) {
     // Read from kafka source
     RowType rowType = (RowType) this.schema.toRowDataType().notNull().getLogicalType();
-    int numWriteTasks = this.conf.getInteger(FlinkOptions.WRITE_TASK_PARALLELISM);
+    int numWriteTasks = this.conf.getInteger(FlinkOptions.WRITE_TASKS);
     StreamWriteOperatorFactory<HoodieRecord> operatorFactory = new StreamWriteOperatorFactory<>(conf, isBounded);
 
     DataStream<Object> pipeline = dataStream

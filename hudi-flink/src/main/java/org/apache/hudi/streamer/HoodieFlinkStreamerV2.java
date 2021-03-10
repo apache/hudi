@@ -72,7 +72,7 @@ public class HoodieFlinkStreamerV2 {
         (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(cfg))
             .getLogicalType();
     Configuration conf = FlinkOptions.fromStreamerConfig(cfg);
-    int numWriteTask = conf.getInteger(FlinkOptions.WRITE_TASK_PARALLELISM);
+    int numWriteTask = conf.getInteger(FlinkOptions.WRITE_TASKS);
     StreamWriteOperatorFactory<HoodieRecord> operatorFactory =
         new StreamWriteOperatorFactory<>(conf);
 

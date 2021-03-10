@@ -39,6 +39,7 @@ public class MergeOnReadInputSplit implements InputSplit {
   private final String tablePath;
   private final long maxCompactionMemoryInBytes;
   private final String mergeType;
+  private final Option<InstantRange> instantRange;
 
   public MergeOnReadInputSplit(
       int splitNum,
@@ -47,7 +48,8 @@ public class MergeOnReadInputSplit implements InputSplit {
       String latestCommit,
       String tablePath,
       long maxCompactionMemoryInBytes,
-      String mergeType) {
+      String mergeType,
+      @Nullable InstantRange instantRange) {
     this.splitNum = splitNum;
     this.basePath = Option.ofNullable(basePath);
     this.logPaths = logPaths;
@@ -55,6 +57,7 @@ public class MergeOnReadInputSplit implements InputSplit {
     this.tablePath = tablePath;
     this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
     this.mergeType = mergeType;
+    this.instantRange = Option.ofNullable(instantRange);
   }
 
   public Option<String> getBasePath() {
@@ -79,6 +82,10 @@ public class MergeOnReadInputSplit implements InputSplit {
 
   public String getMergeType() {
     return mergeType;
+  }
+
+  public Option<InstantRange> getInstantRange() {
+    return this.instantRange;
   }
 
   @Override
