@@ -86,7 +86,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
   }
 
-  //@Test
+  // @Test
   def testArchivalIssue(): Unit = {
     println(s"Basepath : ${basePath}");
     for (i <- 1 to 20) {
