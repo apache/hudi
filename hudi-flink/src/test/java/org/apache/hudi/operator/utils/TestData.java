@@ -43,6 +43,7 @@ import org.apache.flink.table.data.writer.BinaryWriter;
 import org.apache.flink.table.runtime.types.InternalSerializers;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.types.Row;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.Strings;
@@ -117,6 +118,52 @@ public class TestData {
             TimestampData.fromEpochMillis(1), StringData.fromString("par1"))));
   }
 
+  // data set of test_source.data
+  public static List<RowData> DATA_SET_FOUR = Arrays.asList(
+      binaryRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+          TimestampData.fromEpochMillis(1000), StringData.fromString("par1")),
+      binaryRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 33,
+          TimestampData.fromEpochMillis(2000), StringData.fromString("par1")),
+      binaryRow(StringData.fromString("id3"), StringData.fromString("Julian"), 53,
+          TimestampData.fromEpochMillis(3000), StringData.fromString("par2")),
+      binaryRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 31,
+          TimestampData.fromEpochMillis(4000), StringData.fromString("par2")),
+      binaryRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+          TimestampData.fromEpochMillis(5000), StringData.fromString("par3")),
+      binaryRow(StringData.fromString("id6"), StringData.fromString("Emma"), 20,
+          TimestampData.fromEpochMillis(6000), StringData.fromString("par3")),
+      binaryRow(StringData.fromString("id7"), StringData.fromString("Bob"), 44,
+          TimestampData.fromEpochMillis(7000), StringData.fromString("par4")),
+      binaryRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
+          TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
+  );
+
+  // merged data set of test_source.data and test_source2.data
+  public static List<RowData> DATA_SET_FIVE = Arrays.asList(
+      binaryRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
+          TimestampData.fromEpochMillis(1000), StringData.fromString("par1")),
+      binaryRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 34,
+          TimestampData.fromEpochMillis(2000), StringData.fromString("par1")),
+      binaryRow(StringData.fromString("id3"), StringData.fromString("Julian"), 54,
+          TimestampData.fromEpochMillis(3000), StringData.fromString("par2")),
+      binaryRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 32,
+          TimestampData.fromEpochMillis(4000), StringData.fromString("par2")),
+      binaryRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+          TimestampData.fromEpochMillis(5000), StringData.fromString("par3")),
+      binaryRow(StringData.fromString("id6"), StringData.fromString("Emma"), 20,
+          TimestampData.fromEpochMillis(6000), StringData.fromString("par3")),
+      binaryRow(StringData.fromString("id7"), StringData.fromString("Bob"), 44,
+          TimestampData.fromEpochMillis(7000), StringData.fromString("par4")),
+      binaryRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
+          TimestampData.fromEpochMillis(8000), StringData.fromString("par4")),
+      binaryRow(StringData.fromString("id9"), StringData.fromString("Jane"), 19,
+          TimestampData.fromEpochMillis(6000), StringData.fromString("par3")),
+      binaryRow(StringData.fromString("id10"), StringData.fromString("Ella"), 38,
+          TimestampData.fromEpochMillis(7000), StringData.fromString("par4")),
+      binaryRow(StringData.fromString("id11"), StringData.fromString("Phoebe"), 52,
+          TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
+  );
+
   /**
    * Returns string format of a list of RowData.
    */
@@ -159,24 +206,78 @@ public class TestData {
   }
 
   /**
-   * Checks the source data TestConfigurations.DATA_SET_ONE are written as expected.
+   * Sort the {@code rows} using field at index 0 and asserts
+   * it equals with the expected string {@code expected}.
+   *
+   * @param rows     Actual result rows
+   * @param expected Expected string of the sorted rows
+   */
+  public static void assertRowsEquals(List<Row> rows, String expected) {
+    String rowsString = rows.stream()
+        .sorted(Comparator.comparing(o -> o.getField(0).toString()))
+        .collect(Collectors.toList()).toString();
+    assertThat(rowsString, is(expected));
+  }
+
+  /**
+   * Sort the {@code rows} using field at index 0 and asserts
+   * it equals with the expected row data list {@code expected}.
+   *
+   * @param rows     Actual result rows
+   * @param expected Expected row data list
+   */
+  public static void assertRowsEquals(List<Row> rows, List<RowData> expected) {
+    String rowsString = rows.stream()
+        .sorted(Comparator.comparing(o -> o.getField(0).toString()))
+        .collect(Collectors.toList()).toString();
+    assertThat(rowsString, is(rowDataToString(expected)));
+  }
+
+  /**
+   * Sort the {@code rows} using field at index 0 and asserts
+   * it equals with the expected string {@code expected}.
+   *
+   * @param rows     Actual result rows
+   * @param expected Expected string of the sorted rows
+   */
+  public static void assertRowDataEquals(List<RowData> rows, String expected) {
+    String rowsString = rowDataToString(rows);
+    assertThat(rowsString, is(expected));
+  }
+
+  /**
+   * Sort the {@code rows} using field at index 0 and asserts
+   * it equals with the expected row data list {@code expected}.
+   *
+   * @param rows     Actual result rows
+   * @param expected Expected row data list
+   */
+  public static void assertRowDataEquals(List<RowData> rows, List<RowData> expected) {
+    String rowsString = rowDataToString(rows);
+    assertThat(rowsString, is(rowDataToString(expected)));
+  }
+
+  /**
+   * Checks the source data set are written as expected.
    *
    * <p>Note: Replace it with the Flink reader when it is supported.
    *
    * @param baseFile The file base to check, should be a directory
    * @param expected The expected results mapping, the key should be the partition path
+   *                 and value should be values list with the key partition
    */
   public static void checkWrittenData(File baseFile, Map<String, String> expected) throws IOException {
     checkWrittenData(baseFile, expected, 4);
   }
 
   /**
-   * Checks the source data TestConfigurations.DATA_SET_ONE are written as expected.
+   * Checks the source data set are written as expected.
    *
    * <p>Note: Replace it with the Flink reader when it is supported.
    *
    * @param baseFile   The file base to check, should be a directory
    * @param expected   The expected results mapping, the key should be the partition path
+   *                   and value should be values list with the key partition
    * @param partitions The expected partition number
    */
   public static void checkWrittenData(

@@ -71,7 +71,7 @@ public class HoodieFlinkStreamer {
     }
 
     Configuration conf = FlinkOptions.fromStreamerConfig(cfg);
-    int numWriteTask = conf.getInteger(FlinkOptions.WRITE_TASK_PARALLELISM);
+    int numWriteTask = conf.getInteger(FlinkOptions.WRITE_TASKS);
 
     TypedProperties props = StreamerUtil.appendKafkaProps(cfg);
 

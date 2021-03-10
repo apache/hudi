@@ -54,8 +54,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 /**
  * Test cases for HoodieTableSource.
  */
-public class HoodieTableSourceTest {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieTableSourceTest.class);
+public class TestHoodieTableSource {
+  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieTableSource.class);
 
   private Configuration conf;
 

@@ -18,27 +18,26 @@
 
 package org.apache.hudi.util;
 
-import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.TablePathUtils;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
-import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.operator.FlinkOptions;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
+import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 
 import org.apache.avro.Schema;
@@ -332,7 +331,7 @@ public class StreamerUtil {
   public static boolean needsScheduleCompaction(Configuration conf) {
     return conf.getString(FlinkOptions.TABLE_TYPE)
         .toUpperCase(Locale.ROOT)
-        .equals(HoodieTableType.MERGE_ON_READ.name())
+        .equals(FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
         && conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED);
   }
 }
