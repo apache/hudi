@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.deltastreamer.DeltaSync;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
+import org.apache.hudi.utilities.deltastreamer.ReadBatch;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -68,7 +69,8 @@ public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
   public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
     DeltaSync service = deltaSyncService.get().getDeltaSync();
     service.refreshTimeline();
-    return service.readFromSource(service.getCommitTimelineOpt());
+    ReadBatch readBatch = service.readFromSource(service.getCommitTimelineOpt());
+    return Pair.of(readBatch.getSchemaProvider(), Pair.of(readBatch.getCheckpointStr(), readBatch.getHoodieRecordJavaRDD()));
   }
 
 }
