@@ -43,6 +43,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -55,19 +56,16 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NA
 
 public class FunctionalTestHarness implements SparkProvider, DFSProvider, HoodieMetaClientProvider, HoodieWriteClientProvider {
 
-  protected static transient SparkSession spark;
-  private static transient SQLContext sqlContext;
-  private static transient JavaSparkContext jsc;
-  protected static transient HoodieSparkEngineContext context;
+  protected transient SparkSession spark;
+  private transient SQLContext sqlContext;
+  private transient JavaSparkContext jsc;
+  protected transient HoodieSparkEngineContext context;
 
   private static transient HdfsTestService hdfsTestService;
   private static transient MiniDFSCluster dfsCluster;
   private static transient DistributedFileSystem dfs;
 
-  /**
-   * An indicator of the initialization status.
-   */
-  protected boolean initialized = false;
+  protected boolean isHdfsInitialized = false;
   @TempDir
   protected java.nio.file.Path tempDir;
 
@@ -133,28 +131,46 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
 
   @BeforeEach
   public synchronized void runBeforeEach() throws Exception {
-    initialized = spark != null && hdfsTestService != null;
-    if (!initialized) {
-      SparkConf sparkConf = conf();
-      SparkRDDWriteClient.registerClasses(sparkConf);
-      HoodieReadClient.addHoodieSupport(sparkConf);
-      spark = SparkSession.builder().config(sparkConf).getOrCreate();
-      sqlContext = spark.sqlContext();
-      jsc = new JavaSparkContext(spark.sparkContext());
-      context = new HoodieSparkEngineContext(jsc);
+    SparkConf sparkConf = conf();
+    SparkRDDWriteClient.registerClasses(sparkConf);
+    HoodieReadClient.addHoodieSupport(sparkConf);
+    spark = SparkSession.builder().config(sparkConf).getOrCreate();
+    sqlContext = spark.sqlContext();
+    jsc = new JavaSparkContext(spark.sparkContext());
+    context = new HoodieSparkEngineContext(jsc);
 
+    isHdfsInitialized = hdfsTestService != null;
+    if (!isHdfsInitialized) {
       hdfsTestService = new HdfsTestService();
       dfsCluster = hdfsTestService.start(true);
       dfs = dfsCluster.getFileSystem();
       dfs.mkdirs(dfs.getWorkingDirectory());
 
       Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-        hdfsTestService.stop();
-        hdfsTestService = null;
-
-        spark.stop();
-        spark = null;
+        if (hdfsTestService != null) {
+          hdfsTestService.stop();
+          hdfsTestService = null;
+        }
       }));
+    }
+  }
+
+  @AfterEach
+  public void cleanSparkAfterEachTest() {
+    if (sqlContext != null) {
+      sqlContext.clearCache();
+      sqlContext = null;
+    }
+
+    if (jsc != null) {
+      jsc.stop();
+      jsc.close();
+      jsc = null;
+    }
+
+    if (spark != null) {
+      spark.stop();
+      spark = null;
     }
   }
 

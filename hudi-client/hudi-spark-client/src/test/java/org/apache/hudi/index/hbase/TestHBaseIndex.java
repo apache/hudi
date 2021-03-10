@@ -103,9 +103,6 @@ public class TestHBaseIndex extends FunctionalTestHarness {
       utility.deleteTable(TABLE_NAME);
       utility.shutdownMiniCluster();
     }
-    if (spark != null) {
-      spark.close();
-    }
   }
 
   @BeforeAll
