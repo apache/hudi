@@ -75,11 +75,17 @@ public class FlinkOptions {
       .defaultValue(4)
       .withDescription("Parallelism of tasks that do actual read, default is 4");
 
-  public static final ConfigOption<String> READ_SCHEMA_FILE_PATH = ConfigOptions
-      .key("read.schema.file.path")
+  public static final ConfigOption<String> READ_AVRO_SCHEMA_PATH = ConfigOptions
+      .key("read.avro-schema.path")
       .stringType()
       .noDefaultValue()
-      .withDescription("Avro schema file path, the parsed schema is used for deserializing");
+      .withDescription("Avro schema file path, the parsed schema is used for deserialization");
+
+  public static final ConfigOption<String> READ_AVRO_SCHEMA = ConfigOptions
+      .key("read.avro-schema")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Avro schema string, the parsed schema is used for deserialization");
 
   public static final String QUERY_TYPE_SNAPSHOT = "snapshot";
   public static final String QUERY_TYPE_READ_OPTIMIZED = "read_optimized";
@@ -150,7 +156,7 @@ public class FlinkOptions {
   public static final String TABLE_TYPE_COPY_ON_WRITE = HoodieTableType.COPY_ON_WRITE.name();
   public static final String TABLE_TYPE_MERGE_ON_READ = HoodieTableType.MERGE_ON_READ.name();
   public static final ConfigOption<String> TABLE_TYPE = ConfigOptions
-      .key("write.table.type")
+      .key("table.type")
       .stringType()
       .defaultValue(TABLE_TYPE_COPY_ON_WRITE)
       .withDescription("Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ");
@@ -302,7 +308,7 @@ public class FlinkOptions {
     org.apache.flink.configuration.Configuration conf = fromMap(propsMap);
 
     conf.setString(FlinkOptions.PATH, config.targetBasePath);
-    conf.setString(READ_SCHEMA_FILE_PATH, config.readSchemaFilePath);
+    conf.setString(READ_AVRO_SCHEMA_PATH, config.readSchemaFilePath);
     conf.setString(FlinkOptions.TABLE_NAME, config.targetTableName);
     // copy_on_write works same as COPY_ON_WRITE
     conf.setString(FlinkOptions.TABLE_TYPE, config.tableType.toUpperCase());

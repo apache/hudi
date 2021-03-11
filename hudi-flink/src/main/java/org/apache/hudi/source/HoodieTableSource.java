@@ -378,6 +378,11 @@ public class HoodieTableSource implements
     }
   }
 
+  @VisibleForTesting
+  public Configuration getConf() {
+    return this.conf;
+  }
+
   /**
    * Reload the active timeline view.
    */
