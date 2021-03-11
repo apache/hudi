@@ -21,6 +21,7 @@ package org.apache.hudi
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder}
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
 import org.apache.hudi.config.HoodiePayloadConfig
@@ -37,6 +38,7 @@ import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskCont
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 import scala.util.Try
 
 case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSplit) extends Partition
@@ -299,6 +301,23 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         }
       }
     }
+
+  override protected def getPreferredLocations(split: Partition): Seq[String] = {
+    val partitionSplit = split.asInstanceOf[HoodieMergeOnReadPartition].split
+    val files = new ArrayBuffer[PartitionedFile]
+    val fs = FSUtils.getFs(partitionSplit.tablePath, config)
+    if (partitionSplit.dataFile.isDefined) {
+      files += partitionSplit.dataFile.get
+    }
+    val logFilePaths = partitionSplit.logPaths
+    if (logFilePaths.isDefined) {
+      logFilePaths.get.foreach(path => {
+        val partitionedFile = HoodieSparkUtils.getPartitionedFile(fs.getFileStatus(new Path(path)), path, InternalRow.empty)
+        files += partitionedFile
+      })
+    }
+    HoodieSparkUtils.computeHostsWithMostData(files)
+  }
 }
 
 private object HoodieMergeOnReadRDD {

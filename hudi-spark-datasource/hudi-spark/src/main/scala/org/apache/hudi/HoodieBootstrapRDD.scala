@@ -26,6 +26,8 @@ import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
+import scala.collection.mutable.ArrayBuffer
+
 class HoodieBootstrapRDD(@transient spark: SparkSession,
                         dataReadFunction: PartitionedFile => Iterator[Any],
                         skeletonReadFunction: PartitionedFile => Iterator[Any],
@@ -125,6 +127,17 @@ class HoodieBootstrapRDD(@transient spark: SparkSession,
         HoodieBootstrapPartition(file._2, file._1)
       }
     }).toArray
+  }
+
+  override protected def getPreferredLocations(split: Partition): Seq[String] = {
+    val partitionSplit = split.asInstanceOf[HoodieBootstrapPartition].split
+    val files = new ArrayBuffer[PartitionedFile]
+
+    if (partitionSplit.skeletonFile.isDefined) {
+      files += partitionSplit.skeletonFile.get
+    }
+    files += partitionSplit.dataFile
+    HoodieSparkUtils.computeHostsWithMostData(files)
   }
 }
 

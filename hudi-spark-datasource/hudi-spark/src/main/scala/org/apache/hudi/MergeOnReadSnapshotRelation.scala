@@ -148,7 +148,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
     val fileSplits = fileGroup.map(kv => {
       val baseFile = kv._1
       val logPaths = if (kv._2.isEmpty) Option.empty else Option(kv._2.asScala.toList)
-      val partitionedFile = PartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen)
+      val partitionedFile = HoodieSparkUtils.getPartitionedFile(baseFile.getFileStatus, baseFile.getPath, InternalRow.empty)
       HoodieMergeOnReadFileSplit(Option(partitionedFile), logPaths, latestCommit,
         metaClient.getBasePath, maxCompactionMemoryInBytes, mergeType)
     }).toList

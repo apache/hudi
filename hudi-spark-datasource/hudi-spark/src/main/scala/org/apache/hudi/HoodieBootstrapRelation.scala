@@ -78,11 +78,11 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
       var dataFile: PartitionedFile = null
 
       if (hoodieBaseFile.getBootstrapBaseFile.isPresent) {
-        skeletonFile = Option(PartitionedFile(InternalRow.empty, hoodieBaseFile.getPath, 0, hoodieBaseFile.getFileLen))
-        dataFile = PartitionedFile(InternalRow.empty, hoodieBaseFile.getBootstrapBaseFile.get().getPath, 0,
-          hoodieBaseFile.getBootstrapBaseFile.get().getFileLen)
+        skeletonFile = Option(HoodieSparkUtils.getPartitionedFile(hoodieBaseFile.getFileStatus, hoodieBaseFile.getPath, InternalRow.empty))
+        dataFile = HoodieSparkUtils.getPartitionedFile(hoodieBaseFile.getBootstrapBaseFile.get().getFileStatus,
+          hoodieBaseFile.getBootstrapBaseFile.get().getPath, InternalRow.empty)
       } else {
-        dataFile = PartitionedFile(InternalRow.empty, hoodieBaseFile.getPath, 0, hoodieBaseFile.getFileLen)
+        dataFile = HoodieSparkUtils.getPartitionedFile(hoodieBaseFile.getFileStatus, hoodieBaseFile.getPath, InternalRow.empty)
       }
       HoodieBootstrapSplit(dataFile, skeletonFile)
     })

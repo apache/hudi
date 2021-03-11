@@ -201,7 +201,7 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
       val baseFiles = f.getAllFileSlices.iterator().filter(slice => slice.getBaseFile.isPresent).toList
       val partitionedFile = if (baseFiles.nonEmpty) {
         val baseFile = baseFiles.head.getBaseFile
-        Option(PartitionedFile(InternalRow.empty, baseFile.get.getPath, 0, baseFile.get.getFileLen))
+        Option(HoodieSparkUtils.getPartitionedFile(baseFile.get.getFileStatus, baseFile.get.getPath, InternalRow.empty))
       }
       else {
         Option.empty
