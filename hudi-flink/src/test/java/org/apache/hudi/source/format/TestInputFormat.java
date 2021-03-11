@@ -76,18 +76,18 @@ public class TestInputFormat {
   void testRead(HoodieTableType tableType) throws Exception {
     beforeEach(tableType);
 
-    TestData.writeData(TestData.DATA_SET_ONE, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
 
     List<RowData> result = readData(inputFormat);
 
     String actual = TestData.rowDataToString(result);
-    String expected = TestData.rowDataToString(TestData.DATA_SET_ONE);
+    String expected = TestData.rowDataToString(TestData.DATA_SET_INSERT);
     assertThat(actual, is(expected));
 
     // write another commit to read again
-    TestData.writeData(TestData.DATA_SET_TWO, conf);
+    TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
 
     // refresh the input format
     this.tableSource.reloadActiveTimeline();
@@ -116,19 +116,19 @@ public class TestInputFormat {
 
     // write parquet first with compaction
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
-    TestData.writeData(TestData.DATA_SET_ONE, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
 
     List<RowData> result = readData(inputFormat);
 
     String actual = TestData.rowDataToString(result);
-    String expected = TestData.rowDataToString(TestData.DATA_SET_ONE);
+    String expected = TestData.rowDataToString(TestData.DATA_SET_INSERT);
     assertThat(actual, is(expected));
 
     // write another commit using logs and read again
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
-    TestData.writeData(TestData.DATA_SET_TWO, conf);
+    TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
 
     // refresh the input format
     this.tableSource.reloadActiveTimeline();
@@ -156,7 +156,7 @@ public class TestInputFormat {
   void testReadWithPartitionPrune(HoodieTableType tableType) throws Exception {
     beforeEach(tableType);
 
-    TestData.writeData(TestData.DATA_SET_ONE, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
     Map<String, String> prunedPartitions = new HashMap<>();
     prunedPartitions.put("partition", "par1");

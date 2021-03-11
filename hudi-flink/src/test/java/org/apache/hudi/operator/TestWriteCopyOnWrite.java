@@ -114,7 +114,7 @@ public class TestWriteCopyOnWrite {
   public void testCheckpoint() throws Exception {
     // open the function and ingest data
     funcWrapper.openFunction();
-    for (RowData rowData : TestData.DATA_SET_ONE) {
+    for (RowData rowData : TestData.DATA_SET_INSERT) {
       funcWrapper.invoke(rowData);
     }
 
@@ -200,7 +200,7 @@ public class TestWriteCopyOnWrite {
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.REQUESTED, null);
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, null);
 
-    for (RowData rowData : TestData.DATA_SET_ONE) {
+    for (RowData rowData : TestData.DATA_SET_INSERT) {
       funcWrapper.invoke(rowData);
     }
 
@@ -215,7 +215,7 @@ public class TestWriteCopyOnWrite {
   public void testInsert() throws Exception {
     // open the function and ingest data
     funcWrapper.openFunction();
-    for (RowData rowData : TestData.DATA_SET_ONE) {
+    for (RowData rowData : TestData.DATA_SET_INSERT) {
       funcWrapper.invoke(rowData);
     }
 
@@ -248,7 +248,7 @@ public class TestWriteCopyOnWrite {
 
     // open the function and ingest data
     funcWrapper.openFunction();
-    for (RowData rowData : TestData.DATA_SET_THREE) {
+    for (RowData rowData : TestData.DATA_SET_INSERT_DUPLICATES) {
       funcWrapper.invoke(rowData);
     }
 
@@ -267,7 +267,7 @@ public class TestWriteCopyOnWrite {
     checkWrittenData(tempFile, EXPECTED3, 1);
 
     // insert duplicates again
-    for (RowData rowData : TestData.DATA_SET_THREE) {
+    for (RowData rowData : TestData.DATA_SET_INSERT_DUPLICATES) {
       funcWrapper.invoke(rowData);
     }
 
@@ -284,7 +284,7 @@ public class TestWriteCopyOnWrite {
   public void testUpsert() throws Exception {
     // open the function and ingest data
     funcWrapper.openFunction();
-    for (RowData rowData : TestData.DATA_SET_ONE) {
+    for (RowData rowData : TestData.DATA_SET_INSERT) {
       funcWrapper.invoke(rowData);
     }
 
@@ -301,7 +301,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointComplete(1);
 
     // upsert another data buffer
-    for (RowData rowData : TestData.DATA_SET_TWO) {
+    for (RowData rowData : TestData.DATA_SET_UPDATE_INSERT) {
       funcWrapper.invoke(rowData);
     }
     // the data is not flushed yet
@@ -326,6 +326,58 @@ public class TestWriteCopyOnWrite {
   }
 
   @Test
+  public void testUpsertWithDelete() throws Exception {
+    // open the function and ingest data
+    funcWrapper.openFunction();
+    for (RowData rowData : TestData.DATA_SET_INSERT) {
+      funcWrapper.invoke(rowData);
+    }
+
+    assertEmptyDataFiles();
+    // this triggers the data write and event send
+    funcWrapper.checkpointFunction(1);
+
+    OperatorEvent nextEvent = funcWrapper.getNextEvent();
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
+
+    funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
+    assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
+
+    funcWrapper.checkpointComplete(1);
+
+    // upsert another data buffer
+    for (RowData rowData : TestData.DATA_SET_UPDATE_DELETE) {
+      funcWrapper.invoke(rowData);
+    }
+    // the data is not flushed yet
+    checkWrittenData(tempFile, EXPECTED1);
+    // this triggers the data write and event send
+    funcWrapper.checkpointFunction(2);
+
+    String instant = funcWrapper.getWriteClient()
+        .getInflightAndRequestedInstant(getTableType());
+
+    nextEvent = funcWrapper.getNextEvent();
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
+
+    funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
+    assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
+
+    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.REQUESTED, instant);
+    funcWrapper.checkpointComplete(2);
+    // the coordinator checkpoint commits the inflight instant.
+    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
+
+    Map<String, String> expected = new HashMap<>();
+    // id3, id5 were deleted and id9 is ignored
+    expected.put("par1", "[id1,par1,id1,Danny,24,1,par1, id2,par1,id2,Stephen,34,2,par1]");
+    expected.put("par2", "[id4,par2,id4,Fabian,31,4,par2]");
+    expected.put("par3", "[id6,par3,id6,Emma,20,6,par3]");
+    expected.put("par4", "[id7,par4,id7,Bob,44,7,par4, id8,par4,id8,Han,56,8,par4]");
+    checkWrittenData(tempFile, expected);
+  }
+
+  @Test
   public void testInsertWithMiniBatches() throws Exception {
     // reset the config option
     conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.001); // 1Kb batch size
@@ -334,7 +386,7 @@ public class TestWriteCopyOnWrite {
     // open the function and ingest data
     funcWrapper.openFunction();
     // Each record is 424 bytes. so 3 records expect to trigger a mini-batch write
-    for (RowData rowData : TestData.DATA_SET_THREE) {
+    for (RowData rowData : TestData.DATA_SET_INSERT_DUPLICATES) {
       funcWrapper.invoke(rowData);
     }
 
@@ -369,7 +421,7 @@ public class TestWriteCopyOnWrite {
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
 
     // insert duplicates again
-    for (RowData rowData : TestData.DATA_SET_THREE) {
+    for (RowData rowData : TestData.DATA_SET_INSERT_DUPLICATES) {
       funcWrapper.invoke(rowData);
     }
 
@@ -401,7 +453,7 @@ public class TestWriteCopyOnWrite {
   public void testIndexStateBootstrap() throws Exception {
     // open the function and ingest data
     funcWrapper.openFunction();
-    for (RowData rowData : TestData.DATA_SET_ONE) {
+    for (RowData rowData : TestData.DATA_SET_INSERT) {
       funcWrapper.invoke(rowData);
     }
 
@@ -421,7 +473,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.clearIndexState();
 
     // upsert another data buffer
-    for (RowData rowData : TestData.DATA_SET_TWO) {
+    for (RowData rowData : TestData.DATA_SET_UPDATE_INSERT) {
       funcWrapper.invoke(rowData);
     }
     checkIndexLoaded(

@@ -44,6 +44,7 @@ import org.apache.flink.table.runtime.types.InternalSerializers;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.Row;
+import org.apache.flink.types.RowKind;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.Strings;
@@ -58,6 +59,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -70,98 +72,114 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Data set for testing, also some utilities to check the results. */
 public class TestData {
-  public static List<RowData> DATA_SET_ONE = Arrays.asList(
-      binaryRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+  public static List<RowData> DATA_SET_INSERT = Arrays.asList(
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
           TimestampData.fromEpochMillis(1), StringData.fromString("par1")),
-      binaryRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 33,
+      insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 33,
           TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
-      binaryRow(StringData.fromString("id3"), StringData.fromString("Julian"), 53,
+      insertRow(StringData.fromString("id3"), StringData.fromString("Julian"), 53,
           TimestampData.fromEpochMillis(3), StringData.fromString("par2")),
-      binaryRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 31,
+      insertRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 31,
           TimestampData.fromEpochMillis(4), StringData.fromString("par2")),
-      binaryRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+      insertRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
           TimestampData.fromEpochMillis(5), StringData.fromString("par3")),
-      binaryRow(StringData.fromString("id6"), StringData.fromString("Emma"), 20,
+      insertRow(StringData.fromString("id6"), StringData.fromString("Emma"), 20,
           TimestampData.fromEpochMillis(6), StringData.fromString("par3")),
-      binaryRow(StringData.fromString("id7"), StringData.fromString("Bob"), 44,
+      insertRow(StringData.fromString("id7"), StringData.fromString("Bob"), 44,
           TimestampData.fromEpochMillis(7), StringData.fromString("par4")),
-      binaryRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
+      insertRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
           TimestampData.fromEpochMillis(8), StringData.fromString("par4"))
   );
 
-  public static List<RowData> DATA_SET_TWO = Arrays.asList(
+  public static List<RowData> DATA_SET_UPDATE_INSERT = Arrays.asList(
       // advance the age by 1
-      binaryRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
           TimestampData.fromEpochMillis(1), StringData.fromString("par1")),
-      binaryRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 34,
+      insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 34,
           TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
-      binaryRow(StringData.fromString("id3"), StringData.fromString("Julian"), 54,
+      insertRow(StringData.fromString("id3"), StringData.fromString("Julian"), 54,
           TimestampData.fromEpochMillis(3), StringData.fromString("par2")),
-      binaryRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 32,
+      insertRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 32,
           TimestampData.fromEpochMillis(4), StringData.fromString("par2")),
       // same with before
-      binaryRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+      insertRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
           TimestampData.fromEpochMillis(5), StringData.fromString("par3")),
       // new data
-      binaryRow(StringData.fromString("id9"), StringData.fromString("Jane"), 19,
+      insertRow(StringData.fromString("id9"), StringData.fromString("Jane"), 19,
           TimestampData.fromEpochMillis(6), StringData.fromString("par3")),
-      binaryRow(StringData.fromString("id10"), StringData.fromString("Ella"), 38,
+      insertRow(StringData.fromString("id10"), StringData.fromString("Ella"), 38,
           TimestampData.fromEpochMillis(7), StringData.fromString("par4")),
-      binaryRow(StringData.fromString("id11"), StringData.fromString("Phoebe"), 52,
+      insertRow(StringData.fromString("id11"), StringData.fromString("Phoebe"), 52,
           TimestampData.fromEpochMillis(8), StringData.fromString("par4"))
   );
 
-  public static List<RowData> DATA_SET_THREE = new ArrayList<>();
+  public static List<RowData> DATA_SET_INSERT_DUPLICATES = new ArrayList<>();
   static {
-    IntStream.range(0, 5).forEach(i -> DATA_SET_THREE.add(
-        binaryRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+    IntStream.range(0, 5).forEach(i -> DATA_SET_INSERT_DUPLICATES.add(
+        insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
             TimestampData.fromEpochMillis(1), StringData.fromString("par1"))));
   }
 
   // data set of test_source.data
-  public static List<RowData> DATA_SET_FOUR = Arrays.asList(
-      binaryRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+  public static List<RowData> DATA_SET_SOURCE_INSERT = Arrays.asList(
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
           TimestampData.fromEpochMillis(1000), StringData.fromString("par1")),
-      binaryRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 33,
+      insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 33,
           TimestampData.fromEpochMillis(2000), StringData.fromString("par1")),
-      binaryRow(StringData.fromString("id3"), StringData.fromString("Julian"), 53,
+      insertRow(StringData.fromString("id3"), StringData.fromString("Julian"), 53,
           TimestampData.fromEpochMillis(3000), StringData.fromString("par2")),
-      binaryRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 31,
+      insertRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 31,
           TimestampData.fromEpochMillis(4000), StringData.fromString("par2")),
-      binaryRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+      insertRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
           TimestampData.fromEpochMillis(5000), StringData.fromString("par3")),
-      binaryRow(StringData.fromString("id6"), StringData.fromString("Emma"), 20,
+      insertRow(StringData.fromString("id6"), StringData.fromString("Emma"), 20,
           TimestampData.fromEpochMillis(6000), StringData.fromString("par3")),
-      binaryRow(StringData.fromString("id7"), StringData.fromString("Bob"), 44,
+      insertRow(StringData.fromString("id7"), StringData.fromString("Bob"), 44,
           TimestampData.fromEpochMillis(7000), StringData.fromString("par4")),
-      binaryRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
+      insertRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
           TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
   );
 
   // merged data set of test_source.data and test_source2.data
-  public static List<RowData> DATA_SET_FIVE = Arrays.asList(
-      binaryRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
+  public static List<RowData> DATA_SET_SOURCE_MERGED = Arrays.asList(
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
           TimestampData.fromEpochMillis(1000), StringData.fromString("par1")),
-      binaryRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 34,
+      insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 34,
           TimestampData.fromEpochMillis(2000), StringData.fromString("par1")),
-      binaryRow(StringData.fromString("id3"), StringData.fromString("Julian"), 54,
+      insertRow(StringData.fromString("id3"), StringData.fromString("Julian"), 54,
           TimestampData.fromEpochMillis(3000), StringData.fromString("par2")),
-      binaryRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 32,
+      insertRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 32,
           TimestampData.fromEpochMillis(4000), StringData.fromString("par2")),
-      binaryRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+      insertRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
           TimestampData.fromEpochMillis(5000), StringData.fromString("par3")),
-      binaryRow(StringData.fromString("id6"), StringData.fromString("Emma"), 20,
+      insertRow(StringData.fromString("id6"), StringData.fromString("Emma"), 20,
           TimestampData.fromEpochMillis(6000), StringData.fromString("par3")),
-      binaryRow(StringData.fromString("id7"), StringData.fromString("Bob"), 44,
+      insertRow(StringData.fromString("id7"), StringData.fromString("Bob"), 44,
           TimestampData.fromEpochMillis(7000), StringData.fromString("par4")),
-      binaryRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
+      insertRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
           TimestampData.fromEpochMillis(8000), StringData.fromString("par4")),
-      binaryRow(StringData.fromString("id9"), StringData.fromString("Jane"), 19,
+      insertRow(StringData.fromString("id9"), StringData.fromString("Jane"), 19,
           TimestampData.fromEpochMillis(6000), StringData.fromString("par3")),
-      binaryRow(StringData.fromString("id10"), StringData.fromString("Ella"), 38,
+      insertRow(StringData.fromString("id10"), StringData.fromString("Ella"), 38,
           TimestampData.fromEpochMillis(7000), StringData.fromString("par4")),
-      binaryRow(StringData.fromString("id11"), StringData.fromString("Phoebe"), 52,
+      insertRow(StringData.fromString("id11"), StringData.fromString("Phoebe"), 52,
           TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
+  );
+
+  public static List<RowData> DATA_SET_UPDATE_DELETE = Arrays.asList(
+      // this is update
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
+          TimestampData.fromEpochMillis(1), StringData.fromString("par1")),
+      insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 34,
+          TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
+      // this is delete
+      deleteRow(StringData.fromString("id3"), StringData.fromString("Julian"), 53,
+          TimestampData.fromEpochMillis(3), StringData.fromString("par2")),
+      deleteRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+          TimestampData.fromEpochMillis(5), StringData.fromString("par3")),
+      // delete a record that has no inserts
+      deleteRow(StringData.fromString("id9"), StringData.fromString("Jane"), 19,
+          TimestampData.fromEpochMillis(6), StringData.fromString("par3"))
   );
 
   /**
@@ -388,11 +406,16 @@ public class TestData {
       List<String> readBuffer = scanner.getRecords().values().stream()
           .map(hoodieRecord -> {
             try {
-              return filterOutVariables((GenericRecord) hoodieRecord.getData().getInsertValue(schema, new Properties()).get());
+              // in case it is a delete
+              GenericRecord record = (GenericRecord) hoodieRecord.getData()
+                  .getInsertValue(schema, new Properties())
+                  .orElse(null);
+              return record == null ? (String) null : filterOutVariables(record);
             } catch (IOException e) {
               throw new RuntimeException(e);
             }
           })
+          .filter(Objects::nonNull)
           .sorted(Comparator.naturalOrder())
           .collect(Collectors.toList());
       assertThat(readBuffer.toString(), is(expected.get(partitionDir.getName())));
@@ -437,7 +460,7 @@ public class TestData {
     return Strings.join(fields, ",");
   }
 
-  private static BinaryRowData binaryRow(Object... fields) {
+  private static BinaryRowData insertRow(Object... fields) {
     LogicalType[] types = TestConfigurations.ROW_TYPE.getFields().stream().map(RowType.RowField::getType)
         .toArray(LogicalType[]::new);
     assertEquals(
@@ -457,5 +480,11 @@ public class TestData {
     }
     writer.complete();
     return row;
+  }
+
+  private static BinaryRowData deleteRow(Object... fields) {
+    BinaryRowData rowData = insertRow(fields);
+    rowData.setRowKind(RowKind.DELETE);
+    return rowData;
   }
 }
