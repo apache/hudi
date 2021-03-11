@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.checkpointing;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -33,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestKafkaConnectHdfsProvider extends HoodieCommonTestHarness {
+  private static final String BASE_FILE_EXTENSION = HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension();
 
   @Test
   public void testValidKafkaConnectPath() throws Exception {
@@ -46,19 +48,19 @@ public class TestKafkaConnectHdfsProvider extends HoodieCommonTestHarness {
     // kafka connect tmp folder
     new File(topicPath + "/TMP").mkdirs();
     // tmp file that being written
-    new File(topicPath + "/TMP/" + "topic1+0+301+400.parquet").createNewFile();
-    // regular parquet files
+    new File(topicPath + "/TMP/" + "topic1+0+301+400" + BASE_FILE_EXTENSION).createNewFile();
+    // regular base files
     new File(topicPath + "/year=2016/month=05/day=01/"
-        + "topic1+0+100+200.parquet").createNewFile();
+        + "topic1+0+100+200" + BASE_FILE_EXTENSION).createNewFile();
     new File(topicPath + "/year=2016/month=05/day=01/"
-        + "topic1+1+100+200.parquet").createNewFile();
+        + "topic1+1+100+200" + BASE_FILE_EXTENSION).createNewFile();
     new File(topicPath + "/year=2016/month=05/day=02/"
-        + "topic1+0+201+300.parquet").createNewFile();
-    // noise parquet file
+        + "topic1+0+201+300" + BASE_FILE_EXTENSION).createNewFile();
+    // noise base file
     new File(topicPath + "/year=2016/month=05/day=01/"
-        + "random_snappy_1.parquet").createNewFile();
+        + "random_snappy_1" + BASE_FILE_EXTENSION).createNewFile();
     new File(topicPath + "/year=2016/month=05/day=02/"
-        + "random_snappy_2.parquet").createNewFile();
+        + "random_snappy_2" + BASE_FILE_EXTENSION).createNewFile();
     final TypedProperties props = new TypedProperties();
     props.put("hoodie.deltastreamer.checkpoint.provider.path", topicPath.toString());
     final InitialCheckPointProvider provider = new KafkaConnectHdfsProvider(props);
@@ -73,13 +75,13 @@ public class TestKafkaConnectHdfsProvider extends HoodieCommonTestHarness {
     // create regular kafka connect hdfs dirs
     new File(topicPath + "/year=2016/month=05/day=01/").mkdirs();
     new File(topicPath + "/year=2016/month=05/day=02/").mkdirs();
-    // parquet files with missing partition
+    // base files with missing partition
     new File(topicPath + "/year=2016/month=05/day=01/"
-        + "topic1+0+100+200.parquet").createNewFile();
+        + "topic1+0+100+200" + BASE_FILE_EXTENSION).createNewFile();
     new File(topicPath + "/year=2016/month=05/day=01/"
-        + "topic1+2+100+200.parquet").createNewFile();
+        + "topic1+2+100+200" + BASE_FILE_EXTENSION).createNewFile();
     new File(topicPath + "/year=2016/month=05/day=02/"
-        + "topic1+0+201+300.parquet").createNewFile();
+        + "topic1+0+201+300" + BASE_FILE_EXTENSION).createNewFile();
     final TypedProperties props = new TypedProperties();
     props.put("hoodie.deltastreamer.checkpoint.provider.path", topicPath.toString());
     final InitialCheckPointProvider provider = new KafkaConnectHdfsProvider(props);

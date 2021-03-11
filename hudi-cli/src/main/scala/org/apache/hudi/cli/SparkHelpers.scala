@@ -40,7 +40,7 @@ import scala.collection.mutable._
 object SparkHelpers {
   @throws[Exception]
   def skipKeysAndWriteNewFile(instantTime: String, fs: FileSystem, sourceFile: Path, destinationFile: Path, keysToSkip: Set[String]) {
-    val sourceRecords = ParquetUtils.readAvroRecords(fs.getConf, sourceFile)
+    val sourceRecords = new ParquetUtils().readAvroRecords(fs.getConf, sourceFile)
     val schema: Schema = sourceRecords.get(0).getSchema
     val filter: BloomFilter = BloomFilterFactory.createBloomFilter(HoodieIndexConfig.DEFAULT_BLOOM_FILTER_NUM_ENTRIES.toInt, HoodieIndexConfig.DEFAULT_BLOOM_FILTER_FPP.toDouble,
       HoodieIndexConfig.DEFAULT_HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES.toInt, HoodieIndexConfig.DEFAULT_BLOOM_INDEX_FILTER_TYPE);
@@ -125,7 +125,7 @@ class SparkHelper(sqlContext: SQLContext, fs: FileSystem) {
     * @return
     */
   def fileKeysAgainstBF(conf: Configuration, sqlContext: SQLContext, file: String): Boolean = {
-    val bf = ParquetUtils.readBloomFilterFromParquetMetadata(conf, new Path(file))
+    val bf = new ParquetUtils().readBloomFilterFromMetadata(conf, new Path(file))
     val foundCount = sqlContext.parquetFile(file)
       .select(s"`${HoodieRecord.RECORD_KEY_METADATA_FIELD}`")
       .collect().count(r => !bf.mightContain(r.getString(0)))

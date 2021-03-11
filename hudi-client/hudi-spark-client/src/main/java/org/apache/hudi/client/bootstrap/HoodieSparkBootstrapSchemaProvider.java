@@ -47,7 +47,7 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
     MessageType parquetSchema = partitions.stream().flatMap(p -> p.getValue().stream()).map(fs -> {
       try {
         Path filePath = FileStatusUtils.toPath(fs.getPath());
-        return ParquetUtils.readSchema(context.getHadoopConf().get(), filePath);
+        return new ParquetUtils().readSchema(context.getHadoopConf().get(), filePath);
       } catch (Exception ex) {
         return null;
       }

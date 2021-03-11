@@ -36,24 +36,26 @@ import org.apache.parquet.hadoop.ParquetReader;
 public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileReader {
   private Path path;
   private Configuration conf;
+  private final ParquetUtils parquetUtils;
 
   public HoodieParquetReader(Configuration configuration, Path path) {
     this.conf = configuration;
     this.path = path;
+    this.parquetUtils = new ParquetUtils();
   }
 
   public String[] readMinMaxRecordKeys() {
-    return ParquetUtils.readMinMaxRecordKeys(conf, path);
+    return parquetUtils.readMinMaxRecordKeys(conf, path);
   }
 
   @Override
   public BloomFilter readBloomFilter() {
-    return ParquetUtils.readBloomFilterFromParquetMetadata(conf, path);
+    return parquetUtils.readBloomFilterFromMetadata(conf, path);
   }
 
   @Override
   public Set<String> filterRowKeys(Set candidateRowKeys) {
-    return ParquetUtils.filterParquetRowKeys(conf, path, candidateRowKeys);
+    return parquetUtils.filterRowKeys(conf, path, candidateRowKeys);
   }
 
   @Override
@@ -65,7 +67,7 @@ public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileR
 
   @Override
   public Schema getSchema() {
-    return ParquetUtils.readAvroSchema(conf, path);
+    return parquetUtils.readAvroSchema(conf, path);
   }
 
   @Override
@@ -74,6 +76,6 @@ public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileR
 
   @Override
   public long getTotalRecords() {
-    return ParquetUtils.getRowCount(conf, path);
+    return parquetUtils.getRowCount(conf, path);
   }
 }

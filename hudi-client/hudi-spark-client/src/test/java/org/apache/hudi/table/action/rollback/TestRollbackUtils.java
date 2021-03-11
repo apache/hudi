@@ -22,6 +22,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hudi.common.HoodieRollbackStat;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -37,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
 public class TestRollbackUtils {
+  private static final String BASE_FILE_EXTENSION = HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension();
 
   private FileStatus generateFileStatus(String filePath) {
     Path dataFile1Path = new Path(filePath);
@@ -62,15 +64,15 @@ public class TestRollbackUtils {
     String partitionPath2 = "/partitionPath2/";
     //prepare HoodieRollbackStat for different partition
     Map<FileStatus, Boolean> dataFilesOnlyStat1Files = new HashMap<>();
-    dataFilesOnlyStat1Files.put(generateFileStatus(partitionPath1 + "dataFile1.parquet"), true);
-    dataFilesOnlyStat1Files.put(generateFileStatus(partitionPath1 + "dataFile2.parquet"), true);
+    dataFilesOnlyStat1Files.put(generateFileStatus(partitionPath1 + "dataFile1" + BASE_FILE_EXTENSION), true);
+    dataFilesOnlyStat1Files.put(generateFileStatus(partitionPath1 + "dataFile2" + BASE_FILE_EXTENSION), true);
     HoodieRollbackStat dataFilesOnlyStat1 = HoodieRollbackStat.newBuilder()
         .withPartitionPath(partitionPath1)
         .withDeletedFileResults(dataFilesOnlyStat1Files).build();
 
     Map<FileStatus, Boolean> dataFilesOnlyStat2Files = new HashMap<>();
-    dataFilesOnlyStat2Files.put(generateFileStatus(partitionPath2 + "dataFile1.parquet"), true);
-    dataFilesOnlyStat2Files.put(generateFileStatus(partitionPath2 + "dataFile2.parquet"), true);
+    dataFilesOnlyStat2Files.put(generateFileStatus(partitionPath2 + "dataFile1" + BASE_FILE_EXTENSION), true);
+    dataFilesOnlyStat2Files.put(generateFileStatus(partitionPath2 + "dataFile2" + BASE_FILE_EXTENSION), true);
     HoodieRollbackStat dataFilesOnlyStat2 = HoodieRollbackStat.newBuilder()
         .withPartitionPath(partitionPath2)
         .withDeletedFileResults(dataFilesOnlyStat1Files).build();
@@ -83,7 +85,7 @@ public class TestRollbackUtils {
     //prepare HoodieRollbackStat for failed and block append
     Map<FileStatus, Boolean> dataFilesOnlyStat3Files = new HashMap<>();
     dataFilesOnlyStat3Files.put(generateFileStatus(partitionPath1 + "dataFile1.log"), true);
-    dataFilesOnlyStat3Files.put(generateFileStatus(partitionPath1 + "dataFile3.parquet"), false);
+    dataFilesOnlyStat3Files.put(generateFileStatus(partitionPath1 + "dataFile3" + BASE_FILE_EXTENSION), false);
     HoodieRollbackStat dataFilesOnlyStat3 = HoodieRollbackStat.newBuilder()
         .withPartitionPath(partitionPath1)
         .withDeletedFileResults(dataFilesOnlyStat3Files).build();
@@ -98,10 +100,10 @@ public class TestRollbackUtils {
     HoodieRollbackStat dataFilesOnlyStatMerge1 =
         RollbackUtils.mergeRollbackStat(dataFilesOnlyStat1, dataFilesOnlyStat3);
     assertEquals(partitionPath1, dataFilesOnlyStatMerge1.getPartitionPath());
-    assertIterableEquals(CollectionUtils.createImmutableList(partitionPath1 + "dataFile3.parquet"),
+    assertIterableEquals(CollectionUtils.createImmutableList(partitionPath1 + "dataFile3" + BASE_FILE_EXTENSION),
         dataFilesOnlyStatMerge1.getFailedDeleteFiles());
-    assertIterableEquals(CollectionUtils.createImmutableList(partitionPath1 + "dataFile1.parquet",
-        partitionPath1 + "dataFile2.parquet", partitionPath1 + "dataFile1.log").stream().sorted().collect(Collectors.toList()),
+    assertIterableEquals(CollectionUtils.createImmutableList(partitionPath1 + "dataFile1" + BASE_FILE_EXTENSION,
+        partitionPath1 + "dataFile2" + BASE_FILE_EXTENSION, partitionPath1 + "dataFile1.log").stream().sorted().collect(Collectors.toList()),
         dataFilesOnlyStatMerge1.getSuccessDeleteFiles().stream().sorted().collect(Collectors.toList()));
     assertEquals(0, dataFilesOnlyStatMerge1.getCommandBlocksCount().size());
 
@@ -109,10 +111,10 @@ public class TestRollbackUtils {
     HoodieRollbackStat dataFilesOnlyStatMerge2 =
         RollbackUtils.mergeRollbackStat(dataFilesOnlyStatMerge1, dataFilesOnlyStat4);
     assertEquals(partitionPath1, dataFilesOnlyStatMerge1.getPartitionPath());
-    assertIterableEquals(CollectionUtils.createImmutableList(partitionPath1 + "dataFile3.parquet").stream().sorted().collect(Collectors.toList()),
+    assertIterableEquals(CollectionUtils.createImmutableList(partitionPath1 + "dataFile3" + BASE_FILE_EXTENSION).stream().sorted().collect(Collectors.toList()),
         dataFilesOnlyStatMerge2.getFailedDeleteFiles().stream().sorted().collect(Collectors.toList()));
-    assertIterableEquals(CollectionUtils.createImmutableList(partitionPath1 + "dataFile1.parquet",
-        partitionPath1 + "dataFile2.parquet", partitionPath1 + "dataFile1.log").stream().sorted().collect(Collectors.toList()),
+    assertIterableEquals(CollectionUtils.createImmutableList(partitionPath1 + "dataFile1" + BASE_FILE_EXTENSION,
+        partitionPath1 + "dataFile2" + BASE_FILE_EXTENSION, partitionPath1 + "dataFile1.log").stream().sorted().collect(Collectors.toList()),
         dataFilesOnlyStatMerge2.getSuccessDeleteFiles().stream().sorted().collect(Collectors.toList()));
     assertEquals(CollectionUtils.createImmutableMap(generateFileStatus(partitionPath1 + "dataFile1.log"), 10L),
         dataFilesOnlyStatMerge2.getCommandBlocksCount());
