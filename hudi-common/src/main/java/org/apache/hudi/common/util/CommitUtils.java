@@ -66,7 +66,6 @@ public class CommitUtils {
     if (extraMetadata.isPresent()) {
       extraMetadata.get().forEach(commitMetadata::addMetadata);
     }
-    // do we need to set empty string for schema of schema is null ?
     commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaToStoreInCommit == null ? "" : schemaToStoreInCommit);
     commitMetadata.setOperationType(operationType);
     return commitMetadata;
