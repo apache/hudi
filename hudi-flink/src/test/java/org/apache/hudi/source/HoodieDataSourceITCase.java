@@ -95,12 +95,12 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     execInsertSql(streamTableEnv, insertInto);
 
     List<Row> rows = execSelectSql(streamTableEnv, "select * from t1", 10);
-    assertRowsEquals(rows, TestData.DATA_SET_FOUR);
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
 
     // insert another batch of data
     execInsertSql(streamTableEnv, insertInto);
     List<Row> rows2 = execSelectSql(streamTableEnv, "select * from t1", 10);
-    assertRowsEquals(rows2, TestData.DATA_SET_FOUR);
+    assertRowsEquals(rows2, TestData.DATA_SET_SOURCE_INSERT);
   }
 
   @Test
@@ -135,7 +135,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     List<Row> rows = execSelectSql(streamTableEnv, "select * from t2", 10);
     // all the data with same keys are appended within one data bucket and one log file,
     // so when consume, the same keys are merged
-    assertRowsEquals(rows, TestData.DATA_SET_FIVE);
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_MERGED);
   }
 
   @Test
@@ -156,7 +156,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
 
     List<Row> rows = CollectionUtil.iterableToList(
         () -> streamTableEnv.sqlQuery("select * from t1").execute().collect());
-    assertRowsEquals(rows, TestData.DATA_SET_FOUR);
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
   }
 
   @Test
@@ -182,7 +182,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
 
     List<Row> rows = CollectionUtil.iterableToList(
         () -> batchTableEnv.sqlQuery("select * from t1").execute().collect());
-    assertRowsEquals(rows, TestData.DATA_SET_FOUR);
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
   }
 
   private void execInsertSql(TableEnvironment tEnv, String insert) {

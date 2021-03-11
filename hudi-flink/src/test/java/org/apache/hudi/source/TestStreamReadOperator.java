@@ -93,7 +93,7 @@ public class TestStreamReadOperator {
 
   @Test
   void testWriteRecords() throws Exception {
-    TestData.writeData(TestData.DATA_SET_ONE, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
     try (OneInputStreamOperatorTestHarness<MergeOnReadInputSplit, RowData> harness = createReader()) {
       harness.setup();
       harness.open();
@@ -111,9 +111,9 @@ public class TestStreamReadOperator {
         assertThat("Should process 1 split", processor.runMailboxStep());
       }
       // Assert the output has expected elements.
-      TestData.assertRowDataEquals(harness.extractOutputValues(), TestData.DATA_SET_ONE);
+      TestData.assertRowDataEquals(harness.extractOutputValues(), TestData.DATA_SET_INSERT);
 
-      TestData.writeData(TestData.DATA_SET_TWO, conf);
+      TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
       final List<MergeOnReadInputSplit> splits2 = generateSplits(func);
       assertThat("Should have 4 splits", splits2.size(), is(4));
       for (MergeOnReadInputSplit split : splits2) {
@@ -124,8 +124,8 @@ public class TestStreamReadOperator {
         assertThat("Should processed 1 split", processor.runMailboxStep());
       }
       // The result sets behaves like append only: DATA_SET_ONE + DATA_SET_TWO
-      List<RowData> expected = new ArrayList<>(TestData.DATA_SET_ONE);
-      expected.addAll(TestData.DATA_SET_TWO);
+      List<RowData> expected = new ArrayList<>(TestData.DATA_SET_INSERT);
+      expected.addAll(TestData.DATA_SET_UPDATE_INSERT);
       TestData.assertRowDataEquals(harness.extractOutputValues(), expected);
     }
   }
@@ -134,7 +134,7 @@ public class TestStreamReadOperator {
   public void testCheckpoint() throws Exception {
     // Received emitted splits: split1, split2, split3, split4, checkpoint request is triggered
     // when reading records from split1.
-    TestData.writeData(TestData.DATA_SET_ONE, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
     long timestamp = 0;
     try (OneInputStreamOperatorTestHarness<MergeOnReadInputSplit, RowData> harness = createReader()) {
       harness.setup();
@@ -170,13 +170,13 @@ public class TestStreamReadOperator {
       assertTrue(processor.runMailboxStep(), "Should have processed the split3");
 
       // Assert the output has expected elements.
-      TestData.assertRowDataEquals(harness.extractOutputValues(), TestData.DATA_SET_ONE);
+      TestData.assertRowDataEquals(harness.extractOutputValues(), TestData.DATA_SET_INSERT);
     }
   }
 
   @Test
   public void testCheckpointRestore() throws Exception {
-    TestData.writeData(TestData.DATA_SET_ONE, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
     OperatorSubtaskState state;
     final List<MergeOnReadInputSplit> splits;

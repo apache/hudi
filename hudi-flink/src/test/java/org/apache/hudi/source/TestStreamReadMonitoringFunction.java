@@ -71,7 +71,7 @@ public class TestStreamReadMonitoringFunction {
 
   @Test
   public void testConsumeFromLatestCommit() throws Exception {
-    TestData.writeData(TestData.DATA_SET_ONE, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
     StreamReadMonitoringFunction function = TestUtils.getMonitorFunc(conf);
     try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness = createHarness(function)) {
       harness.setup();
@@ -95,7 +95,7 @@ public class TestStreamReadMonitoringFunction {
       sourceContext.reset(latch);
 
       // write another instant and validate
-      TestData.writeData(TestData.DATA_SET_TWO, conf);
+      TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
 
       assertTrue(latch.await(WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS), "Should finish splits generation");
       assertThat("Should produce the expected splits",
@@ -112,8 +112,8 @@ public class TestStreamReadMonitoringFunction {
   public void testConsumeFromSpecifiedCommit() throws Exception {
     // write 2 commits first, use the second commit time as the specified start instant,
     // all the splits should come from the second commit.
-    TestData.writeData(TestData.DATA_SET_ONE, conf);
-    TestData.writeData(TestData.DATA_SET_TWO, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
     String specifiedCommit = TestUtils.getLatestCommit(tempFile.getAbsolutePath());
     conf.setString(FlinkOptions.READ_STREAMING_START_COMMIT, specifiedCommit);
     StreamReadMonitoringFunction function = TestUtils.getMonitorFunc(conf);
@@ -141,7 +141,7 @@ public class TestStreamReadMonitoringFunction {
 
   @Test
   public void testCheckpointRestore() throws Exception {
-    TestData.writeData(TestData.DATA_SET_ONE, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
     StreamReadMonitoringFunction function = TestUtils.getMonitorFunc(conf);
     OperatorSubtaskState state;
@@ -169,7 +169,7 @@ public class TestStreamReadMonitoringFunction {
 
     }
 
-    TestData.writeData(TestData.DATA_SET_TWO, conf);
+    TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
     StreamReadMonitoringFunction function2 = TestUtils.getMonitorFunc(conf);
     try (AbstractStreamOperatorTestHarness<MergeOnReadInputSplit> harness = createHarness(function2)) {
       harness.setup();
