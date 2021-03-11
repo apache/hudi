@@ -101,7 +101,7 @@ public class TestHoodieTableSource {
   @Test
   void testGetInputFormat() throws Exception {
     // write some data to let the TableSchemaResolver get the right instant
-    TestData.writeData(TestData.DATA_SET_ONE, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
     HoodieTableSource tableSource = new HoodieTableSource(
         TestConfigurations.TABLE_SCHEMA,
