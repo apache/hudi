@@ -30,6 +30,7 @@ import org.apache.hudi.operator.partitioner.BucketAssignFunction;
 import org.apache.hudi.operator.transform.RowDataToHoodieFunction;
 import org.apache.hudi.util.StreamerUtil;
 
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -119,6 +120,11 @@ public class HoodieTableSink implements AppendStreamTableSink<RowData>, Partitio
   @Override
   public void setStaticPartition(Map<String, String> partitions) {
     // no operation
+  }
+
+  @VisibleForTesting
+  public Configuration getConf() {
+    return this.conf;
   }
 
   // Dummy sink function that does nothing.
