@@ -24,6 +24,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -393,6 +394,19 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
    * @param context HoodieEngineContext
    */
   public abstract void rollbackBootstrap(HoodieEngineContext context, String instantTime);
+
+
+  /**
+   * Schedule cleaning for the instant time.
+   *
+   * @param context HoodieEngineContext
+   * @param instantTime Instant Time for scheduling cleaning
+   * @param extraMetadata additional metadata to write into plan
+   * @return HoodieCleanerPlan, if there is anything to clean.
+   */
+  public abstract Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context,
+                                                             String instantTime,
+                                                             Option<Map<String, String>> extraMetadata);
 
   /**
    * Executes a new clean action.

@@ -497,8 +497,8 @@ private[hudi] object HoodieSparkSqlWriter {
   private def isAsyncCompactionEnabled(client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]],
                                        tableConfig: HoodieTableConfig,
                                        parameters: Map[String, String], configuration: Configuration) : Boolean = {
-    log.info(s"Config.isInlineCompaction ? ${client.getConfig.isInlineCompaction}")
-    if (asyncCompactionTriggerFnDefined && !client.getConfig.isInlineCompaction
+    log.info(s"Config.inlineCompactionEnabled ? ${client.getConfig.inlineCompactionEnabled}")
+    if (asyncCompactionTriggerFnDefined && !client.getConfig.inlineCompactionEnabled
       && parameters.get(ASYNC_COMPACT_ENABLE_OPT_KEY).exists(r => r.toBoolean)) {
       tableConfig.getTableType == HoodieTableType.MERGE_ON_READ
     } else {

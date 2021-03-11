@@ -200,7 +200,6 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
     result.setWriteStats(writeStats);
     // Finalize write
     finalizeWrite(instantTime, writeStats, result);
-
     try {
       LOG.info("Committing " + instantTime + ", action Type " + getCommitActionType());
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();

@@ -557,10 +557,6 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
       // Restore cannot be done until the metadata table is in sync. See HUDI-1502 for details
       client.syncTableMetadata();
-    }
-
-    // Enable metadata table and ensure it is synced
-    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
       client.restoreToInstant(restoreToInstant);
       assertFalse(metadata(client).isInSync());
 

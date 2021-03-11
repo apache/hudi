@@ -78,6 +78,12 @@ public abstract class AbstractUpgradeDowngrade {
   public abstract void run(HoodieTableMetaClient metaClient, HoodieTableVersion toVersion, HoodieWriteConfig config,
                          HoodieEngineContext context, String instantTime);
 
+  public boolean needsUpgradeOrDowngrade(HoodieTableVersion toVersion) {
+    HoodieTableVersion fromVersion = metaClient.getTableConfig().getTableVersion();
+    // Ensure no inflight commits & versions are same
+    return toVersion.versionCode() != fromVersion.versionCode();
+  }
+
   protected AbstractUpgradeDowngrade(HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieEngineContext context) {
     this.metaClient = metaClient;
     this.config = config;
@@ -90,7 +96,7 @@ public abstract class AbstractUpgradeDowngrade {
   protected void run(HoodieTableVersion toVersion, String instantTime) throws IOException {
     // Fetch version from property file and current version
     HoodieTableVersion fromVersion = metaClient.getTableConfig().getTableVersion();
-    if (toVersion.versionCode() == fromVersion.versionCode()) {
+    if (!needsUpgradeOrDowngrade(toVersion)) {
       return;
     }
 

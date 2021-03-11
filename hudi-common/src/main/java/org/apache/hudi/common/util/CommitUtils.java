@@ -29,6 +29,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -92,5 +93,29 @@ public class CommitUtils {
     LOG.info("Creating  metadata for " + operationType + " numWriteStats:" + writeStats.size()
         + "numReplaceFileIds:" + partitionToReplaceFileIds.values().stream().mapToInt(e -> e.size()).sum());
     return commitMetadata;
+  }
+
+  public static HashMap<String, String> getFileIdWithoutSuffixAndRelativePathsFromSpecificRecord(Map<String, List<org.apache.hudi.avro.model.HoodieWriteStat>>
+                                                                                       partitionToWriteStats) {
+    HashMap<String, String> fileIdToPath = new HashMap<>();
+    // list all partitions paths
+    for (Map.Entry<String, List<org.apache.hudi.avro.model.HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (org.apache.hudi.avro.model.HoodieWriteStat stat : entry.getValue()) {
+        fileIdToPath.put(stat.getFileId(), stat.getPath());
+      }
+    }
+    return fileIdToPath;
+  }
+
+  public static HashMap<String, String> getFileIdWithoutSuffixAndRelativePaths(Map<String, List<HoodieWriteStat>>
+      partitionToWriteStats) {
+    HashMap<String, String> fileIdToPath = new HashMap<>();
+    // list all partitions paths
+    for (Map.Entry<String, List<HoodieWriteStat>> entry : partitionToWriteStats.entrySet()) {
+      for (HoodieWriteStat stat : entry.getValue()) {
+        fileIdToPath.put(stat.getFileId(), stat.getPath());
+      }
+    }
+    return fileIdToPath;
   }
 }

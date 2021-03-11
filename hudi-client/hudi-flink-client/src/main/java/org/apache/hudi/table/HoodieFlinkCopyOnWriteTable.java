@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -43,6 +44,7 @@ import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.clean.FlinkCleanActionExecutor;
+import org.apache.hudi.table.action.clean.FlinkScheduleCleanActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkDeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertPreppedCommitActionExecutor;
@@ -263,6 +265,17 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   @Override
   public void rollbackBootstrap(HoodieEngineContext context, String instantTime) {
     throw new HoodieNotSupportedException("Bootstrap is not supported yet");
+  }
+
+  /**
+   * @param context HoodieEngineContext
+   * @param instantTime Instant Time for scheduling cleaning
+   * @param extraMetadata additional metadata to write into plan
+   * @return
+   */
+  @Override
+  public Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
+    return new FlinkScheduleCleanActionExecutor(context, config, this, instantTime, extraMetadata).execute();
   }
 
   @Override

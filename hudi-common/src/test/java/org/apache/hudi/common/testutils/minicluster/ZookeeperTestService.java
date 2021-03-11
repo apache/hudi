@@ -232,4 +232,8 @@ public class ZookeeperTestService {
     }
     return false;
   }
+
+  public String connectString() {
+    return bindIP + ":" + clientPort;
+  }
 }
