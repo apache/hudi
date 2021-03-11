@@ -90,7 +90,17 @@ public class StreamerUtil {
   }
 
   public static Schema getSourceSchema(org.apache.flink.configuration.Configuration conf) {
-    return new FilebasedSchemaProvider(conf).getSourceSchema();
+    if (conf.getOptional(FlinkOptions.READ_AVRO_SCHEMA_PATH).isPresent()) {
+      return new FilebasedSchemaProvider(conf).getSourceSchema();
+    } else if (conf.getOptional(FlinkOptions.READ_AVRO_SCHEMA).isPresent()) {
+      final String schemaStr = conf.get(FlinkOptions.READ_AVRO_SCHEMA);
+      return new Schema.Parser().parse(schemaStr);
+    } else {
+      final String errorMsg = String.format("Either option '%s' or '%s' "
+              + "should be specified for avro schema deserialization",
+          FlinkOptions.READ_AVRO_SCHEMA_PATH.key(), FlinkOptions.READ_AVRO_SCHEMA.key());
+      throw new HoodieException(errorMsg);
+    }
   }
 
   /**

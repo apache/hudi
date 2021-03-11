@@ -123,7 +123,7 @@ public class TestConfigurations {
   public static Configuration getDefaultConf(String tablePath) {
     Configuration conf = new Configuration();
     conf.setString(FlinkOptions.PATH, tablePath);
-    conf.setString(FlinkOptions.READ_SCHEMA_FILE_PATH,
+    conf.setString(FlinkOptions.READ_AVRO_SCHEMA_PATH,
         Objects.requireNonNull(Thread.currentThread()
             .getContextClassLoader().getResource("test_read_schema.avsc")).toString());
     conf.setString(FlinkOptions.TABLE_NAME, "TestHoodieTable");

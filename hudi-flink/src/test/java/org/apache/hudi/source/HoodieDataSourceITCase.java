@@ -42,7 +42,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -84,9 +83,6 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
 
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
-    options.put(FlinkOptions.READ_SCHEMA_FILE_PATH.key(),
-        Objects.requireNonNull(Thread.currentThread()
-            .getContextClassLoader().getResource("test_read_schema.avsc")).toString());
     options.put(FlinkOptions.READ_AS_STREAMING.key(), "true");
     options.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
@@ -113,9 +109,6 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
 
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
-    options.put(FlinkOptions.READ_SCHEMA_FILE_PATH.key(),
-        Objects.requireNonNull(Thread.currentThread()
-            .getContextClassLoader().getResource("test_read_schema.avsc")).toString());
     options.put(FlinkOptions.READ_AS_STREAMING.key(), "true");
     options.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
     String createHoodieTable = TestConfigurations.getCreateHoodieTableDDL("t1", options);
@@ -146,9 +139,6 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
 
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
-    options.put(FlinkOptions.READ_SCHEMA_FILE_PATH.key(),
-        Objects.requireNonNull(Thread.currentThread()
-            .getContextClassLoader().getResource("test_read_schema.avsc")).toString());
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     streamTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 select * from source";
@@ -163,9 +153,6 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   void testBatchWriteAndRead() {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
-    options.put(FlinkOptions.READ_SCHEMA_FILE_PATH.key(),
-        Objects.requireNonNull(Thread.currentThread()
-            .getContextClassLoader().getResource("test_read_schema.avsc")).toString());
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     batchTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 values\n"
