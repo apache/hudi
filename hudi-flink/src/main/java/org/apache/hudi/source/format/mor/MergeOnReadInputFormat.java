@@ -26,6 +26,7 @@ import org.apache.hudi.operator.FlinkOptions;
 import org.apache.hudi.source.format.FilePathUtils;
 import org.apache.hudi.source.format.FormatUtils;
 import org.apache.hudi.source.format.cow.ParquetColumnarRowSplitReader;
+import org.apache.hudi.source.format.cow.ParquetSplitReaderUtil;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StreamerUtil;
@@ -40,7 +41,6 @@ import org.apache.flink.api.common.io.statistics.BaseStatistics;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.io.InputSplitAssigner;
-import org.apache.hudi.source.format.cow.ParquetSplitReaderUtil;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
@@ -238,7 +238,7 @@ public class MergeOnReadInputFormat
   private ParquetColumnarRowSplitReader getReader(String path, int[] requiredPos) throws IOException {
     // generate partition specs.
     LinkedHashMap<String, String> partSpec = FilePathUtils.extractPartitionKeyValues(
-        new org.apache.flink.core.fs.Path(path).getParent(),
+        new org.apache.hadoop.fs.Path(path).getParent(),
         this.conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITION),
         this.conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(","));
     LinkedHashMap<String, Object> partObjects = new LinkedHashMap<>();

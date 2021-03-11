@@ -20,7 +20,6 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -109,7 +108,7 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
    * @throws IOException if error occurs
    */
   private void setUpWriteStatus() throws IOException {
-    long fileSizeInBytes = FSUtils.getFileSize(fs, path);
+    long fileSizeInBytes = fileWriter.getBytesWritten();
     long incFileSizeInBytes = fileSizeInBytes - lastFileSize;
     this.lastFileSize = fileSizeInBytes;
     HoodieWriteStat stat = new HoodieWriteStat();
