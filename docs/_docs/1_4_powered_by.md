@@ -168,6 +168,7 @@ You can check out [our blog pages](https://hudi.apache.org/blog.html) for conten
 15. ["Building High-Performance Data Lake Using Apache Hudi and Alluxio at T3Go"](https://www.alluxio.io/blog/building-high-performance-data-lake-using-apache-hudi-and-alluxio-at-t3go/)
 16. ["Data Lake Change Capture using Apache Hudi & Amazon AMS/EMR Part 2"](https://towardsdatascience.com/data-lake-change-data-capture-cdc-using-apache-hudi-on-amazon-emr-part-2-process-65e4662d7b4b)
 17. ["Building a large scale transactional data lake at Uber using Apache Hudi"](https://eng.uber.com/apache-hudi-graduation/) - Engineering Blog By Nishith Agarwal
+18. ["Data Lakehouse: Building the Next Generation of Data Lakes using Apache Hudi"](https://medium.com/slalom-build/data-lakehouse-building-the-next-generation-of-data-lakes-using-apache-hudi-41550f62f5f) - Slalom Build blog By Ryan D'Souza and Brandon Stanley
 
 ## Powered by
 
