@@ -47,6 +47,12 @@ public class InstantTimeFormatter {
     int length = commitTime.length();
     switch (length) {
       // For second granularity instant times parsing in V1
+      /**
+       * 13 length is for {@link org.apache.hudi.metadata.HoodieTableMetadata#SOLO_COMMIT_TIMESTAMP}
+       * This value needs to be less than {@link org.apache.hudi.common.table.timeline.HoodieTimeline#INIT_INSTANT_TS}
+       * so we carry this logic forward.
+       */
+      case 13:
       case 14:
         return COMMIT_FORMATTER_V1.parse(commitTime);
       // For milliseconds granularity instant times parsing in V2

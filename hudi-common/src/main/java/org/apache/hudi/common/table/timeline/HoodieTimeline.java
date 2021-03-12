@@ -86,11 +86,11 @@ public interface HoodieTimeline extends Serializable {
   String INVALID_INSTANT_TS = "0";
 
   // Instant corresponding to pristine state of the table after its creation
-  String INIT_INSTANT_TS = "00000000000000";
+  String INIT_INSTANT_TS = "00000000000000000";
   // Instant corresponding to METADATA bootstrapping of table/partitions
-  String METADATA_BOOTSTRAP_INSTANT_TS = "00000000000001";
+  String METADATA_BOOTSTRAP_INSTANT_TS = "00000000000001000";
   // Instant corresponding to full bootstrapping of table/partitions
-  String FULL_BOOTSTRAP_INSTANT_TS = "00000000000002";
+  String FULL_BOOTSTRAP_INSTANT_TS = "00000000000002000";
 
   /**
    * Filter this timeline to just include the in-flights.
