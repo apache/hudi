@@ -20,14 +20,12 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -98,14 +96,7 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O> extends H
     needBootStrap = false;
     // flush any remaining records to disk
     appendDataAndDeleteBlocks(header);
-    try {
-      for (WriteStatus status: statuses) {
-        long logFileSize = FSUtils.getFileSize(fs, new Path(config.getBasePath(), status.getStat().getPath()));
-        status.getStat().setFileSizeInBytes(logFileSize);
-      }
-    } catch (IOException e) {
-      throw new HoodieUpsertException("Failed to get file size for append handle", e);
-    }
+    // need to fix that the incremental write size in bytes may be lost
     List<WriteStatus> ret = new ArrayList<>(statuses);
     statuses.clear();
     return ret;
