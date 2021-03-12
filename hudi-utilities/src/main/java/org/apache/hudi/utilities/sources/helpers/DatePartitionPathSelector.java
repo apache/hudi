@@ -172,7 +172,6 @@ public class DatePartitionPathSelector extends DFSPathSelector {
    * 'CURRENT_DATE'. Parallelizes listing by leveraging HoodieSparkEngineContext's methods.
    */
   public List<String> pruneDatePartitionPaths(HoodieSparkEngineContext context, FileSystem fs, String rootPath, LocalDate currentDate) {
-    LocalDate fromDate = currentDate.minusDays(numPrevDaysToList);
     List<String> partitionPaths = new ArrayList<>();
     // get all partition paths before date partition level
     partitionPaths.add(rootPath);
@@ -198,6 +197,7 @@ public class DatePartitionPathSelector extends DFSPathSelector {
     // Prune date partitions to last few days
     return context.getJavaSparkContext().parallelize(partitionPaths, partitionsListParallelism)
         .filter(s -> {
+          LocalDate fromDate = currentDate.minusDays(numPrevDaysToList);
           String[] splits = s.split("/");
           String datePartition = splits[splits.length - 1];
           LocalDate partitionDate;
