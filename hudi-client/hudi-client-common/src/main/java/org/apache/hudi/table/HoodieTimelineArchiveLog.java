@@ -412,8 +412,10 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
         break;
       }
       case HoodieTimeline.ROLLBACK_ACTION: {
-        archivedMetaWrapper.setHoodieRollbackMetadata(TimelineMetadataUtils.deserializeAvroMetadata(
-            commitTimeline.getInstantDetails(hoodieInstant).get(), HoodieRollbackMetadata.class));
+        if (hoodieInstant.isCompleted()) {
+          archivedMetaWrapper.setHoodieRollbackMetadata(TimelineMetadataUtils.deserializeAvroMetadata(
+                  commitTimeline.getInstantDetails(hoodieInstant).get(), HoodieRollbackMetadata.class));
+        }
         archivedMetaWrapper.setActionType(ActionType.rollback.name());
         break;
       }

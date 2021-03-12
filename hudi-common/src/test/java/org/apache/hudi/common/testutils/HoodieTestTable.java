@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -65,6 +66,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightCom
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightCompaction;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightDeltaCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightReplaceCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightRollbackFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createMarkerFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createReplaceCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCleanFile;
@@ -72,6 +74,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCo
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCompaction;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedDeltaCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedReplaceCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createRollbackFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
 
 public class HoodieTestTable {
@@ -431,6 +434,21 @@ public class HoodieTestTable {
 
   public FileStatus[] listAllFilesInTempFolder() throws IOException {
     return FileSystemTestUtils.listRecursive(fs, new Path(Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME).toString())).toArray(new FileStatus[0]);
+  }
+
+  public HoodieTestTable addInflightRollback(String instantTime) throws IOException {
+    createInflightRollbackFile(basePath, instantTime);
+    currentInstantTime = instantTime;
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    return this;
+  }
+
+  public HoodieTestTable addRollback(String instantTime, HoodieRollbackMetadata rollbackMetadata) throws IOException {
+    createInflightRollbackFile(basePath, instantTime);
+    createRollbackFile(basePath, instantTime, rollbackMetadata);
+    currentInstantTime = instantTime;
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    return this;
   }
 
   public static class HoodieTestTableException extends RuntimeException {
