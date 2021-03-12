@@ -49,7 +49,6 @@ import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.io.CollectionInputFormat;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.core.fs.Path;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
@@ -70,6 +69,7 @@ import org.apache.flink.table.sources.TableSource;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -166,7 +166,7 @@ public class HoodieTableSource implements
         (TypeInformation<RowData>) TypeInfoDataTypeConverter.fromDataTypeToTypeInfo(getProducedDataType());
     if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING)) {
       StreamReadMonitoringFunction monitoringFunction = new StreamReadMonitoringFunction(
-          conf, path, metaClient, maxCompactionMemoryInBytes);
+          conf, FilePathUtils.toFlinkPath(path), metaClient, maxCompactionMemoryInBytes);
       OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) getInputFormat(true));
       SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, "streaming_source")
           .setParallelism(1)
@@ -213,7 +213,8 @@ public class HoodieTableSource implements
 
   @Override
   public List<Map<String, String>> getPartitions() {
-    return FilePathUtils.getPartitions(path, conf, partitionKeys, defaultPartName);
+    return FilePathUtils.getPartitions(path, hadoopConf, partitionKeys, defaultPartName,
+        conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITION));
   }
 
   @Override
@@ -253,7 +254,8 @@ public class HoodieTableSource implements
 
   private List<MergeOnReadInputSplit> buildFileIndex(Path[] paths) {
     FileStatus[] fileStatuses = Arrays.stream(paths)
-        .flatMap(path -> Arrays.stream(FilePathUtils.getHadoopFileStatusRecursively(path, 1, hadoopConf)))
+        .flatMap(path ->
+            Arrays.stream(FilePathUtils.getFileStatusRecursively(path, 1, hadoopConf)))
         .toArray(FileStatus[]::new);
     if (fileStatuses.length == 0) {
       throw new HoodieException("No files found for reading in user provided path.");
@@ -281,9 +283,7 @@ public class HoodieTableSource implements
     } else {
       // all the files are logs
       return Arrays.stream(paths).map(partitionPath -> {
-        String relPartitionPath = FSUtils.getRelativePartitionPath(
-            new org.apache.hadoop.fs.Path(path.toUri()),
-            new org.apache.hadoop.fs.Path(partitionPath.toUri()));
+        String relPartitionPath = FSUtils.getRelativePartitionPath(path, partitionPath);
         return fsView.getLatestMergedFileSlicesBeforeOrOn(relPartitionPath, latestCommit)
             .map(fileSlice -> {
               Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
@@ -351,14 +351,14 @@ public class HoodieTableSource implements
               inputSplits);
           return new MergeOnReadInputFormat(
               this.conf,
-              paths,
+              FilePathUtils.toFlinkPaths(paths),
               hoodieTableState,
               rowDataType.getChildren(), // use the explicit fields data type because the AvroSchemaConverter is not very stable.
               "default",
               this.limit);
         case COPY_ON_WRITE:
           FileInputFormat<RowData> format = new CopyOnWriteInputFormat(
-              paths,
+              FilePathUtils.toFlinkPaths(paths),
               this.schema.getFieldNames(),
               this.schema.getFieldDataTypes(),
               this.requiredPos,
@@ -398,7 +398,8 @@ public class HoodieTableSource implements
   public Path[] getReadPaths() {
     return partitionKeys.isEmpty()
         ? new Path[] {path}
-        : FilePathUtils.partitionPath2ReadPath(path, conf, partitionKeys, getOrFetchPartitions());
+        : FilePathUtils.partitionPath2ReadPath(path, partitionKeys, getOrFetchPartitions(),
+        conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITION));
   }
 
   private static class LatestFileFilter extends FilePathFilter {
@@ -409,8 +410,8 @@ public class HoodieTableSource implements
     }
 
     @Override
-    public boolean filterPath(Path filePath) {
-      return !this.hoodieFilter.accept(new org.apache.hadoop.fs.Path(filePath.toUri()));
+    public boolean filterPath(org.apache.flink.core.fs.Path filePath) {
+      return !this.hoodieFilter.accept(new Path(filePath.toUri()));
     }
   }
 }

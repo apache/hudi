@@ -274,6 +274,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     if (!stat.getLogFiles().contains(result.logFile().getFileName())) {
       stat.addLogFiles(result.logFile().getFileName());
     }
+    stat.setFileSizeInBytes(result.size());
   }
 
   private void updateRuntimeStats(HoodieDeltaWriteStat stat) {
@@ -304,6 +305,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     } else if (stat.getPath().endsWith(result.logFile().getFileName())) {
       // append/continued writing to the same log file
       stat.setLogOffset(Math.min(stat.getLogOffset(), result.offset()));
+      stat.setFileSizeInBytes(stat.getFileSizeInBytes() + result.size());
       accumulateWriteCounts(stat, result);
       accumulateRuntimeStats(stat);
     } else {

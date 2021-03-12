@@ -22,14 +22,16 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.operator.FlinkOptions;
 
 import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.core.fs.FileStatus;
-import org.apache.flink.core.fs.FileSystem;
-import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.api.TableException;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -77,14 +79,14 @@ public class FilePathUtils {
   /**
    * Make partition path from partition spec.
    *
-   * @param partitionKVs       The partition key value mapping
-   * @param hiveStylePartition Whether the partition path is with Hive style,
-   *                           e.g. {partition key} = {partition value}
+   * @param partitionKVs  The partition key value mapping
+   * @param hivePartition Whether the partition path is with Hive style,
+   *                      e.g. {partition key} = {partition value}
    * @return an escaped, valid partition name
    */
   public static String generatePartitionPath(
       LinkedHashMap<String, String> partitionKVs,
-      boolean hiveStylePartition) {
+      boolean hivePartition) {
     if (partitionKVs.isEmpty()) {
       return "";
     }
@@ -92,16 +94,16 @@ public class FilePathUtils {
     int i = 0;
     for (Map.Entry<String, String> e : partitionKVs.entrySet()) {
       if (i > 0) {
-        suffixBuf.append(Path.SEPARATOR);
+        suffixBuf.append(File.separator);
       }
-      if (hiveStylePartition) {
+      if (hivePartition) {
         suffixBuf.append(escapePathName(e.getKey()));
         suffixBuf.append('=');
       }
       suffixBuf.append(escapePathName(e.getValue()));
       i++;
     }
-    suffixBuf.append(Path.SEPARATOR);
+    suffixBuf.append(File.separator);
     return suffixBuf.toString();
   }
 
@@ -235,7 +237,11 @@ public class FilePathUtils {
     return ret;
   }
 
-  private static FileStatus[] getFileStatusRecursively(Path path, int expectLevel, FileSystem fs) {
+  public static FileStatus[] getFileStatusRecursively(Path path, int expectLevel, Configuration conf) {
+    return getFileStatusRecursively(path, expectLevel, FSUtils.getFs(path.toString(), conf));
+  }
+
+  public static FileStatus[] getFileStatusRecursively(Path path, int expectLevel, FileSystem fs) {
     ArrayList<FileStatus> result = new ArrayList<>();
 
     try {
@@ -268,54 +274,6 @@ public class FilePathUtils {
 
   private static boolean isHiddenFile(FileStatus fileStatus) {
     String name = fileStatus.getPath().getName();
-    return name.startsWith("_") || name.startsWith(".");
-  }
-
-  /**
-   * Same as getFileStatusRecursively but returns hadoop {@link org.apache.hadoop.fs.FileStatus}s.
-   */
-  public static org.apache.hadoop.fs.FileStatus[] getHadoopFileStatusRecursively(
-      Path path, int expectLevel, Configuration hadoopConf) {
-    ArrayList<org.apache.hadoop.fs.FileStatus> result = new ArrayList<>();
-
-    org.apache.hadoop.fs.Path hadoopPath = new org.apache.hadoop.fs.Path(path.toUri());
-    org.apache.hadoop.fs.FileSystem fs = FSUtils.getFs(path.getPath(), hadoopConf);
-
-    try {
-      org.apache.hadoop.fs.FileStatus fileStatus = fs.getFileStatus(hadoopPath);
-      listStatusRecursivelyV2(fs, fileStatus, 0, expectLevel, result);
-    } catch (IOException ignore) {
-      return new org.apache.hadoop.fs.FileStatus[0];
-    }
-
-    return result.toArray(new org.apache.hadoop.fs.FileStatus[0]);
-  }
-
-  private static void listStatusRecursivelyV2(
-      org.apache.hadoop.fs.FileSystem fs,
-      org.apache.hadoop.fs.FileStatus fileStatus,
-      int level,
-      int expectLevel,
-      List<org.apache.hadoop.fs.FileStatus> results) throws IOException {
-    if (isHiddenFileV2(fileStatus)) {
-      // do nothing
-      return;
-    }
-
-    if (expectLevel == level) {
-      results.add(fileStatus);
-      return;
-    }
-
-    if (fileStatus.isDirectory()) {
-      for (org.apache.hadoop.fs.FileStatus stat : fs.listStatus(fileStatus.getPath())) {
-        listStatusRecursivelyV2(fs, stat, level + 1, expectLevel, results);
-      }
-    }
-  }
-
-  private static boolean isHiddenFileV2(org.apache.hadoop.fs.FileStatus fileStatus) {
-    String name = fileStatus.getPath().getName();
     // the log files is hidden file
     return name.startsWith("_") || name.startsWith(".") && !name.contains(".log.");
   }
@@ -333,21 +291,23 @@ public class FilePathUtils {
    * <p>The return list should be [{key1:val1, key2:val2, key3:val3}, {key1:val4, key2:val5, key3:val6}].
    *
    * @param path The base path
-   * @param conf The configuration
+   * @param hadoopConf The hadoop configuration
    * @param partitionKeys The partition key list
    * @param defaultParName The default partition name for nulls
+   * @param hivePartition Whether the partition path is in Hive style
    */
   public static List<Map<String, String>> getPartitions(
       Path path,
-      org.apache.flink.configuration.Configuration conf,
+      Configuration hadoopConf,
       List<String> partitionKeys,
-      String defaultParName) {
+      String defaultParName,
+      boolean hivePartition) {
     try {
       return FilePathUtils
           .searchPartKeyValueAndPaths(
-              path.getFileSystem(),
+              FSUtils.getFs(path.toString(), hadoopConf),
               path,
-              conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITION),
+              hivePartition,
               partitionKeys.toArray(new String[0]))
           .stream()
           .map(tuple2 -> tuple2.f0)
@@ -386,21 +346,23 @@ public class FilePathUtils {
    * Returns all the file paths that is the parents of the data files.
    *
    * @param path The base path
-   * @param conf The configuration
+   * @param conf The Flink configuration
+   * @param hadoopConf The hadoop configuration
    * @param partitionKeys The partition key list
-   * @param defaultParName The default partition name for nulls
    */
   public static Path[] getReadPaths(
       Path path,
       org.apache.flink.configuration.Configuration conf,
-      List<String> partitionKeys,
-      String defaultParName) {
+      Configuration hadoopConf,
+      List<String> partitionKeys) {
     if (partitionKeys.isEmpty()) {
       return new Path[] {path};
     } else {
+      final String defaultParName = conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME);
+      final boolean hivePartition = conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITION);
       List<Map<String, String>> partitionPaths =
-          getPartitions(path, conf, partitionKeys, defaultParName);
-      return partitionPath2ReadPath(path, conf, partitionKeys, partitionPaths);
+          getPartitions(path, hadoopConf, partitionKeys, defaultParName, hivePartition);
+      return partitionPath2ReadPath(path, partitionKeys, partitionPaths, hivePartition);
     }
   }
 
@@ -408,21 +370,37 @@ public class FilePathUtils {
    * Transforms the given partition key value mapping to read paths.
    *
    * @param path The base path
-   * @param conf The hadoop configuration
    * @param partitionKeys The partition key list
    * @param partitionPaths The partition key value mapping
+   * @param hivePartition Whether the partition path is in Hive style
    *
    * @see #getReadPaths
    */
   public static Path[] partitionPath2ReadPath(
       Path path,
-      org.apache.flink.configuration.Configuration conf,
       List<String> partitionKeys,
-      List<Map<String, String>> partitionPaths) {
+      List<Map<String, String>> partitionPaths,
+      boolean hivePartition) {
     return partitionPaths.stream()
         .map(m -> validateAndReorderPartitions(m, partitionKeys))
-        .map(kvs -> FilePathUtils.generatePartitionPath(kvs, conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITION)))
+        .map(kvs -> FilePathUtils.generatePartitionPath(kvs, hivePartition))
         .map(n -> new Path(path, n))
         .toArray(Path[]::new);
+  }
+
+  /**
+   * Transforms the array of Hadoop paths to Flink paths.
+   */
+  public static org.apache.flink.core.fs.Path[] toFlinkPaths(Path[] paths) {
+    return Arrays.stream(paths)
+        .map(p -> toFlinkPath(p))
+        .toArray(org.apache.flink.core.fs.Path[]::new);
+  }
+
+  /**
+   * Transforms the Hadoop path to Flink path.
+   */
+  public static org.apache.flink.core.fs.Path toFlinkPath(Path path) {
+    return new org.apache.flink.core.fs.Path(path.toUri());
   }
 }
