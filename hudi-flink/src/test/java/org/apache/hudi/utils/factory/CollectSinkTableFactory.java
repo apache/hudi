@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utils.factory;
 
-import org.apache.hudi.operator.utils.TestConfigurations;
+import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;

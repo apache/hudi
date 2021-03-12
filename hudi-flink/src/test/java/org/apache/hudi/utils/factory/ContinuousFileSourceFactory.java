@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utils.factory;
 
-import org.apache.hudi.operator.FlinkOptions;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.utils.source.ContinuousFileSource;
 
 import org.apache.flink.configuration.Configuration;
