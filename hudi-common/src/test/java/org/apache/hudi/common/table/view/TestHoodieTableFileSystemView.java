@@ -1322,7 +1322,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     replacedFileIds.add(fileId1);
     partitionToReplaceFileIds.put(partitionPath1, replacedFileIds);
     HoodieCommitMetadata commitMetadata =
-        CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds, Option.empty(), WriteOperationType.INSERT_OVERWRITE, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
+        CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds, Option.empty(), WriteOperationType.INSERT_OVERWRITE, "", HoodieTimeline.REPLACE_COMMIT_ACTION, false, metaClient);
     commitTimeline = metaClient.getActiveTimeline();
     HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, commitTime2);
     saveAsComplete(commitTimeline, instant2, Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
@@ -1407,7 +1407,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     replacedFileIdsP2.add(fileId4);
     partitionToReplaceFileIds.put(partitionPath2, replacedFileIdsP2);
     HoodieCommitMetadata commitMetadata =
-        CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds, Option.empty(), WriteOperationType.INSERT_OVERWRITE, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
+        CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds, Option.empty(), WriteOperationType.INSERT_OVERWRITE, "", HoodieTimeline.REPLACE_COMMIT_ACTION, false, metaClient);
 
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
     HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, commitTime1);

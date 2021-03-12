@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -29,10 +30,13 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -106,7 +110,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                            TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
+    super(config, instantTime, partitionPath, fileId, hoodieTable, getWriterSchemaIncludingAndExcludingMetadataPair(config, hoodieTable), taskContextSupplier);
     init(fileId, recordItr);
     init(fileId, partitionPath, hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).get());
   }
@@ -121,6 +125,22 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     this.keyToNewRecords = keyToNewRecords;
     this.useWriterSchema = true;
     init(fileId, this.partitionPath, dataFileToBeMerged);
+  }
+
+  protected static Pair<Schema, Schema> getWriterSchemaIncludingAndExcludingMetadataPair(HoodieWriteConfig config, HoodieTable hoodieTable) {
+    Schema originalSchema = new Schema.Parser().parse(config.getSchema());
+    Schema hoodieSchema = HoodieAvroUtils.addMetadataFields(originalSchema);
+    boolean updatePartialFields = config.updatePartialFields();
+    if (updatePartialFields) {
+      try {
+        TableSchemaResolver resolver = new TableSchemaResolver(hoodieTable.getMetaClient());
+        Schema lastSchema = resolver.getTableAvroSchema();
+        config.setLastSchema(lastSchema.toString());
+      } catch (Exception e) {
+        // Ignore exception.
+      }
+    }
+    return Pair.of(originalSchema, hoodieSchema);
   }
 
   @Override
@@ -144,6 +164,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
    */
   private void init(String fileId, String partitionPath, HoodieBaseFile baseFileToMerge) {
     LOG.info("partitionPath:" + partitionPath + ", fileId to be merged:" + fileId);
+    writerSchemaWithMetafields = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
     this.baseFileToMerge = baseFileToMerge;
     this.writtenRecordKeys = new HashSet<>();
     writeStatus.setStat(new HoodieWriteStat());
@@ -264,6 +285,13 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       writeStatus.markFailure(hoodieRecord, e, recordMetadata);
     }
     return false;
+  }
+
+  protected GenericRecord rewriteRecord(GenericRecord record) {
+    if (config.updatePartialFields() && !StringUtils.isNullOrEmpty(config.getLastSchema())) {
+      return HoodieAvroUtils.rewriteRecord(record, new Schema.Parser().parse(config.getLastSchema()));
+    }
+    return HoodieAvroUtils.rewriteRecord(record, writerSchemaWithMetafields);
   }
 
   /**

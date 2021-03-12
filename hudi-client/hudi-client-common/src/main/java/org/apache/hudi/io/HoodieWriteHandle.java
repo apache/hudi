@@ -56,7 +56,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   private static final Logger LOG = LogManager.getLogger(HoodieWriteHandle.class);
 
   protected final Schema writerSchema;
-  protected final Schema writerSchemaWithMetafields;
+  protected Schema writerSchemaWithMetafields;
   protected HoodieTimer timer;
   protected WriteStatus writeStatus;
   protected final String partitionPath;

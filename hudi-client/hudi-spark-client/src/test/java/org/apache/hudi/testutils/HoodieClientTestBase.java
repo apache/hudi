@@ -62,6 +62,8 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.PARTIAL_TRIP_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -97,6 +99,14 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
     return getConfigBuilder(indexType).build();
   }
 
+  public HoodieWriteConfig getConfig(boolean updatePartialFields, boolean usePartialSchema) {
+    if (usePartialSchema) {
+      return getConfigBuilder(updatePartialFields, PARTIAL_TRIP_SCHEMA).build();
+    } else {
+      return getConfigBuilder(updatePartialFields, TRIP_SCHEMA).build();
+    }
+  }
+
   /**
    * Get Config builder with default configs set.
    *
@@ -112,7 +122,11 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
    * @return Config Builder
    */
   public HoodieWriteConfig.Builder getConfigBuilder(HoodieFailedWritesCleaningPolicy cleaningPolicy) {
-    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, IndexType.BLOOM, cleaningPolicy);
+    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, IndexType.BLOOM, cleaningPolicy, false);
+  }
+
+  public HoodieWriteConfig.Builder getConfigBuilder(boolean updatePartialFields, String schemaStr) {
+    return getConfigBuilder(schemaStr, IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER, updatePartialFields);
   }
 
   /**
@@ -121,15 +135,15 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
    * @return Config Builder
    */
   public HoodieWriteConfig.Builder getConfigBuilder(IndexType indexType) {
-    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, indexType, HoodieFailedWritesCleaningPolicy.EAGER);
+    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, indexType, HoodieFailedWritesCleaningPolicy.EAGER, false);
   }
 
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr) {
-    return getConfigBuilder(schemaStr, IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER);
+    return getConfigBuilder(schemaStr, IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER, false);
   }
 
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, IndexType indexType) {
-    return getConfigBuilder(schemaStr, indexType, HoodieFailedWritesCleaningPolicy.EAGER);
+    return getConfigBuilder(schemaStr, indexType, HoodieFailedWritesCleaningPolicy.EAGER, false);
   }
 
   /**
@@ -138,11 +152,12 @@ public class HoodieClientTestBase extends HoodieClientTestHarness {
    * @return Config Builder
    */
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, IndexType indexType,
-                                                    HoodieFailedWritesCleaningPolicy cleaningPolicy) {
+                                                    HoodieFailedWritesCleaningPolicy cleaningPolicy, boolean updatePartialFields) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)
+        .withUpdatePartialFields(updatePartialFields)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().withFailedWritesCleaningPolicy(cleaningPolicy)
             .compactionSmallFileSize(1024 * 1024).build())
