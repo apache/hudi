@@ -28,16 +28,14 @@ import java.util.Date;
 public class InstantTimeFormatter {
 
   public static final SimpleDateFormat COMMIT_FORMATTER_V1 = new SimpleDateFormat("yyyyMMddHHmmss");
-  public static final SimpleDateFormat COMMIT_FORMATTER_V2 = new SimpleDateFormat("yyyyMMddHHmmssSSS");
   public static Integer latestVersion = TimelineLayoutVersion.CURR_VERSION;
 
   public String format(Date date) {
     switch (latestVersion) {
       case 0:
       case 1:
-        return COMMIT_FORMATTER_V1.format(date);
       case 2:
-        return COMMIT_FORMATTER_V2.format(date);
+        return COMMIT_FORMATTER_V1.format(date);
       default:
         throw new UnsupportedOperationException();
     }
@@ -55,9 +53,6 @@ public class InstantTimeFormatter {
       case 13:
       case 14:
         return COMMIT_FORMATTER_V1.parse(commitTime);
-      // For milliseconds granularity instant times parsing in V2
-      case 17:
-        return COMMIT_FORMATTER_V2.parse(commitTime);
       default:
         throw new UnsupportedOperationException();
     }
