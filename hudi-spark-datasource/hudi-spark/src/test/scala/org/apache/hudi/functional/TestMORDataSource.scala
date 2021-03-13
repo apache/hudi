@@ -584,7 +584,6 @@ class TestMORDataSource extends HoodieClientTestBase {
       .load(basePath + "/*/*/*/*")
 
     hudiSnapshotDF1.createOrReplaceTempView("mor_test_partition_table");
-    hudiSnapshotDF1.printSchema()
     val sql = "select tip_history,year,month,day from mor_test_partition_table where year < '2016' and month > '01'"
 
     val plan = spark.sql(sql).queryExecution.sparkPlan
@@ -613,6 +612,43 @@ class TestMORDataSource extends HoodieClientTestBase {
     assertEquals(2,fileIndexPaths.length)
     assertTrue(fileIndexPaths.get(0).contains("year=2015/month=03"))
     assertTrue(fileIndexPaths.get(1).contains("year=2015/month=03"))
+  }
+
+  @Test
+  def testPrunePartitionsWithMisplacedReturnData() {
+    spark.conf.set("spark.sql.parquet.enableVectorizedReader", true)
+    assertTrue(spark.conf.get("spark.sql.parquet.enableVectorizedReader").toBoolean)
+    // First Operation:
+    // Producing parquet files to three hive style partitions like year=2015/month=03/day=16 from split partition column value (2015/03/16).
+    // SNAPSHOT view on MOR table with parquet files only.
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY, classOf[InferPartitionsKeyGeneratorForTesting].getName)
+      .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY, "true")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+    val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .option("basePath", basePath)
+      .option("mergeSchema", "true")
+      .load(basePath + "/*/*/*/*")
+
+    hudiSnapshotDF1.createOrReplaceTempView("mor_test_partition_table");
+    //hudiSnapshotDF1.printSchema()
+
+    // return correct data
+    val dataSchema_partitionSchema_sql = "select tip_history,year,month,day from mor_test_partition_table where year < '2016' and month > '01'"
+    spark.sql(dataSchema_partitionSchema_sql).show(1)
+
+    // return misplaced data
+    val partitionSchema_dataSchema_sql = "select year,tip_history,month,day from mor_test_partition_table where year < '2016' and month > '01'"
+    spark.sql(partitionSchema_dataSchema_sql).show(1)
   }
 
   @Test
