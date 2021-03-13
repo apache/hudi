@@ -201,8 +201,7 @@ private[hudi] object HoodieSparkSqlWriter {
           }
 
           val tableMetaClient = HoodieTableMetaClient.builder.setConf(sparkContext.hadoopConfiguration).setBasePath(path.get).build()
-          val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
-          val tableSchema = tableSchemaResolver.getTableAvroSchemaWithoutMetadataFields
+          val tableSchema = new TableSchemaResolver(tableMetaClient).getTableAvroSchemaWithoutMetadataFields
 
           // Create a HoodieWriteClient & issue the delete.
           val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,

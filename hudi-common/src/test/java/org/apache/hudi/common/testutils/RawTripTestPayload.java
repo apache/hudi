@@ -94,6 +94,11 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     }
   }
 
+  public static List<String> recordsToDeleteStrings(List<HoodieRecord> records) {
+    return records.stream().map(entry -> "{\"_row_key\":\"" + entry.getRecordKey() + "\",\"partition\":\""
+        + entry.getPartitionPath() + "\"}").collect(Collectors.toList());
+  }
+
   public String getPartitionPath() {
     return partitionPath;
   }

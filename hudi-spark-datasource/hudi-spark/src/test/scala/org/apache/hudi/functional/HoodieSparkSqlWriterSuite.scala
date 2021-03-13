@@ -20,7 +20,6 @@ package org.apache.hudi.functional
 import java.time.Instant
 import java.util
 import java.util.{Collections, Date, UUID}
-
 import org.apache.commons.io.FileUtils
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.{SparkRDDWriteClient, TestBootstrap}
@@ -149,7 +148,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
       }
 
       // fetch all records from parquet files generated from write to hudi
-      val actualDf = sqlContext.read.parquet(fullPartitionPaths(0), fullPartitionPaths(1), fullPartitionPaths(2))
+      val actualDf = sqlContext.read.parquet(fullPartitionPaths:_*)
 
       // remove metadata columns so that expected and actual DFs can be compared as is
       val trimmedDf = actualDf.drop(HoodieRecord.HOODIE_META_COLUMNS.get(0)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(1))
