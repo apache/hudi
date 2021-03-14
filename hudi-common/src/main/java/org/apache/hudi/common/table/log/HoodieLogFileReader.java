@@ -104,21 +104,19 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
    * @return the right {@link FSDataInputStream} as required.
    */
   private FSDataInputStream getFSDataInputStream(FSDataInputStream fsDataInputStream, FileSystem fs, int bufferSize) {
-    FSDataInputStream toReturnInputStream;
     if (FSUtils.isGCSFileSystem(fs)) {
       // in GCS FS, we might need to interceptor seek offsets as we might get EOF exception
-      toReturnInputStream = new SchemeAwareFSDataInputStream(getFSDataInputStreamForGCSFs(fsDataInputStream, bufferSize), true);
-    } else {
-      if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
-        toReturnInputStream = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
-            new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
-      } else {
-        // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream
-        // need to wrap in another BufferedFSInputStream the make bufferSize work?
-        toReturnInputStream = fsDataInputStream;
-      }
+      return new SchemeAwareFSDataInputStream(getFSDataInputStreamForGCS(fsDataInputStream, bufferSize), true);
     }
-    return toReturnInputStream;
+
+    if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
+      return new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
+          new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
+    }
+
+    // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream
+    // need to wrap in another BufferedFSInputStream the make bufferSize work?
+    return fsDataInputStream;
   }
 
   /**
@@ -128,25 +126,24 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
    * @param bufferSize buffer size to be used.
    * @return the right {@link FSDataInputStream} as required.
    */
-  private FSDataInputStream getFSDataInputStreamForGCSFs(FSDataInputStream fsDataInputStream, int bufferSize) {
-    FSDataInputStream toReturnInputStream;
-    // incase of GCS FS, there are two flows. a. fsDataInputStream.getWrappedStream() instanceof FSInputStream
+  private FSDataInputStream getFSDataInputStreamForGCS(FSDataInputStream fsDataInputStream, int bufferSize) {
+    // incase of GCS FS, there are two flows.
+    // a. fsDataInputStream.getWrappedStream() instanceof FSInputStream
     // b. fsDataInputStream.getWrappedStream() not an instanceof FSInputStream, but an instance of FSDataInputStream.
-    // (a) is handled in the first if block nad (b) is handled in the else if block. If not, we fallback to original fsDataInputStream
+    // (a) is handled in the first if block and (b) is handled in the second if block. If not, we fallback to original fsDataInputStream
     if (fsDataInputStream.getWrappedStream() instanceof FSInputStream) {
-      toReturnInputStream = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
+      return new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
           new BufferedFSInputStream((FSInputStream) fsDataInputStream.getWrappedStream(), bufferSize)));
-    } else if (fsDataInputStream.getWrappedStream() instanceof FSDataInputStream
+    }
+
+    if (fsDataInputStream.getWrappedStream() instanceof FSDataInputStream
         && ((FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream() instanceof FSInputStream) {
       FSInputStream inputStream = (FSInputStream)((FSDataInputStream) fsDataInputStream.getWrappedStream()).getWrappedStream();
-      toReturnInputStream = new TimedFSDataInputStream(logFile.getPath(), new FSDataInputStream(
-          new BufferedFSInputStream(inputStream, bufferSize)));
-    } else {
-      // fsDataInputStream.getWrappedStream() maybe a BufferedFSInputStream
-      // need to wrap in another BufferedFSInputStream the make bufferSize work?
-      toReturnInputStream = fsDataInputStream;
+      return new TimedFSDataInputStream(logFile.getPath(),
+          new FSDataInputStream(new BufferedFSInputStream(inputStream, bufferSize)));
     }
-    return toReturnInputStream;
+
+    return fsDataInputStream;
   }
 
   @Override
