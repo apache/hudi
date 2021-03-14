@@ -337,21 +337,6 @@ public class HoodieTestDataGenerator {
     return rec;
   }
 
-  /*
-   * Generate random record using TRIP_EVOLVED_SCHEMA
-   */
-  public GenericRecord generateRecordForEvolvedTripSchema(String rowKey, String riderName, String driverName, long timestamp) {
-    GenericRecord rec = new GenericData.Record(AVRO_EVOLVED_SCHEMA);
-    rec.put("_row_key", rowKey);
-    rec.put("timestamp", timestamp);
-    rec.put("rider", riderName);
-    rec.put("driver", driverName);
-    rec.put("fare", RAND.nextDouble() * 100);
-    rec.put("_hoodie_is_deleted", false);
-    rec.put("rider_evolved", riderName + "_evolved");
-    return rec;
-  }
-
   public GenericRecord generateRecordForShortTripSchema(String rowKey, String riderName, String driverName, long timestamp) {
     GenericRecord rec = new GenericData.Record(AVRO_SHORT_TRIP_SCHEMA);
     rec.put("_row_key", rowKey);
