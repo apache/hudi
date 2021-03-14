@@ -250,11 +250,9 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     try {
       reader.close();
       reader = null;
-      if (keyScanner != null) {
-        keyScanner = null;
-      }
+      keyScanner = null;
     } catch (IOException e) {
-      e.printStackTrace();
+      throw new HoodieIOException("Error closing the hfile reader", e);
     }
   }
 

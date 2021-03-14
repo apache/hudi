@@ -23,7 +23,6 @@ import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -46,7 +45,6 @@ import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -73,19 +71,23 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   // Metadata table's timeline and metaclient
   private HoodieTableMetaClient metaClient;
   private List<FileSlice> latestFileSystemMetadataSlices;
+  // should we reuse the open file handles, across calls
+  private final boolean reuse;
+
 
   // Readers for the base and log file which store the metadata
   private transient HoodieFileReader<GenericRecord> baseFileReader;
   private transient HoodieMetadataMergedLogRecordScanner logRecordScanner;
 
-  public HoodieBackedTableMetadata(Configuration conf, HoodieMetadataConfig metadataConfig,
+  public HoodieBackedTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
                                    String datasetBasePath, String spillableMapDirectory) {
-    this(new HoodieLocalEngineContext(conf), metadataConfig, datasetBasePath, spillableMapDirectory);
+    this(engineContext, metadataConfig, datasetBasePath, spillableMapDirectory, false);
   }
 
   public HoodieBackedTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
-                                   String datasetBasePath, String spillableMapDirectory) {
+                                   String datasetBasePath, String spillableMapDirectory, boolean reuse) {
     super(engineContext, metadataConfig, datasetBasePath, spillableMapDirectory);
+    this.reuse = reuse;
     initIfNeeded();
   }
 
@@ -112,12 +114,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   @Override
   protected Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKeyFromMetadata(String key) {
-    try {
-      openReadersIfNeeded();
-    } catch (IOException e) {
-      throw new HoodieIOException("Error opening readers to the Metadata Table: ", e);
-    }
 
+    openReadersIfNeededOrThrow();
     try {
       List<Long> timings = new ArrayList<>();
       HoodieTimer timer = new HoodieTimer().startTimer();
@@ -154,6 +152,18 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return Option.ofNullable(hoodieRecord);
     } catch (IOException ioe) {
       throw new HoodieIOException("Error merging records from metadata table for key :" + key, ioe);
+    } finally {
+      if (!reuse) {
+        closeOrThrow();
+      }
+    }
+  }
+
+  private void openReadersIfNeededOrThrow() {
+    try {
+      openReadersIfNeeded();
+    } catch (IOException e) {
+      throw new HoodieIOException("Error opening readers to the Metadata Table: ", e);
     }
   }
 
@@ -161,16 +171,19 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * Returns a new pair of readers to the base and log files.
    */
   private void openReadersIfNeeded() throws IOException {
-    if (baseFileReader != null || logRecordScanner != null) {
+    if (reuse && (baseFileReader != null || logRecordScanner != null)) {
+      // quickly exit out without synchronizing if reusing and readers are already open
       return;
     }
 
+    // we always force synchronization, if reuse=false, to handle concurrent close() calls as well.
     synchronized (this) {
       if (baseFileReader != null || logRecordScanner != null) {
         return;
       }
 
-      long[] timings = {0, 0};
+      final long baseFileOpenMs;
+      final long logScannerOpenMs;
 
       // Metadata is in sync till the latest completed instant on the dataset
       HoodieTimer timer = new HoodieTimer().startTimer();
@@ -182,10 +195,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       if (basefile.isPresent()) {
         String basefilePath = basefile.get().getPath();
         baseFileReader = HoodieFileReaderFactory.getFileReader(hadoopConf.get(), new Path(basefilePath));
-        timings[0] = timer.endTimer();
+        baseFileOpenMs = timer.endTimer();
         LOG.info(String.format("Opened metadata base file from %s at instant %s in %d ms", basefilePath,
-            basefile.get().getCommitTime(), timings[0]));
+            basefile.get().getCommitTime(), baseFileOpenMs));
       } else {
+        baseFileOpenMs = 0;
         timer.endTimer();
       }
 
@@ -203,11 +217,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       logRecordScanner = new HoodieMetadataMergedLogRecordScanner(metaClient.getFs(), metadataBasePath, logFilePaths,
           schema, latestMetaInstantTimestamp, MAX_MEMORY_SIZE_IN_BYTES, BUFFER_SIZE, spillableMapDirectory, null);
 
-      timings[1] = timer.endTimer();
+      logScannerOpenMs = timer.endTimer();
       LOG.info(String.format("Opened metadata log files from %s at instant (dataset instant=%s, metadata instant=%s) in %d ms",
-          logFilePaths, latestInstantTime, latestMetaInstantTimestamp, timings[1]));
+          logFilePaths, latestInstantTime, latestMetaInstantTimestamp, logScannerOpenMs));
 
-      metrics.ifPresent(metrics -> metrics.updateMetrics(HoodieMetadataMetrics.SCAN_STR, timings[0] + timings[1]));
+      metrics.ifPresent(metrics -> metrics.updateMetrics(HoodieMetadataMetrics.SCAN_STR, baseFileOpenMs + logScannerOpenMs));
     }
   }
 
@@ -221,6 +235,14 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       }
     } catch (Exception e) {
       throw new HoodieException("Error closing resources during metadata table merge", e);
+    }
+  }
+
+  private void closeOrThrow() {
+    try {
+      close();
+    } catch (Exception e) {
+      throw new HoodieException("Error closing metadata table readers", e);
     }
   }
 
