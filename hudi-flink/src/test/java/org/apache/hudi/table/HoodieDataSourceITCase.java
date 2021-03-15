@@ -36,6 +36,8 @@ import org.apache.flink.util.CollectionUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
 import java.util.Collection;
@@ -149,12 +151,14 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
   }
 
-  @Test
-  void testBatchWriteAndRead() {
+  @ParameterizedTest
+  @EnumSource(value = ExecMode.class)
+  void testWriteAndRead(ExecMode execMode) {
+    TableEnvironment tableEnv = execMode == ExecMode.BATCH ? batchTableEnv : streamTableEnv;
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
-    batchTableEnv.executeSql(hoodieTableDDL);
+    tableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 values\n"
         + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1'),\n"
         + "('id2','Stephen',33,TIMESTAMP '1970-01-01 00:00:02','par1'),\n"
@@ -165,11 +169,18 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         + "('id7','Bob',44,TIMESTAMP '1970-01-01 00:00:07','par4'),\n"
         + "('id8','Han',56,TIMESTAMP '1970-01-01 00:00:08','par4')";
 
-    execInsertSql(batchTableEnv, insertInto);
+    execInsertSql(tableEnv, insertInto);
 
     List<Row> rows = CollectionUtil.iterableToList(
-        () -> batchTableEnv.sqlQuery("select * from t1").execute().collect());
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+  }
+
+  // -------------------------------------------------------------------------
+  //  Utilities
+  // -------------------------------------------------------------------------
+  private enum ExecMode {
+    BATCH, STREAM
   }
 
   private void execInsertSql(TableEnvironment tEnv, String insert) {

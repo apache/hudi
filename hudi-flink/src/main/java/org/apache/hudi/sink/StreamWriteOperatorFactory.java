@@ -39,20 +39,11 @@ public class StreamWriteOperatorFactory<I>
 
   private final StreamWriteOperator<I> operator;
   private final Configuration conf;
-  private final boolean isBounded;
 
-  public StreamWriteOperatorFactory(
-      Configuration conf) {
-    this(conf, false);
-  }
-
-  public StreamWriteOperatorFactory(
-      Configuration conf,
-      boolean isBounded) {
+  public StreamWriteOperatorFactory(Configuration conf) {
     super(new StreamWriteOperator<>(conf));
     this.operator = (StreamWriteOperator<I>) getOperator();
     this.conf = conf;
-    this.isBounded = isBounded;
   }
 
   @Override
@@ -70,7 +61,7 @@ public class StreamWriteOperatorFactory<I>
 
   @Override
   public OperatorCoordinator.Provider getCoordinatorProvider(String s, OperatorID operatorID) {
-    return new StreamWriteOperatorCoordinator.Provider(operatorID, this.conf, isBounded);
+    return new StreamWriteOperatorCoordinator.Provider(operatorID, this.conf);
   }
 
   @Override

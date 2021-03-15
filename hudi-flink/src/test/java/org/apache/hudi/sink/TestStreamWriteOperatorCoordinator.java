@@ -58,7 +58,7 @@ public class TestStreamWriteOperatorCoordinator {
   @BeforeEach
   public void before() throws Exception {
     coordinator = new StreamWriteOperatorCoordinator(
-        TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), 2, false);
+        TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), 2);
     coordinator.start();
   }
 
@@ -75,14 +75,22 @@ public class TestStreamWriteOperatorCoordinator {
     WriteStatus writeStatus = new WriteStatus(true, 0.1D);
     writeStatus.setPartitionPath("par1");
     writeStatus.setStat(new HoodieWriteStat());
-    OperatorEvent event0 =
-        new BatchWriteSuccessEvent(0, instant, Collections.singletonList(writeStatus), true);
+    OperatorEvent event0 = BatchWriteSuccessEvent.builder()
+        .taskID(0)
+        .instantTime(instant)
+        .writeStatus(Collections.singletonList(writeStatus))
+        .isLastBatch(true)
+        .build();
 
     WriteStatus writeStatus1 = new WriteStatus(false, 0.2D);
     writeStatus1.setPartitionPath("par2");
     writeStatus1.setStat(new HoodieWriteStat());
-    OperatorEvent event1 =
-        new BatchWriteSuccessEvent(1, instant, Collections.singletonList(writeStatus1), true);
+    OperatorEvent event1 = BatchWriteSuccessEvent.builder()
+        .taskID(1)
+        .instantTime(instant)
+        .writeStatus(Collections.singletonList(writeStatus1))
+        .isLastBatch(true)
+        .build();
     coordinator.handleEventFromOperator(0, event0);
     coordinator.handleEventFromOperator(1, event1);
 
@@ -115,7 +123,11 @@ public class TestStreamWriteOperatorCoordinator {
   public void testReceiveInvalidEvent() {
     CompletableFuture<byte[]> future = new CompletableFuture<>();
     coordinator.checkpointCoordinator(1, future);
-    OperatorEvent event = new BatchWriteSuccessEvent(0, "abc", Collections.emptyList());
+    OperatorEvent event = BatchWriteSuccessEvent.builder()
+        .taskID(0)
+        .instantTime("abc")
+        .writeStatus(Collections.emptyList())
+        .build();
     assertThrows(IllegalStateException.class,
         () -> coordinator.handleEventFromOperator(0, event),
         "Receive an unexpected event for instant abc from task 0");
@@ -126,7 +138,11 @@ public class TestStreamWriteOperatorCoordinator {
     final CompletableFuture<byte[]> future = new CompletableFuture<>();
     coordinator.checkpointCoordinator(1, future);
     String inflightInstant = coordinator.getInstant();
-    OperatorEvent event = new BatchWriteSuccessEvent(0, inflightInstant, Collections.emptyList());
+    OperatorEvent event = BatchWriteSuccessEvent.builder()
+        .taskID(0)
+        .instantTime(inflightInstant)
+        .writeStatus(Collections.emptyList())
+        .build();
     coordinator.handleEventFromOperator(0, event);
     assertThrows(HoodieException.class,
         () -> coordinator.checkpointComplete(1),
