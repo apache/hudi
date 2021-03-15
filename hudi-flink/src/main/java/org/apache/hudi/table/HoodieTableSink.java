@@ -54,12 +54,10 @@ public class HoodieTableSink implements AppendStreamTableSink<RowData>, Partitio
 
   private final Configuration conf;
   private final TableSchema schema;
-  private final boolean isBounded;
 
-  public HoodieTableSink(Configuration conf, TableSchema schema, boolean isBounded) {
+  public HoodieTableSink(Configuration conf, TableSchema schema) {
     this.conf = conf;
     this.schema = schema;
-    this.isBounded = isBounded;
   }
 
   @Override
@@ -67,7 +65,7 @@ public class HoodieTableSink implements AppendStreamTableSink<RowData>, Partitio
     // Read from kafka source
     RowType rowType = (RowType) this.schema.toRowDataType().notNull().getLogicalType();
     int numWriteTasks = this.conf.getInteger(FlinkOptions.WRITE_TASKS);
-    StreamWriteOperatorFactory<HoodieRecord> operatorFactory = new StreamWriteOperatorFactory<>(conf, isBounded);
+    StreamWriteOperatorFactory<HoodieRecord> operatorFactory = new StreamWriteOperatorFactory<>(conf);
 
     DataStream<Object> pipeline = dataStream
         .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class))
