@@ -1443,4 +1443,9 @@ var store = [{
         "excerpt":"Every record in Hudi is uniquely identified by a HoodieKey, which is a pair of record key and partition path where the record belongs to. Hudi has imposed this constraint so that updates and deletes can be applied to the record of interest. Hudi relies on the partition path field...","categories": ["blog"],
         "tags": [],
         "url": "https://hudi.apache.org/blog/hudi-key-generators/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Streaming Responsibly - How Apache Hudi maintains optimum sized files",
+        "excerpt":"Apache Hudi is a data lake platform technology that provides several functionalities needed to build and manage data lakes. One such key feature that hudi provides is self-managing file sizing so that users don’t need to worry about manual table maintenance. Having a lot of small files will make it...","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/hudi-file-sizing/",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},]
