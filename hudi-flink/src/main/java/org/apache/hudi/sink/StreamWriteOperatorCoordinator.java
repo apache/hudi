@@ -103,11 +103,6 @@ public class StreamWriteOperatorCoordinator
   private final int parallelism;
 
   /**
-   * Whether the coordinator executes with the bounded data set.
-   */
-  private final boolean isBounded;
-
-  /**
    * Whether needs to schedule compaction task on finished checkpoints.
    */
   private final boolean needsScheduleCompaction;
@@ -117,16 +112,13 @@ public class StreamWriteOperatorCoordinator
    *
    * @param conf        The config options
    * @param parallelism The operator task number
-   * @param isBounded   Whether the input data source is bounded
    */
   public StreamWriteOperatorCoordinator(
       Configuration conf,
-      int parallelism,
-      boolean isBounded) {
+      int parallelism) {
     this.conf = conf;
     this.parallelism = parallelism;
     this.needsScheduleCompaction = StreamerUtil.needsScheduleCompaction(conf);
-    this.isBounded = isBounded;
   }
 
   @Override
@@ -143,11 +135,6 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void close() {
-    if (isBounded) {
-      // start to commit the instant.
-      checkAndCommitWithRetry();
-      // no compaction scheduling for batch mode
-    }
     // teardown the resource
     if (writeClient != null) {
       writeClient.close();
@@ -215,6 +202,11 @@ public class StreamWriteOperatorCoordinator
       this.eventBuffer[event.getTaskID()].mergeWith(event);
     } else {
       this.eventBuffer[event.getTaskID()] = event;
+    }
+    if (event.isEndInput() && checkReady()) {
+      // start to commit the instant.
+      doCommit();
+      // no compaction scheduling for batch mode
     }
   }
 
@@ -424,12 +416,10 @@ public class StreamWriteOperatorCoordinator
   public static class Provider implements OperatorCoordinator.Provider {
     private final OperatorID operatorId;
     private final Configuration conf;
-    private final boolean isBounded;
 
-    public Provider(OperatorID operatorId, Configuration conf, boolean isBounded) {
+    public Provider(OperatorID operatorId, Configuration conf) {
       this.operatorId = operatorId;
       this.conf = conf;
-      this.isBounded = isBounded;
     }
 
     @Override
@@ -439,7 +429,7 @@ public class StreamWriteOperatorCoordinator
 
     @Override
     public OperatorCoordinator create(Context context) {
-      return new StreamWriteOperatorCoordinator(this.conf, context.currentParallelism(), isBounded);
+      return new StreamWriteOperatorCoordinator(this.conf, context.currentParallelism());
     }
   }
 }

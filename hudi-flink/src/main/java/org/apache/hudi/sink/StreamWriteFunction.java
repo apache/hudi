@@ -182,7 +182,7 @@ public class StreamWriteFunction<K, I, O>
       // it would check the validity.
       this.onCheckpointing = true;
       // wait for the buffer data flush out and request a new instant
-      flushBuffer(true);
+      flushBuffer(true, false);
       // signal the task thread to start buffering
       addToBufferCondition.signal();
     } finally {
@@ -221,7 +221,7 @@ public class StreamWriteFunction<K, I, O>
    * End input action for batch source.
    */
   public void endInput() {
-    flushBuffer(true);
+    flushBuffer(true, true);
     this.writeClient.cleanHandles();
   }
 
@@ -333,13 +333,13 @@ public class StreamWriteFunction<K, I, O>
   private void flushBufferOnCondition(I value) {
     boolean needFlush = this.detector.detect(value);
     if (needFlush) {
-      flushBuffer(false);
+      flushBuffer(false, false);
       this.detector.reset();
     }
   }
 
   @SuppressWarnings("unchecked, rawtypes")
-  private void flushBuffer(boolean isFinalBatch) {
+  private void flushBuffer(boolean isLastBatch, boolean isEndInput) {
     this.currentInstant = this.writeClient.getInflightAndRequestedInstant(this.config.get(FlinkOptions.TABLE_TYPE));
     if (this.currentInstant == null) {
       // in case there are empty checkpoints that has no input data
@@ -364,8 +364,14 @@ public class StreamWriteFunction<K, I, O>
       LOG.info("No data to write in subtask [{}] for instant [{}]", taskID, currentInstant);
       writeStatus = Collections.emptyList();
     }
-    this.eventGateway.sendEventToCoordinator(
-        new BatchWriteSuccessEvent(this.taskID, currentInstant, writeStatus, isFinalBatch));
+    final BatchWriteSuccessEvent event = BatchWriteSuccessEvent.builder()
+        .taskID(taskID)
+        .instantTime(currentInstant)
+        .writeStatus(writeStatus)
+        .isLastBatch(isLastBatch)
+        .isEndInput(isEndInput)
+        .build();
+    this.eventGateway.sendEventToCoordinator(event);
     this.buffer.clear();
     this.currentInstant = "";
   }

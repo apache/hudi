@@ -69,7 +69,7 @@ public class HoodieTableFactory implements TableSourceFactory<RowData>, TableSin
     conf.setString(FlinkOptions.PARTITION_PATH_FIELD, String.join(",", context.getTable().getPartitionKeys()));
     TableSchema tableSchema = TableSchemaUtils.getPhysicalSchema(context.getTable().getSchema());
     inferAvroSchema(conf, tableSchema.toRowDataType().notNull().getLogicalType());
-    return new HoodieTableSink(conf, tableSchema, context.isBounded());
+    return new HoodieTableSink(conf, tableSchema);
   }
 
   @Override

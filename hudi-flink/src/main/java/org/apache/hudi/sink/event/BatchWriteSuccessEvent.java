@@ -25,6 +25,7 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * An operator event to mark successful checkpoint batch write.
@@ -36,13 +37,13 @@ public class BatchWriteSuccessEvent implements OperatorEvent {
   private final int taskID;
   private final String instantTime;
   private boolean isLastBatch;
-
-  public BatchWriteSuccessEvent(
-      int taskID,
-      String instantTime,
-      List<WriteStatus> writeStatuses) {
-    this(taskID, instantTime, writeStatuses, false);
-  }
+  /**
+   * Flag saying whether the event comes from the end of input, e.g. the source
+   * is bounded, there are two cases in which this flag should be set to true:
+   * 1. batch execution mode
+   * 2. bounded stream source such as VALUES
+   */
+  private final boolean isEndInput;
 
   /**
    * Creates an event.
@@ -55,15 +56,24 @@ public class BatchWriteSuccessEvent implements OperatorEvent {
    *                      if true, the whole data set of the checkpoint
    *                      has been flushed successfully
    */
-  public BatchWriteSuccessEvent(
+  private BatchWriteSuccessEvent(
       int taskID,
       String instantTime,
       List<WriteStatus> writeStatuses,
-      boolean isLastBatch) {
+      boolean isLastBatch,
+      boolean isEndInput) {
     this.taskID = taskID;
     this.instantTime = instantTime;
     this.writeStatuses = new ArrayList<>(writeStatuses);
     this.isLastBatch = isLastBatch;
+    this.isEndInput = isEndInput;
+  }
+
+  /**
+   * Returns the builder for {@link BatchWriteSuccessEvent}.
+   */
+  public static Builder builder() {
+    return new Builder();
   }
 
   public List<WriteStatus> getWriteStatuses() {
@@ -80,6 +90,10 @@ public class BatchWriteSuccessEvent implements OperatorEvent {
 
   public boolean isLastBatch() {
     return isLastBatch;
+  }
+
+  public boolean isEndInput() {
+    return isEndInput;
   }
 
   /**
@@ -100,5 +114,52 @@ public class BatchWriteSuccessEvent implements OperatorEvent {
   /** Returns whether the event is ready to commit. */
   public boolean isReady(String currentInstant) {
     return isLastBatch && this.instantTime.equals(currentInstant);
+  }
+
+  // -------------------------------------------------------------------------
+  //  Builder
+  // -------------------------------------------------------------------------
+
+  /**
+   * Builder for {@link BatchWriteSuccessEvent}.
+   */
+  public static class Builder {
+    private List<WriteStatus> writeStatus;
+    private Integer taskID;
+    private String instantTime;
+    private boolean isLastBatch = false;
+    private boolean isEndInput = false;
+
+    public BatchWriteSuccessEvent build() {
+      Objects.requireNonNull(taskID);
+      Objects.requireNonNull(instantTime);
+      Objects.requireNonNull(writeStatus);
+      return new BatchWriteSuccessEvent(taskID, instantTime, writeStatus, isLastBatch, isEndInput);
+    }
+
+    public Builder taskID(int taskID) {
+      this.taskID = taskID;
+      return this;
+    }
+
+    public Builder instantTime(String instantTime) {
+      this.instantTime = instantTime;
+      return this;
+    }
+
+    public Builder writeStatus(List<WriteStatus> writeStatus) {
+      this.writeStatus = writeStatus;
+      return this;
+    }
+
+    public Builder isLastBatch(boolean isLastBatch) {
+      this.isLastBatch = isLastBatch;
+      return this;
+    }
+
+    public Builder isEndInput(boolean isEndInput) {
+      this.isEndInput = isEndInput;
+      return this;
+    }
   }
 }
