@@ -22,6 +22,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLockException;
@@ -47,13 +48,9 @@ public class FileSystemBasedLockProviderTestClass implements LockProvider<String
   protected LockConfiguration lockConfiguration;
 
   public FileSystemBasedLockProviderTestClass(final LockConfiguration lockConfiguration, final Configuration configuration) {
-    try {
-      this.lockConfiguration = lockConfiguration;
-      this.lockPath = lockConfiguration.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP);
-      this.fs = FileSystem.get(configuration);
-    } catch (IOException io) {
-      throw new HoodieIOException("Unable to create file systems", io);
-    }
+    this.lockConfiguration = lockConfiguration;
+    this.lockPath = lockConfiguration.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP);
+    this.fs = FSUtils.getFs(this.lockPath, configuration);
   }
 
   public void acquireLock() {
@@ -67,9 +64,9 @@ public class FileSystemBasedLockProviderTestClass implements LockProvider<String
   @Override
   public void close() {
     try {
-      fs.close();
-    } catch (Exception e) {
-      e.printStackTrace();
+      fs.delete(new Path(lockPath + "/" + LOCK_NAME), true);
+    } catch (IOException e) {
+      throw new HoodieLockException("Unable to release lock", e);
     }
   }
 

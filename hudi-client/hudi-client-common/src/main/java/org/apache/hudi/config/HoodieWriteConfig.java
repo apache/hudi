@@ -157,6 +157,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       "hoodie.write.concurrency.mode";
   public static final String DEFAULT_WRITE_CONCURRENCY_MODE = WriteConcurrencyMode.SINGLE_WRITER.name();
 
+  // Comma separated metadata key prefixes to override from latest commit during overlapping commits via multi writing
+  public static final String WRITE_META_KEY_PREFIXES_PROP =
+      "hoodie.write.meta.key.prefixes";
+  public static final String DEFAULT_WRITE_META_KEY_PREFIXES = "";
+
   /**
    * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
    * multiple write operations (upsert/buk-insert/...) to be executed within a single commit.
@@ -1023,6 +1028,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean();
   }
 
+  public String getWriteMetaKeyPrefixes() {
+    return props.getProperty(WRITE_META_KEY_PREFIXES_PROP);
+  }
+
   public static class Builder {
 
     protected final Properties props = new Properties();
@@ -1307,6 +1316,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withWriteMetaKeyPrefixes(String writeMetaKeyPrefixes) {
+      props.setProperty(WRITE_META_KEY_PREFIXES_PROP, writeMetaKeyPrefixes);
+      return this;
+    }
+
     public Builder withProperties(Properties properties) {
       this.props.putAll(properties);
       return this;
@@ -1369,7 +1383,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES_PROP, String.valueOf(DEFAULT_CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES));
       setDefaultOnCondition(props, !props.containsKey(WRITE_CONCURRENCY_MODE_PROP),
           WRITE_CONCURRENCY_MODE_PROP, DEFAULT_WRITE_CONCURRENCY_MODE);
-
+      setDefaultOnCondition(props, !props.containsKey(WRITE_META_KEY_PREFIXES_PROP),
+          WRITE_META_KEY_PREFIXES_PROP, DEFAULT_WRITE_META_KEY_PREFIXES);
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().withEngineType(engineType).fromProperties(props).build());
       setDefaultOnCondition(props, !isStorageConfigSet, HoodieStorageConfig.newBuilder().fromProperties(props).build());

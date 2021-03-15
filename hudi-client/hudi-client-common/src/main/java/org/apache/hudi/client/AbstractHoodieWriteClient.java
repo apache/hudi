@@ -33,6 +33,7 @@ import org.apache.hudi.callback.util.HoodieCommitCallbackFactory;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -107,7 +108,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   private transient HoodieWriteCommitCallback commitCallback;
   protected transient AsyncCleanerService asyncCleanerService;
   protected final TransactionManager txnManager;
-  protected Option<HoodieInstant> lastCompletedTxn;
+  protected Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxnAndMetadata = Option.empty();
 
   /**
    * Create a write client, with new hudi index.
@@ -179,20 +180,20 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     finalizeWrite(table, instantTime, stats);
     HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
     this.txnManager.beginTransaction(Option.of(new HoodieInstant(State.INFLIGHT, table.getMetaClient().getCommitActionType(), instantTime)),
-        lastCompletedTxn);
+        lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     try {
       preCommit(instantTime, metadata);
       commit(table, commitActionType, instantTime, metadata, stats);
       postCommit(table, metadata, instantTime, extraMetadata);
-      emitCommitMetrics(instantTime, metadata, commitActionType);
       LOG.info("Committed " + instantTime);
     } catch (IOException e) {
-      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
-          e);
+      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
     } finally {
       this.txnManager.endTransaction();
     }
-
+    // do this outside of lock since compaction, clustering can be time taking and we don't need a lock for the entire execution period
+    runTableServicesInline(table, metadata, extraMetadata);
+    emitCommitMetrics(instantTime, metadata, commitActionType);
     // callback if needed.
     if (config.writeCommitCallbackOn()) {
       if (null == commitCallback) {
@@ -392,9 +393,10 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   protected void preWrite(String instantTime, WriteOperationType writeOperationType,
       HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
-    this.lastCompletedTxn = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
-        .lastInstant();
-    this.txnManager.beginTransaction(Option.of(new HoodieInstant(State.INFLIGHT, metaClient.getCommitActionType(), instantTime)), lastCompletedTxn);
+    this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
+    this.txnManager.beginTransaction(Option.of(new HoodieInstant(State.INFLIGHT, metaClient.getCommitActionType(), instantTime)), lastCompletedTxnAndMetadata
+        .isPresent()
+        ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     try {
       syncTableMetadata();
     } finally {
@@ -422,29 +424,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    */
   protected void postCommit(HoodieTable<T, I, K, O> table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata) {
     try {
-
       // Delete the marker directory for the instant.
       new MarkerFiles(table, instantTime).quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
-
-      if (config.inlineTableServices()) {
-        // Do an inline compaction if enabled
-        if (config.inlineCompactionEnabled()) {
-          runAnyPendingCompactions(table);
-          metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "true");
-          inlineCompact(extraMetadata);
-        } else {
-          metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "false");
-        }
-
-        // Do an inline clustering if enabled
-        if (config.inlineClusteringEnabled()) {
-          runAnyPendingClustering(table);
-          metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING_PROP, "true");
-          inlineCluster(extraMetadata);
-        } else {
-          metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING_PROP, "false");
-        }
-      }
       // We cannot have unbounded commit files. Archive commits if we have to archive
       HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);
       archiveLog.archiveIfRequired(context);
@@ -454,6 +435,28 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       throw new HoodieIOException(ioe.getMessage(), ioe);
     } finally {
       this.heartbeatClient.stop(instantTime);
+    }
+  }
+
+  protected void runTableServicesInline(HoodieTable<T, I, K, O> table, HoodieCommitMetadata metadata, Option<Map<String, String>> extraMetadata) {
+    if (config.inlineTableServices()) {
+      // Do an inline compaction if enabled
+      if (config.inlineCompactionEnabled()) {
+        runAnyPendingCompactions(table);
+        metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "true");
+        inlineCompact(extraMetadata);
+      } else {
+        metadata.addMetadata(HoodieCompactionConfig.INLINE_COMPACT_PROP, "false");
+      }
+
+      // Do an inline clustering if enabled
+      if (config.inlineClusteringEnabled()) {
+        runAnyPendingClustering(table);
+        metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING_PROP, "true");
+        inlineCluster(extraMetadata);
+      } else {
+        metadata.addMetadata(HoodieClusteringConfig.INLINE_CLUSTERING_PROP, "false");
+      }
     }
   }
 
@@ -719,7 +722,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    */
   public Option<String> scheduleCompaction(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
-    return scheduleTableService(instantTime, extraMetadata, TableServiceType.COMPACT);
+    return scheduleCompactionAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
   }
 
   /**
@@ -728,10 +731,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * @param extraMetadata Extra Metadata to be stored
    */
   public boolean scheduleCompactionAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    LOG.info("Scheduling compaction at instant time :" + instantTime);
-    Option<HoodieCompactionPlan> plan = createTable(config, hadoopConf)
-        .scheduleCompaction(context, instantTime, extraMetadata);
-    return plan.isPresent();
+    return scheduleTableService(instantTime, extraMetadata, TableServiceType.COMPACT).isPresent();
   }
 
   /**
@@ -850,9 +850,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * Performs a compaction operation on a table, serially before or after an insert/upsert action.
    */
   protected Option<String> inlineCompact(Option<Map<String, String>> extraMetadata) {
-    String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();
-    Option<String> compactionInstantTimeOpt = scheduleTableServiceInternal(compactionInstantTime,
-        extraMetadata, TableServiceType.COMPACT);
+    Option<String> compactionInstantTimeOpt = scheduleCompaction(extraMetadata);
     compactionInstantTimeOpt.ifPresent(compactInstantTime -> {
       // inline compaction should auto commit as the user is never given control
       compact(compactInstantTime, true);
@@ -866,7 +864,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    */
   public Option<String> scheduleClustering(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
-    return scheduleTableService(instantTime, extraMetadata, TableServiceType.CLUSTER);
+    return scheduleClusteringAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
   }
 
   /**
@@ -875,10 +873,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * @param extraMetadata Extra Metadata to be stored
    */
   public boolean scheduleClusteringAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    LOG.info("Scheduling clustering at instant time :" + instantTime);
-    Option<HoodieClusteringPlan> plan = createTable(config, hadoopConf)
-        .scheduleClustering(context, instantTime, extraMetadata);
-    return plan.isPresent();
+    return scheduleTableService(instantTime, extraMetadata, TableServiceType.CLUSTER).isPresent();
   }
 
   /**
@@ -887,7 +882,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    */
   protected Option<String> scheduleCleaning(Option<Map<String, String>> extraMetadata) throws HoodieIOException {
     String instantTime = HoodieActiveTimeline.createNewInstantTime();
-    return scheduleTableService(instantTime, extraMetadata, TableServiceType.CLEAN);
+    return scheduleCleaningAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
   }
 
   /**
@@ -896,15 +891,11 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * @param extraMetadata Extra Metadata to be stored
    */
   protected boolean scheduleCleaningAtInstant(String instantTime, Option<Map<String, String>> extraMetadata) throws HoodieIOException {
-    LOG.info("Scheduling clustering at instant time :" + instantTime);
-    Option<HoodieCleanerPlan> plan = createTable(config, hadoopConf)
-        .scheduleCleaning(context, instantTime, extraMetadata);
-    return plan.isPresent();
+    return scheduleTableService(instantTime, extraMetadata, TableServiceType.CLEAN).isPresent();
   }
 
   /**
    * Ensures clustering instant is in expected state and performs clustering for the plan stored in metadata.
-   *
    * @param clusteringInstant Clustering Instant Time
    * @return Collection of Write Status
    */
@@ -946,11 +937,20 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
                                                       TableServiceType tableServiceType) {
     switch (tableServiceType) {
       case CLUSTER:
-        return scheduleClusteringAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
+        LOG.info("Scheduling clustering at instant time :" + instantTime);
+        Option<HoodieClusteringPlan> clusteringPlan = createTable(config, hadoopConf)
+            .scheduleClustering(context, instantTime, extraMetadata);
+        return clusteringPlan.isPresent() ? Option.of(instantTime) : Option.empty();
       case COMPACT:
-        return scheduleCompactionAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
+        LOG.info("Scheduling compaction at instant time :" + instantTime);
+        Option<HoodieCompactionPlan> compactionPlan = createTable(config, hadoopConf)
+            .scheduleCompaction(context, instantTime, extraMetadata);
+        return compactionPlan.isPresent() ? Option.of(instantTime) : Option.empty();
       case CLEAN:
-        return scheduleCleaningAtInstant(instantTime, extraMetadata) ? Option.of(instantTime) : Option.empty();
+        LOG.info("Scheduling cleaning at instant time :" + instantTime);
+        Option<HoodieCleanerPlan> cleanerPlan = createTable(config, hadoopConf)
+            .scheduleCleaning(context, instantTime, extraMetadata);
+        return cleanerPlan.isPresent() ? Option.of(instantTime) : Option.empty();
       default:
         throw new IllegalArgumentException("Invalid TableService " + tableServiceType);
     }
@@ -960,9 +960,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    * Executes a clustering plan on a table, serially before or after an insert/upsert action.
    */
   protected Option<String> inlineCluster(Option<Map<String, String>> extraMetadata) {
-    String clusteringInstantTme = HoodieActiveTimeline.createNewInstantTime();
-    Option<String> clusteringInstantOpt = scheduleTableServiceInternal(clusteringInstantTme,
-        extraMetadata, TableServiceType.CLUSTER);
+    Option<String> clusteringInstantOpt = scheduleClustering(extraMetadata);
     clusteringInstantOpt.ifPresent(clusteringInstant -> {
       // inline cluster should auto commit as the user is never given control
       cluster(clusteringInstant, true);

@@ -55,8 +55,6 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
     // 2. Get any scheduled or completed compaction or clustering operations that have started and/or finished
     // after the current instant. We need to check for write conflicts since they may have mutated the same files
     // that are being newly created by the current write.
-    // NOTE that any commits from table services such as compaction, clustering or cleaning since the
-    // overlapping of files is handled using MVCC.
     Stream<HoodieInstant> completedCommitsInstantStream = activeTimeline
         .getCommitsTimeline()
         .filterCompletedInstants()

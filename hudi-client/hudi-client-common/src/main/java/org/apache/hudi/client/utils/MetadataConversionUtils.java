@@ -62,7 +62,7 @@ public class MetadataConversionUtils {
       case HoodieTimeline.COMMIT_ACTION:
       case HoodieTimeline.DELTA_COMMIT_ACTION: {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-                .fromBytes(metaClient.getCommitTimeline().getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
+                .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
         archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(commitMetadata));
         archivedMetaWrapper.setActionType(ActionType.commit.name());
         break;
@@ -70,7 +70,7 @@ public class MetadataConversionUtils {
       case HoodieTimeline.REPLACE_COMMIT_ACTION: {
         if (hoodieInstant.isCompleted()) {
           HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
-              .fromBytes(metaClient.getCommitTimeline().getInstantDetails(hoodieInstant).get(), HoodieReplaceCommitMetadata.class);
+              .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieReplaceCommitMetadata.class);
           archivedMetaWrapper.setHoodieReplaceCommitMetadata(ReplaceArchivalHelper.convertReplaceCommitMetadata(replaceCommitMetadata));
         } else {
           HoodieRequestedReplaceMetadata requestedReplaceMetadata =
@@ -82,13 +82,13 @@ public class MetadataConversionUtils {
       }
       case HoodieTimeline.ROLLBACK_ACTION: {
         archivedMetaWrapper.setHoodieRollbackMetadata(TimelineMetadataUtils.deserializeAvroMetadata(
-                metaClient.getCommitTimeline().getInstantDetails(hoodieInstant).get(), HoodieRollbackMetadata.class));
+                metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieRollbackMetadata.class));
         archivedMetaWrapper.setActionType(ActionType.rollback.name());
         break;
       }
       case HoodieTimeline.SAVEPOINT_ACTION: {
         archivedMetaWrapper.setHoodieSavePointMetadata(TimelineMetadataUtils.deserializeAvroMetadata(
-                metaClient.getCommitTimeline().getInstantDetails(hoodieInstant).get(), HoodieSavepointMetadata.class));
+                metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieSavepointMetadata.class));
         archivedMetaWrapper.setActionType(ActionType.savepoint.name());
         break;
       }

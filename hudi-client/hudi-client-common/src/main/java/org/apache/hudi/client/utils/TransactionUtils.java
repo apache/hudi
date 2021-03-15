@@ -18,12 +18,20 @@
 
 package org.apache.hudi.client.utils;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.ConcurrentOperation;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
@@ -64,8 +72,57 @@ public class TransactionUtils {
         }
       });
       LOG.info("Successfully resolved conflicts, if any");
+      // carry over necessary metadata from latest commit metadata
+      overrideWithLatestCommitMetadata(table.getMetaClient(), thisOperation.getCommitMetadataOption(), currentTxnOwnerInstant, Arrays.asList(config.getWriteMetaKeyPrefixes().split(",")));
       return thisOperation.getCommitMetadataOption();
     }
     return thisCommitMetadata;
+  }
+
+  /**
+   * Get the last completed transaction hoodie instant and {@link HoodieCommitMetadata#getExtraMetadata()}.
+   * @param metaClient
+   * @return
+   */
+  public static Option<Pair<HoodieInstant, Map<String, String>>> getLastCompletedTxnInstantAndMetadata(
+      HoodieTableMetaClient metaClient) {
+    Option<HoodieInstant> hoodieInstantOption = metaClient.getActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants().lastInstant();
+    try {
+      if (hoodieInstantOption.isPresent()) {
+        switch (hoodieInstantOption.get().getAction()) {
+          case HoodieTimeline.REPLACE_COMMIT_ACTION:
+            HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
+                .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstantOption.get()).get(), HoodieReplaceCommitMetadata.class);
+            return Option.of(Pair.of(hoodieInstantOption.get(), replaceCommitMetadata.getExtraMetadata()));
+          case HoodieTimeline.DELTA_COMMIT_ACTION:
+          case HoodieTimeline.COMMIT_ACTION:
+            HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+                .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstantOption.get()).get(), HoodieCommitMetadata.class);
+            return Option.of(Pair.of(hoodieInstantOption.get(), commitMetadata.getExtraMetadata()));
+          default:
+            throw new IllegalArgumentException("Unknown instant action" + hoodieInstantOption.get().getAction());
+        }
+      } else {
+        return Option.empty();
+      }
+    } catch (IOException io) {
+      throw new HoodieIOException("Unable to read metadata for instant " + hoodieInstantOption.get(), io);
+    }
+  }
+
+  // override the current metadata with the metadata from the latest instant for the specified key prefixes
+  private static void overrideWithLatestCommitMetadata(HoodieTableMetaClient metaClient, Option<HoodieCommitMetadata> thisMetadata,
+      Option<HoodieInstant> thisInstant, List<String> keyPrefixes) {
+    if (keyPrefixes.size() == 1 && keyPrefixes.get(0).length() < 1) {
+      return;
+    }
+    Option<Pair<HoodieInstant, Map<String, String>>> lastInstant = getLastCompletedTxnInstantAndMetadata(metaClient);
+    if (lastInstant.isPresent() && thisMetadata.isPresent()) {
+      Stream<String> keys = thisMetadata.get().getExtraMetadata().keySet().stream();
+      keyPrefixes.stream().forEach(keyPrefix -> keys
+          .filter(key -> key.startsWith(keyPrefix))
+          .forEach(key -> thisMetadata.get().getExtraMetadata().put(key, lastInstant.get().getRight().get(key))));
+    }
   }
 }

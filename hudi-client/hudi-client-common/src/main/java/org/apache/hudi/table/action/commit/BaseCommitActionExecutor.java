@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -62,7 +63,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
   protected final WriteOperationType operationType;
   protected final TaskContextSupplier taskContextSupplier;
   protected final TransactionManager txnManager;
-  protected Option<HoodieInstant> lastCompletedTxn;
+  protected Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxn;
 
   public BaseCommitActionExecutor(HoodieEngineContext context, HoodieWriteConfig config,
                                   HoodieTable<T, I, K, O> table, String instantTime, WriteOperationType operationType,
@@ -73,8 +74,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     this.taskContextSupplier = context.getTaskContextSupplier();
     // TODO : Remove this once we refactor and move out autoCommit method from here, since the TxnManager is held in {@link AbstractHoodieWriteClient}.
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
-    this.lastCompletedTxn = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
-        .lastInstant();
+    this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
   }
 
   public abstract HoodieWriteMetadata<O> execute(I inputRecords);
@@ -134,7 +134,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
 
   protected void autoCommit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<O> result) {
     this.txnManager.beginTransaction(Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime)),
-        lastCompletedTxn);
+        lastCompletedTxn.isPresent() ? Option.of(lastCompletedTxn.get().getLeft()) : Option.empty());
     try {
       TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
           result.getCommitMetadata(), config, this.txnManager.getLastCompletedTransactionOwner());
