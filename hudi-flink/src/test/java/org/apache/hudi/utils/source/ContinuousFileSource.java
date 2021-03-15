@@ -153,7 +153,7 @@ public class ContinuousFileSource implements StreamTableSource<RowData> {
     private void loadDataBuffer() {
       this.dataBuffer = new ArrayList<>();
       try (BufferedReader reader =
-               new BufferedReader(new FileReader(this.path.getPath()))) {
+               new BufferedReader(new FileReader(this.path.toString()))) {
         String line = reader.readLine();
         while (line != null) {
           this.dataBuffer.add(line);

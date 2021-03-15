@@ -20,18 +20,16 @@ package org.apache.hudi.source;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.operator.FlinkOptions;
-import org.apache.hudi.operator.StreamReadMonitoringFunction;
-import org.apache.hudi.operator.StreamReadOperator;
-import org.apache.hudi.operator.utils.TestConfigurations;
-import org.apache.hudi.operator.utils.TestData;
-import org.apache.hudi.source.format.FilePathUtils;
-import org.apache.hudi.source.format.mor.MergeOnReadInputFormat;
-import org.apache.hudi.source.format.mor.MergeOnReadInputSplit;
-import org.apache.hudi.source.format.mor.MergeOnReadTableState;
+import org.apache.hudi.table.format.FilePathUtils;
+import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
+import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
+import org.apache.hudi.table.format.mor.MergeOnReadTableState;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.TestConfigurations;
+import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 
 import org.apache.avro.Schema;
