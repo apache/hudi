@@ -20,8 +20,8 @@ package org.apache.hudi.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.operator.FlinkOptions;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.avro.Schema;

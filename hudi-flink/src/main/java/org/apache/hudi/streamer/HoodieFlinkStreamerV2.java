@@ -19,10 +19,10 @@
 package org.apache.hudi.streamer;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.operator.FlinkOptions;
-import org.apache.hudi.operator.StreamWriteOperatorFactory;
-import org.apache.hudi.operator.partitioner.BucketAssignFunction;
-import org.apache.hudi.operator.transform.RowDataToHoodieFunction;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.StreamWriteOperatorFactory;
+import org.apache.hudi.sink.partitioner.BucketAssignFunction;
+import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 

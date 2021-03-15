@@ -19,9 +19,9 @@
 package org.apache.hudi.utils;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.operator.FlinkOptions;
-import org.apache.hudi.operator.StreamReadMonitoringFunction;
-import org.apache.hudi.source.format.mor.MergeOnReadInputSplit;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.source.StreamReadMonitoringFunction;
+import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
