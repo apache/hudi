@@ -112,6 +112,8 @@
                   <include>org.apache.hbase:hbase-protocol</include>
                   <include>org.apache.hbase:hbase-server</include>
                   <include>org.apache.htrace:htrace-core</include>
+
+                  <include>commons-codec:commons-codec</include>
                 </includes>
               </artifactSet>
               <relocations>
