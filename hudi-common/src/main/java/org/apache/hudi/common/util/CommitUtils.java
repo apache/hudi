@@ -66,7 +66,7 @@ public class CommitUtils {
     if (extraMetadata.isPresent()) {
       extraMetadata.get().forEach(commitMetadata::addMetadata);
     }
-    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaToStoreInCommit);
+    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaToStoreInCommit == null ? "" : schemaToStoreInCommit);
     commitMetadata.setOperationType(operationType);
     return commitMetadata;
   }

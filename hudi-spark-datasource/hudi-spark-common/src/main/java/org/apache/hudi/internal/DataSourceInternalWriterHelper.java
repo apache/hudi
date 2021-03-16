@@ -40,6 +40,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.StructType;
 
+import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -77,7 +78,7 @@ public class DataSourceInternalWriterHelper {
 
   public void commit(List<HoodieWriteStat> writeStatList) {
     try {
-      writeClient.commitStats(instantTime, writeStatList, Option.empty(),
+      writeClient.commitStats(instantTime, writeStatList, Option.of(new HashMap<>()),
           DataSourceUtils.getCommitActionType(operationType, metaClient.getTableType()));
     } catch (Exception ioe) {
       throw new HoodieException(ioe.getMessage(), ioe);
