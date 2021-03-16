@@ -12,8 +12,8 @@ version : &version "0.5.1-SNAPSHOT"
 
 previous_docs:
   - version: Latest
-    en: /docs/quick-start-guide.html
-    cn: /cn/docs/quick-start-guide.html
+    en: /docs/spark_quick-start-guide.html
+    cn: /cn/docs/spark_quick-start-guide.html
   - version: 0.7.0
     en: /docs/0.7.0-quick-start-guide.html
     cn: /cn/docs/0.7.0-quick-start-guide.html

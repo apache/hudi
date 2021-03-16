@@ -24,7 +24,7 @@ To contribute code, you need
 
 To contribute, you would need to do the following
  
-- Fork the Hudi code on Github & then clone your own fork locally. Once cloned, we recommend building as per instructions on [quickstart](/docs/quick-start-guide.html)
+- Fork the Hudi code on Github & then clone your own fork locally. Once cloned, we recommend building as per instructions on [spark quickstart](/docs/spark_quick-start-guide.html) or [flink quickstart](/docs/flink-quick-start-guide.html)
 
 - \[Recommended\] We have embraced the code style largely based on [google format](https://google.github.io/styleguide/javaguide.html). Please setup your IDE with style files from [\<project root\>/style/](https://github.com/apache/hudi/tree/master/style). These instructions have been tested on IntelliJ.
 

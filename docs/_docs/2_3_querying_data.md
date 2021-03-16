@@ -40,6 +40,7 @@ Following tables show whether a given query is supported on specific query engin
 |**Hive**|Y|Y|
 |**Spark SQL**|Y|Y|
 |**Spark Datasource**|Y|Y|
+|**Flink SQL**|Y|N|
 |**PrestoDB**|Y|N|
 |**Impala**|Y|N|
 
@@ -53,6 +54,7 @@ Note that `Read Optimized` queries are not applicable for COPY_ON_WRITE tables.
 |**Hive**|Y|Y|Y|
 |**Spark SQL**|Y|Y|Y|
 |**Spark Datasource**|Y|N|Y|
+|**Flink SQL**|Y|Y|Y|
 |**PrestoDB**|Y|N|Y|
 |**Impala**|N|N|Y|
 
@@ -165,7 +167,7 @@ hudiIncQueryDF.createOrReplaceTempView("hudi_trips_incremental")
 spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_incremental where fare > 20.0").show()
 ```
 
-For examples, refer to [Setup spark-shell in quickstart](/docs/quick-start-guide.html#setup-spark-shell). 
+For examples, refer to [Setup spark-shell in quickstart](/docs/spark_quick-start-guide.html#setup-spark-shell). 
 Please refer to [configurations](/docs/configurations.html#spark-datasource) section, to view all datasource options.
 
 Additionally, `HoodieReadClient` offers the following functionality using Hudi's implicit indexing.
@@ -175,6 +177,47 @@ Additionally, `HoodieReadClient` offers the following functionality using Hudi's
 | read(keys) | Read out the data corresponding to the keys as a DataFrame, using Hudi's own index for faster lookup |
 | filterExists() | Filter out already existing records from the provided `RDD[HoodieRecord]`. Useful for de-duplication |
 | checkExists(keys) | Check if the provided keys exist in a Hudi table |
+
+## Flink SQL
+Once the flink Hudi tables have been registered to the Flink catalog, it can be queried using the Flink SQL. It supports all query types across both Hudi table types,
+relying on the custom Hudi input formats again like Hive. Typically notebook users and Flink SQL CLI users leverage flink sql for querying Hudi tables. Please add hudi-flink-bundle as described above via --jars.
+
+By default, Flink SQL will try to use its own parquet reader instead of Hive SerDe when reading from Hive metastore parquet tables.
+
+```bash
+# HADOOP_HOME is your hadoop root directory after unpack the binary package.
+export HADOOP_CLASSPATH=`$HADOOP_HOME/bin/hadoop classpath`
+
+./bin/sql-client.sh embedded -j .../hudi-flink-bundle_2.1?-*.*.*.jar shell
+```
+
+```sql
+-- this defines a COPY_ON_WRITE table named 't1'
+CREATE TABLE t1(
+  uuid VARCHAR(20),
+  name VARCHAR(10),
+  age INT,
+  ts TIMESTAMP(3),
+  `partition` VARCHAR(20)
+)
+PARTITIONED BY (`partition`)
+WITH (
+  'connector' = 'hudi',
+  'path' = 'schema://base-path'
+);
+
+-- query the data
+select * from t1 where `partition` = 'par1';
+```
+
+Flink's built-in support parquet is used for both COPY_ON_WRITE and MERGE_ON_READ tables,
+additionally partition prune is applied by Flink engine internally if a partition path is specified
+in the filter. Filters push down is not supported yet (already on the roadmap).
+
+For MERGE_ON_READ table, in order to query hudi table as a streaming, you need to add option `'read.streaming.enabled' = 'true'`,
+when querying the table, a Flink streaming pipeline starts and never ends until the user cancel the job manually.
+You can specify the start commit with option `read.streaming.start-commit` and source monitoring interval with option
+`read.streaming.check-interval`.
 
 ## PrestoDB
 
