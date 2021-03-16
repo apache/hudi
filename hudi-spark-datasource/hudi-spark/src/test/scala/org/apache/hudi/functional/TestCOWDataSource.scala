@@ -18,9 +18,8 @@
 package org.apache.hudi.functional
 
 import java.sql.{Date, Timestamp}
-
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
@@ -28,7 +27,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.Config
 import org.apache.hudi.testutils.HoodieClientTestBase
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, concat, lit, udf}
 import org.apache.spark.sql.types._
@@ -84,6 +83,43 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .save(basePath)
 
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+  }
+
+  /**
+   * Test for https://issues.apache.org/jira/browse/HUDI-1615. Null Schema in BulkInsert row writer flow.
+   * This was reported by customer when archival kicks in as the schema in commit metadata is not set for bulk_insert
+   * row writer flow.
+   * In this test, we trigger a round of bulk_inserts and set archive related configs to be minimal. So, after 4 rounds,
+   * archival should kick in and 2 commits should be archived. If schema is valid, no exception will be thrown. If not,
+   * NPE will be thrown.
+   */
+  @Test
+  def testArchivalWithBulkInsert(): Unit = {
+    var structType : StructType = null
+    for (i <- 1 to 4) {
+      val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), 100)).toList
+      val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+      structType = inputDF.schema
+      inputDF.write.format("hudi")
+        .options(commonOpts)
+        .option("hoodie.keep.min.commits", "1")
+        .option("hoodie.keep.max.commits", "2")
+        .option("hoodie.cleaner.commits.retained", "0")
+        .option("hoodie.datasource.write.row.writer.enable", "true")
+        .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
+        .mode(if (i == 0) SaveMode.Overwrite else SaveMode.Append)
+        .save(basePath)
+    }
+
+    val tableMetaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(basePath).build()
+    val actualSchema = new TableSchemaResolver(tableMetaClient).getTableAvroSchemaWithoutMetadataFields
+    val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(commonOpts(HoodieWriteConfig.TABLE_NAME))
+    spark.sparkContext.getConf.registerKryoClasses(
+      Array(classOf[org.apache.avro.generic.GenericData],
+        classOf[org.apache.avro.Schema]))
+    val schema = AvroConversionUtils.convertStructTypeToAvroSchema(structType, structName, nameSpace)
+    assertTrue(actualSchema != null)
+    assertEquals(schema, actualSchema)
   }
 
   @ParameterizedTest

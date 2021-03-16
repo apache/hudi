@@ -47,7 +47,8 @@ public class DefaultSource extends BaseDefaultSource implements TableProvider {
     String instantTime = properties.get(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY);
     String path = properties.get("path");
     String tblName = properties.get(HoodieWriteConfig.TABLE_NAME);
-    HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(null, path, tblName, properties);
+    // 1st arg to createHooodieConfig is not really reuqired to be set. but passing it anyways.
+    HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(properties.get(HoodieWriteConfig.AVRO_SCHEMA), path, tblName, properties);
     return new HoodieDataSourceInternalTable(instantTime, config, schema, getSparkSession(),
         getConfiguration());
   }
