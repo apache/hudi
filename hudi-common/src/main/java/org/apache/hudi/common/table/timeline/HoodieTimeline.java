@@ -172,6 +172,11 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline findInstantsAfter(String instantTime, int numCommits);
 
   /**
+   * Create a new Timeline with all the instants after startTs.
+   */
+  HoodieTimeline findInstantsAfter(String instantTime);
+
+  /**
    * Create a new Timeline with all instants before specified time.
    */
   HoodieTimeline findInstantsBefore(String instantTime);

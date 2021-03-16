@@ -650,7 +650,7 @@ public class DeltaSync implements Serializable {
     }
 
     // Validate what deltastreamer assumes of write-config to be really safe
-    ValidationUtils.checkArgument(config.isInlineCompaction() == cfg.isInlineCompactionEnabled(),
+    ValidationUtils.checkArgument(config.inlineCompactionEnabled() == cfg.isInlineCompactionEnabled(),
         String.format("%s should be set to %s", INLINE_COMPACT_PROP, cfg.isInlineCompactionEnabled()));
     ValidationUtils.checkArgument(!config.shouldAutoCommit(),
         String.format("%s should be set to %s", HOODIE_AUTO_COMMIT_PROP, autoCommit));

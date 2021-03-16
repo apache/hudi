@@ -46,6 +46,8 @@ public enum WriteOperationType {
   DELETE_PARTITION("delete_partition"),
   // insert overwrite with dynamic partitioning
   INSERT_OVERWRITE_TABLE("insert_overwrite_table"),
+  // compact
+  COMPACT("compact"),
   // used for old version
   UNKNOWN("unknown");
 
@@ -82,6 +84,10 @@ public enum WriteOperationType {
         return INSERT_OVERWRITE_TABLE;
       case "cluster":
         return CLUSTER;
+      case "compact":
+        return COMPACT;
+      case "unknown":
+        return UNKNOWN;
       default:
         throw new HoodieException("Invalid value of Type.");
     }

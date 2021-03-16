@@ -23,13 +23,13 @@ import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.DagUtils;
 import org.apache.hudi.integ.testsuite.dag.WorkflowDag;
 import org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator;
@@ -38,6 +38,8 @@ import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.RollbackNode;
 import org.apache.hudi.integ.testsuite.dag.scheduler.DagScheduler;
 import org.apache.hudi.integ.testsuite.dag.scheduler.SaferSchemaDagScheduler;
+import org.apache.hudi.integ.testsuite.helpers.HiveServiceProvider;
+import org.apache.hudi.integ.testsuite.helpers.ZookeeperServiceProvider;
 import org.apache.hudi.integ.testsuite.reader.DeltaInputType;
 import org.apache.hudi.integ.testsuite.writer.DeltaOutputMode;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
@@ -182,9 +184,9 @@ public class HoodieTestSuiteJob {
       long startTime = System.currentTimeMillis();
       WriterContext writerContext = new WriterContext(jsc, props, cfg, keyGenerator, sparkSession);
       writerContext.initContext(jsc);
+      startOtherServicesIfNeeded(writerContext);
       if (this.cfg.saferSchemaEvolution) {
         int numRollbacks = 2; // rollback most recent upsert/insert, by default.
-
         // if root is RollbackNode, get num_rollbacks
         List<DagNode> root = workflowDag.getNodeList();
         if (!root.isEmpty() && root.get(0) instanceof RollbackNode) {
@@ -203,8 +205,31 @@ public class HoodieTestSuiteJob {
       log.error("Failed to run Test Suite ", e);
       throw new HoodieException("Failed to run Test Suite ", e);
     } finally {
+      stopQuietly();
+    }
+  }
+
+  private void stopQuietly() {
+    try {
       sparkSession.stop();
       jsc.stop();
+    } catch (Exception e) {
+      log.error("Unable to stop spark session", e);
+    }
+  }
+
+  private void startOtherServicesIfNeeded(WriterContext writerContext) throws Exception {
+    if (cfg.startHiveMetastore) {
+      HiveServiceProvider hiveServiceProvider = new HiveServiceProvider(
+          Config.newBuilder().withHiveLocal(true).build());
+      hiveServiceProvider.startLocalHiveServiceIfNeeded(writerContext.getHoodieTestSuiteWriter().getConfiguration());
+      hiveServiceProvider.syncToLocalHiveIfNeeded(writerContext.getHoodieTestSuiteWriter());
+    }
+
+    if (cfg.startZookeeper) {
+      ZookeeperServiceProvider zookeeperServiceProvider = new ZookeeperServiceProvider(Config.newBuilder().withHiveLocal(true).build(),
+          writerContext.getHoodieTestSuiteWriter().getConfiguration());
+      zookeeperServiceProvider.startLocalZookeeperIfNeeded();
     }
   }
 
@@ -262,5 +287,11 @@ public class HoodieTestSuiteJob {
         + "(If not provided, assumed to be false.)",
         required = false)
     public Boolean saferSchemaEvolution = false;
+
+    @Parameter(names = {"--start-zookeeper"}, description = "Start Zookeeper instance to use for optimistic lock ")
+    public Boolean startZookeeper = false;
+
+    @Parameter(names = {"--start-hive-metastore"}, description = "Start Hive Metastore to use for optimistic lock ")
+    public Boolean startHiveMetastore = false;
   }
 }

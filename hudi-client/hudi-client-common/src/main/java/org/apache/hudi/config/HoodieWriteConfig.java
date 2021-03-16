@@ -18,18 +18,23 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
+import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.common.config.DefaultHoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
@@ -37,12 +42,9 @@ import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
-
-import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import javax.annotation.concurrent.Immutable;
-
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -55,6 +57,8 @@ import java.util.Properties;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.LockConfiguration.HIVE_DATABASE_NAME_PROP;
+import static org.apache.hudi.common.config.LockConfiguration.HIVE_TABLE_NAME_PROP;
 
 /**
  * Class storing configs for the HoodieWriteClient.
@@ -148,6 +152,15 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public static final String CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES_PROP = "hoodie.client.heartbeat.tolerable.misses";
   public static final Integer DEFAULT_CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES = 2;
+  // Enable different concurrency support
+  public static final String WRITE_CONCURRENCY_MODE_PROP =
+      "hoodie.write.concurrency.mode";
+  public static final String DEFAULT_WRITE_CONCURRENCY_MODE = WriteConcurrencyMode.SINGLE_WRITER.name();
+
+  // Comma separated metadata key prefixes to override from latest commit during overlapping commits via multi writing
+  public static final String WRITE_META_KEY_PREFIXES_PROP =
+      "hoodie.write.meta.key.prefixes";
+  public static final String DEFAULT_WRITE_META_KEY_PREFIXES = "";
 
   /**
    * HUDI-858 : There are users who had been directly using RDD APIs and have relied on a behavior in 0.4.x to allow
@@ -427,7 +440,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.CLEANER_INCREMENTAL_MODE));
   }
 
-  public boolean isInlineCompaction() {
+  public boolean inlineCompactionEnabled() {
     return Boolean.parseBoolean(props.getProperty(HoodieCompactionConfig.INLINE_COMPACT_PROP));
   }
 
@@ -459,7 +472,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Boolean.valueOf(props.getProperty(HoodieCompactionConfig.COMPACTION_REVERSE_LOG_READ_ENABLED_PROP));
   }
 
-  public boolean isInlineClustering() {
+  public boolean inlineClusteringEnabled() {
     return Boolean.parseBoolean(props.getProperty(HoodieClusteringConfig.INLINE_CLUSTERING_PROP));
   }
 
@@ -469,7 +482,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public boolean isClusteringEnabled() {
     // TODO: future support async clustering
-    return isInlineClustering() || isAsyncClusteringEnabled();
+    return inlineClusteringEnabled() || isAsyncClusteringEnabled();
   }
 
   public int getInlineClusterMaxCommits() {
@@ -939,10 +952,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Long.valueOf(props.getProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE_PROP));
   }
 
-  public int getMetadataCleanerCommitsRetained() {
-    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED_PROP));
-  }
-
   public Long getHoodieClientHeartbeatIntervalInMs() {
     return Long.valueOf(props.getProperty(CLIENT_HEARTBEAT_INTERVAL_IN_MS_PROP));
   }
@@ -982,6 +991,47 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Integer.parseInt(props.getProperty(HoodieMetadataConfig.MIN_COMMITS_TO_KEEP_PROP));
   }
 
+  public int getMetadataCleanerCommitsRetained() {
+    return Integer.parseInt(props.getProperty(HoodieMetadataConfig.CLEANER_COMMITS_RETAINED_PROP));
+  }
+
+  /**
+   * Hoodie Client Lock Configs.
+   * @return
+   */
+
+  public String getLockProviderClass() {
+    return props.getProperty(HoodieLockConfig.LOCK_PROVIDER_CLASS_PROP);
+  }
+
+  public String getLockHiveDatabaseName() {
+    return props.getProperty(HIVE_DATABASE_NAME_PROP);
+  }
+
+  public String getLockHiveTableName() {
+    return props.getProperty(HIVE_TABLE_NAME_PROP);
+  }
+
+  public ConflictResolutionStrategy getWriteConflictResolutionStrategy() {
+    return ReflectionUtils.loadClass(props.getProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_PROP));
+  }
+
+  public Long getLockAcquireWaitTimeoutInMs() {
+    return Long.valueOf(props.getProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP));
+  }
+
+  public WriteConcurrencyMode getWriteConcurrencyMode() {
+    return WriteConcurrencyMode.fromValue(props.getProperty(WRITE_CONCURRENCY_MODE_PROP));
+  }
+
+  public Boolean inlineTableServices() {
+    return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean();
+  }
+
+  public String getWriteMetaKeyPrefixes() {
+    return props.getProperty(WRITE_META_KEY_PREFIXES_PROP);
+  }
+
   public static class Builder {
 
     protected final Properties props = new Properties();
@@ -998,6 +1048,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     private boolean isCallbackConfigSet = false;
     private boolean isPayloadConfigSet = false;
     private boolean isMetadataConfigSet = false;
+    private boolean isLockConfigSet = false;
 
     public Builder withEngineType(EngineType engineType) {
       this.engineType = engineType;
@@ -1141,6 +1192,12 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withLockConfig(HoodieLockConfig lockConfig) {
+      props.putAll(lockConfig.getProps());
+      isLockConfigSet = true;
+      return this;
+    }
+
     public Builder withMetricsConfig(HoodieMetricsConfig metricsConfig) {
       props.putAll(metricsConfig.getProps());
       isMetricsConfigSet = true;
@@ -1254,6 +1311,16 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withWriteConcurrencyMode(WriteConcurrencyMode concurrencyMode) {
+      props.setProperty(WRITE_CONCURRENCY_MODE_PROP, concurrencyMode.value());
+      return this;
+    }
+
+    public Builder withWriteMetaKeyPrefixes(String writeMetaKeyPrefixes) {
+      props.setProperty(WRITE_META_KEY_PREFIXES_PROP, writeMetaKeyPrefixes);
+      return this;
+    }
+
     public Builder withProperties(Properties properties) {
       this.props.putAll(properties);
       return this;
@@ -1314,7 +1381,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           CLIENT_HEARTBEAT_INTERVAL_IN_MS_PROP, String.valueOf(DEFAULT_CLIENT_HEARTBEAT_INTERVAL_IN_MS));
       setDefaultOnCondition(props, !props.containsKey(CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES_PROP),
           CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES_PROP, String.valueOf(DEFAULT_CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES));
-
+      setDefaultOnCondition(props, !props.containsKey(WRITE_CONCURRENCY_MODE_PROP),
+          WRITE_CONCURRENCY_MODE_PROP, DEFAULT_WRITE_CONCURRENCY_MODE);
+      setDefaultOnCondition(props, !props.containsKey(WRITE_META_KEY_PREFIXES_PROP),
+          WRITE_META_KEY_PREFIXES_PROP, DEFAULT_WRITE_META_KEY_PREFIXES);
       // Make sure the props is propagated
       setDefaultOnCondition(props, !isIndexConfigSet, HoodieIndexConfig.newBuilder().withEngineType(engineType).fromProperties(props).build());
       setDefaultOnCondition(props, !isStorageConfigSet, HoodieStorageConfig.newBuilder().fromProperties(props).build());
@@ -1336,6 +1406,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           HoodiePayloadConfig.newBuilder().fromProperties(props).build());
       setDefaultOnCondition(props, !isMetadataConfigSet,
           HoodieMetadataConfig.newBuilder().fromProperties(props).build());
+      setDefaultOnCondition(props, !isLockConfigSet,
+          HoodieLockConfig.newBuilder().fromProperties(props).build());
 
       setDefaultOnCondition(props, !props.containsKey(EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION),
           EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION, DEFAULT_EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION);
@@ -1349,6 +1421,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       // Ensure Layout Version is good
       new TimelineLayoutVersion(Integer.parseInt(layoutVersion));
       Objects.requireNonNull(props.getProperty(BASE_PATH_PROP));
+      if (props.getProperty(WRITE_CONCURRENCY_MODE_PROP)
+          .equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name())) {
+        ValidationUtils.checkArgument(props.getProperty(HoodieCompactionConfig.FAILED_WRITES_CLEANER_POLICY_PROP)
+            != HoodieFailedWritesCleaningPolicy.EAGER.name());
+      }
     }
 
     public HoodieWriteConfig build() {
