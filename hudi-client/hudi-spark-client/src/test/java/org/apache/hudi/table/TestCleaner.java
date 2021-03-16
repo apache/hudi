@@ -24,8 +24,14 @@ import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieClusteringGroup;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.avro.model.HoodieClusteringStrategy;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieSliceInfo;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieCleanStat;
@@ -38,6 +44,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -96,6 +103,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -104,6 +112,7 @@ import static org.apache.hudi.common.testutils.HoodieTestTable.makeIncrementalCo
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -126,7 +135,7 @@ public class TestCleaner extends HoodieClientTestBase {
    * @param insertFn Insertion API for testing
    * @throws Exception in case of error
    */
-  private void insertFirstBigBatchForClientCleanerTest(HoodieWriteConfig cfg, SparkRDDWriteClient client,
+  private Pair<String, JavaRDD<WriteStatus>> insertFirstBigBatchForClientCleanerTest(HoodieWriteConfig cfg, SparkRDDWriteClient client,
       Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> insertFn,
       HoodieCleaningPolicy cleaningPolicy) throws Exception {
@@ -140,10 +149,9 @@ public class TestCleaner extends HoodieClientTestBase {
     List<HoodieRecord> records = recordGenFunction.apply(newCommitTime, BIG_BATCH_INSERT_SIZE);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 5);
 
-    List<WriteStatus> statuses = insertFn.apply(client, writeRecords, newCommitTime).collect();
+    JavaRDD<WriteStatus> statuses = insertFn.apply(client, writeRecords, newCommitTime);
     // Verify there are no errors
-    assertNoWriteErrors(statuses);
-
+    assertNoWriteErrors(statuses.collect());
     // verify that there is a commit
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
@@ -151,13 +159,49 @@ public class TestCleaner extends HoodieClientTestBase {
     // Should have 100 records in table (check using Index), all in locations marked at commit
     HoodieTable table = HoodieSparkTable.create(client.getConfig(), context, metaClient);
 
-    assertFalse(table.getCompletedCommitsTimeline().empty());
+    if (client.getConfig().shouldAutoCommit()) {
+      assertFalse(table.getCompletedCommitsTimeline().empty());
+    }
     // We no longer write empty cleaner plans when there is nothing to be cleaned.
     assertTrue(table.getCompletedCleanTimeline().empty());
 
-    HoodieIndex index = SparkHoodieIndex.createIndex(cfg);
-    List<HoodieRecord> taggedRecords = ((JavaRDD<HoodieRecord>) index.tagLocation(jsc.parallelize(records, 1), context, table)).collect();
-    checkTaggedRecords(taggedRecords, newCommitTime);
+    if (client.getConfig().shouldAutoCommit()) {
+      HoodieIndex index = SparkHoodieIndex.createIndex(cfg);
+      List<HoodieRecord> taggedRecords = ((JavaRDD<HoodieRecord>) index.tagLocation(jsc.parallelize(records, 1), context, table)).collect();
+      checkTaggedRecords(taggedRecords, newCommitTime);
+    }
+    return Pair.of(newCommitTime, statuses);
+  }
+
+  /**
+   * Helper method to do first batch of insert for clean by versions/commits tests.
+   *
+   * @param cfg Hoodie Write Config
+   * @param client Hoodie Client
+   * @param recordGenFunction Function to generate records for insertion
+   * @param insertFn Insertion API for testing
+   * @throws Exception in case of error
+   */
+  private Pair<String, JavaRDD<WriteStatus>> insertFirstFailedBigBatchForClientCleanerTest(HoodieWriteConfig cfg, SparkRDDWriteClient client,
+                                                       Function2<List<HoodieRecord>, String, Integer> recordGenFunction,
+                                                       Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> insertFn,
+                                                       HoodieCleaningPolicy cleaningPolicy) throws Exception {
+
+    /*
+     * do a big insert (this is basically same as insert part of upsert, just adding it here so we can catch breakages
+     * in insert(), if the implementation diverges.)
+     */
+    String newCommitTime = client.startCommit();
+
+    List<HoodieRecord> records = recordGenFunction.apply(newCommitTime, BIG_BATCH_INSERT_SIZE);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 5);
+
+    JavaRDD<WriteStatus> statuses = insertFn.apply(client, writeRecords, newCommitTime);
+    // Verify there are no errors
+    assertNoWriteErrors(statuses.collect());
+    // Don't invoke commit to simulate failed write
+    client.getHeartbeatClient().stop(newCommitTime);
+    return Pair.of(newCommitTime, statuses);
   }
 
   /**
@@ -166,6 +210,14 @@ public class TestCleaner extends HoodieClientTestBase {
   @Test
   public void testInsertAndCleanByVersions() throws Exception {
     testInsertAndCleanByVersions(SparkRDDWriteClient::insert, SparkRDDWriteClient::upsert, false);
+  }
+
+  /**
+   * Test Clean-Failed-Writes when Cleaning policy is by VERSIONS using insert/upsert API.
+   */
+  @Test
+  public void testInsertAndCleanFailedWritesByVersions() throws Exception {
+    testInsertAndCleanFailedWritesByVersions(SparkRDDWriteClient::insert, false);
   }
 
   /**
@@ -323,7 +375,7 @@ public class TestCleaner extends HoodieClientTestBase {
   }
 
   /**
-   * Test Clean-By-Versions using insert/upsert API.
+   * Test Clean-By-Commits using insert/upsert API.
    */
   @Test
   public void testInsertAndCleanByCommits() throws Exception {
@@ -331,7 +383,15 @@ public class TestCleaner extends HoodieClientTestBase {
   }
 
   /**
-   * Test Clean-By-Versions using prepped version of insert/upsert API.
+   * Test Clean-By-Commits using insert/upsert API.
+   */
+  @Test
+  public void testFailedInsertAndCleanByCommits() throws Exception {
+    testFailedInsertAndCleanByCommits(SparkRDDWriteClient::insert, false);
+  }
+
+  /**
+   * Test Clean-By-Commits using prepped version of insert/upsert API.
    */
   @Test
   public void testInsertPreppedAndCleanByCommits() throws Exception {
@@ -339,7 +399,7 @@ public class TestCleaner extends HoodieClientTestBase {
   }
 
   /**
-   * Test Clean-By-Versions using prepped versions of bulk-insert/upsert API.
+   * Test Clean-By-Commits using prepped versions of bulk-insert/upsert API.
    */
   @Test
   public void testBulkInsertPreppedAndCleanByCommits() throws Exception {
@@ -349,7 +409,7 @@ public class TestCleaner extends HoodieClientTestBase {
   }
 
   /**
-   * Test Clean-By-Versions using bulk-insert/upsert API.
+   * Test Clean-By-Commits using bulk-insert/upsert API.
    */
   @Test
   public void testBulkInsertAndCleanByCommits() throws Exception {
@@ -429,6 +489,64 @@ public class TestCleaner extends HoodieClientTestBase {
         throw new RuntimeException(ioe);
       }
     });
+  }
+
+  /**
+   * Test Helper for Cleaning failed commits by commits logic from HoodieWriteClient API perspective.
+   *
+   * @param insertFn Insert API to be tested
+   * @param isPreppedAPI Flag to indicate if a prepped-version is used. If true, a wrapper function will be used during
+   *        record generation to also tag the regards (de-dupe is implicit as we use uniq record-gen APIs)
+   * @throws Exception in case of errors
+   */
+  private void testFailedInsertAndCleanByCommits(
+      Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> insertFn, boolean isPreppedAPI)
+      throws Exception {
+    int maxCommits = 3; // keep upto 3 commits from the past
+    HoodieWriteConfig cfg = getConfigBuilder()
+        .withAutoCommit(false)
+        .withHeartbeatIntervalInMs(3000)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(maxCommits).build())
+        .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
+        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
+        .build();
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+
+    final Function2<List<HoodieRecord>, String, Integer> recordInsertGenWrappedFunction =
+        generateWrapRecordsFn(isPreppedAPI, cfg, dataGen::generateInserts);
+
+    Pair<String, JavaRDD<WriteStatus>> result = insertFirstBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn,
+        HoodieCleaningPolicy.KEEP_LATEST_COMMITS);
+    client.commit(result.getLeft(), result.getRight());
+
+    HoodieTable table = HoodieSparkTable.create(client.getConfig(), context, metaClient);
+    assertTrue(table.getCompletedCleanTimeline().empty());
+
+    insertFirstFailedBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn,
+        HoodieCleaningPolicy.KEEP_LATEST_COMMITS);
+
+    insertFirstFailedBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn,
+        HoodieCleaningPolicy.KEEP_LATEST_COMMITS);
+
+    Pair<String, JavaRDD<WriteStatus>> ret =
+        insertFirstFailedBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn,
+        HoodieCleaningPolicy.KEEP_LATEST_COMMITS);
+    // Await till enough time passes such that the last failed commits heartbeats are expired
+    await().atMost(10, TimeUnit.SECONDS).until(() -> client.getHeartbeatClient()
+        .isHeartbeatExpired(ret.getLeft()));
+    List<HoodieCleanStat> cleanStats = runCleaner(cfg);
+    assertEquals(0, cleanStats.size(), "Must not clean any files");
+    HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
+    assertTrue(timeline.getTimelineOfActions(
+        CollectionUtils.createSet(HoodieTimeline.ROLLBACK_ACTION)).filterCompletedInstants().countInstants() == 3);
+    Option<HoodieInstant> rolleBackInstantForFailedCommit = timeline.getTimelineOfActions(
+        CollectionUtils.createSet(HoodieTimeline.ROLLBACK_ACTION)).filterCompletedInstants().lastInstant();
+    HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeAvroMetadata(
+        timeline.getInstantDetails(rolleBackInstantForFailedCommit.get()).get(), HoodieRollbackMetadata.class);
+    // Rollback of one of the failed writes should have deleted 3 files
+    assertEquals(3, rollbackMetadata.getTotalFilesDeleted());
   }
 
   /**
@@ -732,7 +850,8 @@ public class TestCleaner extends HoodieClientTestBase {
     // make next replacecommit, with 1 clustering operation. logically delete p0. No change to p1
     Map<String, String> partitionAndFileId002 = testTable.forReplaceCommit("00000000000002").getFileIdsWithBaseFilesInPartitions(p0);
     String file2P0C1 = partitionAndFileId002.get(p0);
-    testTable.addReplaceCommit("00000000000002", generateReplaceCommitMetadata(p0, file1P0C0, file2P0C1));
+    Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceMetadata = generateReplaceCommitMetadata(p0, file1P0C0, file2P0C1);
+    testTable.addReplaceCommit("00000000000002", replaceMetadata.getKey(), replaceMetadata.getValue());
 
     // run cleaner
     List<HoodieCleanStat> hoodieCleanStatsTwo = runCleaner(config);
@@ -744,7 +863,8 @@ public class TestCleaner extends HoodieClientTestBase {
     // make next replacecommit, with 1 clustering operation. Replace data in p1. No change to p0
     Map<String, String> partitionAndFileId003 = testTable.forReplaceCommit("00000000000003").getFileIdsWithBaseFilesInPartitions(p1);
     String file3P1C2 = partitionAndFileId003.get(p1);
-    testTable.addReplaceCommit("00000000000003", generateReplaceCommitMetadata(p1, file1P1C0, file3P1C2));
+    replaceMetadata = generateReplaceCommitMetadata(p1, file1P1C0, file3P1C2);
+    testTable.addReplaceCommit("00000000000003", replaceMetadata.getKey(), replaceMetadata.getValue());
 
     // run cleaner
     List<HoodieCleanStat> hoodieCleanStatsThree = runCleaner(config);
@@ -757,7 +877,8 @@ public class TestCleaner extends HoodieClientTestBase {
     // make next replacecommit, with 1 clustering operation. Replace data in p0 again
     Map<String, String> partitionAndFileId004 = testTable.forReplaceCommit("00000000000004").getFileIdsWithBaseFilesInPartitions(p0);
     String file4P0C3 = partitionAndFileId004.get(p0);
-    testTable.addReplaceCommit("00000000000004", generateReplaceCommitMetadata(p0, file2P0C1, file4P0C3));
+    replaceMetadata = generateReplaceCommitMetadata(p0, file2P0C1, file4P0C3);
+    testTable.addReplaceCommit("00000000000004", replaceMetadata.getKey(), replaceMetadata.getValue());
 
     // run cleaner
     List<HoodieCleanStat> hoodieCleanStatsFour = runCleaner(config);
@@ -771,7 +892,8 @@ public class TestCleaner extends HoodieClientTestBase {
     // make next replacecommit, with 1 clustering operation. Replace all data in p1. no new files created
     Map<String, String> partitionAndFileId005 = testTable.forReplaceCommit("00000000000005").getFileIdsWithBaseFilesInPartitions(p1);
     String file4P1C4 = partitionAndFileId005.get(p1);
-    testTable.addReplaceCommit("00000000000005", generateReplaceCommitMetadata(p1, file3P1C2, file4P1C4));
+    replaceMetadata = generateReplaceCommitMetadata(p0, file3P1C2, file4P1C4);
+    testTable.addReplaceCommit("00000000000005", replaceMetadata.getKey(), replaceMetadata.getValue());
     
     List<HoodieCleanStat> hoodieCleanStatsFive = runCleaner(config, 2);
     assertTrue(testTable.baseFileExists(p0, "00000000000004", file4P0C3));
@@ -781,7 +903,23 @@ public class TestCleaner extends HoodieClientTestBase {
     assertFalse(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
   }
   
-  private HoodieReplaceCommitMetadata generateReplaceCommitMetadata(String partition, String replacedFileId, String newFileId) {
+  private Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> generateReplaceCommitMetadata(String partition,
+                                                                                                          String replacedFileId,
+                                                                                                          String newFileId) {
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
+    requestedReplaceMetadata.setOperationType(WriteOperationType.CLUSTER.toString());
+    requestedReplaceMetadata.setVersion(1);
+    HoodieSliceInfo sliceInfo = HoodieSliceInfo.newBuilder().setFileId(replacedFileId).build();
+    List<HoodieClusteringGroup> clusteringGroups = new ArrayList<>();
+    clusteringGroups.add(HoodieClusteringGroup.newBuilder()
+        .setVersion(1).setNumOutputFileGroups(1).setMetrics(Collections.emptyMap())
+        .setSlices(Collections.singletonList(sliceInfo)).build());
+    requestedReplaceMetadata.setExtraMetadata(Collections.emptyMap());
+    requestedReplaceMetadata.setClusteringPlan(HoodieClusteringPlan.newBuilder()
+        .setVersion(1).setExtraMetadata(Collections.emptyMap())
+        .setStrategy(HoodieClusteringStrategy.newBuilder().setStrategyClassName("").setVersion(1).build())
+        .setInputGroups(clusteringGroups).build());
+    
     HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
     replaceMetadata.addReplaceFileId(partition, replacedFileId);
     replaceMetadata.setOperationType(WriteOperationType.CLUSTER);
@@ -792,7 +930,7 @@ public class TestCleaner extends HoodieClientTestBase {
       writeStat.setFileId(newFileId);
       replaceMetadata.addWriteStat(partition, writeStat);
     }
-    return replaceMetadata;
+    return Pair.of(requestedReplaceMetadata, replaceMetadata);
   }
 
   @Test
@@ -980,6 +1118,7 @@ public class TestCleaner extends HoodieClientTestBase {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().withAssumeDatePartitioning(true).build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withIncrementalCleaningMode(enableIncrementalClean)
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
             .withCleanBootstrapBaseFileEnabled(enableBootstrapSourceClean)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2).build())
         .build();
@@ -1244,6 +1383,69 @@ public class TestCleaner extends HoodieClientTestBase {
 
     List<HoodieCleanStat> cleanStats = runCleaner(config);
     assertEquals(0, cleanStats.size(), "Must not clean any files");
+  }
+
+  /**
+   * Test Helper for cleaning failed writes by versions logic from HoodieWriteClient API perspective.
+   *
+   * @param insertFn Insert API to be tested
+   * @param isPreppedAPI Flag to indicate if a prepped-version is used. If true, a wrapper function will be used during
+   *        record generation to also tag the regards (de-dupe is implicit as we use uniq record-gen APIs)
+   * @throws Exception in case of errors
+   */
+  private void testInsertAndCleanFailedWritesByVersions(
+      Function3<JavaRDD<WriteStatus>, SparkRDDWriteClient, JavaRDD<HoodieRecord>, String> insertFn, boolean isPreppedAPI)
+      throws Exception {
+    int maxVersions = 3; // keep upto 3 versions for each file
+    HoodieWriteConfig cfg = getConfigBuilder()
+        .withAutoCommit(false)
+        .withHeartbeatIntervalInMs(3000)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(maxVersions).build())
+        .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
+        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
+        .build();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
+
+      final Function2<List<HoodieRecord>, String, Integer> recordInsertGenWrappedFunction =
+          generateWrapRecordsFn(isPreppedAPI, cfg, dataGen::generateInserts);
+
+      Pair<String, JavaRDD<WriteStatus>> result = insertFirstBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn,
+          HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS);
+
+      client.commit(result.getLeft(), result.getRight());
+
+      HoodieTable table = HoodieSparkTable.create(client.getConfig(), context, metaClient);
+
+      assertTrue(table.getCompletedCleanTimeline().empty());
+
+      insertFirstFailedBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn,
+          HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS);
+
+      insertFirstFailedBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn,
+          HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS);
+
+      Pair<String, JavaRDD<WriteStatus>> ret =
+          insertFirstFailedBigBatchForClientCleanerTest(cfg, client, recordInsertGenWrappedFunction, insertFn,
+          HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS);
+
+      // Await till enough time passes such that the last failed commits heartbeats are expired
+      await().atMost(10, TimeUnit.SECONDS).until(() -> client.getHeartbeatClient()
+          .isHeartbeatExpired(ret.getLeft()));
+
+      List<HoodieCleanStat> cleanStats = runCleaner(cfg);
+      assertEquals(0, cleanStats.size(), "Must not clean any files");
+      HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
+      assertTrue(timeline.getTimelineOfActions(
+          CollectionUtils.createSet(HoodieTimeline.ROLLBACK_ACTION)).filterCompletedInstants().countInstants() == 3);
+      Option<HoodieInstant> rolleBackInstantForFailedCommit = timeline.getTimelineOfActions(
+          CollectionUtils.createSet(HoodieTimeline.ROLLBACK_ACTION)).filterCompletedInstants().lastInstant();
+      HoodieRollbackMetadata rollbackMetadata = TimelineMetadataUtils.deserializeAvroMetadata(
+          timeline.getInstantDetails(rolleBackInstantForFailedCommit.get()).get(), HoodieRollbackMetadata.class);
+      // Rollback of one of the failed writes should have deleted 3 files
+      assertEquals(3, rollbackMetadata.getTotalFilesDeleted());
+    }
   }
 
   /**

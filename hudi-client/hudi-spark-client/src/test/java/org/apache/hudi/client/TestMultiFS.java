@@ -75,8 +75,11 @@ public class TestMultiFS extends HoodieClientTestHarness {
   @Test
   public void readLocalWriteHDFS() throws Exception {
     // Initialize table and filesystem
-    HoodieTableMetaClient.initTableType(hadoopConf, dfsBasePath, HoodieTableType.valueOf(tableType),
-        tableName, HoodieAvroPayload.class.getName());
+    HoodieTableMetaClient.withPropertyBuilder()
+      .setTableType(tableType)
+      .setTableName(tableName)
+      .setPayloadClass(HoodieAvroPayload.class)
+      .initTable(hadoopConf, dfsBasePath);
 
     // Create write client to write some records in
     HoodieWriteConfig cfg = getHoodieWriteConfig(dfsBasePath);
@@ -94,14 +97,17 @@ public class TestMultiFS extends HoodieClientTestHarness {
 
       // Read from hdfs
       FileSystem fs = FSUtils.getFs(dfsBasePath, HoodieTestUtils.getDefaultHadoopConf());
-      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), dfsBasePath);
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(dfsBasePath).build();
       HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
       Dataset<Row> readRecords = HoodieClientTestUtils.readCommit(dfsBasePath, sqlContext, timeline, readCommitTime);
       assertEquals(readRecords.count(), records.size(), "Should contain 100 records");
 
       // Write to local
-      HoodieTableMetaClient.initTableType(hadoopConf, tablePath, HoodieTableType.valueOf(tableType),
-          tableName, HoodieAvroPayload.class.getName());
+      HoodieTableMetaClient.withPropertyBuilder()
+        .setTableType(tableType)
+        .setTableName(tableName)
+        .setPayloadClass(HoodieAvroPayload.class)
+        .initTable(hadoopConf, tablePath);
 
       String writeCommitTime = localWriteClient.startCommit();
       LOG.info("Starting write commit " + writeCommitTime);
@@ -112,7 +118,7 @@ public class TestMultiFS extends HoodieClientTestHarness {
 
       LOG.info("Reading from path: " + tablePath);
       fs = FSUtils.getFs(tablePath, HoodieTestUtils.getDefaultHadoopConf());
-      metaClient = new HoodieTableMetaClient(fs.getConf(), tablePath);
+      metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(tablePath).build();
       timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
       Dataset<Row> localReadRecords =
           HoodieClientTestUtils.readCommit(tablePath, sqlContext, timeline, writeCommitTime);

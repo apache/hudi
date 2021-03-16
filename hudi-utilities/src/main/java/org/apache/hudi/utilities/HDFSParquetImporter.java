@@ -28,7 +28,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
@@ -135,9 +134,10 @@ public class HDFSParquetImporter implements Serializable {
 
       if (!fs.exists(new Path(cfg.targetPath))) {
         // Initialize target hoodie table.
-        Properties properties = new Properties();
-        properties.put(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, cfg.tableName);
-        properties.put(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, cfg.tableType);
+        Properties properties = HoodieTableMetaClient.withPropertyBuilder()
+            .setTableName(cfg.tableName)
+            .setTableType(cfg.tableType)
+            .build();
         HoodieTableMetaClient.initTableAndGetMetaClient(jsc.hadoopConfiguration(), cfg.targetPath, properties);
       }
 

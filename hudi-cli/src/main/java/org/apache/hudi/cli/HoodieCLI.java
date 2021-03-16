@@ -85,8 +85,8 @@ public class HoodieCLI {
   }
 
   public static void refreshTableMetadata() {
-    setTableMetaClient(new HoodieTableMetaClient(HoodieCLI.conf, basePath, false, HoodieCLI.consistencyGuardConfig,
-        Option.of(layoutVersion)));
+    setTableMetaClient(HoodieTableMetaClient.builder().setConf(HoodieCLI.conf).setBasePath(basePath).setLoadActiveTimelineOnLoad(false).setConsistencyGuardConfig(HoodieCLI.consistencyGuardConfig)
+        .setLayoutVersion(Option.of(layoutVersion)).build());
   }
 
   public static void connectTo(String basePath, Integer layoutVersion) {

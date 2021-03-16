@@ -52,7 +52,7 @@ public class SavepointHelpers {
     // Make sure the restore was successful
     table.getMetaClient().reloadActiveTimeline();
     Option<HoodieInstant> lastInstant = table.getActiveTimeline()
-        .getCommitsAndCompactionTimeline()
+        .getWriteTimeline()
         .filterCompletedAndCompactionInstants()
         .lastInstant();
     ValidationUtils.checkArgument(lastInstant.isPresent());

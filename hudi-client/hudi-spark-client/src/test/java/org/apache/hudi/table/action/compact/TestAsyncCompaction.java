@@ -60,7 +60,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
   public void testRollbackForInflightCompaction() throws Exception {
     // Rollback inflight compaction
     HoodieWriteConfig cfg = getConfig(false);
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg, true);) {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
       HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
       String firstInstantTime = "001";
       String secondInstantTime = "004";
@@ -75,7 +75,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
       // Schedule compaction but do not run them
       scheduleCompaction(compactionInstantTime, client, cfg);
 
-      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
 
       HoodieInstant pendingCompactionInstant =
           metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().get();
@@ -86,12 +86,12 @@ public class TestAsyncCompaction extends CompactionTestBase {
       moveCompactionFromRequestedToInflight(compactionInstantTime, cfg);
 
       // Reload and rollback inflight compaction
-      metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
+      metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context, metaClient);
 
       client.rollbackInflightCompaction(
           new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, compactionInstantTime), hoodieTable);
-      metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
+      metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
       pendingCompactionInstant = metaClient.getCommitsAndCompactionTimeline().filterPendingCompactionTimeline()
           .getInstants().findFirst().get();
       assertEquals("compaction", pendingCompactionInstant.getAction());
@@ -120,7 +120,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
 
     int numRecs = 2000;
 
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg, true);) {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
       HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
       List<HoodieRecord> records = dataGen.generateInserts(firstInstantTime, numRecs);
       records = runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
@@ -129,10 +129,10 @@ public class TestAsyncCompaction extends CompactionTestBase {
       // Schedule compaction but do not run them
       scheduleCompaction(compactionInstantTime, client, cfg);
 
-      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
       createNextDeltaCommit(inflightInstantTime, records, client, metaClient, cfg, true);
 
-      metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
+      metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
       HoodieInstant pendingCompactionInstant =
           metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().get();
       assertEquals(compactionInstantTime, pendingCompactionInstant.getTimestamp(),
@@ -145,7 +145,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
       client.startCommitWithTime(nextInflightInstantTime);
 
       // Validate
-      metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
+      metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
       inflightInstant = metaClient.getActiveTimeline().filterPendingExcludingCompaction().firstInstant().get();
       assertEquals(inflightInstant.getTimestamp(), nextInflightInstantTime, "inflight instant has expected instant time");
       assertEquals(1, metaClient.getActiveTimeline()
@@ -162,7 +162,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
   public void testInflightCompaction() throws Exception {
     // There is inflight compaction. Subsequent compaction run must work correctly
     HoodieWriteConfig cfg = getConfig(true);
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg, true);) {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
       HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
       String firstInstantTime = "001";
       String secondInstantTime = "004";
@@ -177,7 +177,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
           new ArrayList<>());
 
       // Schedule and mark compaction instant as inflight
-      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
       scheduleCompaction(compactionInstantTime, client, cfg);
       moveCompactionFromRequestedToInflight(compactionInstantTime, cfg);
@@ -195,7 +195,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
   public void testScheduleIngestionBeforePendingCompaction() throws Exception {
     // Case: Failure case. Latest pending compaction instant time must be earlier than this instant time
     HoodieWriteConfig cfg = getConfig(false);
-    SparkRDDWriteClient client = getHoodieWriteClient(cfg, true);
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
 
     String firstInstantTime = "001";
@@ -210,7 +210,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
 
     // Schedule compaction but do not run them
     scheduleCompaction(compactionInstantTime, client, cfg);
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
     HoodieInstant pendingCompactionInstant =
         metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant().get();
     assertEquals(compactionInstantTime, pendingCompactionInstant.getTimestamp(), "Pending Compaction instant has expected instant time");
@@ -226,7 +226,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
     // Case: Failure case. Earliest ingestion inflight instant time must be later than compaction time
 
     HoodieWriteConfig cfg = getConfig(false);
-    SparkRDDWriteClient client = getHoodieWriteClient(cfg, true);
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
 
     String firstInstantTime = "001";
@@ -239,10 +239,10 @@ public class TestAsyncCompaction extends CompactionTestBase {
     records = runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
         new ArrayList<>());
 
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
     createNextDeltaCommit(inflightInstantTime, records, client, metaClient, cfg, true);
 
-    metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
+    metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
     HoodieInstant inflightInstant =
         metaClient.getActiveTimeline().filterPendingExcludingCompaction().firstInstant().get();
     assertEquals(inflightInstantTime, inflightInstant.getTimestamp(), "inflight instant has expected instant time");
@@ -258,7 +258,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
     // Case: Failure case. Earliest ingestion inflight instant time must be later than compaction time
 
     HoodieWriteConfig cfg = getConfig(false);
-    SparkRDDWriteClient client = getHoodieWriteClient(cfg, true);
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
 
     final String firstInstantTime = "001";
@@ -293,7 +293,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
   public void testCompactionAfterTwoDeltaCommits() throws Exception {
     // No Delta Commits after compaction request
     HoodieWriteConfig cfg = getConfig(true);
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg, true);) {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
       HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
       String firstInstantTime = "001";
       String secondInstantTime = "004";
@@ -304,7 +304,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
       runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
           new ArrayList<>());
 
-      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
       scheduleAndExecuteCompaction(compactionInstantTime, client, hoodieTable, cfg, numRecs, false);
     }
@@ -314,7 +314,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
   public void testInterleavedCompaction() throws Exception {
     // Case: Two delta commits before and after compaction schedule
     HoodieWriteConfig cfg = getConfig(true);
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg, true);) {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
       HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
       String firstInstantTime = "001";
       String secondInstantTime = "004";
@@ -328,7 +328,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
       records = runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
           new ArrayList<>());
 
-      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
       scheduleCompaction(compactionInstantTime, client, cfg);
 
@@ -342,7 +342,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
   public void testCompactionOnReplacedFiles() throws Exception {
     // Schedule a compaction. Replace those file groups and ensure compaction completes successfully.
     HoodieWriteConfig cfg = getConfig(true);
-    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg, true);) {
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
       HoodieReadClient readClient = getHoodieReadClient(cfg.getBasePath());
       String firstInstantTime = "001";
       String secondInstantTime = "004";
@@ -356,7 +356,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
       runNextDeltaCommits(client, readClient, Arrays.asList(firstInstantTime, secondInstantTime), records, cfg, true,
           new ArrayList<>());
 
-      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, cfg.getBasePath());
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(cfg.getBasePath()).build();
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
       scheduleCompaction(compactionInstantTime, client, cfg);
       metaClient.reloadActiveTimeline();

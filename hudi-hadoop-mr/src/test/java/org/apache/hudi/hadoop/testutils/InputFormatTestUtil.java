@@ -122,10 +122,35 @@ public class InputFormatTestUtil {
         String.format(HoodieHiveUtils.HOODIE_MAX_COMMIT_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
     jobConf.setInt(maxCommitPulls, numberOfCommitsToPull);
   }
+  
+  public static void setupSnapshotIncludePendingCommits(JobConf jobConf, String instantTime) {
+    setupSnapshotScanMode(jobConf, true);
+    String validateTimestampName =
+        String.format(HoodieHiveUtils.HOODIE_CONSUME_COMMIT, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
+    jobConf.set(validateTimestampName, instantTime);
+  }
+
+  public static void setupSnapshotScanMode(JobConf jobConf) {
+    setupSnapshotScanMode(jobConf, false);
+  }
+  
+  private static void setupSnapshotScanMode(JobConf jobConf, boolean includePending) {
+    String modePropertyName =
+        String.format(HoodieHiveUtils.HOODIE_CONSUME_MODE_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
+    jobConf.set(modePropertyName, HoodieHiveUtils.SNAPSHOT_SCAN_MODE);
+    String includePendingCommitsName =
+        String.format(HoodieHiveUtils.HOODIE_CONSUME_PENDING_COMMITS, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
+    jobConf.setBoolean(includePendingCommitsName, includePending);
+  }
 
   public static File prepareParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
       int numberOfRecords, String commitNumber) throws IOException {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString());
+    return prepareParquetTable(basePath, schema, numberOfFiles, numberOfRecords, commitNumber, HoodieTableType.COPY_ON_WRITE);
+  }
+
+  public static File prepareParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
+                                         int numberOfRecords, String commitNumber, HoodieTableType tableType) throws IOException {
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), tableType);
     java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", "01"));
     createData(schema, partitionPath, numberOfFiles, numberOfRecords, commitNumber);
     return partitionPath.toFile();
@@ -133,7 +158,12 @@ public class InputFormatTestUtil {
 
   public static File prepareSimpleParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
       int numberOfRecords, String commitNumber) throws Exception {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString());
+    return prepareSimpleParquetTable(basePath, schema, numberOfFiles, numberOfRecords, commitNumber, HoodieTableType.COPY_ON_WRITE);
+  }
+
+  public static File prepareSimpleParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
+                                               int numberOfRecords, String commitNumber, HoodieTableType tableType) throws Exception {
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), tableType);
     java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", "01"));
     createSimpleData(schema, partitionPath, numberOfFiles, numberOfRecords, commitNumber);
     return partitionPath.toFile();
@@ -141,7 +171,12 @@ public class InputFormatTestUtil {
 
   public static File prepareNonPartitionedParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
       int numberOfRecords, String commitNumber) throws IOException {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString());
+    return prepareNonPartitionedParquetTable(basePath, schema, numberOfFiles, numberOfRecords, commitNumber, HoodieTableType.COPY_ON_WRITE);
+  }
+
+  public static File prepareNonPartitionedParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
+                                                       int numberOfRecords, String commitNumber, HoodieTableType tableType) throws IOException {
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), tableType);
     createData(schema, basePath, numberOfFiles, numberOfRecords, commitNumber);
     return basePath.toFile();
   }

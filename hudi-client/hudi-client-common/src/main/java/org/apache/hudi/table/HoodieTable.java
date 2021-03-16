@@ -107,9 +107,8 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     this.hadoopConfiguration = context.getHadoopConf();
     this.context = context;
 
-    // disable reuse of resources, given there is no close() called on the executors ultimately
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
-        .enableReuse(false).build();
+        .build();
     this.metadata = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath(),
         FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR);
 

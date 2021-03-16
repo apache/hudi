@@ -19,7 +19,6 @@
 package org.apache.hudi.common.fs;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -80,9 +79,6 @@ public class FSUtils {
   private static final PathFilter ALLOW_ALL_FILTER = file -> true;
 
   public static Configuration prepareHadoopConf(Configuration conf) {
-    conf.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
-    conf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
-
     // look for all properties, prefixed to be picked up
     for (Entry<String, String> prop : System.getenv().entrySet()) {
       if (prop.getKey().startsWith(HOODIE_ENV_PROPS_PREFIX)) {
@@ -508,30 +504,6 @@ public class FSUtils {
     return recovered;
   }
 
-  public static void deleteOlderCleanMetaFiles(FileSystem fs, String metaPath, Stream<HoodieInstant> instants) {
-    // TODO - this should be archived when archival is made general for all meta-data
-    // skip MIN_CLEAN_TO_KEEP and delete rest
-    instants.skip(MIN_CLEAN_TO_KEEP).forEach(s -> {
-      try {
-        fs.delete(new Path(metaPath, s.getFileName()), false);
-      } catch (IOException e) {
-        throw new HoodieIOException("Could not delete clean meta files" + s.getFileName(), e);
-      }
-    });
-  }
-
-  public static void deleteOlderRollbackMetaFiles(FileSystem fs, String metaPath, Stream<HoodieInstant> instants) {
-    // TODO - this should be archived when archival is made general for all meta-data
-    // skip MIN_ROLLBACK_TO_KEEP and delete rest
-    instants.skip(MIN_ROLLBACK_TO_KEEP).forEach(s -> {
-      try {
-        fs.delete(new Path(metaPath, s.getFileName()), false);
-      } catch (IOException e) {
-        throw new HoodieIOException("Could not delete rollback meta files " + s.getFileName(), e);
-      }
-    });
-  }
-
   public static void deleteInstantFile(FileSystem fs, String metaPath, HoodieInstant instant) {
     try {
       LOG.warn("try to delete instant file: " + instant);
@@ -569,14 +541,12 @@ public class FSUtils {
 
   /**
    * This is due to HUDI-140 GCS has a different behavior for detecting EOF during seek().
-   * 
-   * @param inputStream FSDataInputStream
+   *
+   * @param fs fileSystem instance.
    * @return true if the inputstream or the wrapped one is of type GoogleHadoopFSInputStream
    */
-  public static boolean isGCSInputStream(FSDataInputStream inputStream) {
-    return inputStream.getClass().getCanonicalName().equals("com.google.cloud.hadoop.fs.gcs.GoogleHadoopFSInputStream")
-        || inputStream.getWrappedStream().getClass().getCanonicalName()
-            .equals("com.google.cloud.hadoop.fs.gcs.GoogleHadoopFSInputStream");
+  public static boolean isGCSFileSystem(FileSystem fs) {
+    return fs.getScheme().equals(StorageSchemes.GCS.getScheme());
   }
 
   public static Configuration registerFileSystem(Path file, Configuration conf) {
@@ -607,8 +577,8 @@ public class FSUtils {
    * Helper to filter out paths under metadata folder when running fs.globStatus.
    * @param fs  File System
    * @param globPath Glob Path
-   * @return
-   * @throws IOException
+   * @return the file status list of globPath exclude the meta folder
+   * @throws IOException when having trouble listing the path
    */
   public static List<FileStatus> getGlobStatusExcludingMetaFolder(FileSystem fs, Path globPath) throws IOException {
     FileStatus[] statuses = fs.globStatus(globPath);

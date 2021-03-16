@@ -38,7 +38,7 @@ import org.apache.hudi.config.HoodieBootstrapConfig.{BOOTSTRAP_BASE_PATH_PROP, B
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
-import org.apache.hudi.internal.{DataSourceInternalWriterHelper, HoodieDataSourceInternalWriter}
+import org.apache.hudi.internal.DataSourceInternalWriterHelper
 import org.apache.hudi.sync.common.AbstractSyncTool
 import org.apache.log4j.LogManager
 import org.apache.spark.SPARK_VERSION
@@ -111,9 +111,14 @@ private[hudi] object HoodieSparkSqlWriter {
       if (!tableExists) {
         val archiveLogFolder = parameters.getOrElse(
           HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, "archived")
-        val tableMetaClient = HoodieTableMetaClient.initTableType(sparkContext.hadoopConfiguration, path.get,
-          tableType, tblName, archiveLogFolder, parameters(PAYLOAD_CLASS_OPT_KEY),
-          null.asInstanceOf[String])
+
+        val tableMetaClient = HoodieTableMetaClient.withPropertyBuilder()
+          .setTableType(tableType)
+          .setTableName(tblName)
+          .setArchiveLogFolder(archiveLogFolder)
+          .setPayloadClassName(parameters(PAYLOAD_CLASS_OPT_KEY))
+          .setPreCombineField(parameters.getOrDefault(PRECOMBINE_FIELD_OPT_KEY, null))
+          .initTable(sparkContext.hadoopConfiguration, path.get)
         tableConfig = tableMetaClient.getTableConfig
       }
 
@@ -261,9 +266,15 @@ private[hudi] object HoodieSparkSqlWriter {
     if (!tableExists) {
       val archiveLogFolder = parameters.getOrElse(
         HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, "archived")
-      HoodieTableMetaClient.initTableTypeWithBootstrap(sparkContext.hadoopConfiguration, path,
-        HoodieTableType.valueOf(tableType), tableName, archiveLogFolder, parameters(PAYLOAD_CLASS_OPT_KEY),
-        null, bootstrapIndexClass, bootstrapBasePath)
+      HoodieTableMetaClient.withPropertyBuilder()
+          .setTableType(HoodieTableType.valueOf(tableType))
+          .setTableName(tableName)
+          .setArchiveLogFolder(archiveLogFolder)
+          .setPayloadClassName(parameters(PAYLOAD_CLASS_OPT_KEY))
+          .setPreCombineField(parameters.getOrDefault(PRECOMBINE_FIELD_OPT_KEY, null))
+          .setBootstrapIndexClass(bootstrapIndexClass)
+          .setBootstrapBasePath(bootstrapBasePath)
+          .initTable(sparkContext.hadoopConfiguration, path)
     }
 
     val jsc = new JavaSparkContext(sqlContext.sparkContext)
@@ -373,6 +384,7 @@ private[hudi] object HoodieSparkSqlWriter {
     hiveSyncConfig.useJdbc = parameters(HIVE_USE_JDBC_OPT_KEY).toBoolean
     hiveSyncConfig.useFileListingFromMetadata = parameters(HoodieMetadataConfig.METADATA_ENABLE_PROP).toBoolean
     hiveSyncConfig.verifyMetadataFileListing = parameters(HoodieMetadataConfig.METADATA_VALIDATE_PROP).toBoolean
+    hiveSyncConfig.ignoreExceptions = parameters.get(HIVE_IGNORE_EXCEPTIONS_OPT_KEY).exists(r => r.toBoolean)
     hiveSyncConfig.supportTimestamp = parameters.get(HIVE_SUPPORT_TIMESTAMP).exists(r => r.toBoolean)
     hiveSyncConfig.autoCreateDatabase = parameters.get(HIVE_AUTO_CREATE_DATABASE_OPT_KEY).exists(r => r.toBoolean)
     hiveSyncConfig.decodePartition = parameters.getOrElse(URL_ENCODE_PARTITIONING_OPT_KEY,
@@ -499,7 +511,8 @@ private[hudi] object HoodieSparkSqlWriter {
                                    hoodieTableConfigOpt: Option[HoodieTableConfig]): HoodieTableConfig = {
     if (tableExists) {
       hoodieTableConfigOpt.getOrElse(
-        new HoodieTableMetaClient(sparkContext.hadoopConfiguration, tablePath).getTableConfig)
+        HoodieTableMetaClient.builder().setConf(sparkContext.hadoopConfiguration).setBasePath(tablePath)
+          .build().getTableConfig)
     } else {
       null
     }

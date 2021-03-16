@@ -528,7 +528,7 @@ public class HoodieDeltaStreamer implements Serializable {
 
       if (fs.exists(new Path(cfg.targetBasePath))) {
         HoodieTableMetaClient meta =
-            new HoodieTableMetaClient(new Configuration(fs.getConf()), cfg.targetBasePath, false);
+            HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf())).setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(false).build();
         tableType = meta.getTableType();
         // This will guarantee there is no surprise with table type
         ValidationUtils.checkArgument(tableType.equals(HoodieTableType.valueOf(cfg.tableType)),
@@ -636,7 +636,7 @@ public class HoodieDeltaStreamer implements Serializable {
           asyncCompactService = Option.ofNullable(new SparkAsyncCompactService(new HoodieSparkEngineContext(jssc), writeClient));
           // Enqueue existing pending compactions first
           HoodieTableMetaClient meta =
-              new HoodieTableMetaClient(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath, true);
+              HoodieTableMetaClient.builder().setConf(new Configuration(jssc.hadoopConfiguration())).setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(true).build();
           List<HoodieInstant> pending = CompactionUtils.getPendingCompactionInstantTimes(meta);
           pending.forEach(hoodieInstant -> asyncCompactService.get().enqueuePendingCompaction(hoodieInstant));
           asyncCompactService.get().start((error) -> {

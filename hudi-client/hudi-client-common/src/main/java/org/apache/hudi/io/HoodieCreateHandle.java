@@ -53,11 +53,11 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
   private static final Logger LOG = LogManager.getLogger(HoodieCreateHandle.class);
 
-  private final HoodieFileWriter<IndexedRecord> fileWriter;
-  private final Path path;
-  private long recordsWritten = 0;
-  private long insertRecordsWritten = 0;
-  private long recordsDeleted = 0;
+  protected final HoodieFileWriter<IndexedRecord> fileWriter;
+  protected final Path path;
+  protected long recordsWritten = 0;
+  protected long insertRecordsWritten = 0;
+  protected long recordsDeleted = 0;
   private Map<String, HoodieRecord<T>> recordMap;
   private boolean useWriterSchema = false;
 

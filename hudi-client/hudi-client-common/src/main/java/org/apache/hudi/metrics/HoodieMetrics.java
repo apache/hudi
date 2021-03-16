@@ -20,6 +20,8 @@ package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import com.codahale.metrics.Timer;
@@ -130,6 +132,7 @@ public class HoodieMetrics {
 
   public void updateCommitMetrics(long commitEpochTimeInMs, long durationInMs, HoodieCommitMetadata metadata,
       String actionType) {
+    updateCommitTimingMetrics(commitEpochTimeInMs, durationInMs, metadata, actionType);
     if (config.isMetricsOn()) {
       long totalPartitionsWritten = metadata.fetchTotalPartitionsWritten();
       long totalFilesInsert = metadata.fetchTotalFilesInsert();
@@ -144,7 +147,6 @@ public class HoodieMetrics {
       long totalCompactedRecordsUpdated = metadata.getTotalCompactedRecordsUpdated();
       long totalLogFilesCompacted = metadata.getTotalLogFilesCompacted();
       long totalLogFilesSize = metadata.getTotalLogFilesSize();
-      Metrics.registerGauge(getMetricsName(actionType, "duration"), durationInMs);
       Metrics.registerGauge(getMetricsName(actionType, "totalPartitionsWritten"), totalPartitionsWritten);
       Metrics.registerGauge(getMetricsName(actionType, "totalFilesInsert"), totalFilesInsert);
       Metrics.registerGauge(getMetricsName(actionType, "totalFilesUpdate"), totalFilesUpdate);
@@ -152,13 +154,29 @@ public class HoodieMetrics {
       Metrics.registerGauge(getMetricsName(actionType, "totalUpdateRecordsWritten"), totalUpdateRecordsWritten);
       Metrics.registerGauge(getMetricsName(actionType, "totalInsertRecordsWritten"), totalInsertRecordsWritten);
       Metrics.registerGauge(getMetricsName(actionType, "totalBytesWritten"), totalBytesWritten);
-      Metrics.registerGauge(getMetricsName(actionType, "commitTime"), commitEpochTimeInMs);
       Metrics.registerGauge(getMetricsName(actionType, "totalScanTime"), totalTimeTakenByScanner);
       Metrics.registerGauge(getMetricsName(actionType, "totalCreateTime"), totalTimeTakenForInsert);
       Metrics.registerGauge(getMetricsName(actionType, "totalUpsertTime"), totalTimeTakenForUpsert);
       Metrics.registerGauge(getMetricsName(actionType, "totalCompactedRecordsUpdated"), totalCompactedRecordsUpdated);
       Metrics.registerGauge(getMetricsName(actionType, "totalLogFilesCompacted"), totalLogFilesCompacted);
       Metrics.registerGauge(getMetricsName(actionType, "totalLogFilesSize"), totalLogFilesSize);
+    }
+  }
+
+  private void updateCommitTimingMetrics(long commitEpochTimeInMs, long durationInMs, HoodieCommitMetadata metadata,
+      String actionType) {
+    if (config.isMetricsOn()) {
+      Pair<Option<Long>, Option<Long>> eventTimePairMinMax = metadata.getMinAndMaxEventTime();
+      if (eventTimePairMinMax.getLeft().isPresent()) {
+        long commitLatencyInMs = commitEpochTimeInMs + durationInMs - eventTimePairMinMax.getLeft().get();
+        Metrics.registerGauge(getMetricsName(actionType, "commitLatencyInMs"), commitLatencyInMs);
+      }
+      if (eventTimePairMinMax.getRight().isPresent()) {
+        long commitFreshnessInMs = commitEpochTimeInMs + durationInMs - eventTimePairMinMax.getRight().get();
+        Metrics.registerGauge(getMetricsName(actionType, "commitFreshnessInMs"), commitFreshnessInMs);
+      }
+      Metrics.registerGauge(getMetricsName(actionType, "commitTime"), commitEpochTimeInMs);
+      Metrics.registerGauge(getMetricsName(actionType, "duration"), durationInMs);
     }
   }
 

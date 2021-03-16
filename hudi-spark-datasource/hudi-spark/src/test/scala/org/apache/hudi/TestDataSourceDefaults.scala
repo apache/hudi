@@ -21,7 +21,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.model.{BaseAvroPayload, DefaultHoodieRecordPayload, EmptyHoodieRecordPayload, HoodieKey, HoodiePayloadProps, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.model._
 import org.apache.hudi.common.testutils.SchemaTestUtil
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodiePayloadConfig
@@ -32,8 +32,6 @@ import org.apache.spark.sql.Row
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.scalatest.Assertions.fail
-
-import scala.collection.JavaConverters.mapAsJavaMapConverter
 
 /**
  * Tests on the default key generator, payload classes.
@@ -591,10 +589,9 @@ class TestDataSourceDefaults {
   }
 
   @Test def testDefaultHoodieRecordPayloadCombineAndGetUpdateValue() = {
-    val baseOrderingVal: Object = baseRecord.get("favoriteIntNumber")
     val fieldSchema: Schema = baseRecord.getSchema().getField("favoriteIntNumber").schema()
-    val props = new TypedProperties()
-    props.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP, "favoriteIntNumber");
+    val props = HoodiePayloadConfig.newBuilder()
+      .withPayloadOrderingField("favoriteIntNumber").build().getProps;
 
     val laterRecord = SchemaTestUtil
       .generateAvroRecordFromJson(schema, 2, "001", "f1")

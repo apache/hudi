@@ -71,7 +71,7 @@ public class HoodieCombineRealtimeRecordReader implements RecordReader<NullWrita
     } else if (recordReaders.size() > 0) {
       this.currentRecordReader.close();
       this.currentRecordReader = recordReaders.remove(0);
-      return this.currentRecordReader.next(key, value);
+      return next(key, value);
     } else {
       return false;
     }

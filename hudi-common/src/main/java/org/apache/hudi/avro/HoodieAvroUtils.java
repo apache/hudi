@@ -46,7 +46,6 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
-import org.codehaus.jackson.node.NullNode;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -217,7 +216,7 @@ public class HoodieAvroUtils {
 
   private static Schema initRecordKeySchema() {
     Schema.Field recordKeyField =
-        new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
+        new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
     Schema recordKeySchema = Schema.createRecord("HoodieRecordKey", "", "", false);
     recordKeySchema.setFields(Collections.singletonList(recordKeyField));
     return recordKeySchema;
@@ -235,9 +234,9 @@ public class HoodieAvroUtils {
     Schema recordSchema = Schema.createRecord("HoodieRecordKey", "", "", false);
 
     Schema.Field recordKeyField =
-        new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
+        new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
     Schema.Field partitionPathField =
-        new Schema.Field(HoodieRecord.PARTITION_PATH_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", NullNode.getInstance());
+        new Schema.Field(HoodieRecord.PARTITION_PATH_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
 
     toBeAddedFields.add(recordKeyField);
     toBeAddedFields.add(partitionPathField);
@@ -263,9 +262,9 @@ public class HoodieAvroUtils {
    */
   public static Schema appendNullSchemaFields(Schema schema, List<String> newFieldNames) {
     List<Field> newFields = schema.getFields().stream()
-        .map(field -> new Field(field.name(), field.schema(), field.doc(), field.defaultValue())).collect(Collectors.toList());
+        .map(field -> new Field(field.name(), field.schema(), field.doc(), field.defaultVal())).collect(Collectors.toList());
     for (String newField : newFieldNames) {
-      newFields.add(new Schema.Field(newField, METADATA_FIELD_SCHEMA, "", NullNode.getInstance()));
+      newFields.add(new Schema.Field(newField, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE));
     }
     Schema newSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError());
     newSchema.setFields(newFields);
@@ -329,7 +328,8 @@ public class HoodieAvroUtils {
 
   private static void copyOldValueOrSetDefault(GenericRecord oldRecord, GenericRecord newRecord, Schema.Field f) {
     // cache the result of oldRecord.get() to save CPU expensive hash lookup
-    Object fieldValue = oldRecord.get(f.name());
+    Schema oldSchema = oldRecord.getSchema();
+    Object fieldValue = oldSchema.getField(f.name()) == null ? null : oldRecord.get(f.name());
     if (fieldValue == null) {
       if (f.defaultVal() instanceof JsonProperties.Null) {
         newRecord.put(f.name(), null);
@@ -381,7 +381,7 @@ public class HoodieAvroUtils {
         throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
             + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
       } else {
-        projectedFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultValue()));
+        projectedFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()));
       }
     }
 

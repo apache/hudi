@@ -24,7 +24,6 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -56,7 +55,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NA
 
 public class FunctionalTestHarness implements SparkProvider, DFSProvider, HoodieMetaClientProvider, HoodieWriteClientProvider {
 
-  private static transient SparkSession spark;
+  protected static transient SparkSession spark;
   private static transient SQLContext sqlContext;
   private static transient JavaSparkContext jsc;
   protected static transient HoodieSparkEngineContext context;
@@ -117,16 +116,19 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
 
   @Override
   public HoodieTableMetaClient getHoodieMetaClient(Configuration hadoopConf, String basePath, Properties props) throws IOException {
-    props.putIfAbsent(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP_NAME, PARQUET.toString());
-    props.putIfAbsent(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, RAW_TRIPS_TEST_NAME);
-    props.putIfAbsent(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, COPY_ON_WRITE.name());
-    props.putIfAbsent(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, HoodieAvroPayload.class.getName());
+    props = HoodieTableMetaClient.withPropertyBuilder()
+      .setTableName(RAW_TRIPS_TEST_NAME)
+      .setTableType(COPY_ON_WRITE)
+      .setPayloadClass(HoodieAvroPayload.class)
+      .setBaseFileFormat(PARQUET.toString())
+      .fromProperties(props)
+      .build();
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, props);
   }
 
   @Override
   public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) throws IOException {
-    return new SparkRDDWriteClient(context(), cfg, false);
+    return new SparkRDDWriteClient(context(), cfg);
   }
 
   @BeforeEach

@@ -48,6 +48,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 import scala.Tuple2;
@@ -85,6 +86,11 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   protected transient HdfsTestService hdfsTestService;
   protected transient MiniDFSCluster dfsCluster;
   protected transient DistributedFileSystem dfs;
+
+  @AfterAll
+  public static void tearDownAll() throws IOException {
+    FileSystem.closeAll();
+  }
 
   @BeforeEach
   public void setTestMethodName(TestInfo testInfo) {
@@ -246,7 +252,6 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
    * @throws IOException
    */
   protected void initDFS() throws IOException {
-    FileSystem.closeAll();
     hdfsTestService = new HdfsTestService();
     dfsCluster = hdfsTestService.start(true);
 
@@ -327,26 +332,22 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     }
   }
 
-  public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
-    return getHoodieWriteClient(cfg, false);
-  }
-
   public HoodieReadClient getHoodieReadClient(String basePath) {
     readClient = new HoodieReadClient(context, basePath, SQLContext.getOrCreate(jsc.sc()));
     return readClient;
   }
 
-  public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg, boolean rollbackInflightCommit) {
+  public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
     if (null != writeClient) {
       writeClient.close();
       writeClient = null;
     }
-    writeClient = new SparkRDDWriteClient(context, cfg, rollbackInflightCommit);
+    writeClient = new SparkRDDWriteClient(context, cfg);
     return writeClient;
   }
 
   public HoodieTableMetaClient getHoodieMetaClient(Configuration conf, String basePath) {
-    metaClient = new HoodieTableMetaClient(conf, basePath);
+    metaClient = HoodieTableMetaClient.builder().setConf(conf).setBasePath(basePath).build();
     return metaClient;
   }
 

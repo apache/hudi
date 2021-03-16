@@ -70,7 +70,7 @@ public class HoodieDataSourceHelpers {
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public static HoodieTimeline allCompletedCommitsCompactions(FileSystem fs, String basePath) {
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath, true);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
     if (metaClient.getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
       return metaClient.getActiveTimeline().getTimelineOfActions(
           CollectionUtils.createSet(HoodieActiveTimeline.COMMIT_ACTION,

@@ -21,6 +21,7 @@ package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
@@ -28,6 +29,7 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.exception.HoodieException;
@@ -83,6 +85,17 @@ public class FileCreateUtils {
     }
   }
 
+  private static void createMetaFile(String basePath, String instantTime, String suffix, FileSystem fs) throws IOException {
+    org.apache.hadoop.fs.Path parentPath = new org.apache.hadoop.fs.Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    if (!fs.exists(parentPath)) {
+      fs.create(parentPath).close();
+    }
+    org.apache.hadoop.fs.Path metaFilePath = new org.apache.hadoop.fs.Path(parentPath, instantTime + suffix);
+    if (!fs.exists(metaFilePath)) {
+      fs.create(metaFilePath).close();
+    }
+  }
+
   private static void createMetaFile(String basePath, String instantTime, String suffix, byte[] content) throws IOException {
     Path parentPath = Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
     Files.createDirectories(parentPath);
@@ -92,8 +105,20 @@ public class FileCreateUtils {
     }
   }
 
+  private static void deleteMetaFile(String basePath, String instantTime, String suffix, FileSystem fs) throws IOException {
+    org.apache.hadoop.fs.Path parentPath = new org.apache.hadoop.fs.Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    org.apache.hadoop.fs.Path metaFilePath = new org.apache.hadoop.fs.Path(parentPath, instantTime + suffix);
+    if (fs.exists(metaFilePath)) {
+      fs.delete(metaFilePath, true);
+    }
+  }
+
   public static void createCommit(String basePath, String instantTime) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
+  }
+
+  public static void createCommit(String basePath, String instantTime, FileSystem fs) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION, fs);
   }
 
   public static void createRequestedCommit(String basePath, String instantTime) throws IOException {
@@ -108,6 +133,10 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION);
   }
 
+  public static void createDeltaCommit(String basePath, String instantTime, FileSystem fs) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, fs);
+  }
+
   public static void createRequestedDeltaCommit(String basePath, String instantTime) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_DELTA_COMMIT_EXTENSION);
   }
@@ -120,8 +149,9 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION, metadata.toJsonString().getBytes(StandardCharsets.UTF_8));
   }
 
-  public static void createRequestedReplaceCommit(String basePath, String instantTime) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION);
+  public static void createRequestedReplaceCommit(String basePath, String instantTime, HoodieRequestedReplaceMetadata requestedMetadata) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION,
+        TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedMetadata).get());
   }
 
   public static void createInflightReplaceCommit(String basePath, String instantTime) throws IOException {
@@ -224,7 +254,7 @@ public class FileCreateUtils {
   public static Map<String, Long> getBaseFileCountsForPaths(String basePath, FileSystem fs, String... paths) {
     Map<String, Long> toReturn = new HashMap<>();
     try {
-      HoodieTableMetaClient metaClient = new HoodieTableMetaClient(fs.getConf(), basePath, true);
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
       for (String path : paths) {
         TableFileSystemView.BaseFileOnlyView fileSystemView = new HoodieTableFileSystemView(metaClient,
             metaClient.getCommitsTimeline().filterCompletedInstants(), fs.globStatus(new org.apache.hadoop.fs.Path(path)));
@@ -234,5 +264,9 @@ public class FileCreateUtils {
     } catch (Exception e) {
       throw new HoodieException("Error reading hoodie table as a dataframe", e);
     }
+  }
+
+  public static void deleteDeltaCommit(String basePath, String instantTime, FileSystem fs) throws IOException {
+    deleteMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, fs);
   }
 }
