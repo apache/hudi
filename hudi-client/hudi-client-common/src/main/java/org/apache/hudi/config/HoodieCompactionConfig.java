@@ -43,7 +43,6 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   public static final String CLEANER_POLICY_PROP = "hoodie.cleaner.policy";
   public static final String AUTO_CLEAN_PROP = "hoodie.clean.automatic";
   public static final String ASYNC_CLEAN_PROP = "hoodie.clean.async";
-
   // Turn on inline compaction - after fw delta commits a inline compaction will be run
   public static final String INLINE_COMPACT_PROP = "hoodie.compact.inline";
   // Run a compaction every N delta commits

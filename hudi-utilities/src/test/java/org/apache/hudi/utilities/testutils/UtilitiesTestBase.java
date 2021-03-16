@@ -29,6 +29,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
+import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
@@ -92,6 +93,7 @@ public class UtilitiesTestBase {
   protected transient SQLContext sqlContext;
   protected static HiveServer2 hiveServer;
   protected static HiveTestService hiveTestService;
+  protected static ZookeeperTestService zookeeperTestService;
   private static ObjectMapper mapper = new ObjectMapper();
 
   @BeforeAll
@@ -105,6 +107,7 @@ public class UtilitiesTestBase {
 
   public static void initClass(boolean startHiveService) throws Exception {
     hdfsTestService = new HdfsTestService();
+    zookeeperTestService = new ZookeeperTestService(hdfsTestService.getHadoopConf());
     dfsCluster = hdfsTestService.start(true);
     dfs = dfsCluster.getFileSystem();
     dfsBasePath = dfs.getWorkingDirectory().toString();
@@ -114,6 +117,7 @@ public class UtilitiesTestBase {
       hiveServer = hiveTestService.start();
       clearHiveDb();
     }
+    zookeeperTestService.start();
   }
 
   @AfterAll
@@ -126,6 +130,9 @@ public class UtilitiesTestBase {
     }
     if (hiveTestService != null) {
       hiveTestService.stop();
+    }
+    if (zookeeperTestService != null) {
+      zookeeperTestService.stop();
     }
   }
 

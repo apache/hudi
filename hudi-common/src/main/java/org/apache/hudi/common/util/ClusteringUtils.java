@@ -69,26 +69,43 @@ public class ClusteringUtils {
         .filter(Option::isPresent).map(Option::get);
   }
 
+  /**
+   * Get requested replace metadata from timeline.
+   * @param metaClient
+   * @param pendingReplaceInstant
+   * @return
+   * @throws IOException
+   */
+  public static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadata(HoodieTableMetaClient metaClient, HoodieInstant pendingReplaceInstant) throws IOException {
+    final HoodieInstant requestedInstant;
+    if (!pendingReplaceInstant.isRequested()) {
+      // inflight replacecommit files don't have clustering plan.
+      // This is because replacecommit inflight can have workload profile for 'insert_overwrite'.
+      // Get the plan from corresponding requested instant.
+      requestedInstant = HoodieTimeline.getReplaceCommitRequestedInstant(pendingReplaceInstant.getTimestamp());
+    } else {
+      requestedInstant = pendingReplaceInstant;
+    }
+    Option<byte[]> content = metaClient.getActiveTimeline().getInstantDetails(requestedInstant);
+    if (!content.isPresent() || content.get().length == 0) {
+      // few operations create requested file without any content. Assume these are not clustering
+      LOG.warn("No content found in requested file for instant " + pendingReplaceInstant);
+      return Option.empty();
+    }
+    return Option.of(TimelineMetadataUtils.deserializeRequestedReplaceMetadata(content.get()));
+  }
+
+  /**
+   * Get Clustering plan from timeline.
+   * @param metaClient
+   * @param pendingReplaceInstant
+   * @return
+   */
   public static Option<Pair<HoodieInstant, HoodieClusteringPlan>> getClusteringPlan(HoodieTableMetaClient metaClient, HoodieInstant pendingReplaceInstant) {
     try {
-      final HoodieInstant requestedInstant;
-      if (!pendingReplaceInstant.isRequested()) {
-        // inflight replacecommit files don't have clustering plan.
-        // This is because replacecommit inflight can have workload profile for 'insert_overwrite'.
-        // Get the plan from corresponding requested instant.
-        requestedInstant = HoodieTimeline.getReplaceCommitRequestedInstant(pendingReplaceInstant.getTimestamp());
-      } else {
-        requestedInstant = pendingReplaceInstant;
-      }
-      Option<byte[]> content = metaClient.getActiveTimeline().getInstantDetails(requestedInstant);
-      if (!content.isPresent() || content.get().length == 0) {
-        // few operations create requested file without any content. Assume these are not clustering
-        LOG.warn("No content found in requested file for instant " + pendingReplaceInstant);
-        return Option.empty();
-      }
-      HoodieRequestedReplaceMetadata requestedReplaceMetadata = TimelineMetadataUtils.deserializeRequestedReplaceMetadata(content.get());
-      if (WriteOperationType.CLUSTER.name().equals(requestedReplaceMetadata.getOperationType())) {
-        return Option.of(Pair.of(pendingReplaceInstant, requestedReplaceMetadata.getClusteringPlan()));
+      Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata = getRequestedReplaceMetadata(metaClient, pendingReplaceInstant);
+      if (requestedReplaceMetadata.isPresent() && WriteOperationType.CLUSTER.name().equals(requestedReplaceMetadata.get().getOperationType())) {
+        return Option.of(Pair.of(pendingReplaceInstant, requestedReplaceMetadata.get().getClusteringPlan()));
       }
       return Option.empty();
     } catch (IOException e) {

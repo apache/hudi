@@ -18,6 +18,9 @@
 
 package org.apache.hudi.integ.testsuite;
 
+import java.io.Serializable;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -28,7 +31,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
@@ -40,12 +42,12 @@ import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.RollbackNode;
 import org.apache.hudi.integ.testsuite.dag.nodes.ScheduleCompactNode;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriteStats;
-import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.rdd.RDD;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,7 +62,7 @@ import java.util.Set;
  * A writer abstraction for the Hudi test suite. This class wraps different implementations of writers used to perform write operations into the target hudi dataset. Current supported writers are
  * {@link HoodieDeltaStreamerWrapper} and {@link SparkRDDWriteClient}.
  */
-public class HoodieTestSuiteWriter {
+public class HoodieTestSuiteWriter implements Serializable {
 
   private static Logger log = LoggerFactory.getLogger(HoodieTestSuiteWriter.class);
 
@@ -119,6 +121,14 @@ public class HoodieTestSuiteWriter {
       return true;
     }
     return false;
+  }
+
+  public RDD<GenericRecord> getNextBatch() throws Exception {
+    Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
+    lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
+    JavaRDD <HoodieRecord> inputRDD = nextBatch.getRight().getRight();
+    return inputRDD.map(r -> (GenericRecord) r.getData()
+        .getInsertValue(new Schema.Parser().parse(schema)).get()).rdd();
   }
 
   public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
@@ -252,5 +262,13 @@ public class HoodieTestSuiteWriter {
 
   public Option<String> getLastCheckpoint() {
     return lastCheckpoint;
+  }
+
+  public Properties getProps() {
+    return props;
+  }
+
+  public String getSchema() {
+    return schema;
   }
 }
