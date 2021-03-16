@@ -110,7 +110,7 @@
     <flink.version>1.11.2</flink.version>
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.0.0</spark3.version>
-    <spark2bundle.version>2</spark2bundle.version>
+    <spark2bundle.version></spark2bundle.version>
     <spark3bundle.version>3</spark3bundle.version>
     <avro.version>1.8.2</avro.version>
     <scala11.version>2.11.12</scala11.version>
