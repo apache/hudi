@@ -11,6 +11,7 @@ This page covers the different ways of configuring your job to write/read Hudi t
 At a high level, you can control behaviour at few levels. 
 
 - **[Spark Datasource Configs](#spark-datasource)** : These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge records or choosing query type to read.
+- **[Flink SQL Configs](#flink-options)** : These configs control the Hudi Flink SQL source/sink connectors, providing ability to define record keys, pick out the write operation, specify how to merge records, enable/disable asynchronous compaction or choosing query type to read.
 - **[WriteClient Configs](#writeclient-configs)** : Internally, the Hudi datasource uses a RDD based `HoodieWriteClient` api to actually perform writes to storage. These configs provide deep control over lower level aspects like 
    file sizing, compression, parallelism, compaction, write schema, cleaning etc. Although Hudi provides sane defaults, from time-time these configs may need to be tweaked to optimize for specific workloads.
 - **[RecordPayload Config](#PAYLOAD_CLASS_OPT_KEY)** : This is the lowest level of customization offered by Hudi. Record payloads define how to produce new values to upsert based on incoming new record and 
@@ -170,6 +171,58 @@ Property: `hoodie.datasource.read.end.instanttime`, Default: latest instant (i.e
 #### INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY {#INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY}
 Property: `hoodie.datasource.read.schema.use.end.instanttime`, Default: false <br/>
 <span style="color:grey"> Uses end instant schema when incrementally fetched data to. Default: users latest instant schema. </span>
+
+## Flink SQL Config Options {#flink-options}
+
+Flink jobs using the SQL can be configured through the options in `WITH` clause.
+The actual datasource level configs are listed below.
+
+### Write Options
+
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `path` | Y | N/A | <span style="color:grey"> Base path for the target hoodie table. The path would be created if it does not exist, otherwise a hudi table expects to be initialized successfully </span> |
+| `table.type`  | N | COPY_ON_WRITE | <span style="color:grey"> Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ </span> |
+| `write.operation` | N | upsert | <span style="color:grey"> The write operation, that this write should do (insert or upsert is supported) </span> |
+| `write.precombine.field` | N | ts | <span style="color:grey"> Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..) </span> |
+| `write.payload.class` | N | OverwriteWithLatestAvroPayload.class | <span style="color:grey"> Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. This will render any value set for the option in-effective </span> |
+| `write.insert.drop.duplicates` | N | false | <span style="color:grey"> Flag to indicate whether to drop duplicates upon insert. By default insert will accept duplicates, to gain extra performance </span> |
+| `write.ignore.failed` | N | true | <span style="color:grey"> Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch. By default true (in favor of streaming progressing over data integrity) </span> |
+| `hoodie.datasource.write.recordkey.field` | N | uuid | <span style="color:grey"> Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using the dot notation eg: `a.b.c` </span> |
+| `hoodie.datasource.write.keygenerator.class` | N | SimpleAvroKeyGenerator.class | <span style="color:grey"> Key generator class, that implements will extract the key out of incoming record </span> |
+| `write.tasks` | N | 4 | <span style="color:grey"> Parallelism of tasks that do actual write, default is 4 </span> |
+| `write.batch.size.MB` | N | 128 | <span style="color:grey"> Batch buffer size in MB to flush data into the underneath filesystem </span> |
+
+If the table type is MERGE_ON_READ, you can also specify the asynchronous compaction strategy through options:
+
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `compaction.async.enabled` | N | true | <span style="color:grey"> Async Compaction, enabled by default for MOR </span> |
+| `compaction.trigger.strategy` | N | num_commits | <span style="color:grey"> Strategy to trigger compaction, options are 'num_commits': trigger compaction when reach N delta commits; 'time_elapsed': trigger compaction when time elapsed > N seconds since last compaction; 'num_and_time': trigger compaction when both NUM_COMMITS and TIME_ELAPSED are satisfied; 'num_or_time': trigger compaction when NUM_COMMITS or TIME_ELAPSED is satisfied. Default is 'num_commits' </span> |
+| `compaction.delta_commits` | N | 5 | <span style="color:grey"> Max delta commits needed to trigger compaction, default 5 commits </span> |
+| `compaction.delta_seconds` | N | 3600 | <span style="color:grey"> Max delta seconds time needed to trigger compaction, default 1 hour </span> |
+
+### Read Options
+
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `path` | Y | N/A | <span style="color:grey"> Base path for the target hoodie table. The path would be created if it does not exist, otherwise a hudi table expects to be initialized successfully </span> |
+| `table.type`  | N | COPY_ON_WRITE | <span style="color:grey"> Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ </span> |
+| `read.tasks` | N | 4 | <span style="color:grey"> Parallelism of tasks that do actual read, default is 4 </span> |
+| `read.avro-schema.path` | N | N/A | <span style="color:grey"> Avro schema file path, the parsed schema is used for deserialization, if not specified, the avro schema is inferred from the table DDL </span> |
+| `read.avro-schema` | N | N/A | <span style="color:grey"> Avro schema string, the parsed schema is used for deserialization, if not specified, the avro schema is inferred from the table DDL </span> |
+| `hoodie.datasource.query.type` | N | snapshot | <span style="color:grey"> Decides how data files need to be read, in 1) Snapshot mode (obtain latest view, based on row & columnar data); 2) incremental mode (new data since an instantTime), not supported yet; 3) Read Optimized mode (obtain latest view, based on columnar data). Default: snapshot </span> |
+| `hoodie.datasource.merge.type` | N | payload_combine | <span style="color:grey"> For Snapshot query on merge on read table. Use this key to define how the payloads are merged, in 1) skip_merge: read the base file records plus the log file records; 2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the log file records(combines the two records with same key for base and log file records), then read the left log file records </span> |
+| `hoodie.datasource.hive_style_partition` | N | false | <span style="color:grey"> Whether the partition path is with Hive style, e.g. '{partition key}={partition value}', default false </span> |
+| `read.utc-timezone` | N | true | <span style="color:grey"> Use UTC timezone or local timezone to the conversion between epoch time and LocalDateTime. Hive 0.x/1.x/2.x use local timezone. But Hive 3.x use UTC timezone, by default true </span> |
+
+If the table type is MERGE_ON_READ, streaming read is supported through options:
+
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `read.streaming.enabled` | N | false | <span style="color:grey"> Whether to read as streaming source, default false </span> |
+| `read.streaming.check-interval` | N | 60 | <span style="color:grey"> Check interval for streaming read of SECOND, default 1 minute </span> |
+| `read.streaming.start-commit` | N | N/A | <span style="color:grey"> Start commit instant for streaming read, the commit time format should be 'yyyyMMddHHmmss', by default reading from the latest instant </span> |
 
 ## WriteClient Configs {#writeclient-configs}
 

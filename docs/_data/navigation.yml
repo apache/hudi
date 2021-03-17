@@ -2,7 +2,7 @@
 # main links
 main:
   - title: "Documentation"
-    url: /docs/quick-start-guide.html
+    url: /docs/spark_quick-start-guide.html
   - title: "Community"
     url: /community.html
   - title: "Blog"
@@ -20,8 +20,10 @@ docs:
     children:
       - title: "Overview"
         url: /docs/overview.html
-      - title: "Quick Start"
-        url: /docs/quick-start-guide.html
+      - title: "Quick Start(Spark)"
+        url: /docs/spark_quick-start-guide.html
+      - title: "Quick Start(Flink)"
+        url: /docs/flink-quick-start-guide.html
       - title: "Use Cases"
         url: /docs/use_cases.html
       - title: "Writing Data"
@@ -50,7 +52,7 @@ docs:
 
 cn_main:
   - title: "文档"
-    url: /cn/docs/quick-start-guide.html
+    url: /cn/docs/spark_quick-start-guide.html
   - title: "社区"
     url: /cn/community.html
   - title: "动态"
@@ -65,7 +67,7 @@ cn_docs:
   - title: 入门指南
     children:
       - title: "快速开始"
-        url: /cn/docs/quick-start-guide.html
+        url: /cn/docs/spark_quick-start-guide.html
       - title: "使用案例"
         url: /cn/docs/use_cases.html
       - title: "演讲 & hudi 用户"
