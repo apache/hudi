@@ -21,7 +21,10 @@ package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -45,6 +48,8 @@ import java.util.Map;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCleanMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCleanerPlan;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRequestedReplaceMetadata;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRollbackMetadata;
 
 public class FileCreateUtils {
 
@@ -115,6 +120,10 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
   }
 
+  public static void createCommit(String basePath, String instantTime, HoodieCommitMetadata metadata) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION, metadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+  }
+
   public static void createCommit(String basePath, String instantTime, FileSystem fs) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION, fs);
   }
@@ -147,8 +156,8 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION, metadata.toJsonString().getBytes(StandardCharsets.UTF_8));
   }
 
-  public static void createRequestedReplaceCommit(String basePath, String instantTime) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION);
+  public static void createRequestedReplaceCommit(String basePath, String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION, serializeRequestedReplaceMetadata(requestedReplaceMetadata).get());
   }
 
   public static void createInflightReplaceCommit(String basePath, String instantTime) throws IOException {
@@ -165,6 +174,14 @@ public class FileCreateUtils {
 
   public static void createInflightCleanFile(String basePath, String instantTime, HoodieCleanerPlan cleanerPlan) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLEAN_EXTENSION, serializeCleanerPlan(cleanerPlan).get());
+  }
+
+  public static void createInflightRollbackFile(String basePath, String instantTime) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_ROLLBACK_EXTENSION);
+  }
+
+  public static void createRollbackFile(String basePath, String instantTime, HoodieRollbackMetadata rollbackMetadata) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.ROLLBACK_EXTENSION, serializeRollbackMetadata(rollbackMetadata).get());
   }
 
   private static void createAuxiliaryMetaFile(String basePath, String instantTime, String suffix) throws IOException {

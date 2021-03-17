@@ -210,7 +210,7 @@ public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
     createParentDirsBeforeDatePartitions(root, generateRandomStrings(), totalDepthBeforeDatePartitions, leafDirs);
     createDatePartitionsWithFiles(leafDirs, isHiveStylePartition, dateFormat);
 
-    List<String> paths = pathSelector.pruneDatePartitionPaths(context, fs, root.toString());
+    List<String> paths = pathSelector.pruneDatePartitionPaths(context, fs, root.toString(), LocalDate.parse(currentDate));
     assertEquals(expectedNumFiles, paths.size());
   }
 }

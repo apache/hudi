@@ -143,7 +143,7 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
     result.setWriteStats(writeStats);
     // Finalize write
     finalizeWrite(instantTime, writeStats, result);
-
+    syncTableMetadata();
     try {
       LOG.info("Committing " + instantTime + ", action Type " + getCommitActionType());
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();

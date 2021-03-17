@@ -69,7 +69,7 @@ public class IncrSourceHelper {
         return lastInstant.map(hoodieInstant -> getStrictlyLowerTimestamp(hoodieInstant.getTimestamp())).orElse("000");
       } else {
         throw new IllegalArgumentException("Missing begin instant for incremental pull. For reading from latest "
-            + "committed instant set hoodie.deltastreamer.source.hoodie.read_latest_on_midding_ckpt to true");
+            + "committed instant set hoodie.deltastreamer.source.hoodieincr.read_latest_on_missing_ckpt to true");
       }
     });
 

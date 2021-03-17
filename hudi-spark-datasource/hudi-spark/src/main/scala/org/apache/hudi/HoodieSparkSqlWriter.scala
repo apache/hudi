@@ -296,30 +296,38 @@ private[hudi] object HoodieSparkSqlWriter {
                       basePath: Path,
                       path: Option[String],
                       instantTime: String): (Boolean, common.util.Option[String]) = {
-    val structName = s"${tblName}_record"
-    val nameSpace = s"hoodie.${tblName}"
-    val writeConfig = DataSourceUtils.createHoodieConfig(null, path.get, tblName, mapAsJavaMap(parameters))
+    val sparkContext = sqlContext.sparkContext
+    // register classes & schemas
+    val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tblName)
+    sparkContext.getConf.registerKryoClasses(
+      Array(classOf[org.apache.avro.generic.GenericData],
+        classOf[org.apache.avro.Schema]))
+    val schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
+    sparkContext.getConf.registerAvroSchemas(schema)
+    log.info(s"Registered avro schema : ${schema.toString(true)}")
+    val params = parameters.updated(HoodieWriteConfig.AVRO_SCHEMA, schema.toString)
+    val writeConfig = DataSourceUtils.createHoodieConfig(schema.toString, path.get, tblName, mapAsJavaMap(params))
     val hoodieDF = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, writeConfig, df, structName, nameSpace)
     if (SPARK_VERSION.startsWith("2.")) {
       hoodieDF.write.format("org.apache.hudi.internal")
         .option(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY, instantTime)
-        .options(parameters)
+        .options(params)
         .save()
     } else if (SPARK_VERSION.startsWith("3.")) {
       hoodieDF.write.format("org.apache.hudi.spark3.internal")
         .option(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY, instantTime)
         .option(HoodieWriteConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL, hoodieDF.schema.toDDL)
-        .options(parameters)
+        .options(params)
         .mode(SaveMode.Append)
         .save()
     } else {
       throw new HoodieException("Bulk insert using row writer is not supported with current Spark version."
         + " To use row writer please switch to spark 2 or spark 3")
     }
-    val hiveSyncEnabled = parameters.get(HIVE_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
-    val metaSyncEnabled = parameters.get(META_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
+    val hiveSyncEnabled = params.get(HIVE_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
+    val metaSyncEnabled = params.get(META_SYNC_ENABLED_OPT_KEY).exists(r => r.toBoolean)
     val syncHiveSucess = if (hiveSyncEnabled || metaSyncEnabled) {
-      metaSync(parameters, basePath, sqlContext.sparkContext.hadoopConfiguration)
+      metaSync(params, basePath, sqlContext.sparkContext.hadoopConfiguration)
     } else {
       true
     }
@@ -497,8 +505,8 @@ private[hudi] object HoodieSparkSqlWriter {
   private def isAsyncCompactionEnabled(client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]],
                                        tableConfig: HoodieTableConfig,
                                        parameters: Map[String, String], configuration: Configuration) : Boolean = {
-    log.info(s"Config.isInlineCompaction ? ${client.getConfig.isInlineCompaction}")
-    if (asyncCompactionTriggerFnDefined && !client.getConfig.isInlineCompaction
+    log.info(s"Config.inlineCompactionEnabled ? ${client.getConfig.inlineCompactionEnabled}")
+    if (asyncCompactionTriggerFnDefined && !client.getConfig.inlineCompactionEnabled
       && parameters.get(ASYNC_COMPACT_ENABLE_OPT_KEY).exists(r => r.toBoolean)) {
       tableConfig.getTableType == HoodieTableType.MERGE_ON_READ
     } else {

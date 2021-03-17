@@ -18,24 +18,17 @@
 
 package org.apache.hudi.table;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
-import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.avro.model.HoodieRollbackMetadata;
-import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.ReplaceArchivalHelper;
+import org.apache.hudi.client.utils.MetadataConversionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
-import org.apache.hudi.common.model.HoodieRollingStatMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
@@ -46,12 +39,9 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.TableFileSystemView;
-import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -59,7 +49,6 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -378,68 +367,6 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
 
   private IndexedRecord convertToAvroRecord(HoodieTimeline commitTimeline, HoodieInstant hoodieInstant)
       throws IOException {
-    HoodieArchivedMetaEntry archivedMetaWrapper = new HoodieArchivedMetaEntry();
-    archivedMetaWrapper.setCommitTime(hoodieInstant.getTimestamp());
-    archivedMetaWrapper.setActionState(hoodieInstant.getState().name());
-    switch (hoodieInstant.getAction()) {
-      case HoodieTimeline.CLEAN_ACTION: {
-        if (hoodieInstant.isCompleted()) {
-          archivedMetaWrapper.setHoodieCleanMetadata(CleanerUtils.getCleanerMetadata(metaClient, hoodieInstant));
-        } else {
-          archivedMetaWrapper.setHoodieCleanerPlan(CleanerUtils.getCleanerPlan(metaClient, hoodieInstant));
-        }
-        archivedMetaWrapper.setActionType(ActionType.clean.name());
-        break;
-      }
-      case HoodieTimeline.COMMIT_ACTION:
-      case HoodieTimeline.DELTA_COMMIT_ACTION: {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-            .fromBytes(commitTimeline.getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
-        archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(commitMetadata));
-        archivedMetaWrapper.setActionType(ActionType.commit.name());
-        break;
-      }
-      case HoodieTimeline.REPLACE_COMMIT_ACTION: {
-        HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
-            .fromBytes(commitTimeline.getInstantDetails(hoodieInstant).get(), HoodieReplaceCommitMetadata.class);
-        archivedMetaWrapper.setHoodieReplaceCommitMetadata(ReplaceArchivalHelper.convertReplaceCommitMetadata(replaceCommitMetadata));
-        archivedMetaWrapper.setActionType(ActionType.replacecommit.name());
-        break;
-      }
-      case HoodieTimeline.ROLLBACK_ACTION: {
-        archivedMetaWrapper.setHoodieRollbackMetadata(TimelineMetadataUtils.deserializeAvroMetadata(
-            commitTimeline.getInstantDetails(hoodieInstant).get(), HoodieRollbackMetadata.class));
-        archivedMetaWrapper.setActionType(ActionType.rollback.name());
-        break;
-      }
-      case HoodieTimeline.SAVEPOINT_ACTION: {
-        archivedMetaWrapper.setHoodieSavePointMetadata(TimelineMetadataUtils.deserializeAvroMetadata(
-            commitTimeline.getInstantDetails(hoodieInstant).get(), HoodieSavepointMetadata.class));
-        archivedMetaWrapper.setActionType(ActionType.savepoint.name());
-        break;
-      }
-      case HoodieTimeline.COMPACTION_ACTION: {
-        HoodieCompactionPlan plan = CompactionUtils.getCompactionPlan(metaClient, hoodieInstant.getTimestamp());
-        archivedMetaWrapper.setHoodieCompactionPlan(plan);
-        archivedMetaWrapper.setActionType(ActionType.compaction.name());
-        break;
-      }
-      default: {
-        throw new UnsupportedOperationException("Action not fully supported yet");
-      }
-    }
-    return archivedMetaWrapper;
-  }
-
-  public static org.apache.hudi.avro.model.HoodieCommitMetadata convertCommitMetadata(
-      HoodieCommitMetadata hoodieCommitMetadata) {
-    ObjectMapper mapper = new ObjectMapper();
-    // Need this to ignore other public get() methods
-    mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-    org.apache.hudi.avro.model.HoodieCommitMetadata avroMetaData =
-        mapper.convertValue(hoodieCommitMetadata, org.apache.hudi.avro.model.HoodieCommitMetadata.class);
-    // Do not archive Rolling Stats, cannot set to null since AVRO will throw null pointer
-    avroMetaData.getExtraMetadata().put(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY, "");
-    return avroMetaData;
+    return MetadataConversionUtils.createMetaWrapper(hoodieInstant, metaClient);
   }
 }

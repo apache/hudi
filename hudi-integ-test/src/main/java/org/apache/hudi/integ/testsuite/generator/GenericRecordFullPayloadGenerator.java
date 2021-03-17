@@ -18,6 +18,7 @@
 
 package org.apache.hudi.integ.testsuite.generator;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -26,6 +27,7 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericData.Fixed;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
+import org.junit.runners.Suite;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,6 +52,8 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
   public static final int DEFAULT_PAYLOAD_SIZE = 1024 * 10; // 10 KB
   public static final int DEFAULT_NUM_DATE_PARTITIONS = 50;
   public static final String DEFAULT_HOODIE_IS_DELETED_COL = "_hoodie_is_deleted";
+  public static final int DEFAULT_START_PARTITION = 0;
+
   protected final Random random = new Random();
   // The source schema used to generate a payload
   private final transient Schema baseSchema;
@@ -61,6 +65,8 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
   private int estimatedFullPayloadSize;
   // Number of extra entries to add in a complex/collection field to achieve the desired record size
   Map<String, Integer> extraEntriesMap = new HashMap<>();
+  // Start partition - default 0
+  private int startPartition = DEFAULT_START_PARTITION;
 
   // The number of unique dates to create
   private int numDatePartitions = DEFAULT_NUM_DATE_PARTITIONS;
@@ -77,9 +83,11 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
     this(schema, DEFAULT_PAYLOAD_SIZE);
   }
 
-  public GenericRecordFullPayloadGenerator(Schema schema, int minPayloadSize, int numDatePartitions) {
+  public GenericRecordFullPayloadGenerator(Schema schema, int minPayloadSize,
+                                           int numDatePartitions, int startPartition) {
     this(schema, minPayloadSize);
     this.numDatePartitions = numDatePartitions;
+    this.startPartition = startPartition;
   }
 
   public GenericRecordFullPayloadGenerator(Schema schema, int minPayloadSize) {
@@ -329,9 +337,10 @@ public class GenericRecordFullPayloadGenerator implements Serializable {
    * Note: When generating records, number of records to be generated must be more than numDatePartitions * parallelism,
    * to guarantee that at least numDatePartitions are created.
    */
+  @VisibleForTesting
   public GenericRecord updateTimestamp(GenericRecord record, String fieldName) {
-    long delta = TimeUnit.MILLISECONDS.convert(++partitionIndex % numDatePartitions, TimeUnit.DAYS);
-    record.put(fieldName, (System.currentTimeMillis() - delta)/1000);
+    long delta = TimeUnit.SECONDS.convert((++partitionIndex % numDatePartitions) + startPartition, TimeUnit.DAYS);
+    record.put(fieldName, delta);
     return record;
   }
 

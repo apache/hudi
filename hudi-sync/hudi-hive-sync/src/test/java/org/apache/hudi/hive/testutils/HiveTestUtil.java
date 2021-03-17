@@ -86,6 +86,7 @@ public class HiveTestUtil {
   private static ZooKeeperServer zkServer;
   private static HiveServer2 hiveServer;
   private static HiveTestService hiveTestService;
+  private static ZookeeperTestService zkService;
   private static Configuration configuration;
   public static HiveSyncConfig hiveSyncConfig;
   private static DateTimeFormatter dtfOut;
@@ -99,7 +100,7 @@ public class HiveTestUtil {
       configuration = service.getHadoopConf();
     }
     if (zkServer == null) {
-      ZookeeperTestService zkService = new ZookeeperTestService(configuration);
+      zkService = new ZookeeperTestService(configuration);
       zkServer = zkService.start();
     }
     if (hiveServer == null) {
@@ -143,6 +144,18 @@ public class HiveTestUtil {
 
   public static HiveConf getHiveConf() {
     return hiveServer.getHiveConf();
+  }
+
+  public static HiveServer2 getHiveServer() {
+    return hiveServer;
+  }
+
+  public static ZooKeeperServer getZkServer() {
+    return zkServer;
+  }
+
+  public static ZookeeperTestService getZkService() {
+    return zkService;
   }
 
   public static void shutdown() {

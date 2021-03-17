@@ -22,13 +22,13 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.operator.FlinkOptions;
-import org.apache.hudi.operator.InstantGenerateOperator;
-import org.apache.hudi.operator.KeyedWriteProcessFunction;
-import org.apache.hudi.operator.KeyedWriteProcessOperator;
-import org.apache.hudi.operator.partitioner.BucketAssignFunction;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.CommitSink;
-import org.apache.hudi.source.JsonStringToHoodieRecordMapFunction;
+import org.apache.hudi.sink.InstantGenerateOperator;
+import org.apache.hudi.sink.KeyedWriteProcessFunction;
+import org.apache.hudi.sink.KeyedWriteProcessOperator;
+import org.apache.hudi.sink.partitioner.BucketAssignFunction;
+import org.apache.hudi.sink.transform.JsonStringToHoodieRecordMapFunction;
 import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.JCommander;
@@ -71,7 +71,7 @@ public class HoodieFlinkStreamer {
     }
 
     Configuration conf = FlinkOptions.fromStreamerConfig(cfg);
-    int numWriteTask = conf.getInteger(FlinkOptions.WRITE_TASK_PARALLELISM);
+    int numWriteTask = conf.getInteger(FlinkOptions.WRITE_TASKS);
 
     TypedProperties props = StreamerUtil.appendKafkaProps(cfg);
 

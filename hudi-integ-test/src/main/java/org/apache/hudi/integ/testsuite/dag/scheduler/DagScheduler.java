@@ -27,6 +27,7 @@ import org.apache.hudi.integ.testsuite.dag.nodes.DelayNode;
 import org.apache.hudi.metrics.Metrics;
 
 import org.apache.spark.api.java.JavaSparkContext;
+import org.junit.runners.Suite;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -129,7 +130,7 @@ public class DagScheduler {
    *
    * @param node The node to be executed
    */
-  private void executeNode(DagNode node, int curRound) {
+  protected void executeNode(DagNode node, int curRound) {
     if (node.isCompleted()) {
       throw new RuntimeException("DagNode already completed! Cannot re-execute");
     }

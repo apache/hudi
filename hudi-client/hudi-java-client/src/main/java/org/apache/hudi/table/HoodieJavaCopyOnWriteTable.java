@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -38,6 +39,7 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.clean.JavaCleanActionExecutor;
+import org.apache.hudi.table.action.clean.JavaScheduleCleanActionExecutor;
 import org.apache.hudi.table.action.commit.JavaDeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaBulkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.JavaBulkInsertPreppedCommitActionExecutor;
@@ -173,6 +175,11 @@ public class HoodieJavaCopyOnWriteTable<T extends HoodieRecordPayload> extends H
   public void rollbackBootstrap(HoodieEngineContext context,
                                 String instantTime) {
     throw new HoodieNotSupportedException("RollbackBootstrap is not supported yet");
+  }
+
+  @Override
+  public Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
+    return new JavaScheduleCleanActionExecutor<>(context, config, this, instantTime, extraMetadata).execute();
   }
 
   @Override

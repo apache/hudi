@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -89,7 +90,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   protected SerializableConfiguration hadoopConf;
   protected final transient HoodieEngineContext engineContext;
 
-  protected HoodieBackedTableMetadataWriter(Configuration hadoopConf, HoodieWriteConfig writeConfig, HoodieEngineContext engineContext) {
+  protected HoodieBackedTableMetadataWriter(Configuration hadoopConf, HoodieWriteConfig writeConfig,
+      HoodieEngineContext engineContext) {
     this.datasetWriteConfig = writeConfig;
     this.engineContext = engineContext;
     this.hadoopConf = new SerializableConfiguration(hadoopConf);
@@ -101,7 +103,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
       // Inline compaction and auto clean is required as we dont expose this table outside
       ValidationUtils.checkArgument(!this.metadataWriteConfig.isAutoClean(), "Cleaning is controlled internally for Metadata table.");
-      ValidationUtils.checkArgument(!this.metadataWriteConfig.isInlineCompaction(), "Compaction is controlled internally for metadata table.");
+      ValidationUtils.checkArgument(!this.metadataWriteConfig.inlineCompactionEnabled(), "Compaction is controlled internally for metadata table.");
       // Metadata Table cannot have metadata listing turned on. (infinite loop, much?)
       ValidationUtils.checkArgument(this.metadataWriteConfig.shouldAutoCommit(), "Auto commit is required for Metadata Table");
       ValidationUtils.checkArgument(!this.metadataWriteConfig.useFileListingMetadata(), "File listing cannot be used for Metadata Table");
@@ -143,6 +145,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             .withMaxConsistencyCheckIntervalMs(writeConfig.getConsistencyGuardConfig().getMaxConsistencyCheckIntervalMs())
             .withMaxConsistencyChecks(writeConfig.getConsistencyGuardConfig().getMaxConsistencyChecks())
             .build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.SINGLE_WRITER)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
         .withAutoCommit(true)
         .withAvroSchemaValidate(true)

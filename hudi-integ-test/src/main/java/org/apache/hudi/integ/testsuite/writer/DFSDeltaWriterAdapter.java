@@ -49,7 +49,6 @@ public class DFSDeltaWriterAdapter implements DeltaWriterAdapter<GenericRecord> 
   public List<DeltaWriteStats> write(Iterator<GenericRecord> input) throws IOException {
     while (input.hasNext()) {
       GenericRecord next = input.next();
-      next.put(SchemaUtils.SOURCE_ORDERING_FIELD, preCombineFieldVal);
       if (this.deltaInputWriter.canWrite()) {
         this.deltaInputWriter.writeData(next);
       } else {

@@ -24,9 +24,14 @@ import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieClusteringGroup;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.avro.model.HoodieClusteringStrategy;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.avro.model.HoodieSliceInfo;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.HoodieCleanStat;
@@ -589,13 +594,8 @@ public class TestCleaner extends HoodieClientTestBase {
         });
       });
       metaClient.reloadActiveTimeline().revertToInflight(completedCleanInstant);
-      HoodieCleanMetadata newCleanMetadata = writeClient.clean(makeNewCommitTime(firstCommitSequence + 1));
-      // No new clean metadata would be created. Only the previous one will be retried
-      assertNull(newCleanMetadata);
-      HoodieCleanMetadata cleanMetadata2 = CleanerUtils.getCleanerMetadata(metaClient, completedCleanInstant);
-      assertEquals(cleanMetadata1.getEarliestCommitToRetain(), cleanMetadata2.getEarliestCommitToRetain());
-      assertEquals(cleanMetadata1.getTotalFilesDeleted(), cleanMetadata2.getTotalFilesDeleted());
-      assertEquals(cleanMetadata1.getPartitionMetadata().keySet(), cleanMetadata2.getPartitionMetadata().keySet());
+      // retry clean operation again
+      writeClient.clean();
       final HoodieCleanMetadata retriedCleanMetadata = CleanerUtils.getCleanerMetadata(HoodieTableMetaClient.reload(metaClient), completedCleanInstant);
       cleanMetadata1.getPartitionMetadata().keySet().forEach(k -> {
         HoodieCleanPartitionMetadata p1 = cleanMetadata1.getPartitionMetadata().get(k);
@@ -845,7 +845,8 @@ public class TestCleaner extends HoodieClientTestBase {
     // make next replacecommit, with 1 clustering operation. logically delete p0. No change to p1
     Map<String, String> partitionAndFileId002 = testTable.forReplaceCommit("00000000000002").getFileIdsWithBaseFilesInPartitions(p0);
     String file2P0C1 = partitionAndFileId002.get(p0);
-    testTable.addReplaceCommit("00000000000002", generateReplaceCommitMetadata(p0, file1P0C0, file2P0C1));
+    Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceMetadata = generateReplaceCommitMetadata(p0, file1P0C0, file2P0C1);
+    testTable.addReplaceCommit("00000000000002", replaceMetadata.getKey(), replaceMetadata.getValue());
 
     // run cleaner
     List<HoodieCleanStat> hoodieCleanStatsTwo = runCleaner(config);
@@ -857,7 +858,8 @@ public class TestCleaner extends HoodieClientTestBase {
     // make next replacecommit, with 1 clustering operation. Replace data in p1. No change to p0
     Map<String, String> partitionAndFileId003 = testTable.forReplaceCommit("00000000000003").getFileIdsWithBaseFilesInPartitions(p1);
     String file3P1C2 = partitionAndFileId003.get(p1);
-    testTable.addReplaceCommit("00000000000003", generateReplaceCommitMetadata(p1, file1P1C0, file3P1C2));
+    replaceMetadata = generateReplaceCommitMetadata(p1, file1P1C0, file3P1C2);
+    testTable.addReplaceCommit("00000000000003", replaceMetadata.getKey(), replaceMetadata.getValue());
 
     // run cleaner
     List<HoodieCleanStat> hoodieCleanStatsThree = runCleaner(config);
@@ -870,7 +872,8 @@ public class TestCleaner extends HoodieClientTestBase {
     // make next replacecommit, with 1 clustering operation. Replace data in p0 again
     Map<String, String> partitionAndFileId004 = testTable.forReplaceCommit("00000000000004").getFileIdsWithBaseFilesInPartitions(p0);
     String file4P0C3 = partitionAndFileId004.get(p0);
-    testTable.addReplaceCommit("00000000000004", generateReplaceCommitMetadata(p0, file2P0C1, file4P0C3));
+    replaceMetadata = generateReplaceCommitMetadata(p0, file2P0C1, file4P0C3);
+    testTable.addReplaceCommit("00000000000004", replaceMetadata.getKey(), replaceMetadata.getValue());
 
     // run cleaner
     List<HoodieCleanStat> hoodieCleanStatsFour = runCleaner(config);
@@ -884,7 +887,8 @@ public class TestCleaner extends HoodieClientTestBase {
     // make next replacecommit, with 1 clustering operation. Replace all data in p1. no new files created
     Map<String, String> partitionAndFileId005 = testTable.forReplaceCommit("00000000000005").getFileIdsWithBaseFilesInPartitions(p1);
     String file4P1C4 = partitionAndFileId005.get(p1);
-    testTable.addReplaceCommit("00000000000005", generateReplaceCommitMetadata(p1, file3P1C2, file4P1C4));
+    replaceMetadata = generateReplaceCommitMetadata(p0, file3P1C2, file4P1C4);
+    testTable.addReplaceCommit("00000000000005", replaceMetadata.getKey(), replaceMetadata.getValue());
     
     List<HoodieCleanStat> hoodieCleanStatsFive = runCleaner(config, 2);
     assertTrue(testTable.baseFileExists(p0, "00000000000004", file4P0C3));
@@ -894,7 +898,23 @@ public class TestCleaner extends HoodieClientTestBase {
     assertFalse(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
   }
   
-  private HoodieReplaceCommitMetadata generateReplaceCommitMetadata(String partition, String replacedFileId, String newFileId) {
+  private Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> generateReplaceCommitMetadata(String partition,
+                                                                                                          String replacedFileId,
+                                                                                                          String newFileId) {
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
+    requestedReplaceMetadata.setOperationType(WriteOperationType.CLUSTER.toString());
+    requestedReplaceMetadata.setVersion(1);
+    HoodieSliceInfo sliceInfo = HoodieSliceInfo.newBuilder().setFileId(replacedFileId).build();
+    List<HoodieClusteringGroup> clusteringGroups = new ArrayList<>();
+    clusteringGroups.add(HoodieClusteringGroup.newBuilder()
+        .setVersion(1).setNumOutputFileGroups(1).setMetrics(Collections.emptyMap())
+        .setSlices(Collections.singletonList(sliceInfo)).build());
+    requestedReplaceMetadata.setExtraMetadata(Collections.emptyMap());
+    requestedReplaceMetadata.setClusteringPlan(HoodieClusteringPlan.newBuilder()
+        .setVersion(1).setExtraMetadata(Collections.emptyMap())
+        .setStrategy(HoodieClusteringStrategy.newBuilder().setStrategyClassName("").setVersion(1).build())
+        .setInputGroups(clusteringGroups).build());
+    
     HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
     replaceMetadata.addReplaceFileId(partition, replacedFileId);
     replaceMetadata.setOperationType(WriteOperationType.CLUSTER);
@@ -905,7 +925,7 @@ public class TestCleaner extends HoodieClientTestBase {
       writeStat.setFileId(newFileId);
       replaceMetadata.addWriteStat(partition, writeStat);
     }
-    return replaceMetadata;
+    return Pair.of(requestedReplaceMetadata, replaceMetadata);
   }
 
   @Test
