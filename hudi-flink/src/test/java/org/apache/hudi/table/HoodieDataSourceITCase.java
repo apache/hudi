@@ -171,9 +171,16 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
 
     execInsertSql(tableEnv, insertInto);
 
-    List<Row> rows = CollectionUtil.iterableToList(
+    List<Row> result1 = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
-    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+    assertRowsEquals(result1, TestData.DATA_SET_SOURCE_INSERT);
+    // apply filters
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 where uuid > 'id5'").execute().collect());
+    assertRowsEquals(result2, "["
+        + "id6,Emma,20,1970-01-01T00:00:06,par3, "
+        + "id7,Bob,44,1970-01-01T00:00:07,par4, "
+        + "id8,Han,56,1970-01-01T00:00:08,par4]");
   }
 
   // -------------------------------------------------------------------------
