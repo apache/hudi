@@ -68,6 +68,7 @@ import org.apache.flink.table.sources.StreamTableSource;
 import org.apache.flink.table.sources.TableSource;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.table.utils.TableConnectorUtils;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
@@ -232,6 +233,18 @@ public class HoodieTableSource implements
   @Override
   public TableSchema getTableSchema() {
     return schema;
+  }
+
+  @Override
+  public String explainSource() {
+    final String filterString = filters.stream()
+        .map(Expression::asSummaryString)
+        .collect(Collectors.joining(","));
+    return TableConnectorUtils.generateRuntimeName(getClass(), getTableSchema().getFieldNames())
+        + (requiredPartitions == null ? "" : ", requiredPartition=" + requiredPartitions)
+        + (requiredPos == null ? "" : ", requiredPos=" + Arrays.toString(requiredPos))
+        + (limit == -1 ? "" : ", limit=" + limit)
+        + (filters.size() == 0 ? "" : ", filters=" + filterString);
   }
 
   @Override
