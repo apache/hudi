@@ -45,6 +45,7 @@ import org.apache.hudi.utilities.DummySchemaProvider;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.CsvDFSSource;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 import org.apache.hudi.utilities.sources.InputBatch;
@@ -100,6 +101,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -313,7 +315,14 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     }
 
     static HoodieDeltaStreamer.Config makeConfig(String basePath, WriteOperationType op, String sourceClassName,
-                                                 List<String> transformerClassNames, String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass,
+        List<String> transformerClassNames, String propsFilename, boolean enableHiveSync, boolean useSchemaProviderClass,
+        int sourceLimit, boolean updatePayloadClass, String payloadClassName, String tableType, String sourceOrderingField) {
+      return makeConfig(basePath, op, sourceClassName, transformerClassNames, propsFilename, enableHiveSync, useSchemaProviderClass
+          ? FilebasedSchemaProvider.class.getName() : null, sourceLimit, updatePayloadClass, payloadClassName, tableType, sourceOrderingField);
+    }
+
+    static HoodieDeltaStreamer.Config makeConfig(String basePath, WriteOperationType op, String sourceClassName,
+                                                 List<String> transformerClassNames, String propsFilename, boolean enableHiveSync, String schemaProviderClass,
                                                  int sourceLimit, boolean updatePayloadClass, String payloadClassName, String tableType, String sourceOrderingField) {
       HoodieDeltaStreamer.Config cfg = new HoodieDeltaStreamer.Config();
       cfg.targetBasePath = basePath;
@@ -329,8 +338,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       if (updatePayloadClass) {
         cfg.payloadClassName = payloadClassName;
       }
-      if (useSchemaProviderClass) {
-        cfg.schemaProviderClassName = FilebasedSchemaProvider.class.getName();
+      if (schemaProviderClass != null) {
+        cfg.schemaProviderClassName = schemaProviderClass;
       }
       return cfg;
     }
@@ -1048,12 +1057,16 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   private void testParquetDFSSource(boolean useSchemaProvider, List<String> transformerClassNames) throws Exception {
+    testParquetDFSSource(useSchemaProvider, useSchemaProvider ? FilebasedSchemaProvider.class.getName() : null, transformerClassNames);
+  }
+
+  private void testParquetDFSSource(boolean useSchemaProvider, String schemaProviderClass, List<String> transformerClassNames) throws Exception {
     prepareParquetDFSSource(useSchemaProvider, transformerClassNames != null);
     String tableBasePath = dfsBasePath + "/test_parquet_table" + testNum;
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
         TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, ParquetDFSSource.class.getName(),
             transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
-            useSchemaProvider, 100000, false, null, null, "timestamp"), jsc);
+            schemaProviderClass, 100000, false, null, null, "timestamp"), jsc);
     deltaStreamer.sync();
     TestHelpers.assertRecordCount(PARQUET_NUM_RECORDS, tableBasePath + "/*/*.parquet", sqlContext);
     testNum++;
@@ -1160,6 +1173,11 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   @Test
   public void testParquetDFSSourceWithoutSchemaProviderAndTransformer() throws Exception {
     testParquetDFSSource(false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
+  }
+
+  @Test
+  public void testParquetDFSSourceWithNullSchemaProviderAndTransformer() throws Exception {
+    testParquetDFSSource(true, NullTargetSchemaProvider.class.getName(), Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
   }
 
   @Test
@@ -1369,4 +1387,22 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       return sparkSession.createDataFrame(jsc.emptyRDD(), rowDataset.schema());
     }
   }
+
+  public static class NullTargetSchemaProvider extends SchemaProvider {
+
+    public NullTargetSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
+      super(props, jssc);
+    }
+
+    @Override
+    public Schema getSourceSchema() {
+      return AVRO_SCHEMA;
+    }
+
+    @Override
+    public Schema getTargetSchema() {
+      return null;
+    }
+  }
+
 }

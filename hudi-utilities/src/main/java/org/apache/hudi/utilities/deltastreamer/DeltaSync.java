@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.AvroConversionHelper;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.HoodieSparkUtils;
@@ -346,7 +345,7 @@ public class DeltaSync implements Serializable {
     final Option<JavaRDD<GenericRecord>> avroRDDOptional;
     final String checkpointStr;
     final SchemaProvider schemaProvider;
-    String schemaStr = null;
+    String dfSchemaStr = null;
     if (transformer.isPresent()) {
       // Transformation is needed. Fetch New rows in Row Format, apply transformation and then convert them
       // to generic records for writing
@@ -356,9 +355,10 @@ public class DeltaSync implements Serializable {
       Option<Dataset<Row>> transformed =
           dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(jssc, sparkSession, data, props));
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
-      if(transformed.isPresent()){
+      if (transformed.isPresent()) {
         StructType schema = transformed.get().schema();
-        schemaStr = AvroConversionUtils.convertStructTypeToAvroSchema(schema,"structNamePlaceholder","nameSpacePlaceHolder").toString();
+        dfSchemaStr = AvroConversionUtils.convertStructTypeToAvroSchema(schema, HOODIE_RECORD_STRUCT_NAME,
+            HOODIE_RECORD_NAMESPACE).toString();
       }
       if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null) {
         // If the target schema is specified through Avro schema,
@@ -389,7 +389,6 @@ public class DeltaSync implements Serializable {
       avroRDDOptional = dataAndCheckpoint.getBatch();
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
       schemaProvider = dataAndCheckpoint.getSchemaProvider();
-      // I assume this code path(no transformer) may not have target schema as null. If not, yet to handle it.
     }
 
     if (Objects.equals(checkpointStr, resumeCheckpointStr.orElse(null))) {
@@ -400,7 +399,7 @@ public class DeltaSync implements Serializable {
 
     if ((!avroRDDOptional.isPresent()) || (avroRDDOptional.get().isEmpty())) {
       LOG.info("No new data, perform empty commit.");
-      return new ReadBatch(schemaProvider, checkpointStr, jssc.emptyRDD(), schemaStr);
+      return new ReadBatch(schemaProvider, checkpointStr, jssc.emptyRDD(), dfSchemaStr);
     }
 
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
@@ -412,7 +411,7 @@ public class DeltaSync implements Serializable {
       return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
     });
 
-    return new ReadBatch(schemaProvider, checkpointStr, records, schemaStr);
+    return new ReadBatch(schemaProvider, checkpointStr, records, dfSchemaStr);
   }
 
   /**
@@ -592,6 +591,7 @@ public class DeltaSync implements Serializable {
    * Note that depending on configs and source-type, schemaProvider could either be eagerly or lazily created.
    * SchemaProvider creation is a precursor to HoodieWriteClient and AsyncCompactor creation. This method takes care of
    * this constraint.
+   * @param dfSchemaStr schema represented in string format for the dataframe in use.
    */
   public void setupWriteClient(String dfSchemaStr) throws IOException {
     if ((null != schemaProvider)) {
@@ -627,13 +627,13 @@ public class DeltaSync implements Serializable {
    * @param schemaProvider Schema Provider
    */
   private HoodieWriteConfig getHoodieClientConfig(SchemaProvider schemaProvider) {
-    return getHoodieClientConfig(schemaProvider != null ? schemaProvider.getTargetSchema() : null);
+    return getHoodieClientConfig(schemaProvider != null ? schemaProvider.getTargetSchema().toString() : null);
   }
 
   /**
    * Helper to construct Write Client config.
    *
-   * @param schema Schema
+   * @param schemaStr Schema in string format.
    */
   private HoodieWriteConfig getHoodieClientConfig(String schemaStr) {
     final boolean combineBeforeUpsert = true;
