@@ -961,11 +961,11 @@
 <lastmod>2020-10-01T17:38:24-04:00</lastmod>
 </url>
 <url>
-<loc>https://hudi.apache.org/cn/docs/quick-start-guide.html</loc>
+<loc>https://hudi.apache.org/cn/docs/spark_quick-start-guide.html</loc>
 <lastmod>2019-12-30T14:59:57-05:00</lastmod>
 </url>
 <url>
-<loc>https://hudi.apache.org/docs/quick-start-guide.html</loc>
+<loc>https://hudi.apache.org/docs/spark_quick-start-guide.html</loc>
 <lastmod>2019-12-30T14:59:57-05:00</lastmod>
 </url>
 <url>
@@ -995,6 +995,10 @@
 <url>
 <loc>https://hudi.apache.org/docs/comparison.html</loc>
 <lastmod>2019-12-30T14:59:57-05:00</lastmod>
+</url>
+<url>
+<loc>https://hudi.apache.org/docs/flink-quick-start-guide.html</loc>
+<lastmod>2020-03-15T23:40:57-04:00</lastmod>
 </url>
 <url>
 <loc>https://hudi.apache.org/cn/docs/concepts.html</loc>

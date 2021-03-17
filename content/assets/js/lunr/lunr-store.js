@@ -1202,12 +1202,12 @@ var store = [{
         "title": "Quick-Start Guide",
         "excerpt":"本指南通过使用spark-shell简要介绍了Hudi功能。使用Spark数据源，我们将通过代码段展示如何插入和更新Hudi的默认存储类型数据集： 写时复制。每次写操作之后，我们还将展示如何读取快照和增量数据。 设置spark-shell Hudi适用于Spark-2.x版本。您可以按照此处的说明设置spark。 在提取的目录中，使用spark-shell运行Hudi： bin/spark-shell --packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' 设置表名、基本路径和数据生成器来为本指南生成记录。 import org.apache.hudi.QuickstartUtils._ import scala.collection.JavaConversions._ import org.apache.spark.sql.SaveMode._ import org.apache.hudi.DataSourceReadOptions._ import org.apache.hudi.DataSourceWriteOptions._ import org.apache.hudi.config.HoodieWriteConfig._ val tableName = \"hudi_cow_table\" val basePath = \"file:///tmp/hudi_cow_table\" val dataGen = new DataGenerator 数据生成器 可以基于行程样本模式 生成插入和更新的样本。 插入数据 生成一些新的行程样本，将其加载到DataFrame中，然后将DataFrame写入Hudi数据集中，如下所示。 val inserts = convertToStringList(dataGen.generateInserts(10)) val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))...","categories": [],
         "tags": [],
-        "url": "https://hudi.apache.org/cn/docs/quick-start-guide.html",
+        "url": "https://hudi.apache.org/cn/docs/spark_quick-start-guide.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
         "title": "Quick-Start Guide",
         "excerpt":"This guide provides a quick peek at Hudi’s capabilities using spark-shell. Using Spark datasources, we will walk through code snippets that allows you to insert and update a Hudi table of default table type: Copy on Write. After each write operation we will also show how to read the data...","categories": [],
         "tags": [],
-        "url": "https://hudi.apache.org/docs/quick-start-guide.html",
+        "url": "https://hudi.apache.org/docs/spark_quick-start-guide.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
         "title": "Structure",
         "excerpt":"Hudi (pronounced “Hoodie”) ingests &amp; manages storage of large analytical tables over DFS (HDFS or cloud stores) and provides three types of queries. Read Optimized query - Provides excellent query performance on pure columnar storage, much like plain Parquet tables. Incremental query - Provides a change stream out of the...","categories": [],
@@ -1243,6 +1243,11 @@ var store = [{
         "excerpt":"Apache Hudi fills a big void for processing data on top of DFS, and thus mostly co-exists nicely with these technologies. However, it would be useful to understand how Hudi fits into the current big data ecosystem, contrasting it with a few related systems and bring out the different tradeoffs...","categories": [],
         "tags": [],
         "url": "https://hudi.apache.org/docs/comparison.html",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Quick-Start Guide",
+        "excerpt":"This guide provides a quick peek at Hudi’s capabilities using flink SQL client. Using flink SQL, we will walk through code snippets that allows you to insert and update a Hudi table of default table type: Copy on Write and Merge On Read. After each write operation we will also...","categories": [],
+        "tags": [],
+        "url": "https://hudi.apache.org/docs/flink-quick-start-guide.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
         "title": "概念",
         "excerpt":"Apache Hudi(发音为“Hudi”)在DFS的数据集上提供以下流原语 插入更新 (如何改变数据集?) 增量拉取 (如何获取变更的数据?) 在本节中，我们将讨论重要的概念和术语，这些概念和术语有助于理解并有效使用这些原语。 时间轴 在它的核心，Hudi维护一条包含在不同的即时时间所有对数据集操作的时间轴，从而提供，从不同时间点出发得到不同的视图下的数据集。Hudi即时包含以下组件 操作类型 : 对数据集执行的操作类型 即时时间 : 即时时间通常是一个时间戳(例如：20190117010349)，该时间戳按操作开始时间的顺序单调增加。 状态 : 即时的状态 Hudi保证在时间轴上执行的操作的原子性和基于即时时间的时间轴一致性。 执行的关键操作包括 COMMITS - 一次提交表示将一组记录原子写入到数据集中。 CLEANS - 删除数据集中不再需要的旧文件版本的后台活动。 DELTA_COMMIT - 增量提交是指将一批记录原子写入到MergeOnRead存储类型的数据集中，其中一些/所有数据都可以只写到增量日志中。 COMPACTION - 协调Hudi中差异数据结构的后台活动，例如：将更新从基于行的日志文件变成列格式。在内部，压缩表现为时间轴上的特殊提交。 ROLLBACK - 表示提交/增量提交不成功且已回滚，删除在写入过程中产生的所有部分文件。 SAVEPOINT - 将某些文件组标记为”已保存”，以便清理程序不会将其删除。在发生灾难/数据恢复的情况下，它有助于将数据集还原到时间轴上的某个点。 任何给定的即时都可以处于以下状态之一 REQUESTED - 表示已调度但尚未启动的操作。 INFLIGHT - 表示当前正在执行该操作。 COMPLETED - 表示在时间轴上完成了该操作。 上面的示例显示了在Hudi数据集上大约10:00到10:20之间发生的更新事件，大约每5分钟一次，将提交元数据以及其他后台清理/压缩保留在Hudi时间轴上。 观察的关键点是：提交时间指示数据的到达时间（上午10:20），而实际数据组织则反映了实际时间或事件时间，即数据所反映的（从07:00开始的每小时时段）。在权衡数据延迟和完整性时，这是两个关键概念。...","categories": [],

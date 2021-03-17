@@ -87,7 +87,7 @@
           
         </a>
         <ul class="visible-links"><li class="masthead__menu-item">
-              <a href="/docs/quick-start-guide.html" target="_self" >Documentation</a>
+              <a href="/docs/spark_quick-start-guide.html" target="_self" >Documentation</a>
             </li><li class="masthead__menu-item">
               <a href="/community.html" target="_self" >Community</a>
             </li><li class="masthead__menu-item">
@@ -164,7 +164,18 @@
             
 
             
-              <li><a href="/docs/quick-start-guide.html" class="">Quick Start</a></li>
+              <li><a href="/docs/spark_quick-start-guide.html" class="">Quick Start(Spark)</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/flink-quick-start-guide.html" class="">Quick Start(Flink)</a></li>
             
 
           
@@ -352,6 +363,7 @@
       <li><a href="#spark-incr-query">Incremental query</a></li>
     </ul>
   </li>
+  <li><a href="#flink-sql">Flink SQL</a></li>
   <li><a href="#prestodb">PrestoDB</a></li>
   <li><a href="#impala-34-or-later">Impala (3.4 or later)</a>
     <ul>
@@ -417,6 +429,11 @@ with special configurations that indicates to query planning that only increment
       <td>Y</td>
     </tr>
     <tr>
+      <td><strong>Flink SQL</strong></td>
+      <td>Y</td>
+      <td>N</td>
+    </tr>
+    <tr>
       <td><strong>PrestoDB</strong></td>
       <td>Y</td>
       <td>N</td>
@@ -459,6 +476,12 @@ with special configurations that indicates to query planning that only increment
       <td><strong>Spark Datasource</strong></td>
       <td>Y</td>
       <td>N</td>
+      <td>Y</td>
+    </tr>
+    <tr>
+      <td><strong>Flink SQL</strong></td>
+      <td>Y</td>
+      <td>Y</td>
       <td>Y</td>
     </tr>
     <tr>
@@ -646,7 +669,7 @@ The following snippet shows how to obtain all records changed after <code class=
 <span class="n">spark</span><span class="o">.</span><span class="na">sql</span><span class="o">(</span><span class="s">"select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_trips_incremental where fare &gt; 20.0"</span><span class="o">).</span><span class="na">show</span><span class="o">()</span>
 </code></pre></div></div>
 
-<p>For examples, refer to <a href="/docs/quick-start-guide.html#setup-spark-shell">Setup spark-shell in quickstart</a>. 
+<p>For examples, refer to <a href="/docs/spark_quick-start-guide.html#setup-spark-shell">Setup spark-shell in quickstart</a>. 
 Please refer to <a href="/docs/configurations.html#spark-datasource">configurations</a> section, to view all datasource options.</p>
 
 <p>Additionally, <code class="highlighter-rouge">HoodieReadClient</code> offers the following functionality using Hudi’s implicit indexing.</p>
@@ -673,6 +696,45 @@ Please refer to <a href="/docs/configurations.html#spark-datasource">configurati
     </tr>
   </tbody>
 </table>
+
+<h2 id="flink-sql">Flink SQL</h2>
+<p>Once the flink Hudi tables have been registered to the Flink catalog, it can be queried using the Flink SQL. It supports all query types across both Hudi table types,
+relying on the custom Hudi input formats again like Hive. Typically notebook users and Flink SQL CLI users leverage flink sql for querying Hudi tables. Please add hudi-flink-bundle as described above via –jars.</p>
+
+<p>By default, Flink SQL will try to use its own parquet reader instead of Hive SerDe when reading from Hive metastore parquet tables.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># HADOOP_HOME is your hadoop root directory after unpack the binary package.</span>
+<span class="nb">export </span><span class="nv">HADOOP_CLASSPATH</span><span class="o">=</span><span class="sb">`</span><span class="nv">$HADOOP_HOME</span>/bin/hadoop classpath<span class="sb">`</span>
+
+./bin/sql-client.sh embedded <span class="nt">-j</span> .../hudi-flink-bundle_2.1?-<span class="k">*</span>.<span class="k">*</span>.<span class="k">*</span>.jar shell
+</code></pre></div></div>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- this defines a COPY_ON_WRITE table named 't1'</span>
+<span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">t1</span><span class="p">(</span>
+  <span class="n">uuid</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">20</span><span class="p">),</span>
+  <span class="n">name</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">10</span><span class="p">),</span>
+  <span class="n">age</span> <span class="nb">INT</span><span class="p">,</span>
+  <span class="n">ts</span> <span class="nb">TIMESTAMP</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span>
+  <span class="nv">`partition`</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span>
+<span class="p">)</span>
+<span class="n">PARTITIONED</span> <span class="k">BY</span> <span class="p">(</span><span class="nv">`partition`</span><span class="p">)</span>
+<span class="k">WITH</span> <span class="p">(</span>
+  <span class="s1">'connector'</span> <span class="o">=</span> <span class="s1">'hudi'</span><span class="p">,</span>
+  <span class="s1">'path'</span> <span class="o">=</span> <span class="s1">'schema://base-path'</span>
+<span class="p">);</span>
+
+<span class="c1">-- query the data</span>
+<span class="k">select</span> <span class="o">*</span> <span class="k">from</span> <span class="n">t1</span> <span class="k">where</span> <span class="nv">`partition`</span> <span class="o">=</span> <span class="s1">'par1'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p>Flink’s built-in support parquet is used for both COPY_ON_WRITE and MERGE_ON_READ tables,
+additionally partition prune is applied by Flink engine internally if a partition path is specified
+in the filter. Filters push down is not supported yet (already on the roadmap).</p>
+
+<p>For MERGE_ON_READ table, in order to query hudi table as a streaming, you need to add option <code class="highlighter-rouge">'read.streaming.enabled' = 'true'</code>,
+when querying the table, a Flink streaming pipeline starts and never ends until the user cancel the job manually.
+You can specify the start commit with option <code class="highlighter-rouge">read.streaming.start-commit</code> and source monitoring interval with option
+<code class="highlighter-rouge">read.streaming.check-interval</code>.</p>
 
 <h2 id="prestodb">PrestoDB</h2>
 

@@ -85,7 +85,7 @@
           
         </a>
         <ul class="visible-links"><li class="masthead__menu-item">
-              <a href="/docs/quick-start-guide.html" target="_self" >Documentation</a>
+              <a href="/docs/spark_quick-start-guide.html" target="_self" >Documentation</a>
             </li><li class="masthead__menu-item">
               <a href="/community.html" target="_self" >Community</a>
             </li><li class="masthead__menu-item">
@@ -299,7 +299,7 @@ We expect this to improve cleaner, compaction scheduling performance, even when 
 derived/ETL pipelines similar to data <a href="https://airflow.apache.org/docs/apache-airflow/stable/_api/airflow/sensors/index.html">sensors</a> in Apache Airflow.</li>
   <li><strong>Insert Overwrite/Insert Overwrite Table</strong>: We have added these two new write operation types, predominantly to help existing batch ETL jobs, which typically overwrite entire 
 tables/partitions each run. These operations are much cheaper, than having to issue upserts, given they are bulk replacing the target table.
-Check <a href="/docs/quick-start-guide.html#insert-overwrite-table">here</a> for examples.</li>
+Check <a href="/docs/spark_quick-start-guide.html#insert-overwrite-table">here</a> for examples.</li>
   <li><strong>Delete Partition</strong>: For users of WriteClient/RDD level apis, we have added an API to delete an entire partition, again without issuing deletes at the record level.</li>
   <li>The current default <code class="highlighter-rouge">OverwriteWithLatestAvroPayload</code> will overwrite the value in storage, even if for e.g the upsert was reissued for an older value of the key.
 Added a new <code class="highlighter-rouge">DefaultHoodieRecordPayload</code> and a new payload config <code class="highlighter-rouge">hoodie.payload.ordering.field</code> helps specify a field, that the incoming upsert record can be compared with

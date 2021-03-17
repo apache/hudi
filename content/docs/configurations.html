@@ -87,7 +87,7 @@
           
         </a>
         <ul class="visible-links"><li class="masthead__menu-item">
-              <a href="/docs/quick-start-guide.html" target="_self" >Documentation</a>
+              <a href="/docs/spark_quick-start-guide.html" target="_self" >Documentation</a>
             </li><li class="masthead__menu-item">
               <a href="/community.html" target="_self" >Community</a>
             </li><li class="masthead__menu-item">
@@ -164,7 +164,18 @@
             
 
             
-              <li><a href="/docs/quick-start-guide.html" class="">Quick Start</a></li>
+              <li><a href="/docs/spark_quick-start-guide.html" class="">Quick Start(Spark)</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/flink-quick-start-guide.html" class="">Quick Start(Flink)</a></li>
             
 
           
@@ -340,6 +351,12 @@
       <li><a href="#read-options">Read Options</a></li>
     </ul>
   </li>
+  <li><a href="#flink-options">Flink SQL Config Options</a>
+    <ul>
+      <li><a href="#write-options-1">Write Options</a></li>
+      <li><a href="#read-options-1">Read Options</a></li>
+    </ul>
+  </li>
   <li><a href="#writeclient-configs">WriteClient Configs</a>
     <ul>
       <li><a href="#index-configs">Index configs</a></li>
@@ -363,6 +380,7 @@ At a high level, you can control behaviour at few levels.</p>
 
 <ul>
   <li><strong><a href="#spark-datasource">Spark Datasource Configs</a></strong> : These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge records or choosing query type to read.</li>
+  <li><strong><a href="#flink-options">Flink SQL Configs</a></strong> : These configs control the Hudi Flink SQL source/sink connectors, providing ability to define record keys, pick out the write operation, specify how to merge records, enable/disable asynchronous compaction or choosing query type to read.</li>
   <li><strong><a href="#writeclient-configs">WriteClient Configs</a></strong> : Internally, the Hudi datasource uses a RDD based <code class="highlighter-rouge">HoodieWriteClient</code> api to actually perform writes to storage. These configs provide deep control over lower level aspects like 
  file sizing, compression, parallelism, compaction, write schema, cleaning etc. Although Hudi provides sane defaults, from time-time these configs may need to be tweaked to optimize for specific workloads.</li>
   <li><strong><a href="#PAYLOAD_CLASS_OPT_KEY">RecordPayload Config</a></strong> : This is the lowest level of customization offered by Hudi. Record payloads define how to produce new values to upsert based on incoming new record and 
@@ -520,6 +538,233 @@ necessarily correspond to an instant on the timeline. New data written with an
 <h4 id="INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY">INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.datasource.read.schema.use.end.instanttime</code>, Default: false <br />
 <span style="color:grey"> Uses end instant schema when incrementally fetched data to. Default: users latest instant schema. </span></p>
+
+<h2 id="flink-options">Flink SQL Config Options</h2>
+
+<p>Flink jobs using the SQL can be configured through the options in <code class="highlighter-rouge">WITH</code> clause.
+The actual datasource level configs are listed below.</p>
+
+<h3 id="write-options-1">Write Options</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Option Name</th>
+      <th>Required</th>
+      <th>Default</th>
+      <th>Remarks</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">path</code></td>
+      <td>Y</td>
+      <td>N/A</td>
+      <td><span style="color:grey"> Base path for the target hoodie table. The path would be created if it does not exist, otherwise a hudi table expects to be initialized successfully </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">table.type</code></td>
+      <td>N</td>
+      <td>COPY_ON_WRITE</td>
+      <td><span style="color:grey"> Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">write.operation</code></td>
+      <td>N</td>
+      <td>upsert</td>
+      <td><span style="color:grey"> The write operation, that this write should do (insert or upsert is supported) </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">write.precombine.field</code></td>
+      <td>N</td>
+      <td>ts</td>
+      <td><span style="color:grey"> Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..) </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">write.payload.class</code></td>
+      <td>N</td>
+      <td>OverwriteWithLatestAvroPayload.class</td>
+      <td><span style="color:grey"> Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. This will render any value set for the option in-effective </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">write.insert.drop.duplicates</code></td>
+      <td>N</td>
+      <td>false</td>
+      <td><span style="color:grey"> Flag to indicate whether to drop duplicates upon insert. By default insert will accept duplicates, to gain extra performance </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">write.ignore.failed</code></td>
+      <td>N</td>
+      <td>true</td>
+      <td><span style="color:grey"> Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch. By default true (in favor of streaming progressing over data integrity) </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">hoodie.datasource.write.recordkey.field</code></td>
+      <td>N</td>
+      <td>uuid</td>
+      <td><span style="color:grey"> Record key field. Value to be used as the <code class="highlighter-rouge">recordKey</code> component of <code class="highlighter-rouge">HoodieKey</code>. Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using the dot notation eg: <code class="highlighter-rouge">a.b.c</code> </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">hoodie.datasource.write.keygenerator.class</code></td>
+      <td>N</td>
+      <td>SimpleAvroKeyGenerator.class</td>
+      <td><span style="color:grey"> Key generator class, that implements will extract the key out of incoming record </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">write.tasks</code></td>
+      <td>N</td>
+      <td>4</td>
+      <td><span style="color:grey"> Parallelism of tasks that do actual write, default is 4 </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">write.batch.size.MB</code></td>
+      <td>N</td>
+      <td>128</td>
+      <td><span style="color:grey"> Batch buffer size in MB to flush data into the underneath filesystem </span></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>If the table type is MERGE_ON_READ, you can also specify the asynchronous compaction strategy through options:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Option Name</th>
+      <th>Required</th>
+      <th>Default</th>
+      <th>Remarks</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">compaction.async.enabled</code></td>
+      <td>N</td>
+      <td>true</td>
+      <td><span style="color:grey"> Async Compaction, enabled by default for MOR </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">compaction.trigger.strategy</code></td>
+      <td>N</td>
+      <td>num_commits</td>
+      <td><span style="color:grey"> Strategy to trigger compaction, options are ‘num_commits’: trigger compaction when reach N delta commits; ‘time_elapsed’: trigger compaction when time elapsed &gt; N seconds since last compaction; ‘num_and_time’: trigger compaction when both NUM_COMMITS and TIME_ELAPSED are satisfied; ‘num_or_time’: trigger compaction when NUM_COMMITS or TIME_ELAPSED is satisfied. Default is ‘num_commits’ </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">compaction.delta_commits</code></td>
+      <td>N</td>
+      <td>5</td>
+      <td><span style="color:grey"> Max delta commits needed to trigger compaction, default 5 commits </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">compaction.delta_seconds</code></td>
+      <td>N</td>
+      <td>3600</td>
+      <td><span style="color:grey"> Max delta seconds time needed to trigger compaction, default 1 hour </span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="read-options-1">Read Options</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Option Name</th>
+      <th>Required</th>
+      <th>Default</th>
+      <th>Remarks</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">path</code></td>
+      <td>Y</td>
+      <td>N/A</td>
+      <td><span style="color:grey"> Base path for the target hoodie table. The path would be created if it does not exist, otherwise a hudi table expects to be initialized successfully </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">table.type</code></td>
+      <td>N</td>
+      <td>COPY_ON_WRITE</td>
+      <td><span style="color:grey"> Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">read.tasks</code></td>
+      <td>N</td>
+      <td>4</td>
+      <td><span style="color:grey"> Parallelism of tasks that do actual read, default is 4 </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">read.avro-schema.path</code></td>
+      <td>N</td>
+      <td>N/A</td>
+      <td><span style="color:grey"> Avro schema file path, the parsed schema is used for deserialization, if not specified, the avro schema is inferred from the table DDL </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">read.avro-schema</code></td>
+      <td>N</td>
+      <td>N/A</td>
+      <td><span style="color:grey"> Avro schema string, the parsed schema is used for deserialization, if not specified, the avro schema is inferred from the table DDL </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">hoodie.datasource.query.type</code></td>
+      <td>N</td>
+      <td>snapshot</td>
+      <td><span style="color:grey"> Decides how data files need to be read, in 1) Snapshot mode (obtain latest view, based on row &amp; columnar data); 2) incremental mode (new data since an instantTime), not supported yet; 3) Read Optimized mode (obtain latest view, based on columnar data). Default: snapshot </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">hoodie.datasource.merge.type</code></td>
+      <td>N</td>
+      <td>payload_combine</td>
+      <td><span style="color:grey"> For Snapshot query on merge on read table. Use this key to define how the payloads are merged, in 1) skip_merge: read the base file records plus the log file records; 2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the log file records(combines the two records with same key for base and log file records), then read the left log file records </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">hoodie.datasource.hive_style_partition</code></td>
+      <td>N</td>
+      <td>false</td>
+      <td><span style="color:grey"> Whether the partition path is with Hive style, e.g. ‘{partition key}={partition value}’, default false </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">read.utc-timezone</code></td>
+      <td>N</td>
+      <td>true</td>
+      <td><span style="color:grey"> Use UTC timezone or local timezone to the conversion between epoch time and LocalDateTime. Hive 0.x/1.x/2.x use local timezone. But Hive 3.x use UTC timezone, by default true </span></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>If the table type is MERGE_ON_READ, streaming read is supported through options:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Option Name</th>
+      <th>Required</th>
+      <th>Default</th>
+      <th>Remarks</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">read.streaming.enabled</code></td>
+      <td>N</td>
+      <td>false</td>
+      <td><span style="color:grey"> Whether to read as streaming source, default false </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">read.streaming.check-interval</code></td>
+      <td>N</td>
+      <td>60</td>
+      <td><span style="color:grey"> Check interval for streaming read of SECOND, default 1 minute </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">read.streaming.start-commit</code></td>
+      <td>N</td>
+      <td>N/A</td>
+      <td><span style="color:grey"> Start commit instant for streaming read, the commit time format should be ‘yyyyMMddHHmmss’, by default reading from the latest instant </span></td>
+    </tr>
+  </tbody>
+</table>
 
 <h2 id="writeclient-configs">WriteClient Configs</h2>
 
