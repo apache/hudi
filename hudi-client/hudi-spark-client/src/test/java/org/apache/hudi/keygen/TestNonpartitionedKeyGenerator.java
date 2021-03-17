@@ -74,7 +74,12 @@ public class TestNonpartitionedKeyGenerator extends KeyGeneratorTestUtilities {
 
   @Test
   public void testNonNullPartitionPathFields() {
-    Assertions.assertThrows(IllegalArgumentException.class, () -> new NonpartitionedKeyGenerator(getPropertiesWithPartitionPathProp()));
+    TypedProperties properties = getPropertiesWithPartitionPathProp();
+    NonpartitionedKeyGenerator keyGenerator = new NonpartitionedKeyGenerator(properties);
+    GenericRecord record = getRecord();
+    Row row = KeyGeneratorTestUtilities.getRow(record);
+    Assertions.assertEquals(properties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY), "timestamp,ts_ms");
+    Assertions.assertEquals(keyGenerator.getPartitionPath(row), "");
   }
 
   @Test
