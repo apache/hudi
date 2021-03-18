@@ -377,4 +377,12 @@ public class FlinkOptions {
     map.forEach(configuration::setString);
     return configuration;
   }
+
+  /**
+   * Returns whether the given conf defines default value for the option {@code option}.
+   */
+  public static <T> boolean isDefaultValueDefined(Configuration conf, ConfigOption<T> option) {
+    return !conf.getOptional(option).isPresent()
+        || conf.get(option).equals(option.defaultValue());
+  }
 }
