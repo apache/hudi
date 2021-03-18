@@ -373,4 +373,12 @@ object DataSourceWriteOptions {
   // Async Compaction - Enabled by default for MOR
   val ASYNC_COMPACT_ENABLE_OPT_KEY = "hoodie.datasource.compaction.async.enable"
   val DEFAULT_ASYNC_COMPACT_ENABLE_OPT_VAL = "true"
+
+  // Avro Kafka Source configs
+  val KAFKA_AVRO_VALUE_DESERIALIZER = "hoodie.deltastreamer.source.kafka.value.deserializer.class"
+  // val DEFAULT_KAFKA_AVRO_VALUE_DESERIALIZER = classOf[io.confluent.kafka.serializers.KafkaAvroDeserializer]
+
+  val SCHEMA_PROVIDER_CLASS_PROP = "hoodie.deltastreamer.schemaprovider.class"
+
+  val JAVA_SPARK_CONTEXT_PROP = "java.spark.context"
 }

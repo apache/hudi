@@ -32,10 +32,6 @@ public class NullTargetSchemaRegistryProvider extends SchemaRegistryProvider {
   public NullTargetSchemaRegistryProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
   }
-  
-  public NullTargetSchemaRegistryProvider(TypedProperties props) {
-    super(props);
-  }
 
   @Override
   public Schema getTargetSchema() {
