@@ -23,7 +23,6 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.avro.Schema;
-import org.apache.spark.api.java.JavaSparkContext;
 
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -34,8 +33,8 @@ public class SchemaTestProvider extends SchemaProvider {
 
   public static AtomicReference<Schema> schemaToReturn = new AtomicReference<>(HoodieTestDataGenerator.AVRO_SCHEMA);
 
-  public SchemaTestProvider(TypedProperties props, JavaSparkContext jsc) {
-    super(props, jsc);
+  public SchemaTestProvider(TypedProperties props) {
+    super(props);
   }
 
   @Override

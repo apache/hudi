@@ -376,9 +376,8 @@ object DataSourceWriteOptions {
 
   // Avro Kafka Source configs
   val KAFKA_AVRO_VALUE_DESERIALIZER = "hoodie.deltastreamer.source.kafka.value.deserializer.class"
-  // val DEFAULT_KAFKA_AVRO_VALUE_DESERIALIZER = classOf[io.confluent.kafka.serializers.KafkaAvroDeserializer]
 
+  // Schema provider class to be set to be used in custom kakfa deserializer
   val SCHEMA_PROVIDER_CLASS_PROP = "hoodie.deltastreamer.schemaprovider.class"
 
-  val JAVA_SPARK_CONTEXT_PROP = "java.spark.context"
 }

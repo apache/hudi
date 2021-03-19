@@ -28,7 +28,6 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.kafka.common.errors.SerializationException;
-import org.apache.spark.api.java.JavaSparkContext;
 
 import java.util.Map;
 import java.util.Map.Entry;
@@ -53,8 +52,7 @@ public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
     try {
       TypedProperties props = getConvertToTypedProperties(configs);
       String className = props.getString(DataSourceWriteOptions.SCHEMA_PROVIDER_CLASS_PROP());
-      JavaSparkContext jsc = (JavaSparkContext) props.get(DataSourceWriteOptions.JAVA_SPARK_CONTEXT_PROP());
-      SchemaProvider schemaProvider = (SchemaProvider) ReflectionUtils.loadClass(className, props, jsc);
+      SchemaProvider schemaProvider = (SchemaProvider) ReflectionUtils.loadClass(className, props);
       sourceSchema = Objects.requireNonNull(schemaProvider).getSourceSchema();
     } catch (Throwable e) {
       throw new HoodieException(e);

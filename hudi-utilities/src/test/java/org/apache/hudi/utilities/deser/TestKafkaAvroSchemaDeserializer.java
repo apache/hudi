@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.deser;
 
-import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.sources.helpers.SchemaTestProvider;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
@@ -101,7 +100,6 @@ public class TestKafkaAvroSchemaDeserializer extends UtilitiesTestBase {
    */
   @Test
   public void testKafkaAvroSchemaDeserializer() {
-    defaultConfig.put(DataSourceWriteOptions.JAVA_SPARK_CONTEXT_PROP(), jsc);
     byte[] bytesOrigRecord;
     IndexedRecord avroRecord = createUserRecord();
     SchemaTestProvider.schemaToReturn.set(origSchema);
