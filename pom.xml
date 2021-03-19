@@ -106,9 +106,12 @@
     <prometheus.version>0.8.0</prometheus.version>
     <http.version>4.4.1</http.version>
     <spark.version>${spark2.version}</spark.version>
+    <sparkbundle.version>${spark2bundle.version}</sparkbundle.version>
     <flink.version>1.11.2</flink.version>
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.0.0</spark3.version>
+    <spark2bundle.version></spark2bundle.version>
+    <spark3bundle.version>3</spark3bundle.version>
     <avro.version>1.8.2</avro.version>
     <scala11.version>2.11.12</scala11.version>
     <scala12.version>2.12.10</scala12.version>
@@ -1459,6 +1462,7 @@
       <id>spark3</id>
       <properties>
         <spark.version>${spark3.version}</spark.version>
+        <sparkbundle.version>${spark3bundle.version}</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
         <kafka.version>2.4.1</kafka.version>
