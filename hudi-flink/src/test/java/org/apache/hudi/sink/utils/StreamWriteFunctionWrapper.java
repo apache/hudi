@@ -137,7 +137,7 @@ public class StreamWriteFunctionWrapper<I> {
   }
 
   public Map<String, List<HoodieRecord>> getDataBuffer() {
-    return this.writeFunction.getBuffer();
+    return this.writeFunction.getDataBuffer();
   }
 
   @SuppressWarnings("rawtypes")
