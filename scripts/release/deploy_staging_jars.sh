@@ -44,8 +44,8 @@ else
     do
 	if [[ $param =~ --scala_version\=(2\.1[1-2]) ]]; then
 		SCALA_VERSION=${BASH_REMATCH[1]}
-        elif [[ $param =~ --spark_version\=([2-3]) ]]; then
-                SPARK_VERSION=${BASH_REMATCH[0]}
+    elif [[ $param =~ --spark_version\=([2-3]) ]]; then
+            SPARK_VERSION=${BASH_REMATCH[0]}
 	fi
     done
 fi
