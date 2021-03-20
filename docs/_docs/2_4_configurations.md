@@ -824,3 +824,66 @@ Property: `hoodie.write.commit.callback.kafka.acks` <br/>
 ##### CALLBACK_KAFKA_RETRIES
 Property: `hoodie.write.commit.callback.kafka.retries` <br/>
 <span style="color:grey">Times to retry. 3 by default</span>
+
+### Locking configs
+Configs that control locking mechanisms if [WriteConcurrencyMode=optimistic_concurrency_control](#WriteConcurrencyMode) is enabled
+[withLockConfig](#withLockConfig) (HoodieLockConfig) <br/>
+
+#### withLockProvider(lockProvider = org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider) {#withLockProvider}
+Property: `hoodie.writer.lock.provider` <br/>
+<span style="color:grey">Lock provider class name, user can provide their own implementation of LockProvider which should be subclass of org.apache.hudi.common.lock.LockProvider</span>
+
+#### withZkQuorum(zkQuorum) {#withZkQuorum}
+Property: `hoodie.writer.lock.zookeeper.url` <br/>
+<span style="color:grey">Set the list of comma separated servers to connect to</span>
+
+#### withZkBasePath(zkBasePath) {#withZkBasePath}
+Property: `hoodie.writer.lock.zookeeper.base_path` [Required] <br/>
+<span style="color:grey">The base path on Zookeeper under which to create a ZNode to acquire the lock. This should be common for all jobs writing to the same table</span>
+
+#### withZkPort(zkPort) {#withZkPort}
+Property: `hoodie.writer.lock.zookeeper.port` [Required] <br/>
+<span style="color:grey">The connection port to be used for Zookeeper</span>
+
+#### withZkLockKey(zkLockKey) {#withZkLockKey}
+Property: `hoodie.writer.lock.zookeeper.lock_key` [Required] <br/>
+<span style="color:grey">Key name under base_path at which to create a ZNode and acquire lock. Final path on zk will look like base_path/lock_key. We recommend setting this to the table name</span>
+
+#### withZkConnectionTimeoutInMs(connectionTimeoutInMs = 15000) {#withZkConnectionTimeoutInMs}
+Property: `hoodie.writer.lock.zookeeper.connection_timeout_ms` <br/>
+<span style="color:grey">How long to wait when connecting to ZooKeeper before considering the connection a failure</span>
+
+#### withZkSessionTimeoutInMs(sessionTimeoutInMs = 60000) {#withZkSessionTimeoutInMs}
+Property: `hoodie.writer.lock.zookeeper.session_timeout_ms` <br/>
+<span style="color:grey">How long to wait after losing a connection to ZooKeeper before the session is expired</span>
+
+#### withNumRetries(num_retries = 3) {#withNumRetries}
+Property: `hoodie.writer.lock.num_retries` <br/>
+<span style="color:grey">Maximum number of times to retry by lock provider client</span>
+
+#### withRetryWaitTimeInMillis(retryWaitTimeInMillis = 5000) {#withRetryWaitTimeInMillis}
+Property: `hoodie.writer.lock.wait_time_ms_between_retry` <br/>
+<span style="color:grey">Initial amount of time to wait between retries by lock provider client</span>
+
+#### withHiveDatabaseName(hiveDatabaseName) {#withHiveDatabaseName}
+Property: `hoodie.writer.lock.hivemetastore.database` [Required] <br/>
+<span style="color:grey">The Hive database to acquire lock against</span>
+
+#### withHiveTableName(hiveTableName) {#withHiveTableName}
+Property: `hoodie.writer.lock.hivemetastore.table` [Required] <br/>
+<span style="color:grey">The Hive table under the hive database to acquire lock against</span>
+
+#### withClientNumRetries(clientNumRetries = 0) {#withClientNumRetries}
+Property: `hoodie.writer.lock.client.num_retries` <br/>
+<span style="color:grey">Maximum number of times to retry to acquire lock additionally from the hudi client</span>
+
+#### withRetryWaitTimeInMillis(retryWaitTimeInMillis = 10000) {#withRetryWaitTimeInMillis}
+Property: `hoodie.writer.lock.client.wait_time_ms_between_retry` <br/>
+<span style="color:grey">Amount of time to wait between retries from the hudi client</span>
+
+#### withConflictResolutionStrategy(lockProvider = org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy) {#withConflictResolutionStrategy}
+Property: `hoodie.writer.lock.conflict.resolution.strategy` <br/>
+<span style="color:grey">Lock provider class name, this should be subclass of org.apache.hudi.client.transaction.ConflictResolutionStrategy</span>
+
+
+
