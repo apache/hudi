@@ -281,7 +281,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         tableState.requiredStructSchema.foreach(
           f => {
             val curPos = posIterator.next()
-            val curField = row.get(curPos, f.dataType)
+            val curField = if (row.isNullAt(curPos)) null else row.get(curPos, f.dataType)
             rowToReturn.update(curIndex, curField)
             curIndex = curIndex + 1
           }
