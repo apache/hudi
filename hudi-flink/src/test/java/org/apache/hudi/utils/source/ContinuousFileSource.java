@@ -33,7 +33,6 @@ import org.apache.flink.table.sources.StreamTableSource;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -152,7 +151,6 @@ public class ContinuousFileSource implements StreamTableSource<RowData> {
 
     private void loadDataBuffer() {
       try {
-        new File(this.path.toString()).exists();
         this.dataBuffer = Files.readAllLines(Paths.get(this.path.toUri()));
       } catch (IOException e) {
         throw new RuntimeException("Read file " + this.path + " error", e);
