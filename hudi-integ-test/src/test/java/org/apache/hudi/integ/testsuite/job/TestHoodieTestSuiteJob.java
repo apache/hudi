@@ -178,7 +178,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     props.setProperty("hoodie.writer.lock.zookeeper.port", "2828");
     props.setProperty("hoodie.writer.lock.wait_time_ms", "1200000");
     props.setProperty("hoodie.writer.lock.num_retries", "10");
-    props.setProperty("hoodie.writer.lock.lock_key", "test_table");
+    props.setProperty("hoodie.writer.lock.zookeeper.lock_key", "test_table");
     props.setProperty("hoodie.writer.lock.zookeeper.zk_base_path", "/test");
     return props;
   }
