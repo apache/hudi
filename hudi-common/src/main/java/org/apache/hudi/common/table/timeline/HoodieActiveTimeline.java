@@ -69,9 +69,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       INFLIGHT_COMPACTION_EXTENSION, REQUESTED_COMPACTION_EXTENSION,
       INFLIGHT_RESTORE_EXTENSION, RESTORE_EXTENSION,
       ROLLBACK_EXTENSION, INFLIGHT_ROLLBACK_EXTENSION,
-      REQUESTED_REPLACE_COMMIT_EXTENSION, INFLIGHT_REPLACE_COMMIT_EXTENSION, REPLACE_COMMIT_EXTENSION
-  ));
-  
+      REQUESTED_REPLACE_COMMIT_EXTENSION, INFLIGHT_REPLACE_COMMIT_EXTENSION, REPLACE_COMMIT_EXTENSION));
   private static final Logger LOG = LogManager.getLogger(HoodieActiveTimeline.class);
   protected HoodieTableMetaClient metaClient;
   private static AtomicReference<String> lastInstantTime = new AtomicReference<>(String.valueOf(Integer.MIN_VALUE));
@@ -81,10 +79,18 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
    */
   public static String createNewInstantTime() {
+    return createNewInstantTime(0);
+  }
+
+  /**
+   * Returns next instant time that adds N milliseconds in the {@link #COMMIT_FORMATTER} format.
+   * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
+   */
+  public static String createNewInstantTime(long milliseconds) {
     return lastInstantTime.updateAndGet((oldVal) -> {
       String newCommitTime;
       do {
-        newCommitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date());
+        newCommitTime = HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date(System.currentTimeMillis() + milliseconds));
       } while (HoodieTimeline.compareTimestamps(newCommitTime, LESSER_THAN_OR_EQUALS, oldVal));
       return newCommitTime;
     });
@@ -163,6 +169,12 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   public void deletePending(HoodieInstant instant) {
+    ValidationUtils.checkArgument(!instant.isCompleted());
+    deleteInstantFile(instant);
+  }
+
+  public void deletePending(HoodieInstant.State state, String action, String instantStr) {
+    HoodieInstant instant = new HoodieInstant(state, action, instantStr);
     ValidationUtils.checkArgument(!instant.isCompleted());
     deleteInstantFile(instant);
   }

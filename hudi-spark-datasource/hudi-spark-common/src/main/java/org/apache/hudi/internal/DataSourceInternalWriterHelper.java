@@ -40,6 +40,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.StructType;
 
+import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -60,10 +61,10 @@ public class DataSourceInternalWriterHelper {
       SparkSession sparkSession, Configuration configuration) {
     this.instantTime = instantTime;
     this.operationType = WriteOperationType.BULK_INSERT;
-    this.writeClient  = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(new JavaSparkContext(sparkSession.sparkContext())), writeConfig, true);
+    this.writeClient  = new SparkRDDWriteClient<>(new HoodieSparkEngineContext(new JavaSparkContext(sparkSession.sparkContext())), writeConfig);
     writeClient.setOperationType(operationType);
     writeClient.startCommitWithTime(instantTime);
-    this.metaClient = new HoodieTableMetaClient(configuration, writeConfig.getBasePath());
+    this.metaClient = HoodieTableMetaClient.builder().setConf(configuration).setBasePath(writeConfig.getBasePath()).build();
     this.hoodieTable = HoodieSparkTable.create(writeConfig, new HoodieSparkEngineContext(new JavaSparkContext(sparkSession.sparkContext())), metaClient);
   }
 
@@ -77,7 +78,7 @@ public class DataSourceInternalWriterHelper {
 
   public void commit(List<HoodieWriteStat> writeStatList) {
     try {
-      writeClient.commitStats(instantTime, writeStatList, Option.empty(),
+      writeClient.commitStats(instantTime, writeStatList, Option.of(new HashMap<>()),
           DataSourceUtils.getCommitActionType(operationType, metaClient.getTableType()));
     } catch (Exception ioe) {
       throw new HoodieException(ioe.getMessage(), ioe);

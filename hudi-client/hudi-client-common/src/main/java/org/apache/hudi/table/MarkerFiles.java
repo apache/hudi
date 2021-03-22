@@ -166,10 +166,12 @@ public class MarkerFiles implements Serializable {
 
   public List<String> allMarkerFilePaths() throws IOException {
     List<String> markerFiles = new ArrayList<>();
-    FSUtils.processFiles(fs, markerDirPath.toString(), fileStatus -> {
-      markerFiles.add(stripMarkerFolderPrefix(fileStatus.getPath().toString()));
-      return true;
-    }, false);
+    if (doesMarkerDirExist()) {
+      FSUtils.processFiles(fs, markerDirPath.toString(), fileStatus -> {
+        markerFiles.add(stripMarkerFolderPrefix(fileStatus.getPath().toString()));
+        return true;
+      }, false);
+    }
     return markerFiles;
   }
 
@@ -189,7 +191,9 @@ public class MarkerFiles implements Serializable {
   public Path create(String partitionPath, String dataFileName, IOType type) {
     Path path = FSUtils.getPartitionPath(markerDirPath, partitionPath);
     try {
-      fs.mkdirs(path); // create a new partition as needed.
+      if (!fs.exists(path)) {
+        fs.mkdirs(path); // create a new partition as needed.
+      }
     } catch (IOException e) {
       throw new HoodieIOException("Failed to make dir " + path, e);
     }

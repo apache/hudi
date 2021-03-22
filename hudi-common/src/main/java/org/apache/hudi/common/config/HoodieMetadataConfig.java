@@ -41,6 +41,10 @@ public final class HoodieMetadataConfig extends DefaultHoodieConfig {
   public static final boolean DEFAULT_METADATA_VALIDATE = false;
   public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = false;
 
+  // Enable metrics for internal Metadata Table
+  public static final String METADATA_METRICS_ENABLE_PROP = METADATA_PREFIX + ".metrics.enable";
+  public static final boolean DEFAULT_METADATA_METRICS_ENABLE = false;
+
   // Parallelism for inserts
   public static final String METADATA_INSERT_PARALLELISM_PROP = METADATA_PREFIX + ".insert.parallelism";
   public static final int DEFAULT_METADATA_INSERT_PARALLELISM = 1;
@@ -63,12 +67,54 @@ public final class HoodieMetadataConfig extends DefaultHoodieConfig {
   public static final String CLEANER_COMMITS_RETAINED_PROP = METADATA_PREFIX + ".cleaner.commits.retained";
   public static final int DEFAULT_CLEANER_COMMITS_RETAINED = 3;
 
+  // Controls whether or not, upon failure to fetch from metadata table, should fallback to listing.
+  public static final String ENABLE_FALLBACK_PROP = METADATA_PREFIX + ".fallback.enable";
+  public static final String DEFAULT_ENABLE_FALLBACK = "true";
+
+  // Regex to filter out matching directories during bootstrap
+  public static final String DIRECTORY_FILTER_REGEX = METADATA_PREFIX + ".dir.filter.regex";
+  public static final String DEFAULT_DIRECTORY_FILTER_REGEX = "";
+
+  public static final String HOODIE_ASSUME_DATE_PARTITIONING_PROP = "hoodie.assume.date.partitioning";
+  public static final String DEFAULT_ASSUME_DATE_PARTITIONING = "false";
+
+  public static final String FILE_LISTING_PARALLELISM_PROP = "hoodie.file.listing.parallelism";
+  public static final int DEFAULT_FILE_LISTING_PARALLELISM = 1500;
+
   private HoodieMetadataConfig(Properties props) {
     super(props);
   }
 
   public static HoodieMetadataConfig.Builder newBuilder() {
     return new Builder();
+  }
+
+  public int getFileListingParallelism() {
+    return Math.max(Integer.parseInt(props.getProperty(HoodieMetadataConfig.FILE_LISTING_PARALLELISM_PROP)), 1);
+  }
+
+  public Boolean shouldAssumeDatePartitioning() {
+    return Boolean.parseBoolean(props.getProperty(HoodieMetadataConfig.HOODIE_ASSUME_DATE_PARTITIONING_PROP));
+  }
+
+  public boolean useFileListingMetadata() {
+    return Boolean.parseBoolean(props.getProperty(METADATA_ENABLE_PROP));
+  }
+
+  public boolean enableFallback() {
+    return Boolean.parseBoolean(props.getProperty(ENABLE_FALLBACK_PROP));
+  }
+
+  public boolean validateFileListingMetadata() {
+    return Boolean.parseBoolean(props.getProperty(METADATA_VALIDATE_PROP));
+  }
+
+  public boolean enableMetrics() {
+    return Boolean.parseBoolean(props.getProperty(METADATA_METRICS_ENABLE_PROP));
+  }
+
+  public String getDirectoryFilterRegex() {
+    return props.getProperty(DIRECTORY_FILTER_REGEX);
   }
 
   public static class Builder {
@@ -89,6 +135,16 @@ public final class HoodieMetadataConfig extends DefaultHoodieConfig {
 
     public Builder enable(boolean enable) {
       props.setProperty(METADATA_ENABLE_PROP, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder enableMetrics(boolean enableMetrics) {
+      props.setProperty(METADATA_METRICS_ENABLE_PROP, String.valueOf(enableMetrics));
+      return this;
+    }
+
+    public Builder enableFallback(boolean fallback) {
+      props.setProperty(ENABLE_FALLBACK_PROP, String.valueOf(fallback));
       return this;
     }
 
@@ -123,10 +179,27 @@ public final class HoodieMetadataConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withFileListingParallelism(int parallelism) {
+      props.setProperty(FILE_LISTING_PARALLELISM_PROP, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder withAssumeDatePartitioning(boolean assumeDatePartitioning) {
+      props.setProperty(HOODIE_ASSUME_DATE_PARTITIONING_PROP, String.valueOf(assumeDatePartitioning));
+      return this;
+    }
+
+    public Builder withDirectoryFilterRegex(String regex) {
+      props.setProperty(DIRECTORY_FILTER_REGEX, regex);
+      return this;
+    }
+
     public HoodieMetadataConfig build() {
       HoodieMetadataConfig config = new HoodieMetadataConfig(props);
       setDefaultOnCondition(props, !props.containsKey(METADATA_ENABLE_PROP), METADATA_ENABLE_PROP,
           String.valueOf(DEFAULT_METADATA_ENABLE));
+      setDefaultOnCondition(props, !props.containsKey(METADATA_METRICS_ENABLE_PROP), METADATA_METRICS_ENABLE_PROP,
+          String.valueOf(DEFAULT_METADATA_METRICS_ENABLE));
       setDefaultOnCondition(props, !props.containsKey(METADATA_VALIDATE_PROP), METADATA_VALIDATE_PROP,
           String.valueOf(DEFAULT_METADATA_VALIDATE));
       setDefaultOnCondition(props, !props.containsKey(METADATA_INSERT_PARALLELISM_PROP), METADATA_INSERT_PARALLELISM_PROP,
@@ -141,7 +214,14 @@ public final class HoodieMetadataConfig extends DefaultHoodieConfig {
           String.valueOf(DEFAULT_MAX_COMMITS_TO_KEEP));
       setDefaultOnCondition(props, !props.containsKey(MIN_COMMITS_TO_KEEP_PROP), MIN_COMMITS_TO_KEEP_PROP,
           String.valueOf(DEFAULT_MIN_COMMITS_TO_KEEP));
-
+      setDefaultOnCondition(props, !props.containsKey(FILE_LISTING_PARALLELISM_PROP), FILE_LISTING_PARALLELISM_PROP,
+          String.valueOf(DEFAULT_FILE_LISTING_PARALLELISM));
+      setDefaultOnCondition(props, !props.containsKey(HOODIE_ASSUME_DATE_PARTITIONING_PROP),
+          HOODIE_ASSUME_DATE_PARTITIONING_PROP, DEFAULT_ASSUME_DATE_PARTITIONING);
+      setDefaultOnCondition(props, !props.containsKey(ENABLE_FALLBACK_PROP), ENABLE_FALLBACK_PROP,
+          DEFAULT_ENABLE_FALLBACK);
+      setDefaultOnCondition(props, !props.containsKey(DIRECTORY_FILTER_REGEX), DIRECTORY_FILTER_REGEX,
+          DEFAULT_DIRECTORY_FILTER_REGEX);
       return config;
     }
   }

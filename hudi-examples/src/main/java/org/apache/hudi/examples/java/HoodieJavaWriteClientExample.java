@@ -46,9 +46,9 @@ import java.util.stream.Collectors;
 /**
  * Simple examples of #{@link HoodieJavaWriteClient}.
  *
- * Usage: HoodieWriteClientExample <tablePath> <tableName>
+ * Usage: HoodieJavaWriteClientExample <tablePath> <tableName>
  * <tablePath> and <tableName> describe root path of hudi and table name
- * for example, `HoodieWriteClientExample file:///tmp/hoodie/sample-table hoodie_rt`
+ * for example, `HoodieJavaWriteClientExample file:///tmp/hoodie/sample-table hoodie_rt`
  */
 public class HoodieJavaWriteClientExample {
 
@@ -58,7 +58,7 @@ public class HoodieJavaWriteClientExample {
 
   public static void main(String[] args) throws Exception {
     if (args.length < 2) {
-      System.err.println("Usage: HoodieWriteClientExample <tablePath> <tableName>");
+      System.err.println("Usage: HoodieJavaWriteClientExample <tablePath> <tableName>");
       System.exit(1);
     }
     String tablePath = args[0];
@@ -72,8 +72,11 @@ public class HoodieJavaWriteClientExample {
     Path path = new Path(tablePath);
     FileSystem fs = FSUtils.getFs(tablePath, hadoopConf);
     if (!fs.exists(path)) {
-      HoodieTableMetaClient.initTableType(hadoopConf, tablePath, HoodieTableType.valueOf(tableType),
-          tableName, HoodieAvroPayload.class.getName());
+      HoodieTableMetaClient.withPropertyBuilder()
+        .setTableType(tableType)
+        .setTableName(tableName)
+        .setPayloadClassName(HoodieAvroPayload.class.getName())
+        .initTable(hadoopConf, tablePath);
     }
 
     // Create the write client to write some records in

@@ -104,19 +104,17 @@ public class FlinkHoodieBackedErrorTableWriter<T extends HoodieRecordPayload> ex
         String partitionPath = new DateTime(timeMillis, dateTimeZone).toString("yyyy/MM/dd");
 
         HoodieKey hoodieKey = hoodieRecord.getKey();
-        HoodieRecordLocation hoodieRecordLocation = (HoodieRecordLocation) hoodieRecord.getNewLocation().get();
 
-        String instancTime = hoodieRecordLocation.getInstantTime();
-        String fileId = hoodieRecordLocation.getFileId();
+        HoodieRecordLocation hoodieRecordLocation = null;
+        if (hoodieRecord.getNewLocation().isPresent()) {
+          hoodieRecordLocation = (HoodieRecordLocation) hoodieRecord.getNewLocation().get();
+        }
+
+        String instancTime = hoodieRecordLocation == null ? "" : hoodieRecordLocation.getInstantTime();
+        String fileId = hoodieRecordLocation == null ? "" : hoodieRecordLocation.getFileId();
         String message = errorsMap.get(hoodieKey).toString();
 
         OverwriteWithLatestAvroPayload data = (OverwriteWithLatestAvroPayload)hoodieRecord.getData();
-        String record = null;
-        try {
-          record = HoodieAvroUtils.bytesToAvro(data.recordBytes, new Schema.Parser().parse(hoodieTable.getConfig().getSchema())).toString();
-        } catch (IOException e) {
-          LOG.error("Failed to parse the original Record.", e);
-        }
 
         Map<String, String> context = new HashMap<>();
         context.put(ERROR_COMMIT_TIME_METADATA_FIELD, instancTime);
@@ -130,7 +128,7 @@ public class FlinkHoodieBackedErrorTableWriter<T extends HoodieRecordPayload> ex
         errorGenericRecord.put(ERROR_RECORD_UUID, uuid);
         errorGenericRecord.put(ERROR_RECORD_TS, ts);
         errorGenericRecord.put(ERROR_RECORD_SCHEMA, hoodieTable.getConfig().getSchema());
-        errorGenericRecord.put(ERROR_RECORD_RECORD, record);
+        errorGenericRecord.put(ERROR_RECORD_RECORD, data.getGenericRecord().toString());
         errorGenericRecord.put(ERROR_RECORD_MESSAGE, message);
         errorGenericRecord.put(ERROR_RECORD_CONTEXT, context);
 

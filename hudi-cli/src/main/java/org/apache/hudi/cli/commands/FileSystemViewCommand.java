@@ -237,7 +237,7 @@ public class FileSystemViewCommand implements CommandMarker {
       boolean includeMaxInstant, boolean includeInflight, boolean excludeCompaction) throws IOException {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     HoodieTableMetaClient metaClient =
-        new HoodieTableMetaClient(client.getHadoopConf(), client.getBasePath(), true);
+        HoodieTableMetaClient.builder().setConf(client.getHadoopConf()).setBasePath(client.getBasePath()).setLoadActiveTimelineOnLoad(true).build();
     FileSystem fs = HoodieCLI.fs;
     String globPath = String.format("%s/%s/*", client.getBasePath(), globRegex);
     List<FileStatus> statuses = FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(globPath));
@@ -249,7 +249,7 @@ public class FileSystemViewCommand implements CommandMarker {
     } else if (excludeCompaction) {
       timeline = metaClient.getActiveTimeline().getCommitsTimeline();
     } else {
-      timeline = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline();
+      timeline = metaClient.getActiveTimeline().getWriteTimeline();
     }
 
     if (!includeInflight) {

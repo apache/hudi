@@ -131,11 +131,11 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterCompletedAndCompactionInstants();
 
   /**
-   * Timeline to just include commits (commit/deltacommit) and compaction actions.
+   * Timeline to just include commits (commit/deltacommit), compaction and replace actions.
    * 
    * @return
    */
-  HoodieTimeline getCommitsAndCompactionTimeline();
+  HoodieTimeline getWriteTimeline();
 
   /**
    * Timeline to just include replace instants that have valid (commit/deltacommit) actions.
@@ -156,7 +156,6 @@ public interface HoodieTimeline extends Serializable {
    */
   HoodieTimeline filterPendingReplaceTimeline();
 
-
   /**
    * Create a new Timeline with all the instants after startTs.
    */
@@ -173,10 +172,20 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline findInstantsAfter(String instantTime, int numCommits);
 
   /**
+   * Create a new Timeline with all the instants after startTs.
+   */
+  HoodieTimeline findInstantsAfter(String instantTime);
+
+  /**
    * Create a new Timeline with all instants before specified time.
    */
   HoodieTimeline findInstantsBefore(String instantTime);
 
+  /**
+   * Create new timeline with all instants before or equals specified time.
+   */
+  HoodieTimeline findInstantsBeforeOrEquals(String instantTime);
+  
   /**
    * Custom Filter of Instants.
    */
@@ -226,6 +235,11 @@ public interface HoodieTimeline extends Serializable {
    * @return true if the passed instant is present as a completed instant on the timeline
    */
   boolean containsInstant(HoodieInstant instant);
+
+  /**
+   * @return true if the passed instant is present as a completed instant on the timeline
+   */
+  boolean containsInstant(String ts);
 
   /**
    * @return true if the passed instant is present as a completed instant on the timeline or if the instant is before

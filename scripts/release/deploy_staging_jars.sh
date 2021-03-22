@@ -21,7 +21,7 @@
 ## Variables with defaults (if not overwritten by environment)
 ##
 MVN=${MVN:-mvn}
-
+SPARK_VERSION=2
 # fail immediately
 set -o errexit
 set -o nounset
@@ -44,6 +44,8 @@ else
     do
 	if [[ $param =~ --scala_version\=(2\.1[1-2]) ]]; then
 		SCALA_VERSION=${BASH_REMATCH[1]}
+      elif [[ $param =~ --spark_version\=([2-3]) ]]; then
+              SPARK_VERSION=${BASH_REMATCH[0]}
 	fi
     done
 fi
@@ -54,5 +56,5 @@ cd ..
 
 echo "Deploying to repository.apache.org with scala version ${SCALA_VERSION}"
 
-COMMON_OPTIONS="-Dscala-${SCALA_VERSION} -Prelease -DskipTests -DretryFailedDeploymentCount=10 -DdeployArtifacts=true"
+COMMON_OPTIONS="-Dscala-${SCALA_VERSION} -Dspark${SPARK_VERSION} -Prelease -DskipTests -DretryFailedDeploymentCount=10 -DdeployArtifacts=true"
 $MVN clean deploy $COMMON_OPTIONS

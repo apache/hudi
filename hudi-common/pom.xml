@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.6.1-SNAPSHOT</version>
+    <version>0.8.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
@@ -77,7 +77,6 @@
             <import>${basedir}/src/main/avro/HoodieRollbackMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieRestoreMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieReplaceCommitMetadata.avsc</import>
-            <import>${basedir}/src/main/avro/HoodieArchivedMetaEntry.avsc</import>
             <import>${basedir}/src/main/avro/HoodiePath.avsc</import>
             <import>${basedir}/src/main/avro/HoodieFSPermission.avsc</import>
             <import>${basedir}/src/main/avro/HoodieFileStatus.avsc</import>
@@ -90,6 +89,7 @@
             <import>${basedir}/src/main/avro/HoodieClusteringPlan.avsc</import>
             <import>${basedir}/src/main/avro/HoodieRequestedReplaceMetadata.avsc</import>
             <import>${basedir}/src/main/avro/HoodieMetadata.avsc</import>
+            <import>${basedir}/src/main/avro/HoodieArchivedMetaEntry.avsc</import>
           </imports>
         </configuration>
       </plugin>
@@ -144,6 +144,7 @@
           <artifactId>*</artifactId>
         </exclusion>
       </exclusions>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.hadoop</groupId>
@@ -154,6 +155,7 @@
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-hdfs</artifactId>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.hadoop</groupId>

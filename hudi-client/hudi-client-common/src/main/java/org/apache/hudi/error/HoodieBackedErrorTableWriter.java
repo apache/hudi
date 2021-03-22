@@ -62,7 +62,9 @@ public abstract class HoodieBackedErrorTableWriter<T extends HoodieRecordPayload
       this.basePath = getErrorTableBasePath(writeConfig);
       this.errorTableWriteConfig = createErrorDataWriteConfig(writeConfig);
       initialize(engineContext, metaClient);
-      this.metaClient = new HoodieTableMetaClient(hadoopConf, this.basePath);
+      this.metaClient = HoodieTableMetaClient.builder()
+                            .setConf(hadoopConf)
+                            .setBasePath(datasetWriteConfig.getBasePath()).build();
     }
   }
 
@@ -101,13 +103,23 @@ public abstract class HoodieBackedErrorTableWriter<T extends HoodieRecordPayload
   protected void bootstrapErrorTable(HoodieTableMetaClient datasetMetaClient) throws IOException {
 
     if (datasetMetaClient == null) {
-      HoodieTableMetaClient.initTableType(hadoopConf.get(), errorTableWriteConfig.getBasePath(),
-          HoodieTableType.COPY_ON_WRITE, tableName, "archived", OverwriteWithLatestAvroPayload.class.getName(), HoodieFileFormat.PARQUET.toString());
+      HoodieTableMetaClient.withPropertyBuilder()
+          .setTableType(HoodieTableType.COPY_ON_WRITE)
+          .setTableName(tableName)
+          .setArchiveLogFolder("archived")
+          .setPayloadClassName(OverwriteWithLatestAvroPayload.class.getName())
+          .setBaseFileFormat(HoodieFileFormat.PARQUET.toString())
+          .initTable(new Configuration(hadoopConf.get()), errorTableWriteConfig.getBasePath());
     } else {
       boolean exists = datasetMetaClient.getFs().exists(new Path(errorTableWriteConfig.getBasePath(), HoodieTableMetaClient.METAFOLDER_NAME));
       if (!exists) {
-        HoodieTableMetaClient.initTableType(hadoopConf.get(), errorTableWriteConfig.getBasePath(),
-            HoodieTableType.COPY_ON_WRITE, tableName, "archived", OverwriteWithLatestAvroPayload.class.getName(), HoodieFileFormat.PARQUET.toString());
+        HoodieTableMetaClient.withPropertyBuilder()
+            .setTableType(HoodieTableType.COPY_ON_WRITE)
+            .setTableName(tableName)
+            .setArchiveLogFolder("archived")
+            .setPayloadClassName(OverwriteWithLatestAvroPayload.class.getName())
+            .setBaseFileFormat(HoodieFileFormat.PARQUET.toString())
+            .initTable(new Configuration(hadoopConf.get()), errorTableWriteConfig.getBasePath());
       }
     }
   }

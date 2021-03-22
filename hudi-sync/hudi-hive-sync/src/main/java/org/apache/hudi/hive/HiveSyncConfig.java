@@ -76,6 +76,9 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--auto-create-database"}, description = "Auto create hive database")
   public Boolean autoCreateDatabase = true;
 
+  @Parameter(names = {"--ignore-exceptions"}, description = "Ignore hive exceptions")
+  public Boolean ignoreExceptions = false;
+
   @Parameter(names = {"--skip-ro-suffix"}, description = "Skip the `_ro` suffix for Read optimized table, when registering")
   public Boolean skipROSuffix = false;
 
@@ -130,6 +133,7 @@ public class HiveSyncConfig implements Serializable {
         + ", usePreApacheInputFormat=" + usePreApacheInputFormat
         + ", useJdbc=" + useJdbc
         + ", autoCreateDatabase=" + autoCreateDatabase
+        + ", ignoreExceptions=" + ignoreExceptions
         + ", skipROSuffix=" + skipROSuffix
         + ", help=" + help
         + ", supportTimestamp=" + supportTimestamp

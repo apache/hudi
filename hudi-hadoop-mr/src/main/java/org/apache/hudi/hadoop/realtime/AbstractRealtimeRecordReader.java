@@ -71,7 +71,7 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   private boolean usesCustomPayload() {
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(jobConf, split.getBasePath());
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jobConf).setBasePath(split.getBasePath()).build();
     return !(metaClient.getTableConfig().getPayloadClass().contains(HoodieAvroPayload.class.getName())
         || metaClient.getTableConfig().getPayloadClass().contains("org.apache.hudi.OverwriteWithLatestAvroPayload"));
   }

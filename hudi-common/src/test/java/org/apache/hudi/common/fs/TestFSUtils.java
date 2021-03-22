@@ -18,22 +18,18 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.exception.HoodieException;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.junit.Rule;
 import org.junit.contrib.java.lang.system.EnvironmentVariables;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -48,7 +44,6 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.table.timeline.HoodieActiveTimeline.COMMIT_FORMATTER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -271,51 +266,6 @@ public class TestFSUtils extends HoodieCommonTestHarness {
 
   public static String makeOldLogFileName(String fileId, String logFileExtension, String baseCommitTime, int version) {
     return "." + String.format("%s_%s%s.%d", fileId, baseCommitTime, logFileExtension, version);
-  }
-
-  @Test
-  public void testDeleteOlderRollbackFiles() throws Exception {
-    String[] instantTimes = new String[]{"20160501010101", "20160501020101", "20160501030101", "20160501040101",
-        "20160502020601", "20160502030601", "20160502040601", "20160502050601", "20160506030611",
-        "20160506040611", "20160506050611", "20160506060611"};
-    List<HoodieInstant> hoodieInstants = new ArrayList<>();
-    // create rollback files
-    for (String instantTime : instantTimes) {
-      Files.createFile(Paths.get(basePath,
-          HoodieTableMetaClient.METAFOLDER_NAME,
-          instantTime + HoodieTimeline.ROLLBACK_EXTENSION));
-      hoodieInstants.add(new HoodieInstant(false, HoodieTimeline.ROLLBACK_ACTION, instantTime));
-    }
-
-    String metaPath = Paths.get(basePath, ".hoodie").toString();
-    FSUtils.deleteOlderRollbackMetaFiles(FSUtils.getFs(basePath, new Configuration()),
-        metaPath, hoodieInstants.stream());
-    File[] rollbackFiles = new File(metaPath).listFiles((dir, name)
-        -> name.contains(HoodieTimeline.ROLLBACK_EXTENSION));
-    assertNotNull(rollbackFiles);
-    assertEquals(rollbackFiles.length, minRollbackToKeep);
-  }
-
-  @Test
-  public void testDeleteOlderCleanMetaFiles() throws Exception {
-    String[] instantTimes = new String[]{"20160501010101", "20160501020101", "20160501030101", "20160501040101",
-        "20160502020601", "20160502030601", "20160502040601", "20160502050601", "20160506030611",
-        "20160506040611", "20160506050611", "20160506060611"};
-    List<HoodieInstant> hoodieInstants = new ArrayList<>();
-    // create rollback files
-    for (String instantTime : instantTimes) {
-      Files.createFile(Paths.get(basePath,
-          HoodieTableMetaClient.METAFOLDER_NAME,
-          instantTime + HoodieTimeline.CLEAN_EXTENSION));
-      hoodieInstants.add(new HoodieInstant(false, HoodieTimeline.CLEAN_ACTION, instantTime));
-    }
-    String metaPath = Paths.get(basePath, ".hoodie").toString();
-    FSUtils.deleteOlderCleanMetaFiles(FSUtils.getFs(basePath, new Configuration()),
-        metaPath, hoodieInstants.stream());
-    File[] cleanFiles = new File(metaPath).listFiles((dir, name)
-        -> name.contains(HoodieTimeline.CLEAN_EXTENSION));
-    assertNotNull(cleanFiles);
-    assertEquals(cleanFiles.length, minCleanToKeep);
   }
 
   @Test

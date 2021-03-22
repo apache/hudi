@@ -26,13 +26,11 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import scala.Tuple2;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,20 +47,13 @@ public class SparkInsertOverwriteTableCommitActionExecutor<T extends HoodieRecor
   @Override
   protected Map<String, List<String>> getPartitionToReplacedFileIds(JavaRDD<WriteStatus> writeStatuses) {
     Map<String, List<String>> partitionToExistingFileIds = new HashMap<>();
-    try {
-      List<String> partitionPaths = FSUtils.getAllPartitionPaths(context, table.getMetaClient().getFs(),
-          table.getMetaClient().getBasePath(), config.useFileListingMetadata(), config.getFileListingMetadataVerify(),
-          false);
-      JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
-      if (partitionPaths != null && partitionPaths.size() > 0) {
-        context.setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of all partitions");
-        JavaRDD<String> partitionPathRdd = jsc.parallelize(partitionPaths, partitionPaths.size());
-        partitionToExistingFileIds = partitionPathRdd.mapToPair(
-            partitionPath -> new Tuple2<>(partitionPath, getAllExistingFileIds(partitionPath))).collectAsMap();
-      }
-    } catch (IOException e) {
-      throw new HoodieCommitException("In InsertOverwriteTable action failed to get existing fileIds of all partition "
-          + config.getBasePath() + " at time " + instantTime, e);
+    List<String> partitionPaths = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
+    JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
+    if (partitionPaths != null && partitionPaths.size() > 0) {
+      context.setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of all partitions");
+      JavaRDD<String> partitionPathRdd = jsc.parallelize(partitionPaths, partitionPaths.size());
+      partitionToExistingFileIds = partitionPathRdd.mapToPair(
+          partitionPath -> new Tuple2<>(partitionPath, getAllExistingFileIds(partitionPath))).collectAsMap();
     }
     return partitionToExistingFileIds;
   }

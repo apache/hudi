@@ -74,38 +74,38 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   // This acts as the sequenceID for records written
   private static final AtomicLong RECORD_COUNTER = new AtomicLong(1);
 
-  private final String fileId;
+  protected final String fileId;
   // Buffer for holding records in memory before they are flushed to disk
   private final List<IndexedRecord> recordList = new ArrayList<>();
   // Buffer for holding records (to be deleted) in memory before they are flushed to disk
   private final List<HoodieKey> keysToDelete = new ArrayList<>();
   // Incoming records to be written to logs.
-  private final Iterator<HoodieRecord<T>> recordItr;
+  protected Iterator<HoodieRecord<T>> recordItr;
   // Writer to log into the file group's latest slice.
-  private Writer writer;
+  protected Writer writer;
 
-  private final List<WriteStatus> statuses;
+  protected final List<WriteStatus> statuses;
   // Total number of records written during an append
-  private long recordsWritten = 0;
+  protected long recordsWritten = 0;
   // Total number of records deleted during an append
-  private long recordsDeleted = 0;
+  protected long recordsDeleted = 0;
   // Total number of records updated during an append
-  private long updatedRecordsWritten = 0;
+  protected long updatedRecordsWritten = 0;
   // Total number of new records inserted into the delta file
-  private long insertRecordsWritten = 0;
+  protected long insertRecordsWritten = 0;
 
   // Average record size for a HoodieRecord. This size is updated at the end of every log block flushed to disk
   private long averageRecordSize = 0;
   // Flag used to initialize some metadata
   private boolean doInit = true;
   // Total number of bytes written during this append phase (an estimation)
-  private long estimatedNumberOfBytesWritten;
+  protected long estimatedNumberOfBytesWritten;
   // Number of records that must be written to meet the max block size for a log block
   private int numberOfRecords = 0;
   // Max block size to limit to for a log block
   private final int maxBlockSize = config.getLogFileDataBlockMaxSize();
   // Header metadata for a log block
-  private final Map<HeaderMetadataType, String> header = new HashMap<>();
+  protected final Map<HeaderMetadataType, String> header = new HashMap<>();
   private SizeEstimator<HoodieRecord> sizeEstimator;
 
   public HoodieAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -178,6 +178,14 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     }
   }
 
+  /**
+   * Returns whether the hoodie record is an UPDATE.
+   */
+  protected boolean isUpdateRecord(HoodieRecord<T> hoodieRecord) {
+    // If currentLocation is present, then this is an update
+    return hoodieRecord.getCurrentLocation() != null;
+  }
+
   private Option<IndexedRecord> getIndexedRecord(HoodieRecord<T> hoodieRecord) {
     Option<Map<String, String>> recordMetadata = hoodieRecord.getData().getMetadata();
     try {
@@ -190,8 +198,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord.get(), hoodieRecord.getRecordKey(),
             hoodieRecord.getPartitionPath(), fileId);
         HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord.get(), instantTime, seqId);
-        // If currentLocation is present, then this is an update
-        if (hoodieRecord.getCurrentLocation() != null) {
+        if (isUpdateRecord(hoodieRecord)) {
           updatedRecordsWritten++;
         } else {
           insertRecordsWritten++;
@@ -267,6 +274,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     if (!stat.getLogFiles().contains(result.logFile().getFileName())) {
       stat.addLogFiles(result.logFile().getFileName());
     }
+    stat.setFileSizeInBytes(result.size());
   }
 
   private void updateRuntimeStats(HoodieDeltaWriteStat stat) {
@@ -297,6 +305,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     } else if (stat.getPath().endsWith(result.logFile().getFileName())) {
       // append/continued writing to the same log file
       stat.setLogOffset(Math.min(stat.getLogOffset(), result.offset()));
+      stat.setFileSizeInBytes(stat.getFileSizeInBytes() + result.size());
       accumulateWriteCounts(stat, result);
       accumulateRuntimeStats(stat);
     } else {
@@ -324,7 +333,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     estimatedNumberOfBytesWritten += averageRecordSize * numberOfRecords;
   }
 
-  private void appendDataAndDeleteBlocks(Map<HeaderMetadataType, String> header) {
+  protected void appendDataAndDeleteBlocks(Map<HeaderMetadataType, String> header) {
     try {
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writerSchemaWithMetafields.toString());
@@ -412,6 +421,13 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
   }
 
+  /**
+   * Whether there is need to update the record location.
+   */
+  protected boolean needsUpdateLocation() {
+    return true;
+  }
+
   private void writeToBuffer(HoodieRecord<T> record) {
     if (!partitionPath.equals(record.getPartitionPath())) {
       HoodieUpsertException failureEx = new HoodieUpsertException("mismatched partition path, record partition: "
@@ -421,9 +437,11 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     }
 
     // update the new location of the record, so we know where to find it next
-    record.unseal();
-    record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
-    record.seal();
+    if (needsUpdateLocation()) {
+      record.unseal();
+      record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
+      record.seal();
+    }
     Option<IndexedRecord> indexedRecord = getIndexedRecord(record);
     if (indexedRecord.isPresent()) {
       recordList.add(indexedRecord.get());

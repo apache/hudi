@@ -18,9 +18,11 @@
 
 package org.apache.hudi.common.metrics;
 
+import java.io.Serializable;
+
 /**
  * Interface for Hudi Metric Types.
  */
-public interface Metric {
+public interface Metric extends Serializable {
   Long getValue();
 }

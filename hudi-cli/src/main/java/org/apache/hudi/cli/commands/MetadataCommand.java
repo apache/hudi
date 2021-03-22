@@ -24,6 +24,7 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -146,7 +147,9 @@ public class MetadataCommand implements CommandMarker {
   @CliCommand(value = "metadata stats", help = "Print stats about the metadata")
   public String stats() throws IOException {
     HoodieCLI.getTableMetaClient();
-    HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(HoodieCLI.conf, HoodieCLI.basePath, "/tmp", true, false, false);
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
+    HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(HoodieCLI.conf),
+        config, HoodieCLI.basePath, "/tmp");
     Map<String, String> stats = metadata.stats();
 
     StringBuffer out = new StringBuffer("\n");
@@ -162,8 +165,9 @@ public class MetadataCommand implements CommandMarker {
   public String listPartitions() throws IOException {
     HoodieCLI.getTableMetaClient();
     initJavaSparkContext();
-    HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc),
-        HoodieCLI.basePath, "/tmp", true, false, false, false);
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
+    HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc), config,
+        HoodieCLI.basePath, "/tmp");
 
     StringBuffer out = new StringBuffer("\n");
     if (!metadata.enabled()) {
@@ -194,7 +198,8 @@ public class MetadataCommand implements CommandMarker {
       @CliOption(key = {"partition"}, help = "Name of the partition to list files", mandatory = true)
       final String partition) throws IOException {
     HoodieCLI.getTableMetaClient();
-    HoodieBackedTableMetadata metaReader = new HoodieBackedTableMetadata(HoodieCLI.conf, HoodieCLI.basePath, "/tmp", true, false, false);
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
+    HoodieBackedTableMetadata metaReader = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(HoodieCLI.conf), config, HoodieCLI.basePath, "/tmp");
 
     StringBuffer out = new StringBuffer("\n");
     if (!metaReader.enabled()) {
