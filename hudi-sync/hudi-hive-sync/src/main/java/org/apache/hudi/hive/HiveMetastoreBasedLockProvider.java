@@ -47,6 +47,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static org.apache.hudi.common.config.LockConfiguration.HIVE_DATABASE_NAME_PROP;
+import static org.apache.hudi.common.config.LockConfiguration.HIVE_METASTORE_URI_PROP;
 import static org.apache.hudi.common.config.LockConfiguration.HIVE_TABLE_NAME_PROP;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP;
@@ -68,18 +69,19 @@ import static org.apache.hudi.common.lock.LockState.RELEASING;
  * using hive metastore APIs. Users need to have a HiveMetastore & Zookeeper cluster deployed to be able to use this lock.
  *
  */
-public class HiveMetastoreLockProvider implements LockProvider<LockResponse> {
+public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse> {
 
-  private static final Logger LOG = LogManager.getLogger(HiveMetastoreLockProvider.class);
+  private static final Logger LOG = LogManager.getLogger(HiveMetastoreBasedLockProvider.class);
 
   private final String databaseName;
   private final String tableName;
+  private final String hiveMetastoreUris;
   private IMetaStoreClient hiveClient;
   private volatile LockResponse lock = null;
   protected LockConfiguration lockConfiguration;
   ExecutorService executor = Executors.newSingleThreadExecutor();
 
-  public HiveMetastoreLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
+  public HiveMetastoreBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
     this(lockConfiguration);
     try {
       HiveConf hiveConf = new HiveConf();
@@ -91,16 +93,17 @@ public class HiveMetastoreLockProvider implements LockProvider<LockResponse> {
     }
   }
 
-  public HiveMetastoreLockProvider(final LockConfiguration lockConfiguration, final IMetaStoreClient metaStoreClient) {
+  public HiveMetastoreBasedLockProvider(final LockConfiguration lockConfiguration, final IMetaStoreClient metaStoreClient) {
     this(lockConfiguration);
     this.hiveClient = metaStoreClient;
   }
 
-  HiveMetastoreLockProvider(final LockConfiguration lockConfiguration) {
+  HiveMetastoreBasedLockProvider(final LockConfiguration lockConfiguration) {
     checkRequiredProps(lockConfiguration);
     this.lockConfiguration = lockConfiguration;
     this.databaseName = this.lockConfiguration.getConfig().getString(HIVE_DATABASE_NAME_PROP);
     this.tableName = this.lockConfiguration.getConfig().getString(HIVE_TABLE_NAME_PROP);
+    this.hiveMetastoreUris = this.lockConfiguration.getConfig().getOrDefault(HIVE_METASTORE_URI_PROP, "").toString();
   }
 
   @Override
@@ -206,6 +209,9 @@ public class HiveMetastoreLockProvider implements LockProvider<LockResponse> {
   }
 
   private void setHiveLockConfs(HiveConf hiveConf) {
+    if (!StringUtils.isNullOrEmpty(this.hiveMetastoreUris)) {
+      hiveConf.setVar(HiveConf.ConfVars.METASTOREURIS, this.hiveMetastoreUris);
+    }
     hiveConf.set("hive.support.concurrency", "true");
     hiveConf.set("hive.lock.manager", "org.apache.hadoop.hive.ql.lockmgr.zookeeper.ZooKeeperHiveLockManager");
     hiveConf.set("hive.lock.numretries", lockConfiguration.getConfig().getString(LOCK_ACQUIRE_NUM_RETRIES_PROP));
