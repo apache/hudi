@@ -28,6 +28,8 @@ docs:
         url: /docs/use_cases.html
       - title: "Writing Data"
         url: /docs/writing_data.html
+      - title: "Concurrency Control"
+        url: /docs/concurrency_control.html
       - title: "Querying Data"
         url: /docs/querying_data.html
       - title: "Configuration"
