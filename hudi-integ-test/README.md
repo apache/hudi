@@ -177,7 +177,7 @@ cd /opt
 Copy the integration tests jar into the docker container
 
 ```
-docker cp packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.6.1-SNAPSHOT.jar adhoc-2:/opt
+docker cp packaging/hudi-integ-test-bundle/target/hudi-integ-test-bundle-0.8.0-SNAPSHOT.jar adhoc-2:/opt
 ```
 
 ```
@@ -215,7 +215,7 @@ spark-submit \
 --conf spark.yarn.max.executor.failures=10 \
 --conf spark.sql.catalogImplementation=hive \
 --class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
-/opt/hudi-integ-test-bundle-0.6.1-SNAPSHOT.jar \
+/opt/hudi-integ-test-bundle-0.8.0-SNAPSHOT.jar \
 --source-ordering-field test_suite_source_ordering_field \
 --use-deltastreamer \
 --target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \
@@ -254,7 +254,7 @@ spark-submit \
 --conf spark.yarn.max.executor.failures=10 \
 --conf spark.sql.catalogImplementation=hive \
 --class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
-/opt/hudi-integ-test-bundle-0.6.1-SNAPSHOT.jar \
+/opt/hudi-integ-test-bundle-0.8.0-SNAPSHOT.jar \
 --source-ordering-field test_suite_source_ordering_field \
 --use-deltastreamer \
 --target-base-path /user/hive/warehouse/hudi-integ-test-suite/output \
