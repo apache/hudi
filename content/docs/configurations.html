@@ -208,6 +208,17 @@
             
 
             
+              <li><a href="/docs/concurrency_control.html" class="">Concurrency Control</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
               <li><a href="/docs/querying_data.html" class="">Querying Data</a></li>
             
 
@@ -369,6 +380,7 @@
       <li><a href="#metrics-configs">Metrics configs</a></li>
       <li><a href="#memory-configs">Memory configs</a></li>
       <li><a href="#write-commit-callback-configs">Write commit callback configs</a></li>
+      <li><a href="#locking-configs">Locking configs</a></li>
     </ul>
   </li>
 </ul>
@@ -1364,6 +1376,67 @@ Each clustering operation can create multiple groups. Total amount of data proce
 <h5 id="callback_kafka_retries">CALLBACK_KAFKA_RETRIES</h5>
 <p>Property: <code class="highlighter-rouge">hoodie.write.commit.callback.kafka.retries</code> <br />
 <span style="color:grey">Times to retry. 3 by default</span></p>
+
+<h3 id="locking-configs">Locking configs</h3>
+<p>Configs that control locking mechanisms if <a href="#WriteConcurrencyMode">WriteConcurrencyMode=optimistic_concurrency_control</a> is enabled
+<a href="#withLockConfig">withLockConfig</a> (HoodieLockConfig) <br /></p>
+
+<h4 id="withLockProvider">withLockProvider(lockProvider = org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.writer.lock.provider</code> <br />
+<span style="color:grey">Lock provider class name, user can provide their own implementation of LockProvider which should be subclass of org.apache.hudi.common.lock.LockProvider</span></p>
+
+<h4 id="withZkQuorum">withZkQuorum(zkQuorum)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.writer.lock.zookeeper.url</code> <br />
+<span style="color:grey">Set the list of comma separated servers to connect to</span></p>
+
+<h4 id="withZkBasePath">withZkBasePath(zkBasePath)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.writer.lock.zookeeper.base_path</code> [Required] <br />
+<span style="color:grey">The base path on Zookeeper under which to create a ZNode to acquire the lock. This should be common for all jobs writing to the same table</span></p>
+
+<h4 id="withZkPort">withZkPort(zkPort)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.writer.lock.zookeeper.port</code> [Required] <br />
+<span style="color:grey">The connection port to be used for Zookeeper</span></p>
+
+<h4 id="withZkLockKey">withZkLockKey(zkLockKey)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.writer.lock.zookeeper.lock_key</code> [Required] <br />
+<span style="color:grey">Key name under base_path at which to create a ZNode and acquire lock. Final path on zk will look like base_path/lock_key. We recommend setting this to the table name</span></p>
+
+<h4 id="withZkConnectionTimeoutInMs">withZkConnectionTimeoutInMs(connectionTimeoutInMs = 15000)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.writer.lock.zookeeper.connection_timeout_ms</code> <br />
+<span style="color:grey">How long to wait when connecting to ZooKeeper before considering the connection a failure</span></p>
+
+<h4 id="withZkSessionTimeoutInMs">withZkSessionTimeoutInMs(sessionTimeoutInMs = 60000)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.writer.lock.zookeeper.session_timeout_ms</code> <br />
+<span style="color:grey">How long to wait after losing a connection to ZooKeeper before the session is expired</span></p>
+
+<h4 id="withNumRetries">withNumRetries(num_retries = 3)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.writer.lock.num_retries</code> <br />
+<span style="color:grey">Maximum number of times to retry by lock provider client</span></p>
+
+<h4 id="withRetryWaitTimeInMillis">withRetryWaitTimeInMillis(retryWaitTimeInMillis = 5000)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.writer.lock.wait_time_ms_between_retry</code> <br />
+<span style="color:grey">Initial amount of time to wait between retries by lock provider client</span></p>
+
+<h4 id="withHiveDatabaseName">withHiveDatabaseName(hiveDatabaseName)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.writer.lock.hivemetastore.database</code> [Required] <br />
+<span style="color:grey">The Hive database to acquire lock against</span></p>
+
+<h4 id="withHiveTableName">withHiveTableName(hiveTableName)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.writer.lock.hivemetastore.table</code> [Required] <br />
+<span style="color:grey">The Hive table under the hive database to acquire lock against</span></p>
+
+<h4 id="withClientNumRetries">withClientNumRetries(clientNumRetries = 0)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.writer.lock.client.num_retries</code> <br />
+<span style="color:grey">Maximum number of times to retry to acquire lock additionally from the hudi client</span></p>
+
+<h4 id="withRetryWaitTimeInMillis">withRetryWaitTimeInMillis(retryWaitTimeInMillis = 10000)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.writer.lock.client.wait_time_ms_between_retry</code> <br />
+<span style="color:grey">Amount of time to wait between retries from the hudi client</span></p>
+
+<h4 id="withConflictResolutionStrategy">withConflictResolutionStrategy(lockProvider = org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.writer.lock.conflict.resolution.strategy</code> <br />
+<span style="color:grey">Lock provider class name, this should be subclass of org.apache.hudi.client.transaction.ConflictResolutionStrategy</span></p>
+
 
       </section>
 

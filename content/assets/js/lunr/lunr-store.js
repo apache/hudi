@@ -1324,6 +1324,11 @@ var store = [{
         "tags": [],
         "url": "https://hudi.apache.org/docs/metrics.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Concurrent Writes to Hudi Tables",
+        "excerpt":"In this section, we will cover Hudi’s concurrency model and describe ways to ingest data into a Hudi Table from multiple writers; using the DeltaStreamer tool as well as using the Hudi datasource. Supported Concurrency Controls MVCC : Hudi table services such as compaction, cleaning, clustering leverage Multi Version Concurrency...","categories": [],
+        "tags": [],
+        "url": "https://hudi.apache.org/docs/concurrency_control.html",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
         "title": "Privacy Policy",
         "excerpt":"Information about your use of this website is collected using server access logs and a tracking cookie. The collected information consists of the following: The IP address from which you access the website; The type of browser and operating system you use to access our site; The date and time...","categories": [],
         "tags": [],
