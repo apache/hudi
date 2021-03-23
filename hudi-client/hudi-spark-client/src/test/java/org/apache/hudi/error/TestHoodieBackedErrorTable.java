@@ -18,17 +18,21 @@
 
 package org.apache.hudi.error;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieErrorTableConfig;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.spark.api.java.JavaRDD;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -39,6 +43,7 @@ import static org.apache.hudi.testutils.Assertions.assertHasWriteErrors;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA;
 import static org.apache.hudi.common.testutils.Transformations.recordsToHoodieKeys;
+import static org.apache.hudi.common.util.ParquetUtils.readRowKeysFromParquet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestHoodieBackedErrorTable extends HoodieClientTestBase {
@@ -66,12 +71,17 @@ public class TestHoodieBackedErrorTable extends HoodieClientTestBase {
 
     String commitTime1 = writeClient1.startCommit();
     List<HoodieRecord> hoodieRecords1 =
-            dataGen.generateInsertsStream(commitTime1, 10, false, TRIP_SCHEMA).collect(Collectors.toList());
+            dataGen.generateInsertsStream(commitTime1, 50, false, TRIP_SCHEMA).collect(Collectors.toList());
     List<HoodieKey> insertKeys1 = recordsToHoodieKeys(hoodieRecords1);
     List<WriteStatus> writeStatuses = insertAndCheck(writeClient1, insertKeys1, commitTime1);
+
     assertHasWriteErrors(writeStatuses);
-    assertEquals(10, writeStatuses.get(0).getFailedRecords().size(),
-            "file shoule contain 100 records");
+    assertEquals(50, writeStatuses.get(0).getFailedRecords().size(), "shoule contain 50 records");
+    String basePath = writeClient1.getConfig().getBasePath();
+    DateTimeZone dateTimeZone = null;
+    long timeMillis = System.currentTimeMillis();
+    assertEquals(50, readRowKeysFromParquet(hadoopConf, new Path(basePath + "/" + HoodieTableMetaClient.ERROR_TABLE_FOLDER_NAME  + "/"
+            + new DateTime(timeMillis, dateTimeZone).toString("yyyy/MM/dd"))).size(), "shoule contain 50 records");
   }
 
   private List<WriteStatus> insertAndCheck(SparkRDDWriteClient client, List<HoodieKey> insertKeys, String commitTime) {
@@ -79,7 +89,7 @@ public class TestHoodieBackedErrorTable extends HoodieClientTestBase {
 
     for (HoodieKey hoodieKey : insertKeys) {
       OverwriteWithLatestAvroPayload payload;
-      payload = dataGen.generateMissWithOverwriteWithLatestAvroPayload(hoodieKey, commitTime);
+      payload = dataGen.generateMissWithOverwriteWithLatestAvroSchemaPayload(hoodieKey, commitTime);
       HoodieRecord record = new HoodieRecord(hoodieKey, payload);
       records.add(record);
     }

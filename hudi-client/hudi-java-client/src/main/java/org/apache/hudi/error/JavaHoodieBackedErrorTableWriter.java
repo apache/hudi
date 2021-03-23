@@ -18,49 +18,22 @@
 
 package org.apache.hudi.error;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieErrorTableConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
-import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
-
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.UUID;
-import java.util.Map;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_RECORD_TS;
-import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_RECORD_UUID;
-import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_RECORD_SCHEMA;
-import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_RECORD_RECORD;
-import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_RECORD_MESSAGE;
-import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_RECORD_CONTEXT;
-import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_COMMIT_TIME_METADATA_FIELD;
-import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_RECORD_KEY_METADATA_FIELD;
-import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_PARTITION_PATH_METADATA_FIELD;
-import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_FILE_ID_FIELD;
-import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_TABLE_NAME;
 
 public class JavaHoodieBackedErrorTableWriter<T extends HoodieRecordPayload> extends
     HoodieBackedErrorTableWriter<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
@@ -89,59 +62,15 @@ public class JavaHoodieBackedErrorTableWriter<T extends HoodieRecordPayload> ext
   public void commit(List<WriteStatus> writeStatuses,
                      HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> hoodieTable) {
 
-    List<HoodieRecord> errorRecordJavaRDD = writeStatuses.stream().flatMap(writeStatus -> {
-
-      HashMap<HoodieKey, Throwable> errorsMap = writeStatus.getErrors();
-      List<HoodieRecord> errorHoodieRecords = new ArrayList<>();
-      for (HoodieRecord hoodieRecord : writeStatus.getFailedRecords()) {
-
-        String uuid = UUID.randomUUID().toString();
-
-        long timeMillis = System.currentTimeMillis();
-        String ts = String.valueOf(timeMillis);
-        DateTimeZone dateTimeZone = null;
-        String partitionPath = new DateTime(timeMillis, dateTimeZone).toString("yyyy/MM/dd");
-
-        HoodieKey hoodieKey = hoodieRecord.getKey();
-
-        HoodieRecordLocation hoodieRecordLocation = null;
-        if (hoodieRecord.getNewLocation().isPresent()) {
-          hoodieRecordLocation = (HoodieRecordLocation) hoodieRecord.getNewLocation().get();
-        }
-
-        String instancTime = hoodieRecordLocation == null ? "" : hoodieRecordLocation.getInstantTime();
-        String fileId = hoodieRecordLocation == null ? "" : hoodieRecordLocation.getFileId();
-        String message = errorsMap.get(hoodieKey).toString();
-
-        OverwriteWithLatestAvroPayload data = (OverwriteWithLatestAvroPayload)hoodieRecord.getData();
-
-        Map<String, String> context = new HashMap<>();
-        context.put(ERROR_COMMIT_TIME_METADATA_FIELD, instancTime);
-        context.put(ERROR_RECORD_KEY_METADATA_FIELD, hoodieKey.getRecordKey());
-        context.put(ERROR_PARTITION_PATH_METADATA_FIELD, hoodieRecord.getPartitionPath());
-        context.put(ERROR_FILE_ID_FIELD, fileId);
-        context.put(ERROR_TABLE_NAME, hoodieTable.getConfig().getTableName());
-
-        GenericRecord errorGenericRecord = new GenericData.Record(new Schema.Parser().parse(HoodieErrorTableConfig.ERROR_TABLE_SCHEMA));
-
-        errorGenericRecord.put(ERROR_RECORD_UUID, uuid);
-        errorGenericRecord.put(ERROR_RECORD_TS, ts);
-        errorGenericRecord.put(ERROR_RECORD_SCHEMA, hoodieTable.getConfig().getSchema());
-        errorGenericRecord.put(ERROR_RECORD_RECORD, data.getGenericRecord().toString());
-        errorGenericRecord.put(ERROR_RECORD_MESSAGE, message);
-        errorGenericRecord.put(ERROR_RECORD_CONTEXT, context);
-
-        HoodieAvroPayload hoodieAvroPayload = new HoodieAvroPayload(Option.of(errorGenericRecord));
-
-        HoodieKey errorHoodieKey = new HoodieKey(uuid, partitionPath);
-        errorHoodieRecords.add(new HoodieRecord(errorHoodieKey, hoodieAvroPayload));
-      }
-      return errorHoodieRecords.stream();
-
-    }).collect(Collectors.toList());
-
-    HoodieJavaWriteClient writeClient = new HoodieJavaWriteClient(engineContext, errorTableWriteConfig);
-    String instantTime = writeClient.startCommit();
-    writeClient.insertError(errorRecordJavaRDD, instantTime);
+    try {
+      String schema = hoodieTable.getConfig().getSchema();
+      String tableName = hoodieTable.getConfig().getTableName();
+      List<HoodieRecord> errorRecordJavaRDD = writeStatuses.stream().flatMap(writeStatus -> createErrorRecord(writeStatus, schema, tableName).stream()).collect(Collectors.toList());
+      HoodieJavaWriteClient writeClient = new HoodieJavaWriteClient(engineContext, errorTableWriteConfig);
+      String instantTime = writeClient.startCommit();
+      writeClient.insertError(errorRecordJavaRDD, instantTime);
+    } catch (Exception e) {
+      LOG.error("commit error message Fail", e);
+    }
   }
 }

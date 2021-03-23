@@ -109,6 +109,11 @@ public final class HoodieErrorTableConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withErrorTableBasePath(String basePath) {
+      props.setProperty(ERROR_TABLE_BASE_PATH_PROP, basePath);
+      return this;
+    }
+
     public Builder withInsertParallelism(int parallelism) {
       props.setProperty(ERROR_TABLE_INSERT_PARALLELISM_PROP, String.valueOf(parallelism));
       return this;

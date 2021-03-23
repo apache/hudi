@@ -18,30 +18,64 @@
 
 package org.apache.hudi.error;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieErrorTableConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroSchemaPayload;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_COMMIT_TIME_METADATA_FIELD;
+import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_RECORD_KEY_METADATA_FIELD;
+import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_PARTITION_PATH_METADATA_FIELD;
+import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_FILE_ID_FIELD;
+import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_TABLE_NAME;
+import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_RECORD_UUID;
+import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_RECORD_TS;
+import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_RECORD_SCHEMA;
+import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_RECORD_RECORD;
+import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_RECORD_MESSAGE;
+import static org.apache.hudi.common.config.HoodieErrorTableConfig.ERROR_RECORD_CONTEXT;
 
 /**
  * Writer implementation backed by an internal hudi table. Error records are saved within an internal COW table
  * called Error table.
  */
 public abstract class HoodieBackedErrorTableWriter<T extends HoodieRecordPayload, I, K, O>  implements Serializable {
+
+  private static final Logger LOG = LogManager.getLogger(HoodieBackedErrorTableWriter.class);
 
   protected HoodieWriteConfig errorTableWriteConfig;
   protected HoodieWriteConfig datasetWriteConfig;
@@ -64,7 +98,7 @@ public abstract class HoodieBackedErrorTableWriter<T extends HoodieRecordPayload
       initialize(engineContext, metaClient);
       this.metaClient = HoodieTableMetaClient.builder()
                             .setConf(hadoopConf)
-                            .setBasePath(datasetWriteConfig.getBasePath()).build();
+                            .setBasePath(errorTableWriteConfig.getBasePath()).build();
     }
   }
 
@@ -151,6 +185,62 @@ public abstract class HoodieBackedErrorTableWriter<T extends HoodieRecordPayload
   protected abstract void initialize(HoodieEngineContext engineContext, HoodieTableMetaClient datasetMetaClient);
 
   public abstract void commit(O writeStatuses, HoodieTable<T, I, K, O> hoodieTable);
+
+  public List<HoodieRecord> createErrorRecord(WriteStatus status, String schema, String tableName) {
+
+    HashMap<HoodieKey, Throwable> errorsMap = status.getErrors();
+    List<HoodieRecord> errorHoodieRecords = new ArrayList<>();
+    for (HoodieRecord hoodieRecord : status.getFailedRecords()) {
+
+      String uuid = UUID.randomUUID().toString();
+
+      long timeMillis = System.currentTimeMillis();
+      String ts = String.valueOf(timeMillis);
+      DateTimeZone dateTimeZone = null;
+      String partitionPath = new DateTime(timeMillis, dateTimeZone).toString("yyyy/MM/dd");
+
+      HoodieKey hoodieKey = hoodieRecord.getKey();
+
+      HoodieRecordLocation hoodieRecordLocation = null;
+      if (hoodieRecord.getNewLocation().isPresent()) {
+        hoodieRecordLocation = (HoodieRecordLocation) hoodieRecord.getNewLocation().get();
+      }
+
+      String instancTime = hoodieRecordLocation == null ? "" : hoodieRecordLocation.getInstantTime();
+      String fileId = hoodieRecordLocation == null ? "" : hoodieRecordLocation.getFileId();
+      String message = errorsMap.get(hoodieKey).toString();
+
+      OverwriteWithLatestAvroSchemaPayload data = (OverwriteWithLatestAvroSchemaPayload) hoodieRecord.getData();
+      GenericRecord genericRecord = null;
+      try {
+        genericRecord = HoodieAvroUtils.bytesToAvro(data.recordBytes, new Schema.Parser().parse(data.getSchema()));
+      } catch (IOException e) {
+        LOG.error("Serialization failed", e);
+      }
+      Map<String, String> context = new HashMap<>();
+      context.put(ERROR_COMMIT_TIME_METADATA_FIELD, instancTime);
+      context.put(ERROR_RECORD_KEY_METADATA_FIELD, hoodieKey.getRecordKey());
+      context.put(ERROR_PARTITION_PATH_METADATA_FIELD, hoodieRecord.getPartitionPath());
+      context.put(ERROR_FILE_ID_FIELD, fileId);
+      context.put(ERROR_TABLE_NAME, tableName);
+
+      GenericRecord errorGenericRecord = new GenericData.Record(new Schema.Parser().parse(HoodieErrorTableConfig.ERROR_TABLE_SCHEMA));
+
+      errorGenericRecord.put(ERROR_RECORD_UUID, uuid);
+      errorGenericRecord.put(ERROR_RECORD_TS, ts);
+      errorGenericRecord.put(ERROR_RECORD_SCHEMA, schema);
+      errorGenericRecord.put(ERROR_RECORD_RECORD, genericRecord != null ? genericRecord.toString() : "");
+      errorGenericRecord.put(ERROR_RECORD_MESSAGE, message);
+      errorGenericRecord.put(ERROR_RECORD_CONTEXT, context);
+
+      HoodieAvroPayload hoodieAvroPayload = new HoodieAvroPayload(Option.of(errorGenericRecord));
+
+      HoodieKey errorHoodieKey = new HoodieKey(uuid, partitionPath);
+      errorHoodieRecords.add(new HoodieRecord(errorHoodieKey, hoodieAvroPayload));
+    }
+    return errorHoodieRecords;
+  }
+
 }
 
 

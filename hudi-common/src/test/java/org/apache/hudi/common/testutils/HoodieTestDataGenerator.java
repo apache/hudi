@@ -22,12 +22,13 @@ package org.apache.hudi.common.testutils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroSchemaPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -185,8 +186,6 @@ public class HoodieTestDataGenerator {
       return generatePayloadForTripSchema(key, commitTime);
     } else if (SHORT_TRIP_SCHEMA.equals(schemaStr)) {
       return generatePayloadForShortTripSchema(key, commitTime);
-    } else if (MISS_TRIP_SCHEMA.equals(schemaStr)) {
-      return generatePayloadForMissTripSchema(key, commitTime);
     }
     return null;
   }
@@ -248,9 +247,9 @@ public class HoodieTestDataGenerator {
     return new RawTripTestPayload(Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA, true);
   }
 
-  public OverwriteWithLatestAvroPayload generateMissWithOverwriteWithLatestAvroPayload(HoodieKey key, String instantTime) {
+  public OverwriteWithLatestAvroSchemaPayload generateMissWithOverwriteWithLatestAvroSchemaPayload(HoodieKey key, String instantTime) {
     GenericRecord rec = generateRecordForMissTripSchema(key.getRecordKey(), "driver-" + instantTime, 0);
-    return new OverwriteWithLatestAvroPayload(Option.of(rec));
+    return new OverwriteWithLatestAvroSchemaPayload(Option.of(rec));
   }
 
   public OverwriteWithLatestAvroPayload generateUpdatesWithOverwriteWithLatestAvroPayload(HoodieKey key, String instantTime) {
