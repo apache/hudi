@@ -414,6 +414,10 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
             "first rollback must have been archived");
     assertFalse(metaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.ROLLBACK_ACTION, "103")),
             "second rollback must have been archived");
+    assertTrue(metaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.ROLLBACK_ACTION, "105")),
+            "first rollback must have been archived");
+    assertTrue(metaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.ROLLBACK_ACTION, "107")),
+            "second rollback must have been archived");
   }
 
   @Test
@@ -530,10 +534,8 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
 
     createCleanMetadata("10", false);
     createCleanMetadata("11", false);
-    createCleanMetadata("12", false);
-    HoodieInstant notArchivedInstant1 = new HoodieInstant(State.COMPLETED, "clean", "12");
-    createCleanMetadata("13", false);
-    HoodieInstant notArchivedInstant2 = new HoodieInstant(State.COMPLETED, "clean", "13");
+    HoodieInstant notArchivedInstant1 = createCleanMetadata("12", false);
+    HoodieInstant notArchivedInstant2 = createCleanMetadata("13", false);
 
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
@@ -652,7 +654,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
   }
 
   @Test
-  public void testArchiveInflightRollbackAndClean() throws IOException {
+  public void testArchiveInflightClean() throws IOException {
     HoodieWriteConfig cfg =
             HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
                     .withParallelism(2, 2).forTable("test-trip-table")
@@ -662,12 +664,9 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
 
     createCleanMetadata("10", false);
     createCleanMetadata("11", false);
-    createCleanMetadata("12", false);
-    HoodieInstant notArchivedInstant1 = new HoodieInstant(State.COMPLETED, "clean", "12");
-    createCleanMetadata("13", false);
-    HoodieInstant notArchivedInstant2 = new HoodieInstant(State.COMPLETED, "clean", "13");
-    createCleanMetadata("14", true);
-    HoodieInstant notArchivedInstant3 = new HoodieInstant(State.INFLIGHT, "clean", "14");
+    HoodieInstant notArchivedInstant1 = createCleanMetadata("12", false);
+    HoodieInstant notArchivedInstant2 = createCleanMetadata("13", false);
+    HoodieInstant notArchivedInstant3 = createCleanMetadata("14", true);
 
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
@@ -697,7 +696,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
-  private void createCleanMetadata(String instantTime, boolean inflightOnly) throws IOException {
+  private HoodieInstant createCleanMetadata(String instantTime, boolean inflightOnly) throws IOException {
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""), "", new HashMap<>(),
         CleanPlanV2MigrationHandler.VERSION, new HashMap<>());
     if (inflightOnly) {
@@ -713,6 +712,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
       HoodieCleanMetadata cleanMetadata = convertCleanMetadata(instantTime, Option.of(0L), Collections.singletonList(cleanStats));
       HoodieTestTable.of(metaClient).addClean(instantTime, cleanerPlan, cleanMetadata);
     }
+    return new HoodieInstant(inflightOnly, "clean", instantTime);
   }
 
   private void createCommitAndRollbackFile(String commitToRollback, String rollbackTIme, boolean isRollbackInflight) throws IOException {
@@ -720,7 +720,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     createRollbackMetadata(rollbackTIme, commitToRollback, isRollbackInflight);
   }
 
-  private void createRollbackMetadata(String rollbackTime, String commitToRollback, boolean inflight) throws IOException {
+  private HoodieInstant createRollbackMetadata(String rollbackTime, String commitToRollback, boolean inflight) throws IOException {
     if (inflight) {
       HoodieTestTable.of(metaClient).addInflightRollback(rollbackTime);
     } else {
@@ -735,5 +735,6 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
               .build();
       HoodieTestTable.of(metaClient).addRollback(rollbackTime, hoodieRollbackMetadata);
     }
+    return new HoodieInstant(inflight, "rollback", rollbackTime);
   }
 }
