@@ -63,6 +63,7 @@ import org.apache.spark.sql.SparkSession;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -545,6 +546,20 @@ public class HoodieDeltaStreamer implements Serializable {
 
       this.props = properties.get();
       LOG.info("Creating delta streamer with configs : " + props.toString());
+
+      Enumeration<String> enums = (Enumeration<String>) props.propertyNames();
+      StringBuilder propsLog = new StringBuilder("Creating delta streamer with configs:\n");
+      while (enums.hasMoreElements()) {
+        String key = enums.nextElement();
+        String value = props.getProperty(key);
+        // Truncate too long values.
+        if (value.length() > 255 && !LOG.isDebugEnabled()) {
+          value = value.substring(0, 128) + "[...]";
+        }
+        propsLog.append(key).append(": ").append(value).append("\n");
+      }
+      LOG.info(propsLog.toString());
+
       this.schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
           UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc), props, jssc, cfg.transformerClassNames);
 

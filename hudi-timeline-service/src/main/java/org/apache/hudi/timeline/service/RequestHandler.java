@@ -135,7 +135,7 @@ public class RequestHandler {
       synchronized (view) {
         if (isLocalViewBehind(ctx)) {
           HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
-          LOG.info("Syncing view as client passed last known instant " + lastKnownInstantFromClient
+          LOG.debug("Syncing view as client passed last known instant " + lastKnownInstantFromClient
               + " as last known instant but server has the folling timeline :"
               + localTimeline.getInstants().collect(Collectors.toList()));
           view.sync();
@@ -457,7 +457,7 @@ public class RequestHandler {
         metricsRegistry.add("TOTAL_CHECK_TIME", finalCheckTimeTaken);
         metricsRegistry.add("TOTAL_API_CALLS", 1);
 
-        LOG.info(String.format(
+        LOG.debug(String.format(
                 "TimeTakenMillis[Total=%d, Refresh=%d, handle=%d, Check=%d], "
                     + "Success=%s, Query=%s, Host=%s, synced=%s",
                 timeTakenMillis, refreshCheckTimeTaken, handleTimeTaken, finalCheckTimeTaken, success,

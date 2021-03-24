@@ -113,7 +113,9 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
     this.details = (Function<HoodieInstant, Option<byte[]>> & Serializable) this::getInstantDetails;
-    LOG.info("Loaded instants " + getInstants().collect(Collectors.toList()));
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Loaded instants " + getInstants().collect(Collectors.toList()));
+    }
   }
 
   public HoodieActiveTimeline(HoodieTableMetaClient metaClient) {
