@@ -93,10 +93,18 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     super(context, config, table, instantTime, operationType, extraMetadata);
   }
 
+  /**
+   * 小文件聚类后更新操作
+   * @param inputRecordsRDD
+   * @return
+   */
   private JavaRDD<HoodieRecord<T>> clusteringHandleUpdate(JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
+    // 判断是否配置：hoodie.clustering.inline（写入完后，立即执行小文件聚类）或者hoodie.clustering.async.enabled（异步执行小文件聚类）
     if (config.isClusteringEnabled()) {
       Set<HoodieFileGroupId> fileGroupsInPendingClustering =
           table.getFileSystemView().getFileGroupsInPendingClustering().map(entry -> entry.getKey()).collect(Collectors.toSet());
+      // 获取小文件聚类更新file group的策略，hoodie.clustering.updates.strategy
+      // 默认是不会进行file group更新的
       UpdateStrategy updateStrategy = (UpdateStrategy)ReflectionUtils
           .loadClass(config.getClusteringUpdatesStrategyClass(), this.context, fileGroupsInPendingClustering);
       return (JavaRDD<HoodieRecord<T>>)updateStrategy.handleUpdate(inputRecordsRDD);
@@ -105,6 +113,11 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     }
   }
 
+  /**
+   * 执行HoodieRecord记录写入、并更新索引，自动提交（默认）
+   * @param inputRecordsRDD
+   * @return
+   */
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> execute(JavaRDD<HoodieRecord<T>> inputRecordsRDD) {
     HoodieWriteMetadata<JavaRDD<WriteStatus>> result = new HoodieWriteMetadata<>();
@@ -121,23 +134,30 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
       context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile");
       profile = new WorkloadProfile(buildProfile(inputRecordsRDD));
       LOG.info("Workload profile :" + profile);
+      // 将workload的信息写入到metadatabase中，此处写入的是inflight文件
       saveWorkloadProfileMetadataToInflight(profile, instantTime);
     }
 
     // handle records update with clustering
+    // 小文件聚类后是否更新文件组
     JavaRDD<HoodieRecord<T>> inputRecordsRDDWithClusteringUpdate = clusteringHandleUpdate(inputRecordsRDD);
 
     // partition using the insert partitioner
+    // 根据要更新的记录、元数据设置分区
     final Partitioner partitioner = getPartitioner(profile);
     JavaRDD<HoodieRecord<T>> partitionedRecords = partition(inputRecordsRDDWithClusteringUpdate, partitioner);
+    // 生成待更新的RDD
     JavaRDD<WriteStatus> writeStatusRDD = partitionedRecords.mapPartitionsWithIndex((partition, recordItr) -> {
       if (WriteOperationType.isChangingRecords(operationType)) {
+        // 执行Upsert分区操作（写入数据）
         return handleUpsertPartition(instantTime, partition, recordItr, partitioner);
       } else {
+        // 执行Insert分区写入
         return handleInsertPartition(instantTime, partition, recordItr, partitioner);
       }
     }, true).flatMap(List::iterator);
 
+    // 如果设置了hoodie.auto.commit（默认为true），会更新索引并提交
     updateIndexAndCommitIfNeeded(writeStatusRDD, result);
     return result;
   }

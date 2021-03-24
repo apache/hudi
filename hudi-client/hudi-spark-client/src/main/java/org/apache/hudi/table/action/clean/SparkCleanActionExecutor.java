@@ -90,15 +90,24 @@ public class SparkCleanActionExecutor<T extends HoodieRecordPayload> extends
     };
   }
 
+  /**
+   * 执行过期的commit清理
+   * @param context
+   * @param cleanerPlan
+   * @return
+   */
   @Override
   List<HoodieCleanStat> clean(HoodieEngineContext context, HoodieCleanerPlan cleanerPlan) {
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
+    // 获取每个分区下待清理的文件
     int cleanerParallelism = Math.min(
         (int) (cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().mapToInt(List::size).count()),
         config.getCleanerParallelism());
     LOG.info("Using cleanerParallelism: " + cleanerParallelism);
 
+    // 设置job状态
     context.setJobStatus(this.getClass().getSimpleName(), "Perform cleaning of partitions");
+    // 转换路径与要清理的文件信息
     List<Tuple2<String, PartitionCleanStat>> partitionCleanStats = jsc
         .parallelize(cleanerPlan.getFilePathsToBeDeletedPerPartition().entrySet().stream()
             .flatMap(x -> x.getValue().stream().map(y -> new Tuple2<>(x.getKey(),
@@ -111,6 +120,7 @@ public class SparkCleanActionExecutor<T extends HoodieRecordPayload> extends
         .collect(Collectors.toMap(Tuple2::_1, Tuple2::_2));
 
     // Return PartitionCleanStat for each partition passed.
+    // 执行清理，并返回清理状态
     return cleanerPlan.getFilePathsToBeDeletedPerPartition().keySet().stream().map(partitionPath -> {
       PartitionCleanStat partitionCleanStat = partitionCleanStatsMap.containsKey(partitionPath)
           ? partitionCleanStatsMap.get(partitionPath)

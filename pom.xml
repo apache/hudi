@@ -923,6 +923,10 @@
     </dependencies>
   </dependencyManagement>
   <repositories>
+<!--    <repository>-->
+<!--      <id>central</id>-->
+<!--      <url>http://maven.aliyun.com/nexus/content/groups/public/</url>-->
+<!--    </repository>-->
     <repository>
       <id>Maven Central</id>
       <name>Maven Repository</name>

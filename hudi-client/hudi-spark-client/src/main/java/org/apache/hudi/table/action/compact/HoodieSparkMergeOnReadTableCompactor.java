@@ -175,6 +175,16 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
     }).collect(toList());
   }
 
+  /**
+   * 生成MOR合并计划（Parquet与Avro log合并）
+   * @param context
+   * @param hoodieTable
+   * @param config
+   * @param compactionCommitTime
+   * @param fgIdsInPendingCompactionAndClustering
+   * @return
+   * @throws IOException
+   */
   @Override
   public HoodieCompactionPlan generateCompactionPlan(HoodieEngineContext context,
                                                      HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> hoodieTable,
@@ -182,11 +192,13 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
                                                      Set<HoodieFileGroupId> fgIdsInPendingCompactionAndClustering)
       throws IOException {
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
+    // 注册日志文件、parquet文件计数器
     totalLogFiles = new LongAccumulator();
     totalFileSlices = new LongAccumulator();
     jsc.sc().register(totalLogFiles);
     jsc.sc().register(totalFileSlices);
 
+    // 校验是否为MOR类型表
     ValidationUtils.checkArgument(hoodieTable.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ,
         "Can only compact table of type " + HoodieTableType.MERGE_ON_READ + " and not "
             + hoodieTable.getMetaClient().getTableType().name());
@@ -198,6 +210,7 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), metaClient.getBasePath());
 
     // filter the partition paths if needed to reduce list status
+    // 获取合并策略hoodie.compaction.strategy（默认为：LogFileSizeBasedCompactionStrategy）
     partitionPaths = config.getCompactionStrategy().filterPartitionPaths(config, partitionPaths);
 
     if (partitionPaths.isEmpty()) {
@@ -211,9 +224,12 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
 
     List<HoodieCompactionOperation> operations = context.flatMap(partitionPaths, partitionPath -> {
       return fileSystemView
+          // 获取分区最新的文件分片
           .getLatestFileSlices(partitionPath)
+          // 过滤掉等待合并或者小文件聚类的文件组
           .filter(slice -> !fgIdsInPendingCompactionAndClustering.contains(slice.getFileGroupId()))
           .map(s -> {
+            // 计数要合并的日志文件
             List<HoodieLogFile> logFiles =
                 s.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
             totalLogFiles.add((long) logFiles.size());
@@ -221,11 +237,14 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
             // Avro generated classes are not inheriting Serializable. Using CompactionOperation POJO
             // for spark Map operations and collecting them finally in Avro generated classes for storing
             // into meta files.
+            // 获取分片对应的Base文件（parquet文件）
+            // 创建一个Base文件与log文件合并任务操作
             Option<HoodieBaseFile> dataFile = s.getBaseFile();
             return new CompactionOperation(dataFile, partitionPath, logFiles,
                 config.getCompactionStrategy().captureMetrics(config, s));
           })
           .filter(c -> !c.getDeltaFileNames().isEmpty());
+          // 构建操作(设置必要参数)
     }, partitionPaths.size()).stream().map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
 
     LOG.info("Total of " + operations.size() + " compactions are retrieved");
@@ -234,6 +253,7 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
     LOG.info("Total number of file slices " + totalFileSlices.value());
     // Filter the compactions with the passed in filter. This lets us choose most effective
     // compactions only
+    // 创建计划
     HoodieCompactionPlan compactionPlan = config.getCompactionStrategy().generateCompactionPlan(config, operations,
         CompactionUtils.getAllPendingCompactionPlans(metaClient).stream().map(Pair::getValue).collect(toList()));
     ValidationUtils.checkArgument(

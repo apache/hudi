@@ -143,7 +143,9 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
       return Collections.emptyList();
     }
 
+    // 获取是否配置增量更新
     if (config.incrementalCleanerModeEnabled()) {
+      // 获取要清理的HoodieInstants
       Option<HoodieInstant> lastClean = hoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant();
       if (lastClean.isPresent()) {
         HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
@@ -397,6 +399,7 @@ public class CleanPlanner<T extends HoodieRecordPayload, I, K, O> implements Ser
   }
 
   /**
+   * 获取保留的commit
    * Returns earliest commit to retain based on cleaning policy.
    */
   public Option<HoodieInstant> getEarliestCommitToRetain() {

@@ -61,6 +61,7 @@ public abstract class BaseCleanActionExecutor<T extends HoodieRecordPayload, I, 
 
   /**
    * Generates List of files to be cleaned.
+   * 生成要清理的文件列表
    *
    * @param context HoodieEngineContext
    * @return Cleaner Plan
@@ -68,13 +69,16 @@ public abstract class BaseCleanActionExecutor<T extends HoodieRecordPayload, I, 
   HoodieCleanerPlan requestClean(HoodieEngineContext context) {
     try {
       CleanPlanner<T, I, K, O> planner = new CleanPlanner<>(context, table, config);
+      // 获取比hoodie.cleaner.commits.retaine（默认为：24）更早的HoodieInstant，默认为24次提交
       Option<HoodieInstant> earliestInstant = planner.getEarliestCommitToRetain();
+      // 根据清理策略hoodie.cleaner.policy（默认为：KEEP_LATEST_COMMITS，保持最后的提交）获取要清理的分区
       List<String> partitionsToClean = planner.getPartitionPathsToClean(earliestInstant);
 
       if (partitionsToClean.isEmpty()) {
         LOG.info("Nothing to clean here.");
         return HoodieCleanerPlan.newBuilder().setPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name()).build();
       }
+      // 根据配置或者分区数量设置并行度
       LOG.info("Total Partitions to clean : " + partitionsToClean.size() + ", with policy " + config.getCleanerPolicy());
       int cleanerParallelism = Math.min(partitionsToClean.size(), config.getCleanerParallelism());
       LOG.info("Using cleanerParallelism: " + cleanerParallelism);
@@ -86,6 +90,7 @@ public abstract class BaseCleanActionExecutor<T extends HoodieRecordPayload, I, 
           .stream()
           .collect(Collectors.toMap(Pair::getKey, y -> CleanerUtils.convertToHoodieCleanFileInfoList(y.getValue())));
 
+      // 生成清理计划
       return new HoodieCleanerPlan(earliestInstant
           .map(x -> new HoodieActionInstant(x.getTimestamp(), x.getAction(), x.getState().name())).orElse(null),
           config.getCleanerPolicy().name(), CollectionUtils.createImmutableMap(),

@@ -136,6 +136,8 @@ public class SparkHoodieBloomIndex<T extends HoodieRecordPayload> extends SparkH
 
   /**
    * Compute the estimated number of bloom filter comparisons to be performed on each file group.
+   * 计算在每个文件组需要执行BloomFilter的计算量（按照基础文件的每个HoodieKey来计算）
+   * 因为每个HFile的min key和max key是不一样的，所以要评估出来针对每个BloomFilter文件对应的key有多少
    */
   private Map<String, Long> computeComparisonsPerFileGroup(final Map<String, Long> recordsPerPartition,
                                                            final Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
@@ -165,18 +167,22 @@ public class SparkHoodieBloomIndex<T extends HoodieRecordPayload> extends SparkH
   List<Tuple2<String, BloomIndexFileInfo>> loadInvolvedFiles(List<String> partitions, final HoodieEngineContext context,
                                                              final HoodieTable hoodieTable) {
 
-    // Obtain the latest data files from all the partitions.
+    // 获取所有分区对应的最新基础数据文件
     List<Pair<String, String>> partitionPathFileIDList = getLatestBaseFilesForAllPartitions(partitions, context, hoodieTable).stream()
         .map(pair -> Pair.of(pair.getKey(), pair.getValue().getFileId()))
         .collect(toList());
 
+    // 判断hoodie.bloom.index.prune.by.ranges是否开启，默认是开启的
     if (config.getBloomIndexPruneByRanges()) {
       // also obtain file ranges, if range pruning is enabled
       context.setJobStatus(this.getClass().getName(), "Obtain key ranges for file slices (range pruning=on)");
+      // 对所有最新数据文件执行map操作
       return context.map(partitionPathFileIDList, pf -> {
         try {
+          // 从基础文件中读取出对应的最大key、和最小的key
           HoodieRangeInfoHandle rangeInfoHandle = new HoodieRangeInfoHandle(config, hoodieTable, pf);
           String[] minMaxKeys = rangeInfoHandle.getMinMaxKeys();
+          // 为每个文件创建布隆过滤器文件
           return new Tuple2<>(pf.getKey(), new BloomIndexFileInfo(pf.getValue(), minMaxKeys[0], minMaxKeys[1]));
         } catch (MetadataNotFoundException me) {
           LOG.warn("Unable to find range metadata in file :" + pf);

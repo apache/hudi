@@ -50,10 +50,12 @@ public class HoodieIndexUtils {
                                                                                       final HoodieTable hoodieTable) {
     context.setJobStatus(HoodieIndexUtils.class.getSimpleName(), "Load latest base files from all partitions");
     return context.flatMap(partitions, partitionPath -> {
+      // 获取对应Hoodie表提交的时间线，并过滤出来所有已完成的Instant，然后取最后一个
       Option<HoodieInstant> latestCommitTime = hoodieTable.getMetaClient().getCommitsTimeline()
           .filterCompletedInstants().lastInstant();
       List<Pair<String, HoodieBaseFile>> filteredFiles = new ArrayList<>();
       if (latestCommitTime.isPresent()) {
+        // 获取最近一次commit之前的所有基础文件
         filteredFiles = hoodieTable.getBaseFileOnlyView()
             .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.get().getTimestamp())
             .map(f -> Pair.of(partitionPath, f))

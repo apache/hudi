@@ -65,12 +65,14 @@ public class SparkUpsertDeltaCommitPartitioner<T extends HoodieRecordPayload<T>>
       List<FileSlice> allSmallFileSlices = new ArrayList<>();
       // If we cannot index log files, then we choose the smallest parquet file in the partition and add inserts to
       // it. Doing this overtime for a partition, we ensure that we handle small file issues
+      // 如果找不到log文件，那么会找到符合配置的所有parquet小文件
       if (!table.getIndex().canIndexLogFiles()) {
         // TODO : choose last N small files since there can be multiple small files written to a single partition
         // by different spark partitions in a single batch
         Option<FileSlice> smallFileSlice = Option.fromJavaOptional(table.getSliceView()
             .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), false)
             .filter(
+                // 根据文件大小、配置获取小文件
                 fileSlice -> fileSlice.getLogFiles().count() < 1 && fileSlice.getBaseFile().get().getFileSize() < config
                     .getParquetSmallFileLimit())
             .min((FileSlice left, FileSlice right) ->
@@ -81,6 +83,7 @@ public class SparkUpsertDeltaCommitPartitioner<T extends HoodieRecordPayload<T>>
       } else {
         // If we can index log files, we can add more inserts to log files for fileIds including those under
         // pending compaction.
+        // 如果找到log文件，那么就会把更多的inserts操作添加到log文件中，这种是针对MOR表
         List<FileSlice> allFileSlices =
             table.getSliceView().getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), true)
                 .collect(Collectors.toList());
@@ -91,6 +94,7 @@ public class SparkUpsertDeltaCommitPartitioner<T extends HoodieRecordPayload<T>>
         }
       }
       // Create SmallFiles from the eligible file slices
+      // 为每一个文件片（包含文件和log）生成位置、大小信息
       for (FileSlice smallFileSlice : allSmallFileSlices) {
         SmallFile sf = new SmallFile();
         if (smallFileSlice.getBaseFile().isPresent()) {

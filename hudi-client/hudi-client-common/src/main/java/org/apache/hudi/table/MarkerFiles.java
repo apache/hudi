@@ -119,23 +119,30 @@ public class MarkerFiles implements Serializable {
   public Set<String> createdAndMergedDataPaths(HoodieEngineContext context, int parallelism) throws IOException {
     Set<String> dataFiles = new HashSet<>();
 
+    // 获取标记的DFS目录路径
     FileStatus[] topLevelStatuses = fs.listStatus(markerDirPath);
     List<String> subDirectories = new ArrayList<>();
     for (FileStatus topLevelStatus: topLevelStatuses) {
       if (topLevelStatus.isFile()) {
         String pathStr = topLevelStatus.getPath().toString();
+        // 获取带合并的数据文件
         if (pathStr.contains(HoodieTableMetaClient.MARKER_EXTN) && !pathStr.endsWith(IOType.APPEND.name())) {
           dataFiles.add(translateMarkerToDataPath(pathStr));
         }
       } else {
+        // 获取子目录
         subDirectories.add(topLevelStatus.getPath().toString());
       }
     }
 
     if (subDirectories.size() > 0) {
+      // 获取子目录的数量设置并行度
       parallelism = Math.min(subDirectories.size(), parallelism);
+      // 获取序列化配置
       SerializableConfiguration serializedConf = new SerializableConfiguration(fs.getConf());
+      // 设置作业信息
       context.setJobStatus(this.getClass().getSimpleName(), "Obtaining marker files for all created, merged paths");
+      // 将子目录中的带合并的文件添加到数据文件列表
       dataFiles.addAll(context.flatMap(subDirectories, directory -> {
         Path path = new Path(directory);
         FileSystem fileSystem = path.getFileSystem(serializedConf.get());
@@ -144,6 +151,7 @@ public class MarkerFiles implements Serializable {
         while (itr.hasNext()) {
           FileStatus status = itr.next();
           String pathStr = status.getPath().toString();
+          // 过滤出来后缀为.marker、以及部位APPEND的名字
           if (pathStr.contains(HoodieTableMetaClient.MARKER_EXTN) && !pathStr.endsWith(IOType.APPEND.name())) {
             result.add(translateMarkerToDataPath(pathStr));
           }
