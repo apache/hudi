@@ -6,6 +6,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.utilities.mongo.Operation;
 import org.apache.hudi.utilities.mongo.SchemaUtils;
 import org.bson.BsonDocument;
+import org.bson.BsonInvalidOperationException;
 import org.bson.BsonObjectId;
 import org.bson.codecs.BsonObjectIdCodec;
 import org.bson.codecs.DecoderContext;
@@ -79,6 +80,11 @@ public class MongoAvroConverter extends KafkaAvroConverter {
     if (keyJson.has(PAYLOAD_OPLOGFIELD)) {
       keyJson = keyJson.getJSONObject(PAYLOAD_OPLOGFIELD);
     }
-    return getObjectId(keyJson.getString(ID_OPLOGFIELD)).getValue().toString();
+    try {
+      return getObjectId(keyJson.getString(ID_OPLOGFIELD)).getValue().toString();
+    }
+    catch (BsonInvalidOperationException ex){
+      return keyJson.getString(ID_OPLOGFIELD);
+    }
   }
 }
