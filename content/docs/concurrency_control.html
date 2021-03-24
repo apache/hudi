@@ -415,29 +415,29 @@ This feature is currently <em>experimental</em> and requires either Zookeeper or
 
 <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie.write.concurrency.mode=optimistic_concurrency_control
 hoodie.failed.writes.cleaner.policy=LAZY
-hoodie.writer.lock.provider=&lt;lock-provider-classname&gt;
+hoodie.write.lock.provider=&lt;lock-provider-classname&gt;
 </code></pre></div></div>
 
 <p>There are 2 different server based lock providers that require different configuration to be set.</p>
 
 <p><strong><code class="highlighter-rouge">Zookeeper</code></strong> based lock provider</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie.writer.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider
-hoodie.writer.lock.zookeeper.url
-hoodie.writer.lock.zookeeper.port
-hoodie.writer.lock.wait_time_ms
-hoodie.writer.lock.num_retries
-hoodie.writer.lock.lock_key
-hoodie.writer.lock.zookeeper.zk_base_path
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider
+hoodie.write.lock.zookeeper.url
+hoodie.write.lock.zookeeper.port
+hoodie.write.lock.wait_time_ms
+hoodie.write.lock.num_retries
+hoodie.write.lock.lock_key
+hoodie.write.lock.zookeeper.zk_base_path
 </code></pre></div></div>
 
 <p><strong><code class="highlighter-rouge">HiveMetastore</code></strong> based lock provider</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie.writer.lock.provider=org.apache.hudi.hive.HiveMetastoreBasedLockProvider
-hoodie.writer.lock.hivemetastore.database
-hoodie.writer.lock.hivemetastore.table
-hoodie.writer.lock.wait_time_ms
-hoodie.writer.lock.num_retries
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie.write.lock.provider=org.apache.hudi.hive.HiveMetastoreBasedLockProvider
+hoodie.write.lock.hivemetastore.database
+hoodie.write.lock.hivemetastore.table
+hoodie.write.lock.wait_time_ms
+hoodie.write.lock.num_retries
 </code></pre></div></div>
 
 <p><code class="highlighter-rouge">The HiveMetastore URI's are picked up from the hadoop configuration file loaded during runtime.</code></p>
@@ -453,12 +453,12 @@ hoodie.writer.lock.num_retries
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="no">PRECOMBINE_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"ts"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.failed.writes.cleaner.policy"</span><span class="o">,</span> <span class="s">"LAZY"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.concurrency.mode"</span><span class="o">,</span> <span class="s">"optimistic_concurrency_control"</span><span class="o">)</span>
-       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.writer.lock.zookeeper.url"</span><span class="o">,</span> <span class="s">"zookeeper"</span><span class="o">)</span>
-       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.writer.lock.zookeeper.port"</span><span class="o">,</span> <span class="s">"2181"</span><span class="o">)</span>
-       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.writer.lock.wait_time_ms"</span><span class="o">,</span> <span class="s">"12000"</span><span class="o">)</span>
-       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.writer.lock.num_retries"</span><span class="o">,</span> <span class="s">"2"</span><span class="o">)</span>
-       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.writer.lock.lock_key"</span><span class="o">,</span> <span class="s">"test_table"</span><span class="o">)</span>
-       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.writer.lock.zookeeper.zk_base_path"</span><span class="o">,</span> <span class="s">"/test"</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.lock.zookeeper.url"</span><span class="o">,</span> <span class="s">"zookeeper"</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.lock.zookeeper.port"</span><span class="o">,</span> <span class="s">"2181"</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.lock.wait_time_ms"</span><span class="o">,</span> <span class="s">"12000"</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.lock.num_retries"</span><span class="o">,</span> <span class="s">"2"</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.lock.lock_key"</span><span class="o">,</span> <span class="s">"test_table"</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.lock.zookeeper.zk_base_path"</span><span class="o">,</span> <span class="s">"/test"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="no">RECORDKEY_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"uuid"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="no">PARTITIONPATH_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"partitionpath"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="no">TABLE_NAME</span><span class="o">,</span> <span class="n">tableName</span><span class="o">)</span>
@@ -495,14 +495,14 @@ A deltastreamer job can then be triggered as follows:</p>
 
 <p>Set the correct native lock provider client retries. NOTE that sometimes these settings are set on the server once and all clients inherit the same configs. Please check your settings before enabling optimistic concurrency.</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie.writer.lock.wait_time_ms
-hoodie.writer.lock.num_retries
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie.write.lock.wait_time_ms
+hoodie.write.lock.num_retries
 </code></pre></div></div>
 
 <p>Set the correct hudi client retries for Zookeeper &amp; HiveMetastore. This is useful in cases when native client retry settings cannot be changed. Please note that these retries will happen in addition to any native client retries that you may have set.</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie.writer.lock.client.wait_time_ms
-hoodie.writer.lock.client.num_retries
+<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie.write.lock.client.wait_time_ms
+hoodie.write.lock.client.num_retries
 </code></pre></div></div>
 
 <p><em>Setting the right values for these depends on a case by case basis; some defaults have been provided for general cases.</em></p>
