@@ -45,7 +45,7 @@ The following properties are needed to be set properly to turn on optimistic con
 ```
 hoodie.write.concurrency.mode=optimistic_concurrency_control
 hoodie.failed.writes.cleaner.policy=LAZY
-hoodie.writer.lock.provider=<lock-provider-classname>
+hoodie.write.lock.provider=<lock-provider-classname>
 ```
 
 There are 2 different server based lock providers that require different configuration to be set.
@@ -53,23 +53,23 @@ There are 2 different server based lock providers that require different configu
 **`Zookeeper`** based lock provider
 
 ```
-hoodie.writer.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider
-hoodie.writer.lock.zookeeper.url
-hoodie.writer.lock.zookeeper.port
-hoodie.writer.lock.wait_time_ms
-hoodie.writer.lock.num_retries
-hoodie.writer.lock.lock_key
-hoodie.writer.lock.zookeeper.zk_base_path
+hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider
+hoodie.write.lock.zookeeper.url
+hoodie.write.lock.zookeeper.port
+hoodie.write.lock.wait_time_ms
+hoodie.write.lock.num_retries
+hoodie.write.lock.lock_key
+hoodie.write.lock.zookeeper.zk_base_path
 ```
 
 **`HiveMetastore`** based lock provider
 
 ```
-hoodie.writer.lock.provider=org.apache.hudi.hive.HiveMetastoreBasedLockProvider
-hoodie.writer.lock.hivemetastore.database
-hoodie.writer.lock.hivemetastore.table
-hoodie.writer.lock.wait_time_ms
-hoodie.writer.lock.num_retries
+hoodie.write.lock.provider=org.apache.hudi.hive.HiveMetastoreBasedLockProvider
+hoodie.write.lock.hivemetastore.database
+hoodie.write.lock.hivemetastore.table
+hoodie.write.lock.wait_time_ms
+hoodie.write.lock.num_retries
 ```
 
 `The HiveMetastore URI's are picked up from the hadoop configuration file loaded during runtime.`
@@ -86,12 +86,12 @@ inputDF.write.format("hudi")
        .option(PRECOMBINE_FIELD_OPT_KEY, "ts")
        .option("hoodie.failed.writes.cleaner.policy", "LAZY")
        .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
-       .option("hoodie.writer.lock.zookeeper.url", "zookeeper")
-       .option("hoodie.writer.lock.zookeeper.port", "2181")
-       .option("hoodie.writer.lock.wait_time_ms", "12000")
-       .option("hoodie.writer.lock.num_retries", "2")
-       .option("hoodie.writer.lock.lock_key", "test_table")
-       .option("hoodie.writer.lock.zookeeper.zk_base_path", "/test")
+       .option("hoodie.write.lock.zookeeper.url", "zookeeper")
+       .option("hoodie.write.lock.zookeeper.port", "2181")
+       .option("hoodie.write.lock.wait_time_ms", "12000")
+       .option("hoodie.write.lock.num_retries", "2")
+       .option("hoodie.write.lock.lock_key", "test_table")
+       .option("hoodie.write.lock.zookeeper.zk_base_path", "/test")
        .option(RECORDKEY_FIELD_OPT_KEY, "uuid")
        .option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath")
        .option(TABLE_NAME, tableName)
@@ -128,15 +128,15 @@ Concurrent Writing to Hudi tables requires acquiring a lock with either Zookeepe
 Set the correct native lock provider client retries. NOTE that sometimes these settings are set on the server once and all clients inherit the same configs. Please check your settings before enabling optimistic concurrency.
    
 ```
-hoodie.writer.lock.wait_time_ms
-hoodie.writer.lock.num_retries
+hoodie.write.lock.wait_time_ms
+hoodie.write.lock.num_retries
 ```
 
 Set the correct hudi client retries for Zookeeper & HiveMetastore. This is useful in cases when native client retry settings cannot be changed. Please note that these retries will happen in addition to any native client retries that you may have set. 
 
 ```
-hoodie.writer.lock.client.wait_time_ms
-hoodie.writer.lock.client.num_retries
+hoodie.write.lock.client.wait_time_ms
+hoodie.write.lock.client.num_retries
 ```
 
 *Setting the right values for these depends on a case by case basis; some defaults have been provided for general cases.*
