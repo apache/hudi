@@ -49,6 +49,15 @@ fi
 HIVE_JACKSON=`ls ${HIVE_HOME}/lib/jackson-*.jar | tr '\n' ':'`
 HIVE_JARS=$HIVE_METASTORE:$HIVE_SERVICE:$HIVE_EXEC:$HIVE_JDBC:$HIVE_JACKSON
 
+HIVE_CALCITE=`ls ${HIVE_HOME}/lib/calcite-*.jar | tr '\n' ':'`
+if [ -n "$HIVE_CALCITE" ]; then
+    HIVE_JARS=$HIVE_JARS:$HIVE_CALCITE
+fi
+HIVE_LIBFB303=`ls ${HIVE_HOME}/lib/libfb303-*.jar | tr '\n' ':'`
+if [ -n "$HIVE_LIBFB303" ]; then
+    HIVE_JARS=$HIVE_JARS:$HIVE_LIBFB303
+fi
+
 HADOOP_HIVE_JARS=${HIVE_JARS}:${HADOOP_HOME}/share/hadoop/common/*:${HADOOP_HOME}/share/hadoop/mapreduce/*:${HADOOP_HOME}/share/hadoop/hdfs/*:${HADOOP_HOME}/share/hadoop/common/lib/*:${HADOOP_HOME}/share/hadoop/hdfs/lib/*
 
 echo "Running Command : java -cp ${HADOOP_HIVE_JARS}:${HADOOP_CONF_DIR}:$HUDI_HIVE_UBER_JAR org.apache.hudi.hive.HiveSyncTool $@"
