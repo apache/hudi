@@ -218,8 +218,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     TableResult tableResult = tEnv.executeSql(insert);
     // wait to finish
     try {
-      tableResult.getJobClient().get()
-          .getJobExecutionResult(Thread.currentThread().getContextClassLoader()).get();
+      tableResult.getJobClient().get().getJobExecutionResult().get();
     } catch (InterruptedException | ExecutionException ex) {
       throw new RuntimeException(ex);
     }

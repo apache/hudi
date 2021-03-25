@@ -33,6 +33,8 @@
     <main.basedir>${project.parent.basedir}</main.basedir>
     <flink.bundle.hive.shade.prefix>org.apache.hudi.</flink.bundle.hive.shade.prefix>
     <javax.servlet.version>3.1.0</javax.servlet.version>
+    <!-- override to be same with flink 1.12.2 -->
+    <parquet.version>1.11.1</parquet.version>
   </properties>
 
   <build>
@@ -89,8 +91,9 @@
                   <include>org.apache.parquet:parquet-hadoop</include>
                   <include>org.apache.parquet:parquet-column</include>
                   <include>org.apache.parquet:parquet-common</include>
-                  <include>org.apache.parquet:parquet-format</include>
+                  <include>org.apache.parquet:parquet-format-structures</include>
                   <include>org.apache.parquet:parquet-encoding</include>
+                  <include>org.apache.parquet:parquet-jackson</include>
 
                   <include>org.apache.avro:avro</include>
                   <include>joda-time:joda-time</include>
@@ -100,11 +103,6 @@
 
                   <include>com.twitter:bijection-avro_${scala.binary.version}</include>
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>
-                  <include>io.confluent:kafka-avro-serializer</include>
-                  <include>io.confluent:common-config</include>
-                  <include>io.confluent:common-utils</include>
-                  <include>io.confluent:kafka-schema-registry-client</include>
-                  <include>org.apache.kafka:kafka-clients</include>
                   <include>io.dropwizard.metrics:metrics-core</include>
                   <include>io.dropwizard.metrics:metrics-graphite</include>
                   <include>io.prometheus:simpleclient</include>
@@ -113,16 +111,12 @@
                   <include>io.prometheus:simpleclient_pushgateway</include>
                   <include>io.prometheus:simpleclient_common</include>
                   <include>com.yammer.metrics:metrics-core</include>
-                  <include>org.apache.kafka:kafka_${scala.binary.version}</include>
-                  <include>com.101tec:zkclient</include>
 
                   <!-- Used for HUDI TimelineService -->
                   <include>org.eclipse.jetty:*</include>
                   <include>org.eclipse.jetty.websocket:*</include>
                   <include>javax.servlet:javax.servlet-api</include>
 
-                  <include>org.apache.flink:flink-connector-kafka_${scala.binary.version}</include>
-                  <include>org.apache.flink:flink-connector-kafka-base_${scala.binary.version}</include>
                   <include>org.apache.flink:flink-hadoop-compatibility_${scala.binary.version}</include>
                   <include>org.apache.flink:flink-avro</include>
                   <include>org.apache.flink:flink-json</include>
@@ -133,14 +127,18 @@
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
 
-                  <include>org.apache.hbase:hbase-client</include>
                   <include>org.apache.hbase:hbase-common</include>
-                  <include>org.apache.hbase:hbase-protocol</include>
-                  <include>org.apache.hbase:hbase-server</include>
-                  <include>org.apache.htrace:htrace-core</include>
                 </includes>
               </artifactSet>
               <relocations>
+                <relocation>
+                  <pattern>org.apache.avro.</pattern>
+                  <shadedPattern>${flink.bundle.hive.shade.prefix}org.apache.avro.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.parquet.</pattern>
+                  <shadedPattern>${flink.bundle.hive.shade.prefix}org.apache.parquet.</shadedPattern>
+                </relocation>
                 <relocation>
                   <pattern>com.yammer.metrics.</pattern>
                   <shadedPattern>org.apache.hudi.com.yammer.metrics.</shadedPattern>
@@ -198,8 +196,6 @@
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
-                    <!-- exclude the test dynamic factory -->
-                    <exclude>META-INF/services/org.apache.flink.table.factories.Factory</exclude>
                   </excludes>
                 </filter>
               </filters>
@@ -260,17 +256,6 @@
     <!-- Flink -->
     <dependency>
       <groupId>org.apache.flink</groupId>
-      <artifactId>flink-connector-kafka_${scala.binary.version}</artifactId>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.flink</groupId>
-      <artifactId>flink-connector-kafka-base_${scala.binary.version}</artifactId>
-      <version>${flink.version}</version>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.flink</groupId>
       <artifactId>flink-hadoop-compatibility_${scala.binary.version}</artifactId>
       <version>${flink.version}</version>
       <scope>compile</scope>
@@ -297,7 +282,60 @@
     <!-- Parquet -->
     <dependency>
       <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-hadoop</artifactId>
+      <version>${parquet.version}</version>
+      <scope>compile</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.xerial.snappy</groupId>
+          <artifactId>snappy-java</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
+      <version>${parquet.version}</version>
+      <scope>compile</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.hadoop</groupId>
+          <artifactId>hadoop-client</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>it.unimi.dsi</groupId>
+          <artifactId>fastutil</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-column</artifactId>
+      <version>${parquet.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-common</artifactId>
+      <version>${parquet.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-encoding</artifactId>
+      <version>${parquet.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-format-structures</artifactId>
+      <version>${parquet.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-jackson</artifactId>
+      <version>${parquet.version}</version>
       <scope>compile</scope>
     </dependency>
 
@@ -391,51 +429,10 @@
       <scope>compile</scope>
     </dependency>
 
-    <dependency>
-      <groupId>org.apache.htrace</groupId>
-      <artifactId>htrace-core</artifactId>
-      <version>${htrace.version}</version>
-      <scope>compile</scope>
-    </dependency>
-
     <!-- Hbase -->
     <dependency>
       <groupId>org.apache.hbase</groupId>
       <artifactId>hbase-common</artifactId>
-      <version>${hbase.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase-server</artifactId>
-      <version>${hbase.version}</version>
-      <scope>compile</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>javax.servlet</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.codehaus.jackson</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.mortbay.jetty</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>tomcat</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase-client</artifactId>
-      <version>${hbase.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hbase</groupId>
-      <artifactId>hbase-protocol</artifactId>
       <version>${hbase.version}</version>
     </dependency>
   </dependencies>

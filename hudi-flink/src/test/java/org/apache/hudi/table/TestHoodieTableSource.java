@@ -88,8 +88,7 @@ public class TestHoodieTableSource {
     Map<String, String> partitions = new HashMap<>();
     partitions.put("partition", "par1");
 
-    tableSource = (HoodieTableSource) tableSource
-        .applyPartitionPruning(Collections.singletonList(partitions));
+    tableSource.applyPartitions(Collections.singletonList(partitions));
 
     Path[] paths2 = tableSource.getReadPaths();
     assertNotNull(paths2);

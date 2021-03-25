@@ -30,6 +30,7 @@
 
   <properties>
     <main.basedir>${project.parent.basedir}</main.basedir>
+    <parquet.version>1.11.1</parquet.version>
   </properties>
 
   <build>
@@ -170,10 +171,23 @@
       <scope>provided</scope>
     </dependency>
 
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-hadoop</artifactId>
+      <version>${parquet.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.xerial.snappy</groupId>
+          <artifactId>snappy-java</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
     <!-- Parquet -->
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
+      <version>${parquet.version}</version>
       <scope>test</scope>
     </dependency>
 

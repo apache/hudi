@@ -157,7 +157,7 @@ public class StreamWriteOperatorCoordinator
   }
 
   @Override
-  public void checkpointComplete(long checkpointId) {
+  public void notifyCheckpointComplete(long checkpointId) {
     // start to commit the instant.
     checkAndCommitWithRetry();
     // if async compaction is on, schedule the compaction
@@ -182,7 +182,7 @@ public class StreamWriteOperatorCoordinator
   }
 
   @Override
-  public void resetToCheckpoint(@Nullable byte[] checkpointData) throws Exception {
+  public void resetToCheckpoint(long checkpointID, @Nullable byte[] checkpointData) throws Exception {
     if (checkpointData != null) {
       // restore when any checkpoint completed
       deserializeCheckpointAndRestore(checkpointData);
@@ -212,6 +212,11 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void subtaskFailed(int i, @Nullable Throwable throwable) {
+    // no operation
+  }
+
+  @Override
+  public void subtaskReset(int i, long l) {
     // no operation
   }
 

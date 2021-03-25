@@ -53,7 +53,7 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.FileProcessingMode;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
-import org.apache.flink.table.runtime.typeutils.RowDataTypeInfo;
+import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.TestLogger;
 import org.junit.jupiter.api.Test;
@@ -104,7 +104,7 @@ public class StreamWriteITCase extends TestLogger {
 
     JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
         rowType,
-        new RowDataTypeInfo(rowType),
+        InternalTypeInfo.of(rowType),
         false,
         true,
         TimestampFormat.ISO_8601
@@ -135,7 +135,7 @@ public class StreamWriteITCase extends TestLogger {
 
     JobClient client = execEnv.executeAsync(execEnv.getStreamGraph(conf.getString(FlinkOptions.TABLE_NAME)));
     // wait for the streaming job to finish
-    client.getJobExecutionResult(Thread.currentThread().getContextClassLoader()).get();
+    client.getJobExecutionResult().get();
 
     TestData.checkWrittenFullData(tempFile, EXPECTED);
   }
@@ -159,7 +159,7 @@ public class StreamWriteITCase extends TestLogger {
 
     JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
         rowType,
-        new RowDataTypeInfo(rowType),
+        InternalTypeInfo.of(rowType),
         false,
         true,
         TimestampFormat.ISO_8601
@@ -204,7 +204,7 @@ public class StreamWriteITCase extends TestLogger {
 
     JobClient client = execEnv.executeAsync(execEnv.getStreamGraph(conf.getString(FlinkOptions.TABLE_NAME)));
     // wait for the streaming job to finish
-    client.getJobExecutionResult(Thread.currentThread().getContextClassLoader()).get();
+    client.getJobExecutionResult().get();
 
     TestData.checkWrittenFullData(tempFile, EXPECTED);
   }
@@ -230,7 +230,7 @@ public class StreamWriteITCase extends TestLogger {
 
     JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
         rowType,
-        new RowDataTypeInfo(rowType),
+        InternalTypeInfo.of(rowType),
         false,
         true,
         TimestampFormat.ISO_8601
