@@ -35,8 +35,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.action.compact.OperationResult;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -24,10 +24,13 @@ import org.apache.hudi.metrics.datadog.DatadogReporter.PayloadBuilder;
 
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
-import org.apache.log4j.AppenderSkeleton;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-import org.apache.log4j.spi.LoggingEvent;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.Appender;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -42,21 +45,40 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 public class TestDatadogReporter {
 
   @Mock
-  AppenderSkeleton appender;
+  Appender appender;
 
   @Captor
-  ArgumentCaptor<LoggingEvent> logCaptor;
+  ArgumentCaptor<LogEvent> logCaptor;
 
   @Mock
   MetricRegistry registry;
 
   @Mock
   DatadogHttpClient client;
+
+  private Logger logger;
+
+  @BeforeEach
+  public void init() {
+    when(appender.getName()).thenReturn("Appender");
+
+    logger = (Logger)LogManager.getLogger(DatadogReporter.class);
+    logger.addAppender(appender);
+    logger.setLevel(Level.INFO);
+  }
+
+  @AfterEach
+  public void tearDown() {
+    // the appender we added will sit in the singleton logger forever
+    // slowing future things down - so remove it
+    logger.removeAppender(appender);
+  }
 
   @Test
   public void stopShouldCloseEnclosedClient() throws IOException {
@@ -68,14 +90,15 @@ public class TestDatadogReporter {
 
   @Test
   public void stopShouldLogWhenEnclosedClientFailToClose() throws IOException {
-    Logger.getRootLogger().addAppender(appender);
     doThrow(IOException.class).when(client).close();
+    when(appender.isStarted()).thenReturn(true);
 
     new DatadogReporter(registry, client, "foo", Option.empty(), Option.empty(),
         MetricFilter.ALL, TimeUnit.SECONDS, TimeUnit.SECONDS).stop();
 
-    verify(appender).doAppend(logCaptor.capture());
-    assertEquals("Error disconnecting from Datadog.", logCaptor.getValue().getRenderedMessage());
+    verify(appender).append(logCaptor.capture());
+    assertEquals("Error disconnecting from Datadog.",
+        logCaptor.getValue().getMessage().getFormattedMessage());
     assertEquals(Level.WARN, logCaptor.getValue().getLevel());
   }
 

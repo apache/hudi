@@ -63,8 +63,8 @@ import org.apache.hudi.table.action.commit.SparkUpsertPreppedCommitActionExecuto
 import org.apache.hudi.table.action.restore.SparkCopyOnWriteRestoreActionExecutor;
 import org.apache.hudi.table.action.rollback.SparkCopyOnWriteRollbackActionExecutor;
 import org.apache.hudi.table.action.savepoint.SavepointActionExecutor;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;

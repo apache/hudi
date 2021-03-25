@@ -23,8 +23,8 @@ import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.callback.util.HoodieWriteCommitCallbackUtil;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * A http implementation of {@link HoodieWriteCommitCallback}.

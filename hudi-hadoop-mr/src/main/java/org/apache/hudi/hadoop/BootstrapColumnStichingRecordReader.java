@@ -27,8 +27,8 @@ import java.io.IOException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Stitches 2 record reader returned rows and presents a concatenated view to clients.

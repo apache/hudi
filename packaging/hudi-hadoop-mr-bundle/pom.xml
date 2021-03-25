@@ -79,6 +79,9 @@
                   <include>org.apache.htrace:htrace-core</include>
                   <include>com.yammer.metrics:metrics-core</include>
                   <include>com.google.guava:guava</include>
+
+                  <include>org.apache.logging.log4j:log4j-core</include>
+                  <include>org.apache.logging.log4j:log4j-api</include>
                 </includes>
               </artifactSet>
               <relocations>
@@ -189,6 +192,10 @@
         <exclusion>
           <groupId>tomcat</groupId>
           <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>log4j</groupId>
+          <artifactId>log4j</artifactId>
         </exclusion>
       </exclusions>
     </dependency>

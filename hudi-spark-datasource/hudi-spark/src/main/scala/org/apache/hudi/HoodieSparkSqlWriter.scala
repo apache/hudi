@@ -40,7 +40,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
 import org.apache.hudi.internal.DataSourceInternalWriterHelper
 import org.apache.hudi.sync.common.AbstractSyncTool
-import org.apache.log4j.LogManager
+import org.apache.logging.log4j.LogManager
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.SparkContext
 import org.apache.spark.api.java.JavaSparkContext

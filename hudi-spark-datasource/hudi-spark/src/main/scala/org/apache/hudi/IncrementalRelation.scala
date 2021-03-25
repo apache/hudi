@@ -25,7 +25,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hadoop.fs.GlobPattern
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.table.HoodieSparkTable
-import org.apache.log4j.LogManager
+import org.apache.logging.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}

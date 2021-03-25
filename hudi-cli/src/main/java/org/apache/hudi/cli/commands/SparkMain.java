@@ -49,7 +49,8 @@ import org.apache.hudi.utilities.deltastreamer.BootstrapExecutor;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 
@@ -63,7 +64,7 @@ import java.util.List;
  */
 public class SparkMain {
 
-  private static final Logger LOG = Logger.getLogger(SparkMain.class);
+  private static final Logger LOG = LogManager.getLogger(SparkMain.class);
 
   /**
    * Commands.

@@ -82,6 +82,9 @@
                   <include>com.google.guava:guava</include>
                   <include>commons-lang:commons-lang</include>
                   <include>com.google.protobuf:protobuf-java</include>
+
+                  <include>org.apache.logging.log4j:log4j-core</include>
+                  <include>org.apache.logging.log4j:log4j-api</include>
                 </includes>
               </artifactSet>
               <relocations>

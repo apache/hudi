@@ -35,7 +35,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
 import org.springframework.shell.core.CommandMarker;
@@ -61,7 +62,7 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME
 @Component
 public class RepairsCommand implements CommandMarker {
 
-  private static final Logger LOG = Logger.getLogger(RepairsCommand.class);
+  private static final Logger LOG = LogManager.getLogger(RepairsCommand.class);
   public static final String DEDUPLICATE_RETURN_PREFIX = "Deduplicated files placed in:  ";
 
   @CliCommand(value = "repair deduplicate",

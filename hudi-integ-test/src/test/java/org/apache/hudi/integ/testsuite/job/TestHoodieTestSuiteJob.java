@@ -42,8 +42,8 @@ import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.AvroDFSSource;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.core.config.Configurator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -116,7 +116,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     UtilitiesTestBase.Helpers.savePropsToDFS(downstreamProps, dfs,
         dfsBasePath + "/test-downstream-source.properties");
     // these tests cause a lot of log verbosity from spark, turning it down
-    Logger.getLogger("org.apache.spark").setLevel(Level.WARN);
+    Configurator.setLevel("org.apache.spark", Level.WARN);
   }
 
   @AfterAll

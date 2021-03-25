@@ -29,8 +29,8 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.FlinkHoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.List;
 

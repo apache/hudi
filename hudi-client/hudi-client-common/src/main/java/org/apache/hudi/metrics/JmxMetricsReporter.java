@@ -22,7 +22,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 
 import com.codahale.metrics.MetricRegistry;
-import org.apache.log4j.LogManager;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import javax.management.MBeanServer;
 
@@ -37,7 +38,7 @@ import java.util.stream.IntStream;
  */
 public class JmxMetricsReporter extends MetricsReporter {
 
-  private static final org.apache.log4j.Logger LOG = LogManager.getLogger(JmxMetricsReporter.class);
+  private static final Logger LOG = LogManager.getLogger(JmxMetricsReporter.class);
 
   private final MetricRegistry registry;
   private JmxReporterServer jmxReporterServer;
