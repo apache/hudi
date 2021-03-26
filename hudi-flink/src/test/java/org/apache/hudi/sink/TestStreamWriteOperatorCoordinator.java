@@ -94,7 +94,7 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator.handleEventFromOperator(0, event0);
     coordinator.handleEventFromOperator(1, event1);
 
-    coordinator.checkpointComplete(1);
+    coordinator.notifyCheckpointComplete(1);
     String inflight = coordinator.getWriteClient()
         .getInflightAndRequestedInstant("COPY_ON_WRITE");
     String lastCompleted = coordinator.getWriteClient().getLastCompletedInstant("COPY_ON_WRITE");
@@ -116,7 +116,7 @@ public class TestStreamWriteOperatorCoordinator {
   public void testCheckpointAndRestore() throws Exception {
     CompletableFuture<byte[]> future = new CompletableFuture<>();
     coordinator.checkpointCoordinator(1, future);
-    coordinator.resetToCheckpoint(future.get());
+    coordinator.resetToCheckpoint(1, future.get());
   }
 
   @Test
@@ -145,7 +145,7 @@ public class TestStreamWriteOperatorCoordinator {
         .build();
     coordinator.handleEventFromOperator(0, event);
     assertThrows(HoodieException.class,
-        () -> coordinator.checkpointComplete(1),
+        () -> coordinator.notifyCheckpointComplete(1),
         "Try 3 to commit instant");
   }
 }

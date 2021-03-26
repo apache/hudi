@@ -21,6 +21,7 @@ package org.apache.hudi.configuration;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
@@ -30,10 +31,13 @@ import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
 
-import java.util.Arrays;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Hoodie Flink config options.
@@ -287,12 +291,6 @@ public class FlinkOptions {
   //  Utilities
   // -------------------------------------------------------------------------
 
-  // Remember to update the set when adding new options.
-  public static final List<ConfigOption<?>> OPTIONAL_OPTIONS = Arrays.asList(
-      TABLE_TYPE, OPERATION, PRECOMBINE_FIELD, PAYLOAD_CLASS, INSERT_DROP_DUPS, RETRY_TIMES,
-      RETRY_INTERVAL_MS, IGNORE_FAILED, RECORD_KEY_FIELD, PARTITION_PATH_FIELD, KEYGEN_CLASS
-  );
-
   // Prefix for Hoodie specific properties.
   private static final String PROPERTIES_PREFIX = "properties.";
 
@@ -384,5 +382,33 @@ public class FlinkOptions {
   public static <T> boolean isDefaultValueDefined(Configuration conf, ConfigOption<T> option) {
     return !conf.getOptional(option).isPresent()
         || conf.get(option).equals(option.defaultValue());
+  }
+
+  /**
+   * Returns all the optional config options.
+   */
+  public static Set<ConfigOption<?>> optionalOptions() {
+    Set<ConfigOption<?>> options = new HashSet<>(allOptions());
+    options.remove(PATH);
+    return options;
+  }
+
+  /**
+   * Returns all the config options.
+   */
+  public static List<ConfigOption<?>> allOptions() {
+    Field[] declaredFields = FlinkOptions.class.getDeclaredFields();
+    List<ConfigOption<?>> options = new ArrayList<>();
+    for (Field field : declaredFields) {
+      if (java.lang.reflect.Modifier.isStatic(field.getModifiers())
+          && field.getType().equals(ConfigOption.class)) {
+        try {
+          options.add((ConfigOption<?>) field.get(ConfigOption.class));
+        } catch (IllegalAccessException e) {
+          throw new HoodieException("Error while fetching static config option", e);
+        }
+      }
+    }
+    return options;
   }
 }

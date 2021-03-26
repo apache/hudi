@@ -36,7 +36,7 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
-import org.apache.flink.table.runtime.typeutils.RowDataTypeInfo;
+import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.util.Properties;
@@ -80,7 +80,7 @@ public class HoodieFlinkStreamerV2 {
         cfg.kafkaTopic,
         new JsonRowDataDeserializationSchema(
             rowType,
-            new RowDataTypeInfo(rowType),
+            InternalTypeInfo.of(rowType),
             false,
             true,
             TimestampFormat.ISO_8601
