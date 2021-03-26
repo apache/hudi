@@ -225,8 +225,8 @@ public class StreamerUtil {
     // put all the set up options
     conf.addAllToProperties(properties);
     // put all the default options
-    for (ConfigOption<?> option : FlinkOptions.OPTIONAL_OPTIONS) {
-      if (!conf.contains(option)) {
+    for (ConfigOption<?> option : FlinkOptions.optionalOptions()) {
+      if (!conf.contains(option) && option.hasDefaultValue()) {
         properties.put(option.key(), option.defaultValue());
       }
     }
