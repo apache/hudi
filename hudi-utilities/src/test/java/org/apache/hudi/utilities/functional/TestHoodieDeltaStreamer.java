@@ -289,7 +289,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
     props.setProperty("include", "base.properties");
     props.setProperty("hoodie.write.concurrency.mode", "optimistic_concurrency_control");
-    props.setProperty("hoodie.failed.writes.cleaner.policy", "LAZY");
+    props.setProperty("hoodie.cleaner.policy.failed.writes", "LAZY");
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider");
     props.setProperty("hoodie.write.lock.hivemetastore.database", "testdb1");
     props.setProperty("hoodie.write.lock.hivemetastore.table", "table1");
@@ -298,7 +298,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     props.setProperty("hoodie.write.lock.wait_time_ms", "1200000");
     props.setProperty("hoodie.write.lock.num_retries", "10");
     props.setProperty("hoodie.write.lock.zookeeper.lock_key", "test_table");
-    props.setProperty("hoodie.write.lock.zookeeper.zk_base_path", "/test");
+    props.setProperty("hoodie.write.lock.zookeeper.base_path", "/test");
 
     UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/" + propsFileName);
     return props;
