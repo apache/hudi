@@ -18,16 +18,16 @@
 
 mode=$1
 modules=$2
-sparkVersion=2.4.4
+sparkVersion=3.0.0
 hadoopVersion=2.7
 
 if [ "$mode" = "unit" ]; then
-  mvn clean install -DskipTests -q
+  mvn clean install -DskipTests -q -Dspark3
   echo "Running Unit Tests"
-  mvn test -Punit-tests -pl "$modules" -B
+  mvn test -Punit-tests -pl "$modules" -B -Dspark3
 elif [ "$mode" = "functional" ]; then
   echo "Running Functional Tests"
-  mvn test -Pfunctional-tests -B
+  mvn test -Pfunctional-tests -B -Dspark3
 elif [ "$mode" = "integration" ]; then
   echo "Downloading Apache Spark-${sparkVersion}-bin-hadoop${hadoopVersion}"
   wget http://archive.apache.org/dist/spark/spark-${sparkVersion}/spark-${sparkVersion}-bin-hadoop${hadoopVersion}.tgz -O /tmp/spark-${sparkVersion}.tgz
@@ -35,7 +35,7 @@ elif [ "$mode" = "integration" ]; then
   export SPARK_HOME=$PWD/spark-${sparkVersion}-bin-hadoop${hadoopVersion}
   mkdir /tmp/spark-events/
   echo "Running Integration Tests"
-  mvn verify -Pintegration-tests -B
+  mvn verify -Pintegration-tests -B -Dspark3
 else
   echo "Unknown mode $mode"
   exit 1
