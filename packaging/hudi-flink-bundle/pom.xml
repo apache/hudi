@@ -31,6 +31,7 @@
   <properties>
     <checkstyle.skip>true</checkstyle.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
+    <flink.bundle.hive.scope>provided</flink.bundle.hive.scope>
     <flink.bundle.hive.shade.prefix>org.apache.hudi.</flink.bundle.hive.shade.prefix>
     <javax.servlet.version>3.1.0</javax.servlet.version>
     <!-- override to be same with flink 1.12.2 -->
@@ -74,6 +75,8 @@
                   <include>org.apache.hudi:hudi-client-common</include>
                   <include>org.apache.hudi:hudi-flink-client</include>
                   <include>org.apache.hudi:hudi-flink_${scala.binary.version}</include>
+                  <include>org.apache.hudi:hudi-hive-sync</include>
+                  <include>org.apache.hudi:hudi-sync-common</include>
                   <include>org.apache.hudi:hudi-hadoop-mr</include>
                   <include>org.apache.hudi:hudi-timeline-service</include>
 
@@ -123,6 +126,8 @@
                   <include>org.apache.flink:flink-parquet_${scala.binary.version}</include>
 
                   <include>org.apache.hive:hive-common</include>
+                  <include>org.apache.hive:hive-service</include>
+                  <include>org.apache.hive:hive-service-rpc</include>
                   <include>org.apache.hive:hive-exec</include>
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
@@ -244,6 +249,11 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-hive-sync</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-timeline-service</artifactId>
       <version>${project.version}</version>
     </dependency>
@@ -351,6 +361,18 @@
     <!-- Hive -->
     <dependency>
       <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-service</artifactId>
+      <version>${hive.version}</version>
+      <scope>${flink.bundle.hive.scope}</scope>
+    </dependency>
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
+      <artifactId>hive-service-rpc</artifactId>
+      <version>${hive.version}</version>
+      <scope>${flink.bundle.hive.scope}</scope>
+    </dependency>
+    <dependency>
+      <groupId>${hive.groupid}</groupId>
       <artifactId>hive-exec</artifactId>
       <version>${hive.version}</version>
       <exclusions>
@@ -368,6 +390,7 @@
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-metastore</artifactId>
       <version>${hive.version}</version>
+      <scope>${flink.bundle.hive.scope}</scope>
       <exclusions>
         <exclusion>
           <groupId>javax.servlet</groupId>
@@ -383,6 +406,7 @@
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-jdbc</artifactId>
       <version>${hive.version}</version>
+      <scope>${flink.bundle.hive.scope}</scope>
       <exclusions>
         <exclusion>
           <groupId>javax.servlet</groupId>
@@ -398,6 +422,7 @@
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-common</artifactId>
       <version>${hive.version}</version>
+      <scope>${flink.bundle.hive.scope}</scope>
       <exclusions>
         <exclusion>
           <groupId>org.eclipse.jetty.orbit</groupId>
@@ -436,4 +461,13 @@
       <version>${hbase.version}</version>
     </dependency>
   </dependencies>
+
+  <profiles>
+    <profile>
+      <id>flink-bundle-shade-hive</id>
+      <properties>
+        <flink.bundle.hive.scope>compile</flink.bundle.hive.scope>
+      </properties>
+    </profile>
+  </profiles>
 </project>
