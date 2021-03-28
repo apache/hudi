@@ -21,7 +21,6 @@ package org.apache.hudi
 import java.nio.ByteBuffer
 import java.sql.{Date, Timestamp}
 import java.util
-
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes.{TimestampMicros, TimestampMillis}
 import org.apache.avro.Schema.Type._
@@ -340,7 +339,7 @@ object AvroConversionHelper {
           }
         }
       case structType: StructType =>
-        val schema: Schema = SchemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
+        val schema: Schema = AvroConversionUtils.convertStructTypeToAvroSchema(structType, structName, recordNamespace)
         val childNameSpace = if (recordNamespace != "") s"$recordNamespace.$structName" else structName
         val fieldConverters = structType.fields.map(field =>
           createConverterToAvro(

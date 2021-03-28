@@ -18,7 +18,7 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
+import org.apache.avro.{JsonProperties, Schema}
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder, IndexedRecord}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.spark.rdd.RDD
@@ -27,6 +27,7 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
 
 import scala.collection.JavaConverters._
+import scala.collection.JavaConversions._
 
 object AvroConversionUtils {
 
@@ -49,11 +50,43 @@ object AvroConversionUtils {
   def convertStructTypeToAvroSchema(structType: StructType,
                                     structName: String,
                                     recordNamespace: String): Schema = {
-    SchemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
+    getAvroSchemaWithDefaults(SchemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace))
   }
 
   def convertAvroSchemaToStructType(avroSchema: Schema): StructType = {
     SchemaConverters.toSqlType(avroSchema).dataType.asInstanceOf[StructType]
+  }
+
+  /**
+   * Regenerate Avro schema with proper nullable default values. Avro expects null to be first entry in case of UNION so that
+   * default value can be set to null.
+   * @param writeSchema original writer schema.
+   * @return the regenerated schema with proper defaults set.
+   */
+  def getAvroSchemaWithDefaults(writeSchema: Schema): Schema = {
+    val modifiedFields = writeSchema.getFields.map(field => {
+      field.schema().getType match {
+        case Schema.Type.RECORD =>  {
+          val newSchema = getAvroSchemaWithDefaults(field.schema())
+          new Schema.Field(field.name(), newSchema, field.doc(), JsonProperties.NULL_VALUE)
+        }
+        case Schema.Type.UNION => {
+          val innerFields = field.schema().getTypes
+          val containsNullSchema = innerFields.foldLeft(false)((nullFieldEncountered, schema) => nullFieldEncountered | schema.getType == Schema.Type.NULL)
+          if(containsNullSchema) {
+            val newSchema = Schema.createUnion(List(Schema.create(Schema.Type.NULL)) ++ innerFields.filter(innerSchema => !(innerSchema.getType == Schema.Type.NULL)))
+            val newSchemaField = new Schema.Field(field.name(), newSchema, field.doc(), JsonProperties.NULL_VALUE)
+            newSchemaField
+          } else {
+            new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal())
+          }
+        }
+        case _ => new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal())
+      }
+    }).toList
+    val newSchema = Schema.createRecord(writeSchema.getName, writeSchema.getDoc, writeSchema.getNamespace, writeSchema.isError)
+    newSchema.setFields(modifiedFields)
+    newSchema
   }
 
   def buildAvroRecordBySchema(record: IndexedRecord,

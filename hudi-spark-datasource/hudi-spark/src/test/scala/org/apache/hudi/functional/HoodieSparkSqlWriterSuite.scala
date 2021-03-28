@@ -17,13 +17,10 @@
 
 package org.apache.hudi.functional
 
-import java.time.Instant
-import java.util
-import java.util.{Collections, Date, UUID}
-
 import org.apache.commons.io.FileUtils
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.{SparkRDDWriteClient, TestBootstrap}
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordPayload}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
@@ -34,10 +31,14 @@ import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, DataSourceWriteOpt
 import org.apache.spark.SparkContext
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{Row, SQLContext, SaveMode, SparkSession}
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{spy, times, verify}
 import org.scalatest.{FunSuite, Matchers}
 
+import java.time.Instant
+import java.util
+import java.util.{Collections, Date, UUID}
 import scala.collection.JavaConversions._
 
 class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
@@ -112,6 +113,91 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
       FileUtils.deleteDirectory(path.toFile)
     }
   }
+
+  List(DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+    .foreach(tableType => {
+      test("test schema evolution for " + tableType) {
+        initSparkContext("test_schema_evolution")
+        val path = java.nio.file.Files.createTempDirectory("hoodie_test_path")
+        try {
+          val hoodieFooTableName = "hoodie_foo_tbl"
+          //create a new table
+          val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
+            HoodieWriteConfig.TABLE_NAME -> hoodieFooTableName,
+            "hoodie.insert.shuffle.parallelism" -> "1",
+            "hoodie.upsert.shuffle.parallelism" -> "1",
+            DataSourceWriteOptions.TABLE_TYPE_OPT_KEY -> tableType,
+            DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY -> "_row_key",
+            DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY -> "partition",
+            DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY -> "org.apache.hudi.keygen.SimpleKeyGenerator")
+          val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
+
+          // generate the inserts
+          var schema = DataSourceTestUtils.getStructTypeExampleSchema
+          var structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+          var records = DataSourceTestUtils.generateRandomRows(10)
+          var recordsSeq = convertRowListToSeq(records)
+          var df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
+          // write to Hudi
+          HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, fooTableParams, df1)
+
+          val snapshotDF1 = spark.read.format("org.apache.hudi")
+            .load(path.toAbsolutePath.toString + "/*/*/*/*")
+          assertEquals(10, snapshotDF1.count())
+
+          // remove metadata columns so that expected and actual DFs can be compared as is
+          val trimmedDf1 = snapshotDF1.drop(HoodieRecord.HOODIE_META_COLUMNS.get(0)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(1))
+            .drop(HoodieRecord.HOODIE_META_COLUMNS.get(2)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(3))
+            .drop(HoodieRecord.HOODIE_META_COLUMNS.get(4))
+
+          assert(df1.except(trimmedDf1).count() == 0)
+
+          // issue updates so that log files are created for MOR table
+          var updates = DataSourceTestUtils.generateUpdates(records, 5);
+          var updatesSeq = convertRowListToSeq(updates)
+          var updatesDf = spark.createDataFrame(sc.parallelize(updatesSeq), structType)
+          // write to Hudi
+          HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, updatesDf)
+
+          val snapshotDF2 = spark.read.format("org.apache.hudi")
+            .load(path.toAbsolutePath.toString + "/*/*/*/*")
+          assertEquals(10, snapshotDF2.count())
+
+          // remove metadata columns so that expected and actual DFs can be compared as is
+          val trimmedDf2 = snapshotDF1.drop(HoodieRecord.HOODIE_META_COLUMNS.get(0)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(1))
+            .drop(HoodieRecord.HOODIE_META_COLUMNS.get(2)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(3))
+            .drop(HoodieRecord.HOODIE_META_COLUMNS.get(4))
+
+          // ensure 2nd batch of updates matches.
+          assert(updatesDf.intersect(trimmedDf2).except(updatesDf).count() == 0)
+
+          schema = DataSourceTestUtils.getStructTypeExampleEvolvedSchema
+          structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+          records = DataSourceTestUtils.generateRandomRowsEvolvedSchema(5)
+          recordsSeq = convertRowListToSeq(records)
+          val df3 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
+          // write to Hudi
+          HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, df3)
+
+          val snapshotDF3 = spark.read.format("org.apache.hudi")
+            .load(path.toAbsolutePath.toString + "/*/*/*/*")
+          assertEquals(15, snapshotDF3.count())
+
+          // remove metadata columns so that expected and actual DFs can be compared as is
+          val trimmedDf3 = snapshotDF3.drop(HoodieRecord.HOODIE_META_COLUMNS.get(0)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(1))
+            .drop(HoodieRecord.HOODIE_META_COLUMNS.get(2)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(3))
+            .drop(HoodieRecord.HOODIE_META_COLUMNS.get(4))
+
+          // ensure 2nd batch of updates matches.
+          assert(df3.intersect(trimmedDf3).except(df3).count() == 0)
+
+        } finally {
+          spark.stop()
+          FileUtils.deleteDirectory(path.toFile)
+        }
+      }
+    })
+
 
   test("test bulk insert dataset with datasource impl") {
     initSparkContext("test_bulk_insert_datasource")
