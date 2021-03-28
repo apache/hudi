@@ -16,17 +16,17 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.index.bloom;
+package org.apache.hudi.index;
 
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.bloom.HoodieBaseBloomIndex;
 
 /**
  * Indexing mechanism based on bloom filter. Each parquet file includes its row_key bloom filter in its metadata.
  */
-@SuppressWarnings("checkstyle:LineLength")
-public class FlinkHoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieBaseBloomIndex<T> {
-  public FlinkHoodieBloomIndex(HoodieWriteConfig config) {
+public class JavaHoodieBloomIndex<T extends HoodieRecordPayload> extends HoodieBaseBloomIndex<T> {
+  public JavaHoodieBloomIndex(HoodieWriteConfig config) {
     super(config);
   }
 }
