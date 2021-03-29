@@ -491,7 +491,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(2);
 
     String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant("COPY_ON_WRITE");
+        .getInflightAndRequestedInstant(getTableType());
 
     nextEvent = funcWrapper.getNextEvent();
     assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
@@ -507,6 +507,8 @@ public class TestWriteCopyOnWrite {
     // the coordinator checkpoint commits the inflight instant.
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
     checkWrittenData(tempFile, EXPECTED2);
+    // next element triggers all partitions load check
+    funcWrapper.invoke(TestData.DATA_SET_INSERT.get(0));
     assertTrue(funcWrapper.isAllPartitionsLoaded(),
         "All partitions assume to be loaded into the index state");
   }

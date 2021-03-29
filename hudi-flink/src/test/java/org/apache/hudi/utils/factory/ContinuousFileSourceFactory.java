@@ -22,6 +22,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.utils.source.ContinuousFileSource;
 
 import org.apache.flink.configuration.ConfigOption;
+import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.api.ValidationException;
@@ -37,6 +38,12 @@ import java.util.Set;
  */
 public class ContinuousFileSourceFactory implements DynamicTableSourceFactory {
   public static final String FACTORY_ID = "continuous-file-source";
+
+  public static final ConfigOption<Integer> CHECKPOINTS = ConfigOptions
+      .key("checkpoints")
+      .intType()
+      .defaultValue(2)
+      .withDescription("Number of checkpoints to write the data set as, default 2");
 
   @Override
   public DynamicTableSource createDynamicTableSource(Context context) {
@@ -56,11 +63,11 @@ public class ContinuousFileSourceFactory implements DynamicTableSourceFactory {
 
   @Override
   public Set<ConfigOption<?>> requiredOptions() {
-    return Collections.emptySet();
+    return Collections.singleton(FlinkOptions.PATH);
   }
 
   @Override
   public Set<ConfigOption<?>> optionalOptions() {
-    return Collections.singleton(FlinkOptions.PATH);
+    return Collections.singleton(CHECKPOINTS);
   }
 }
