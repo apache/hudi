@@ -148,7 +148,11 @@ public class HiveTestService {
     hadoopConf = null;
   }
 
-  private HiveConf configureHive(Configuration conf, String localHiveLocation) throws IOException {
+  public HiveServer2 getHiveServer() {
+    return hiveServer;
+  }
+
+  public HiveConf configureHive(Configuration conf, String localHiveLocation) throws IOException {
     conf.set("hive.metastore.local", "false");
     conf.set(HiveConf.ConfVars.METASTOREURIS.varname, "thrift://" + bindIP + ":" + metastorePort);
     conf.set(HiveConf.ConfVars.HIVE_SERVER2_THRIFT_BIND_HOST.varname, bindIP);

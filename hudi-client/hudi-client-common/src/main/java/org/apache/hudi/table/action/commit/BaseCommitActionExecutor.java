@@ -19,6 +19,8 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -29,7 +31,9 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -58,6 +62,8 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
   protected final Option<Map<String, String>> extraMetadata;
   protected final WriteOperationType operationType;
   protected final TaskContextSupplier taskContextSupplier;
+  protected final TransactionManager txnManager;
+  protected Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxn;
 
   public BaseCommitActionExecutor(HoodieEngineContext context, HoodieWriteConfig config,
                                   HoodieTable<T, I, K, O> table, String instantTime, WriteOperationType operationType,
@@ -66,6 +72,9 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     this.operationType = operationType;
     this.extraMetadata = extraMetadata;
     this.taskContextSupplier = context.getTaskContextSupplier();
+    // TODO : Remove this once we refactor and move out autoCommit method from here, since the TxnManager is held in {@link AbstractHoodieWriteClient}.
+    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
+    this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
   }
 
   public abstract HoodieWriteMetadata<O> execute(I inputRecords);
@@ -117,9 +126,21 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
   protected void commitOnAutoCommit(HoodieWriteMetadata result) {
     if (config.shouldAutoCommit()) {
       LOG.info("Auto commit enabled: Committing " + instantTime);
-      commit(extraMetadata, result);
+      autoCommit(extraMetadata, result);
     } else {
       LOG.info("Auto commit disabled for " + instantTime);
+    }
+  }
+
+  protected void autoCommit(Option<Map<String, String>> extraMetadata, HoodieWriteMetadata<O> result) {
+    this.txnManager.beginTransaction(Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime)),
+        lastCompletedTxn.isPresent() ? Option.of(lastCompletedTxn.get().getLeft()) : Option.empty());
+    try {
+      TransactionUtils.resolveWriteConflictIfAny(table, this.txnManager.getCurrentTransactionOwner(),
+          result.getCommitMetadata(), config, this.txnManager.getLastCompletedTransactionOwner());
+      commit(extraMetadata, result);
+    } finally {
+      this.txnManager.endTransaction();
     }
   }
 
@@ -138,6 +159,10 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     } catch (HoodieIOException ioe) {
       throw new HoodieCommitException("Failed to complete commit " + instantTime + " due to finalize errors.", ioe);
     }
+  }
+
+  protected void syncTableMetadata() {
+    // No Op
   }
 
   /**

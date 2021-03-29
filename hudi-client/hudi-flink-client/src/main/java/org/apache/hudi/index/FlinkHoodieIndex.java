@@ -29,6 +29,8 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.index.simple.FlinkHoodieSimpleIndex;
+import org.apache.hudi.index.bloom.FlinkHoodieBloomIndex;
 import org.apache.hudi.index.state.FlinkInMemoryStateIndex;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.table.HoodieTable;
@@ -44,7 +46,7 @@ public abstract class FlinkHoodieIndex<T extends HoodieRecordPayload> extends Ho
     super(config);
   }
 
-  public static FlinkHoodieIndex createIndex(HoodieFlinkEngineContext context, HoodieWriteConfig config) {
+  public static HoodieIndex createIndex(HoodieFlinkEngineContext context, HoodieWriteConfig config) {
     // first use index class config to create index.
     if (!StringUtils.isNullOrEmpty(config.getIndexClass())) {
       Object instance = ReflectionUtils.loadClass(config.getIndexClass(), config);
@@ -58,6 +60,10 @@ public abstract class FlinkHoodieIndex<T extends HoodieRecordPayload> extends Ho
     switch (config.getIndexType()) {
       case INMEMORY:
         return new FlinkInMemoryStateIndex<>(context, config);
+      case BLOOM:
+        return new FlinkHoodieBloomIndex(config);
+      case SIMPLE:
+        return new FlinkHoodieSimpleIndex<>(config);
       default:
         throw new HoodieIndexException("Unsupported index type " + config.getIndexType());
     }

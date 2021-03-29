@@ -83,13 +83,13 @@ public class HoodieSnapshotCopier implements Serializable {
                        final boolean verifyMetadataFileListing) throws IOException {
     FileSystem fs = FSUtils.getFs(baseDir, jsc.hadoopConfiguration());
     final SerializableConfiguration serConf = new SerializableConfiguration(jsc.hadoopConfiguration());
-    final HoodieTableMetaClient tableMetadata = new HoodieTableMetaClient(fs.getConf(), baseDir);
+    final HoodieTableMetaClient tableMetadata = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(baseDir).build();
     final BaseFileOnlyView fsView = new HoodieTableFileSystemView(tableMetadata,
-        tableMetadata.getActiveTimeline().getCommitsAndCompactionTimeline().filterCompletedInstants());
+        tableMetadata.getActiveTimeline().getWriteTimeline().filterCompletedInstants());
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     // Get the latest commit
     Option<HoodieInstant> latestCommit =
-        tableMetadata.getActiveTimeline().getCommitsAndCompactionTimeline().filterCompletedInstants().lastInstant();
+        tableMetadata.getActiveTimeline().getWriteTimeline().filterCompletedInstants().lastInstant();
     if (!latestCommit.isPresent()) {
       LOG.warn("No commits present. Nothing to snapshot");
       return;
@@ -98,7 +98,7 @@ public class HoodieSnapshotCopier implements Serializable {
     LOG.info(String.format("Starting to snapshot latest version files which are also no-late-than %s.",
         latestCommitTimestamp));
 
-    List<String> partitions = FSUtils.getAllPartitionPaths(context, fs, baseDir, useFileListingFromMetadata, verifyMetadataFileListing, shouldAssumeDatePartitioning);
+    List<String> partitions = FSUtils.getAllPartitionPaths(context, baseDir, useFileListingFromMetadata, verifyMetadataFileListing, shouldAssumeDatePartitioning);
     if (partitions.size() > 0) {
       LOG.info(String.format("The job needs to copy %d partitions.", partitions.size()));
 

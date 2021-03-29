@@ -94,4 +94,9 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
     super.write(object);
     writeSupport.add(key);
   }
+
+  @Override
+  public long getBytesWritten() {
+    return fs.getBytesWritten(file);
+  }
 }

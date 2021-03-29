@@ -19,11 +19,11 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.6.1-SNAPSHOT</version>
+    <version>0.9.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
-  <artifactId>hudi-spark-bundle_${scala.binary.version}</artifactId>
+  <artifactId>hudi-spark${sparkbundle.version}-bundle_${scala.binary.version}</artifactId>
   <packaging>jar</packaging>
 
   <properties>
@@ -52,7 +52,7 @@
               <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml
               </dependencyReducedPomLocation>
               <transformers>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer"></transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer" />
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer">
                   <addHeader>true</addHeader>
                 </transformer>
@@ -112,6 +112,10 @@
                   <include>org.apache.hbase:hbase-protocol</include>
                   <include>org.apache.hbase:hbase-server</include>
                   <include>org.apache.htrace:htrace-core</include>
+                  <include>org.apache.curator:curator-framework</include>
+                  <include>org.apache.curator:curator-client</include>
+                  <include>org.apache.curator:curator-recipes</include>
+                  <include>commons-codec:commons-codec</include>
                 </includes>
               </artifactSet>
               <relocations>
@@ -158,6 +162,10 @@
                 <relocation>
                   <pattern>com.codahale.metrics.</pattern>
                   <shadedPattern>org.apache.hudi.com.codahale.metrics.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.commons.codec.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.commons.codec.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.eclipse.jetty.</pattern>
@@ -347,6 +355,25 @@
       <version>${hbase.version}</version>
     </dependency>
 
+    <!-- zookeeper -->
+    <dependency>
+      <groupId>org.apache.curator</groupId>
+      <artifactId>curator-framework</artifactId>
+      <version>${zk-curator.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.curator</groupId>
+      <artifactId>curator-client</artifactId>
+      <version>${zk-curator.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.curator</groupId>
+      <artifactId>curator-recipes</artifactId>
+      <version>${zk-curator.version}</version>
+    </dependency>
+
     <!-- TODO: Reinvestigate PR 633 -->
   </dependencies>
 
@@ -362,7 +389,7 @@
       <id>spark-shade-unbundle-avro</id>
       <properties>
         <spark.bundle.avro.scope>provided</spark.bundle.avro.scope>
-        <spark.bundle.spark.shade.prefix></spark.bundle.spark.shade.prefix>
+        <spark.bundle.spark.shade.prefix />
       </properties>
     </profile>
   </profiles>

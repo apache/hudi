@@ -18,8 +18,6 @@
 
 package org.apache.hudi.schema;
 
-import org.apache.hudi.common.config.TypedProperties;
-
 import org.apache.avro.Schema;
 
 import java.io.Serializable;
@@ -28,12 +26,6 @@ import java.io.Serializable;
  * Class to provide schema for reading data and also writing into a Hoodie table.
  */
 public abstract class SchemaProvider implements Serializable {
-
-  protected TypedProperties config;
-
-  protected SchemaProvider(TypedProperties props) {
-    this.config = props;
-  }
 
   public abstract Schema getSourceSchema();
 

@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi-hadoop-docker</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.6.1-SNAPSHOT</version>
+    <version>0.9.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
   <packaging>pom</packaging>
@@ -58,8 +58,8 @@
               <tasks>
                 <copy file="${project.basedir}/../../../../packaging/hudi-hadoop-mr-bundle/target/hudi-hadoop-mr-bundle-${project.version}.jar" tofile="target/hoodie-hadoop-mr-bundle.jar" />
                 <copy file="${project.basedir}/../../../../packaging/hudi-hive-sync-bundle/target/hudi-hive-sync-bundle-${project.version}.jar" tofile="target/hoodie-hive-sync-bundle.jar" />
-                <copy file="${project.basedir}/../../../../packaging/hudi-spark-bundle/target/hudi-spark-bundle_${scala.binary.version}-${project.version}.jar" tofile="target/hoodie-spark-bundle.jar" />
-                <copy file="${project.basedir}/../../../../packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_${scala.binary.version}-${project.version}.jar" tofile="target/hoodie-utilities.jar"/>
+                <copy file="${project.basedir}/../../../../packaging/hudi-spark-bundle/target/hudi-spark${sparkbundle.version}-bundle_${scala.binary.version}-${project.version}.jar" tofile="target/hoodie-spark-bundle.jar" />
+                <copy file="${project.basedir}/../../../../packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_${scala.binary.version}-${project.version}.jar" tofile="target/hoodie-utilities.jar" />
               </tasks>
             </configuration>
             <goals>

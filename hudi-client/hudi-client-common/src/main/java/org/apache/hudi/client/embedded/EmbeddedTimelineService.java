@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.embedded;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
@@ -41,17 +42,32 @@ public class EmbeddedTimelineService {
   private int serverPort;
   private int preferredPort;
   private String hostAddr;
+  private HoodieEngineContext context;
   private final SerializableConfiguration hadoopConf;
   private final FileSystemViewStorageConfig config;
+  private final HoodieMetadataConfig metadataConfig;
+  private final String basePath;
+
+  private final int numThreads;
+  private final boolean shouldCompressOutput;
+  private final boolean useAsync;
   private transient FileSystemViewManager viewManager;
   private transient TimelineService server;
 
-  public EmbeddedTimelineService(HoodieEngineContext context, String embeddedTimelineServiceHostAddr, int embeddedTimelineServerPort, FileSystemViewStorageConfig config) {
+  public EmbeddedTimelineService(HoodieEngineContext context, String embeddedTimelineServiceHostAddr, int embeddedTimelineServerPort,
+                                 HoodieMetadataConfig metadataConfig, FileSystemViewStorageConfig config, String basePath,
+                                 int numThreads, boolean compressOutput, boolean useAsync) {
     setHostAddr(embeddedTimelineServiceHostAddr);
+    this.context = context;
     this.config = config;
+    this.basePath = basePath;
+    this.metadataConfig = metadataConfig;
     this.hadoopConf = context.getHadoopConf();
     this.viewManager = createViewManager();
     this.preferredPort = embeddedTimelineServerPort;
+    this.numThreads = numThreads;
+    this.shouldCompressOutput = compressOutput;
+    this.useAsync = useAsync;
   }
 
   private FileSystemViewManager createViewManager() {
@@ -64,11 +80,11 @@ public class EmbeddedTimelineService {
       // Reset to default if set to Remote
       builder.withStorageType(FileSystemViewStorageType.MEMORY);
     }
-    return FileSystemViewManager.createViewManager(hadoopConf, builder.build());
+    return FileSystemViewManager.createViewManager(context, metadataConfig, builder.build(), basePath);
   }
 
   public void startServer() throws IOException {
-    server = new TimelineService(preferredPort, viewManager, hadoopConf.newCopy());
+    server = new TimelineService(preferredPort, viewManager, hadoopConf.newCopy(), numThreads, shouldCompressOutput, useAsync);
     serverPort = server.startService();
     LOG.info("Started embedded timeline server at " + hostAddr + ":" + serverPort);
   }

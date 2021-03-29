@@ -104,6 +104,14 @@
             "HoodieReplaceCommitMetadata"
          ],
          "default": null
+      },
+      {
+         "name":"hoodieRequestedReplaceMetadata",
+         "type":[
+            "null",
+            "HoodieRequestedReplaceMetadata"
+         ],
+         "default": null
       }
    ]
 }

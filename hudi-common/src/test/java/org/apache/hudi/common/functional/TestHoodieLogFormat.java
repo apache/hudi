@@ -18,6 +18,13 @@
 
 package org.apache.hudi.common.functional;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
@@ -39,19 +46,12 @@ import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
+import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.MiniClusterUtil;
 import org.apache.hudi.exception.CorruptedLogFileException;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -472,7 +472,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       writer.appendBlock(dataBlock);
     }
     writer.close();
-
+    FileCreateUtils.createDeltaCommit(basePath, "100", fs);
     // scan all log blocks (across multiple log files)
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
@@ -626,6 +626,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
+    FileCreateUtils.createDeltaCommit(basePath, "100", fs);
+
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
         .withBasePath(basePath)
@@ -698,6 +700,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
+    FileCreateUtils.createDeltaCommit(basePath, "100", fs);
+    FileCreateUtils.createDeltaCommit(basePath, "102", fs);
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
         .withBasePath(basePath)
@@ -722,7 +726,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testAvroLogRecordReaderWithRollbackPartialBlock()
+  public void testAvroLogRecordReaderWithFailedPartialBlock()
       throws IOException, URISyntaxException, InterruptedException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     // Set a small threshold so that every block is a new version
@@ -761,17 +765,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     outputStream.flush();
     outputStream.close();
 
-    // Rollback the last write
-    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "102");
-    header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, "101");
-    header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
-        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
-    HoodieCommandBlock commandBlock = new HoodieCommandBlock(header);
     writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
             .withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
-    writer.appendBlock(commandBlock);
-
     // Write 3
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "103");
     List<IndexedRecord> records3 = SchemaTestUtil.generateHoodieTestRecords(0, 100);
@@ -787,6 +783,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
+    FileCreateUtils.createDeltaCommit(basePath, "100", fs);
+    FileCreateUtils.createDeltaCommit(basePath, "103", fs);
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
         .withBasePath(basePath)
@@ -857,6 +855,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1", HoodieLogFile.DELTA_EXTENSION, "100")
             .map(s -> s.getPath().toString()).collect(Collectors.toList());
 
+    FileCreateUtils.createDeltaCommit(basePath, "100", fs);
+    FileCreateUtils.createDeltaCommit(basePath, "101", fs);
+    FileCreateUtils.createDeltaCommit(basePath, "102", fs);
+
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
         .withBasePath(basePath)
@@ -869,6 +871,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withBufferSize(bufferSize)
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .build();
+
     assertEquals(200, scanner.getTotalLogRecords(), "We still would read 200 records");
     final List<String> readKeys = new ArrayList<>(200);
     final List<Boolean> emptyPayloads = new ArrayList<>();
@@ -896,6 +899,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
     HoodieCommandBlock commandBlock = new HoodieCommandBlock(header);
     writer.appendBlock(commandBlock);
+
+    FileCreateUtils.deleteDeltaCommit(basePath, "102", fs);
 
     readKeys.clear();
     scanner = HoodieMergedLogRecordScanner.newBuilder()
@@ -954,6 +959,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new HoodieKey[50]), header);
     writer.appendBlock(deleteBlock);
 
+    FileCreateUtils.createDeltaCommit(basePath, "100", fs);
+
     // Attempt 1 : Write rollback block for a failed write
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
         String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
@@ -990,6 +997,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     final List<String> readKeys = new ArrayList<>();
     scanner.forEach(s -> readKeys.add(s.getKey().getRecordKey()));
     assertEquals(0, readKeys.size(), "Stream collect should return all 0 records");
+    FileCreateUtils.deleteDeltaCommit(basePath, "100", fs);
   }
 
   @ParameterizedTest
@@ -1023,6 +1031,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new HoodieKey[50]), header);
     writer.appendBlock(deleteBlock);
 
+    FileCreateUtils.createDeltaCommit(basePath, "100", fs);
+
     // Write 2 rollback blocks (1 data block + 1 delete bloc) for a failed write
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
         String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
@@ -1047,6 +1057,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would read 0 records");
+    FileCreateUtils.deleteDeltaCommit(basePath, "100", fs);
   }
 
   @ParameterizedTest
@@ -1066,6 +1077,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
     HoodieDataBlock dataBlock = getDataBlock(records1, header);
     writer.appendBlock(dataBlock);
+
+    FileCreateUtils.createDeltaCommit(basePath, "100", fs);
 
     // Write invalid rollback for a failed write (possible for in-flight commits)
     header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, "101");
@@ -1130,8 +1143,11 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(deletedKeys.toArray(new HoodieKey[50]), header);
     writer.appendBlock(deleteBlock);
 
+    FileCreateUtils.createDeltaCommit(basePath, "100", fs);
+
     // Write 1 rollback block for a failed write
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "101");
+    header.put(HeaderMetadataType.TARGET_INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
         String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_PREVIOUS_BLOCK.ordinal()));
     HoodieCommandBlock commandBlock = new HoodieCommandBlock(header);
@@ -1179,6 +1195,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
 
     writer.close();
+    FileCreateUtils.createDeltaCommit(basePath, "100", fs);
+
     // Append some arbit byte[] to the end of the log (mimics a partially written commit)
     fs = FSUtils.getFs(fs.getUri().toString(), fs.getConf());
     FSDataOutputStream outputStream = fs.append(writer.getLogFile().getPath());
@@ -1254,6 +1272,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withSpillableMapBasePath(BASE_OUTPUT_PATH)
         .build();
     assertEquals(0, scanner.getTotalLogRecords(), "We would read 0 records");
+    FileCreateUtils.deleteDeltaCommit(basePath, "100", fs);
   }
 
   /*
@@ -1303,6 +1322,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       writer2.appendBlock(dataBlock2);
       // Get the size of the block
       writer2.close();
+
+      FileCreateUtils.createDeltaCommit(basePath, "100", fs);
 
       // From the two log files generated, read the records
       List<String> allLogFiles = FSUtils.getAllLogFiles(fs, partitionPath, "test-fileid1",
@@ -1398,6 +1419,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     writer.appendBlock(dataBlock);
     writer.close();
 
+    FileCreateUtils.createDeltaCommit(basePath, "100", fs);
+
     HoodieLogFileReader reader = new HoodieLogFileReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(),
         bufferSize, readBlocksLazily, true);
 
@@ -1445,6 +1468,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     HoodieDataBlock dataBlock = getDataBlock(records, header);
     writer.appendBlock(dataBlock);
     writer.close();
+
+    FileCreateUtils.createDeltaCommit(basePath, "100", fs);
 
     // Append some arbit byte[] to thee end of the log (mimics a partially written commit)
     fs = FSUtils.getFs(fs.getUri().toString(), fs.getConf());
@@ -1521,6 +1546,8 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     dataBlock = getDataBlock(records3, header);
     writer.appendBlock(dataBlock);
     writer.close();
+
+    FileCreateUtils.createDeltaCommit(basePath, "100", fs);
 
     HoodieLogFileReader reader = new HoodieLogFileReader(fs, writer.getLogFile(), SchemaTestUtil.getSimpleSchema(),
         bufferSize, readBlocksLazily, true);

@@ -125,6 +125,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
         HoodieWriteConfig.TABLE_NAME -> hoodieFooTableName,
         "hoodie.bulkinsert.shuffle.parallelism" -> "4",
         DataSourceWriteOptions.OPERATION_OPT_KEY -> DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
+        DataSourceWriteOptions.ENABLE_ROW_WRITER_OPT_KEY -> "true",
         DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY -> "_row_key",
         DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY -> "partition",
         DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY -> "org.apache.hudi.keygen.SimpleKeyGenerator")
@@ -232,6 +233,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
         HoodieWriteConfig.TABLE_NAME -> hoodieFooTableName,
         "hoodie.bulkinsert.shuffle.parallelism" -> "4",
         DataSourceWriteOptions.OPERATION_OPT_KEY -> DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
+        DataSourceWriteOptions.ENABLE_ROW_WRITER_OPT_KEY -> "true",
         DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY -> "_row_key",
         DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY -> "partition",
         DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY -> "org.apache.hudi.keygen.SimpleKeyGenerator")

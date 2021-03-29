@@ -124,14 +124,14 @@ public class ZookeeperTestService {
     return zooKeeperServer;
   }
 
-  public void stop() throws IOException {
+  public void stop() throws RuntimeException {
     if (!started) {
       return;
     }
 
     standaloneServerFactory.shutdown();
     if (!waitForServerDown(clientPort, CONNECTION_TIMEOUT)) {
-      throw new IOException("Waiting for shutdown of standalone server");
+      throw new RuntimeException("Waiting for shutdown of standalone server");
     }
 
     // clear everything
@@ -231,5 +231,9 @@ public class ZookeeperTestService {
       }
     }
     return false;
+  }
+
+  public String connectString() {
+    return bindIP + ":" + clientPort;
   }
 }

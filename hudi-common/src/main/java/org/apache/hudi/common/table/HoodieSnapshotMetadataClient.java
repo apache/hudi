@@ -48,7 +48,7 @@ public class HoodieSnapshotMetadataClient {
    * @param basePath Table location absolute path.
    */
   public HoodieSnapshotMetadataClient(Configuration conf, String basePath) {
-    this(new HoodieTableMetaClient(conf, basePath, true));
+    this(HoodieTableMetaClient.builder().setConf(conf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build());
   }
 
   /**

@@ -121,6 +121,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
       }
     });
     updateIndex(writeStatuses, result);
+    updateIndexAndCommitIfNeeded(writeStatuses, result);
     return result;
   }
 
@@ -199,7 +200,6 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
     result.setWriteStats(writeStats);
     // Finalize write
     finalizeWrite(instantTime, writeStats, result);
-
     try {
       LOG.info("Committing " + instantTime + ", action Type " + getCommitActionType());
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
@@ -297,8 +297,7 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr)
-      throws Exception {
+  public Iterator<List<WriteStatus>> handleInsert(String idPfx, Iterator<HoodieRecord<T>> recordItr) {
     // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
     if (!recordItr.hasNext()) {
       LOG.info("Empty partition");
@@ -325,4 +324,13 @@ public abstract class BaseJavaCommitActionExecutor<T extends HoodieRecordPayload
     return getUpsertPartitioner(profile);
   }
 
+  public void updateIndexAndCommitIfNeeded(List<WriteStatus> writeStatuses, HoodieWriteMetadata result) {
+    Instant indexStartTime = Instant.now();
+    // Update the index back
+    List<WriteStatus> statuses = table.getIndex().updateLocation(writeStatuses, context, table);
+    result.setIndexUpdateDuration(Duration.between(indexStartTime, Instant.now()));
+    result.setWriteStatuses(statuses);
+    result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(statuses));
+    commitOnAutoCommit(result);
+  }
 }

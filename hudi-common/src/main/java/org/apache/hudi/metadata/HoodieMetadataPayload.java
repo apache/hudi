@@ -29,7 +29,9 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
@@ -177,10 +179,12 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   /**
    * Returns the files added as part of this record.
    */
-  public FileStatus[] getFileStatuses(Path partitionPath) {
+  public FileStatus[] getFileStatuses(Configuration hadoopConf, Path partitionPath) throws IOException {
+    FileSystem fs = partitionPath.getFileSystem(hadoopConf);
+    long blockSize = fs.getDefaultBlockSize(partitionPath);
     return filterFileInfoEntries(false)
-        .map(e -> new FileStatus(e.getValue().getSize(), false, 0, 0, 0, 0, null, null, null,
-            new Path(partitionPath, e.getKey())))
+        .map(e -> new FileStatus(e.getValue().getSize(), false, 0, blockSize, 0, 0,
+            null, null, null, new Path(partitionPath, e.getKey())))
         .toArray(FileStatus[]::new);
   }
 

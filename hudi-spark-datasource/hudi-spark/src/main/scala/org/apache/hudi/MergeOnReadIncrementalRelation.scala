@@ -24,7 +24,6 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.listAffectedFilesForCommits
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
-
 import org.apache.hadoop.fs.{FileStatus, GlobPattern, Path}
 import org.apache.hadoop.mapred.JobConf
 import org.apache.log4j.LogManager
@@ -78,7 +77,16 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
   private val tableStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
   private val fileIndex = buildFileIndex()
-
+  private val preCombineField = {
+    val preCombineFieldFromTableConfig = metaClient.getTableConfig.getPreCombineField
+    if (preCombineFieldFromTableConfig != null) {
+      Some(preCombineFieldFromTableConfig)
+    } else {
+      // get preCombineFiled from the options if this is a old table which have not store
+      // the field to hoodie.properties
+      optParams.get(DataSourceReadOptions.READ_PRE_COMBINE_FIELD)
+    }
+  }
   override def schema: StructType = tableStructSchema
 
   override def needConversion: Boolean = false
@@ -117,7 +125,8 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
       requiredStructSchema,
       tableAvroSchema.toString,
       requiredAvroSchema.toString,
-      fileIndex
+      fileIndex,
+      preCombineField
     )
     val fullSchemaParquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(
       sparkSession = sqlContext.sparkSession,

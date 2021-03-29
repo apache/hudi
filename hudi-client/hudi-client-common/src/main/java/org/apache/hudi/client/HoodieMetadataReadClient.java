@@ -36,7 +36,7 @@ public class HoodieMetadataReadClient {
    * @param basePath path to Hoodie table.
    */
   public HoodieMetadataReadClient(Configuration conf, String basePath) {
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(conf, basePath);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(conf).setBasePath(basePath).build();
     this.snapshotMetadataClient = new HoodieSnapshotMetadataClient(metaClient);
     this.incrementalMetadataClient = new HoodieIncrementalMetadataClient(metaClient);
   }
