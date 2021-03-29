@@ -51,7 +51,7 @@ public class HoodieIncrementalMetadataClient implements Serializable {
    * @param basePath Base path of the Table
    */
   public HoodieIncrementalMetadataClient(Configuration conf, String basePath) {
-    this(new HoodieTableMetaClient(conf, basePath, true));
+    this(HoodieTableMetaClient.builder().setConf(conf).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build());
   }
 
   /**
