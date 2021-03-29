@@ -5,18 +5,21 @@ author: shivnarayan
 category: blog
 ---
 
-Every record in Hudi is uniquely identified by a HoodieKey, which is a pair of record key and partition path where the 
-record belongs to. Hudi has imposed this constraint so that updates and deletes can be applied to the record of interest. 
-Hudi relies on the partition path field to partition your dataset and records within a partition have unique record keys. 
-Since uniqueness is guaranteed only within the partition, there could be records with same record keys across different 
-partitions. One should choose the partition field wisely as it could be a determining factor for your ingestion and 
-query latency.
+Every record in Hudi is uniquely identified by a primary key, which is a pair of record key and partition path where
+the record belongs to. Using primary keys, Hudi can impose a) partition level uniqueness integrity constraint
+b) enable fast updates and deletes on records. One should choose the partitioning scheme wisely as it could be a
+determining factor for your ingestion and query latency.
+
+In general, Hudi supports both partitioned and global indexes. For a dataset with partitioned index(which is most
+commonly used), each record is uniquely identified by a pair of record key and partition path. But for a dataset with
+global index, each record is uniquely identified by just the record key. There won't be any duplicate record keys across
+partitions.
 
 ## Key Generators
 
-Hudi exposes a number of out of the box key generators that customers can use based on their need. Or can have their 
-own implementation for the KeyGenerator. This blog goes over all different types of key generators that are readily 
-available to use.
+Hudi provides several key generators out of the box that users can use based on their need, while having a pluggable
+implementation for users to implement and use their own KeyGenerator. This blog goes over all different types of key 
+generators that are readily available to use.
 
 [Here](https://github.com/apache/hudi/blob/master/hudi-client/hudi-client-common/src/main/java/org/apache/hudi/keygen/KeyGenerator.java)
 is the interface for KeyGenerator in Hudi for your reference.
