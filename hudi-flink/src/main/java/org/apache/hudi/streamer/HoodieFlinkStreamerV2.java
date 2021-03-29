@@ -20,6 +20,7 @@ package org.apache.hudi.streamer;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperatorFactory;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
@@ -32,7 +33,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.formats.json.JsonRowDataDeserializationSchema;
 import org.apache.flink.formats.json.TimestampFormat;
 import org.apache.flink.runtime.state.filesystem.FsStateBackend;
-import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
@@ -76,7 +76,7 @@ public class HoodieFlinkStreamerV2 {
     StreamWriteOperatorFactory<HoodieRecord> operatorFactory =
         new StreamWriteOperatorFactory<>(conf);
 
-    DataStream<Object> dataStream = env.addSource(new FlinkKafkaConsumer<>(
+    env.addSource(new FlinkKafkaConsumer<>(
         cfg.kafkaTopic,
         new JsonRowDataDeserializationSchema(
             rowType,
@@ -99,9 +99,11 @@ public class HoodieFlinkStreamerV2 {
         .keyBy(record -> record.getCurrentLocation().getFileId())
         .transform("hoodie_stream_write", null, operatorFactory)
         .uid("uid_hoodie_stream_write")
-        .setParallelism(numWriteTask);
-
-    env.addOperator(dataStream.getTransformation());
+        .setParallelism(numWriteTask)
+        .addSink(new CleanFunction<>(conf))
+        .setParallelism(1)
+        .name("clean_commits")
+        .uid("uid_clean_commits");
 
     env.execute(cfg.targetTableName);
   }
