@@ -24,15 +24,19 @@ import java.nio.ByteBuffer;
 import java.sql.Timestamp;
 import java.util.Base64;
 import java.util.Date;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema.Field;
 import org.apache.avro.generic.GenericData;
 import java.nio.charset.StandardCharsets;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData.StringType;
 import org.apache.avro.util.Utf8;
 import org.apache.orc.storage.common.type.HiveDecimal;
 import org.apache.orc.storage.ql.exec.vector.BytesColumnVector;
@@ -46,16 +50,18 @@ import org.apache.orc.storage.ql.exec.vector.StructColumnVector;
 import org.apache.orc.storage.ql.exec.vector.TimestampColumnVector;
 import org.apache.orc.storage.ql.exec.vector.UnionColumnVector;
 import org.apache.orc.storage.serde2.io.DateWritable;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.orc.TypeDescription;
 
 /**
- * This file is originally from https://github.com/streamsets/datacollector.
+ * Methods including addToVector, addUnionValue, createOrcSchema are originally from
+ * https://github.com/streamsets/datacollector.
  * Source classes:
  * - com.streamsets.pipeline.lib.util.avroorc.AvroToOrcRecordConverter
  * - com.streamsets.pipeline.lib.util.avroorc.AvroToOrcSchemaConverter
  *
  * Changes made:
- * 1. Flatten nullable Avro schema type when the value if not null in `addToVector`.
+ * 1. Flatten nullable Avro schema type when the value is not null in `addToVector`.
  * 2. Use getLogicalType(), constants from LogicalTypes instead of getJsonProp() to handle Avro logical types.
  */
 public class AvroOrcUtils {
@@ -177,12 +183,13 @@ public class AvroOrcUtils {
         long time;
         int nanos = 0;
 
+        // The unit for Timestamp in ORC is millis, convert timestamp to millis if needed
         if (logicalType instanceof LogicalTypes.TimestampMillis) {
           time = (long) value;
         } else if (logicalType instanceof LogicalTypes.TimestampMicros) {
           final long logicalTsValue = (long) value;
           time = logicalTsValue / MICROS_PER_MILLI;
-          nanos = NANOS_PER_MICRO * ((int)(logicalTsValue % MICROS_PER_MILLI));
+          nanos = NANOS_PER_MICRO * ((int) (logicalTsValue % MICROS_PER_MILLI));
         } else if (value instanceof Timestamp) {
           Timestamp tsValue = (Timestamp) value;
           time = tsValue.getTime();
@@ -216,7 +223,7 @@ public class AvroOrcUtils {
         byte[] binaryBytes;
         if (value instanceof GenericData.Fixed) {
           binaryBytes = ((GenericData.Fixed)value).bytes();
-        }  else if (value instanceof ByteBuffer) {
+        } else if (value instanceof ByteBuffer) {
           final ByteBuffer byteBuffer = (ByteBuffer) value;
           binaryBytes = new byte[byteBuffer.remaining()];
           byteBuffer.get(binaryBytes);
@@ -243,7 +250,7 @@ public class AvroOrcUtils {
           byteBuffer.get(decimalBytes);
           final BigInteger bigInt = new BigInteger(decimalBytes);
           final int scale = type.getScale();
-          BigDecimal bigDecVal =  new BigDecimal(bigInt, scale);
+          BigDecimal bigDecVal = new BigDecimal(bigInt, scale);
 
           decimalValue = HiveDecimal.create(bigDecVal);
           if (decimalValue == null && decimalBytes.length > 0) {
@@ -458,6 +465,144 @@ public class AvroOrcUtils {
     }
   }
 
+  /**
+   * Read the Column vector at a given position conforming to a given ORC schema.
+   *
+   * @param type        ORC schema of the object to read.
+   * @param colVector   The column vector to read.
+   * @param avroSchema  Avro schema of the object to read.
+   *                    Only used to check logical types for timestamp unit conversion.
+   * @param vectorPos   The position in the vector where the value to read is stored at.
+   * @return            The object being read.
+   */
+  public static Object readFromVector(TypeDescription type, ColumnVector colVector, Schema avroSchema, int vectorPos) {
+
+    if (colVector.isNull[vectorPos]) {
+      return null;
+    }
+    if (colVector.isRepeating) {
+      vectorPos = 0;
+    }
+
+    if (avroSchema.getType().equals(Schema.Type.UNION)) {
+      avroSchema = getActualSchemaType(avroSchema);
+    }
+    LogicalType logicalType = avroSchema != null ? avroSchema.getLogicalType() : null;
+
+    switch (type.getCategory()) {
+      case BOOLEAN:
+        return ((LongColumnVector) colVector).vector[vectorPos] != 0;
+      case BYTE:
+        return (byte) ((LongColumnVector) colVector).vector[vectorPos];
+      case SHORT:
+        return (short) ((LongColumnVector) colVector).vector[vectorPos];
+      case INT:
+        return (int) ((LongColumnVector) colVector).vector[vectorPos];
+      case LONG:
+        return ((LongColumnVector) colVector).vector[vectorPos];
+      case FLOAT:
+        return (float) ((DoubleColumnVector) colVector).vector[vectorPos];
+      case DOUBLE:
+        return ((DoubleColumnVector) colVector).vector[vectorPos];
+      case VARCHAR:
+      case CHAR:
+        int maxLength = type.getMaxLength();
+        String result = ((BytesColumnVector) colVector).toString(vectorPos);
+        if (result.length() <= maxLength) {
+          return result;
+        } else {
+          throw new HoodieIOException("CHAR/VARCHAR has length " + result.length() + " greater than Max Length allowed");
+        }
+      case STRING:
+        String stringType = avroSchema.getProp(GenericData.STRING_PROP);
+        if (stringType == null || !stringType.equals(StringType.String)) {
+          int stringLength = ((BytesColumnVector) colVector).length[vectorPos];
+          int stringOffset = ((BytesColumnVector) colVector).start[vectorPos];
+          byte[] stringBytes = new byte[stringLength];
+          System.arraycopy(((BytesColumnVector) colVector).vector[vectorPos], stringOffset, stringBytes, 0, stringLength);
+          return new Utf8(stringBytes);
+        } else {
+          return ((BytesColumnVector) colVector).toString(vectorPos);
+        }
+      case DATE:
+        // convert to daysSinceEpoch for LogicalType.Date
+        return (int) ((LongColumnVector) colVector).vector[vectorPos];
+      case TIMESTAMP:
+        // The unit of time in ORC is millis. Convert (time,nanos) to the desired unit per logicalType
+        long time = ((TimestampColumnVector) colVector).time[vectorPos];
+        int nanos = ((TimestampColumnVector) colVector).nanos[vectorPos];
+        if (logicalType instanceof LogicalTypes.TimestampMillis) {
+          return time;
+        } else if (logicalType instanceof LogicalTypes.TimestampMicros) {
+          return time * MICROS_PER_MILLI + nanos / NANOS_PER_MICRO;
+        } else {
+          return ((TimestampColumnVector) colVector).getTimestampAsLong(vectorPos);
+        }
+      case BINARY:
+        int binaryLength = ((BytesColumnVector) colVector).length[vectorPos];
+        int binaryOffset = ((BytesColumnVector) colVector).start[vectorPos];
+        byte[] binaryBytes = new byte[binaryLength];
+        System.arraycopy(((BytesColumnVector) colVector).vector[vectorPos], binaryOffset, binaryBytes, 0, binaryLength);
+        // return a ByteBuffer to be consistent with AvroRecordConverter
+        return ByteBuffer.wrap(binaryBytes);
+      case DECIMAL:
+        // HiveDecimal always ignores trailing zeros, thus modifies the scale implicitly,
+        // therefore, the scale must be enforced here.
+        BigDecimal bigDecimal = ((DecimalColumnVector) colVector).vector[vectorPos]
+            .getHiveDecimal().bigDecimalValue()
+            .setScale(((LogicalTypes.Decimal) logicalType).getScale());
+        Schema.Type baseType = avroSchema.getType();
+        if (baseType.equals(Schema.Type.FIXED)) {
+          return new Conversions.DecimalConversion().toFixed(bigDecimal, avroSchema, logicalType);
+        } else if (baseType.equals(Schema.Type.BYTES)) {
+          return bigDecimal.unscaledValue().toByteArray();
+        } else {
+          throw new HoodieIOException(baseType.getName() + "is not a valid type for LogicalTypes.DECIMAL.");
+        }
+      case LIST:
+        ArrayList<Object> list = new ArrayList<>();
+        ListColumnVector listVector = (ListColumnVector) colVector;
+        int listLength = (int) listVector.lengths[vectorPos];
+        int listOffset = (int) listVector.offsets[vectorPos];
+        list.ensureCapacity(listLength);
+        TypeDescription childType = type.getChildren().get(0);
+        for (int i = 0; i < listLength; i++) {
+          list.add(readFromVector(childType, listVector.child, avroSchema.getElementType(), listOffset + i));
+        }
+        return list;
+      case MAP:
+        Map<String, Object> map = new HashMap<String, Object>();
+        MapColumnVector mapVector = (MapColumnVector) colVector;
+        int mapLength = (int) mapVector.lengths[vectorPos];
+        int mapOffset = (int) mapVector.offsets[vectorPos];
+        // keys are always strings for maps in Avro
+        Schema keySchema = Schema.create(Schema.Type.STRING);
+        for (int i = 0; i < mapLength; i++) {
+          map.put(
+              readFromVector(type.getChildren().get(0), mapVector.keys, keySchema, i + mapOffset).toString(),
+              readFromVector(type.getChildren().get(1), mapVector.values,
+                  avroSchema.getValueType(), i + mapOffset));
+        }
+        return map;
+      case STRUCT:
+        StructColumnVector structVector = (StructColumnVector) colVector;
+        List<TypeDescription> children = type.getChildren();
+        GenericData.Record record = new GenericData.Record(avroSchema);
+        for (int i = 0; i < children.size(); i++) {
+          record.put(i, readFromVector(children.get(i), structVector.fields[i],
+              avroSchema.getFields().get(i).schema(), vectorPos));
+        }
+        return record;
+      case UNION:
+        UnionColumnVector unionVector = (UnionColumnVector) colVector;
+        int tag = unionVector.tags[vectorPos];
+        ColumnVector fieldVector = unionVector.fields[tag];
+        return readFromVector(type.getChildren().get(tag), fieldVector, avroSchema.getTypes().get(tag), vectorPos);
+      default:
+        throw new HoodieIOException("Unrecognized TypeDescription " + type.toString());
+    }
+  }
+
   public static TypeDescription createOrcSchema(Schema avroSchema) {
 
     LogicalType logicalType = avroSchema.getLogicalType();
@@ -571,6 +716,67 @@ public class AvroOrcUtils {
         return TypeDescription.createBinary();
       default:
         throw new IllegalStateException(String.format("Unrecognized Avro type: %s", type.getName()));
+    }
+  }
+
+  public static Schema createAvroSchema(TypeDescription orcSchema) {
+    switch (orcSchema.getCategory()) {
+      case BOOLEAN:
+        return Schema.create(Schema.Type.BOOLEAN);
+      case BYTE:
+        // tinyint (8 bit), use int to hold it
+        return Schema.create(Schema.Type.INT);
+      case SHORT:
+        // smallint (16 bit), use int to hold it
+        return Schema.create(Schema.Type.INT);
+      case INT:
+        // the Avro logical type could be AvroTypeUtil.LOGICAL_TYPE_TIME_MILLIS, but there is no way to distinguish
+        return Schema.create(Schema.Type.INT);
+      case LONG:
+        // the Avro logical type could be AvroTypeUtil.LOGICAL_TYPE_TIME_MICROS, but there is no way to distinguish
+        return Schema.create(Schema.Type.LONG);
+      case FLOAT:
+        return Schema.create(Schema.Type.FLOAT);
+      case DOUBLE:
+        return Schema.create(Schema.Type.DOUBLE);
+      case VARCHAR:
+      case CHAR:
+      case STRING:
+        return Schema.create(Schema.Type.STRING);
+      case DATE:
+        Schema date = Schema.create(Schema.Type.INT);
+        LogicalTypes.date().addToSchema(date);
+        return date;
+      case TIMESTAMP:
+        // Cannot distinguish between TIMESTAMP_MILLIS and TIMESTAMP_MICROS
+        // Assume TIMESTAMP_MILLIS because Timestamp in ORC is in millis
+        Schema timestamp = Schema.create(Schema.Type.LONG);
+        LogicalTypes.timestampMillis().addToSchema(timestamp);
+        return timestamp;
+      case BINARY:
+        return Schema.create(Schema.Type.BYTES);
+      case DECIMAL:
+        Schema decimal = Schema.create(Schema.Type.BYTES);
+        LogicalTypes.decimal(orcSchema.getPrecision(), orcSchema.getScale()).addToSchema(decimal);
+        return decimal;
+      case LIST:
+        return Schema.createArray(createAvroSchema(orcSchema.getChildren().get(0)));
+      case MAP:
+        return Schema.createMap(createAvroSchema(orcSchema.getChildren().get(1)));
+      case STRUCT:
+        List<Field> childFields = new ArrayList<>();
+        for (int i = 0; i < orcSchema.getChildren().size(); i++) {
+          TypeDescription childType = orcSchema.getChildren().get(i);
+          String childName = orcSchema.getFieldNames().get(i);
+          childFields.add(new Field(childName, createAvroSchema(childType), "", null));
+        }
+        return Schema.createRecord(childFields);
+      case UNION:
+        return Schema.createUnion(orcSchema.getChildren().stream()
+            .map(AvroOrcUtils::createAvroSchema)
+            .collect(Collectors.toList()));
+      default:
+        throw new IllegalStateException(String.format("Unrecognized ORC type: %s", orcSchema.getCategory().getName()));
     }
   }
 
