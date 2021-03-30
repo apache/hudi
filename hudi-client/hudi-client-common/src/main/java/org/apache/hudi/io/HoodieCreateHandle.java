@@ -18,8 +18,6 @@
 
 package org.apache.hudi.io;
 
-import com.google.common.base.Preconditions;
-import java.util.Objects;
 import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -188,7 +186,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
       constructWriteStatus(stat);
 
       LOG.info(String.format("CreateHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
-          stat.getFileId(), Preconditions.checkNotNull(stat.getRuntimeStats()).getTotalCreateTime()));
+          stat.getFileId(), stat.getRuntimeStats().getTotalCreateTime()));
 
       return Collections.singletonList(writeStatus);
     } catch (IOException e) {
