@@ -414,7 +414,7 @@ This feature is currently <em>experimental</em> and requires either Zookeeper or
 <p>The following properties are needed to be set properly to turn on optimistic concurrency control.</p>
 
 <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie.write.concurrency.mode=optimistic_concurrency_control
-hoodie.failed.writes.cleaner.policy=LAZY
+hoodie.cleaner.policy.failed.writes=LAZY
 hoodie.write.lock.provider=&lt;lock-provider-classname&gt;
 </code></pre></div></div>
 
@@ -427,8 +427,8 @@ hoodie.write.lock.zookeeper.url
 hoodie.write.lock.zookeeper.port
 hoodie.write.lock.wait_time_ms
 hoodie.write.lock.num_retries
-hoodie.write.lock.lock_key
-hoodie.write.lock.zookeeper.zk_base_path
+hoodie.write.lock.zookeeper.lock_key
+hoodie.write.lock.zookeeper.base_path
 </code></pre></div></div>
 
 <p><strong><code class="highlighter-rouge">HiveMetastore</code></strong> based lock provider</p>
@@ -451,14 +451,14 @@ hoodie.write.lock.num_retries
 <div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">inputDF</span><span class="o">.</span><span class="na">write</span><span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">options</span><span class="o">(</span><span class="n">getQuickstartWriteConfigs</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="no">PRECOMBINE_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"ts"</span><span class="o">)</span>
-       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.failed.writes.cleaner.policy"</span><span class="o">,</span> <span class="s">"LAZY"</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.cleaner.policy.failed.writes"</span><span class="o">,</span> <span class="s">"LAZY"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.concurrency.mode"</span><span class="o">,</span> <span class="s">"optimistic_concurrency_control"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.lock.zookeeper.url"</span><span class="o">,</span> <span class="s">"zookeeper"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.lock.zookeeper.port"</span><span class="o">,</span> <span class="s">"2181"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.lock.wait_time_ms"</span><span class="o">,</span> <span class="s">"12000"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.lock.num_retries"</span><span class="o">,</span> <span class="s">"2"</span><span class="o">)</span>
-       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.lock.lock_key"</span><span class="o">,</span> <span class="s">"test_table"</span><span class="o">)</span>
-       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.lock.zookeeper.zk_base_path"</span><span class="o">,</span> <span class="s">"/test"</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.lock.zookeeper.lock_key"</span><span class="o">,</span> <span class="s">"test_table"</span><span class="o">)</span>
+       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.lock.zookeeper.base_path"</span><span class="o">,</span> <span class="s">"/test"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="no">RECORDKEY_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"uuid"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="no">PARTITIONPATH_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"partitionpath"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="no">TABLE_NAME</span><span class="o">,</span> <span class="n">tableName</span><span class="o">)</span>
@@ -512,7 +512,7 @@ hoodie.write.lock.client.num_retries
 <p>Remove the following settings that were used to enable multi-writer or override with default values.</p>
 
 <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie.write.concurrency.mode=single_writer
-hoodie.failed.writes.cleaner.policy=EAGER
+hoodie.cleaner.policy.failed.writes=EAGER
 </code></pre></div></div>
 
       </section>
