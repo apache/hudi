@@ -22,6 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.utilities.deltastreamer.HoodieMultiTableDeltaStreamer;
 import org.apache.hudi.utilities.deltastreamer.TableExecutionContext;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
@@ -213,6 +214,25 @@ public class TestHoodieMultiTableDeltaStreamer extends TestHoodieDeltaStreamer {
     }
   }
 
+  @Test
+  public void testTableLevelProperties() throws IOException {
+    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, dfsBasePath + "/config", TestDataSource.class.getName(), false);
+    HoodieMultiTableDeltaStreamer streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
+    List<TableExecutionContext> tableExecutionContexts = streamer.getTableExecutionContexts();
+    tableExecutionContexts.forEach(tableExecutionContext -> {
+      switch (tableExecutionContext.getTableName()) {
+        case "dummy_table_short_trip":
+          String publicGeneratorClass = tableExecutionContext.getProperties().getString("hoodie.datasource.write.keygenerator.class");
+          assertEquals(TestHoodieDeltaStreamer.TestGenerator.class.getName(), publicGeneratorClass);
+          break;
+        case "dummy_table_uber":
+          String tableLevelKeyGeneratorClass = tableExecutionContext.getProperties().getString("hoodie.datasource.write.keygenerator.class");
+          assertEquals(NonpartitionedKeyGenerator.class.getName(), tableLevelKeyGeneratorClass);
+          break;
+      }
+    });
+  }
+
   private String populateCommonPropsAndWriteToFile() throws IOException {
     TypedProperties commonProps = new TypedProperties();
     populateCommonProps(commonProps);
@@ -247,4 +267,5 @@ public class TestHoodieMultiTableDeltaStreamer extends TestHoodieDeltaStreamer {
     TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(table1ExpectedRecords, targetBasePath1 + "/*/*.parquet", sqlContext);
     TestHoodieDeltaStreamer.TestHelpers.assertRecordCount(table2ExpectedRecords, targetBasePath2 + "/*/*.parquet", sqlContext);
   }
+
 }
