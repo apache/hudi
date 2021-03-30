@@ -18,11 +18,11 @@
 
 package org.apache.hudi.sink;
 
-import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.BatchWriteSuccessEvent;
@@ -54,7 +54,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
@@ -138,7 +137,7 @@ public class StreamWriteOperatorCoordinator
     // initialize event buffer
     reset();
     // writeClient
-    initWriteClient();
+    this.writeClient = StreamerUtil.createWriteClient(conf, null);
     // init table, create it if not exists.
     initTableIfNotExists(this.conf);
     // start a new instant
@@ -178,7 +177,10 @@ public class StreamWriteOperatorCoordinator
   @Override
   public void notifyCheckpointComplete(long checkpointId) {
     // start to commit the instant.
-    checkAndCommitWithRetry();
+    final String errorMsg = String.format("Instant [%s] has a complete checkpoint [%d],\n"
+        + "but the coordinator has not received full write success events,\n"
+        + "rolls back the instant and rethrow", this.instant, checkpointId);
+    checkAndForceCommit(errorMsg);
     // if async compaction is on, schedule the compaction
     if (needsScheduleCompaction) {
       writeClient.scheduleCompaction(Option.empty());
@@ -226,10 +228,14 @@ public class StreamWriteOperatorCoordinator
   @Override
   public void handleEventFromOperator(int i, OperatorEvent operatorEvent) {
     // no event to handle
-    Preconditions.checkState(operatorEvent instanceof BatchWriteSuccessEvent,
+    ValidationUtils.checkState(operatorEvent instanceof BatchWriteSuccessEvent,
         "The coordinator can only handle BatchWriteSuccessEvent");
     BatchWriteSuccessEvent event = (BatchWriteSuccessEvent) operatorEvent;
-    Preconditions.checkState(event.getInstantTime().equals(this.instant),
+    // the write task does not block after checkpointing(and before it receives a checkpoint success event),
+    // if it it checkpoints succeed then flushes the data buffer again before this coordinator receives a checkpoint
+    // success event, the data buffer would flush with an older instant time.
+    ValidationUtils.checkState(
+        HoodieTimeline.compareTimestamps(instant, HoodieTimeline.GREATER_THAN_OR_EQUALS, event.getInstantTime()),
         String.format("Receive an unexpected event for instant %s from task %d",
             event.getInstantTime(), event.getTaskID()));
     if (this.eventBuffer[event.getTaskID()] != null) {
@@ -257,14 +263,6 @@ public class StreamWriteOperatorCoordinator
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
-
-  @SuppressWarnings("rawtypes")
-  private void initWriteClient() {
-    writeClient = new HoodieFlinkWriteClient(
-        new HoodieFlinkEngineContext(new FlinkTaskContextSupplier(null)),
-        StreamerUtil.getHoodieClientConfig(this.conf),
-        true);
-  }
 
   private void initHiveSync() {
     this.executor = new NonThrownExecutor();
@@ -336,51 +334,6 @@ public class StreamWriteOperatorCoordinator
       }
     }
     doCommit();
-  }
-
-  @SuppressWarnings("unchecked")
-  private void checkAndCommitWithRetry() {
-    int retryTimes = this.conf.getInteger(FlinkOptions.RETRY_TIMES);
-    if (retryTimes < 0) {
-      retryTimes = 1;
-    }
-    long retryIntervalMillis = this.conf.getLong(FlinkOptions.RETRY_INTERVAL_MS);
-    int tryTimes = 0;
-    while (tryTimes++ < retryTimes) {
-      try {
-        if (!checkReady()) {
-          // Do not throw if the try times expires but the event buffer are still not ready,
-          // because we have a force check when next checkpoint starts.
-          if (tryTimes == retryTimes) {
-            // Throw if the try times expires but the event buffer are still not ready
-            throw new HoodieException("Try " + retryTimes + " to commit instant [" + this.instant + "] failed");
-          }
-          sleepFor(retryIntervalMillis);
-          continue;
-        }
-        doCommit();
-        return;
-      } catch (Throwable throwable) {
-        String cause = throwable.getCause() == null ? "" : throwable.getCause().toString();
-        LOG.warn("Try to commit the instant {} failed, with times {} and cause {}", this.instant, tryTimes, cause);
-        if (tryTimes == retryTimes) {
-          throw new HoodieException("Not all write tasks finish the batch write to commit", throwable);
-        }
-        sleepFor(retryIntervalMillis);
-      }
-    }
-  }
-
-  /**
-   * Sleep {@code intervalMillis} milliseconds in current thread.
-   */
-  private void sleepFor(long intervalMillis) {
-    try {
-      TimeUnit.MILLISECONDS.sleep(intervalMillis);
-    } catch (InterruptedException e) {
-      LOG.error("Thread interrupted while waiting to retry the instant commits");
-      throw new HoodieException(e);
-    }
   }
 
   /** Checks the buffer is ready to commit. */
