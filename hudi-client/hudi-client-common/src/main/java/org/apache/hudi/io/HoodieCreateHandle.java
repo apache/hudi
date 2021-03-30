@@ -18,6 +18,8 @@
 
 package org.apache.hudi.io;
 
+import com.google.common.base.Preconditions;
+import java.util.Objects;
 import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -180,28 +182,34 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
       fileWriter.close();
 
       HoodieWriteStat stat = new HoodieWriteStat();
-      stat.setPartitionPath(writeStatus.getPartitionPath());
-      stat.setNumWrites(recordsWritten);
-      stat.setNumDeletes(recordsDeleted);
-      stat.setNumInserts(insertRecordsWritten);
-      stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
-      stat.setFileId(writeStatus.getFileId());
-      stat.setPath(new Path(config.getBasePath()), path);
       long fileSizeInBytes = FSUtils.getFileSize(fs, path);
       stat.setTotalWriteBytes(fileSizeInBytes);
       stat.setFileSizeInBytes(fileSizeInBytes);
-      stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
-      RuntimeStats runtimeStats = new RuntimeStats();
-      runtimeStats.setTotalCreateTime(timer.endTimer());
-      stat.setRuntimeStats(runtimeStats);
-      writeStatus.setStat(stat);
+      constructWriteStatus(stat);
 
       LOG.info(String.format("CreateHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
-          stat.getFileId(), runtimeStats.getTotalCreateTime()));
+          stat.getFileId(), Preconditions.checkNotNull(stat.getRuntimeStats()).getTotalCreateTime()));
 
       return Collections.singletonList(writeStatus);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to close the Insert Handle for path " + path, e);
     }
   }
+
+  protected void constructWriteStatus(HoodieWriteStat stat) {
+    stat.setPartitionPath(writeStatus.getPartitionPath());
+    stat.setNumWrites(recordsWritten);
+    stat.setNumDeletes(recordsDeleted);
+    stat.setNumInserts(insertRecordsWritten);
+    stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
+    stat.setFileId(writeStatus.getFileId());
+    stat.setPath(new Path(config.getBasePath()), path);
+
+    RuntimeStats runtimeStats = new RuntimeStats();
+    runtimeStats.setTotalCreateTime(timer.endTimer());
+    stat.setRuntimeStats(runtimeStats);
+    stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
+    writeStatus.setStat(stat);
+  }
+
 }

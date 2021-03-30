@@ -111,23 +111,15 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
     long fileSizeInBytes = fileWriter.getBytesWritten();
     long incFileSizeInBytes = fileSizeInBytes - lastFileSize;
     this.lastFileSize = fileSizeInBytes;
+
     HoodieWriteStat stat = new HoodieWriteStat();
-    stat.setPartitionPath(writeStatus.getPartitionPath());
-    stat.setNumWrites(recordsWritten);
-    stat.setNumDeletes(recordsDeleted);
-    stat.setNumInserts(insertRecordsWritten);
-    stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
-    stat.setFileId(writeStatus.getFileId());
-    stat.setPath(new Path(config.getBasePath()), path);
     stat.setTotalWriteBytes(incFileSizeInBytes);
     stat.setFileSizeInBytes(fileSizeInBytes);
-    stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
-    HoodieWriteStat.RuntimeStats runtimeStats = new HoodieWriteStat.RuntimeStats();
-    runtimeStats.setTotalCreateTime(timer.endTimer());
-    stat.setRuntimeStats(runtimeStats);
-    writeStatus.setStat(stat);
+
+    constructWriteStatus(stat);
   }
 
+  @Override
   public void finishWrite() {
     LOG.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
     try {
