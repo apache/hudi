@@ -126,16 +126,6 @@
       <version>${orc.version}</version>
       <classifier>nohive</classifier>
     </dependency>
-    <dependency>
-      <groupId>org.apache.orc</groupId>
-      <artifactId>orc-shims</artifactId>
-      <version>${orc.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>io.airlift</groupId>
-      <artifactId>aircompressor</artifactId>
-      <version>${airlift.version}</version>
-    </dependency>
 
     <!-- Httpcomponents -->
     <dependency>
