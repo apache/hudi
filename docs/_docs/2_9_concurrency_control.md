@@ -44,7 +44,7 @@ The following properties are needed to be set properly to turn on optimistic con
 
 ```
 hoodie.write.concurrency.mode=optimistic_concurrency_control
-hoodie.failed.writes.cleaner.policy=LAZY
+hoodie.cleaner.policy.failed.writes=LAZY
 hoodie.write.lock.provider=<lock-provider-classname>
 ```
 
@@ -58,8 +58,8 @@ hoodie.write.lock.zookeeper.url
 hoodie.write.lock.zookeeper.port
 hoodie.write.lock.wait_time_ms
 hoodie.write.lock.num_retries
-hoodie.write.lock.lock_key
-hoodie.write.lock.zookeeper.zk_base_path
+hoodie.write.lock.zookeeper.lock_key
+hoodie.write.lock.zookeeper.base_path
 ```
 
 **`HiveMetastore`** based lock provider
@@ -84,14 +84,14 @@ Following is an example of how to use optimistic_concurrency_control via spark d
 inputDF.write.format("hudi")
        .options(getQuickstartWriteConfigs)
        .option(PRECOMBINE_FIELD_OPT_KEY, "ts")
-       .option("hoodie.failed.writes.cleaner.policy", "LAZY")
+       .option("hoodie.cleaner.policy.failed.writes", "LAZY")
        .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
        .option("hoodie.write.lock.zookeeper.url", "zookeeper")
        .option("hoodie.write.lock.zookeeper.port", "2181")
        .option("hoodie.write.lock.wait_time_ms", "12000")
        .option("hoodie.write.lock.num_retries", "2")
-       .option("hoodie.write.lock.lock_key", "test_table")
-       .option("hoodie.write.lock.zookeeper.zk_base_path", "/test")
+       .option("hoodie.write.lock.zookeeper.lock_key", "test_table")
+       .option("hoodie.write.lock.zookeeper.base_path", "/test")
        .option(RECORDKEY_FIELD_OPT_KEY, "uuid")
        .option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath")
        .option(TABLE_NAME, tableName)
@@ -147,5 +147,5 @@ Remove the following settings that were used to enable multi-writer or override 
 
 ```
 hoodie.write.concurrency.mode=single_writer
-hoodie.failed.writes.cleaner.policy=EAGER
+hoodie.cleaner.policy.failed.writes=EAGER
 ```
