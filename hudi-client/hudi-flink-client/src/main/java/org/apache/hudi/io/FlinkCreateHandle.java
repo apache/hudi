@@ -115,7 +115,7 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
     stat.setTotalWriteBytes(incFileSizeInBytes);
     stat.setFileSizeInBytes(fileSizeInBytes);
 
-    constructWriteStatus(stat);
+    renderWriteStatus(stat);
   }
 
   @Override

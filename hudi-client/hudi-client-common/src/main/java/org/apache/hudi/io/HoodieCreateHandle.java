@@ -183,7 +183,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
       long fileSizeInBytes = FSUtils.getFileSize(fs, path);
       stat.setTotalWriteBytes(fileSizeInBytes);
       stat.setFileSizeInBytes(fileSizeInBytes);
-      constructWriteStatus(stat);
+      renderWriteStatus(stat);
 
       LOG.info(String.format("CreateHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
           stat.getFileId(), stat.getRuntimeStats().getTotalCreateTime()));
@@ -194,7 +194,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
     }
   }
 
-  protected void constructWriteStatus(HoodieWriteStat stat) {
+  protected void renderWriteStatus(HoodieWriteStat stat) {
     stat.setPartitionPath(writeStatus.getPartitionPath());
     stat.setNumWrites(recordsWritten);
     stat.setNumDeletes(recordsDeleted);
