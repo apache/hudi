@@ -42,7 +42,8 @@ import java.util.UUID;
  *
  * <p>The final sql statement result is used as the write payload.
  *
- * <p>The SQL file is configured with this hoodie property: hoodie.deltastreamer.transformer.sql.file
+ * <p>The SQL file is configured with this hoodie property:
+ * hoodie.deltastreamer.transformer.sql.file
  */
 public class SqlFileBasedTransformer implements Transformer {
 
@@ -70,6 +71,7 @@ public class SqlFileBasedTransformer implements Transformer {
 
     try (Scanner scanner = new Scanner(fs.open(new Path(sqlFile)), "UTF-8")) {
       Dataset<Row> rows = null;
+      // each sql statement is separated with semicolon hence set that as delimiter.
       scanner.useDelimiter(";");
       LOG.info("SQL Query for transformation : ");
       while (scanner.hasNext()) {
