@@ -216,7 +216,7 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
       emitCommitMetrics(instantTime, result.getCommitMetadata().get(), hoodieTable.getMetaClient().getCommitActionType());
     }
 
-    if (config.enableErrorTable()) {
+    if (config.errorTableEnabled()) {
       JavaHoodieBackedErrorTableWriter.create(hadoopConf, config, context).commit(result.getWriteStatuses(), hoodieTable);
     }
     return result.getWriteStatuses();
