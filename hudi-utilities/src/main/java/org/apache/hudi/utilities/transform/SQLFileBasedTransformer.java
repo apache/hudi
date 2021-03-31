@@ -41,6 +41,8 @@ import java.util.UUID;
  * <p>The query should reference the source as a table named "\<SRC\>"
  *
  * <p>The final sql statement result is used as the write payload.
+ *
+ * <p>The SQL file is configured with this hoodie property: hoodie.deltastreamer.transformer.sql.file
  */
 public class SqlFileBasedTransformer implements Transformer {
 
