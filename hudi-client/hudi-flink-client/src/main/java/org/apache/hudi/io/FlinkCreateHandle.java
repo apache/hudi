@@ -22,7 +22,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -88,7 +87,7 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
    */
   private WriteStatus getIncrementalWriteStatus() {
     try {
-      setUpWriteStatus();
+      setupWriteStatus();
       // reset the write status
       recordsWritten = 0;
       recordsDeleted = 0;
@@ -101,21 +100,17 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
     }
   }
 
-  /**
-   * Set up the write status.
-   *
-   * @throws IOException if error occurs
-   */
-  private void setUpWriteStatus() throws IOException {
-    long fileSizeInBytes = fileWriter.getBytesWritten();
+  @Override
+  protected long computeTotalWriteBytes() throws IOException {
+    long fileSizeInBytes = computeFileSizeInBytes();
     long incFileSizeInBytes = fileSizeInBytes - lastFileSize;
     this.lastFileSize = fileSizeInBytes;
+    return incFileSizeInBytes;
+  }
 
-    HoodieWriteStat stat = new HoodieWriteStat();
-    stat.setTotalWriteBytes(incFileSizeInBytes);
-    stat.setFileSizeInBytes(fileSizeInBytes);
-
-    renderWriteStatus(stat);
+  @Override
+  protected long computeFileSizeInBytes() {
+    return fileWriter.getBytesWritten();
   }
 
   @Override

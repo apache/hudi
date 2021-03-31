@@ -18,7 +18,15 @@
 
 package org.apache.hudi.io;
 
+import java.io.IOException;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -36,18 +44,8 @@ import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.table.HoodieTable;
-
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-
-import java.io.IOException;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
 
 public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
 
@@ -62,14 +60,15 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
   private boolean useWriterSchema = false;
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                            String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, getWriterSchemaIncludingAndExcludingMetadataPair(config),
+      String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
+    this(config, instantTime, hoodieTable, partitionPath, fileId,
+        getWriterSchemaIncludingAndExcludingMetadataPair(config),
         taskContextSupplier);
   }
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                            String partitionPath, String fileId, Pair<Schema, Schema> writerSchemaIncludingAndExcludingMetadataPair,
-                            TaskContextSupplier taskContextSupplier) {
+      String partitionPath, String fileId, Pair<Schema, Schema> writerSchemaIncludingAndExcludingMetadataPair,
+      TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, writerSchemaIncludingAndExcludingMetadataPair,
         taskContextSupplier);
     writeStatus.setFileId(fileId);
@@ -81,8 +80,11 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, instantTime,
           new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
       partitionMetadata.trySave(getPartitionId());
-      createMarkerFile(partitionPath, FSUtils.makeDataFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
-      this.fileWriter = HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, writerSchemaWithMetafields, this.taskContextSupplier);
+      createMarkerFile(partitionPath,
+          FSUtils.makeDataFileName(this.instantTime, this.writeToken, this.fileId, hoodieTable.getBaseFileExtension()));
+      this.fileWriter =
+          HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, writerSchemaWithMetafields,
+              this.taskContextSupplier);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize HoodieStorageWriter for path " + path, e);
     }
@@ -179,14 +181,11 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
       fileWriter.close();
 
-      HoodieWriteStat stat = new HoodieWriteStat();
-      long fileSizeInBytes = FSUtils.getFileSize(fs, path);
-      stat.setTotalWriteBytes(fileSizeInBytes);
-      stat.setFileSizeInBytes(fileSizeInBytes);
-      renderWriteStatus(stat);
+      setupWriteStatus();
 
-      LOG.info(String.format("CreateHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
-          stat.getFileId(), stat.getRuntimeStats().getTotalCreateTime()));
+      LOG.info(String.format("CreateHandle for partitionPath %s fileID %s, took %d ms.",
+          writeStatus.getStat().getPartitionPath(), writeStatus.getStat().getFileId(),
+          writeStatus.getStat().getRuntimeStats().getTotalCreateTime()));
 
       return Collections.singletonList(writeStatus);
     } catch (IOException e) {
@@ -194,7 +193,13 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
     }
   }
 
-  protected void renderWriteStatus(HoodieWriteStat stat) {
+  /**
+   * Set up the write status.
+   *
+   * @throws IOException if error occurs
+   */
+  protected void setupWriteStatus() throws IOException {
+    HoodieWriteStat stat = new HoodieWriteStat();
     stat.setPartitionPath(writeStatus.getPartitionPath());
     stat.setNumWrites(recordsWritten);
     stat.setNumDeletes(recordsDeleted);
@@ -202,12 +207,21 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
     stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
     stat.setFileId(writeStatus.getFileId());
     stat.setPath(new Path(config.getBasePath()), path);
-
+    stat.setTotalWriteBytes(computeTotalWriteBytes());
+    stat.setFileSizeInBytes(computeFileSizeInBytes());
+    stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
     RuntimeStats runtimeStats = new RuntimeStats();
     runtimeStats.setTotalCreateTime(timer.endTimer());
     stat.setRuntimeStats(runtimeStats);
-    stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
     writeStatus.setStat(stat);
+  }
+
+  protected long computeTotalWriteBytes() throws IOException {
+    return FSUtils.getFileSize(fs, path);
+  }
+
+  protected long computeFileSizeInBytes() throws IOException {
+    return FSUtils.getFileSize(fs, path);
   }
 
 }
