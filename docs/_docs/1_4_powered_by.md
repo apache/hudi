@@ -147,6 +147,8 @@ Meanwhile, we build a set of data access standards based on Hudi, which provides
 
 22. ["Apache Hudi learning series: Understanding Hudi internals"](https://www.slideshare.net/NishithAgarwal3/hudi-architecture-fundamentals-and-capabilities) - By Abhishek Modi, Balajee Nagasubramaniam, Prashant Wason, Satish Kotha, Nishith Agarwal, Feb 2021, Uber Meetup
 
+23. ["Apache Hudi Meetup at Uber with talks from AWS, CityStorageSystems & Uber"](https://youtu.be/iXBInMLbjo0) - By Udit Mehrotra, Wenning Ding (AWS), Alexander Filipchik (CityStorageSystems), Prashant Wason, Satish Kotha (Uber), Feb 2021
+
 ## Articles
 
 You can check out [our blog pages](https://hudi.apache.org/blog.html) for content written by our committers/contributors.
