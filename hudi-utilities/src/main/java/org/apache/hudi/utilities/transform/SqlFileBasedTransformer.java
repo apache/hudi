@@ -60,8 +60,10 @@ public class SqlFileBasedTransformer implements Transformer {
           TypedProperties props) {
 
     String sqlFile = props.getString(Config.TRANSFORMER_SQL_FILE);
-    if (null == sqlFile) throw new IllegalArgumentException(
+    if (null == sqlFile) {
+	throw new IllegalArgumentException(
             "Missing required configuration : (" + Config.TRANSFORMER_SQL_FILE + ")");
+    }
 
     FileSystem fs = FSUtils.getFs(sqlFile, jsc.hadoopConfiguration(), true);
     // tmp table name doesn't like dashes
