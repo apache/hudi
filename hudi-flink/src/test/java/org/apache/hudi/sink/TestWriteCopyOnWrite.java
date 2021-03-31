@@ -399,6 +399,7 @@ public class TestWriteCopyOnWrite {
 
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
+    dataBuffer = funcWrapper.getDataBuffer();
     assertThat("All data should be flushed out", dataBuffer.size(), is(0));
 
     final OperatorEvent event1 = funcWrapper.getNextEvent(); // remove the first event first
@@ -430,10 +431,8 @@ public class TestWriteCopyOnWrite {
 
     final OperatorEvent event3 = funcWrapper.getNextEvent(); // remove the first event first
     final OperatorEvent event4 = funcWrapper.getNextEvent();
-    final OperatorEvent event5 = funcWrapper.getNextEvent();
     funcWrapper.getCoordinator().handleEventFromOperator(0, event3);
     funcWrapper.getCoordinator().handleEventFromOperator(0, event4);
-    funcWrapper.getCoordinator().handleEventFromOperator(0, event5);
     funcWrapper.checkpointComplete(2);
 
     // Same the original base file content.
@@ -492,7 +491,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(2);
 
     String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant("COPY_ON_WRITE");
+        .getInflightAndRequestedInstant(getTableType());
 
     nextEvent = funcWrapper.getNextEvent();
     assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
@@ -508,6 +507,8 @@ public class TestWriteCopyOnWrite {
     // the coordinator checkpoint commits the inflight instant.
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
     checkWrittenData(tempFile, EXPECTED2);
+    // next element triggers all partitions load check
+    funcWrapper.invoke(TestData.DATA_SET_INSERT.get(0));
     assertTrue(funcWrapper.isAllPartitionsLoaded(),
         "All partitions assume to be loaded into the index state");
   }

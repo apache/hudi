@@ -27,19 +27,22 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.table.connector.ChangelogMode;
+import org.apache.flink.table.connector.source.DataStreamScanProvider;
+import org.apache.flink.table.connector.source.DynamicTableSource;
+import org.apache.flink.table.connector.source.ScanTableSource;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.runtime.typeutils.RowDataTypeInfo;
-import org.apache.flink.table.sources.StreamTableSource;
-import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.apache.hudi.utils.factory.ContinuousFileSourceFactory.CHECKPOINTS;
 
 /**
  * A continuous file source that can trigger checkpoints continuously.
@@ -54,7 +57,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * <p>If all the data are flushed out, it waits for the next checkpoint to finish and tear down the source.
  */
-public class ContinuousFileSource implements StreamTableSource<RowData> {
+public class ContinuousFileSource implements ScanTableSource {
 
   private final TableSchema tableSchema;
   private final Path path;
@@ -70,30 +73,46 @@ public class ContinuousFileSource implements StreamTableSource<RowData> {
   }
 
   @Override
-  public DataStream<RowData> getDataStream(StreamExecutionEnvironment execEnv) {
-    final RowType rowType = (RowType) this.tableSchema.toRowDataType().getLogicalType();
-    JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
-        rowType,
-        new RowDataTypeInfo(rowType),
-        false,
-        true,
-        TimestampFormat.ISO_8601);
+  public ScanRuntimeProvider getScanRuntimeProvider(ScanContext scanContext) {
+    return new DataStreamScanProvider() {
 
-    return execEnv.addSource(new BoundedSourceFunction(this.path, 2))
-        .name("continuous_file_source")
-        .setParallelism(1)
-        .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)),
-            new RowDataTypeInfo(rowType));
+      @Override
+      public boolean isBounded() {
+        return false;
+      }
+
+      @Override
+      public DataStream<RowData> produceDataStream(StreamExecutionEnvironment execEnv) {
+        final RowType rowType = (RowType) tableSchema.toRowDataType().getLogicalType();
+        JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
+            rowType,
+            InternalTypeInfo.of(rowType),
+            false,
+            true,
+            TimestampFormat.ISO_8601);
+
+        return execEnv.addSource(new BoundedSourceFunction(path, conf.getInteger(CHECKPOINTS)))
+            .name("continuous_file_source")
+            .setParallelism(1)
+            .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)),
+                InternalTypeInfo.of(rowType));
+      }
+    };
   }
 
   @Override
-  public TableSchema getTableSchema() {
-    return this.tableSchema;
+  public ChangelogMode getChangelogMode() {
+    return ChangelogMode.insertOnly();
   }
 
   @Override
-  public DataType getProducedDataType() {
-    return this.tableSchema.toRowDataType().bridgedTo(RowData.class);
+  public DynamicTableSource copy() {
+    return new ContinuousFileSource(this.tableSchema, this.path, this.conf);
+  }
+
+  @Override
+  public String asSummaryString() {
+    return "ContinuousFileSource";
   }
 
   /**
@@ -151,15 +170,8 @@ public class ContinuousFileSource implements StreamTableSource<RowData> {
     }
 
     private void loadDataBuffer() {
-      this.dataBuffer = new ArrayList<>();
-      try (BufferedReader reader =
-               new BufferedReader(new FileReader(this.path.toString()))) {
-        String line = reader.readLine();
-        while (line != null) {
-          this.dataBuffer.add(line);
-          // read next line
-          line = reader.readLine();
-        }
+      try {
+        this.dataBuffer = Files.readAllLines(Paths.get(this.path.toUri()));
       } catch (IOException e) {
         throw new RuntimeException("Read file " + this.path + " error", e);
       }

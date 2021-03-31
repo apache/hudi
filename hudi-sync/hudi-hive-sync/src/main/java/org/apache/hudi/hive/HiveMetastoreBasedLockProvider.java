@@ -47,10 +47,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static org.apache.hudi.common.config.LockConfiguration.HIVE_DATABASE_NAME_PROP;
+import static org.apache.hudi.common.config.LockConfiguration.HIVE_METASTORE_URI_PROP;
 import static org.apache.hudi.common.config.LockConfiguration.HIVE_TABLE_NAME_PROP;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP;
-import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECTION_TIMEOUT_MS_PROP;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECT_URL_PROP;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_PORT_PROP;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT_MS_PROP;
@@ -68,18 +68,19 @@ import static org.apache.hudi.common.lock.LockState.RELEASING;
  * using hive metastore APIs. Users need to have a HiveMetastore & Zookeeper cluster deployed to be able to use this lock.
  *
  */
-public class HiveMetastoreLockProvider implements LockProvider<LockResponse> {
+public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse> {
 
-  private static final Logger LOG = LogManager.getLogger(HiveMetastoreLockProvider.class);
+  private static final Logger LOG = LogManager.getLogger(HiveMetastoreBasedLockProvider.class);
 
   private final String databaseName;
   private final String tableName;
+  private final String hiveMetastoreUris;
   private IMetaStoreClient hiveClient;
   private volatile LockResponse lock = null;
   protected LockConfiguration lockConfiguration;
   ExecutorService executor = Executors.newSingleThreadExecutor();
 
-  public HiveMetastoreLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
+  public HiveMetastoreBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
     this(lockConfiguration);
     try {
       HiveConf hiveConf = new HiveConf();
@@ -91,16 +92,17 @@ public class HiveMetastoreLockProvider implements LockProvider<LockResponse> {
     }
   }
 
-  public HiveMetastoreLockProvider(final LockConfiguration lockConfiguration, final IMetaStoreClient metaStoreClient) {
+  public HiveMetastoreBasedLockProvider(final LockConfiguration lockConfiguration, final IMetaStoreClient metaStoreClient) {
     this(lockConfiguration);
     this.hiveClient = metaStoreClient;
   }
 
-  HiveMetastoreLockProvider(final LockConfiguration lockConfiguration) {
+  HiveMetastoreBasedLockProvider(final LockConfiguration lockConfiguration) {
     checkRequiredProps(lockConfiguration);
     this.lockConfiguration = lockConfiguration;
     this.databaseName = this.lockConfiguration.getConfig().getString(HIVE_DATABASE_NAME_PROP);
     this.tableName = this.lockConfiguration.getConfig().getString(HIVE_TABLE_NAME_PROP);
+    this.hiveMetastoreUris = this.lockConfiguration.getConfig().getOrDefault(HIVE_METASTORE_URI_PROP, "").toString();
   }
 
   @Override
@@ -174,7 +176,8 @@ public class HiveMetastoreLockProvider implements LockProvider<LockResponse> {
       throws InterruptedException, ExecutionException, TimeoutException, TException {
     LockRequest lockRequest = null;
     try {
-      final LockRequestBuilder builder = new LockRequestBuilder("hudi-lock");
+      // TODO : FIX:Using the parameterized constructor throws MethodNotFound
+      final LockRequestBuilder builder = new LockRequestBuilder();
       lockRequest = builder.addLockComponent(lockComponent).setUser(System.getProperty("user.name")).build();
       lockRequest.setUserIsSet(true);
       final LockRequest lockRequestFinal = lockRequest;
@@ -200,20 +203,29 @@ public class HiveMetastoreLockProvider implements LockProvider<LockResponse> {
   private void checkRequiredProps(final LockConfiguration lockConfiguration) {
     ValidationUtils.checkArgument(lockConfiguration.getConfig().getString(HIVE_DATABASE_NAME_PROP) != null);
     ValidationUtils.checkArgument(lockConfiguration.getConfig().getString(HIVE_TABLE_NAME_PROP) != null);
-    ValidationUtils.checkArgument(lockConfiguration.getConfig().getString(ZK_CONNECT_URL_PROP) != null);
-    ValidationUtils.checkArgument(lockConfiguration.getConfig().getString(ZK_SESSION_TIMEOUT_MS_PROP) != null);
-    ValidationUtils.checkArgument(lockConfiguration.getConfig().getString(ZK_CONNECTION_TIMEOUT_MS_PROP) != null);
   }
 
   private void setHiveLockConfs(HiveConf hiveConf) {
+    if (!StringUtils.isNullOrEmpty(this.hiveMetastoreUris)) {
+      hiveConf.setVar(HiveConf.ConfVars.METASTOREURIS, this.hiveMetastoreUris);
+    }
     hiveConf.set("hive.support.concurrency", "true");
     hiveConf.set("hive.lock.manager", "org.apache.hadoop.hive.ql.lockmgr.zookeeper.ZooKeeperHiveLockManager");
     hiveConf.set("hive.lock.numretries", lockConfiguration.getConfig().getString(LOCK_ACQUIRE_NUM_RETRIES_PROP));
     hiveConf.set("hive.unlock.numretries", lockConfiguration.getConfig().getString(LOCK_ACQUIRE_NUM_RETRIES_PROP));
     hiveConf.set("hive.lock.sleep.between.retries", lockConfiguration.getConfig().getString(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP));
-    hiveConf.set("hive.zookeeper.quorum", lockConfiguration.getConfig().getString(ZK_CONNECT_URL_PROP));
-    hiveConf.set("hive.zookeeper.client.port", lockConfiguration.getConfig().getString(ZK_PORT_PROP));
-    hiveConf.set("hive.zookeeper.session.timeout", lockConfiguration.getConfig().getString(ZK_SESSION_TIMEOUT_MS_PROP));
+    String zkConnectUrl = lockConfiguration.getConfig().getOrDefault(ZK_CONNECT_URL_PROP, "").toString();
+    if (zkConnectUrl.length() > 0) {
+      hiveConf.set("hive.zookeeper.quorum", zkConnectUrl);
+    }
+    String zkPort = lockConfiguration.getConfig().getOrDefault(ZK_PORT_PROP, "").toString();
+    if (zkPort.length() > 0) {
+      hiveConf.set("hive.zookeeper.client.port", zkPort);
+    }
+    String zkSessionTimeout = lockConfiguration.getConfig().getOrDefault(ZK_SESSION_TIMEOUT_MS_PROP, "").toString();
+    if (zkSessionTimeout.length() > 0) {
+      hiveConf.set("hive.zookeeper.session.timeout", zkSessionTimeout);
+    }
   }
 
   private String generateLogSuffixString() {

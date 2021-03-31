@@ -137,7 +137,7 @@ public class StreamWriteFunctionWrapper<I> {
   }
 
   public Map<String, List<HoodieRecord>> getDataBuffer() {
-    return this.writeFunction.getBuffer();
+    return this.writeFunction.getDataBuffer();
   }
 
   @SuppressWarnings("rawtypes")
@@ -156,7 +156,7 @@ public class StreamWriteFunctionWrapper<I> {
 
   public void checkpointComplete(long checkpointId) {
     functionInitializationContext.getOperatorStateStore().checkpointSuccess(checkpointId);
-    coordinator.checkpointComplete(checkpointId);
+    coordinator.notifyCheckpointComplete(checkpointId);
     this.bucketAssignerFunction.notifyCheckpointComplete(checkpointId);
     this.writeFunction.notifyCheckpointComplete(checkpointId);
     if (conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED)) {

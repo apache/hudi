@@ -157,7 +157,8 @@ public class KafkaOffsetGen {
 
     private static final String KAFKA_TOPIC_NAME = "hoodie.deltastreamer.source.kafka.topic";
     private static final String MAX_EVENTS_FROM_KAFKA_SOURCE_PROP = "hoodie.deltastreamer.kafka.source.maxEvents";
-    private static final String KAFKA_AUTO_RESET_OFFSETS = "hoodie.deltastreamer.source.kafka.auto.reset.offsets";
+    // "auto.reset.offsets" is kafka native config param. Do not change the config param name.
+    public static final String KAFKA_AUTO_RESET_OFFSETS = "auto.reset.offsets";
     private static final KafkaResetOffsetStrategies DEFAULT_KAFKA_AUTO_RESET_OFFSETS = KafkaResetOffsetStrategies.LATEST;
     public static final long DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE = 5000000;
     public static long maxEventsFromKafkaSource = DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE;
@@ -206,8 +207,8 @@ public class KafkaOffsetGen {
               .map(x -> new TopicPartition(x.topic(), x.partition())).collect(Collectors.toSet());
 
       // Determine the offset ranges to read from
-      if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty()) {
-        fromOffsets = checkupValidOffsets(consumer, lastCheckpointStr, topicPartitions);
+      if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty() && checkTopicCheckpoint(lastCheckpointStr)) {
+        fromOffsets = fetchValidOffsets(consumer, lastCheckpointStr, topicPartitions);
         metrics.updateDeltaStreamerKafkaDelayCountMetrics(delayOffsetCalculation(lastCheckpointStr, topicPartitions, consumer));
       } else {
         switch (autoResetValue) {
@@ -245,27 +246,20 @@ public class KafkaOffsetGen {
     return CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents);
   }
 
-  // check up checkpoint offsets is valid or not, if true, return checkpoint offsets,
-  // else return earliest offsets
-  private Map<TopicPartition, Long> checkupValidOffsets(KafkaConsumer consumer,
+  /**
+   * Fetch checkpoint offsets for each partition.
+   * @param consumer instance of {@link KafkaConsumer} to fetch offsets from.
+   * @param lastCheckpointStr last checkpoint string.
+   * @param topicPartitions set of topic partitions.
+   * @return a map of Topic partitions to offsets.
+   */
+  private Map<TopicPartition, Long> fetchValidOffsets(KafkaConsumer consumer,
                                                         Option<String> lastCheckpointStr, Set<TopicPartition> topicPartitions) {
     Map<TopicPartition, Long> earliestOffsets = consumer.beginningOffsets(topicPartitions);
-    if (checkTopicCheckpoint(lastCheckpointStr)) {
-      Map<TopicPartition, Long> checkpointOffsets = CheckpointUtils.strToOffsets(lastCheckpointStr.get());
-      boolean checkpointOffsetReseter = checkpointOffsets.entrySet().stream()
-              .anyMatch(offset -> offset.getValue() < earliestOffsets.get(offset.getKey()));
-      return checkpointOffsetReseter ? earliestOffsets : checkpointOffsets;
-    }
-
-    switch (autoResetValue) {
-      case EARLIEST:
-        return earliestOffsets;
-      case LATEST:
-        return consumer.endOffsets(topicPartitions);
-      default:
-        throw new HoodieNotSupportedException("Auto reset value must be one of 'earliest' or 'latest' ");
-    }
-
+    Map<TopicPartition, Long> checkpointOffsets = CheckpointUtils.strToOffsets(lastCheckpointStr.get());
+    boolean checkpointOffsetReseter = checkpointOffsets.entrySet().stream()
+        .anyMatch(offset -> offset.getValue() < earliestOffsets.get(offset.getKey()));
+    return checkpointOffsetReseter ? earliestOffsets : checkpointOffsets;
   }
 
   private Long delayOffsetCalculation(Option<String> lastCheckpointStr, Set<TopicPartition> topicPartitions, KafkaConsumer consumer) {

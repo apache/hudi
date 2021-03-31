@@ -19,16 +19,18 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.CatalogTableImpl;
 import org.apache.flink.table.catalog.ObjectIdentifier;
-import org.apache.flink.table.factories.TableSinkFactory;
-import org.apache.flink.table.factories.TableSourceFactory;
+import org.apache.flink.table.factories.DynamicTableFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -36,6 +38,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 import static org.hamcrest.CoreMatchers.is;
@@ -74,32 +77,96 @@ public class TestHoodieTableFactory {
   void testInferAvroSchemaForSource() {
     // infer the schema if not specified
     final HoodieTableSource tableSource1 =
-        (HoodieTableSource) new HoodieTableFactory().createTableSource(MockSourceContext.getInstance(this.conf));
+        (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(MockContext.getInstance(this.conf));
     final Configuration conf1 = tableSource1.getConf();
     assertThat(conf1.get(FlinkOptions.READ_AVRO_SCHEMA), is(INFERRED_SCHEMA));
 
     // set up the explicit schema using the file path
     this.conf.setString(FlinkOptions.READ_AVRO_SCHEMA_PATH, AVRO_SCHEMA_FILE_PATH);
     HoodieTableSource tableSource2 =
-        (HoodieTableSource) new HoodieTableFactory().createTableSource(MockSourceContext.getInstance(this.conf));
+        (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(MockContext.getInstance(this.conf));
     Configuration conf2 = tableSource2.getConf();
     assertNull(conf2.get(FlinkOptions.READ_AVRO_SCHEMA), "expect schema string as null");
+  }
+
+  @Test
+  void testSetupHoodieKeyOptionsForSource() {
+    this.conf.setString(FlinkOptions.RECORD_KEY_FIELD, "dummyField");
+    this.conf.setString(FlinkOptions.KEYGEN_CLASS, "dummyKeyGenClass");
+    // definition with simple primary key and partition path
+    TableSchema schema1 = TableSchema.builder()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .primaryKey("f0")
+        .build();
+    final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema1, "f2");
+    final HoodieTableSource tableSource1 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext1);
+    final Configuration conf1 = tableSource1.getConf();
+    assertThat(conf1.get(FlinkOptions.RECORD_KEY_FIELD), is("f0"));
+    assertThat(conf1.get(FlinkOptions.KEYGEN_CLASS), is("dummyKeyGenClass"));
+
+    // definition with complex primary keys and partition paths
+    this.conf.setString(FlinkOptions.KEYGEN_CLASS, FlinkOptions.KEYGEN_CLASS.defaultValue());
+    TableSchema schema2 = TableSchema.builder()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20).notNull())
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .primaryKey("f0", "f1")
+        .build();
+    final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema2, "f2");
+    final HoodieTableSource tableSource2 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext2);
+    final Configuration conf2 = tableSource2.getConf();
+    assertThat(conf2.get(FlinkOptions.RECORD_KEY_FIELD), is("f0,f1"));
+    assertThat(conf2.get(FlinkOptions.KEYGEN_CLASS), is(ComplexAvroKeyGenerator.class.getName()));
   }
 
   @Test
   void testInferAvroSchemaForSink() {
     // infer the schema if not specified
     final HoodieTableSink tableSink1 =
-        (HoodieTableSink) new HoodieTableFactory().createTableSink(MockSinkContext.getInstance(this.conf));
+        (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf));
     final Configuration conf1 = tableSink1.getConf();
     assertThat(conf1.get(FlinkOptions.READ_AVRO_SCHEMA), is(INFERRED_SCHEMA));
 
     // set up the explicit schema using the file path
     this.conf.setString(FlinkOptions.READ_AVRO_SCHEMA_PATH, AVRO_SCHEMA_FILE_PATH);
     HoodieTableSink tableSink2 =
-        (HoodieTableSink) new HoodieTableFactory().createTableSink(MockSinkContext.getInstance(this.conf));
+        (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf));
     Configuration conf2 = tableSink2.getConf();
     assertNull(conf2.get(FlinkOptions.READ_AVRO_SCHEMA), "expect schema string as null");
+  }
+
+  @Test
+  void testSetupHoodieKeyOptionsForSink() {
+    this.conf.setString(FlinkOptions.RECORD_KEY_FIELD, "dummyField");
+    this.conf.setString(FlinkOptions.KEYGEN_CLASS, "dummyKeyGenClass");
+    // definition with simple primary key and partition path
+    TableSchema schema1 = TableSchema.builder()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .primaryKey("f0")
+        .build();
+    final MockContext sinkContext1 = MockContext.getInstance(this.conf, schema1, "f2");
+    final HoodieTableSink tableSink1 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sinkContext1);
+    final Configuration conf1 = tableSink1.getConf();
+    assertThat(conf1.get(FlinkOptions.RECORD_KEY_FIELD), is("f0"));
+    assertThat(conf1.get(FlinkOptions.KEYGEN_CLASS), is("dummyKeyGenClass"));
+
+    // definition with complex primary keys and partition paths
+    this.conf.setString(FlinkOptions.KEYGEN_CLASS, FlinkOptions.KEYGEN_CLASS.defaultValue());
+    TableSchema schema2 = TableSchema.builder()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20).notNull())
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .primaryKey("f0", "f1")
+        .build();
+    final MockContext sinkContext2 = MockContext.getInstance(this.conf, schema2, "f2");
+    final HoodieTableSink tableSink2 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sinkContext2);
+    final Configuration conf2 = tableSink2.getConf();
+    assertThat(conf2.get(FlinkOptions.RECORD_KEY_FIELD), is("f0,f1"));
+    assertThat(conf2.get(FlinkOptions.KEYGEN_CLASS), is(ComplexAvroKeyGenerator.class.getName()));
   }
 
   // -------------------------------------------------------------------------
@@ -107,17 +174,29 @@ public class TestHoodieTableFactory {
   // -------------------------------------------------------------------------
 
   /**
-   * Mock context for table source.
+   * Mock dynamic table factory context.
    */
-  private static class MockSourceContext implements TableSourceFactory.Context {
+  private static class MockContext implements DynamicTableFactory.Context {
     private final Configuration conf;
+    private final TableSchema schema;
+    private final List<String> partitions;
 
-    private MockSourceContext(Configuration conf) {
+    private MockContext(Configuration conf, TableSchema schema, List<String> partitions) {
       this.conf = conf;
+      this.schema = schema;
+      this.partitions = partitions;
     }
 
-    static MockSourceContext getInstance(Configuration conf) {
-      return new MockSourceContext(conf);
+    static MockContext getInstance(Configuration conf) {
+      return getInstance(conf, TestConfigurations.TABLE_SCHEMA, Collections.singletonList("partition"));
+    }
+
+    static MockContext getInstance(Configuration conf, TableSchema schema, String partition) {
+      return getInstance(conf, schema, Collections.singletonList(partition));
+    }
+
+    static MockContext getInstance(Configuration conf, TableSchema schema, List<String> partitions) {
+      return new MockContext(conf, schema, partitions);
     }
 
     @Override
@@ -126,40 +205,8 @@ public class TestHoodieTableFactory {
     }
 
     @Override
-    public CatalogTable getTable() {
-      return new CatalogTableImpl(TestConfigurations.TABLE_SCHEMA, Collections.singletonList("partition"),
-          conf.toMap(), "mock source table");
-    }
-
-    @Override
-    public ReadableConfig getConfiguration() {
-      return conf;
-    }
-  }
-
-  /**
-   * Mock context for table sink.
-   */
-  private static class MockSinkContext implements TableSinkFactory.Context {
-    private final Configuration conf;
-
-    private MockSinkContext(Configuration conf) {
-      this.conf = conf;
-    }
-
-    static MockSinkContext getInstance(Configuration conf) {
-      return new MockSinkContext(conf);
-    }
-
-    @Override
-    public ObjectIdentifier getObjectIdentifier() {
-      return ObjectIdentifier.of("hudi", "default", "t1");
-    }
-
-    @Override
-    public CatalogTable getTable() {
-      return new CatalogTableImpl(TestConfigurations.TABLE_SCHEMA, Collections.singletonList("partition"),
-          conf.toMap(), "mock sink table");
+    public CatalogTable getCatalogTable() {
+      return new CatalogTableImpl(schema, partitions, conf.toMap(), "mock source table");
     }
 
     @Override
@@ -168,7 +215,12 @@ public class TestHoodieTableFactory {
     }
 
     @Override
-    public boolean isBounded() {
+    public ClassLoader getClassLoader() {
+      return null;
+    }
+
+    @Override
+    public boolean isTemporary() {
       return false;
     }
   }

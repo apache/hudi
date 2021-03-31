@@ -38,7 +38,7 @@ public abstract class JavaHoodieIndex<T extends HoodieRecordPayload> extends Hoo
     super(config);
   }
 
-  public static JavaHoodieIndex createIndex(HoodieWriteConfig config) {
+  public static HoodieIndex createIndex(HoodieWriteConfig config) {
     // first use index class config to create index.
     if (!StringUtils.isNullOrEmpty(config.getIndexClass())) {
       Object instance = ReflectionUtils.loadClass(config.getIndexClass(), config);
@@ -52,6 +52,8 @@ public abstract class JavaHoodieIndex<T extends HoodieRecordPayload> extends Hoo
     switch (config.getIndexType()) {
       case INMEMORY:
         return new JavaInMemoryHashIndex(config);
+      case BLOOM:
+        return new JavaHoodieBloomIndex(config);
       default:
         throw new HoodieIndexException("Unsupported index type " + config.getIndexType());
     }

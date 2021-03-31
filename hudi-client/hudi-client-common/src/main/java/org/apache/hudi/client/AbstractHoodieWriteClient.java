@@ -174,7 +174,6 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
                              String commitActionType, Map<String, List<String>> partitionToReplaceFileIds) {
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = createTable(config, hadoopConf);
-    HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
     HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds, extraMetadata, operationType, config.getSchema(), commitActionType);
     // Finalize write
     finalizeWrite(table, instantTime, stats);
@@ -640,7 +639,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    */
   public HoodieCleanMetadata clean(String cleanInstantTime, boolean scheduleInline) throws HoodieIOException {
     if (scheduleInline) {
-      scheduleCleaningAtInstant(cleanInstantTime, Option.empty());
+      scheduleTableServiceInternal(cleanInstantTime, Option.empty(), TableServiceType.CLEAN);
     }
     LOG.info("Cleaner started");
     final Timer.Context timerContext = metrics.getCleanCtx();

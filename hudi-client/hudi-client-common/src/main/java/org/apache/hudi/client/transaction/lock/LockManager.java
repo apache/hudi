@@ -93,7 +93,7 @@ public class LockManager implements Serializable, AutoCloseable {
   public synchronized LockProvider getLockProvider() {
     // Perform lazy initialization of lock provider only if needed
     if (lockProvider == null) {
-      LOG.info("Lock Provider " + writeConfig.getLockProviderClass());
+      LOG.info("LockProvider " + writeConfig.getLockProviderClass());
       lockProvider = (LockProvider) ReflectionUtils.loadClass(writeConfig.getLockProviderClass(),
           lockConfiguration, hadoopConf.get());
     }

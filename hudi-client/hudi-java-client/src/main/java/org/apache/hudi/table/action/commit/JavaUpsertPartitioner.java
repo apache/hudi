@@ -51,9 +51,9 @@ import java.util.stream.Collectors;
 /**
  * Packs incoming records to be upserted, into buckets.
  */
-public class UpsertPartitioner<T extends HoodieRecordPayload<T>> implements Partitioner  {
+public class JavaUpsertPartitioner<T extends HoodieRecordPayload<T>> implements Partitioner  {
 
-  private static final Logger LOG = LogManager.getLogger(UpsertPartitioner.class);
+  private static final Logger LOG = LogManager.getLogger(JavaUpsertPartitioner.class);
 
   /**
    * List of all small files to be corrected.
@@ -84,8 +84,8 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> implements Part
 
   protected final HoodieWriteConfig config;
 
-  public UpsertPartitioner(WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
-                           HoodieWriteConfig config) {
+  public JavaUpsertPartitioner(WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
+                               HoodieWriteConfig config) {
     updateLocationToBucket = new HashMap<>();
     partitionPathToInsertBucketInfos = new HashMap<>();
     bucketInfoMap = new HashMap<>();

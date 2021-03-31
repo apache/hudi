@@ -171,15 +171,15 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), "datestr");
     props.setProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(), TimestampBasedKeyGenerator.class.getName());
 
-    props.setProperty("hoodie.writer.lock.provider", "org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider");
-    props.setProperty("hoodie.writer.lock.hivemetastore.database", "testdb1");
-    props.setProperty("hoodie.writer.lock.hivemetastore.table", "table1");
-    props.setProperty("hoodie.writer.lock.zookeeper.url", "127.0.0.1");
-    props.setProperty("hoodie.writer.lock.zookeeper.port", "2828");
-    props.setProperty("hoodie.writer.lock.wait_time_ms", "1200000");
-    props.setProperty("hoodie.writer.lock.num_retries", "10");
-    props.setProperty("hoodie.writer.lock.lock_key", "test_table");
-    props.setProperty("hoodie.writer.lock.zookeeper.zk_base_path", "/test");
+    props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider");
+    props.setProperty("hoodie.write.lock.hivemetastore.database", "testdb1");
+    props.setProperty("hoodie.write.lock.hivemetastore.table", "table1");
+    props.setProperty("hoodie.write.lock.zookeeper.url", "127.0.0.1");
+    props.setProperty("hoodie.write.lock.zookeeper.port", "2828");
+    props.setProperty("hoodie.write.lock.wait_time_ms", "1200000");
+    props.setProperty("hoodie.write.lock.num_retries", "10");
+    props.setProperty("hoodie.write.lock.zookeeper.lock_key", "test_table");
+    props.setProperty("hoodie.write.lock.zookeeper.zk_base_path", "/test");
     return props;
   }
 

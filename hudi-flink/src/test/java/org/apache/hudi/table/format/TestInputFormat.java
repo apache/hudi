@@ -161,9 +161,8 @@ public class TestInputFormat {
     Map<String, String> prunedPartitions = new HashMap<>();
     prunedPartitions.put("partition", "par1");
     // prune to only be with partition 'par1'
-    HoodieTableSource newSource = (HoodieTableSource) tableSource
-        .applyPartitionPruning(Collections.singletonList(prunedPartitions));
-    InputFormat<RowData, ?> inputFormat = newSource.getInputFormat();
+    tableSource.applyPartitions(Collections.singletonList(prunedPartitions));
+    InputFormat<RowData, ?> inputFormat = tableSource.getInputFormat();
 
     List<RowData> result = readData(inputFormat);
 

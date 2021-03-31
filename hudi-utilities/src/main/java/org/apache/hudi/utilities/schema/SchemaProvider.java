@@ -38,6 +38,10 @@ public abstract class SchemaProvider implements Serializable {
 
   protected JavaSparkContext jssc;
 
+  public SchemaProvider(TypedProperties props) {
+    this(props, null);
+  }
+
   protected SchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     this.config = props;
     this.jssc = jssc;

@@ -20,6 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperatorFactory;
 import org.apache.hudi.sink.compact.CompactFunction;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
@@ -34,23 +35,21 @@ import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
-import org.apache.flink.streaming.api.datastream.DataStreamSink;
-import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.table.api.TableSchema;
-import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.sinks.AppendStreamTableSink;
-import org.apache.flink.table.sinks.PartitionableTableSink;
-import org.apache.flink.table.sinks.TableSink;
-import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.connector.ChangelogMode;
+import org.apache.flink.table.connector.sink.DataStreamSinkProvider;
+import org.apache.flink.table.connector.sink.DynamicTableSink;
+import org.apache.flink.table.connector.sink.abilities.SupportsPartitioning;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.types.RowKind;
 
 import java.util.Map;
 
 /**
  * Hoodie table sink.
  */
-public class HoodieTableSink implements AppendStreamTableSink<RowData>, PartitionableTableSink {
+public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning {
 
   private final Configuration conf;
   private final TableSchema schema;
@@ -61,63 +60,46 @@ public class HoodieTableSink implements AppendStreamTableSink<RowData>, Partitio
   }
 
   @Override
-  public DataStreamSink<?> consumeDataStream(DataStream<RowData> dataStream) {
-    // Read from kafka source
-    RowType rowType = (RowType) this.schema.toRowDataType().notNull().getLogicalType();
-    int numWriteTasks = this.conf.getInteger(FlinkOptions.WRITE_TASKS);
-    StreamWriteOperatorFactory<HoodieRecord> operatorFactory = new StreamWriteOperatorFactory<>(conf);
+  public SinkRuntimeProvider getSinkRuntimeProvider(Context context) {
+    return (DataStreamSinkProvider) dataStream -> {
+      // Read from kafka source
+      RowType rowType = (RowType) schema.toRowDataType().notNull().getLogicalType();
+      int numWriteTasks = conf.getInteger(FlinkOptions.WRITE_TASKS);
+      StreamWriteOperatorFactory<HoodieRecord> operatorFactory = new StreamWriteOperatorFactory<>(conf);
 
-    DataStream<Object> pipeline = dataStream
-        .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class))
-        // Key-by partition path, to avoid multiple subtasks write to a partition at the same time
-        .keyBy(HoodieRecord::getPartitionPath)
-        .transform(
-            "bucket_assigner",
-            TypeInformation.of(HoodieRecord.class),
-            new KeyedProcessOperator<>(new BucketAssignFunction<>(conf)))
-        .uid("uid_bucket_assigner")
-        // shuffle by fileId(bucket id)
-        .keyBy(record -> record.getCurrentLocation().getFileId())
-        .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
-        .uid("uid_hoodie_stream_write")
-        .setParallelism(numWriteTasks);
-    if (StreamerUtil.needsScheduleCompaction(conf)) {
-      return pipeline.transform("compact_plan_generate",
-          TypeInformation.of(CompactionPlanEvent.class),
-          new CompactionPlanOperator(conf))
-          .uid("uid_compact_plan_generate")
-          .setParallelism(1) // plan generate must be singleton
-          .keyBy(event -> event.getOperation().hashCode())
-          .transform("compact_task",
-              TypeInformation.of(CompactionCommitEvent.class),
-              new KeyedProcessOperator<>(new CompactFunction(conf)))
-          .addSink(new CompactionCommitSink(conf))
-          .name("compact_commit")
-          .setParallelism(1); // compaction commit should be singleton
-    } else {
-      return pipeline.addSink(new DummySinkFunction<>())
-          .name("dummy").uid("uid_dummy");
-    }
-  }
-
-  @Override
-  public TableSink<RowData> configure(String[] strings, TypeInformation<?>[] infos) {
-    return this;
-  }
-
-  @Override
-  public TableSchema getTableSchema() {
-    return this.schema;
-  }
-
-  @Override
-  public DataType getConsumedDataType() {
-    return this.schema.toRowDataType().bridgedTo(RowData.class);
-  }
-
-  @Override
-  public void setStaticPartition(Map<String, String> partitions) {
-    // no operation
+      DataStream<Object> pipeline = dataStream
+          .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class))
+          // Key-by partition path, to avoid multiple subtasks write to a partition at the same time
+          .keyBy(HoodieRecord::getPartitionPath)
+          .transform(
+              "bucket_assigner",
+              TypeInformation.of(HoodieRecord.class),
+              new KeyedProcessOperator<>(new BucketAssignFunction<>(conf)))
+          .uid("uid_bucket_assigner")
+          // shuffle by fileId(bucket id)
+          .keyBy(record -> record.getCurrentLocation().getFileId())
+          .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
+          .uid("uid_hoodie_stream_write")
+          .setParallelism(numWriteTasks);
+      if (StreamerUtil.needsScheduleCompaction(conf)) {
+        return pipeline.transform("compact_plan_generate",
+            TypeInformation.of(CompactionPlanEvent.class),
+            new CompactionPlanOperator(conf))
+            .uid("uid_compact_plan_generate")
+            .setParallelism(1) // plan generate must be singleton
+            .keyBy(event -> event.getOperation().hashCode())
+            .transform("compact_task",
+                TypeInformation.of(CompactionCommitEvent.class),
+                new KeyedProcessOperator<>(new CompactFunction(conf)))
+            .addSink(new CompactionCommitSink(conf))
+            .name("compact_commit")
+            .setParallelism(1); // compaction commit should be singleton
+      } else {
+        return pipeline.addSink(new CleanFunction<>(conf))
+            .setParallelism(1)
+            .name("clean_commits").uid("uid_clean_commits");
+      }
+    };
   }
 
   @VisibleForTesting
@@ -125,6 +107,28 @@ public class HoodieTableSink implements AppendStreamTableSink<RowData>, Partitio
     return this.conf;
   }
 
-  // Dummy sink function that does nothing.
-  private static class DummySinkFunction<T> implements SinkFunction<T> {}
+  @Override
+  public ChangelogMode getChangelogMode(ChangelogMode changelogMode) {
+    // ignore RowKind.UPDATE_BEFORE
+    return ChangelogMode.newBuilder()
+        .addContainedKind(RowKind.DELETE)
+        .addContainedKind(RowKind.INSERT)
+        .addContainedKind(RowKind.UPDATE_AFTER)
+        .build();
+  }
+
+  @Override
+  public DynamicTableSink copy() {
+    return new HoodieTableSink(this.conf, this.schema);
+  }
+
+  @Override
+  public String asSummaryString() {
+    return "HoodieTableSink";
+  }
+
+  @Override
+  public void applyStaticPartition(Map<String, String> map) {
+    // no operation
+  }
 }

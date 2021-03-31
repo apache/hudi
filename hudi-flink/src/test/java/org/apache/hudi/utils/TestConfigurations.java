@@ -23,7 +23,6 @@ import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 import org.apache.hudi.utils.factory.ContinuousFileSourceFactory;
 
-import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.configuration.Configuration;
@@ -73,7 +72,8 @@ public class TestConfigurations {
         + "  name varchar(10),\n"
         + "  age int,\n"
         + "  ts timestamp(3),\n"
-        + "  `partition` varchar(20)\n"
+        + "  `partition` varchar(20),\n"
+        + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
         + ")\n"
         + "PARTITIONED BY (`partition`)\n"
         + "with (\n"
@@ -91,7 +91,15 @@ public class TestConfigurations {
     return getFileSourceDDL(tableName, "test_source.data");
   }
 
+  public static String getFileSourceDDL(String tableName, int checkpoints) {
+    return getFileSourceDDL(tableName, "test_source.data", checkpoints);
+  }
+
   public static String getFileSourceDDL(String tableName, String fileName) {
+    return getFileSourceDDL(tableName, fileName, 2);
+  }
+
+  public static String getFileSourceDDL(String tableName, String fileName, int checkpoints) {
     String sourcePath = Objects.requireNonNull(Thread.currentThread()
         .getContextClassLoader().getResource(fileName)).toString();
     return "create table " + tableName + "(\n"
@@ -102,7 +110,8 @@ public class TestConfigurations {
         + "  `partition` varchar(20)\n"
         + ") with (\n"
         + "  'connector' = '" + ContinuousFileSourceFactory.FACTORY_ID + "',\n"
-        + "  'path' = '" + sourcePath + "'\n"
+        + "  'path' = '" + sourcePath + "',\n"
+        + "  'checkpoints' = '" + checkpoints + "'\n"
         + ")";
   }
 
@@ -118,7 +127,7 @@ public class TestConfigurations {
         + ")";
   }
 
-  public static final RowDataSerializer SERIALIZER = new RowDataSerializer(new ExecutionConfig(), ROW_TYPE);
+  public static final RowDataSerializer SERIALIZER = new RowDataSerializer(ROW_TYPE);
 
   public static Configuration getDefaultConf(String tablePath) {
     Configuration conf = new Configuration();
