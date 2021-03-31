@@ -41,7 +41,7 @@ import org.apache.flink.table.data.conversion.DataStructureConverter;
 import org.apache.flink.table.data.conversion.DataStructureConverters;
 import org.apache.flink.table.data.writer.BinaryRowWriter;
 import org.apache.flink.table.data.writer.BinaryWriter;
-import org.apache.flink.table.runtime.types.InternalSerializers;
+import org.apache.flink.table.runtime.typeutils.InternalSerializers;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.Row;
@@ -141,7 +141,7 @@ public class TestData {
           TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
   );
 
-  // merged data set of test_source.data and test_source2.data
+  // merged data set of test_source.data and test_source_2.data
   public static List<RowData> DATA_SET_SOURCE_MERGED = Arrays.asList(
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
           TimestampData.fromEpochMillis(1000), StringData.fromString("par1")),

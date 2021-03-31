@@ -289,16 +289,16 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
     props.setProperty("include", "base.properties");
     props.setProperty("hoodie.write.concurrency.mode", "optimistic_concurrency_control");
-    props.setProperty("hoodie.failed.writes.cleaner.policy", "LAZY");
-    props.setProperty("hoodie.writer.lock.provider", "org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider");
-    props.setProperty("hoodie.writer.lock.hivemetastore.database", "testdb1");
-    props.setProperty("hoodie.writer.lock.hivemetastore.table", "table1");
-    props.setProperty("hoodie.writer.lock.zookeeper.url", "127.0.0.1");
-    props.setProperty("hoodie.writer.lock.zookeeper.port", "2828");
-    props.setProperty("hoodie.writer.lock.wait_time_ms", "1200000");
-    props.setProperty("hoodie.writer.lock.num_retries", "10");
-    props.setProperty("hoodie.writer.lock.zookeeper.lock_key", "test_table");
-    props.setProperty("hoodie.writer.lock.zookeeper.zk_base_path", "/test");
+    props.setProperty("hoodie.cleaner.policy.failed.writes", "LAZY");
+    props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider");
+    props.setProperty("hoodie.write.lock.hivemetastore.database", "testdb1");
+    props.setProperty("hoodie.write.lock.hivemetastore.table", "table1");
+    props.setProperty("hoodie.write.lock.zookeeper.url", "127.0.0.1");
+    props.setProperty("hoodie.write.lock.zookeeper.port", "2828");
+    props.setProperty("hoodie.write.lock.wait_time_ms", "1200000");
+    props.setProperty("hoodie.write.lock.num_retries", "10");
+    props.setProperty("hoodie.write.lock.zookeeper.lock_key", "test_table");
+    props.setProperty("hoodie.write.lock.zookeeper.base_path", "/test");
 
     UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/" + propsFileName);
     return props;
@@ -743,8 +743,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     String tableBasePath = dfsBasePath + "/" + tempDir;
     // enable carrying forward latest checkpoint
     TypedProperties props = prepareMultiWriterProps(PROPS_FILENAME_TEST_MULTI_WRITER);
-    props.setProperty("hoodie.writer.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
-    props.setProperty("hoodie.writer.lock.filesystem.path", tableBasePath);
+    props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
+    props.setProperty("hoodie.write.lock.filesystem.path", tableBasePath);
     UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_MULTI_WRITER);
     // Keep it higher than batch-size to test continuous mode
     int totalRecords = 3000;
@@ -793,8 +793,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
     // create new ingestion & backfill job config to generate only INSERTS to avoid conflict
     props = prepareMultiWriterProps(PROPS_FILENAME_TEST_MULTI_WRITER);
-    props.setProperty("hoodie.writer.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
-    props.setProperty("hoodie.writer.lock.filesystem.path", tableBasePath);
+    props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
+    props.setProperty("hoodie.write.lock.filesystem.path", tableBasePath);
     props.setProperty("hoodie.test.source.generate.inserts", "true");
     UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_MULTI_WRITER);
     cfgBackfillJob = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT,
@@ -830,8 +830,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     String tableBasePath = dfsBasePath + "/" + tempDir;
     // enable carrying forward latest checkpoint
     TypedProperties props = prepareMultiWriterProps(PROPS_FILENAME_TEST_MULTI_WRITER);
-    props.setProperty("hoodie.writer.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
-    props.setProperty("hoodie.writer.lock.filesystem.path", tableBasePath);
+    props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
+    props.setProperty("hoodie.write.lock.filesystem.path", tableBasePath);
     UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_MULTI_WRITER);
     // Keep it higher than batch-size to test continuous mode
     int totalRecords = 3000;
@@ -874,8 +874,8 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
     // run the backfill job, enable overriding checkpoint from the latest commit
     props = prepareMultiWriterProps(PROPS_FILENAME_TEST_MULTI_WRITER);
-    props.setProperty("hoodie.writer.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
-    props.setProperty("hoodie.writer.lock.filesystem.path", tableBasePath);
+    props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass");
+    props.setProperty("hoodie.write.lock.filesystem.path", tableBasePath);
     props.setProperty("hoodie.write.meta.key.prefixes", CHECKPOINT_KEY);
     UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_MULTI_WRITER);
 

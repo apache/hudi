@@ -123,6 +123,12 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
    */
   private boolean allPartitionsLoaded = false;
 
+  /**
+   * Flag saying whether to check that all the partitions are loaded.
+   * So that there is chance that flag {@code allPartitionsLoaded} becomes true.
+   */
+  private boolean checkPartition = true;
+
   public BucketAssignFunction(Configuration conf) {
     this.conf = conf;
     this.isChangingRecords = WriteOperationType.isChangingRecords(
@@ -174,6 +180,13 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     final HoodieKey hoodieKey = record.getKey();
     final BucketInfo bucketInfo;
     final HoodieRecordLocation location;
+
+    // Checks whether all the partitions are loaded first.
+    if (checkPartition && !allPartitionsLoaded) {
+      checkPartitionsLoaded();
+      checkPartition = false;
+    }
+
     if (!allPartitionsLoaded
         && initialPartitionsToLoad.contains(hoodieKey.getPartitionPath()) // this is an existing partition
         && !partitionLoadState.contains(hoodieKey.getPartitionPath())) {
@@ -213,7 +226,9 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   public void notifyCheckpointComplete(long l) {
     // Refresh the table state when there are new commits.
     this.bucketAssigner.refreshTable();
-    checkPartitionsLoaded();
+    if (!allPartitionsLoaded) {
+      checkPartition = true;
+    }
   }
 
   /**

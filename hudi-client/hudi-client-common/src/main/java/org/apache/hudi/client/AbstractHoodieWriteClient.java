@@ -651,7 +651,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    */
   public HoodieCleanMetadata clean(String cleanInstantTime, boolean scheduleInline) throws HoodieIOException {
     if (scheduleInline) {
-      scheduleCleaningAtInstant(cleanInstantTime, Option.empty());
+      scheduleTableServiceInternal(cleanInstantTime, Option.empty(), TableServiceType.CLEAN);
     }
     LOG.info("Cleaner started");
     final Timer.Context timerContext = metrics.getCleanCtx();

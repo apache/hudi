@@ -103,7 +103,11 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
 
     @Override
     public ChangelogMode getChangelogMode(ChangelogMode requestedMode) {
-      return ChangelogMode.insertOnly();
+      return ChangelogMode.newBuilder()
+          .addContainedKind(RowKind.INSERT)
+          .addContainedKind(RowKind.DELETE)
+          .addContainedKind(RowKind.UPDATE_AFTER)
+          .build();
     }
 
     @Override

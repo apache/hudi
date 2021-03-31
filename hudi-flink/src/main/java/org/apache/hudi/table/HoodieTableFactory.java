@@ -22,17 +22,17 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
 
+import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.api.constraints.UniqueConstraint;
 import org.apache.flink.table.catalog.CatalogTable;
-import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.connector.sink.DynamicTableSink;
+import org.apache.flink.table.connector.source.DynamicTableSource;
+import org.apache.flink.table.factories.DynamicTableSinkFactory;
+import org.apache.flink.table.factories.DynamicTableSourceFactory;
 import org.apache.flink.table.factories.FactoryUtil;
-import org.apache.flink.table.factories.TableSinkFactory;
-import org.apache.flink.table.factories.TableSourceFactory;
-import org.apache.flink.table.sinks.TableSink;
-import org.apache.flink.table.sources.TableSource;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.utils.TableSchemaUtils;
 import org.apache.hadoop.fs.Path;
@@ -40,52 +40,57 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 
 /**
  * Hoodie data source/sink factory.
  */
-public class HoodieTableFactory implements TableSourceFactory<RowData>, TableSinkFactory<RowData> {
+public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTableSinkFactory {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableFactory.class);
 
   public static final String FACTORY_ID = "hudi";
 
   @Override
-  public TableSource<RowData> createTableSource(TableSourceFactory.Context context) {
-    Configuration conf = FlinkOptions.fromMap(context.getTable().getOptions());
-    TableSchema schema = TableSchemaUtils.getPhysicalSchema(context.getTable().getSchema());
-    setupConfOptions(conf, context.getObjectIdentifier().getObjectName(), context.getTable(), schema);
+  public DynamicTableSource createDynamicTableSource(Context context) {
+    FactoryUtil.TableFactoryHelper helper = FactoryUtil.createTableFactoryHelper(this, context);
+    helper.validate();
+
+    Configuration conf = (Configuration) helper.getOptions();
+    TableSchema schema = TableSchemaUtils.getPhysicalSchema(context.getCatalogTable().getSchema());
+    setupConfOptions(conf, context.getObjectIdentifier().getObjectName(), context.getCatalogTable(), schema);
+
     Path path = new Path(conf.getOptional(FlinkOptions.PATH).orElseThrow(() ->
-        new ValidationException("Option [path] should be not empty.")));
+        new ValidationException("Option [path] should not be empty.")));
     return new HoodieTableSource(
         schema,
         path,
-        context.getTable().getPartitionKeys(),
+        context.getCatalogTable().getPartitionKeys(),
         conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME),
         conf);
   }
 
   @Override
-  public TableSink<RowData> createTableSink(TableSinkFactory.Context context) {
-    Configuration conf = FlinkOptions.fromMap(context.getTable().getOptions());
-    TableSchema schema = TableSchemaUtils.getPhysicalSchema(context.getTable().getSchema());
-    setupConfOptions(conf, context.getObjectIdentifier().getObjectName(), context.getTable(), schema);
+  public DynamicTableSink createDynamicTableSink(Context context) {
+    Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
+    TableSchema schema = TableSchemaUtils.getPhysicalSchema(context.getCatalogTable().getSchema());
+    setupConfOptions(conf, context.getObjectIdentifier().getObjectName(), context.getCatalogTable(), schema);
     return new HoodieTableSink(conf, schema);
   }
 
   @Override
-  public Map<String, String> requiredContext() {
-    Map<String, String> context = new HashMap<>();
-    context.put(FactoryUtil.CONNECTOR.key(), FACTORY_ID);
-    return context;
+  public String factoryIdentifier() {
+    return FACTORY_ID;
   }
 
   @Override
-  public List<String> supportedProperties() {
-    // contains format properties.
-    return Collections.singletonList("*");
+  public Set<ConfigOption<?>> requiredOptions() {
+    return Collections.singleton(FlinkOptions.PATH);
+  }
+
+  @Override
+  public Set<ConfigOption<?>> optionalOptions() {
+    return FlinkOptions.optionalOptions();
   }
 
   // -------------------------------------------------------------------------

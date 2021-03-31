@@ -29,7 +29,7 @@
   <groupId>org.apache.hudi</groupId>
   <artifactId>hudi</artifactId>
   <packaging>pom</packaging>
-  <version>0.8.0-SNAPSHOT</version>
+  <version>0.9.0-SNAPSHOT</version>
   <description>Apache Hudi brings stream style processing on big data</description>
   <url>https://github.com/apache/hudi</url>
   <name>Hudi</name>
@@ -107,7 +107,7 @@
     <http.version>4.4.1</http.version>
     <spark.version>${spark2.version}</spark.version>
     <sparkbundle.version>${spark2bundle.version}</sparkbundle.version>
-    <flink.version>1.11.2</flink.version>
+    <flink.version>1.12.2</flink.version>
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.0.0</spark3.version>
     <spark2bundle.version></spark2bundle.version>
@@ -133,6 +133,7 @@
     <skipFTs>${skipTests}</skipFTs>
     <skipITs>${skipTests}</skipITs>
     <skip.hudi-spark2.unit.tests>${skipTests}</skip.hudi-spark2.unit.tests>
+    <skip.hudi-spark3.unit.tests>${skipTests}</skip.hudi-spark3.unit.tests>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <main.basedir>${project.basedir}</main.basedir>
     <spark.bundle.hive.scope>provided</spark.bundle.hive.scope>
@@ -1424,6 +1425,8 @@
       <properties>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
+        <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
+        <skipITs>true</skipITs>
       </properties>
       <activation>
         <property>
@@ -1471,6 +1474,7 @@
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
+        <skipITs>true</skipITs>
       </properties>
       <activation>
         <property>

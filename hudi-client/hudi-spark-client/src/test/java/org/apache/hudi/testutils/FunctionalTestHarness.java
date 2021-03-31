@@ -152,6 +152,8 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
         hdfsTestService.stop();
         hdfsTestService = null;
 
+        jsc.close();
+        jsc = null;
         spark.stop();
         spark = null;
       }));
@@ -166,5 +168,19 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
     for (FileStatus f : fileStatuses) {
       fs.delete(f.getPath(), true);
     }
+    if (hdfsTestService != null) {
+      hdfsTestService.stop();
+      hdfsTestService = null;
+    }
+    if (spark != null) {
+      spark.stop();
+      spark = null;
+    }
+    if (jsc != null) {
+      jsc.close();
+      jsc = null;
+    }
+    sqlContext = null;
+    context = null;
   }
 }

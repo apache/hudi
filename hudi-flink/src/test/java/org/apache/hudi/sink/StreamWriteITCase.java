@@ -53,7 +53,7 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.FileProcessingMode;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
-import org.apache.flink.table.runtime.typeutils.RowDataTypeInfo;
+import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.TestLogger;
 import org.junit.jupiter.api.Test;
@@ -104,7 +104,7 @@ public class StreamWriteITCase extends TestLogger {
 
     JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
         rowType,
-        new RowDataTypeInfo(rowType),
+        InternalTypeInfo.of(rowType),
         false,
         true,
         TimestampFormat.ISO_8601
@@ -135,7 +135,7 @@ public class StreamWriteITCase extends TestLogger {
 
     JobClient client = execEnv.executeAsync(execEnv.getStreamGraph(conf.getString(FlinkOptions.TABLE_NAME)));
     // wait for the streaming job to finish
-    client.getJobExecutionResult(Thread.currentThread().getContextClassLoader()).get();
+    client.getJobExecutionResult().get();
 
     TestData.checkWrittenFullData(tempFile, EXPECTED);
   }
@@ -159,7 +159,7 @@ public class StreamWriteITCase extends TestLogger {
 
     JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
         rowType,
-        new RowDataTypeInfo(rowType),
+        InternalTypeInfo.of(rowType),
         false,
         true,
         TimestampFormat.ISO_8601
@@ -204,7 +204,7 @@ public class StreamWriteITCase extends TestLogger {
 
     JobClient client = execEnv.executeAsync(execEnv.getStreamGraph(conf.getString(FlinkOptions.TABLE_NAME)));
     // wait for the streaming job to finish
-    client.getJobExecutionResult(Thread.currentThread().getContextClassLoader()).get();
+    client.getJobExecutionResult().get();
 
     TestData.checkWrittenFullData(tempFile, EXPECTED);
   }
@@ -230,7 +230,7 @@ public class StreamWriteITCase extends TestLogger {
 
     JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
         rowType,
-        new RowDataTypeInfo(rowType),
+        InternalTypeInfo.of(rowType),
         false,
         true,
         TimestampFormat.ISO_8601
@@ -243,7 +243,7 @@ public class StreamWriteITCase extends TestLogger {
     TypeInformation<String> typeInfo = BasicTypeInfo.STRING_TYPE_INFO;
     format.setCharsetName("UTF-8");
 
-    execEnv
+    DataStream<Object> pipeline = execEnv
         // use PROCESS_CONTINUOUSLY mode to trigger checkpoint
         .readFile(format, sourcePath, FileProcessingMode.PROCESS_CONTINUOUSLY, 1000, typeInfo)
         .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
@@ -259,10 +259,15 @@ public class StreamWriteITCase extends TestLogger {
         // shuffle by fileId(bucket id)
         .keyBy(record -> record.getCurrentLocation().getFileId())
         .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
-        .uid("uid_hoodie_stream_write")
-        .transform("compact_plan_generate",
-            TypeInformation.of(CompactionPlanEvent.class),
-            new CompactionPlanOperator(conf))
+        .uid("uid_hoodie_stream_write");
+
+    pipeline.addSink(new CleanFunction<>(conf))
+        .setParallelism(1)
+        .name("clean_commits").uid("uid_clean_commits");
+
+    pipeline.transform("compact_plan_generate",
+        TypeInformation.of(CompactionPlanEvent.class),
+        new CompactionPlanOperator(conf))
         .uid("uid_compact_plan_generate")
         .setParallelism(1) // plan generate must be singleton
         .keyBy(event -> event.getOperation().hashCode())

@@ -26,6 +26,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.BatchWriteSuccessEvent;
+import org.apache.hudi.sink.utils.HiveSyncContext;
+import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -108,6 +110,16 @@ public class StreamWriteOperatorCoordinator
   private final boolean needsScheduleCompaction;
 
   /**
+   * A single-thread executor to handle all the asynchronous jobs of the coordinator.
+   */
+  private NonThrownExecutor executor;
+
+  /**
+   * Context that holds variables for asynchronous hive sync.
+   */
+  private HiveSyncContext hiveSyncContext;
+
+  /**
    * Constructs a StreamingSinkOperatorCoordinator.
    *
    * @param conf        The config options
@@ -131,13 +143,20 @@ public class StreamWriteOperatorCoordinator
     initTableIfNotExists(this.conf);
     // start a new instant
     startInstant();
+    // start the executor if required
+    if (conf.getBoolean(FlinkOptions.HIVE_SYNC_ENABLED)) {
+      initHiveSync();
+    }
   }
 
   @Override
-  public void close() {
+  public void close() throws Exception {
     // teardown the resource
     if (writeClient != null) {
       writeClient.close();
+    }
+    if (executor != null) {
+      executor.close();
     }
     this.eventBuffer = null;
   }
@@ -157,15 +176,30 @@ public class StreamWriteOperatorCoordinator
   }
 
   @Override
-  public void checkpointComplete(long checkpointId) {
+  public void notifyCheckpointComplete(long checkpointId) {
     // start to commit the instant.
     checkAndCommitWithRetry();
     // if async compaction is on, schedule the compaction
     if (needsScheduleCompaction) {
       writeClient.scheduleCompaction(Option.empty());
     }
+    // sync Hive if is enabled
+    syncHiveIfEnabled();
     // start new instant.
     startInstant();
+  }
+
+  private void syncHiveIfEnabled() {
+    if (conf.getBoolean(FlinkOptions.HIVE_SYNC_ENABLED)) {
+      this.executor.execute(this::syncHive, "sync hive metadata", this.instant);
+    }
+  }
+
+  /**
+   * Sync hoodie table metadata to Hive metastore.
+   */
+  public void syncHive() {
+    hiveSyncContext.hiveSyncTool().syncHoodieTable();
   }
 
   private void startInstant() {
@@ -182,7 +216,7 @@ public class StreamWriteOperatorCoordinator
   }
 
   @Override
-  public void resetToCheckpoint(@Nullable byte[] checkpointData) throws Exception {
+  public void resetToCheckpoint(long checkpointID, @Nullable byte[] checkpointData) throws Exception {
     if (checkpointData != null) {
       // restore when any checkpoint completed
       deserializeCheckpointAndRestore(checkpointData);
@@ -215,6 +249,11 @@ public class StreamWriteOperatorCoordinator
     // no operation
   }
 
+  @Override
+  public void subtaskReset(int i, long l) {
+    // no operation
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -225,6 +264,11 @@ public class StreamWriteOperatorCoordinator
         new HoodieFlinkEngineContext(new FlinkTaskContextSupplier(null)),
         StreamerUtil.getHoodieClientConfig(this.conf),
         true);
+  }
+
+  private void initHiveSync() {
+    this.executor = new NonThrownExecutor();
+    this.hiveSyncContext = HiveSyncContext.create(conf);
   }
 
   static byte[] readBytes(DataInputStream in, int size) throws IOException {
@@ -294,6 +338,7 @@ public class StreamWriteOperatorCoordinator
     doCommit();
   }
 
+  @SuppressWarnings("unchecked")
   private void checkAndCommitWithRetry() {
     int retryTimes = this.conf.getInteger(FlinkOptions.RETRY_TIMES);
     if (retryTimes < 0) {
@@ -373,6 +418,7 @@ public class StreamWriteOperatorCoordinator
 
       boolean success = writeClient.commit(this.instant, writeResults, Option.of(checkpointCommitMetadata));
       if (success) {
+        writeClient.postCommit(this.instant);
         reset();
         LOG.info("Commit instant [{}] success!", this.instant);
       } else {
@@ -409,6 +455,10 @@ public class StreamWriteOperatorCoordinator
   public HoodieFlinkWriteClient getWriteClient() {
     return writeClient;
   }
+
+  // -------------------------------------------------------------------------
+  //  Inner Class
+  // -------------------------------------------------------------------------
 
   /**
    * Provider for {@link StreamWriteOperatorCoordinator}.
