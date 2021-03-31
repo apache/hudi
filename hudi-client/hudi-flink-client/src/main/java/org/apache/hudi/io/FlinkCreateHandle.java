@@ -109,7 +109,7 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
   }
 
   @Override
-  protected long computeFileSizeInBytes() {
+  protected long computeFileSizeInBytes() throws IOException{
     return fileWriter.getBytesWritten();
   }
 
