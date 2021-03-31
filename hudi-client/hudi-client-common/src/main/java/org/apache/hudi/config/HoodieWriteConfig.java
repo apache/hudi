@@ -1036,7 +1036,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   /**
    * Error table configs.
    */
-  public boolean enableErrorTable() {
+  public boolean errorTableEnabled() {
     return Boolean.parseBoolean(props.getProperty(HoodieErrorTableConfig.ERROR_TABLE_ENABLE_PROP));
   }
 

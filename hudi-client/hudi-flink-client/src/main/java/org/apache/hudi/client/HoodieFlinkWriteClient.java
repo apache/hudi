@@ -234,7 +234,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       metrics.updateIndexMetrics(getOperationType().name(), result.getIndexUpdateDuration().get().toMillis());
     }
 
-    if (config.enableErrorTable()) {
+    if (config.errorTableEnabled()) {
       FlinkHoodieBackedErrorTableWriter.create(hadoopConf, config, context).commit(result.getWriteStatuses(), hoodieTable);
     }
     return result.getWriteStatuses();

@@ -91,7 +91,7 @@ public abstract class HoodieBackedErrorTableWriter<T extends HoodieRecordPayload
     this.engineContext = engineContext;
     this.hadoopConf = new SerializableConfiguration(hadoopConf);
 
-    if (writeConfig.enableErrorTable()) {
+    if (writeConfig.errorTableEnabled()) {
       this.tableName = writeConfig.getTableName() + HoodieErrorTableConfig.ERROR_TABLE_NAME_SUFFIX;
       this.basePath = getErrorTableBasePath(writeConfig);
       this.errorTableWriteConfig = createErrorDataWriteConfig(writeConfig);

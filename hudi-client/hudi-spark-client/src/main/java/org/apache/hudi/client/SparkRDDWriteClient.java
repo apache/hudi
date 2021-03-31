@@ -304,7 +304,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       emitCommitMetrics(instantTime, result.getCommitMetadata().get(), hoodieTable.getMetaClient().getCommitActionType());
     }
 
-    if (config.enableErrorTable()) {
+    if (config.errorTableEnabled()) {
       SparkHoodieBackedErrorTableWriter.create(hadoopConf, config, context).commit(result.getWriteStatuses(), hoodieTable);
     }
     return result.getWriteStatuses();
@@ -329,7 +329,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     LOG.info("Committing Compaction " + compactionCommitTime + ". Finished with result " + metadata);
     SparkCompactHelpers.newInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
 
-    if (config.enableErrorTable()) {
+    if (config.errorTableEnabled()) {
       SparkHoodieBackedErrorTableWriter.create(hadoopConf, config, context).commit(writeStatuses, table);
     }
 
@@ -405,7 +405,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       throw new HoodieClusteringException("unable to transition clustering inflight to complete: " + clusteringCommitTime,  e);
     }
 
-    if (config.enableErrorTable()) {
+    if (config.errorTableEnabled()) {
       SparkHoodieBackedErrorTableWriter.create(hadoopConf, config, context).commit(writeStatuses, table);
     }
 
