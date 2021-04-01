@@ -61,6 +61,16 @@ public class BucketAssigner {
   private static final Logger LOG = LogManager.getLogger(BucketAssigner.class);
 
   /**
+   * Task ID.
+   */
+  private final int taskID;
+
+  /**
+   * Number of tasks.
+   */
+  private final int numTasks;
+
+  /**
    * Remembers what type each bucket is for later.
    */
   private final HashMap<String, BucketInfo> bucketInfoMap;
@@ -104,12 +114,16 @@ public class BucketAssigner {
   private final Map<String, NewFileAssignState> newFileAssignStates;
 
   public BucketAssigner(
+      int taskID,
+      int numTasks,
       HoodieFlinkEngineContext context,
       HoodieWriteConfig config) {
     bucketInfoMap = new HashMap<>();
     partitionSmallFilesMap = new HashMap<>();
     smallFileAssignStates = new HashMap<>();
     newFileAssignStates = new HashMap<>();
+    this.taskID = taskID;
+    this.numTasks = numTasks;
     this.context = context;
     this.config = config;
     this.table = HoodieFlinkTable.create(this.config, this.context);
@@ -187,7 +201,7 @@ public class BucketAssigner {
     if (partitionSmallFilesMap.containsKey(partitionPath)) {
       return partitionSmallFilesMap.get(partitionPath);
     }
-    List<SmallFile> smallFiles = getSmallFiles(partitionPath);
+    List<SmallFile> smallFiles = smallFilesOfThisTask(getSmallFiles(partitionPath));
     if (smallFiles.size() > 0) {
       LOG.info("For partitionPath : " + partitionPath + " Small Files => " + smallFiles);
       partitionSmallFilesMap.put(partitionPath, smallFiles);
@@ -238,6 +252,15 @@ public class BucketAssigner {
     }
 
     return smallFileLocations;
+  }
+
+  private List<SmallFile> smallFilesOfThisTask(List<SmallFile> smallFiles) {
+    // computes the small files to write inserts for this task.
+    List<SmallFile> smallFilesOfThisTask = new ArrayList<>();
+    for (int i = taskID; i < smallFiles.size(); i += numTasks) {
+      smallFilesOfThisTask.add(smallFiles.get(i));
+    }
+    return smallFilesOfThisTask;
   }
 
   /**

@@ -255,7 +255,7 @@ public class FlinkOptions {
   public static final ConfigOption<Double> WRITE_BATCH_SIZE = ConfigOptions
       .key("write.batch.size.MB")
       .doubleType()
-      .defaultValue(128D) // 128MB
+      .defaultValue(2D) // 2MB
       .withDescription("Batch buffer size in MB to flush data into the underneath filesystem");
 
   // ------------------------------------------------------------------------
@@ -293,6 +293,12 @@ public class FlinkOptions {
       .intType()
       .defaultValue(3600) // default 1 hour
       .withDescription("Max delta seconds time needed to trigger compaction, default 1 hour");
+
+  public static final ConfigOption<Integer> COMPACTION_MAX_MEMORY = ConfigOptions
+      .key("compaction.max_memory")
+      .intType()
+      .defaultValue(100) // default 100 MB
+      .withDescription("Max memory in MB for compaction spillable map, default 100MB");
 
   public static final ConfigOption<Boolean> CLEAN_ASYNC_ENABLED = ConfigOptions
       .key("clean.async.enabled")
