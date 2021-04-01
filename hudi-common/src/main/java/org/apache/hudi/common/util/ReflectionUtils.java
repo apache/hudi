@@ -50,7 +50,8 @@ public class ReflectionUtils {
   private static Class<?> getClass(String clazzName) {
     if (!clazzCache.containsKey(clazzName)) {
       try {
-        Class<?> clazz = Class.forName(clazzName);
+        Class<?> clazz = Class.forName(clazzName, true,
+                Thread.currentThread().getContextClassLoader());
         clazzCache.put(clazzName, clazz);
       } catch (ClassNotFoundException e) {
         throw new HoodieException("Unable to load class", e);
