@@ -18,11 +18,8 @@
 
 package org.apache.hudi.sink.compact;
 
-import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.table.HoodieFlinkCopyOnWriteTable;
 import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor;
@@ -62,7 +59,7 @@ public class CompactFunction extends KeyedProcessFunction<Long, CompactionPlanEv
   @Override
   public void open(Configuration parameters) throws Exception {
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
-    initWriteClient();
+    this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
   }
 
   @Override
@@ -81,14 +78,5 @@ public class CompactFunction extends KeyedProcessFunction<Long, CompactionPlanEv
         compactionOperation,
         instantTime);
     collector.collect(new CompactionCommitEvent(instantTime, writeStatuses, taskID));
-  }
-
-  private void initWriteClient() {
-    HoodieFlinkEngineContext context =
-        new HoodieFlinkEngineContext(
-            new SerializableConfiguration(StreamerUtil.getHadoopConf()),
-            new FlinkTaskContextSupplier(getRuntimeContext()));
-
-    writeClient = new HoodieFlinkWriteClient<>(context, StreamerUtil.getHoodieClientConfig(conf));
   }
 }

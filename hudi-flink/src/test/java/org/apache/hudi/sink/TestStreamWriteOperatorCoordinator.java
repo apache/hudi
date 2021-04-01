@@ -137,7 +137,7 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   @Test
-  public void testCheckpointCompleteWithRetry() {
+  public void testCheckpointCompleteWithException() {
     final CompletableFuture<byte[]> future = new CompletableFuture<>();
     coordinator.checkpointCoordinator(1, future);
     String inflightInstant = coordinator.getInstant();
@@ -149,7 +149,9 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator.handleEventFromOperator(0, event);
     assertThrows(HoodieException.class,
         () -> coordinator.notifyCheckpointComplete(1),
-        "Try 3 to commit instant");
+        "org.apache.hudi.exception.HoodieException: Instant [20210330153432] has a complete checkpoint [1],\n"
+            + "but the coordinator has not received full write success events,\n"
+            + "rolls back the instant and rethrow");
   }
 
   @Test

@@ -19,11 +19,8 @@
 package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -86,7 +83,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    initWriteClient();
+    this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
     this.commitBuffer = new ArrayList<>();
   }
 
@@ -141,14 +138,5 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   private void reset() {
     this.commitBuffer.clear();
     this.compactionInstantTime = null;
-  }
-
-  private void initWriteClient() {
-    HoodieFlinkEngineContext context =
-        new HoodieFlinkEngineContext(
-            new SerializableConfiguration(StreamerUtil.getHadoopConf()),
-            new FlinkTaskContextSupplier(getRuntimeContext()));
-
-    writeClient = new HoodieFlinkWriteClient<>(context, StreamerUtil.getHoodieClientConfig(this.conf));
   }
 }
