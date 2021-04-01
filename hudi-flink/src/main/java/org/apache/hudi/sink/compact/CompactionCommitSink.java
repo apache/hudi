@@ -30,10 +30,10 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,8 +51,11 @@ import java.util.stream.Collectors;
  * it loads and checks the compaction plan {@link HoodieCompactionPlan},
  * if all the compaction operations {@link org.apache.hudi.common.model.CompactionOperation}
  * of the plan are finished, tries to commit the compaction action.
+ *
+ * <p>It also inherits the {@link CleanFunction} cleaning ability. This is needed because
+ * the SQL API does not allow multiple sinks in one table sink provider.
  */
-public class CompactionCommitSink extends RichSinkFunction<CompactionCommitEvent> {
+public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   private static final Logger LOG = LoggerFactory.getLogger(CompactionCommitSink.class);
 
   /**
@@ -76,6 +79,7 @@ public class CompactionCommitSink extends RichSinkFunction<CompactionCommitEvent
   private String compactionInstantTime;
 
   public CompactionCommitSink(Configuration conf) {
+    super(conf);
     this.conf = conf;
   }
 

@@ -51,7 +51,6 @@ import static org.apache.hudi.common.config.LockConfiguration.HIVE_METASTORE_URI
 import static org.apache.hudi.common.config.LockConfiguration.HIVE_TABLE_NAME_PROP;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP;
-import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECTION_TIMEOUT_MS_PROP;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECT_URL_PROP;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_PORT_PROP;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT_MS_PROP;
@@ -177,7 +176,8 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
       throws InterruptedException, ExecutionException, TimeoutException, TException {
     LockRequest lockRequest = null;
     try {
-      final LockRequestBuilder builder = new LockRequestBuilder("hudi-lock");
+      // TODO : FIX:Using the parameterized constructor throws MethodNotFound
+      final LockRequestBuilder builder = new LockRequestBuilder();
       lockRequest = builder.addLockComponent(lockComponent).setUser(System.getProperty("user.name")).build();
       lockRequest.setUserIsSet(true);
       final LockRequest lockRequestFinal = lockRequest;
@@ -203,9 +203,6 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
   private void checkRequiredProps(final LockConfiguration lockConfiguration) {
     ValidationUtils.checkArgument(lockConfiguration.getConfig().getString(HIVE_DATABASE_NAME_PROP) != null);
     ValidationUtils.checkArgument(lockConfiguration.getConfig().getString(HIVE_TABLE_NAME_PROP) != null);
-    ValidationUtils.checkArgument(lockConfiguration.getConfig().getString(ZK_CONNECT_URL_PROP) != null);
-    ValidationUtils.checkArgument(lockConfiguration.getConfig().getString(ZK_SESSION_TIMEOUT_MS_PROP) != null);
-    ValidationUtils.checkArgument(lockConfiguration.getConfig().getString(ZK_CONNECTION_TIMEOUT_MS_PROP) != null);
   }
 
   private void setHiveLockConfs(HiveConf hiveConf) {
@@ -217,9 +214,18 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
     hiveConf.set("hive.lock.numretries", lockConfiguration.getConfig().getString(LOCK_ACQUIRE_NUM_RETRIES_PROP));
     hiveConf.set("hive.unlock.numretries", lockConfiguration.getConfig().getString(LOCK_ACQUIRE_NUM_RETRIES_PROP));
     hiveConf.set("hive.lock.sleep.between.retries", lockConfiguration.getConfig().getString(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP));
-    hiveConf.set("hive.zookeeper.quorum", lockConfiguration.getConfig().getString(ZK_CONNECT_URL_PROP));
-    hiveConf.set("hive.zookeeper.client.port", lockConfiguration.getConfig().getString(ZK_PORT_PROP));
-    hiveConf.set("hive.zookeeper.session.timeout", lockConfiguration.getConfig().getString(ZK_SESSION_TIMEOUT_MS_PROP));
+    String zkConnectUrl = lockConfiguration.getConfig().getOrDefault(ZK_CONNECT_URL_PROP, "").toString();
+    if (zkConnectUrl.length() > 0) {
+      hiveConf.set("hive.zookeeper.quorum", zkConnectUrl);
+    }
+    String zkPort = lockConfiguration.getConfig().getOrDefault(ZK_PORT_PROP, "").toString();
+    if (zkPort.length() > 0) {
+      hiveConf.set("hive.zookeeper.client.port", zkPort);
+    }
+    String zkSessionTimeout = lockConfiguration.getConfig().getOrDefault(ZK_SESSION_TIMEOUT_MS_PROP, "").toString();
+    if (zkSessionTimeout.length() > 0) {
+      hiveConf.set("hive.zookeeper.session.timeout", zkSessionTimeout);
+    }
   }
 
   private String generateLogSuffixString() {

@@ -37,14 +37,14 @@ import java.util.List;
  * Function performing actual checking of list containing (fileId, hoodieKeys) against the actual files.
  */
 //TODO we can move this class into the hudi-client-common and reuse it for spark client
-public class HoodieFlinkBloomIndexCheckFunction
+public class HoodieBaseBloomIndexCheckFunction 
         implements Function<Iterator<Pair<String, HoodieKey>>, Iterator<List<KeyLookupResult>>> {
 
   private final HoodieTable hoodieTable;
 
   private final HoodieWriteConfig config;
 
-  public HoodieFlinkBloomIndexCheckFunction(HoodieTable hoodieTable, HoodieWriteConfig config) {
+  public HoodieBaseBloomIndexCheckFunction(HoodieTable hoodieTable, HoodieWriteConfig config) {
     this.hoodieTable = hoodieTable;
     this.config = config;
   }

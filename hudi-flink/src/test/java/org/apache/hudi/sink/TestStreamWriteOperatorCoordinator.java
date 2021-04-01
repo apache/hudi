@@ -22,11 +22,13 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.BatchWriteSuccessEvent;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -42,6 +44,7 @@ import java.util.concurrent.CompletableFuture;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -63,7 +66,7 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   @AfterEach
-  public void after() {
+  public void after() throws Exception {
     coordinator.close();
   }
 
@@ -147,5 +150,32 @@ public class TestStreamWriteOperatorCoordinator {
     assertThrows(HoodieException.class,
         () -> coordinator.notifyCheckpointComplete(1),
         "Try 3 to commit instant");
+  }
+
+  @Test
+  public void testHiveSyncInvoked() throws Exception {
+    // override the default configuration
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setBoolean(FlinkOptions.HIVE_SYNC_ENABLED, true);
+    coordinator = new StreamWriteOperatorCoordinator(conf, 1);
+    coordinator.start();
+
+    String instant = coordinator.getInstant();
+    assertNotEquals("", instant);
+
+    WriteStatus writeStatus = new WriteStatus(true, 0.1D);
+    writeStatus.setPartitionPath("par1");
+    writeStatus.setStat(new HoodieWriteStat());
+    OperatorEvent event0 = BatchWriteSuccessEvent.builder()
+        .taskID(0)
+        .instantTime(instant)
+        .writeStatus(Collections.singletonList(writeStatus))
+        .isLastBatch(true)
+        .build();
+
+    coordinator.handleEventFromOperator(0, event0);
+
+    // never throw for hive synchronization now
+    assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(1));
   }
 }

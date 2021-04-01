@@ -20,6 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperatorFactory;
 import org.apache.hudi.sink.compact.CompactFunction;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
@@ -34,7 +35,6 @@ import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
-import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.connector.ChangelogMode;
@@ -95,9 +95,9 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning {
             .name("compact_commit")
             .setParallelism(1); // compaction commit should be singleton
       } else {
-        return pipeline.addSink(new DummySinkFunction<>())
+        return pipeline.addSink(new CleanFunction<>(conf))
             .setParallelism(1)
-            .name("dummy").uid("uid_dummy");
+            .name("clean_commits").uid("uid_clean_commits");
       }
     };
   }
@@ -131,7 +131,4 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning {
   public void applyStaticPartition(Map<String, String> map) {
     // no operation
   }
-
-  // Dummy sink function that does nothing.
-  private static class DummySinkFunction<T> implements SinkFunction<T> {}
 }

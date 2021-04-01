@@ -91,7 +91,15 @@ public class TestConfigurations {
     return getFileSourceDDL(tableName, "test_source.data");
   }
 
+  public static String getFileSourceDDL(String tableName, int checkpoints) {
+    return getFileSourceDDL(tableName, "test_source.data", checkpoints);
+  }
+
   public static String getFileSourceDDL(String tableName, String fileName) {
+    return getFileSourceDDL(tableName, fileName, 2);
+  }
+
+  public static String getFileSourceDDL(String tableName, String fileName, int checkpoints) {
     String sourcePath = Objects.requireNonNull(Thread.currentThread()
         .getContextClassLoader().getResource(fileName)).toString();
     return "create table " + tableName + "(\n"
@@ -102,7 +110,8 @@ public class TestConfigurations {
         + "  `partition` varchar(20)\n"
         + ") with (\n"
         + "  'connector' = '" + ContinuousFileSourceFactory.FACTORY_ID + "',\n"
-        + "  'path' = '" + sourcePath + "'\n"
+        + "  'path' = '" + sourcePath + "',\n"
+        + "  'checkpoints' = '" + checkpoints + "'\n"
         + ")";
   }
 

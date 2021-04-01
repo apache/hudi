@@ -18,12 +18,15 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
@@ -49,6 +52,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.utils.TestData.assertRowsEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * IT cases for Hoodie table source and sink.
@@ -105,7 +109,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   void testStreamReadAppendData() throws Exception {
     // create filesystem table named source
     String createSource = TestConfigurations.getFileSourceDDL("source");
-    String createSource2 = TestConfigurations.getFileSourceDDL("source2", "test_source2.data");
+    String createSource2 = TestConfigurations.getFileSourceDDL("source2", "test_source_2.data");
     streamTableEnv.executeSql(createSource);
     streamTableEnv.executeSql(createSource2);
 
@@ -173,6 +177,35 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     List<Row> rows = CollectionUtil.iterableToList(
         () -> streamTableEnv.sqlQuery("select * from t1").execute().collect());
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+  }
+
+  @Test
+  void testStreamWriteWithCleaning() throws InterruptedException {
+    // create filesystem table named source
+
+    // the source generates 4 commits but the cleaning task
+    // would always try to keep the remaining commits number as 1
+    String createSource = TestConfigurations.getFileSourceDDL(
+        "source", "test_source_3.data", 4);
+    streamTableEnv.executeSql(createSource);
+
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.CLEAN_RETAIN_COMMITS.key(), "1"); // only keep 1 commits
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
+    streamTableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 select * from source";
+    execInsertSql(streamTableEnv, insertInto);
+
+    Configuration defaultConf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    Map<String, String> options1 = new HashMap<>(defaultConf.toMap());
+    options1.put(FlinkOptions.TABLE_NAME.key(), "t1");
+    Configuration conf = Configuration.fromMap(options1);
+    HoodieTimeline timeline = StreamerUtil.createWriteClient(conf, null)
+        .getHoodieTable().getActiveTimeline();
+    assertTrue(timeline.filterCompletedInstants()
+            .getInstants().anyMatch(instant -> instant.getAction().equals("clean")),
+        "some commits should be cleaned");
   }
 
   @ParameterizedTest

@@ -330,7 +330,7 @@ public class TableSchemaResolver {
       for (final Field newSchemaField : newSchema.getFields()) {
         final Field oldSchemaField = SchemaCompatibility.lookupWriterField(oldSchema, newSchemaField);
         if (oldSchemaField == null) {
-          if (newSchemaField.defaultValue() == null) {
+          if (newSchemaField.defaultVal() == null) {
             // C3: newly added field in newSchema does not have a default value
             return false;
           }
