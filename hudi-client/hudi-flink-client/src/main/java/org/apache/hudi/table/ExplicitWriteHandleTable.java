@@ -125,4 +125,22 @@ public interface ExplicitWriteHandleTable<T extends HoodieRecordPayload> {
       HoodieWriteHandle<?, ?, ?, ?> writeHandle,
       String instantTime,
       List<HoodieRecord<T>> preppedRecords);
+
+  /**
+   * InsertOverwrite a batch of new records into Hoodie table at the supplied instantTime.
+   *
+   * <p>Specifies the write handle explicitly in order to have fine grained control with
+   * the underneath file.
+   *
+   * @param context     HoodieEngineContext
+   * @param writeHandle The write handle
+   * @param instantTime Instant Time for the action
+   * @param records     hoodieRecords to upsert
+   * @return HoodieWriteMetadata
+   */
+  HoodieWriteMetadata<List<WriteStatus>> insertOverwrite(
+          HoodieEngineContext context,
+          HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+          String instantTime,
+          List<HoodieRecord<T>> records);
 }

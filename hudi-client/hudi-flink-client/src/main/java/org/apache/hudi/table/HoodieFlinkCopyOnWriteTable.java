@@ -45,12 +45,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.clean.FlinkCleanActionExecutor;
 import org.apache.hudi.table.action.clean.FlinkScheduleCleanActionExecutor;
-import org.apache.hudi.table.action.commit.FlinkDeleteCommitActionExecutor;
-import org.apache.hudi.table.action.commit.FlinkInsertCommitActionExecutor;
-import org.apache.hudi.table.action.commit.FlinkInsertPreppedCommitActionExecutor;
-import org.apache.hudi.table.action.commit.FlinkMergeHelper;
-import org.apache.hudi.table.action.commit.FlinkUpsertCommitActionExecutor;
-import org.apache.hudi.table.action.commit.FlinkUpsertPreppedCommitActionExecutor;
+import org.apache.hudi.table.action.commit.*;
 import org.apache.hudi.table.action.rollback.FlinkCopyOnWriteRollbackActionExecutor;
 
 import org.slf4j.Logger;
@@ -116,6 +111,26 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
       String instantTime,
       List<HoodieRecord<T>> records) {
     return new FlinkInsertCommitActionExecutor<>(context, writeHandle, config, this, instantTime, records).execute();
+  }
+
+  /**
+   * InsertOverwrite a batch of new records into Hoodie table at the supplied instantTime.
+   *
+   * <p>Specifies the write handle explicitly in order to have fine grained control with
+   * the underneath file.
+   *
+   * @param context     HoodieEngineContext
+   * @param writeHandle The write handle
+   * @param instantTime Instant Time for the action
+   * @param records     hoodieRecords to upsert
+   * @return HoodieWriteMetadata
+   */
+  public HoodieWriteMetadata<List<WriteStatus>> insertOverwrite(
+      HoodieEngineContext context,
+      HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+      String instantTime,
+      List<HoodieRecord<T>> records) {
+    return new FlinkInsertOverwriteCommitActionExecutor<>(context, writeHandle, config, this, instantTime, records).execute();
   }
 
   /**

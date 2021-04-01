@@ -173,6 +173,27 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     return postWrite(result, instantTime, table);
   }
 
+  /**
+   * Removes all existing records from the partitions affected and inserts the given HoodieRecords, into the table.
+   *
+   * @param records     HoodieRecords to insert
+   * @param instantTime Instant time of the commit
+   * @return List<WriteStatus> - List of WriteStatus to inspect errors and counts
+   */
+  public HoodieWriteResult insertOverwrite(List<HoodieRecord<T>> records, String instantTime) {
+    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
+            getTableAndInitCtx(WriteOperationType.INSERT_OVERWRITE, instantTime);
+    table.validateInsertSchema();
+    preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE, table.getMetaClient());
+    // create the write handle if not exists
+    final HoodieRecord<T> record = records.get(0);
+    final boolean isDelta = table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ);
+    final HoodieWriteHandle<?, ?, ?, ?> writeHandle = getOrCreateWriteHandle(record, isDelta, getConfig(),
+            instantTime, table, record.getPartitionPath(), records.listIterator());
+    HoodieWriteMetadata<List<WriteStatus>> result = ((HoodieFlinkTable<T>) table).insertOverwrite(context, writeHandle, instantTime, records);
+    return new HoodieWriteResult(postWrite(result, instantTime, table), result.getPartitionToReplaceFileIds());
+  }
+
   @Override
   public List<WriteStatus> insertPreppedRecords(List<HoodieRecord<T>> preppedRecords, String instantTime) {
     throw new HoodieNotSupportedException("InsertPrepped operation is not supported yet");
