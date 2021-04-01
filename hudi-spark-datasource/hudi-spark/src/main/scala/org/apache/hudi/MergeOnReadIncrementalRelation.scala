@@ -201,7 +201,8 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
       val baseFiles = f.getAllFileSlices.iterator().filter(slice => slice.getBaseFile.isPresent).toList
       val partitionedFile = if (baseFiles.nonEmpty) {
         val baseFile = baseFiles.head.getBaseFile
-        Option(PartitionedFile(InternalRow.empty, baseFile.get.getPath, 0, baseFile.get.getFileLen))
+        val filePath = MergeOnReadSnapshotRelation.getFilePath(baseFile.get.getFileStatus.getPath)
+        Option(PartitionedFile(InternalRow.empty, filePath, 0, baseFile.get.getFileLen))
       }
       else {
         Option.empty

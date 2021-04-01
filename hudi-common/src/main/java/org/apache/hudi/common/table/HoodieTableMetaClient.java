@@ -596,6 +596,7 @@ public class HoodieTableMetaClient implements Serializable {
     private Integer timelineLayoutVersion;
     private String baseFileFormat;
     private String preCombineField;
+    private String partitionColumns;
     private String bootstrapIndexClass;
     private String bootstrapBasePath;
 
@@ -643,6 +644,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setPreCombineField(String preCombineField) {
       this.preCombineField = preCombineField;
+      return this;
+    }
+
+    public PropertyBuilder setPartitionColumns(String partitionColumns) {
+      this.partitionColumns = partitionColumns;
       return this;
     }
 
@@ -696,6 +702,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (properties.containsKey(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD)) {
         setPreCombineField(properties.getProperty(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD));
       }
+      if (properties.containsKey(HoodieTableConfig.HOODIE_TABLE_PARTITION_COLUMNS)) {
+        setPartitionColumns(properties.getProperty(HoodieTableConfig.HOODIE_TABLE_PARTITION_COLUMNS));
+      }
       return this;
     }
 
@@ -737,6 +746,10 @@ public class HoodieTableMetaClient implements Serializable {
 
       if (null != preCombineField) {
         properties.put(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD, preCombineField);
+      }
+
+      if (null != partitionColumns) {
+        properties.put(HoodieTableConfig.HOODIE_TABLE_PARTITION_COLUMNS, partitionColumns);
       }
       return properties;
     }

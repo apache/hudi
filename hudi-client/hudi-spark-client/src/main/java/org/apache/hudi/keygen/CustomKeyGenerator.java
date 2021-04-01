@@ -90,7 +90,7 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
       return "";
     }
     for (String field : getPartitionPathFields()) {
-      String[] fieldWithType = field.split(customAvroKeyGenerator.getSplitRegex());
+      String[] fieldWithType = field.split(customAvroKeyGenerator.SPLIT_REGEX);
       if (fieldWithType.length != 2) {
         throw new HoodieKeyGeneratorException("Unable to find field names for partition path in proper format");
       }
