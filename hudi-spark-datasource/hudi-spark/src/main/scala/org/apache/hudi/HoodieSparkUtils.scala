@@ -28,7 +28,8 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.encoders.{ExpressionEncoder, RowEncoder}
-import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFileIndex}
+import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFileIndex, Spark2ParsePartitionUtil, Spark3ParsePartitionUtil, SparkParsePartitionUtil}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 
 import scala.collection.JavaConverters._
@@ -116,6 +117,15 @@ object HoodieSparkUtils {
       new Spark2RowSerDe(encoder)
     } else {
       new Spark3RowSerDe(encoder)
+    }
+  }
+
+  def createSparkParsePartitionUtil(conf: SQLConf): SparkParsePartitionUtil = {
+    // TODO remove Spark2RowSerDe if Spark 2.x support is dropped
+    if (SPARK_VERSION.startsWith("2.")) {
+      new Spark2ParsePartitionUtil
+    } else {
+      new Spark3ParsePartitionUtil(conf)
     }
   }
 }
