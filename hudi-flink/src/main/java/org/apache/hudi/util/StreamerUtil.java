@@ -18,7 +18,11 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.client.FlinkTaskContextSupplier;
+import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
@@ -42,6 +46,7 @@ import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.util.Preconditions;
@@ -204,6 +209,11 @@ public class StreamerUtil {
                         CompactionTriggerStrategy.valueOf(conf.getString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY).toUpperCase(Locale.ROOT)))
                     .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_COMMITS))
                     .withMaxDeltaSecondsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_SECONDS))
+                    .withAsyncClean(conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED))
+                    .retainCommits(conf.getInteger(FlinkOptions.CLEAN_RETAIN_COMMITS))
+                    // override and hardcode to 20,
+                    // actually Flink cleaning is always with parallelism 1 now
+                    .withCleanerParallelism(20)
                     .build())
             .forTable(conf.getString(FlinkOptions.TABLE_NAME))
             .withAutoCommit(false)
@@ -301,5 +311,17 @@ public class StreamerUtil {
         .toUpperCase(Locale.ROOT)
         .equals(FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
         && conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED);
+  }
+
+  /**
+   * Creates the Flink write client.
+   */
+  public static HoodieFlinkWriteClient createWriteClient(Configuration conf, RuntimeContext runtimeContext) {
+    HoodieFlinkEngineContext context =
+        new HoodieFlinkEngineContext(
+            new SerializableConfiguration(getHadoopConf()),
+            new FlinkTaskContextSupplier(runtimeContext));
+
+    return new HoodieFlinkWriteClient<>(context, getHoodieClientConfig(conf));
   }
 }

@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
@@ -64,7 +65,7 @@ public class FlinkOptions {
   // ------------------------------------------------------------------------
 
   public static final ConfigOption<String> PARTITION_DEFAULT_NAME = ConfigOptions
-      .key("partition.default.name")
+      .key("partition.default_name")
       .stringType()
       .defaultValue("__DEFAULT_PARTITION__")
       .withDescription("The default partition name in case the dynamic partition"
@@ -233,6 +234,12 @@ public class FlinkOptions {
       .withDescription("Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`.\n"
           + "Actual value obtained by invoking .toString()");
 
+  public static final ConfigOption<Boolean> PARTITION_PATH_URL_ENCODE = ConfigOptions
+      .key("write.partition.url_encode")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to encode the partition path url, default false");
+
   public static final ConfigOption<String> KEYGEN_CLASS = ConfigOptions
       .key(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP)
       .stringType()
@@ -286,6 +293,114 @@ public class FlinkOptions {
       .intType()
       .defaultValue(3600) // default 1 hour
       .withDescription("Max delta seconds time needed to trigger compaction, default 1 hour");
+
+  public static final ConfigOption<Boolean> CLEAN_ASYNC_ENABLED = ConfigOptions
+      .key("clean.async.enabled")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether to cleanup the old commits immediately on new commits, enabled by default");
+
+  public static final ConfigOption<Integer> CLEAN_RETAIN_COMMITS = ConfigOptions
+      .key("clean.retain_commits")
+      .intType()
+      .defaultValue(10)// default 10 commits
+      .withDescription("Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
+          + "This also directly translates into how much you can incrementally pull on this table, default 10");
+
+  // ------------------------------------------------------------------------
+  //  Hive Sync Options
+  // ------------------------------------------------------------------------
+  public static final ConfigOption<Boolean> HIVE_SYNC_ENABLED = ConfigOptions
+      .key("hive_sync.enable")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Asynchronously sync Hive meta to HMS, default false");
+
+  public static final ConfigOption<String> HIVE_SYNC_DB = ConfigOptions
+      .key("hive_sync.db")
+      .stringType()
+      .defaultValue("default")
+      .withDescription("Database name for hive sync, default 'default'");
+
+  public static final ConfigOption<String> HIVE_SYNC_TABLE = ConfigOptions
+      .key("hive_sync.table")
+      .stringType()
+      .defaultValue("unknown")
+      .withDescription("Table name for hive sync, default 'unknown'");
+
+  public static final ConfigOption<String> HIVE_SYNC_FILE_FORMAT = ConfigOptions
+      .key("hive_sync.file_format")
+      .stringType()
+      .defaultValue("PARQUET")
+      .withDescription("File format for hive sync, default 'PARQUET'");
+
+  public static final ConfigOption<String> HIVE_SYNC_USERNAME = ConfigOptions
+      .key("hive_sync.username")
+      .stringType()
+      .defaultValue("hive")
+      .withDescription("Username for hive sync, default 'hive'");
+
+  public static final ConfigOption<String> HIVE_SYNC_PASSWORD = ConfigOptions
+      .key("hive_sync.password")
+      .stringType()
+      .defaultValue("hive")
+      .withDescription("Password for hive sync, default 'hive'");
+
+  public static final ConfigOption<String> HIVE_SYNC_JDBC_URL = ConfigOptions
+      .key("hive_sync.jdbc_url")
+      .stringType()
+      .defaultValue("jdbc:hive2://localhost:10000")
+      .withDescription("Jdbc URL for hive sync, default 'jdbc:hive2://localhost:10000'");
+
+  public static final ConfigOption<String> HIVE_SYNC_PARTITION_FIELDS = ConfigOptions
+      .key("hive_sync.partition_fields")
+      .stringType()
+      .defaultValue("")
+      .withDescription("Partition fields for hive sync, default ''");
+
+  public static final ConfigOption<String> HIVE_SYNC_PARTITION_EXTRACTOR_CLASS = ConfigOptions
+      .key("hive_sync.partition_extractor_class")
+      .stringType()
+      .defaultValue(SlashEncodedDayPartitionValueExtractor.class.getCanonicalName())
+      .withDescription("Tool to extract the partition value from HDFS path, "
+          + "default 'SlashEncodedDayPartitionValueExtractor'");
+
+  public static final ConfigOption<Boolean> HIVE_SYNC_ASSUME_DATE_PARTITION = ConfigOptions
+      .key("hive_sync.assume_date_partitioning")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Assume partitioning is yyyy/mm/dd, default false");
+
+  public static final ConfigOption<Boolean> HIVE_SYNC_USE_JDBC = ConfigOptions
+      .key("hive_sync.use_jdbc")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Use JDBC when hive synchronization is enabled, default true");
+
+  public static final ConfigOption<Boolean> HIVE_SYNC_AUTO_CREATE_DB = ConfigOptions
+      .key("hive_sync.auto_create_db")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Auto create hive database if it does not exists, default true");
+
+  public static final ConfigOption<Boolean> HIVE_SYNC_IGNORE_EXCEPTIONS = ConfigOptions
+      .key("hive_sync.ignore_exceptions")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Ignore exceptions during hive synchronization, default false");
+
+  public static final ConfigOption<Boolean> HIVE_SYNC_SKIP_RO_SUFFIX = ConfigOptions
+      .key("hive_sync.skip_ro_suffix")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Skip the _ro suffix for Read optimized table when registering, default false");
+
+  public static final ConfigOption<Boolean> HIVE_SYNC_SUPPORT_TIMESTAMP = ConfigOptions
+      .key("hive_sync.support_timestamp")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type.\n"
+          + "Disabled by default for backward compatibility.");
 
   // -------------------------------------------------------------------------
   //  Utilities

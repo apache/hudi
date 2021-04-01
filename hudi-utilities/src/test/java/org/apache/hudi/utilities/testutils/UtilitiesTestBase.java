@@ -124,15 +124,19 @@ public class UtilitiesTestBase {
   public static void cleanupClass() {
     if (hdfsTestService != null) {
       hdfsTestService.stop();
+      hdfsTestService = null;
     }
     if (hiveServer != null) {
       hiveServer.stop();
+      hiveServer = null;
     }
     if (hiveTestService != null) {
       hiveTestService.stop();
+      hiveTestService = null;
     }
     if (zookeeperTestService != null) {
       zookeeperTestService.stop();
+      zookeeperTestService = null;
     }
   }
 
@@ -150,6 +154,11 @@ public class UtilitiesTestBase {
     TestDataSource.resetDataGen();
     if (jsc != null) {
       jsc.stop();
+      jsc = null;
+    }
+    if (sparkSession != null) {
+      sparkSession.close();
+      sparkSession = null;
     }
     if (context != null) {
       context = null;

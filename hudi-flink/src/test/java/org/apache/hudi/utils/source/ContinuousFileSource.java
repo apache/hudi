@@ -42,6 +42,8 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.hudi.utils.factory.ContinuousFileSourceFactory.CHECKPOINTS;
+
 /**
  * A continuous file source that can trigger checkpoints continuously.
  *
@@ -89,7 +91,7 @@ public class ContinuousFileSource implements ScanTableSource {
             true,
             TimestampFormat.ISO_8601);
 
-        return execEnv.addSource(new BoundedSourceFunction(path, 2))
+        return execEnv.addSource(new BoundedSourceFunction(path, conf.getInteger(CHECKPOINTS)))
             .name("continuous_file_source")
             .setParallelism(1)
             .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)),

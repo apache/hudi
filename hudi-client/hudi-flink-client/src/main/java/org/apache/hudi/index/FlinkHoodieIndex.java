@@ -46,7 +46,7 @@ public abstract class FlinkHoodieIndex<T extends HoodieRecordPayload> extends Ho
     super(config);
   }
 
-  public static FlinkHoodieIndex createIndex(HoodieFlinkEngineContext context, HoodieWriteConfig config) {
+  public static HoodieIndex createIndex(HoodieFlinkEngineContext context, HoodieWriteConfig config) {
     // first use index class config to create index.
     if (!StringUtils.isNullOrEmpty(config.getIndexClass())) {
       Object instance = ReflectionUtils.loadClass(config.getIndexClass(), config);

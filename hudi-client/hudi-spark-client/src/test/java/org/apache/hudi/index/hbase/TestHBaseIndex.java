@@ -18,7 +18,6 @@
 
 package org.apache.hudi.index.hbase;
 
-import avro.shaded.com.google.common.collect.Maps;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -65,6 +64,7 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -469,7 +469,7 @@ public class TestHBaseIndex extends FunctionalTestHarness {
   @Test
   public void testHbaseTagLocationForArchivedCommits() throws Exception {
     // Load to memory
-    Map<String, String> params = Maps.newHashMap();
+    Map<String, String> params = new HashMap<String, String>();
     params.put(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED_PROP, "1");
     params.put(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP_PROP, "3");
     params.put(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP_PROP, "2");
