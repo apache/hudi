@@ -191,9 +191,9 @@ public class HoodieTableSource implements
         } else {
           InputFormatSourceFunction<RowData> func = new InputFormatSourceFunction<>(getInputFormat(), typeInfo);
           DataStreamSource<RowData> source = execEnv.addSource(func, asSummaryString(), typeInfo);
-          return source.name("streaming_source")
+          return source.name("bounded_source")
               .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS))
-              .uid("uid_streaming_source");
+              .uid("uid_bounded_source");
         }
       }
     };
@@ -363,21 +363,26 @@ public class HoodieTableSource implements
                 requiredRowType,
                 tableAvroSchema.toString(),
                 AvroSchemaConverter.convertToSchema(requiredRowType).toString(),
-                inputSplits);
-            return new MergeOnReadInputFormat(
-                this.conf,
-                FilePathUtils.toFlinkPaths(paths),
-                hoodieTableState,
-                rowDataType.getChildren(), // use the explicit fields data type because the AvroSchemaConverter is not very stable.
-                "default",
-                this.limit);
+                inputSplits,
+                conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(","));
+            return MergeOnReadInputFormat.builder()
+                .config(this.conf)
+                .paths(FilePathUtils.toFlinkPaths(paths))
+                .tableState(hoodieTableState)
+                // use the explicit fields data type because the AvroSchemaConverter
+                // is not very stable.
+                .fieldTypes(rowDataType.getChildren())
+                .defaultPartName(conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME))
+                .limit(this.limit)
+                .emitDelete(isStreaming)
+                .build();
           case COPY_ON_WRITE:
             FileInputFormat<RowData> format = new CopyOnWriteInputFormat(
                 FilePathUtils.toFlinkPaths(paths),
                 this.schema.getFieldNames(),
                 this.schema.getFieldDataTypes(),
                 this.requiredPos,
-                "default",
+                this.conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME),
                 this.limit == NO_LIMIT_CONSTANT ? Long.MAX_VALUE : this.limit, // ParquetInputFormat always uses the limit value
                 getParquetConf(this.conf, this.hadoopConf),
                 this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE)

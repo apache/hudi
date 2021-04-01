@@ -143,14 +143,9 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
 
     @Override
     public void invoke(RowData value, SinkFunction.Context context) {
-      if (value.getRowKind() == RowKind.INSERT) {
-        Row row = (Row) converter.toExternal(value);
-        assert row != null;
-        RESULT.get(taskID).add(row);
-      } else {
-        throw new RuntimeException(
-            "CollectSinkFunction received " + value.getRowKind() + " messages.");
-      }
+      Row row = (Row) converter.toExternal(value);
+      assert row != null;
+      RESULT.get(taskID).add(row);
     }
 
     @Override

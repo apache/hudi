@@ -21,6 +21,7 @@ package org.apache.hudi.table.format;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.HoodieTableSource;
+import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -43,6 +44,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -148,6 +150,29 @@ public class TestInputFormat {
         + "id7,Bob,44,1970-01-01T00:00:00.007,par4, "
         + "id8,Han,56,1970-01-01T00:00:00.008,par4, "
         + "id9,Jane,19,1970-01-01T00:00:00.006,par3]";
+    assertThat(actual, is(expected));
+  }
+
+  @Test
+  void testReadWithDeletes() throws Exception {
+    beforeEach(HoodieTableType.MERGE_ON_READ);
+
+    // write another commit to read again
+    TestData.writeData(TestData.DATA_SET_UPDATE_DELETE, conf);
+
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
+    ((MergeOnReadInputFormat) inputFormat).isEmitDelete(true);
+
+    List<RowData> result = readData(inputFormat);
+
+    final String actual = TestData.rowDataToString(result);
+    final String expected = "["
+        + "id1,Danny,24,1970-01-01T00:00:00.001,par1, "
+        + "id2,Stephen,34,1970-01-01T00:00:00.002,par1, "
+        + "id3,null,null,null,null, "
+        + "id5,null,null,null,null, "
+        + "id9,null,null,null,null]";
     assertThat(actual, is(expected));
   }
 

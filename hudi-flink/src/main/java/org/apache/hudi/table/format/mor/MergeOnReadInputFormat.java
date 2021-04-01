@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.cow.ParquetColumnarRowSplitReader;
@@ -30,22 +31,28 @@ import org.apache.hudi.table.format.cow.ParquetSplitReaderUtil;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.StringToRowDataConverter;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.io.DefaultInputSplitAssigner;
 import org.apache.flink.api.common.io.RichInputFormat;
 import org.apache.flink.api.common.io.statistics.BaseStatistics;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.io.InputSplitAssigner;
+import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.types.RowKind;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -116,13 +123,20 @@ public class MergeOnReadInputFormat
    */
   private long currentReadCount = 0;
 
-  public MergeOnReadInputFormat(
+  /**
+   * Flag saying whether to emit the deletes. In streaming read mode, downstream
+   * operators need the delete messages to retract the legacy accumulator.
+   */
+  private boolean emitDelete;
+
+  private MergeOnReadInputFormat(
       Configuration conf,
       Path[] paths,
       MergeOnReadTableState tableState,
       List<DataType> fieldTypes,
       String defaultPartName,
-      long limit) {
+      long limit,
+      boolean emitDelete) {
     this.conf = conf;
     this.paths = paths;
     this.tableState = tableState;
@@ -133,6 +147,14 @@ public class MergeOnReadInputFormat
     // because we need to
     this.requiredPos = tableState.getRequiredPositions();
     this.limit = limit;
+    this.emitDelete = emitDelete;
+  }
+
+  /**
+   * Returns the builder for {@link MergeOnReadInputFormat}.
+   */
+  public static Builder builder() {
+    return new Builder();
   }
 
   @Override
@@ -177,7 +199,7 @@ public class MergeOnReadInputFormat
       if (filePath == null) {
         throw new IllegalArgumentException("File path was not specified in input format or configuration.");
       } else {
-        this.paths = new Path[] { new Path(filePath) };
+        this.paths = new Path[] {new Path(filePath)};
       }
     }
     // may supports nested files in the future.
@@ -269,6 +291,13 @@ public class MergeOnReadInputFormat
     final Map<String, HoodieRecord<? extends HoodieRecordPayload>> logRecords =
         FormatUtils.scanLog(split, tableSchema, hadoopConf).getRecords();
     final Iterator<String> logRecordsKeyIterator = logRecords.keySet().iterator();
+    final int[] pkOffset = tableState.getPkOffsetsInRequired();
+    // flag saying whether the pk semantics has been dropped by user specified
+    // projections. For e.g, if the pk fields are [a, b] but user only select a,
+    // then the pk semantics is lost.
+    final boolean pkSemanticLost = Arrays.stream(pkOffset).anyMatch(offset -> offset == -1);
+    final LogicalType[] pkTypes = pkSemanticLost ? null : tableState.getPkTypes(pkOffset);
+    final StringToRowDataConverter converter = pkSemanticLost ? null : new StringToRowDataConverter(pkTypes);
 
     return new Iterator<RowData>() {
       private RowData currentRecord;
@@ -278,14 +307,30 @@ public class MergeOnReadInputFormat
         if (logRecordsKeyIterator.hasNext()) {
           String curAvrokey = logRecordsKeyIterator.next();
           Option<IndexedRecord> curAvroRecord = null;
+          final HoodieRecord<?> hoodieRecord = logRecords.get(curAvrokey);
           try {
-            curAvroRecord = logRecords.get(curAvrokey).getData().getInsertValue(tableSchema);
+            curAvroRecord = hoodieRecord.getData().getInsertValue(tableSchema);
           } catch (IOException e) {
             throw new HoodieException("Get avro insert value error for key: " + curAvrokey, e);
           }
           if (!curAvroRecord.isPresent()) {
-            // delete record found, skipping
-            return hasNext();
+            if (emitDelete && !pkSemanticLost) {
+              GenericRowData delete = new GenericRowData(tableState.getRequiredRowType().getFieldCount());
+
+              final String recordKey = hoodieRecord.getRecordKey();
+              final String[] pkFields = KeyGenUtils.extractRecordKeys(recordKey);
+              final Object[] converted = converter.convert(pkFields);
+              for (int i = 0; i < pkOffset.length; i++) {
+                delete.setField(pkOffset[i], converted[i]);
+              }
+              delete.setRowKind(RowKind.DELETE);
+
+              this.currentRecord =  delete;
+              return true;
+            } else {
+              // delete record found, skipping
+              return hasNext();
+            }
           } else {
             // should improve the code when log scanner supports
             // seeking by log blocks with commit time which is more
@@ -317,6 +362,10 @@ public class MergeOnReadInputFormat
       }
     };
   }
+
+  // -------------------------------------------------------------------------
+  //  Inner Class
+  // -------------------------------------------------------------------------
 
   private interface RecordIterator {
     boolean reachedEnd() throws IOException;
@@ -520,5 +569,63 @@ public class MergeOnReadInputFormat
       GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, curRow);
       return logRecords.get(curKey).getData().combineAndGetUpdateValue(historyAvroRecord, tableSchema);
     }
+  }
+
+  /**
+   * Builder for {@link MergeOnReadInputFormat}.
+   */
+  public static class Builder {
+    private Configuration conf;
+    private Path[] paths;
+    private MergeOnReadTableState tableState;
+    private List<DataType> fieldTypes;
+    private String defaultPartName;
+    private long limit = -1;
+    private boolean emitDelete = false;
+
+    public Builder config(Configuration conf) {
+      this.conf = conf;
+      return this;
+    }
+
+    public Builder paths(Path[] paths) {
+      this.paths = paths;
+      return this;
+    }
+
+    public Builder tableState(MergeOnReadTableState tableState) {
+      this.tableState = tableState;
+      return this;
+    }
+
+    public Builder fieldTypes(List<DataType> fieldTypes) {
+      this.fieldTypes = fieldTypes;
+      return this;
+    }
+
+    public Builder defaultPartName(String defaultPartName) {
+      this.defaultPartName = defaultPartName;
+      return this;
+    }
+
+    public Builder limit(long limit) {
+      this.limit = limit;
+      return this;
+    }
+
+    public Builder emitDelete(boolean emitDelete) {
+      this.emitDelete = emitDelete;
+      return this;
+    }
+
+    public MergeOnReadInputFormat build() {
+      return new MergeOnReadInputFormat(conf, paths, tableState,
+          fieldTypes, defaultPartName, limit, emitDelete);
+    }
+  }
+
+  @VisibleForTesting
+  public void isEmitDelete(boolean emitDelete) {
+    this.emitDelete = emitDelete;
   }
 }
