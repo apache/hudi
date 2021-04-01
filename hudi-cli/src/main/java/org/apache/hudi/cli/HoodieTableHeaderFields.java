@@ -126,6 +126,9 @@ public class HoodieTableHeaderFields {
   public static final String HEADER_TOTAL_RECORDS_INSERTED = "Total Records Inserted";
   public static final String HEADER_TOTAL_RECORDS_UPDATED = "Total Records Updated";
   public static final String HEADER_TOTAL_ERRORS = "Total Errors";
+  public static final String HEADER_TOTAL_RECORDS_WRITTEN_COMMIT = "Total Records Written for entire commit";
+  public static final String HEADER_TOTAL_BYTES_WRITTEN_COMMIT = "Total Bytes Written for entire commit";
+  public static final String HEADER_AVG_REC_SIZE_COMMIT = "Avg record size for entire commit";
 
   /**
    * Fields of commit metadata.

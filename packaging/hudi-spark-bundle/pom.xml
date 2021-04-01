@@ -19,11 +19,11 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.8.0-SNAPSHOT</version>
+    <version>0.9.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
-  <artifactId>hudi-spark-bundle_${scala.binary.version}</artifactId>
+  <artifactId>hudi-spark${sparkbundle.version}-bundle_${scala.binary.version}</artifactId>
   <packaging>jar</packaging>
 
   <properties>
@@ -112,6 +112,10 @@
                   <include>org.apache.hbase:hbase-protocol</include>
                   <include>org.apache.hbase:hbase-server</include>
                   <include>org.apache.htrace:htrace-core</include>
+                  <include>org.apache.curator:curator-framework</include>
+                  <include>org.apache.curator:curator-client</include>
+                  <include>org.apache.curator:curator-recipes</include>
+                  <include>commons-codec:commons-codec</include>
                 </includes>
               </artifactSet>
               <relocations>
@@ -349,6 +353,25 @@
       <groupId>org.apache.hbase</groupId>
       <artifactId>hbase-protocol</artifactId>
       <version>${hbase.version}</version>
+    </dependency>
+
+    <!-- zookeeper -->
+    <dependency>
+      <groupId>org.apache.curator</groupId>
+      <artifactId>curator-framework</artifactId>
+      <version>${zk-curator.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.curator</groupId>
+      <artifactId>curator-client</artifactId>
+      <version>${zk-curator.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.curator</groupId>
+      <artifactId>curator-recipes</artifactId>
+      <version>${zk-curator.version}</version>
     </dependency>
 
     <!-- TODO: Reinvestigate PR 633 -->

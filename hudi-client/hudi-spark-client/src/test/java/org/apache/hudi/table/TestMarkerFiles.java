@@ -119,6 +119,7 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
   public void testDeletionWhenMarkerDirNotExists() throws IOException {
     // then
     assertFalse(markerFiles.doesMarkerDirExist());
+    assertTrue(markerFiles.allMarkerFilePaths().isEmpty());
     assertFalse(markerFiles.deleteMarkerDir(context, 2));
   }
 

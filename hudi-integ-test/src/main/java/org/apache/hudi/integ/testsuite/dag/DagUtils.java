@@ -18,6 +18,19 @@
 
 package org.apache.hudi.integ.testsuite.dag;
 
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonToken;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.JsonSerializer;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.module.SimpleModule;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.integ.testsuite.configuration.DeltaConfig;
+import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;
+
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -190,18 +203,24 @@ public class DagUtils {
 
   private static List<Pair<String, Integer>> getHiveQueries(Entry<String, JsonNode> entry) {
     List<Pair<String, Integer>> queries = new ArrayList<>();
-    Iterator<Entry<String, JsonNode>> queriesItr = entry.getValue().fields();
-    while (queriesItr.hasNext()) {
-      queries.add(Pair.of(queriesItr.next().getValue().textValue(), queriesItr.next().getValue().asInt()));
+    try {
+      List<JsonNode> flattened = new ArrayList<>();
+      flattened.add(entry.getValue());
+      queries = (List<Pair<String, Integer>>)getHiveQueryMapper().readValue(flattened.toString(), List.class);
+    } catch (Exception e) {
+      e.printStackTrace();
     }
     return queries;
   }
 
   private static List<String> getProperties(Entry<String, JsonNode> entry) {
     List<String> properties = new ArrayList<>();
-    Iterator<Entry<String, JsonNode>> queriesItr = entry.getValue().fields();
-    while (queriesItr.hasNext()) {
-      properties.add(queriesItr.next().getValue().textValue());
+    try {
+      List<JsonNode> flattened = new ArrayList<>();
+      flattened.add(entry.getValue());
+      properties = (List<String>)getHivePropertyMapper().readValue(flattened.toString(), List.class);
+    } catch (Exception e) {
+      e.printStackTrace();
     }
     return properties;
   }
@@ -226,6 +245,22 @@ public class DagUtils {
   private static JsonNode createJsonNode(DagNode node, String type) throws IOException {
     JsonNode configNode = MAPPER.readTree(node.getConfig().toString());
     JsonNode jsonNode = MAPPER.createObjectNode();
+    Iterator<Entry<String, JsonNode>> itr = configNode.fields();
+    while (itr.hasNext()) {
+      Entry<String, JsonNode> entry = itr.next();
+      switch (entry.getKey()) {
+        case DeltaConfig.Config.HIVE_QUERIES:
+          ((ObjectNode) configNode).put(DeltaConfig.Config.HIVE_QUERIES,
+              MAPPER.readTree(getHiveQueryMapper().writeValueAsString(node.getConfig().getHiveQueries())));
+          break;
+        case DeltaConfig.Config.HIVE_PROPERTIES:
+          ((ObjectNode) configNode).put(DeltaConfig.Config.HIVE_PROPERTIES,
+              MAPPER.readTree(getHivePropertyMapper().writeValueAsString(node.getConfig().getHiveProperties())));
+          break;
+        default:
+          break;
+      }
+    }
     ((ObjectNode) jsonNode).put(DeltaConfig.Config.CONFIG_NAME, configNode);
     ((ObjectNode) jsonNode).put(DeltaConfig.Config.TYPE, type);
     ((ObjectNode) jsonNode).put(DeltaConfig.Config.DEPENDENCIES, getDependencyNames(node));
@@ -248,4 +283,101 @@ public class DagUtils {
     return result.toString("utf-8");
   }
 
+  private static ObjectMapper getHiveQueryMapper() {
+    SimpleModule module = new SimpleModule();
+    ObjectMapper queryMapper = new ObjectMapper();
+    module.addSerializer(List.class, new HiveQuerySerializer());
+    module.addDeserializer(List.class, new HiveQueryDeserializer());
+    queryMapper.registerModule(module);
+    return queryMapper;
+  }
+
+  private static final class HiveQuerySerializer extends JsonSerializer<List> {
+    Integer index = 0;
+    @Override
+    public void serialize(List pairs, JsonGenerator gen, SerializerProvider serializers) throws IOException {
+      gen.writeStartObject();
+      for (Pair pair : (List<Pair>)pairs) {
+        gen.writeStringField("query" + index, pair.getLeft().toString());
+        gen.writeNumberField("result" + index, Integer.parseInt(pair.getRight().toString()));
+        index++;
+      }
+      gen.writeEndObject();
+    }
+  }
+
+  private static final class HiveQueryDeserializer extends JsonDeserializer<List> {
+    @Override
+    public List deserialize(JsonParser parser, DeserializationContext context) throws IOException {
+      List<Pair<String, Integer>> pairs = new ArrayList<>();
+      String query = "";
+      Integer result = 0;
+      // [{query0:<query>, result0:<result>,query1:<query>, result1:<result>}]
+      while (!parser.isClosed()) {
+        JsonToken jsonToken = parser.nextToken();
+        if (jsonToken.equals(JsonToken.END_ARRAY)) {
+          break;
+        }
+        if (JsonToken.FIELD_NAME.equals(jsonToken)) {
+          String fieldName = parser.getCurrentName();
+          parser.nextToken();
+
+          if (fieldName.contains("query")) {
+            query = parser.getValueAsString();
+          } else if (fieldName.contains("result")) {
+            result = parser.getValueAsInt();
+            pairs.add(Pair.of(query, result));
+          }
+        }
+      }
+      return pairs;
+    }
+  }
+
+  private static ObjectMapper getHivePropertyMapper() {
+    SimpleModule module = new SimpleModule();
+    ObjectMapper propMapper = new ObjectMapper();
+    module.addSerializer(List.class, new HivePropertySerializer());
+    module.addDeserializer(List.class, new HivePropertyDeserializer());
+    propMapper.registerModule(module);
+    return propMapper;
+  }
+
+  private static final class HivePropertySerializer extends JsonSerializer<List> {
+    Integer index = 0;
+    @Override
+    public void serialize(List props, JsonGenerator gen, SerializerProvider serializers) throws IOException {
+      gen.writeStartObject();
+      for (String prop : (List<String>)props) {
+        gen.writeStringField("prop" + index, prop);
+        index++;
+      }
+      gen.writeEndObject();
+    }
+  }
+
+  private static final class HivePropertyDeserializer extends JsonDeserializer<List> {
+    @Override
+    public List deserialize(JsonParser parser, DeserializationContext context) throws IOException {
+      List<String> props = new ArrayList<>();
+      String prop = "";
+      // [{prop0:<property>,...}]
+      while (!parser.isClosed()) {
+        JsonToken jsonToken = parser.nextToken();
+        if (jsonToken.equals(JsonToken.END_ARRAY)) {
+          break;
+        }
+        if (JsonToken.FIELD_NAME.equals(jsonToken)) {
+          String fieldName = parser.getCurrentName();
+          parser.nextToken();
+
+          if (parser.getCurrentName().contains("prop")) {
+            prop = parser.getValueAsString();
+            props.add(prop);
+          }
+        }
+      }
+      return props;
+    }
+  }
 }

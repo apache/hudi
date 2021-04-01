@@ -56,6 +56,8 @@ public class HoodieTableConfig implements Serializable {
   public static final String HOODIE_TABLE_NAME_PROP_NAME = "hoodie.table.name";
   public static final String HOODIE_TABLE_TYPE_PROP_NAME = "hoodie.table.type";
   public static final String HOODIE_TABLE_VERSION_PROP_NAME = "hoodie.table.version";
+  public static final String HOODIE_TABLE_PRECOMBINE_FIELD = "hoodie.table.precombine.field";
+
   @Deprecated
   public static final String HOODIE_RO_FILE_FORMAT_PROP_NAME = "hoodie.table.ro.file.format";
   @Deprecated
@@ -185,6 +187,10 @@ public class HoodieTableConfig implements Serializable {
     // change to org.apache.hudi
     return props.getProperty(HOODIE_PAYLOAD_CLASS_PROP_NAME, DEFAULT_PAYLOAD_CLASS).replace("com.uber.hoodie",
         "org.apache.hudi");
+  }
+
+  public String getPreCombineField() {
+    return props.getProperty(HOODIE_TABLE_PRECOMBINE_FIELD);
   }
 
   /**

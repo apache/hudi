@@ -24,6 +24,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
@@ -95,33 +96,14 @@ public class HoodieTableMetaClient implements Serializable {
   private HoodieArchivedTimeline archivedTimeline;
   private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
 
-  public HoodieTableMetaClient(Configuration conf, String basePath) {
-    // Do not load any timeline by default
-    this(conf, basePath, false);
-  }
-
-  public HoodieTableMetaClient(Configuration conf, String basePath, String payloadClassName) {
-    this(conf, basePath, false, ConsistencyGuardConfig.newBuilder().build(), Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION),
-        payloadClassName);
-  }
-
-  public HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
-                               ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion) {
-    this(conf, basePath, loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, null);
-  }
-
-  public HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad) {
-    this(conf, basePath, loadActiveTimelineOnLoad, ConsistencyGuardConfig.newBuilder().build(), Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION), null);
-  }
-
-  public HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
+  private HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
                                ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
                                String payloadClassName) {
     LOG.info("Loading HoodieTableMetaClient from " + basePath);
-    this.basePath = basePath;
     this.consistencyGuardConfig = consistencyGuardConfig;
     this.hadoopConf = new SerializableConfiguration(conf);
-    Path basePathDir = new Path(this.basePath);
+    Path basePathDir = new Path(basePath);
+    this.basePath = basePathDir.toString();
     this.metaPath = new Path(basePath, METAFOLDER_NAME).toString();
     Path metaPathDir = new Path(this.metaPath);
     this.fs = getFs();
@@ -153,9 +135,8 @@ public class HoodieTableMetaClient implements Serializable {
   public HoodieTableMetaClient() {}
 
   public static HoodieTableMetaClient reload(HoodieTableMetaClient oldMetaClient) {
-    return new HoodieTableMetaClient(oldMetaClient.hadoopConf.get(), oldMetaClient.basePath,
-        oldMetaClient.loadActiveTimelineOnLoad, oldMetaClient.consistencyGuardConfig,
-        Option.of(oldMetaClient.timelineLayoutVersion), null);
+    return HoodieTableMetaClient.builder().setConf(oldMetaClient.hadoopConf.get()).setBasePath(oldMetaClient.basePath).setLoadActiveTimelineOnLoad(oldMetaClient.loadActiveTimelineOnLoad)
+        .setConsistencyGuardConfig(oldMetaClient.consistencyGuardConfig).setLayoutVersion(Option.of(oldMetaClient.timelineLayoutVersion)).setPayloadClassName(null).build();
   }
 
   /**
@@ -323,76 +304,6 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Helper method to initialize a table, with given basePath, tableType, name, archiveFolder, payloadClass and
-   * base file format.
-   */
-  public static HoodieTableMetaClient initTableTypeWithBootstrap(Configuration hadoopConf, String basePath, HoodieTableType tableType,
-                                                                 String tableName, String archiveLogFolder, String payloadClassName,
-                                                                 String baseFileFormat, String bootstrapIndexClass,
-                                                                 String bootstrapBasePath) throws IOException {
-    return initTableType(hadoopConf, basePath, tableType, tableName,
-        archiveLogFolder, payloadClassName, null, baseFileFormat, bootstrapIndexClass, bootstrapBasePath);
-  }
-
-  public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, HoodieTableType tableType,
-                                                    String tableName, String archiveLogFolder, String payloadClassName,
-                                                    String baseFileFormat) throws IOException {
-    return initTableType(hadoopConf, basePath, tableType, tableName,
-        archiveLogFolder, payloadClassName, null, baseFileFormat, null, null);
-  }
-
-  /**
-   * Used primarily by tests, examples.
-   */
-  public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, HoodieTableType tableType,
-                                                    String tableName, String payloadClassName) throws IOException {
-    return initTableType(hadoopConf, basePath, tableType, tableName, null, payloadClassName,
-        null, null, null, null);
-  }
-
-  public static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, HoodieTableType tableType,
-                                                    String tableName, String archiveLogFolder, String payloadClassName,
-                                                    Integer timelineLayoutVersion) throws IOException {
-    return initTableType(hadoopConf, basePath, tableType, tableName, archiveLogFolder, payloadClassName,
-        timelineLayoutVersion, null, null, null);
-  }
-
-  private static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath, HoodieTableType tableType,
-                                                     String tableName, String archiveLogFolder, String payloadClassName,
-                                                     Integer timelineLayoutVersion, String baseFileFormat,
-                                                     String bootstrapIndexClass, String bootstrapBasePath) throws IOException {
-    Properties properties = new Properties();
-    properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tableName);
-    properties.setProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
-    properties.setProperty(HoodieTableConfig.HOODIE_TABLE_VERSION_PROP_NAME, String.valueOf(HoodieTableVersion.current().versionCode()));
-    if (tableType == HoodieTableType.MERGE_ON_READ && payloadClassName != null) {
-      properties.setProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, payloadClassName);
-    }
-
-    if (null != archiveLogFolder) {
-      properties.put(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, archiveLogFolder);
-    }
-
-    if (null != timelineLayoutVersion) {
-      properties.put(HoodieTableConfig.HOODIE_TIMELINE_LAYOUT_VERSION, String.valueOf(timelineLayoutVersion));
-    }
-
-    if (null != baseFileFormat) {
-      properties.setProperty(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP_NAME, baseFileFormat.toUpperCase());
-    }
-
-    if (null != bootstrapIndexClass) {
-      properties.put(HoodieTableConfig.HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME, bootstrapIndexClass);
-    }
-
-    if (null != bootstrapBasePath) {
-      properties.put(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH, bootstrapBasePath);
-    }
-
-    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
-  }
-
-  /**
    * Helper method to initialize a given path as a hoodie table with configs passed in as as Properties.
    *
    * @return Instance of HoodieTableMetaClient
@@ -436,7 +347,7 @@ public class HoodieTableMetaClient implements Serializable {
     HoodieTableConfig.createHoodieProperties(fs, metaPathDir, props);
     // We should not use fs.getConf as this might be different from the original configuration
     // used to create the fs in unit tests
-    HoodieTableMetaClient metaClient = new HoodieTableMetaClient(hadoopConf, basePath);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
     LOG.info("Finished initializing Table of type " + metaClient.getTableConfig().getTableType() + " from " + basePath);
     return metaClient;
   }
@@ -501,7 +412,7 @@ public class HoodieTableMetaClient implements Serializable {
       case COPY_ON_WRITE:
         return getActiveTimeline().getCommitTimeline();
       case MERGE_ON_READ:
-        return getActiveTimeline().getCommitsAndCompactionTimeline();
+        return getActiveTimeline().getWriteTimeline();
       default:
         throw new HoodieException("Unsupported table type :" + this.getTableType());
     }
@@ -609,5 +520,229 @@ public class HoodieTableMetaClient implements Serializable {
 
   public void setActiveTimeline(HoodieActiveTimeline activeTimeline) {
     this.activeTimeline = activeTimeline;
+  }
+
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  /**
+   * Builder for {@link HoodieTableMetaClient}.
+   */
+  public static class Builder {
+
+    private Configuration conf;
+    private String basePath;
+    private boolean loadActiveTimelineOnLoad = false;
+    private String payloadClassName = null;
+    private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
+    private Option<TimelineLayoutVersion> layoutVersion = Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION);
+
+    public Builder setConf(Configuration conf) {
+      this.conf = conf;
+      return this;
+    }
+
+    public Builder setBasePath(String basePath) {
+      this.basePath = basePath;
+      return this;
+    }
+
+    public Builder setLoadActiveTimelineOnLoad(boolean loadActiveTimelineOnLoad) {
+      this.loadActiveTimelineOnLoad = loadActiveTimelineOnLoad;
+      return this;
+    }
+
+    public Builder setPayloadClassName(String payloadClassName) {
+      this.payloadClassName = payloadClassName;
+      return this;
+    }
+
+    public Builder setConsistencyGuardConfig(ConsistencyGuardConfig consistencyGuardConfig) {
+      this.consistencyGuardConfig = consistencyGuardConfig;
+      return this;
+    }
+
+    public Builder setLayoutVersion(Option<TimelineLayoutVersion> layoutVersion) {
+      this.layoutVersion = layoutVersion;
+      return this;
+    }
+
+    public HoodieTableMetaClient build() {
+      ValidationUtils.checkArgument(conf != null, "Configuration needs to be set to init HoodieTableMetaClient");
+      ValidationUtils.checkArgument(basePath != null, "basePath needs to be set to init HoodieTableMetaClient");
+      return new HoodieTableMetaClient(conf, basePath,
+          loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName);
+    }
+  }
+
+  public static PropertyBuilder withPropertyBuilder() {
+    return new PropertyBuilder();
+  }
+
+  public static class PropertyBuilder {
+
+    private HoodieTableType tableType;
+    private String tableName;
+    private String archiveLogFolder;
+    private String payloadClassName;
+    private Integer timelineLayoutVersion;
+    private String baseFileFormat;
+    private String preCombineField;
+    private String bootstrapIndexClass;
+    private String bootstrapBasePath;
+
+    private PropertyBuilder() {
+
+    }
+
+    public PropertyBuilder setTableType(HoodieTableType tableType) {
+      this.tableType = tableType;
+      return this;
+    }
+
+    public PropertyBuilder setTableType(String tableType) {
+      return setTableType(HoodieTableType.valueOf(tableType));
+    }
+
+    public PropertyBuilder setTableName(String tableName) {
+      this.tableName = tableName;
+      return this;
+    }
+
+    public PropertyBuilder setArchiveLogFolder(String archiveLogFolder) {
+      this.archiveLogFolder = archiveLogFolder;
+      return this;
+    }
+
+    public PropertyBuilder setPayloadClassName(String payloadClassName) {
+      this.payloadClassName = payloadClassName;
+      return this;
+    }
+
+    public PropertyBuilder setPayloadClass(Class<? extends HoodieRecordPayload> payloadClass) {
+      return setPayloadClassName(payloadClass.getName());
+    }
+
+    public PropertyBuilder setTimelineLayoutVersion(Integer timelineLayoutVersion) {
+      this.timelineLayoutVersion = timelineLayoutVersion;
+      return this;
+    }
+
+    public PropertyBuilder setBaseFileFormat(String baseFileFormat) {
+      this.baseFileFormat = baseFileFormat;
+      return this;
+    }
+
+    public PropertyBuilder setPreCombineField(String preCombineField) {
+      this.preCombineField = preCombineField;
+      return this;
+    }
+
+    public PropertyBuilder setBootstrapIndexClass(String bootstrapIndexClass) {
+      this.bootstrapIndexClass = bootstrapIndexClass;
+      return this;
+    }
+
+    public PropertyBuilder setBootstrapBasePath(String bootstrapBasePath) {
+      this.bootstrapBasePath = bootstrapBasePath;
+      return this;
+    }
+
+    public PropertyBuilder fromMetaClient(HoodieTableMetaClient metaClient) {
+      return setTableType(metaClient.getTableType())
+        .setTableName(metaClient.getTableConfig().getTableName())
+        .setArchiveLogFolder(metaClient.getArchivePath())
+        .setPayloadClassName(metaClient.getTableConfig().getPayloadClass());
+    }
+
+    public PropertyBuilder fromProperties(Properties properties) {
+      if (properties.containsKey(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME)) {
+        setTableName(properties.getProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME));
+      }
+      if (properties.containsKey(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME)) {
+        setTableType(properties.getProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME));
+      }
+      if (properties.containsKey(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME)) {
+        setArchiveLogFolder(
+            properties.getProperty(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME));
+      }
+      if (properties.containsKey(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME)) {
+        setPayloadClassName(
+            properties.getProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME));
+      }
+      if (properties.containsKey(HoodieTableConfig.HOODIE_TIMELINE_LAYOUT_VERSION)) {
+        setTimelineLayoutVersion(Integer
+            .parseInt(properties.getProperty(HoodieTableConfig.HOODIE_TIMELINE_LAYOUT_VERSION)));
+      }
+      if (properties.containsKey(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP_NAME)) {
+        setBaseFileFormat(
+            properties.getProperty(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP_NAME));
+      }
+      if (properties.containsKey(HoodieTableConfig.HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME)) {
+        setBootstrapIndexClass(
+            properties.getProperty(HoodieTableConfig.HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME));
+      }
+      if (properties.containsKey(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH)) {
+        setBootstrapBasePath(properties.getProperty(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH));
+      }
+      if (properties.containsKey(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD)) {
+        setPreCombineField(properties.getProperty(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD));
+      }
+      return this;
+    }
+
+    public Properties build() {
+      ValidationUtils.checkArgument(tableType != null, "tableType is null");
+      ValidationUtils.checkArgument(tableName != null, "tableName is null");
+
+      Properties properties = new Properties();
+      properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tableName);
+      properties.setProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
+      properties.setProperty(HoodieTableConfig.HOODIE_TABLE_VERSION_PROP_NAME,
+          String.valueOf(HoodieTableVersion.current().versionCode()));
+      if (tableType == HoodieTableType.MERGE_ON_READ && payloadClassName != null) {
+        properties.setProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, payloadClassName);
+      }
+
+      if (null != archiveLogFolder) {
+        properties.put(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, archiveLogFolder);
+      }
+
+      if (null != timelineLayoutVersion) {
+        properties.put(HoodieTableConfig.HOODIE_TIMELINE_LAYOUT_VERSION,
+            String.valueOf(timelineLayoutVersion));
+      }
+
+      if (null != baseFileFormat) {
+        properties.setProperty(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP_NAME,
+            baseFileFormat.toUpperCase());
+      }
+
+      if (null != bootstrapIndexClass) {
+        properties
+          .put(HoodieTableConfig.HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME, bootstrapIndexClass);
+      }
+
+      if (null != bootstrapBasePath) {
+        properties.put(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH, bootstrapBasePath);
+      }
+
+      if (null != preCombineField) {
+        properties.put(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD, preCombineField);
+      }
+      return properties;
+    }
+
+    /**
+     * Init Table with the properties build by this builder.
+     *
+     * @param configuration The hadoop config.
+     * @param basePath The base path for hoodie table.
+     */
+    public HoodieTableMetaClient initTable(Configuration configuration, String basePath)
+        throws IOException {
+      return HoodieTableMetaClient.initTableAndGetMetaClient(configuration, basePath, build());
+    }
   }
 }

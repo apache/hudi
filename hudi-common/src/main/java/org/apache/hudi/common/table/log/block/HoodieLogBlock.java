@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
@@ -220,7 +219,7 @@ public abstract class HoodieLogBlock {
       inputStream.readFully(content, 0, contentLength);
     } else {
       // Seek to the end of the content block
-      safeSeek(inputStream, inputStream.getPos() + contentLength);
+      inputStream.seek(inputStream.getPos() + contentLength);
     }
     return content;
   }
@@ -232,9 +231,9 @@ public abstract class HoodieLogBlock {
 
     try {
       content = Option.of(new byte[(int) this.getBlockContentLocation().get().getBlockSize()]);
-      safeSeek(inputStream, this.getBlockContentLocation().get().getContentPositionInLogFile());
+      inputStream.seek(this.getBlockContentLocation().get().getContentPositionInLogFile());
       inputStream.readFully(content.get(), 0, content.get().length);
-      safeSeek(inputStream, this.getBlockContentLocation().get().getBlockEndPos());
+      inputStream.seek(this.getBlockContentLocation().get().getBlockEndPos());
     } catch (IOException e) {
       // TODO : fs.open() and return inputstream again, need to pass FS configuration
       // because the inputstream might close/timeout for large number of log blocks to be merged
@@ -248,24 +247,5 @@ public abstract class HoodieLogBlock {
    */
   protected void deflate() {
     content = Option.empty();
-  }
-
-  /**
-   * Handles difference in seek behavior for GCS and non-GCS input stream.
-   * 
-   * @param inputStream Input Stream
-   * @param pos Position to seek
-   * @throws IOException -
-   */
-  private static void safeSeek(FSDataInputStream inputStream, long pos) throws IOException {
-    try {
-      inputStream.seek(pos);
-    } catch (EOFException e) {
-      if (FSUtils.isGCSInputStream(inputStream)) {
-        inputStream.seek(pos - 1);
-      } else {
-        throw e;
-      }
-    }
   }
 }

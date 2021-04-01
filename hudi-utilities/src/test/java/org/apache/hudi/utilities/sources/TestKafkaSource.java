@@ -88,7 +88,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
     TypedProperties props = new TypedProperties();
     props.setProperty("hoodie.deltastreamer.source.kafka.topic", TEST_TOPIC_NAME);
     props.setProperty("bootstrap.servers", testUtils.brokerAddress());
-    props.setProperty("auto.offset.reset", resetStrategy);
+    props.setProperty(Config.KAFKA_AUTO_RESET_OFFSETS, resetStrategy);
     props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents",
         maxEventsToReadFromKafkaSource != null ? String.valueOf(maxEventsToReadFromKafkaSource) :
             String.valueOf(Config.maxEventsFromKafkaSource));

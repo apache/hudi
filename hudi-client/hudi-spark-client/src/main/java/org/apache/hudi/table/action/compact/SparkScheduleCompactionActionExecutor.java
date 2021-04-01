@@ -25,7 +25,9 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -37,6 +39,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
 
 import java.io.IOException;
+import java.text.ParseException;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -58,36 +61,92 @@ public class SparkScheduleCompactionActionExecutor<T extends HoodieRecordPayload
   @Override
   protected HoodieCompactionPlan scheduleCompaction() {
     LOG.info("Checking if compaction needs to be run on " + config.getBasePath());
-    Option<HoodieInstant> lastCompaction = table.getActiveTimeline().getCommitTimeline()
-        .filterCompletedInstants().lastInstant();
-    String lastCompactionTs = "0";
-    if (lastCompaction.isPresent()) {
-      lastCompactionTs = lastCompaction.get().getTimestamp();
+    // judge if we need to compact according to num delta commits and time elapsed
+    boolean compactable = needCompact(config.getInlineCompactTriggerStrategy());
+    if (compactable) {
+      LOG.info("Generating compaction plan for merge on read table " + config.getBasePath());
+      HoodieSparkMergeOnReadTableCompactor compactor = new HoodieSparkMergeOnReadTableCompactor();
+      try {
+        SyncableFileSystemView fileSystemView = (SyncableFileSystemView) table.getSliceView();
+        Set<HoodieFileGroupId> fgInPendingCompactionAndClustering = fileSystemView.getPendingCompactionOperations()
+            .map(instantTimeOpPair -> instantTimeOpPair.getValue().getFileGroupId())
+            .collect(Collectors.toSet());
+        // exclude files in pending clustering from compaction.
+        fgInPendingCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getLeft).collect(Collectors.toSet()));
+        return compactor.generateCompactionPlan(context, table, config, instantTime, fgInPendingCompactionAndClustering);
+      } catch (IOException e) {
+        throw new HoodieCompactionException("Could not schedule compaction " + config.getBasePath(), e);
+      }
     }
 
-    int deltaCommitsSinceLastCompaction = table.getActiveTimeline().getDeltaCommitTimeline()
-        .findInstantsAfter(lastCompactionTs, Integer.MAX_VALUE).countInstants();
-    if (config.getInlineCompactDeltaCommitMax() > deltaCommitsSinceLastCompaction) {
-      LOG.info("Not scheduling compaction as only " + deltaCommitsSinceLastCompaction
-          + " delta commits was found since last compaction " + lastCompactionTs + ". Waiting for "
-          + config.getInlineCompactDeltaCommitMax());
-      return new HoodieCompactionPlan();
-    }
-
-    LOG.info("Generating compaction plan for merge on read table " + config.getBasePath());
-    HoodieSparkMergeOnReadTableCompactor compactor = new HoodieSparkMergeOnReadTableCompactor();
-    try {
-      SyncableFileSystemView fileSystemView = (SyncableFileSystemView) table.getSliceView();
-      Set<HoodieFileGroupId> fgInPendingCompactionAndClustering = fileSystemView.getPendingCompactionOperations()
-          .map(instantTimeOpPair -> instantTimeOpPair.getValue().getFileGroupId())
-          .collect(Collectors.toSet());
-      // exclude files in pending clustering from compaction.
-      fgInPendingCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getLeft).collect(Collectors.toSet()));
-      return compactor.generateCompactionPlan(context, table, config, instantTime, fgInPendingCompactionAndClustering);
-
-    } catch (IOException e) {
-      throw new HoodieCompactionException("Could not schedule compaction " + config.getBasePath(), e);
-    }
+    return new HoodieCompactionPlan();
   }
 
+  public Pair<Integer, String> getLatestDeltaCommitInfo(CompactionTriggerStrategy compactionTriggerStrategy) {
+    Option<HoodieInstant> lastCompaction = table.getActiveTimeline().getCommitTimeline()
+        .filterCompletedInstants().lastInstant();
+    HoodieTimeline deltaCommits = table.getActiveTimeline().getDeltaCommitTimeline();
+
+    String latestInstantTs;
+    int deltaCommitsSinceLastCompaction = 0;
+    if (lastCompaction.isPresent()) {
+      latestInstantTs = lastCompaction.get().getTimestamp();
+      deltaCommitsSinceLastCompaction = deltaCommits.findInstantsAfter(latestInstantTs, Integer.MAX_VALUE).countInstants();
+    } else {
+      latestInstantTs = deltaCommits.firstInstant().get().getTimestamp();
+      deltaCommitsSinceLastCompaction = deltaCommits.findInstantsAfterOrEquals(latestInstantTs, Integer.MAX_VALUE).countInstants();
+    }
+    return Pair.of(deltaCommitsSinceLastCompaction, latestInstantTs);
+  }
+
+  public boolean needCompact(CompactionTriggerStrategy compactionTriggerStrategy) {
+    boolean compactable;
+    // get deltaCommitsSinceLastCompaction and lastCompactionTs
+    Pair<Integer, String> latestDeltaCommitInfo = getLatestDeltaCommitInfo(compactionTriggerStrategy);
+    int inlineCompactDeltaCommitMax = config.getInlineCompactDeltaCommitMax();
+    int inlineCompactDeltaSecondsMax = config.getInlineCompactDeltaSecondsMax();
+    switch (compactionTriggerStrategy) {
+      case NUM_COMMITS:
+        compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft();
+        if (compactable) {
+          LOG.info(String.format("The delta commits >= %s, trigger compaction scheduler.", inlineCompactDeltaCommitMax));
+        }
+        break;
+      case TIME_ELAPSED:
+        compactable = inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(latestDeltaCommitInfo.getRight());
+        if (compactable) {
+          LOG.info(String.format("The elapsed time >=%ss, trigger compaction scheduler.", inlineCompactDeltaSecondsMax));
+        }
+        break;
+      case NUM_OR_TIME:
+        compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft()
+            || inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(latestDeltaCommitInfo.getRight());
+        if (compactable) {
+          LOG.info(String.format("The delta commits >= %s or elapsed_time >=%ss, trigger compaction scheduler.", inlineCompactDeltaCommitMax,
+              inlineCompactDeltaSecondsMax));
+        }
+        break;
+      case NUM_AND_TIME:
+        compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft()
+            && inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(latestDeltaCommitInfo.getRight());
+        if (compactable) {
+          LOG.info(String.format("The delta commits >= %s and elapsed_time >=%ss, trigger compaction scheduler.", inlineCompactDeltaCommitMax,
+              inlineCompactDeltaSecondsMax));
+        }
+        break;
+      default:
+        throw new HoodieCompactionException("Unsupported compaction trigger strategy: " + config.getInlineCompactTriggerStrategy());
+    }
+    return compactable;
+  }
+
+  public Long parsedToSeconds(String time) {
+    long timestamp;
+    try {
+      timestamp = HoodieActiveTimeline.COMMIT_FORMATTER.parse(time).getTime() / 1000;
+    } catch (ParseException e) {
+      throw new HoodieCompactionException(e.getMessage(), e);
+    }
+    return timestamp;
+  }
 }

@@ -121,17 +121,10 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
 
     if (hfileConfig.useBloomFilter()) {
       hfileConfig.getBloomFilter().add(recordKey);
-      if (minRecordKey != null) {
-        minRecordKey = minRecordKey.compareTo(recordKey) <= 0 ? minRecordKey : recordKey;
-      } else {
+      if (minRecordKey == null) {
         minRecordKey = recordKey;
       }
-
-      if (maxRecordKey != null) {
-        maxRecordKey = maxRecordKey.compareTo(recordKey) >= 0 ? maxRecordKey : recordKey;
-      } else {
-        maxRecordKey = recordKey;
-      }
+      maxRecordKey = recordKey;
     }
   }
 
@@ -162,5 +155,10 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
 
     writer.close();
     writer = null;
+  }
+
+  @Override
+  public long getBytesWritten() {
+    return fs.getBytesWritten(file);
   }
 }

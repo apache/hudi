@@ -86,6 +86,7 @@ public class HiveTestUtil {
   private static ZooKeeperServer zkServer;
   private static HiveServer2 hiveServer;
   private static HiveTestService hiveTestService;
+  private static ZookeeperTestService zkService;
   private static Configuration configuration;
   public static HiveSyncConfig hiveSyncConfig;
   private static DateTimeFormatter dtfOut;
@@ -99,7 +100,7 @@ public class HiveTestUtil {
       configuration = service.getHadoopConf();
     }
     if (zkServer == null) {
-      ZookeeperTestService zkService = new ZookeeperTestService(configuration);
+      zkService = new ZookeeperTestService(configuration);
       zkServer = zkService.start();
     }
     if (hiveServer == null) {
@@ -126,8 +127,11 @@ public class HiveTestUtil {
 
   public static void clear() throws IOException {
     fileSystem.delete(new Path(hiveSyncConfig.basePath), true);
-    HoodieTableMetaClient.initTableType(configuration, hiveSyncConfig.basePath, HoodieTableType.COPY_ON_WRITE,
-        hiveSyncConfig.tableName, HoodieAvroPayload.class.getName());
+    HoodieTableMetaClient.withPropertyBuilder()
+      .setTableType(HoodieTableType.COPY_ON_WRITE)
+      .setTableName(hiveSyncConfig.tableName)
+      .setPayloadClass(HoodieAvroPayload.class)
+      .initTable(configuration, hiveSyncConfig.basePath);
 
     HoodieHiveClient client = new HoodieHiveClient(hiveSyncConfig, hiveServer.getHiveConf(), fileSystem);
     for (String tableName : createdTablesSet) {
@@ -140,6 +144,18 @@ public class HiveTestUtil {
 
   public static HiveConf getHiveConf() {
     return hiveServer.getHiveConf();
+  }
+
+  public static HiveServer2 getHiveServer() {
+    return hiveServer;
+  }
+
+  public static ZooKeeperServer getZkServer() {
+    return zkServer;
+  }
+
+  public static ZookeeperTestService getZkService() {
+    return zkService;
   }
 
   public static void shutdown() {
@@ -161,8 +177,12 @@ public class HiveTestUtil {
       throws IOException, URISyntaxException {
     Path path = new Path(hiveSyncConfig.basePath);
     FileIOUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
-    HoodieTableMetaClient.initTableType(configuration, hiveSyncConfig.basePath, HoodieTableType.COPY_ON_WRITE,
-        hiveSyncConfig.tableName, HoodieAvroPayload.class.getName());
+    HoodieTableMetaClient.withPropertyBuilder()
+      .setTableType(HoodieTableType.COPY_ON_WRITE)
+      .setTableName(hiveSyncConfig.tableName)
+      .setPayloadClass(HoodieAvroPayload.class)
+      .initTable(configuration, hiveSyncConfig.basePath);
+
     boolean result = fileSystem.mkdirs(path);
     checkResult(result);
     DateTime dateTime = DateTime.now();
@@ -177,8 +197,11 @@ public class HiveTestUtil {
       throws IOException, URISyntaxException, InterruptedException {
     Path path = new Path(hiveSyncConfig.basePath);
     FileIOUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
-    HoodieTableMetaClient.initTableType(configuration, hiveSyncConfig.basePath, HoodieTableType.MERGE_ON_READ,
-        hiveSyncConfig.tableName, HoodieAvroPayload.class.getName());
+    HoodieTableMetaClient.withPropertyBuilder()
+      .setTableType(HoodieTableType.MERGE_ON_READ)
+      .setTableName(hiveSyncConfig.tableName)
+      .setPayloadClass(HoodieAvroPayload.class)
+      .initTable(configuration, hiveSyncConfig.basePath);
 
     boolean result = fileSystem.mkdirs(path);
     checkResult(result);
