@@ -133,6 +133,7 @@
                   <include>org.apache.hive:hive-jdbc</include>
 
                   <include>org.apache.hbase:hbase-common</include>
+                  <include>commons-codec:commons-codec</include>
                 </includes>
               </artifactSet>
               <relocations>
