@@ -34,7 +34,7 @@ import java.util.Set;
 /**
  * Hoodie's Implementation of {@link SupportsWrite}. This is used in data source "hudi.spark3.internal" implementation for bulk insert.
  */
-class HoodieDataSourceInternalTable implements SupportsWrite {
+public class HoodieDataSourceInternalTable implements SupportsWrite {
 
   private final String instantTime;
   private final HoodieWriteConfig writeConfig;

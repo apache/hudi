@@ -250,7 +250,7 @@ case class HoodieFileIndex(
     val sparkParsePartitionUtil = HoodieSparkUtils.createSparkParsePartitionUtil(spark
       .sessionState.conf)
     // Convert partition path to PartitionRowPath
-    val partitionRowPaths = partitionPaths.map { partitionPath =>
+    var partitionRowPaths = partitionPaths.map { partitionPath =>
       val partitionRow = if (partitionSchema.fields.length == 0) {
         // This is a non-partitioned table
         InternalRow.empty
@@ -300,6 +300,10 @@ case class HoodieFileIndex(
         }
       }
       PartitionRowPath(partitionRow, partitionPath)
+    }
+
+    if (partitionRowPaths.isEmpty) {
+      partitionRowPaths = Seq(PartitionRowPath(InternalRow.empty, "")).toBuffer
     }
 
     // List files in all of the partition path.
