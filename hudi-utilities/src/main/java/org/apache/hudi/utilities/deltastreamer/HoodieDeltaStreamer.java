@@ -63,7 +63,7 @@ import org.apache.spark.sql.SparkSession;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Enumeration;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -545,12 +545,16 @@ public class HoodieDeltaStreamer implements Serializable {
           "'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed.");
 
       this.props = properties.get();
-      LOG.info("Creating delta streamer with configs : " + props.toString());
 
-      Enumeration<String> enums = (Enumeration<String>) props.propertyNames();
+      List<String> allKeys = new ArrayList<>();
+      for (Object k : props.keySet()) {
+        allKeys.add(k.toString());
+      }
+      Collections.sort(allKeys);
+
       StringBuilder propsLog = new StringBuilder("Creating delta streamer with configs:\n");
-      while (enums.hasMoreElements()) {
-        String key = enums.nextElement();
+
+      for (String key : allKeys) {
         String value = props.getProperty(key);
         // Truncate too long values.
         if (value.length() > 255 && !LOG.isDebugEnabled()) {
