@@ -88,7 +88,7 @@ object AvroConversionUtils {
       }
 
       case Schema.Type.ARRAY => {
-        Schema.createMap(getAvroSchemaWithDefaults(schema.getElementType))
+        Schema.createArray(getAvroSchemaWithDefaults(schema.getElementType))
       }
 
       case _ => schema
