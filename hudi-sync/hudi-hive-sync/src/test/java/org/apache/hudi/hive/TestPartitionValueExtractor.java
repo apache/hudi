@@ -19,6 +19,7 @@
 package org.apache.hudi.hive;
 
 import org.junit.jupiter.api.Test;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,11 +29,25 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class TestPartitionValueExtractor {
   @Test
   public void testHourPartition() {
-    SlashEncodedHourPartitionValueExtractor hourPartition = new SlashEncodedHourPartitionValueExtractor();
+    SlashEncodedHourPartitionValueExtractor hourPartition =
+        new SlashEncodedHourPartitionValueExtractor();
     List<String> list = new ArrayList<>();
     list.add("2020-12-20-01");
     assertEquals(hourPartition.extractPartitionValuesInPath("2020/12/20/01"), list);
-    assertThrows(IllegalArgumentException.class, () -> hourPartition.extractPartitionValuesInPath("2020/12/20"));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> hourPartition.extractPartitionValuesInPath("2020/12/20"));
     assertEquals(hourPartition.extractPartitionValuesInPath("update_time=2020/12/20/01"), list);
+  }
+
+  @Test
+  public void testHiveStylePartition() {
+    HiveStylePartitionValueExtractor hiveStylePartition = new HiveStylePartitionValueExtractor();
+    List<String> list = new ArrayList<>();
+    list.add("2021-04-02");
+    assertEquals(hiveStylePartition.extractPartitionValuesInPath("datestr=2021-04-02"), list);
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> hiveStylePartition.extractPartitionValuesInPath("2021/04/02"));
   }
 }
