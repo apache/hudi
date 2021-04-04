@@ -45,6 +45,10 @@ public class DataSourceTestUtils {
     return new Schema.Parser().parse(FileIOUtils.readAsUTFString(DataSourceTestUtils.class.getResourceAsStream("/exampleSchema.txt")));
   }
 
+  public static Schema getStructTypeExampleEvolvedSchema() throws IOException {
+    return new Schema.Parser().parse(FileIOUtils.readAsUTFString(DataSourceTestUtils.class.getResourceAsStream("/exampleEvolvedSchema.txt")));
+  }
+
   public static List<Row> generateRandomRows(int count) {
     Random random = new Random();
     List<Row> toReturn = new ArrayList<>();
@@ -54,6 +58,33 @@ public class DataSourceTestUtils {
       values[0] = UUID.randomUUID().toString();
       values[1] = partitions.get(random.nextInt(3));
       values[2] = new Date().getTime();
+      toReturn.add(RowFactory.create(values));
+    }
+    return toReturn;
+  }
+
+  public static List<Row> generateUpdates(List<Row> records, int count) {
+    List<Row> toReturn = new ArrayList<>();
+    for (int i = 0; i < count; i++) {
+      Object[] values = new Object[3];
+      values[0] = records.get(i).getString(0);
+      values[1] = records.get(i).getAs(1);
+      values[2] = new Date().getTime();
+      toReturn.add(RowFactory.create(values));
+    }
+    return toReturn;
+  }
+
+  public static List<Row> generateRandomRowsEvolvedSchema(int count) {
+    Random random = new Random();
+    List<Row> toReturn = new ArrayList<>();
+    List<String> partitions = Arrays.asList(new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH});
+    for (int i = 0; i < count; i++) {
+      Object[] values = new Object[4];
+      values[0] = UUID.randomUUID().toString();
+      values[1] = partitions.get(random.nextInt(3));
+      values[2] = new Date().getTime();
+      values[3] = UUID.randomUUID().toString();
       toReturn.add(RowFactory.create(values));
     }
     return toReturn;
