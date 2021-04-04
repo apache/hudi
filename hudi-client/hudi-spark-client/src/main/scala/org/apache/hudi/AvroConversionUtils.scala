@@ -70,10 +70,10 @@ object AvroConversionUtils {
                 val restructuredNewSchema = Schema.createUnion(List(Schema.create(Schema.Type.NULL)) ++ innerFields.filter(innerSchema => !(innerSchema.getType == Schema.Type.NULL)))
                 new Schema.Field(field.name(), restructuredNewSchema, field.doc(), JsonProperties.NULL_VALUE)
               } else {
-                new Schema.Field(field.name(), newSchema, field.doc(), null)
+                new Schema.Field(field.name(), newSchema, field.doc(), field.defaultVal())
               }
             }
-            case _ => new Schema.Field(field.name(), newSchema, field.doc(), null)
+            case _ => new Schema.Field(field.name(), newSchema, field.doc(), field.defaultVal())
           }
         }).toList
         Schema.createRecord(schema.getName, schema.getDoc, schema.getNamespace, schema.isError, modifiedFields)
