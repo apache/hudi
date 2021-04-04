@@ -32,7 +32,7 @@ The steps have been tested on a Mac laptop
     ```
   * Java : Java SE Development Kit 8.
   * Maven : A build automation tool for Java projects.
-  * jq : A lightweight and flexible command-line JSON processor. Use `brew instlal jq` to install jq.
+  * jq : A lightweight and flexible command-line JSON processor. Use `brew install jq` to install jq.
   
 Also, this has not been tested on some environments like Docker on Windows.
 
@@ -207,7 +207,7 @@ inorder to run Hive queries against those tables.
 ```java
 docker exec -it adhoc-2 /bin/bash
 
-# THis command takes in HIveServer URL and COW Hudi table location in HDFS and sync the HDFS state to Hive
+# This command takes in HiveServer URL and COW Hudi table location in HDFS and sync the HDFS state to Hive
 /var/hoodie/ws/hudi-sync/hudi-hive-sync/run_sync_tool.sh \
   --jdbc-url jdbc:hive2://hiveserver:10000 \
   --user hive \
