@@ -19,6 +19,8 @@
 package org.apache.hudi;
 
 import org.apache.hudi.exception.HoodieException;
+
+import org.apache.avro.Schema;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,5 +43,45 @@ public class TestQuickstartUtils {
     //Execute generateInserts before executing generateUpdates then no exception
     assertEquals(dataGenerator.generateInserts(10).size(), 10);
     assertEquals(dataGenerator.generateUpdates(10).size(), 10);
+    assertEquals(dataGenerator.generateDeletes(4).size(), 4);
+
+    QuickstartUtils.convertToStringList(dataGenerator.generateInserts(4)); // ensures no exception is thrown
+
+    QuickstartUtils.convertToStringList(dataGenerator.generateUpdates(2)); // ensure no exception is thrown
+
+    QuickstartUtils.convertDeletesToStringList(dataGenerator.generateDeletes(2)); // ensures no exception is thrown
   }
+
+  @Test
+  public void testGenerateUpdatesCustomSchema() throws Exception {
+    QuickstartUtils.DataGenerator dataGenerator = new QuickstartUtils.DataGenerator();
+
+    //Call generateUpdates directly then throws HoodieException
+    assertEquals(Assertions.assertThrows(HoodieException.class, () -> {
+      dataGenerator.generateUpdates(10);
+    }).getMessage(), "Data must have been written before performing the update operation");
+
+    Schema schema = createUserSchema();
+    dataGenerator.instantiateSchema(schema.toString(), "name");
+
+    assertEquals(dataGenerator.generateInserts(10).size(), 10);
+    assertEquals(dataGenerator.generateUpdates(10).size(), 10);
+    assertEquals(dataGenerator.generateDeletes(4).size(), 4);
+
+    QuickstartUtils.convertToStringList(dataGenerator.generateInserts(4)); // ensures no exception is thrown
+
+    QuickstartUtils.convertToStringList(dataGenerator.generateUpdates(2)); // ensure no exception is thrown
+
+    QuickstartUtils.convertDeletesToStringList(dataGenerator.generateDeletes(2)); // ensures no exception is thrown
+
+  }
+
+  private Schema createUserSchema() {
+    String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", "
+        + "\"name\": \"User\","
+        + "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}, {\"name\": \"strField\", \"type\": \"string\"}]}";
+    Schema.Parser parser = new Schema.Parser();
+    return parser.parse(userSchema);
+  }
+
 }

@@ -403,6 +403,12 @@
       <version>${zk-curator.version}</version>
     </dependency>
 
+    <dependency>
+      <groupId>io.confluent.avro</groupId>
+      <artifactId>avro-random-generator</artifactId>
+      <version>0.2.2</version>
+    </dependency>
+
     <!-- Hoodie - Test -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
