@@ -185,12 +185,12 @@ public class HiveIncrementalPuller {
       throw new HoodieIncrementalPullSQLException(
           "Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable);
     }
-    if (!incrementalSQL.contains("`_hoodie_commit_time` > '%targetBasePath'")) {
+    if (!incrementalSQL.contains("`_hoodie_commit_time` > '%s'")) {
       LOG.info("Incremental SQL : " + incrementalSQL
-          + " does not contain `_hoodie_commit_time` > '%targetBasePath'. Please add "
+          + " does not contain `_hoodie_commit_time` > '%s'. Please add "
           + "this clause for incremental to work properly.");
       throw new HoodieIncrementalPullSQLException(
-          "Incremental SQL does not have clause `_hoodie_commit_time` > '%targetBasePath', which "
+          "Incremental SQL does not have clause `_hoodie_commit_time` > '%s', which "
               + "means its not pulling incrementally");
     }
 
