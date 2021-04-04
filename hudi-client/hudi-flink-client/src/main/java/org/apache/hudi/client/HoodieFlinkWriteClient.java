@@ -429,8 +429,8 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     HoodieFlinkTable<T> table = getHoodieTable();
     String commitType = CommitUtils.getCommitActionType(HoodieTableType.valueOf(tableType));
     HoodieActiveTimeline activeTimeline = table.getMetaClient().getActiveTimeline();
-    activeTimeline.deletePending(HoodieInstant.State.INFLIGHT, commitType, instant);
-    activeTimeline.deletePending(HoodieInstant.State.REQUESTED, commitType, instant);
+    activeTimeline.deletePendingIfExists(HoodieInstant.State.INFLIGHT, commitType, instant);
+    activeTimeline.deletePendingIfExists(HoodieInstant.State.REQUESTED, commitType, instant);
   }
 
   public void transitionRequestedToInflight(String tableType, String inFlightInstant) {

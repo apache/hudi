@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 
 public class KeyGenUtils {
@@ -40,6 +41,32 @@ public class KeyGenUtils {
 
   protected static final String DEFAULT_PARTITION_PATH = "default";
   protected static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
+
+  /**
+   * Extracts the record key fields in strings out of the given record key,
+   * this is the reverse operation of {@link #getRecordKey(GenericRecord, String)}.
+   *
+   * @see SimpleAvroKeyGenerator
+   * @see org.apache.hudi.keygen.ComplexAvroKeyGenerator
+   */
+  public static String[] extractRecordKeys(String recordKey) {
+    String[] fieldKV = recordKey.split(",");
+    if (fieldKV.length == 1) {
+      return fieldKV;
+    } else {
+      // a complex key
+      return Arrays.stream(fieldKV).map(kv -> {
+        final String[] kvArray = kv.split(":");
+        if (kvArray[1].equals(NULL_RECORDKEY_PLACEHOLDER)) {
+          return null;
+        } else if (kvArray[1].equals(EMPTY_RECORDKEY_PLACEHOLDER)) {
+          return "";
+        } else {
+          return kvArray[1];
+        }
+      }).toArray(String[]::new);
+    }
+  }
 
   public static String getRecordKey(GenericRecord record, List<String> recordKeyFields) {
     boolean keyIsNullEmpty = true;
