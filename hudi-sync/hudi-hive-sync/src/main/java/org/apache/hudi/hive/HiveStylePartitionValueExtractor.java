@@ -21,6 +21,11 @@ package org.apache.hudi.hive;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * Extractor for Hive Style Partitioned tables, when the parition folders are key value pairs.
+ *
+ * <p>This implementation extracts the partition value of yyyy-mm-dd from the path of type datestr=yyyy-mm-dd.
+ */
 public class HiveStylePartitionValueExtractor implements PartitionValueExtractor {
   private static final long serialVersionUID = 1L;
 
