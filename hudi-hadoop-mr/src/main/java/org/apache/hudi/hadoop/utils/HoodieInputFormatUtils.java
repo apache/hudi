@@ -426,7 +426,6 @@ public class HoodieInputFormatUtils {
                                                                  List<Path> snapshotPaths) throws IOException {
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(job);
     List<FileStatus> returns = new ArrayList<>();
-
     Map<HoodieTableMetaClient, List<Path>> groupedPaths = HoodieInputFormatUtils
         .groupSnapshotPathsByMetaClient(tableMetaClientMap.values(), snapshotPaths);
     Map<HoodieTableMetaClient, HoodieTableFileSystemView> fsViewCache = new HashMap<>();
@@ -438,11 +437,20 @@ public class HoodieInputFormatUtils {
         if (LOG.isDebugEnabled()) {
           LOG.debug("Hoodie Metadata initialized with completed commit instant as :" + metaClient);
         }
-
         HoodieTimeline timeline = HoodieHiveUtils.getTableTimeline(metaClient.getTableConfig().getTableName(), job, metaClient);
+
+        String tableName = metaClient.getTableConfig().getTableName();
+        Option<String> maxCommitInstant = HoodieHiveUtils.getSnapshotMaxCommitTime(job, tableName);
+
+        if (maxCommitInstant.isPresent()) {
+          timeline = timeline.filter(hoodieInstant -> HoodieTimeline.compareTimestamps(hoodieInstant.getTimestamp(), HoodieTimeline.LESSER_THAN_OR_EQUALS, maxCommitInstant.get()));
+        }
+
+        HoodieTimeline finalTimeline = timeline;
         HoodieTableFileSystemView fsView = fsViewCache.computeIfAbsent(metaClient, tableMetaClient ->
-            FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext, tableMetaClient, buildMetadataConfig(job), timeline));
+            FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext, tableMetaClient, buildMetadataConfig(job), finalTimeline));
         List<HoodieBaseFile> filteredBaseFiles = new ArrayList<>();
+
         for (Path p : entry.getValue()) {
           String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), p);
           List<HoodieBaseFile> matched = fsView.getLatestBaseFiles(relativePartitionPath).collect(Collectors.toList());

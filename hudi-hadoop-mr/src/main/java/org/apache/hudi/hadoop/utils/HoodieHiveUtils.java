@@ -24,6 +24,7 @@ import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -68,6 +69,7 @@ public class HoodieHiveUtils {
   public static final String HOODIE_STOP_AT_COMPACTION_PATTERN = "hoodie.%s.ro.stop.at.compaction";
   public static final String INCREMENTAL_SCAN_MODE = "INCREMENTAL";
   public static final String SNAPSHOT_SCAN_MODE = "SNAPSHOT";
+  public static final String HOODIE_SNAPSHOT_CONSUME_COMMIT_PATTERN = "hoodie.%s.consume.snapshot.time";
   public static final String DEFAULT_SCAN_MODE = SNAPSHOT_SCAN_MODE;
   public static final int DEFAULT_MAX_COMMITS = 1;
   public static final int MAX_COMMIT_ALL = -1;
@@ -136,5 +138,17 @@ public class HoodieHiveUtils {
 
     // by default return all completed commits.
     return metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+  }
+
+  public static Option<String> getSnapshotMaxCommitTime(JobConf job, String tableName) {
+    String maxCommitTime = job.get(getSnapshotMaxCommitKey(tableName));
+    if (maxCommitTime != null) {
+      return Option.of(maxCommitTime);
+    }
+    return Option.empty();
+  }
+
+  private static String getSnapshotMaxCommitKey(String tableName) {
+    return String.format(HoodieHiveUtils.HOODIE_SNAPSHOT_CONSUME_COMMIT_PATTERN, tableName);
   }
 }

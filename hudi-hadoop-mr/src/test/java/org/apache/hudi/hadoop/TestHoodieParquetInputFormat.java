@@ -193,6 +193,40 @@ public class TestHoodieParquetInputFormat {
   }
 
   @Test
+  public void testPointInTimeQueryWithUpdates() throws IOException {
+    // initial commit
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
+    InputFormatTestUtil.commit(basePath, "100");
+
+    // Add the paths
+    FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
+
+    FileStatus[] files = inputFormat.listStatus(jobConf);
+    assertEquals(10, files.length);
+
+    // update files
+    InputFormatTestUtil.simulateUpdates(partitionDir, baseFileExtension, "100", 5, "200", true);
+    // Before the commit
+    files = inputFormat.listStatus(jobConf);
+    assertEquals(10, files.length);
+    ensureFilesInCommit("Commit 200 has not been committed. We should not see files from this commit", files, "200", 0);
+    InputFormatTestUtil.commit(basePath, "200");
+
+    InputFormatTestUtil.setupSnapshotMaxCommitTimeQueryMode(jobConf, "150");
+
+    files = inputFormat.listStatus(jobConf);
+    assertEquals(10, files.length);
+    ensureFilesInCommit("We shouldn't have any file pertaining to commit 200", files, "200", 0);
+    ensureFilesInCommit("All files should be from commit 100", files, "100", 10);
+
+    InputFormatTestUtil.setupSnapshotMaxCommitTimeQueryMode(jobConf, "250");
+    files = inputFormat.listStatus(jobConf);
+    assertEquals(10, files.length);
+    ensureFilesInCommit("5 files for commit 200", files, "200", 5);
+    ensureFilesInCommit("5 files for commit 100", files, "100", 5);
+  }
+
+  @Test
   public void testInputFormatWithCompaction() throws IOException {
     // initial commit
     File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
