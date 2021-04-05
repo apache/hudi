@@ -245,7 +245,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       bootstrapIndex = null;
 
       // Initialize with new Hoodie timeline.
-      init(metaClient, getTimeline());
+      init(metaClient, metaClient.reloadActiveTimeline());
     } finally {
       writeLock.unlock();
     }

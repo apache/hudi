@@ -68,6 +68,10 @@ public class ReplaceArchivalHelper implements Serializable {
   public static boolean deleteReplacedFileGroups(HoodieEngineContext context, HoodieTableMetaClient metaClient,
                                                  TableFileSystemView fileSystemView,
                                                  HoodieInstant instant, List<String> replacedPartitions) {
+    if (replacedPartitions.isEmpty()) {
+      LOG.warn("Found empty replaced partitions");
+      return true;
+    }
     context.setJobStatus(ReplaceArchivalHelper.class.getSimpleName(), "Delete replaced file groups");
     List<Boolean> f = context.map(replacedPartitions, partition -> {
       Stream<FileSlice> fileSlices =  fileSystemView.getReplacedFileGroupsBeforeOrOn(instant.getTimestamp(), partition)
