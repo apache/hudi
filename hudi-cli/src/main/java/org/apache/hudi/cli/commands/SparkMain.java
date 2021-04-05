@@ -41,6 +41,7 @@ import org.apache.hudi.table.upgrade.SparkUpgradeDowngrade;
 import org.apache.hudi.utilities.HDFSParquetImporter;
 import org.apache.hudi.utilities.HDFSParquetImporter.Config;
 import org.apache.hudi.utilities.HoodieCleaner;
+import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool;
 import org.apache.hudi.utilities.HoodieCompactionAdminTool.Operation;
 import org.apache.hudi.utilities.HoodieCompactor;
@@ -70,7 +71,8 @@ public class SparkMain {
    */
   enum SparkCommand {
     BOOTSTRAP, ROLLBACK, DEDUPLICATE, ROLLBACK_TO_SAVEPOINT, SAVEPOINT, IMPORT, UPSERT, COMPACT_SCHEDULE, COMPACT_RUN,
-    COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR, CLEAN, DELETE_SAVEPOINT, UPGRADE, DOWNGRADE
+    COMPACT_UNSCHEDULE_PLAN, COMPACT_UNSCHEDULE_FILE, COMPACT_VALIDATE, COMPACT_REPAIR, CLUSTERING_SCHEDULE,
+    CLUSTERING_RUN, CLEAN, DELETE_SAVEPOINT, UPGRADE, DOWNGRADE
   }
 
   public static void main(String[] args) throws Exception {
@@ -158,6 +160,31 @@ public class SparkMain {
           doCompactUnschedule(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]),
                   Boolean.parseBoolean(args[7]), Boolean.parseBoolean(args[8]));
           returnCode = 0;
+          break;
+        case CLUSTERING_RUN:
+          assert (args.length >= 9);
+          propsFilePath = null;
+          if (!StringUtils.isNullOrEmpty(args[8])) {
+            propsFilePath = args[8];
+          }
+          configs = new ArrayList<>();
+          if (args.length > 9) {
+            configs.addAll(Arrays.asList(args).subList(9, args.length));
+          }
+          returnCode = cluster(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5],
+              Integer.parseInt(args[6]), false, propsFilePath, configs);
+          break;
+        case CLUSTERING_SCHEDULE:
+          assert (args.length >= 6);
+          propsFilePath = null;
+          if (!StringUtils.isNullOrEmpty(args[5])) {
+            propsFilePath = args[5];
+          }
+          configs = new ArrayList<>();
+          if (args.length > 6) {
+            configs.addAll(Arrays.asList(args).subList(6, args.length));
+          }
+          returnCode = cluster(jsc, args[1], args[2], args[3], 1, args[4], 0, true, propsFilePath, configs);
           break;
         case CLEAN:
           assert (args.length >= 5);
@@ -310,6 +337,20 @@ public class SparkMain {
     cfg.configs = configs;
     jsc.getConf().set("spark.executor.memory", sparkMemory);
     return new HoodieCompactor(jsc, cfg).compact(retry);
+  }
+
+  private static int cluster(JavaSparkContext jsc, String basePath, String tableName, String clusteringInstant,
+      int parallelism, String sparkMemory, int retry, boolean schedule, String propsFilePath, List<String> configs) {
+    HoodieClusteringJob.Config cfg = new HoodieClusteringJob.Config();
+    cfg.basePath = basePath;
+    cfg.tableName = tableName;
+    cfg.clusteringInstantTime = clusteringInstant;
+    cfg.parallelism = parallelism;
+    cfg.runSchedule = schedule;
+    cfg.propsFilePath = propsFilePath;
+    cfg.configs = configs;
+    jsc.getConf().set("spark.executor.memory", sparkMemory);
+    return new HoodieClusteringJob(jsc, cfg).cluster(retry);
   }
 
   private static int deduplicatePartitionPath(JavaSparkContext jsc, String duplicatedPartitionPath,
