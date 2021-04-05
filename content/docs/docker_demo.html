@@ -424,7 +424,7 @@ data infrastructure is brought up in a local docker cluster within your computer
   </li>
   <li>Java : Java SE Development Kit 8.</li>
   <li>Maven : A build automation tool for Java projects.</li>
-  <li>jq : A lightweight and flexible command-line JSON processor. Use <code class="highlighter-rouge">brew instlal jq</code> to install jq.</li>
+  <li>jq : A lightweight and flexible command-line JSON processor. Use <code class="highlighter-rouge">brew install jq</code> to install jq.</li>
 </ul>
 
 <p>Also, this has not been tested on some environments like Docker on Windows.</p>
@@ -594,7 +594,7 @@ inorder to run Hive queries against those tables.</p>
 
 <div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">docker</span> <span class="n">exec</span> <span class="o">-</span><span class="n">it</span> <span class="n">adhoc</span><span class="o">-</span><span class="mi">2</span> <span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">bash</span>
 
-<span class="err">#</span> <span class="nc">THis</span> <span class="n">command</span> <span class="n">takes</span> <span class="n">in</span> <span class="nc">HIveServer</span> <span class="no">URL</span> <span class="n">and</span> <span class="no">COW</span> <span class="nc">Hudi</span> <span class="n">table</span> <span class="n">location</span> <span class="n">in</span> <span class="no">HDFS</span> <span class="n">and</span> <span class="n">sync</span> <span class="n">the</span> <span class="no">HDFS</span> <span class="n">state</span> <span class="n">to</span> <span class="nc">Hive</span>
+<span class="err">#</span> <span class="nc">This</span> <span class="n">command</span> <span class="n">takes</span> <span class="n">in</span> <span class="nc">HiveServer</span> <span class="no">URL</span> <span class="n">and</span> <span class="no">COW</span> <span class="nc">Hudi</span> <span class="n">table</span> <span class="n">location</span> <span class="n">in</span> <span class="no">HDFS</span> <span class="n">and</span> <span class="n">sync</span> <span class="n">the</span> <span class="no">HDFS</span> <span class="n">state</span> <span class="n">to</span> <span class="nc">Hive</span>
 <span class="o">/</span><span class="kt">var</span><span class="o">/</span><span class="n">hoodie</span><span class="o">/</span><span class="n">ws</span><span class="o">/</span><span class="n">hudi</span><span class="o">-</span><span class="n">sync</span><span class="o">/</span><span class="n">hudi</span><span class="o">-</span><span class="n">hive</span><span class="o">-</span><span class="n">sync</span><span class="o">/</span><span class="n">run_sync_tool</span><span class="o">.</span><span class="na">sh</span> <span class="err">\</span>
   <span class="o">--</span><span class="n">jdbc</span><span class="o">-</span><span class="n">url</span> <span class="nl">jdbc:hive2:</span><span class="c1">//hiveserver:10000 \</span>
   <span class="o">--</span><span class="n">user</span> <span class="n">hive</span> <span class="err">\</span>
