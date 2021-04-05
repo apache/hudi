@@ -162,14 +162,14 @@ public class SparkMain {
           returnCode = 0;
           break;
         case CLUSTERING_RUN:
-          assert (args.length >= 9);
+          assert (args.length >= 8);
           propsFilePath = null;
-          if (!StringUtils.isNullOrEmpty(args[8])) {
-            propsFilePath = args[8];
+          if (!StringUtils.isNullOrEmpty(args[7])) {
+            propsFilePath = args[7];
           }
           configs = new ArrayList<>();
-          if (args.length > 9) {
-            configs.addAll(Arrays.asList(args).subList(9, args.length));
+          if (args.length > 8) {
+            configs.addAll(Arrays.asList(args).subList(8, args.length));
           }
           returnCode = cluster(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5],
               Integer.parseInt(args[6]), false, propsFilePath, configs);
