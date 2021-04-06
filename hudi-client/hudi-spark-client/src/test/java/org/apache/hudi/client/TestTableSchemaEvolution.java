@@ -67,6 +67,10 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
   public static final String EXTRA_FIELD_SCHEMA =
       "{\"name\": \"new_field\", \"type\": \"boolean\", \"default\": false},";
+  public static final String EXTRA_FIELD_WITHOUT_DEFAULT_SCHEMA =
+      "{\"name\": \"new_field_without_default\", \"type\": \"boolean\"},";
+  public static final String EXTRA_FIELD_NULLABLE_SCHEMA =
+      "{\"name\": \"new_field_without_default\", \"type\": [\"boolean\", \"null\"]},";
 
   // TRIP_EXAMPLE_SCHEMA with a new_field added
   public static final String TRIP_EXAMPLE_SCHEMA_EVOLVED = TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
@@ -143,6 +147,16 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
         + TRIP_SCHEMA_SUFFIX;
     assertTrue(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, multipleAddedFieldSchema),
         "Multiple added fields with defauls are compatible");
+
+    assertFalse(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA,
+        TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
+            + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + EXTRA_FIELD_WITHOUT_DEFAULT_SCHEMA + TRIP_SCHEMA_SUFFIX),
+        "Added field without default and not nullable is not compatible (Evolved Schema)");
+
+    assertTrue(TableSchemaResolver.isSchemaCompatible(TRIP_EXAMPLE_SCHEMA,
+        TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
+            + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + EXTRA_FIELD_NULLABLE_SCHEMA + TRIP_SCHEMA_SUFFIX),
+        "Added nullable field is compatible (Evolved Schema)");
   }
 
   @Test
