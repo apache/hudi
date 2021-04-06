@@ -122,7 +122,11 @@ public class HoodieClusteringJob {
     int ret = UtilHelpers.retry(retry, () -> {
       if (cfg.runSchedule) {
         LOG.info("Do schedule");
-        return doSchedule(jsc);
+        int result = doSchedule(jsc);
+        if (result == 0) {
+          LOG.info("The schedule instant time is " + cfg.clusteringInstantTime);
+        }
+        return result;
       } else {
         LOG.info("Do cluster");
         return doCluster(jsc);
@@ -162,5 +166,4 @@ public class HoodieClusteringJob {
     client.scheduleClusteringAtInstant(cfg.clusteringInstantTime, Option.empty());
     return 0;
   }
-
 }

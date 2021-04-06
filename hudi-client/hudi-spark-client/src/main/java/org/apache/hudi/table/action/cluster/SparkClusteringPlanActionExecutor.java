@@ -52,6 +52,16 @@ public class SparkClusteringPlanActionExecutor<T extends HoodieRecordPayload> ex
 
   @Override
   protected Option<HoodieClusteringPlan> createClusteringPlan() {
+    LOG.info("=============> hoodie.clustering.inline.max.commits:" + config.getInlineClusterMaxCommits());
+    LOG.info("=============> hoodie.clustering.plan.strategy.class:" + config.getClusteringPlanStrategyClass());
+    LOG.info("=============> hoodie.clustering.execution.strategy.class:" + config.getClusteringExecutionStrategyClass());
+    LOG.info("=============> hoodie.clustering.plan.strategy.small.file.limit:" + config.getClusteringSmallFileLimit());
+    LOG.info("=============> hoodie.clustering.plan.strategy.max.bytes.per.group:" + config.getClusteringMaxBytesInGroup());
+    LOG.info("=============> hoodie.clustering.plan.strategy.max.num.groups:" + config.getClusteringMaxNumGroups());
+    LOG.info("=============> hoodie.clustering.plan.strategy.target.file.max.bytes:" + config.getClusteringTargetFileMaxBytes());
+    LOG.info("=============> hoodie.clustering.plan.strategy.sort.columns:" + config.getClusteringSortColumns());
+    LOG.info("=============> hoodie.cleaner.commits.retained:" + config.getCleanerCommitsRetained());
+
     LOG.info("Checking if clustering needs to be run on " + config.getBasePath());
     Option<HoodieInstant> lastClusteringInstant = table.getActiveTimeline().getCompletedReplaceTimeline().lastInstant();
 
