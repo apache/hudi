@@ -41,7 +41,6 @@ public class HoodieIndexUtils {
    * Fetches Pair of partition path and {@link HoodieBaseFile}s for interested partitions.
    *
    * @param partition   Partition of interest
-   * @param context     Instance of {@link HoodieEngineContext} to use
    * @param hoodieTable Instance of {@link HoodieTable} of interest
    * @return the list of {@link HoodieBaseFile}
    */
