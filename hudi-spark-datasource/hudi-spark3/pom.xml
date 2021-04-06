@@ -158,6 +158,12 @@
       <artifactId>spark-sql_2.12</artifactId>
       <version>${spark3.version}</version>
       <optional>true</optional>
+      <exclusions>
+        <exclusion>
+          <groupId>log4j</groupId>
+          <artifactId>log4j</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>
