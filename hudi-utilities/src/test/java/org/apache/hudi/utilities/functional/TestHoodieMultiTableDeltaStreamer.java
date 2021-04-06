@@ -227,7 +227,7 @@ public class TestHoodieMultiTableDeltaStreamer extends TestHoodieDeltaStreamer {
           break;
         case "dummy_table_uber":
           String tableLevelKeyGeneratorClass = tableExecutionContext.getProperties().getString("hoodie.datasource.write.keygenerator.class");
-          assertEquals(NonpartitionedKeyGenerator.class.getName(), tableLevelKeyGeneratorClass);
+          assertEquals(TestHoodieDeltaStreamer.TestTableLevelGenerator.class.getName(), tableLevelKeyGeneratorClass);
           break;
         default:
       }

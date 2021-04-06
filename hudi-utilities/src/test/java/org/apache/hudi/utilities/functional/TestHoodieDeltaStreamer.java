@@ -1624,6 +1624,13 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     }
   }
 
+  public static class TestTableLevelGenerator extends SimpleKeyGenerator {
+
+    public TestTableLevelGenerator(TypedProperties props) {
+      super(props);
+    }
+  }
+
   public static class DummyAvroPayload extends OverwriteWithLatestAvroPayload {
 
     public DummyAvroPayload(GenericRecord gr, Comparable orderingVal) {
