@@ -110,6 +110,12 @@ public class HoodieCleaner {
 
     String dirName = new Path(cfg.basePath).getName();
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("hoodie-cleaner-" + dirName, cfg.sparkMaster);
-    new HoodieCleaner(cfg, jssc).run();
+    try {
+      new HoodieCleaner(cfg, jssc).run();
+    } catch (Throwable throwable) {
+      LOG.error("Fail to run cleaning for " + cfg.basePath, throwable);
+    } finally {
+      jssc.stop();
+    }
   }
 }
