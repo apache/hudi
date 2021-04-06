@@ -69,8 +69,8 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning {
 
       DataStream<Object> pipeline = dataStream
           .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class))
-          // Key-by partition path, to avoid multiple subtasks write to a partition at the same time
-          .keyBy(HoodieRecord::getPartitionPath)
+          // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
+          .keyBy(HoodieRecord::getRecordKey)
           .transform(
               "bucket_assigner",
               TypeInformation.of(HoodieRecord.class),

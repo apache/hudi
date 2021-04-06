@@ -260,11 +260,17 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
    * but cleaning action should trigger after all the write actions within a
    * checkpoint finish.
    *
-   * @param instantTime The latest successful commit time
+   * @param table         Table to commit on
+   * @param metadata      Commit Metadata corresponding to committed instant
+   * @param instantTime   Instant Time
+   * @param extraMetadata Additional Metadata passed by user
    */
-  public void postCommit(String instantTime) {
+  @Override
+  protected void postCommit(HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table,
+                            HoodieCommitMetadata metadata,
+                            String instantTime,
+                            Option<Map<String, String>> extraMetadata) {
     try {
-      HoodieTable<?, ?, ?, ?> table = createTable(config, hadoopConf);
       // Delete the marker directory for the instant.
       new MarkerFiles(createTable(config, hadoopConf), instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());

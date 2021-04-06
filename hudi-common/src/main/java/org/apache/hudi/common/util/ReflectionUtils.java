@@ -47,7 +47,7 @@ public class ReflectionUtils {
 
   private static Map<String, Class<?>> clazzCache = new HashMap<>();
 
-  private static Class<?> getClass(String clazzName) {
+  public static Class<?> getClass(String clazzName) {
     if (!clazzCache.containsKey(clazzName)) {
       try {
         Class<?> clazz = Class.forName(clazzName);

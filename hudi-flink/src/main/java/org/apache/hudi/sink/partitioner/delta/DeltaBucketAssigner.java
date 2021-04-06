@@ -40,8 +40,12 @@ import java.util.stream.Collectors;
  * <p>Note: assumes the index can always index log files for Flink write.
  */
 public class DeltaBucketAssigner extends BucketAssigner {
-  public DeltaBucketAssigner(HoodieFlinkEngineContext context, HoodieWriteConfig config) {
-    super(context, config);
+  public DeltaBucketAssigner(
+      int taskID,
+      int numTasks,
+      HoodieFlinkEngineContext context,
+      HoodieWriteConfig config) {
+    super(taskID, numTasks, context, config);
   }
 
   @Override
@@ -77,11 +81,13 @@ public class DeltaBucketAssigner extends BucketAssigner {
           sf.sizeBytes = getTotalFileSize(smallFileSlice);
           smallFileLocations.add(sf);
         } else {
-          HoodieLogFile logFile = smallFileSlice.getLogFiles().findFirst().get();
-          sf.location = new HoodieRecordLocation(FSUtils.getBaseCommitTimeFromLogPath(logFile.getPath()),
-              FSUtils.getFileIdFromLogPath(logFile.getPath()));
-          sf.sizeBytes = getTotalFileSize(smallFileSlice);
-          smallFileLocations.add(sf);
+          smallFileSlice.getLogFiles().findFirst().ifPresent(logFile -> {
+            // in case there is something error, and the file slice has no log file
+            sf.location = new HoodieRecordLocation(FSUtils.getBaseCommitTimeFromLogPath(logFile.getPath()),
+                FSUtils.getFileIdFromLogPath(logFile.getPath()));
+            sf.sizeBytes = getTotalFileSize(smallFileSlice);
+            smallFileLocations.add(sf);
+          });
         }
       }
     }
