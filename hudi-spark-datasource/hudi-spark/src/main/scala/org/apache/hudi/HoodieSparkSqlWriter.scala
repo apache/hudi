@@ -205,7 +205,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
           // Create a HoodieWriteClient & issue the delete.
           val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
-            Schema.create(Schema.Type.NULL).toString, path.get, tblName,
+            null, path.get, tblName,
             mapAsJavaMap(parameters - HoodieWriteConfig.HOODIE_AUTO_COMMIT_PROP)))
             .asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
 
