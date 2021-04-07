@@ -179,7 +179,7 @@ public class HoodieTestTable {
 
   public HoodieTestTable addReplaceCommit(String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata, HoodieReplaceCommitMetadata metadata) throws Exception {
     createRequestedReplaceCommit(basePath, instantTime, requestedReplaceMetadata);
-    createInflightReplaceCommit(basePath, instantTime);
+    createInflightReplaceCommit(basePath, instantTime, metadata);
     createReplaceCommit(basePath, instantTime, metadata);
     currentInstantTime = instantTime;
     metaClient = HoodieTableMetaClient.reload(metaClient);

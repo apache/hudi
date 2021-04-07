@@ -240,6 +240,8 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
 
     int numCommits = 4;
     int commitInstant = 100;
+    // The first replace commit file have empty replace file id
+    createReplaceMetadataWithoutReplaceFileId(String.valueOf(commitInstant));
     for (int i = 0; i < numCommits; i++) {
       createReplaceMetadata(String.valueOf(commitInstant));
       commitInstant += 100;
@@ -491,6 +493,22 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     org.apache.hudi.avro.model.HoodieCommitMetadata expectedCommitMetadata = MetadataConversionUtils
         .convertCommitMetadata(hoodieCommitMetadata);
     assertEquals(expectedCommitMetadata.getOperationType(), WriteOperationType.INSERT.toString());
+  }
+
+  private void createReplaceMetadataWithoutReplaceFileId(String instantTime) throws Exception {
+    String baseFile = "file-" + instantTime;
+
+    // create replace instant without a previous replace commit
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
+        .setOperationType(WriteOperationType.INSERT_OVERWRITE_TABLE.toString())
+        .setVersion(1)
+        .setExtraMetadata(Collections.emptyMap())
+        .build();
+    HoodieReplaceCommitMetadata replaceCommitMetadata = new HoodieReplaceCommitMetadata();
+    replaceCommitMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE_TABLE);
+    HoodieTestTable.of(metaClient)
+        .addReplaceCommit(instantTime, requestedReplaceMetadata, replaceCommitMetadata)
+        .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, baseFile);
   }
 
   private void createReplaceMetadata(String instantTime) throws Exception {

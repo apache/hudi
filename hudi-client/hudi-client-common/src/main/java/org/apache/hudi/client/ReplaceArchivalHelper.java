@@ -68,8 +68,9 @@ public class ReplaceArchivalHelper implements Serializable {
   public static boolean deleteReplacedFileGroups(HoodieEngineContext context, HoodieTableMetaClient metaClient,
                                                  TableFileSystemView fileSystemView,
                                                  HoodieInstant instant, List<String> replacedPartitions) {
+    // There is no file id to be replaced in the very first replace commit file for insert overwrite operation
     if (replacedPartitions.isEmpty()) {
-      LOG.warn("Found empty replaced partitions");
+      LOG.warn("Found empty partitionToReplaceFileIds");
       return true;
     }
     context.setJobStatus(ReplaceArchivalHelper.class.getSimpleName(), "Delete replaced file groups");

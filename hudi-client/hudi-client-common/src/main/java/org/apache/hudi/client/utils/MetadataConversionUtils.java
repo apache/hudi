@@ -37,13 +37,17 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
-import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 /**
  * Helper class to convert between different action related payloads and {@link HoodieArchivedMetaEntry}.
  */
 public class MetadataConversionUtils {
+
+  private static final Logger LOG = LogManager.getLogger(MetadataConversionUtils.class);
 
   public static HoodieArchivedMetaEntry createMetaWrapper(HoodieInstant hoodieInstant, HoodieTableMetaClient metaClient) throws IOException {
     HoodieArchivedMetaEntry archivedMetaWrapper = new HoodieArchivedMetaEntry();
@@ -72,9 +76,14 @@ public class MetadataConversionUtils {
           HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
               .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieReplaceCommitMetadata.class);
           archivedMetaWrapper.setHoodieReplaceCommitMetadata(ReplaceArchivalHelper.convertReplaceCommitMetadata(replaceCommitMetadata));
+        } else if (hoodieInstant.isInflight()) {
+          // inflight replacecommit files have the same meta data body as HoodieCommitMetadata
+          // so we could re-use it without further creating an inflight extension
+          HoodieCommitMetadata inflightCommitMetadata = HoodieCommitMetadata
+                  .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
+          archivedMetaWrapper.setHoodieInflightReplaceMetadata(convertCommitMetadata(inflightCommitMetadata));
         } else {
-          HoodieRequestedReplaceMetadata requestedReplaceMetadata =
-              ClusteringUtils.getRequestedReplaceMetadata(metaClient, hoodieInstant).get();
+          HoodieRequestedReplaceMetadata requestedReplaceMetadata = getRequestedReplaceMetadata(metaClient, hoodieInstant).get();
           archivedMetaWrapper.setHoodieRequestedReplaceMetadata(requestedReplaceMetadata);
         }
         archivedMetaWrapper.setActionType(ActionType.replacecommit.name());
@@ -105,14 +114,15 @@ public class MetadataConversionUtils {
     return archivedMetaWrapper;
   }
 
-  public static HoodieArchivedMetaEntry createMetaWrapper(HoodieInstant hoodieInstant,
-                                                          HoodieCommitMetadata hoodieCommitMetadata) {
-    HoodieArchivedMetaEntry archivedMetaWrapper = new HoodieArchivedMetaEntry();
-    archivedMetaWrapper.setCommitTime(hoodieInstant.getTimestamp());
-    archivedMetaWrapper.setActionState(hoodieInstant.getState().name());
-    archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(hoodieCommitMetadata));
-    archivedMetaWrapper.setActionType(ActionType.commit.name());
-    return archivedMetaWrapper;
+  public static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadata(HoodieTableMetaClient metaClient, HoodieInstant pendingReplaceInstant) throws IOException {
+    final HoodieInstant requestedInstant = HoodieTimeline.getReplaceCommitRequestedInstant(pendingReplaceInstant.getTimestamp());
+
+    Option<byte[]> content = metaClient.getActiveTimeline().getInstantDetails(requestedInstant);
+    if (!content.isPresent() || content.get().length == 0) {
+      LOG.warn("No content found in requested file for instant " + pendingReplaceInstant);
+      return Option.of(new HoodieRequestedReplaceMetadata());
+    }
+    return Option.of(TimelineMetadataUtils.deserializeRequestedReplaceMetadata(content.get()));
   }
 
   public static org.apache.hudi.avro.model.HoodieCommitMetadata convertCommitMetadata(
