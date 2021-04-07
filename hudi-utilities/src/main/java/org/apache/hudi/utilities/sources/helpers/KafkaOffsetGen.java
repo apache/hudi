@@ -173,9 +173,13 @@ public class KafkaOffsetGen {
     this.props = props;
 
     kafkaParams = new HashMap<>();
-    for (Object prop : props.keySet()) {
+    props.keySet().stream().filter(prop -> {
+      // In order to prevent printing unnecessary warn logs, here filter out the hoodie
+      // configuration items before passing to kafkaParams
+      return !prop.toString().startsWith("hoodie.");
+    }).forEach(prop -> {
       kafkaParams.put(prop.toString(), props.get(prop.toString()));
-    }
+    });
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.KAFKA_TOPIC_NAME));
     topicName = props.getString(Config.KAFKA_TOPIC_NAME);
     String kafkaAutoResetOffsetsStr = props.getString(Config.KAFKA_AUTO_RESET_OFFSETS, Config.DEFAULT_KAFKA_AUTO_RESET_OFFSETS.name().toLowerCase());
