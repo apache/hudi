@@ -220,12 +220,12 @@ public class TestHoodieMultiTableDeltaStreamer extends TestHoodieDeltaStreamer {
     List<TableExecutionContext> tableExecutionContexts = streamer.getTableExecutionContexts();
     tableExecutionContexts.forEach(tableExecutionContext -> {
       switch (tableExecutionContext.getTableName()) {
-        case "dummy_table_short_trip":
-          String publicGeneratorClass = tableExecutionContext.getProperties().getString("hoodie.datasource.write.keygenerator.class");
+        case "dummy_table_uber":
+          String publicGeneratorClass = tableExecutionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY());
           assertEquals(TestHoodieDeltaStreamer.TestGenerator.class.getName(), publicGeneratorClass);
           break;
-        case "dummy_table_uber":
-          String tableLevelKeyGeneratorClass = tableExecutionContext.getProperties().getString("hoodie.datasource.write.keygenerator.class");
+        case "dummy_table_short_trip":
+          String tableLevelKeyGeneratorClass = tableExecutionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY());
           assertEquals(TestHoodieDeltaStreamer.TestTableLevelGenerator.class.getName(), tableLevelKeyGeneratorClass);
           break;
         default:
