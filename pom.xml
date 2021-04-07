@@ -95,7 +95,7 @@
     <junit.vintage.version>5.7.0-M1</junit.vintage.version>
     <junit.platform.version>1.7.0-M1</junit.platform.version>
     <mockito.jupiter.version>3.3.3</mockito.jupiter.version>
-    <log4j.version>2.11.0</log4j.version>
+    <log4j.version>2.13.3</log4j.version>
     <slf4j.version>1.7.15</slf4j.version>
     <joda.version>2.9.9</joda.version>
     <hadoop.version>2.7.3</hadoop.version>
