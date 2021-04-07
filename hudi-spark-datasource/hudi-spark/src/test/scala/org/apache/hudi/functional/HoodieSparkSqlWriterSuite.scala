@@ -443,7 +443,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
           var updates = DataSourceTestUtils.generateUpdates(records, 5);
           var updatesSeq = convertRowListToSeq(updates)
           var updatesDf = spark.createDataFrame(sc.parallelize(updatesSeq), structType)
-          // write to Hudi
+          // write updates to Hudi
           HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, updatesDf)
 
           val snapshotDF2 = spark.read.format("org.apache.hudi")
@@ -458,12 +458,13 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
           // ensure 2nd batch of updates matches.
           assert(updatesDf.intersect(trimmedDf2).except(updatesDf).count() == 0)
 
+          // getting new schema with new column
           schema = DataSourceTestUtils.getStructTypeExampleEvolvedSchema
           structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
           records = DataSourceTestUtils.generateRandomRowsEvolvedSchema(5)
           recordsSeq = convertRowListToSeq(records)
           val df3 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
-          // write to Hudi
+          // write to Hudi with new column
           HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, df3)
 
           val snapshotDF3 = spark.read.format("org.apache.hudi")

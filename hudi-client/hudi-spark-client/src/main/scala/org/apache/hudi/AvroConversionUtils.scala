@@ -48,12 +48,28 @@ object AvroConversionUtils {
     }
   }
 
+  /**
+    *
+    * Returns avro schema from spark StructType.
+    *
+    * @param structType       Dataframe Struct Type.
+    * @param structName       Avro record name.
+    * @param recordNamespace  Avro record namespace.
+    * @return                 Avro schema corresponding to given struct type.
+    */
   def convertStructTypeToAvroSchema(structType: StructType,
                                     structName: String,
                                     recordNamespace: String): Schema = {
     getAvroSchemaWithDefaults(SchemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace))
   }
 
+  /**
+    *
+    * Method to add default value of null to nullable fields in given avro schema
+    *
+    * @param schema     input avro schema
+    * @return           Avro schema with null default set to nullable fields
+    */
   def getAvroSchemaWithDefaults(schema: Schema): Schema = {
 
     schema.getType match {
@@ -66,7 +82,7 @@ object AvroConversionUtils {
               val innerFields = newSchema.getTypes
               val containsNullSchema = innerFields.foldLeft(false)((nullFieldEncountered, schema) => nullFieldEncountered | schema.getType == Schema.Type.NULL)
               if(containsNullSchema) {
-                // Need to re shuffel the fields in list becase to set null as default, null schema must be head in union schema
+                // Need to re shuffle the fields in list because to set null as default, null schema must be head in union schema
                 val restructuredNewSchema = Schema.createUnion(List(Schema.create(Schema.Type.NULL)) ++ innerFields.filter(innerSchema => !(innerSchema.getType == Schema.Type.NULL)))
                 new Schema.Field(field.name(), restructuredNewSchema, field.doc(), JsonProperties.NULL_VALUE)
               } else {
@@ -80,7 +96,7 @@ object AvroConversionUtils {
       }
 
       case Schema.Type.UNION => {
-        Schema.createUnion(schema.getTypes.map(innerSchea => getAvroSchemaWithDefaults(innerSchea)))
+        Schema.createUnion(schema.getTypes.map(innerSchema => getAvroSchemaWithDefaults(innerSchema)))
       }
 
       case Schema.Type.MAP => {
