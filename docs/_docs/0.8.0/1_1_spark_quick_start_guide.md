@@ -14,7 +14,7 @@ After each write operation we will also show how to read the data both snapshot 
 
 ## Setup
 
-Hudi works with Spark-2.4.4+ & Spark 3.x versions. You can follow instructions [here](https://spark.apache.org/downloads.html) for setting up spark. 
+Hudi works with Spark-2.4.3+ & Spark 3.x versions. You can follow instructions [here](https://spark.apache.org/downloads.html) for setting up spark. 
 From the extracted directory run spark-shell with Hudi as:
 
 ```scala
@@ -22,9 +22,13 @@ From the extracted directory run spark-shell with Hudi as:
 spark-shell \
   --packages org.apache.hudi:hudi-spark3-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
-// spark-shell for spark 2
+// spark-shell for spark 2 with scala 2.12
 spark-shell \
   --packages org.apache.hudi:hudi-spark-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+// spark-shell for spark 2 with scala 2.11
+spark-shell \
+  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.8.0,org.apache.spark:spark-avro_2.11:3.0.1 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
@@ -309,9 +313,13 @@ export PYSPARK_PYTHON=$(which python3)
 pyspark \
   --packages org.apache.hudi:hudi-spark3-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
-# for spark2
+# for spark2 with scala 2.12
 pyspark \
   --packages org.apache.hudi:hudi-spark-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+# for spark2 with scala 2.11
+pyspark \
+  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.8.0,org.apache.spark:spark-avro_2.11:3.0.1 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 

@@ -11,7 +11,7 @@ language: cn
 [写时复制](/cn/docs/0.8.0-concepts.html#copy-on-write-storage)。每次写操作之后，我们还将展示如何读取快照和增量数据。 
 
 ## 设置spark-shell
-Hudi适用于Spark-2.4.4+ & Spark 3.x 版本。您可以按照[此处](https://spark.apache.org/downloads.html)的说明设置spark。
+Hudi适用于Spark-2.4.3+ & Spark 3.x 版本。您可以按照[此处](https://spark.apache.org/downloads.html)的说明设置spark。
 在提取的目录中，使用spark-shell运行Hudi：
 
 ```scala
@@ -19,9 +19,13 @@ Hudi适用于Spark-2.4.4+ & Spark 3.x 版本。您可以按照[此处](https://s
 spark-shell \
   --packages org.apache.hudi:hudi-spark3-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
-// spark-shell for spark 2
+// spark-shell for spark 2 with scala 2.12
 spark-shell \
   --packages org.apache.hudi:hudi-spark-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+// spark-shell for spark 2 with scala 2.11
+spark-shell \
+  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.8.0,org.apache.spark:spark-avro_2.11:3.0.1 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
@@ -202,7 +206,7 @@ spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 # Pyspark 示例
 ## 设置spark-shell
 
-Hudi适用于Spark-2.4.4+ & Spark 3.x 版本。您可以按照[此处](https://spark.apache.org/downloads.html)的说明设置spark。
+Hudi适用于Spark-2.4.3+ & Spark 3.x 版本。您可以按照[此处](https://spark.apache.org/downloads.html)的说明设置spark。
 在提取的目录中，使用spark-shell运行Hudi：
 
 ```python
@@ -212,9 +216,13 @@ export PYSPARK_PYTHON=$(which python3)
 pyspark \
   --packages org.apache.hudi:hudi-spark3-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
-# for spark2
+# for spark2 with scala 2.12
 pyspark \
   --packages org.apache.hudi:hudi-spark-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+# for spark2 with scala 2.11
+pyspark \
+  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.8.0,org.apache.spark:spark-avro_2.11:3.0.1 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
