@@ -74,7 +74,15 @@ public class MetadataConversionUtils {
           HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
               .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieReplaceCommitMetadata.class);
           archivedMetaWrapper.setHoodieReplaceCommitMetadata(ReplaceArchivalHelper.convertReplaceCommitMetadata(replaceCommitMetadata));
+        } else if (hoodieInstant.isInflight()) {
+          // inflight replacecommit files have the same meta data body as HoodieCommitMetadata
+          // so we could re-use it without further creating an inflight extension
+          HoodieCommitMetadata inflightCommitMetadata = HoodieCommitMetadata
+                  .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
+          archivedMetaWrapper.setHoodieInflightReplaceMetadata(convertCommitMetadata(inflightCommitMetadata));
         } else {
+          // we may have some cases with empty HoodieRequestedReplaceMetadata
+          // e.g. insert_overwrite_table or insert_overwrite without clustering
           Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata =
                   ClusteringUtils.getRequestedReplaceMetadata(metaClient, hoodieInstant);
           if (requestedReplaceMetadata.isPresent()) {

@@ -99,6 +99,16 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testInflightReplace() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE_TABLE, true);
+    HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
+            new HoodieInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, newCommitTime), metaClient);
+    assertEquals(metaEntry.getActionState(), State.INFLIGHT.toString());
+    assertEquals(metaEntry.getHoodieInflightReplaceMetadata().getOperationType(), WriteOperationType.INSERT_OVERWRITE_TABLE.toString());
+  }
+
+  @Test
   public void testCompletedCommitOrDeltaCommit() throws Exception {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
     createCommitMetadata(newCommitTime);
