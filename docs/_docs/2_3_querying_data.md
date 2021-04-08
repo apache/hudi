@@ -194,7 +194,7 @@ export HADOOP_CLASSPATH=`$HADOOP_HOME/bin/hadoop classpath`
 ```sql
 -- this defines a COPY_ON_WRITE table named 't1'
 CREATE TABLE t1(
-  uuid VARCHAR(20),
+  uuid VARCHAR(20), -- you can use 'PRIMARY KEY NOT ENFORCED' syntax to specify the field as record key
   name VARCHAR(10),
   age INT,
   ts TIMESTAMP(3),
@@ -203,7 +203,7 @@ CREATE TABLE t1(
 PARTITIONED BY (`partition`)
 WITH (
   'connector' = 'hudi',
-  'path' = 'schema://base-path'
+  'path' = 'table_base+path'
 );
 
 -- query the data

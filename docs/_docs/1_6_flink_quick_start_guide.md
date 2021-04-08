@@ -16,8 +16,8 @@ We use the [Flink Sql Client](https://ci.apache.org/projects/flink/flink-docs-st
 quick start tool for SQL users.
 
 ### Step.1 download flink jar
-Hudi works with Flink-1.11.x version. You can follow instructions [here](https://flink.apache.org/downloads.html) for setting up flink.
-The hudi-flink-bundle jar is archived with scala 2.11, so it’s recommended to use flink 1.11 bundled with scala 2.11.
+Hudi works with Flink-1.12.x version. You can follow instructions [here](https://flink.apache.org/downloads.html) for setting up flink.
+The hudi-flink-bundle jar is archived with scala 2.11, so it’s recommended to use flink 1.12.x bundled with scala 2.11.
 
 ### Step.2 start flink cluster
 Start a standalone flink cluster within hadoop environment.
@@ -70,7 +70,7 @@ Creates a flink hudi table first and insert data into the Hudi table using SQL `
 set execution.result-mode=tableau;
 
 CREATE TABLE t1(
-  uuid VARCHAR(20),
+  uuid VARCHAR(20), -- you can use 'PRIMARY KEY NOT ENFORCED' syntax to mark the field as record key
   name VARCHAR(10),
   age INT,
   ts TIMESTAMP(3),
@@ -79,7 +79,7 @@ CREATE TABLE t1(
 PARTITIONED BY (`partition`)
 WITH (
   'connector' = 'hudi',
-  'path' = 'schema://base-path',
+  'path' = 'table_base_path',
   'table.type' = 'MERGE_ON_READ' -- this creates a MERGE_ON_READ table, by default is COPY_ON_WRITE
 );
 
@@ -129,7 +129,7 @@ We do not need to specify endTime, if we want all changes after the given commit
 
 ```sql
 CREATE TABLE t1(
-  uuid VARCHAR(20),
+  uuid VARCHAR(20), -- you can use 'PRIMARY KEY NOT ENFORCED' syntax to mark the field as record key
   name VARCHAR(10),
   age INT,
   ts TIMESTAMP(3),
@@ -138,10 +138,10 @@ CREATE TABLE t1(
 PARTITIONED BY (`partition`)
 WITH (
   'connector' = 'hudi',
-  'path' = 'oss://vvr-daily/hudi/t1',
+  'path' = 'table_base_path',
   'table.type' = 'MERGE_ON_READ',
   'read.streaming.enabled' = 'true',  -- this option enable the streaming read
-  'read.streaming.start-commit' = '20210316134557' -- specifies the start commit instant time
+  'read.streaming.start-commit' = '20210316134557', -- specifies the start commit instant time
   'read.streaming.check-interval' = '4' -- specifies the check interval for finding new source commits, default 60s.
 );
 
