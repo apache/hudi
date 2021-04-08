@@ -27,8 +27,9 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.util.DataFileUtils;
 import org.apache.hudi.common.util.ParquetReaderIterator;
-import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetReader;
@@ -36,12 +37,12 @@ import org.apache.parquet.hadoop.ParquetReader;
 public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileReader {
   private Path path;
   private Configuration conf;
-  private final ParquetUtils parquetUtils;
+  private final DataFileUtils parquetUtils;
 
   public HoodieParquetReader(Configuration configuration, Path path) {
     this.conf = configuration;
     this.path = path;
-    this.parquetUtils = new ParquetUtils();
+    this.parquetUtils = DataFileUtils.getInstance(HoodieFileFormat.PARQUET);
   }
 
   public String[] readMinMaxRecordKeys() {
