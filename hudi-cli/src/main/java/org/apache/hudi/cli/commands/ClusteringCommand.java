@@ -49,6 +49,9 @@ public class ClusteringCommand implements CommandMarker {
       @CliOption(key = "hoodieConfigs", help = "Any configuration that can be set in the properties file can be passed here in the form of an array",
           unspecifiedDefaultValue = "") final String[] configs) throws Exception {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
+    boolean initialized = HoodieCLI.initConf();
+    HoodieCLI.initFS(initialized);
+
     String sparkPropertiesPath =
         Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
@@ -65,7 +68,7 @@ public class ClusteringCommand implements CommandMarker {
     if (exitCode != 0) {
       return "Failed to schedule clustering for " + clusteringInstantTime;
     }
-    return "Attempted to schedule clustering for " + clusteringInstantTime;
+    return "Succeeded to schedule clustering for " + clusteringInstantTime;
   }
 
   @CliCommand(value = "clustering run", help = "Run Clustering")
@@ -84,6 +87,9 @@ public class ClusteringCommand implements CommandMarker {
           unspecifiedDefaultValue = "") final String[] configs
   ) throws Exception {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
+    boolean initialized = HoodieCLI.initConf();
+    HoodieCLI.initFS(initialized);
+
     String sparkPropertiesPath =
         Utils.getDefaultPropertiesFile(JavaConverters.mapAsScalaMapConverter(System.getenv()).asScala());
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
@@ -96,7 +102,6 @@ public class ClusteringCommand implements CommandMarker {
     if (exitCode != 0) {
       return "Failed to run clustering for " + clusteringInstantTime;
     }
-    return "Clustering successfully completed for " + clusteringInstantTime;
-
+    return "Succeeded to run clustering for " + clusteringInstantTime;
   }
 }
