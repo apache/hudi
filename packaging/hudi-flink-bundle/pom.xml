@@ -35,7 +35,7 @@
     <flink.bundle.hive.shade.prefix>org.apache.hudi.</flink.bundle.hive.shade.prefix>
     <javax.servlet.version>3.1.0</javax.servlet.version>
     <!-- override to be same with flink 1.12.2 -->
-    <parquet.version>1.11.1</parquet.version>
+    <parquet.version>1.12.0</parquet.version>
   </properties>
 
   <build>
@@ -415,6 +415,10 @@
         </exclusion>
         <exclusion>
           <groupId>javax.servlet.jsp</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.parquet</groupId>
           <artifactId>*</artifactId>
         </exclusion>
       </exclusions>

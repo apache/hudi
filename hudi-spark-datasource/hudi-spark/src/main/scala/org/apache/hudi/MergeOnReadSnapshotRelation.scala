@@ -92,6 +92,12 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
         requiredStructSchema = requiredStructSchema.add(field.get)
       }
     })
+    filters.flatMap(_.references).foreach(col => {
+      val field = tableStructSchema.find(_.name == col)
+      if (field.isDefined && !requiredStructSchema.contains(field.get)) {
+        requiredStructSchema = requiredStructSchema.add(field.get)
+      }
+    })
     val requiredAvroSchema = AvroConversionUtils
       .convertStructTypeToAvroSchema(requiredStructSchema, tableAvroSchema.getName, tableAvroSchema.getNamespace)
     val hoodieTableState = HoodieMergeOnReadTableState(

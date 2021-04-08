@@ -312,7 +312,7 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
       ParquetMetadata readFooter = ParquetFileReader.readFooter(table.getHadoopConf(), sourceFilePath,
           ParquetMetadataConverter.NO_FILTER);
       MessageType parquetSchema = readFooter.getFileMetaData().getSchema();
-      avroSchema = new AvroSchemaConverter().convert(parquetSchema);
+      avroSchema = new AvroSchemaConverter(table.getHadoopConf()).convert(parquetSchema);
       Schema recordKeySchema = HoodieAvroUtils.generateProjectionSchema(avroSchema,
           keyGenerator.getRecordKeyFieldNames());
       LOG.info("Schema to be used for reading record Keys :" + recordKeySchema);

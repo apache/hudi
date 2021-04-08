@@ -191,6 +191,16 @@ public class ParquetUtils {
   }
 
   public static Schema readAvroSchema(Configuration configuration, Path parquetFilePath) {
+    // If ADD_LIST_ELEMENT_RECORDS=true, the convert result of array type will had one more level,
+    // which is different with the origin schema.
+    if (configuration.get(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS) == null) {
+      configuration.set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, "false");
+    }
+    // After upgrade to parquet 1.12.0, we can set READ_INT96_AS_FIXED=true to support INT96
+    // dataType.
+    if (configuration.get(AvroReadSupport.READ_INT96_AS_FIXED) == null) {
+      configuration.set(AvroReadSupport.READ_INT96_AS_FIXED, "true");
+    }
     return new AvroSchemaConverter(configuration).convert(readSchema(configuration, parquetFilePath));
   }
 

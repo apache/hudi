@@ -105,7 +105,19 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
       }
       requiredColsSchema = requiredColsSchema.add(field.get)
     })
-
+    filters.flatMap(_.references).foreach(col => {
+      var field = dataSchema.find(_.name == col)
+      if (!requiredColsSchema.contains(field.get)) {
+        if (field.isDefined) {
+          requiredColsSchema = requiredColsSchema.add(field.get)
+        } else {
+          field = skeletonSchema.find(_.name == col)
+          if (field.isDefined) {
+            requiredSkeletonSchema = requiredSkeletonSchema.add(field.get)
+          }
+        }
+      }
+    })
     // Prepare readers for reading data file and skeleton files
     val dataReadFunction = new ParquetFileFormat()
         .buildReaderWithPartitionValues(

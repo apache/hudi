@@ -53,6 +53,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -77,6 +78,11 @@ public class HoodieAvroUtils {
   private static String INVALID_AVRO_CHARS_IN_NAMES = "[^A-Za-z0-9_]";
   private static String INVALID_AVRO_FIRST_CHAR_IN_NAMES = "[^A-Za-z_]";
   private static String MASK_FOR_INVALID_CHARS_IN_NAMES = "__";
+  private static final int JULIAN_DAY_OF_EPOCH = 2440588;
+  private static final long SECONDS_PER_DAY = 60 * 60 * 24L;
+  private static final long MICROS_PER_MILLIS = 1000L;
+  private static final long MILLIS_PER_SECOND = 1000L;
+  private static final long MICROS_PER_SECOND = MICROS_PER_MILLIS * MILLIS_PER_SECOND;
 
   // All metadata fields are optional strings.
   public static final Schema METADATA_FIELD_SCHEMA =
@@ -280,13 +286,47 @@ public class HoodieAvroUtils {
     return record;
   }
 
+  // get microsSecond value
+  private static long fromJulianDay(int day, long nanoseconds) {
+    long seconds = (long)(day - JULIAN_DAY_OF_EPOCH) * SECONDS_PER_DAY;
+    return seconds * MICROS_PER_SECOND + nanoseconds / 1000L;
+  }
+
+  private static boolean isFixed(Schema schema) {
+    if (schema.getType() == Schema.Type.FIXED && schema.getName().equalsIgnoreCase("int96")) {
+      return true;
+    }
+    if (schema.getType() == Schema.Type.UNION) {
+      for (Schema optionSchema : schema.getTypes()) {
+        if (optionSchema.getType() == Schema.Type.FIXED
+            && optionSchema.getName().equalsIgnoreCase("int96")) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private static Long fixedToLong(GenericData.Fixed value) {
+    ByteBuffer buf = ByteBuffer.wrap(value.bytes()).order(ByteOrder.LITTLE_ENDIAN);
+    long timeOfDayNanos = buf.getLong();
+    int julianDay = buf.getInt();
+    long rawTime = fromJulianDay(julianDay, timeOfDayNanos);
+    // TODO: we don't have timezone information now, need to support timezone later
+    return rawTime;
+  }
+
   public static GenericRecord stitchRecords(GenericRecord left, GenericRecord right, Schema stitchedSchema) {
     GenericRecord result = new Record(stitchedSchema);
     for (Schema.Field f : left.getSchema().getFields()) {
       result.put(f.name(), left.get(f.name()));
     }
     for (Schema.Field f : right.getSchema().getFields()) {
-      result.put(f.name(), right.get(f.name()));
+      Object value = right.get(f.name());
+      if (isFixed(f.schema())) {
+        value = fixedToLong((GenericData.Fixed)value);
+      }
+      result.put(f.name(), value);
     }
     return result;
   }

@@ -96,7 +96,7 @@ public abstract class AbstractMergeHelper<T extends HoodieRecordPayload, I, K, O
     Configuration bootstrapFileConfig = new Configuration(table.getHadoopConf());
     HoodieFileReader<GenericRecord> bootstrapReader = HoodieFileReaderFactory.<GenericRecord>getFileReader(bootstrapFileConfig, externalFilePath);
     Schema bootstrapReadSchema;
-    if (externalSchemaTransformation) {
+    if (externalSchemaTransformation || baseFile.getBootstrapBaseFile().isPresent()) {
       bootstrapReadSchema = bootstrapReader.getSchema();
     } else {
       bootstrapReadSchema = mergeHandle.getWriterSchema();

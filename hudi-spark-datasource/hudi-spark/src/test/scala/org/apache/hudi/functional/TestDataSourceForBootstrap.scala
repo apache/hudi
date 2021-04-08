@@ -22,18 +22,24 @@ import org.apache.hadoop.fs.FileSystem
 import org.apache.hudi.bootstrap.SparkParquetBootstrapDataProvider
 import org.apache.hudi.client.TestBootstrap
 import org.apache.hudi.client.bootstrap.selector.FullRecordBootstrapModeSelector
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, TestSparkUtils}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.SimpleKeyGenerator
 import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.functions.{col, lit}
-import org.apache.spark.sql.{SaveMode, SparkSession}
+import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.io.TempDir
 
+import org.scalatest.Matchers.assertResult
+
+import java.io.File
+import java.sql.Timestamp
 import java.time.Instant
 import java.util.Collections
 
@@ -69,6 +75,7 @@ class TestDataSourceForBootstrap {
       .appName("Hoodie Datasource test")
       .master("local[2]")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .config("spark.default.parallelism", 1)
       .getOrCreate
     basePath = tempDir.toAbsolutePath.toString + "/base"
     srcPath = tempDir.toAbsolutePath.toString + "/src"
@@ -529,6 +536,58 @@ class TestDataSourceForBootstrap {
 
       assertEquals(hoodieIncViewDF2.filter(col("_hoodie_partition_path").contains("2020-04-02")).count(),
         hoodieIncViewDF3.count())
+    }
+  }
+
+  @Test def testBootStrapPattitionTableWithTimeStamp(): Unit = {
+    new TestSparkUtils(spark).withTable("t1", "t2") {
+      try {
+        val opts = commonOpts ++ Map(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY -> "_row_key",
+          DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY -> "partition_column",
+          DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY -> classOf[SimpleKeyGenerator].getName,
+          HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS -> classOf[SimpleKeyGenerator].getName,
+          DataSourceWriteOptions.TABLE_TYPE_OPT_KEY ->  DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
+          DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY -> "_row_key",
+          KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY -> "true"
+        )
+        spark.sparkContext.hadoopConfiguration.set("parquet.avro.readInt96AsFixed", "true")
+        spark.sql("create table t1(_row_key int, a string, date_column date, timestamp_column timestamp, partition_column string) using parquet partitioned by (partition_column)")
+        spark.sql("insert into t1 partition(partition_column='p1') values" +
+          "(1,'b','2021-3-19','2021-3-19 14:24:30'),(2,'b','2021-3-19','2021-3-19 14:24:31')")
+        spark.sql("insert into t1 partition(partition_column='p2') values" +
+          "(3,'b','2021-3-19','2021-3-19 14:24:30'),(4,'b','2021-3-19','2021-3-19 14:24:31')")
+        spark.sql("drop table if exists t2")
+        spark.sql("create table t2(_row_key int, a string, date_column date, timestamp_column timestamp, partition_column string) using parquet partitioned by (partition_column)")
+        spark.sql("insert into t2 partition(partition_column='p1') values" +
+          // here only update one row for testing partially update a file
+          "(1,'b2','2021-3-19','2021-3-19 14:24:30')")
+        spark.sql("insert into t2 partition(partition_column='p2') values" +
+          "(3,'b2','2021-3-19','2021-3-19 14:24:30'),(4,'b2','2021-3-19','2021-3-19 14:24:31')")
+        val tb1 = TableIdentifier("t1", None)
+        val tb1Dir = new File(spark.sessionState.catalog.getTableMetadata(tb1).location)
+        spark.sql("select * from t1")
+          .write
+          .format("org.apache.hudi")
+          .options(opts)
+          .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
+          .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP, tb1Dir.getAbsolutePath)
+          .mode(SaveMode.Append)
+          .save(basePath)
+        spark.sql("select * from t2")
+          .write
+          .format("org.apache.hudi")
+          .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+          .options(opts)
+          .mode(SaveMode.Append)
+          .save(basePath)
+        val hudiDf = spark.read.format("org.apache.hudi")
+          .options(opts)
+          .load(basePath + "/*")
+        assertResult(Seq[String]("2021-03-19 14:24:30", "2021-03-19 14:24:30",
+          "2021-03-19 14:24:31", "2021-03-19 14:24:31")
+          .map(row => Row(Timestamp.valueOf(row))).toArray)(hudiDf.select("timestamp_column")
+          .orderBy("timestamp_column").collect())
+      }
     }
   }
 }

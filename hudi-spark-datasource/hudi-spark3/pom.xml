@@ -158,6 +158,12 @@
       <artifactId>spark-sql_2.12</artifactId>
       <version>${spark3.version}</version>
       <optional>true</optional>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.parquet</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>
