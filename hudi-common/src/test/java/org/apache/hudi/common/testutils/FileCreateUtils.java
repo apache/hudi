@@ -157,7 +157,7 @@ public class FileCreateUtils {
   }
 
   public static void createRequestedReplaceCommit(String basePath, String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata) throws IOException {
-    if(null != requestedReplaceMetadata) {
+    if (null != requestedReplaceMetadata) {
       createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION, serializeRequestedReplaceMetadata(requestedReplaceMetadata).get());
     } else {
       createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION, new byte[0]);

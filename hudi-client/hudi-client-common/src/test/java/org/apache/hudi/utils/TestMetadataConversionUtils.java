@@ -190,7 +190,6 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
-
   private void createReplace(String instantTime, WriteOperationType writeOperationType, Boolean isClustering)
           throws Exception {
     String fileId1 = "file-1";
@@ -208,7 +207,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     // some cases requestedReplaceMetadata will be null
     // e.g. insert_overwrite_table or insert_overwrite without clustering
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = null;
-    if(isClustering) {
+    if (isClustering) {
       requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
       requestedReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE.name());
       HoodieClusteringPlan clusteringPlan = new HoodieClusteringPlan();
