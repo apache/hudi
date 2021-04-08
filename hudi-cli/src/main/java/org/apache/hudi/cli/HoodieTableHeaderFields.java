@@ -143,4 +143,25 @@ public class HoodieTableHeaderFields {
   public static final String HEADER_TOTAL_ROLLBACK_BLOCKS = "Total Rollback Blocks";
   public static final String HEADER_TOTAL_LOG_RECORDS = "Total Log Records";
   public static final String HEADER_TOTAL_UPDATED_RECORDS_COMPACTED = "Total Updated Records Compacted";
+
+  /**
+   * Fields of Compaction.
+   */
+  public static final String HEADER_INSTANT_BLANK_TIME = "Instant Time";
+  public static final String HEADER_FILE_PATH = "File Path";
+  public static final String HEADER_COMPACTION_INSTANT_TIME = "Compaction " + HEADER_INSTANT_BLANK_TIME;
+  public static final String HEADER_STATE = "State";
+  public static final String HEADER_TOTAL_FILES_TO_BE_COMPACTED = "Total FileIds to be Compacted";
+  public static final String HEADER_EXTRA_METADATA = "Extra Metadata";
+  public static final String HEADER_DATA_FILE_PATH = "Data " + HEADER_FILE_PATH;
+  public static final String HEADER_TOTAL_DELTA_FILES = "Total " + HEADER_DELTA_FILES;
+  public static final String HEADER_METRICS = "getMetrics";
+  public static final String HEADER_BASE_INSTANT_TIME = "Base " + HEADER_INSTANT_BLANK_TIME;
+  public static final String HEADER_BASE_DATA_FILE = "Base Data File";
+  public static final String HEADER_VALID = "Valid";
+  public static final String HEADER_ERROR = "Error";
+  public static final String HEADER_SOURCE_FILE_PATH = "Source " + HEADER_FILE_PATH;
+  public static final String HEADER_DESTINATION_FILE_PATH = "Destination " + HEADER_FILE_PATH;
+  public static final String HEADER_RENAME_EXECUTED = "Rename Executed?";
+  public static final String HEADER_RENAME_SUCCEEDED = "Rename Succeeded?";
 }
