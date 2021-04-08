@@ -518,3 +518,72 @@ cn_docs:
         url: /cn/docs/0.7.0-docs-versions.html
       - title: "版权信息"
         url: /cn/docs/0.7.0-privacy.html
+
+0.8.0_docs:
+  - title: Documentation
+    children:
+      - title: "Overview"
+        url: /docs/0.8.0-overview.html
+      - title: "Quick Start"
+        url: /docs/0.8.0-quick-start-guide.html
+      - title: "Use Cases"
+        url: /docs/0.8.0-use_cases.html
+      - title: "Writing Data"
+        url: /docs/0.8.0-writing_data.html
+      - title: "Querying Data"
+        url: /docs/0.8.0-querying_data.html
+      - title: "Configuration"
+        url: /docs/0.8.0-configurations.html
+      - title: "Performance"
+        url: /docs/0.8.0-performance.html
+      - title: "Deployment"
+        url: /docs/0.8.0-deployment.html
+
+  - title: Resources
+    children:
+      - title: "Dockerized Demo"
+        url: /docs/0.8.0-docker_demo.html
+      - title: "Storage Configuration"
+        url: /docs/0.8.0-cloud.html
+      - title: "Metrics"
+        url: /docs/0.8.0-metrics.html
+      - title: "Docs Versions"
+        url: /docs/0.8.0-docs-versions.html
+      - title: "Privacy Policy"
+        url: /docs/0.8.0-privacy.html
+
+0.8.0_cn_docs:
+  - title: 入门指南
+    children:
+      - title: "快速开始"
+        url: /cn/docs/0.8.0-quick-start-guide.html
+      - title: "使用案例"
+        url: /cn/docs/0.8.0-use_cases.html
+      - title: "演讲 & hudi 用户"
+        url: /cn/docs/0.8.0-powered_by.html
+      - title: "对比"
+        url: /cn/docs/0.8.0-comparison.html
+      - title: "Docker 示例"
+        url: /cn/docs/0.8.0-docker_demo.html
+  - title: 帮助文档
+    children:
+      - title: "概念"
+        url: /cn/docs/0.8.0-concepts.html
+      - title: "写入数据"
+        url: /cn/docs/0.8.0-writing_data.html
+      - title: "查询数据"
+        url: /cn/docs/0.8.0-querying_data.html
+      - title: "配置"
+        url: /cn/docs/0.8.0-configurations.html
+      - title: "性能"
+        url: /cn/docs/0.8.0-performance.html
+      - title: "管理"
+        url: /cn/docs/0.8.0-deployment.html
+      - title: "云储存"
+        url: /cn/docs/0.8.0-cloud.html
+  - title: 其他信息
+    children:
+      - title: "文档版本"
+        url: /cn/docs/0.8.0-docs-versions.html
+      - title: "版权信息"
+        url: /cn/docs/0.8.0-privacy.html
