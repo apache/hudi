@@ -21,6 +21,7 @@ package org.apache.hudi.integ.testsuite.converter;
 import static junit.framework.TestCase.assertTrue;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -65,7 +66,7 @@ public class TestUpdateConverter {
 
     // 2. DFS converter reads existing records and generates random updates for the same row keys
     UpdateConverter updateConverter = new UpdateConverter(schemaStr, minPayloadSize,
-        Arrays.asList("timestamp"), Arrays.asList("_row_key"));
+            Collections.singletonList("timestamp"), Collections.singletonList("_row_key"));
     List<String> insertRowKeys = inputRDD.map(r -> r.get("_row_key").toString()).collect();
     assertTrue(inputRDD.count() == 10);
     JavaRDD<GenericRecord> outputRDD = updateConverter.convert(inputRDD);
@@ -75,7 +76,7 @@ public class TestUpdateConverter {
     Map<String, GenericRecord> inputRecords = inputRDD.mapToPair(r -> new Tuple2<>(r.get("_row_key").toString(), r))
         .collectAsMap();
     List<GenericRecord> updateRecords = outputRDD.collect();
-    updateRecords.stream().forEach(updateRecord -> {
+    updateRecords.forEach(updateRecord -> {
       GenericRecord inputRecord = inputRecords.get(updateRecord.get("_row_key").toString());
       assertTrue(areRecordsDifferent(inputRecord, updateRecord));
     });
@@ -87,11 +88,11 @@ public class TestUpdateConverter {
    */
   private boolean areRecordsDifferent(GenericRecord in, GenericRecord up) {
     for (Field field : in.getSchema().getFields()) {
-      if (field.name() == "_row_key") {
+      if (field.name().equals("_row_key")) {
         continue;
       } else {
         // Just convert all types to string for now since all are primitive
-        if (in.get(field.name()).toString() != up.get(field.name()).toString()) {
+        if (!in.get(field.name()).toString().equals(up.get(field.name()).toString())) {
           return true;
         }
       }
