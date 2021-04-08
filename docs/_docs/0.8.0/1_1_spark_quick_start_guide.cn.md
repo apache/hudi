@@ -1,13 +1,14 @@
 ---
+version: 0.8.0
 title: "Quick-Start Guide"
-permalink: /cn/docs/spark_quick-start-guide.html
+permalink: /cn/docs/0.8.0-spark_quick-start-guide.html
 toc: true
 last_modified_at: 2019-12-30T15:59:57-04:00
 language: cn
 ---
 
 本指南通过使用spark-shell简要介绍了Hudi功能。使用Spark数据源，我们将通过代码段展示如何插入和更新Hudi的默认存储类型数据集：
-[写时复制](/cn/docs/concepts.html#copy-on-write-storage)。每次写操作之后，我们还将展示如何读取快照和增量数据。 
+[写时复制](/cn/docs/0.8.0-concepts.html#copy-on-write-storage)。每次写操作之后，我们还将展示如何读取快照和增量数据。 
 
 ## 设置spark-shell
 Hudi适用于Spark-2.4.3+ & Spark 3.x 版本。您可以按照[此处](https://spark.apache.org/downloads.html)的说明设置spark。
@@ -27,7 +28,6 @@ spark-shell \
   --packages org.apache.hudi:hudi-spark-bundle_2.11:0.8.0,org.apache.spark:spark-avro_2.11:3.0.1 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
-
 
 设置表名、基本路径和数据生成器来为本指南生成记录。
 
@@ -69,9 +69,9 @@ df.write.format("org.apache.hudi").
 ([schema](#sample-schema)中的`uuid`)，分区字段(`region/country/city`）和组合逻辑([schema](#sample-schema)中的`ts`)
 以确保行程记录在每个分区中都是唯一的。更多信息请参阅
 [对Hudi中的数据进行建模](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi)，
-有关将数据提取到Hudi中的方法的信息，请参阅[写入Hudi数据集](/cn/docs/writing_data.html)。
+有关将数据提取到Hudi中的方法的信息，请参阅[写入Hudi数据集](/cn/docs/0.8.0-writing_data.html)。
 这里我们使用默认的写操作：`插入更新`。 如果您的工作负载没有`更新`，也可以使用更快的`插入`或`批量插入`操作。
-想了解更多信息，请参阅[写操作](/cn/docs/writing_data.html#write-operations)
+想了解更多信息，请参阅[写操作](/cn/docs/0.8.0-writing_data.html#write-operations)
 
 ## 查询数据 {#query}
 
@@ -91,7 +91,7 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 
 该查询提供已提取数据的读取优化视图。由于我们的分区路径(`region/country/city`)是嵌套的3个级别
 从基本路径开始，我们使用了`load(basePath + "/*/*/*/*")`。
-有关支持的所有存储类型和视图的更多信息，请参考[存储类型和视图](/cn/docs/concepts.html#storage-types--views)。
+有关支持的所有存储类型和视图的更多信息，请参考[存储类型和视图](/cn/docs/0.8.0-concepts.html#storage-types--views)。
 
 ## 更新数据 {#updates}
 
@@ -111,7 +111,7 @@ df.write.format("org.apache.hudi").
 ```
 
 注意，保存模式现在为`追加`。通常，除非您是第一次尝试创建数据集，否则请始终使用追加模式。
-[查询](#query)现在再次查询数据将显示更新的行程。每个写操作都会生成一个新的由时间戳表示的[commit](/cn/docs/concepts.html)
+[查询](#query)现在再次查询数据将显示更新的行程。每个写操作都会生成一个新的由时间戳表示的[commit](/cn/docs/0.8.0-concepts.html)
 。在之前提交的相同的`_hoodie_record_key`中寻找`_hoodie_commit_time`, `rider`, `driver`字段变更。
 
 ## 增量查询
@@ -200,7 +200,7 @@ spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 
 
 
-请查阅写数据页的[删除部分](/cn/docs/writing_data.html#deletes) 查看更多信息.
+请查阅写数据页的[删除部分](/cn/docs/0.8.0-writing_data.html#deletes) 查看更多信息.
 
 
 # Pyspark 示例
@@ -282,9 +282,9 @@ df.write.format("hudi"). \
 ([schema](#sample-schema)中的`uuid`)，分区字段(`region/country/city`）和组合逻辑([schema](#sample-schema)中的`ts`)
 以确保行程记录在每个分区中都是唯一的。更多信息请参阅
 [对Hudi中的数据进行建模](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=113709185#FAQ-HowdoImodelthedatastoredinHudi)，
-有关将数据提取到Hudi中的方法的信息，请参阅[写入Hudi数据集](/cn/docs/writing_data.html)。
+有关将数据提取到Hudi中的方法的信息，请参阅[写入Hudi数据集](/cn/docs/0.8.0-writing_data.html)。
 这里我们使用默认的写操作：`插入更新`。 如果您的工作负载没有`更新`，也可以使用更快的`插入`或`批量插入`操作。
-想了解更多信息，请参阅[写操作](/cn/docs/writing_data.html#write-operations)
+想了解更多信息，请参阅[写操作](/cn/docs/0.8.0-writing_data.html#write-operations)
 {: .notice--info}
 
 ## 查询数据 {#query}
@@ -307,7 +307,7 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 
 该查询提供已提取数据的读取优化视图。由于我们的分区路径(`region/country/city`)是嵌套的3个级别
 从基本路径开始，我们使用了`load(basePath + "/*/*/*/*")`。
-有关支持的所有存储类型和视图的更多信息，请参考[存储类型和视图](/cn/docs/concepts.html#storage-types--views)。
+有关支持的所有存储类型和视图的更多信息，请参考[存储类型和视图](/cn/docs/0.8.0-concepts.html#storage-types--views)。
 {: .notice--info}
 
 ## 更新数据 {#updates}
@@ -325,11 +325,11 @@ df.write.format("hudi"). \
 ```
 
 Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
-[Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/concepts.html) 
+[Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](/docs/0.8.0-concepts.html) 
 denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `driver` fields for the same `_hoodie_record_key`s in previous commit. 
 
 注意，保存模式现在为`追加`。通常，除非您是第一次尝试创建数据集，否则请始终使用追加模式。
-[查询](#query)现在再次查询数据将显示更新的行程。每个写操作都会生成一个新的由时间戳表示的[commit](/cn/docs/concepts.html)
+[查询](#query)现在再次查询数据将显示更新的行程。每个写操作都会生成一个新的由时间戳表示的[commit](/cn/docs/0.8.0-concepts.html)
 。在之前提交的相同的`_hoodie_record_key`中寻找`_hoodie_commit_time`, `rider`, `driver`字段变更。
 {: .notice--info}
 
@@ -434,7 +434,7 @@ roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 ```
 
-请查阅写数据页的[删除部分](/cn/docs/writing_data.html#deletes) 查看更多信息.
+请查阅写数据页的[删除部分](/cn/docs/0.8.0-writing_data.html#deletes) 查看更多信息.
 
 
 ## 从这开始下一步？
@@ -446,5 +446,5 @@ spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 
 这里我们使用Spark演示了Hudi的功能。但是，Hudi可以支持多种存储类型/视图，并且可以从Hive，Spark，Presto等查询引擎中查询Hudi数据集。
 我们制作了一个基于Docker设置、所有依赖系统都在本地运行的[演示视频](https://www.youtube.com/watch?v=VhNgUsxdrD0)，
-我们建议您复制相同的设置然后按照[这里](/cn/docs/docker_demo.html)的步骤自己运行这个演示。
-另外，如果您正在寻找将现有数据迁移到Hudi的方法，请参考[迁移指南](/cn/docs/migration_guide.html)。
+我们建议您复制相同的设置然后按照[这里](/cn/docs/0.8.0-docker_demo.html)的步骤自己运行这个演示。
+另外，如果您正在寻找将现有数据迁移到Hudi的方法，请参考[迁移指南](/cn/docs/0.8.0-migration_guide.html)。
