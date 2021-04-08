@@ -31,7 +31,6 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -1003,7 +1002,6 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     String tableBasePath = dfsBasePath + "/asyncClustering";
     // Keep it higher than batch-size to test continuous mode
     int totalRecords = 3000;
-
     // Initial bulk insert
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT);
     cfg.continuousMode = true;
@@ -1014,22 +1012,26 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamerTestRunner(ds, cfg, (r) -> {
       TestHelpers.assertAtLeastNCommits(2, tableBasePath, dfs);
-      String scheduleClusteringInstantTime = HoodieActiveTimeline.createNewInstantTime();
       HoodieClusteringJob.Config scheduleClusteringConfig = buildHoodieClusteringUtilConfig(tableBasePath,
-          scheduleClusteringInstantTime, true);
+          null, true);
       HoodieClusteringJob scheduleClusteringJob = new HoodieClusteringJob(jsc, scheduleClusteringConfig);
+      Option<String> scheduleClusteringInstantTime = Option.empty();
       try {
-        scheduleClusteringJob.doSchedule();
+        scheduleClusteringInstantTime = scheduleClusteringJob.doSchedule();
       } catch (Exception e) {
         LOG.warn("Schedule clustering failed", e);
         return false;
       }
-      LOG.info("Schedule clustering success, now cluster with instant time " + scheduleClusteringInstantTime);
-      HoodieClusteringJob.Config clusterClusteringConfig = buildHoodieClusteringUtilConfig(tableBasePath,
-          scheduleClusteringInstantTime, false);
-      HoodieClusteringJob clusterClusteringJob = new HoodieClusteringJob(jsc, clusterClusteringConfig);
-      clusterClusteringJob.cluster(clusterClusteringConfig.retry);
-      LOG.info("Cluster success");
+      if (scheduleClusteringInstantTime.isPresent()) {
+        LOG.info("Schedule clustering success, now cluster with instant time " + scheduleClusteringInstantTime.get());
+        HoodieClusteringJob.Config clusterClusteringConfig = buildHoodieClusteringUtilConfig(tableBasePath,
+            scheduleClusteringInstantTime.get(), false);
+        HoodieClusteringJob clusterClusteringJob = new HoodieClusteringJob(jsc, clusterClusteringConfig);
+        clusterClusteringJob.cluster(clusterClusteringConfig.retry);
+        LOG.info("Cluster success");
+      } else {
+        LOG.warn("Schedule clustering failed");
+      }
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(this.dfs.getConf()).setBasePath(tableBasePath).setLoadActiveTimelineOnLoad(true).build();
       int pendingReplaceSize = metaClient.getActiveTimeline().filterPendingReplaceTimeline().getInstants().toArray().length;
       int completeReplaceSize = metaClient.getActiveTimeline().getCompletedReplaceTimeline().getInstants().toArray().length;

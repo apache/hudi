@@ -122,9 +122,10 @@ public class HoodieClusteringJob {
     int ret = UtilHelpers.retry(retry, () -> {
       if (cfg.runSchedule) {
         LOG.info("Do schedule");
-        int result = doSchedule(jsc);
+        Option<String> instantTime = doSchedule(jsc);
+        int result = instantTime.isPresent() ? 0 : -1;
         if (result == 0) {
-          LOG.info("The schedule instant time is " + cfg.clusteringInstantTime);
+          LOG.info("The schedule instant time is " + instantTime.get());
         }
         return result;
       } else {
@@ -155,15 +156,18 @@ public class HoodieClusteringJob {
   }
 
   @TestOnly
-  public int doSchedule() throws Exception {
+  public Option<String> doSchedule() throws Exception {
     return this.doSchedule(jsc);
   }
 
-  private int doSchedule(JavaSparkContext jsc) throws Exception {
+  private Option<String> doSchedule(JavaSparkContext jsc) throws Exception {
     String schemaStr = getSchemaFromLatestInstant();
     SparkRDDWriteClient client =
         UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props);
-    client.scheduleClusteringAtInstant(cfg.clusteringInstantTime, Option.empty());
-    return 0;
+    if (cfg.clusteringInstantTime != null) {
+      client.scheduleClusteringAtInstant(cfg.clusteringInstantTime, Option.empty());
+      return Option.of(cfg.clusteringInstantTime);
+    }
+    return client.scheduleClustering(Option.empty());
   }
 }
