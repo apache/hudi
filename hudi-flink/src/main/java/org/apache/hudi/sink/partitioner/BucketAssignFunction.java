@@ -31,7 +31,6 @@ import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BucketInfo;
@@ -103,6 +102,8 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
 
   private final boolean isChangingRecords;
 
+  private final boolean bootstrapIndex;
+
   /**
    * State to book-keep which partition is loaded into the index state {@code indexState}.
    */
@@ -112,6 +113,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     this.conf = conf;
     this.isChangingRecords = WriteOperationType.isChangingRecords(
         WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)));
+    this.bootstrapIndex = conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED);
   }
 
   @Override
@@ -143,9 +145,11 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
             TypeInformation.of(HoodieKey.class),
             TypeInformation.of(HoodieRecordLocation.class));
     indexState = context.getKeyedStateStore().getMapState(indexStateDesc);
-    MapStateDescriptor<String, Integer> partitionLoadStateDesc =
-        new MapStateDescriptor<>("partitionLoadState", Types.STRING, Types.INT);
-    partitionLoadState = context.getKeyedStateStore().getMapState(partitionLoadStateDesc);
+    if (bootstrapIndex) {
+      MapStateDescriptor<String, Integer> partitionLoadStateDesc =
+          new MapStateDescriptor<>("partitionLoadState", Types.STRING, Types.INT);
+      partitionLoadState = context.getKeyedStateStore().getMapState(partitionLoadStateDesc);
+    }
   }
 
   @SuppressWarnings("unchecked")
@@ -159,7 +163,9 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     final BucketInfo bucketInfo;
     final HoodieRecordLocation location;
 
-    if (!partitionLoadState.contains(hoodieKey.getPartitionPath())) {
+    // The dataset may be huge, thus the processing would block for long,
+    // disabled by default.
+    if (bootstrapIndex && !partitionLoadState.contains(hoodieKey.getPartitionPath())) {
       // If the partition records are never loaded, load the records first.
       loadRecords(hoodieKey.getPartitionPath());
     }
@@ -205,6 +211,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
    * @throws Exception when error occurs for state update
    */
   private void loadRecords(String partitionPath) throws Exception {
+    LOG.info("Start loading records under partition {} into the index state", partitionPath);
     HoodieTable<?, ?, ?, ?> hoodieTable = bucketAssigner.getTable();
     List<HoodieBaseFile> latestBaseFiles =
         HoodieIndexUtils.getLatestBaseFilesForPartition(partitionPath, hoodieTable);
@@ -212,8 +219,16 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     final int maxParallelism = getRuntimeContext().getMaxNumberOfParallelSubtasks();
     final int taskID = getRuntimeContext().getIndexOfThisSubtask();
     for (HoodieBaseFile baseFile : latestBaseFiles) {
-      List<HoodieKey> hoodieKeys =
-          ParquetUtils.fetchRecordKeyPartitionPathFromParquet(hadoopConf, new Path(baseFile.getPath()));
+      final List<HoodieKey> hoodieKeys;
+      try {
+        hoodieKeys =
+            ParquetUtils.fetchRecordKeyPartitionPathFromParquet(hadoopConf, new Path(baseFile.getPath()));
+      } catch (Exception e) {
+        // in case there was some empty parquet file when the pipeline
+        // crushes exceptionally.
+        LOG.error("Error when loading record keys from file: {}", baseFile);
+        continue;
+      }
       hoodieKeys.forEach(hoodieKey -> {
         try {
           // Reference: org.apache.flink.streaming.api.datastream.KeyedStream,
@@ -224,12 +239,13 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
             this.indexState.put(hoodieKey, new HoodieRecordLocation(baseFile.getCommitTime(), baseFile.getFileId()));
           }
         } catch (Exception e) {
-          throw new HoodieIOException("Error when load record keys from file: " + baseFile);
+          LOG.error("Error when putting record keys into the state from file: {}", baseFile);
         }
       });
     }
     // Mark the partition path as loaded.
     partitionLoadState.put(partitionPath, 0);
+    LOG.info("Finish loading records under partition {} into the index state", partitionPath);
   }
 
   @VisibleForTesting
