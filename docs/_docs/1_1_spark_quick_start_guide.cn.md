@@ -10,12 +10,20 @@ language: cn
 [写时复制](/cn/docs/concepts.html#copy-on-write-storage)。每次写操作之后，我们还将展示如何读取快照和增量数据。 
 
 ## 设置spark-shell
-Hudi适用于Spark-2.x版本。您可以按照[此处](https://spark.apache.org/downloads.html)的说明设置spark。
+Hudi适用于Spark-2.4.4+ & Spark 3.x 版本。您可以按照[此处](https://spark.apache.org/downloads.html)的说明设置spark。
 在提取的目录中，使用spark-shell运行Hudi：
 
 ```scala
-bin/spark-shell --packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+// spark-shell for spark 3
+spark-shell \
+  --packages org.apache.hudi:hudi-spark3-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+// spark-shell for spark 2
+spark-shell \
+  --packages org.apache.hudi:hudi-spark-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
+
 
 设置表名、基本路径和数据生成器来为本指南生成记录。
 
@@ -194,14 +202,19 @@ spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 # Pyspark 示例
 ## 设置spark-shell
 
-Hudi适用于Spark-2.x版本。您可以按照[此处](https://spark.apache.org/downloads.html)的说明设置spark。
+Hudi适用于Spark-2.4.4+ & Spark 3.x 版本。您可以按照[此处](https://spark.apache.org/downloads.html)的说明设置spark。
 在提取的目录中，使用spark-shell运行Hudi：
 
 ```python
 # pyspark
 export PYSPARK_PYTHON=$(which python3)
-spark-2.4.4-bin-hadoop2.7/bin/pyspark \
-  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.6.0,org.apache.spark:spark-avro_2.11:2.4.4 \
+# for spark3
+pyspark \
+  --packages org.apache.hudi:hudi-spark3-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+# for spark2
+pyspark \
+  --packages org.apache.hudi:hudi-spark-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
@@ -419,8 +432,8 @@ spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 ## 从这开始下一步？
 
 您也可以通过[自己构建hudi](https://github.com/apache/hudi#building-apache-hudi-from-source)来快速开始，
-并在spark-shell命令中使用`--jars <path to hudi_code>/packaging/hudi-spark-bundle/target/hudi-spark-bundle-*.*.*-SNAPSHOT.jar`，
-而不是`--packages org.apache.hudi:hudi-spark-bundle:0.5.0-incubating`
+并在spark-shell命令中使用`--jars <path to hudi_code>/packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.1?-*.*.*-SNAPSHOT.jar`，
+而不是`--packages org.apache.hudi:hudi-spark3-bundle_2.12:0.8.0`
 
 
 这里我们使用Spark演示了Hudi的功能。但是，Hudi可以支持多种存储类型/视图，并且可以从Hive，Spark，Presto等查询引擎中查询Hudi数据集。

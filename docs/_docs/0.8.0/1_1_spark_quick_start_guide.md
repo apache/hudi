@@ -14,13 +14,17 @@ After each write operation we will also show how to read the data both snapshot 
 
 ## Setup
 
-Hudi works with Spark-2.x & Spark 3.x versions. You can follow instructions [here](https://spark.apache.org/downloads.html) for setting up spark. 
+Hudi works with Spark-2.4.4+ & Spark 3.x versions. You can follow instructions [here](https://spark.apache.org/downloads.html) for setting up spark. 
 From the extracted directory run spark-shell with Hudi as:
 
 ```scala
-// spark-shell
+// spark-shell for spark 3
 spark-shell \
-  --packages org.apache.hudi:hudi-spark-bundle_2.12:0.7.0,org.apache.spark:spark-avro_2.12:3.0.1 \
+  --packages org.apache.hudi:hudi-spark3-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+// spark-shell for spark 2
+spark-shell \
+  --packages org.apache.hudi:hudi-spark-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
@@ -301,8 +305,13 @@ Examples below illustrate the same flow above, instead using PySpark.
 ```python
 # pyspark
 export PYSPARK_PYTHON=$(which python3)
+# for spark3
 pyspark \
-  --packages org.apache.hudi:hudi-spark-bundle_2.12:0.7.0,org.apache.spark:spark-avro_2.12:3.0.1 \
+  --packages org.apache.hudi:hudi-spark3-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+# for spark2
+pyspark \
+  --packages org.apache.hudi:hudi-spark-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
@@ -519,7 +528,7 @@ See the [deletion section](/docs/0.8.0-writing_data.html#deletes) of the writing
 
 You can also do the quickstart by [building hudi yourself](https://github.com/apache/hudi#building-apache-hudi-from-source), 
 and using `--jars <path to hudi_code>/packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.1?-*.*.*-SNAPSHOT.jar` in the spark-shell command above
-instead of `--packages org.apache.hudi:hudi-spark-bundle_2.12:0.7.0`. Hudi also supports scala 2.12. Refer [build with scala 2.12](https://github.com/apache/hudi#build-with-scala-212)
+instead of `--packages org.apache.hudi:hudi-spark3-bundle_2.12:0.8.0`. Hudi also supports scala 2.12. Refer [build with scala 2.12](https://github.com/apache/hudi#build-with-scala-212)
 for more info.
 
 Also, we used Spark here to show case the capabilities of Hudi. However, Hudi can support multiple table types/query types and 

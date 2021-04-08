@@ -243,7 +243,7 @@ cn_author:
   links:
     - label: "Documentation"
       icon: "fa fa-book"
-      url: "/docs/0.6.0-quick-start-guide"
+      url: "/docs/0.7.0-quick-start-guide"
     - label: "Technical Wiki"
       icon: "fa fa-wikipedia-w"
       url: "https://cwiki.apache.org/confluence/display/HUDI"
@@ -269,7 +269,7 @@ cn_author:
   links:
     - label: "Documentation"
       icon: "fa fa-book"
-      url: "/docs/0.6.0-quick-start-guide"
+      url: "/docs/0.8.0-quick-start-guide"
     - label: "Technical Wiki"
       icon: "fa fa-wikipedia-w"
       url: "https://cwiki.apache.org/confluence/display/HUDI"
