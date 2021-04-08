@@ -1002,6 +1002,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     String tableBasePath = dfsBasePath + "/asyncClustering";
     // Keep it higher than batch-size to test continuous mode
     int totalRecords = 3000;
+
     // Initial bulk insert
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT);
     cfg.continuousMode = true;
