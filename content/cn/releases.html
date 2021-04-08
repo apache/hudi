@@ -17,7 +17,7 @@
 
 
 
-  <meta property="article:modified_time" content="2019-12-30T14:59:57-05:00">
+  <meta property="article:modified_time" content="2020-05-28T11:40:00-04:00">
 
 
 
@@ -189,118 +189,326 @@
           <nav class="toc">
             <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
             <ul class="toc__menu">
-  <li><a href="#release-052-incubating-docs">Release 0.5.2-incubating (docs)</a>
+  <li><a href="#release-080-docs">Release 0.8.0 (docs)</a>
     <ul>
       <li><a href="#download-information">Download Information</a></li>
       <li><a href="#migration-guide-for-this-release">Migration Guide for this release</a></li>
-      <li><a href="#release-highlights">Release Highlights</a></li>
-      <li><a href="#raw-release-notes">Raw Release Notes</a></li>
+      <li><a href="#release-highlights">Release Highlights</a>
+        <ul>
+          <li><a href="#flink-integration">Flink Integration</a></li>
+          <li><a href="#parallel-writers-support">Parallel Writers Support</a></li>
+          <li><a href="#writer-side-improvements">Writer side improvements</a></li>
+          <li><a href="#query-side-improvements">Query side improvements</a></li>
+          <li><a href="#raw-release-notes">Raw Release Notes</a></li>
+        </ul>
+      </li>
     </ul>
   </li>
-  <li><a href="#release-051-incubating-docs">Release 0.5.1-incubating (docs)</a>
+  <li><a href="#release-070-docs">Release 0.7.0 (docs)</a>
     <ul>
       <li><a href="#download-information-1">Download Information</a></li>
       <li><a href="#migration-guide-for-this-release-1">Migration Guide for this release</a></li>
-      <li><a href="#release-highlights-1">Release Highlights</a></li>
-      <li><a href="#migration-guide-for-this-release-2">Migration Guide for this release</a></li>
-      <li><a href="#raw-release-notes-1">Raw Release Notes</a></li>
+      <li><a href="#release-highlights-1">Release Highlights</a>
+        <ul>
+          <li><a href="#clustering">Clustering</a></li>
+          <li><a href="#metadata-table">Metadata Table</a></li>
+          <li><a href="#javaflink-writers">Java/Flink Writers</a></li>
+          <li><a href="#writer-side-improvements-1">Writer side improvements</a></li>
+          <li><a href="#query-side-improvements-1">Query side improvements</a></li>
+          <li><a href="#raw-release-notes-1">Raw Release Notes</a></li>
+        </ul>
+      </li>
     </ul>
   </li>
-  <li><a href="#release-047">Release 0.4.7</a>
+  <li><a href="#release-060-docs">Release 0.6.0 (docs)</a>
     <ul>
-      <li><a href="#release-highlights-2">Release Highlights</a></li>
-      <li><a href="#pr-list">PR LIST</a></li>
+      <li><a href="#download-information-2">Download Information</a></li>
+      <li><a href="#migration-guide-for-this-release-2">Migration Guide for this release</a></li>
+      <li><a href="#release-highlights-2">Release Highlights</a>
+        <ul>
+          <li><a href="#writer-side-improvements-2">Writer side improvements:</a></li>
+          <li><a href="#query-side-improvements-2">Query side improvements:</a></li>
+          <li><a href="#usability">Usability:</a></li>
+        </ul>
+      </li>
+      <li><a href="#raw-release-notes-2">Raw Release Notes</a></li>
+    </ul>
+  </li>
+  <li><a href="#release-053-docs">Release 0.5.3 (docs)</a>
+    <ul>
+      <li><a href="#download-information-3">Download Information</a></li>
+      <li><a href="#migration-guide-for-this-release-3">Migration Guide for this release</a></li>
+      <li><a href="#release-highlights-3">Release Highlights</a></li>
+      <li><a href="#raw-release-notes-3">Raw Release Notes</a></li>
     </ul>
   </li>
 </ul>
           </nav>
         </aside>
         
-        <h2 id="release-052-incubating-docs"><a href="https://github.com/apache/hudi/releases/tag/release-0.5.2-incubating">Release 0.5.2-incubating</a> (<a href="/docs/0.5.2-quick-start-guide.html">docs</a>)</h2>
+        <h1 id="release-080-docs"><a href="https://github.com/apache/hudi/releases/tag/release-0.8.0">Release 0.8.0</a> (<a href="/docs/0.8.0-quick-start-guide.html">docs</a>)</h1>
 
-<h3 id="download-information">Download Information</h3>
+<h2 id="download-information">Download Information</h2>
 <ul>
-  <li>Source Release : <a href="https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz">Apache Hudi 0.5.2-incubating Source Release</a> (<a href="https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.sha512">sha512</a>)</li>
+  <li>Source Release : <a href="https://downloads.apache.org/hudi/0.8.0/hudi-0.8.0.src.tgz">Apache Hudi 0.8.0 Source Release</a> (<a href="https://downloads.apache.org/hudi/0.8.0/hudi-0.8.0.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/hudi/0.8.0/hudi-0.8.0.src.tgz.sha512">sha512</a>)</li>
   <li>Apache Hudi jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
 </ul>
 
-<h3 id="migration-guide-for-this-release">Migration Guide for this release</h3>
+<h2 id="migration-guide-for-this-release">Migration Guide for this release</h2>
 <ul>
-  <li>Write Client restructuring has moved classes around (<a href="https://issues.apache.org/jira/browse/HUDI-554">HUDI-554</a>). Package <code class="highlighter-rouge">client</code> now has all the various client classes, that do the transaction management. <code class="highlighter-rouge">func</code> renamed to <code class="highlighter-rouge">execution</code> and some helpers moved to <code class="highlighter-rouge">client/utils</code>. All compaction code under <code class="highlighter-rouge">io</code> now under <code class="highlighter-rouge">table/compact</code>. Rollback code under <code class="highlighter-rouge">table/rollback</code> and in general all code for individual operations under <code class="highlighter-rouge">table</code>. This change only affects the apps/projects depending on hudi-client. Users of deltastreamer/datasource will not need to change anything.</li>
+  <li>If migrating from release older than 0.5.3, please also check the upgrade instructions for each subsequent release below.</li>
+  <li>Specifically check upgrade instructions for 0.6.0. This release does not introduce any new table versions.</li>
+  <li>The <code class="highlighter-rouge">HoodieRecordPayload</code> interface deprecated existing methods, in favor of new ones that also lets us pass properties at runtime. Users are
+encouraged to migrate out of the deprecated methods, since they will be removed in 0.9.0.</li>
 </ul>
 
-<h3 id="release-highlights">Release Highlights</h3>
+<h2 id="release-highlights">Release Highlights</h2>
+
+<h3 id="flink-integration">Flink Integration</h3>
+<p>Since the initial support for the Hudi Flink Writer in the 0.7.0 release, the Hudi community made great progress on improving the Flink/Hudi integration, 
+including redesigning the Flink writer pipeline with better performance and scalability, state-backed indexing with bootstrap support, 
+Flink writer for MOR table, batch reader for COW&amp;MOR table, streaming reader for MOR table, and Flink SQL connector for both source and sink. 
+In the 0.8.0 release, user is able to use all those features with Flink 1.11+.</p>
+
+<p>Please see <a href="https://cwiki.apache.org/confluence/display/HUDI/RFC+-+24%3A+Hoodie+Flink+Writer+Proposal">RFC-24</a>
+for more implementation details for the Flink writer and follow this <a href="/docs/flink-quick-start-guide.html">page</a> 
+to get started with Flink!</p>
+
+<h3 id="parallel-writers-support">Parallel Writers Support</h3>
+<p>As many users requested, now Hudi supports multiple ingestion writers to the same Hudi Table with optimistic concurrency control.
+Hudi supports file level OCC, i.e., for any 2 commits (or writers) happening to the same table, if they do not have writes to overlapping files being changed, 
+both writers are allowed to succeed. This feature is currently experimental and requires either Zookeeper or HiveMetastore to acquire locks.</p>
+
+<p>Please see <a href="https://cwiki.apache.org/confluence/display/HUDI/RFC+-+22+%3A+Snapshot+Isolation+using+Optimistic+Concurrency+Control+for+multi-writers">RFC-22</a>
+for more implementation details and follow this <a href="/docs/concurrency_control.html">page</a> to get started with concurrency control!</p>
+
+<h3 id="writer-side-improvements">Writer side improvements</h3>
 <ul>
-  <li>Support for overwriting the payload implementation in <code class="highlighter-rouge">hoodie.properties</code> via specifying the <code class="highlighter-rouge">hoodie.compaction.payload.class</code> config option. Previously, once the payload class is set once in <code class="highlighter-rouge">hoodie.properties</code>, it cannot be changed. In some cases, if a code refactor is done and the jar updated, one may need to pass the new payload class name.</li>
-  <li><code class="highlighter-rouge">TimestampBasedKeyGenerator</code> supports for <code class="highlighter-rouge">CharSequence</code>  types. Previously <code class="highlighter-rouge">TimestampBasedKeyGenerator</code> only supports <code class="highlighter-rouge">Double</code>, <code class="highlighter-rouge">Long</code>, <code class="highlighter-rouge">Float</code> and <code class="highlighter-rouge">String</code> 4 data types for the partition key. Now, after data type extending, <code class="highlighter-rouge">CharSequence</code> has been supported in <code class="highlighter-rouge">TimestampBasedKeyGenerator</code>.</li>
-  <li>Hudi now supports incremental pulling from defined partitions via the <code class="highlighter-rouge">hoodie.datasource.read.incr.path.glob</code> <a href="https://github.com/apache/hudi/blob/master/hudi-spark/src/main/scala/org/apache/hudi/DataSourceOptions.scala#L111">config option</a>. For some use case that users only need to pull the incremental part of certain partitions, it can run faster by only loading relevant parquet files.</li>
-  <li>With 0.5.2, hudi allows partition path to be updated with <code class="highlighter-rouge">GLOBAL_BLOOM</code> index. Previously, when a record is to be updated with a new partition path, and when set to <code class="highlighter-rouge">GLOBAL_BLOOM</code> as index, hudi ignores the new partition path and update the record in the original partition path. Now, hudi allows records to be inserted into their new partition paths and delete the records in the old partition paths. A configuration (e.g. <code class="highlighter-rouge">hoodie.index.bloom.update.partition.path=true</code>) can be added to enable this feature.</li>
-  <li>A <code class="highlighter-rouge">JdbcbasedSchemaProvider</code> schema provider has been provided to get metadata through JDBC. For the use case that users want to synchronize data from MySQL, and at the same time, want to get the schema from the database, it’s very helpful.</li>
-  <li>Simplify <code class="highlighter-rouge">HoodieBloomIndex</code> without the need for 2GB limit handling. Prior to spark 2.4.0, each spark partition has a limit of 2GB. In Hudi 0.5.1, after we upgraded to spark 2.4.4, we don’t have the limitation anymore. Hence removing the safe parallelism constraint we had in<code class="highlighter-rouge"> HoodieBloomIndex</code>.</li>
-  <li>CLI related changes:
+  <li>InsertOverwrite Support for Flink writer client.</li>
+  <li>Support CopyOnWriteTable in Java writer client.</li>
+</ul>
+
+<h3 id="query-side-improvements">Query side improvements</h3>
+<ul>
+  <li>Support Spark Structured Streaming read from Hudi table.</li>
+  <li>Performance improvement of Metadata table.</li>
+  <li>Performance improvement of Clustering.</li>
+</ul>
+
+<h3 id="raw-release-notes">Raw Release Notes</h3>
+<p>The raw release notes are available <a href="https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&amp;version=12349423">here</a></p>
+
+<h1 id="release-070-docs"><a href="https://github.com/apache/hudi/releases/tag/release-0.7.0">Release 0.7.0</a> (<a href="/docs/0.7.0-quick-start-guide.html">docs</a>)</h1>
+
+<h2 id="download-information-1">Download Information</h2>
+<ul>
+  <li>Source Release : <a href="https://downloads.apache.org/hudi/0.7.0/hudi-0.7.0.src.tgz">Apache Hudi 0.7.0 Source Release</a> (<a href="https://downloads.apache.org/hudi/0.7.0/hudi-0.7.0.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/hudi/0.7.0/hudi-0.7.0.src.tgz.sha512">sha512</a>)</li>
+  <li>Apache Hudi jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
+</ul>
+
+<h2 id="migration-guide-for-this-release-1">Migration Guide for this release</h2>
+<ul>
+  <li>If migrating from release older than 0.5.3, please also check the upgrade instructions for each subsequent release below.</li>
+  <li>Specifically check upgrade instructions for 0.6.0. This release does not introduce any new table versions.</li>
+  <li>The <code class="highlighter-rouge">HoodieRecordPayload</code> interface deprecated existing methods, in favor of new ones that also lets us pass properties at runtime. Users are
+encouraged to migrate out of the deprecated methods, since they will be removed in 0.9.0.</li>
+</ul>
+
+<h2 id="release-highlights-1">Release Highlights</h2>
+
+<h3 id="clustering">Clustering</h3>
+
+<p>0.7.0 brings the ability to cluster your Hudi tables, to optimize for file sizes and also storage layout. Hudi will continue to
+enforce file sizes, as it always has been, during the write. Clustering provides more flexibility to increase the file sizes 
+down the line or ability to ingest data at much fresher intervals, and later coalesce them into bigger files. <a href="https://gist.github.com/vinothchandar/d7fa1338cddfae68390afcdfe310f94e#gistcomment-3383478">Microbenchmarks</a>
+demonstrate a 3-4x reduction in query performance, for a 10-20x reduction in file sizes.</p>
+
+<p>Additionally, clustering data based on fields that are often used in queries, dramatically 
+<a href="https://cwiki.apache.org/confluence/display/HUDI/RFC+-+19+Clustering+data+for+freshness+and+query+performance#RFC19Clusteringdataforfreshnessandqueryperformance-PerformanceEvaluation">improves query performance</a> by allowing many files to be
+completely skipped. This is very similar to the benefits of clustering delivered by <a href="https://docs.snowflake.com/en/user-guide/tables-clustering-micropartitions.html">cloud data warehouses</a>.
+We are proud to announce that such capability is freely available in open source, for the first time, through the 0.7.0 release.</p>
+
+<p>Please see <a href="https://cwiki.apache.org/confluence/display/HUDI/RFC+-+19+Clustering+data+for+freshness+and+query+performance">RFC-19</a> for more implementation details
+and checkout configs <a href="/docs/configurations.html#clustering-configs">here</a> for how to use it in your pipelines. At the moment, we support both inline and async clustering modes.</p>
+
+<h3 id="metadata-table">Metadata Table</h3>
+
+<p>Since Hudi was born at Uber, on a HDFS backed data lake, we have since been a tad apathetic to the plight of listing performance on cloud storage (partly in hopes that
+cloud providers will fix it over time:)). Nonetheless, 0.7.0 changes this and lays out the foundation for storing more indexes, metadata in an internal metadata table, 
+which is implemented using a Hudi MOR table - which means it’s compacted, cleaned and also incrementally updated like any other Hudi table. Also, unlike similar 
+implementations in other projects, we have chosen to index the file listing information as HFiles, which offers point-lookup performance to fetch listings for a single partition.</p>
+
+<p>In 0.7.0 release, <code class="highlighter-rouge">hoodie.metadata.enable=true</code> on the writer side, will populate the metadata table with file system listings
+so all operations don’t have to explicitly use <code class="highlighter-rouge">fs.listStatus()</code> anymore on data partitions. We have introduced a sync mechanism that
+keeps syncing file additions/deletions on the data timeline, to the metadata table, after each write operation.</p>
+
+<p>In our testing, on a large 250K file table, the metadata table delivers <a href="https://github.com/apache/hudi/pull/2441#issuecomment-761742963">2-3x speedup</a> over parallelized 
+listing done by the Hudi spark writer. Please check <a href="https://cwiki.apache.org/confluence/display/HUDI/RFC+-+15%3A+HUDI+File+Listing+and+Query+Planning+Improvements">RFC-15 (ongoing)</a>
+and the <a href="/docs/configurations.html#metadata-config">configurations</a>, which offer flags to help adopt this feature safely in your production pipelines.</p>
+
+<h3 id="javaflink-writers">Java/Flink Writers</h3>
+
+<p>Hudi was originally designed with a heavy dependency on Spark, given it had simply solve specific problems at Uber. But, as we have evolved as an Apache 
+project, we realized the need for abstracting the internal table format, table services and writing layers of code. In 0.7.0, we have additionally added
+Java and Flink based writers, as initial steps in this direction.</p>
+
+<p>Specifically, the <code class="highlighter-rouge">HoodieFlinkStreamer</code> allows for Hudi Copy-On-Write table to built by streaming data from a Kafka topic.</p>
+
+<h3 id="writer-side-improvements-1">Writer side improvements</h3>
+
+<ul>
+  <li><strong>Spark3 Support</strong>: We have added support for writing/querying data using Spark 3. please be sure to use the scala 2.12 hudi-spark-bundle.</li>
+  <li><strong>Parallelized Listing</strong>: We have holistically moved all listings under the <code class="highlighter-rouge">HoodieTableMetadata</code> interface, which does multi-threaded/spark parallelized list operations. 
+We expect this to improve cleaner, compaction scheduling performance, even when the metadata table is not used.</li>
+  <li><strong>Kafka Commit Callbacks</strong>: We have added <code class="highlighter-rouge">HoodieWriteCommitKafkaCallback</code>, that publishes an event to Apache Kafka, for every commit operation. This can be used to trigger
+derived/ETL pipelines similar to data <a href="https://airflow.apache.org/docs/apache-airflow/stable/_api/airflow/sensors/index.html">sensors</a> in Apache Airflow.</li>
+  <li><strong>Insert Overwrite/Insert Overwrite Table</strong>: We have added these two new write operation types, predominantly to help existing batch ETL jobs, which typically overwrite entire 
+tables/partitions each run. These operations are much cheaper, than having to issue upserts, given they are bulk replacing the target table.
+Check <a href="/docs/spark_quick-start-guide.html#insert-overwrite-table">here</a> for examples.</li>
+  <li><strong>Delete Partition</strong>: For users of WriteClient/RDD level apis, we have added an API to delete an entire partition, again without issuing deletes at the record level.</li>
+  <li>The current default <code class="highlighter-rouge">OverwriteWithLatestAvroPayload</code> will overwrite the value in storage, even if for e.g the upsert was reissued for an older value of the key.
+Added a new <code class="highlighter-rouge">DefaultHoodieRecordPayload</code> and a new payload config <code class="highlighter-rouge">hoodie.payload.ordering.field</code> helps specify a field, that the incoming upsert record can be compared with
+the record on storage, to decide whether to overwrite or not. Users are encouraged to adopt this newer, more flexible model.</li>
+  <li>Hive sync supports hourly partitions via <code class="highlighter-rouge">SlashEncodedHourPartitionValueExtractor</code></li>
+  <li>Support for IBM Cloud storage, Open J9 JVM.</li>
+</ul>
+
+<h3 id="query-side-improvements-1">Query side improvements</h3>
+
+<ul>
+  <li><strong>Incremental Query on MOR (Spark Datasource)</strong>: Spark datasource now has experimental support for incremental queries on MOR table. This feature will be hardened and certified 
+ in the next release, along with a large overhaul of the spark datasource implementation. (sshh!:))</li>
+  <li><strong>Metadata Table For File Listings</strong>: Users can also leverage the metadata table on the query side for the following query paths. For Hive, setting the <code class="highlighter-rouge">hoodie.metadata.enable=true</code> session
+property and for SparkSQL on Hive registered tables using <code class="highlighter-rouge">--conf spark.hadoop.hoodie.metadata.enable=true</code>, allows the file listings for the partition to be fetched out of the metadata
+table, instead of listing the underlying DFS partition.</li>
+</ul>
+
+<h3 id="raw-release-notes-1">Raw Release Notes</h3>
+<p>The raw release notes are available <a href="https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&amp;version=12348721">here</a></p>
+
+<h1 id="release-060-docs"><a href="https://github.com/apache/hudi/releases/tag/release-0.6.0">Release 0.6.0</a> (<a href="/docs/0.6.0-quick-start-guide.html">docs</a>)</h1>
+
+<h2 id="download-information-2">Download Information</h2>
+<ul>
+  <li>Source Release : <a href="https://downloads.apache.org/hudi/0.6.0/hudi-0.6.0.src.tgz">Apache Hudi 0.6.0 Source Release</a> (<a href="https://downloads.apache.org/hudi/0.6.0/hudi-0.6.0.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/hudi/0.6.0/hudi-0.6.0.src.tgz.sha512">sha512</a>)</li>
+  <li>Apache Hudi jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
+</ul>
+
+<h2 id="migration-guide-for-this-release-2">Migration Guide for this release</h2>
+<ul>
+  <li>If migrating from release older than 0.5.3, please also check the upgrade instructions for each subsequent release below.</li>
+  <li>With 0.6.0 Hudi is moving from list based rollback to marker based rollbacks. To smoothly aid this transition a 
+ new property called <code class="highlighter-rouge">hoodie.table.version</code> is added to <code class="highlighter-rouge">hoodie.properties</code> file. Whenever Hudi is launched with 
+ newer table version i.e 1 (or moving from pre 0.6.0 to 0.6.0), an upgrade step will be executed automatically. 
+ This automatic upgrade step will happen just once per Hudi table as the <code class="highlighter-rouge">hoodie.table.version</code> will be updated in property file after upgrade is completed.</li>
+  <li>Similarly, a command line tool for Downgrading (command - <code class="highlighter-rouge">downgrade</code>) is added if in case some users want to downgrade Hudi from table version 1 to 0 or move from Hudi 0.6.0 to pre 0.6.0</li>
+  <li>If you were using a user defined partitioner with bulkInsert() RDD API, the base interface has changed to <code class="highlighter-rouge">BulkInsertPartitioner</code> and will need minor adjustments to your existing implementations.</li>
+</ul>
+
+<h2 id="release-highlights-2">Release Highlights</h2>
+
+<h3 id="writer-side-improvements-2">Writer side improvements:</h3>
+<ul>
+  <li>Bootstrapping existing parquet datasets :  Adds support for bootstrapping existing datasets into Hudi, via both Spark datasource writer and 
+ deltastreamer tool, with support for reading from Hive, SparkSQL, AWS Athena (prestoDB support coming soon). See <a href="https://cwiki.apache.org/confluence/display/HUDI/RFC+-+15%3A+HUDI+File+Listing+and+Query+Planning+Improvements">RFC-15</a> for technical details. 
+ Note that this is an experimental feature, which will be improved upon further in the 0.6.x versions.</li>
+  <li>Native row writing for bulk_insert : Avoids any dataframe-rdd conversion for bulk_insert path, which can improve performance of initial bulk loads.
+  Although, this is typically not the bottleneck for upsert/deletes, subsequent releases in 0.6.x versions will expand this to other write operations
+  to make reasoning about schema management easier, avoiding the spark-avro conversion totally.</li>
+  <li>Bulk insert sort modes : Hudi bulk_insert sorts the input globally to optimize file sizes and avoid out-of-memory issues encountered when writing parallely to multiple DFS partitions. 
+ For users who want to prepare the dataframe for writing outside of Hudi, we have made this configurable using <code class="highlighter-rouge">hoodie.bulkinsert.sort.mode</code>.</li>
+  <li>Cleaning can now be run concurrently with writing, using <code class="highlighter-rouge">hoodie.clean.async=true</code>which can speed up time taken to finish committing.</li>
+  <li>Async compaction for spark streaming writes to hudi table, is now self managed by default, controlling <code class="highlighter-rouge">hoodie.datasource.compaction.async.enable</code>.</li>
+  <li>Rollbacks no longer perform full table listings, by leveraging marker files. To enable, set <code class="highlighter-rouge">hoodie.rollback.using.markers=true</code>.</li>
+  <li>Added a new index <code class="highlighter-rouge">hoodie.index.type=SIMPLE</code> which can be faster than <code class="highlighter-rouge">BLOOM_INDEX</code> for cases where updates/deletes spread across a large portion of the table.</li>
+  <li>Hudi now supports <code class="highlighter-rouge">Azure Data Lake Storage V2</code> , <code class="highlighter-rouge">Alluxio</code> and <code class="highlighter-rouge">Tencent Cloud Object Storage</code> storages.</li>
+  <li><a href="https://hudi.apache.org/docs/writing_data.html#multitabledeltastreamer">HoodieMultiDeltaStreamer</a> adds support for ingesting multiple kafka streams in a single DeltaStreamer deployment, effectively reducing operational burden for using delta streamer 
+as your data lake ingestion tool (Experimental feature)</li>
+  <li>Added a new tool - InitialCheckPointProvider, to set checkpoints when migrating to DeltaStreamer after an initial load of the table is complete.</li>
+  <li>Delta Streamer tool now supports ingesting CSV data sources, chaining of multiple transformers to build more advanced ETL jobs.</li>
+  <li>Introducing a new <code class="highlighter-rouge">CustomKeyGenerator</code> key generator class, that provides flexible configurations to provide enable different types of key, partition path generation in  single class.
+We also added support for more time units and date/time formats in <code class="highlighter-rouge">TimestampBasedKeyGenerator</code>. See <a href="https://hudi.apache.org/docs/writing_data.html#key-generation">docs</a> for more.</li>
+</ul>
+
+<h3 id="query-side-improvements-2">Query side improvements:</h3>
+<ul>
+  <li>Starting 0.6.0, snapshot queries are feasible on MOR tables using spark datasource. (experimental feature)</li>
+  <li>In prior versions we only supported <code class="highlighter-rouge">HoodieCombineHiveInputFormat</code> for CopyOnWrite tables to ensure that there is a limit on the number of mappers spawned for
+any query. Hudi now supports Merge on Read tables also using <code class="highlighter-rouge">HoodieCombineInputFormat</code>.</li>
+  <li>Speedup spark read queries by caching metaclient in HoodieROPathFilter. This helps reduce listing related overheads in S3 when filtering files for read-optimized queries.</li>
+</ul>
+
+<h3 id="usability">Usability:</h3>
+<ul>
+  <li>Spark DAGs are named to aid better debuggability.</li>
+  <li>Support pluggable metrics reporting by introducing proper abstraction for user defined metrics. Console, JMX, Prometheus and DataDog metric reporters have been added.</li>
+  <li>A new utility called Data snapshot exporter has been added. Latest table snapshot as of a certain point in time can be exported as plain parquet files with this tool.</li>
+  <li>Introduce write committed callback hooks for incremental pipelines to be notified and act on new commits in the timeline. For e.g, Apache Airflow jobs can be triggered
+as new commits arrive.</li>
+  <li>Added support for deleting savepoints via CLI</li>
+  <li>Added a new command - <code class="highlighter-rouge">export instants</code>, to export metadata of instants</li>
+</ul>
+
+<h2 id="raw-release-notes-2">Raw Release Notes</h2>
+<p>The raw release notes are available <a href="https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&amp;version=12346663">here</a></p>
+
+<h1 id="release-053-docs"><a href="https://github.com/apache/hudi/releases/tag/release-0.5.3">Release 0.5.3</a> (<a href="/docs/0.5.3-quick-start-guide.html">docs</a>)</h1>
+
+<h2 id="download-information-3">Download Information</h2>
+<ul>
+  <li>Source Release : <a href="https://downloads.apache.org/hudi/0.5.3/hudi-0.5.3.src.tgz">Apache Hudi 0.5.3 Source Release</a> (<a href="https://downloads.apache.org/hudi/0.5.3/hudi-0.5.3.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/hudi/0.5.3/hudi-0.5.3.src.tgz.sha512">sha512</a>)</li>
+  <li>Apache Hudi jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
+</ul>
+
+<h2 id="migration-guide-for-this-release-3">Migration Guide for this release</h2>
+<ul>
+  <li>This is a bug fix only release and no special migration steps needed when upgrading from 0.5.2. If you are upgrading from earlier releases “X”, please make sure you read the migration guide for each subsequent release between “X” and 0.5.3</li>
+  <li>0.5.3 is the first hudi release after graduation. As a result, all hudi jars will no longer have “-incubating” in the version name. In all the places where hudi version is referred, please make sure “-incubating” is no longer present.</li>
+</ul>
+
+<p>For example hudi-spark-bundle pom dependency would look like:</p>
+<div class="language-xml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    <span class="nt">&lt;dependency&gt;</span>
+        <span class="nt">&lt;groupId&gt;</span>org.apache.hudi<span class="nt">&lt;/groupId&gt;</span>
+        <span class="nt">&lt;artifactId&gt;</span>hudi-spark-bundle_2.12<span class="nt">&lt;/artifactId&gt;</span>
+        <span class="nt">&lt;version&gt;</span>0.5.3<span class="nt">&lt;/version&gt;</span>
+    <span class="nt">&lt;/dependency&gt;</span>
+</code></pre></div></div>
+<h2 id="release-highlights-3">Release Highlights</h2>
+<ul>
+  <li>Hudi now supports <code class="highlighter-rouge">aliyun OSS</code> storage service.</li>
+  <li>Embedded Timeline Server is enabled by default for both delta-streamer and spark datasource writes. This feature was in experimental mode before this release. Embedded Timeline Server caches file listing calls in Spark driver and serves them to Spark writer tasks. This reduces the number of file listings needed to be performed for each write.</li>
+  <li>Incremental Cleaning is enabled by default for both delta-streamer and spark datasource writes. This feature was also in experimental mode before this release. In the steady state, incremental cleaning avoids the costly step of scanning all partitions and instead uses Hudi metadata to find files to be cleaned up.</li>
+  <li>Delta-streamer config files can now be placed in different filesystem than actual data.</li>
+  <li>Hudi Hive Sync now supports tables partitioned by date type column.</li>
+  <li>Hudi Hive Sync now supports syncing directly via Hive MetaStore. You simply need to set hoodie.datasource.hive_sync.use_jdbc
+=false. Hive Metastore Uri will be read implicitly from environment. For example, when writing through Spark Data Source,</li>
+</ul>
+
+<pre><code class="language-Scala"> spark.write.format(“hudi”)
+ .option(…)
+ .option(“hoodie.datasource.hive_sync.username”, “&lt;user&gt;”)
+ .option(“hoodie.datasource.hive_sync.password”, “&lt;password&gt;”)
+ .option(“hoodie.datasource.hive_sync.partition_fields”, “&lt;partition_fields&gt;”)
+ .option(“hoodie.datasource.hive_sync.database”, “&lt;db_name&gt;”)
+ .option(“hoodie.datasource.hive_sync.table”, “&lt;table_name&gt;”)
+ .option(“hoodie.datasource.hive_sync.use_jdbc”, “false”)
+ .mode(APPEND)
+ .save(“/path/to/dataset”)
+</code></pre>
+
+<ul>
+  <li>Other Writer Performance related fixes:
     <ul>
-      <li>Allows users to specify option to print additional commit metadata, e.g. <em>Total Log Blocks</em>, <em>Total Rollback Blocks</em>, <em>Total Updated Records Compacted</em> and so on.</li>
-      <li>Supports <code class="highlighter-rouge">temp_query</code> and <code class="highlighter-rouge">temp_delete</code> to query and delete temp view. This command creates a temp table. Users can write HiveQL queries against the table to filter the desired row. For example,
-        <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>temp_query --sql "select Instant, NumInserts, NumWrites from satishkotha_debug where FileId='ed33bd99-466f-4417-bd92-5d914fa58a8f' and Instant &gt; '20200123211217' order by Instant"
-</code></pre></div>        </div>
-      </li>
+      <li>DataSource Writer now avoids unnecessary loading of data after write.</li>
+      <li>Hudi Writer now leverages spark parallelism when searching for existing files for writing new records.</li>
     </ul>
   </li>
 </ul>
 
-<h3 id="raw-release-notes">Raw Release Notes</h3>
-<p>The raw release notes are available <a href="https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&amp;version=12346606">here</a></p>
+<h2 id="raw-release-notes-3">Raw Release Notes</h2>
+<p>The raw release notes are available <a href="https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&amp;version=12348256">here</a></p>
 
-<h2 id="release-051-incubating-docs"><a href="https://github.com/apache/hudi/releases/tag/release-0.5.1-incubating">Release 0.5.1-incubating</a> (<a href="/docs/0.5.1-quick-start-guide.html">docs</a>)</h2>
-
-<h3 id="download-information-1">Download Information</h3>
-<ul>
-  <li>Source Release : <a href="https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz">Apache Hudi 0.5.1-incubating Source Release</a> (<a href="https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.sha512">sha512</a>)</li>
-  <li>Apache Hudi jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
-</ul>
-
-<h3 id="migration-guide-for-this-release-1">Migration Guide for this release</h3>
-<ul>
-  <li>In 0.5.1, the community restructured the package of key generators. The key generator related classes have been moved from <code class="highlighter-rouge">org.apache.hudi</code> to <code class="highlighter-rouge">org.apache.hudi.keygen</code>.</li>
-</ul>
-
-<h3 id="release-highlights-1">Release Highlights</h3>
-<ul>
-  <li>Package and format renaming from com.uber.hoodie to org.apache.hudi (See migration guide section below)</li>
-  <li>Major redo of Hudi bundles to address class and jar version mismatches in different environments</li>
-  <li>Upgrade from Hive 1.x to Hive 2.x for compile time dependencies - Hive 1.x runtime integration still works with a patch : See <a href="https://lists.apache.org/thread.html/48b3f0553f47c576fd7072f56bb0d8a24fb47d4003880d179c7f88a3@%3Cdev.hudi.apache.org%3E">the discussion thread</a></li>
-  <li>DeltaStreamer now supports continuous running mode with managed concurrent compaction</li>
-  <li>Support for Composite Keys as record key</li>
-  <li>HoodieCombinedInputFormat to scale huge hive queries running on Hoodie tables</li>
-</ul>
-
-<h3 id="migration-guide-for-this-release-2">Migration Guide for this release</h3>
-<p>This is the first Apache release for Hudi. Prior to this release, Hudi Jars were published using “com.uber.hoodie” maven co-ordinates. We have a <a href="https://cwiki.apache.org/confluence/display/HUDI/Migration+Guide+From+com.uber.hoodie+to+org.apache.hudi">migration guide</a></p>
-
-<h3 id="raw-release-notes-1">Raw Release Notes</h3>
-<p>The raw release notes are available <a href="https://jira.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&amp;version=12346087">here</a></p>
-
-<h2 id="release-047"><a href="https://github.com/apache/hudi/releases/tag/hoodie-0.4.7">Release 0.4.7</a></h2>
-
-<h3 id="release-highlights-2">Release Highlights</h3>
-
-<ul>
-  <li>Major releases with fundamental changes to filesystem listing &amp; write failure handling</li>
-  <li>Introduced the first version of HoodieTimelineServer that runs embedded on the driver</li>
-  <li>With all executors fetching filesystem listing via RPC to timeline server, drastically reduced filesystem listing!</li>
-  <li>Failing concurrent write tasks are now handled differently to be robust against spark stage retries</li>
-  <li>Bug fixes/clean up around indexing, compaction</li>
-</ul>
-
-<h3 id="pr-list">PR LIST</h3>
-
-<ul>
-  <li>Skip Meta folder when looking for partitions. <a href="https://github.com/apache/hudi/pull/698">#698</a></li>
-  <li>HUDI-134 - Disable inline compaction for Hoodie Demo. <a href="https://github.com/apache/hudi/pull/696">#696</a></li>
-  <li>Default implementation for HBase index qps allocator. <a href="https://github.com/apache/hudi/pull/685">#685</a></li>
-  <li>Handle duplicate record keys across partitions. <a href="https://github.com/apache/hudi/pull/687">#687</a></li>
-  <li>Fix up offsets not available on leader exception. <a href="https://github.com/apache/hudi/pull/650">#650</a></li>
-</ul>
+<p>For releases older than these versions, please see <a href="/older-releases.html">here</a>.</p>
 
         
       </section>
