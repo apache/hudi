@@ -1003,7 +1003,7 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 
 <h4 id="logFileDataBlockMaxSize">logFileDataBlockMaxSize(dataBlockSize = 256MB)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.logfile.data.block.max.size</code> <br />
-<span style="color:grey">LogFile Data block max size. This is the maximum size allowed for a single data block to be appended to a log file. This helps to make sure the data appended to the log file is broken up into sizable blocks to prevent from OOM errors. This size should not be greater than the JVM memory. </span></p>
+<span style="color:grey">LogFile Data block max size. This is the maximum size allowed for a single data block to be appended to a log file. This helps to make sure the data appended to the log file is broken up into sizable blocks to prevent from OOM errors. This size should be greater than the JVM memory. </span></p>
 
 <h4 id="logFileToParquetCompressionRatio">logFileToParquetCompressionRatio(logFileToParquetCompressionRatio = 0.35)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.logfile.to.parquet.compression.ratio</code> <br />
