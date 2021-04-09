@@ -57,8 +57,6 @@ There are 2 different server based lock providers that require different configu
 hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider
 hoodie.write.lock.zookeeper.url
 hoodie.write.lock.zookeeper.port
-hoodie.write.lock.wait_time_ms
-hoodie.write.lock.num_retries
 hoodie.write.lock.zookeeper.lock_key
 hoodie.write.lock.zookeeper.base_path
 ```
@@ -69,8 +67,6 @@ hoodie.write.lock.zookeeper.base_path
 hoodie.write.lock.provider=org.apache.hudi.hive.HiveMetastoreBasedLockProvider
 hoodie.write.lock.hivemetastore.database
 hoodie.write.lock.hivemetastore.table
-hoodie.write.lock.wait_time_ms
-hoodie.write.lock.num_retries
 ```
 
 `The HiveMetastore URI's are picked up from the hadoop configuration file loaded during runtime.`
@@ -89,8 +85,6 @@ inputDF.write.format("hudi")
        .option("hoodie.write.concurrency.mode", "optimistic_concurrency_control")
        .option("hoodie.write.lock.zookeeper.url", "zookeeper")
        .option("hoodie.write.lock.zookeeper.port", "2181")
-       .option("hoodie.write.lock.wait_time_ms", "12000")
-       .option("hoodie.write.lock.num_retries", "2")
        .option("hoodie.write.lock.zookeeper.lock_key", "test_table")
        .option("hoodie.write.lock.zookeeper.base_path", "/test")
        .option(RECORDKEY_FIELD_OPT_KEY, "uuid")
