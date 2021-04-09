@@ -449,6 +449,10 @@ public class TestWriteCopyOnWrite {
 
   @Test
   public void testIndexStateBootstrap() throws Exception {
+    // reset the config option
+    conf.setBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
+
     // open the function and ingest data
     funcWrapper.openFunction();
     for (RowData rowData : TestData.DATA_SET_INSERT) {
