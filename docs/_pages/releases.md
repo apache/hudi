@@ -5,7 +5,7 @@ layout: releases
 toc: true
 last_modified_at: 2020-05-28T08:40:00-07:00
 ---
-# [Release 0.8.0](https://github.com/apache/hudi/releases/tag/release-0.8.0) ([docs](/docs/0.8.0-quick-start-guide.html))
+# [Release 0.8.0](https://github.com/apache/hudi/releases/tag/release-0.8.0) ([docs](/docs/0.8.0-spark_quick-start-guide.html))
 
 ## Download Information
 * Source Release : [Apache Hudi 0.8.0 Source Release](https://downloads.apache.org/hudi/0.8.0/hudi-0.8.0.src.tgz) ([asc](https://downloads.apache.org/hudi/0.8.0/hudi-0.8.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.8.0/hudi-0.8.0.src.tgz.sha512))
