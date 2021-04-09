@@ -72,6 +72,15 @@ public class FlinkOptions {
           + " column value is null/empty string");
 
   // ------------------------------------------------------------------------
+  //  Index Options
+  // ------------------------------------------------------------------------
+  public static final ConfigOption<Boolean> INDEX_BOOTSTRAP_ENABLED = ConfigOptions
+      .key("index.bootstrap.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to bootstrap the index state from existing hoodie table, default false");
+
+  // ------------------------------------------------------------------------
   //  Read Options
   // ------------------------------------------------------------------------
   public static final ConfigOption<Integer> READ_TASKS = ConfigOptions
@@ -255,8 +264,14 @@ public class FlinkOptions {
   public static final ConfigOption<Double> WRITE_BATCH_SIZE = ConfigOptions
       .key("write.batch.size.MB")
       .doubleType()
-      .defaultValue(2D) // 2MB
-      .withDescription("Batch buffer size in MB to flush data into the underneath filesystem");
+      .defaultValue(64D) // 64MB
+      .withDescription("Batch buffer size in MB to flush data into the underneath filesystem, default 64MB");
+
+  public static final ConfigOption<Integer> WRITE_LOG_BLOCK_SIZE = ConfigOptions
+      .key("write.log_block.size.MB")
+      .intType()
+      .defaultValue(128)
+      .withDescription("Max log block size in MB for log file, default 128MB");
 
   // ------------------------------------------------------------------------
   //  Compaction Options
@@ -267,6 +282,12 @@ public class FlinkOptions {
       .booleanType()
       .defaultValue(true) // default true for MOR write
       .withDescription("Async Compaction, enabled by default for MOR");
+
+  public static final ConfigOption<Integer> COMPACTION_TASKS = ConfigOptions
+      .key("compaction.tasks")
+      .intType()
+      .defaultValue(10) // default WRITE_TASKS * COMPACTION_DELTA_COMMITS * 0.5 (assumes two commits generate one bucket)
+      .withDescription("Parallelism of tasks that do actual compaction, default is 10");
 
   public static final String NUM_COMMITS = "num_commits";
   public static final String TIME_ELAPSED = "time_elapsed";

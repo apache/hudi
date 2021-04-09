@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
+import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
@@ -210,6 +211,9 @@ public class StreamerUtil {
                         conf.getInteger(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024L
                         ).build())
             .forTable(conf.getString(FlinkOptions.TABLE_NAME))
+            .withStorageConfig(HoodieStorageConfig.newBuilder()
+                .logFileDataBlockMaxSize(conf.getInteger(FlinkOptions.WRITE_LOG_BLOCK_SIZE) * 1024 * 1024)
+                .build())
             .withAutoCommit(false)
             .withProps(flinkConf2TypedProperties(FlinkOptions.flatOptions(conf)));
 

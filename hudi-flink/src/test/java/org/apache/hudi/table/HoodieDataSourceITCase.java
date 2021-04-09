@@ -169,6 +169,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     options.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
     options.put(FlinkOptions.QUERY_TYPE.key(), FlinkOptions.QUERY_TYPE_READ_OPTIMIZED);
     options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "1");
+    options.put(FlinkOptions.COMPACTION_TASKS.key(), "1");
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     streamTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 select * from source";
@@ -180,7 +181,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   }
 
   @Test
-  void testStreamWriteWithCleaning() throws InterruptedException {
+  void testStreamWriteWithCleaning() {
     // create filesystem table named source
 
     // the source generates 4 commits but the cleaning task
