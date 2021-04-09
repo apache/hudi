@@ -425,8 +425,6 @@ hoodie.write.lock.provider=&lt;lock-provider-classname&gt;
 <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider
 hoodie.write.lock.zookeeper.url
 hoodie.write.lock.zookeeper.port
-hoodie.write.lock.wait_time_ms
-hoodie.write.lock.num_retries
 hoodie.write.lock.zookeeper.lock_key
 hoodie.write.lock.zookeeper.base_path
 </code></pre></div></div>
@@ -436,8 +434,6 @@ hoodie.write.lock.zookeeper.base_path
 <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie.write.lock.provider=org.apache.hudi.hive.HiveMetastoreBasedLockProvider
 hoodie.write.lock.hivemetastore.database
 hoodie.write.lock.hivemetastore.table
-hoodie.write.lock.wait_time_ms
-hoodie.write.lock.num_retries
 </code></pre></div></div>
 
 <p><code class="highlighter-rouge">The HiveMetastore URI's are picked up from the hadoop configuration file loaded during runtime.</code></p>
@@ -455,8 +451,6 @@ hoodie.write.lock.num_retries
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.concurrency.mode"</span><span class="o">,</span> <span class="s">"optimistic_concurrency_control"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.lock.zookeeper.url"</span><span class="o">,</span> <span class="s">"zookeeper"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.lock.zookeeper.port"</span><span class="o">,</span> <span class="s">"2181"</span><span class="o">)</span>
-       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.lock.wait_time_ms"</span><span class="o">,</span> <span class="s">"12000"</span><span class="o">)</span>
-       <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.lock.num_retries"</span><span class="o">,</span> <span class="s">"2"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.lock.zookeeper.lock_key"</span><span class="o">,</span> <span class="s">"test_table"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="s">"hoodie.write.lock.zookeeper.base_path"</span><span class="o">,</span> <span class="s">"/test"</span><span class="o">)</span>
        <span class="o">.</span><span class="na">option</span><span class="o">(</span><span class="no">RECORDKEY_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"uuid"</span><span class="o">)</span>
