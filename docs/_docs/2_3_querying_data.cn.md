@@ -36,6 +36,7 @@ language: cn
 |**Hive**|Y|Y|
 |**Spark SQL**|Y|Y|
 |**Spark Datasource**|Y|Y|
+|**Flink SQL**|Y|N|
 |**PrestoDB**|Y|N|
 |**Impala**|Y|N|
 
@@ -46,7 +47,8 @@ language: cn
 |------------|--------|-----------|--------------|
 |**Hive**|Y|Y|Y|
 |**Spark SQL**|Y|Y|Y|
-|**Spark Datasource**|Y|N|Y|
+|**Spark Datasource**|Y|Y|Y|
+|**Flink SQL**|Y|Y|Y|
 |**PrestoDB**|Y|N|Y|
 |**Impala**|N|N|Y|
 
