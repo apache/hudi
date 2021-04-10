@@ -76,15 +76,16 @@ public class MetadataConversionUtils {
           archivedMetaWrapper.setHoodieReplaceCommitMetadata(ReplaceArchivalHelper.convertReplaceCommitMetadata(replaceCommitMetadata));
         } else if (hoodieInstant.isInflight()) {
           // inflight replacecommit files have the same meta data body as HoodieCommitMetadata
-          // so we could re-use it without further creating an inflight extension
-          HoodieCommitMetadata inflightCommitMetadata = HoodieCommitMetadata
-                  .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
-          archivedMetaWrapper.setHoodieInflightReplaceMetadata(convertCommitMetadata(inflightCommitMetadata));
+          // so we could re-use it without further creating an inflight extension.
+          // Or inflight replacecommit files are empty under clustering circumstance
+          Option<HoodieCommitMetadata> inflightCommitMetadata = getInflightReplaceMetadata(metaClient, hoodieInstant);
+          if (inflightCommitMetadata.isPresent()) {
+            archivedMetaWrapper.setHoodieInflightReplaceMetadata(convertCommitMetadata(inflightCommitMetadata.get()));
+          }
         } else {
-          // we may have some cases with empty HoodieRequestedReplaceMetadata
-          // e.g. insert_overwrite_table or insert_overwrite without clustering
-          Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata =
-                  ClusteringUtils.getRequestedReplaceMetadata(metaClient, hoodieInstant);
+          // we may have cases with empty HoodieRequestedReplaceMetadata e.g. insert_overwrite_table or insert_overwrite
+          // without clustering. However, we should revisit the requested commit file standardization
+          Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata = getRequestedReplaceMetadata(metaClient, hoodieInstant);
           if (requestedReplaceMetadata.isPresent()) {
             archivedMetaWrapper.setHoodieRequestedReplaceMetadata(requestedReplaceMetadata.get());
           }
@@ -115,6 +116,27 @@ public class MetadataConversionUtils {
       }
     }
     return archivedMetaWrapper;
+  }
+
+  public static Option<HoodieCommitMetadata> getInflightReplaceMetadata(HoodieTableMetaClient metaClient, HoodieInstant instant) throws IOException {
+    Option<byte[]> inflightContent = metaClient.getActiveTimeline().getInstantDetails(instant);
+    if (!inflightContent.isPresent() || inflightContent.get().length == 0) {
+      // inflight files can be empty in some certain cases, e.g. when users opt in clustering
+      return Option.empty();
+    }
+    return Option.of(HoodieCommitMetadata.fromBytes(inflightContent.get(), HoodieCommitMetadata.class));
+  }
+
+  public static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadata(HoodieTableMetaClient metaClient, HoodieInstant instant) throws IOException {
+    Option<byte[]> requestedContent = metaClient.getActiveTimeline().getInstantDetails(instant);
+    if (!requestedContent.isPresent() || requestedContent.get().length == 0) {
+      // requested commit files can be empty in some certain cases, e.g. insert_overwrite or insert_overwrite_table.
+      // However, it appears requested files are supposed to contain meta data and we should revisit the standardization
+      // of requested commit files
+      // TODO revisit requested commit file standardization https://issues.apache.org/jira/browse/HUDI-1739
+      return Option.empty();
+    }
+    return Option.of(TimelineMetadataUtils.deserializeRequestedReplaceMetadata(requestedContent.get()));
   }
 
   public static org.apache.hudi.avro.model.HoodieCommitMetadata convertCommitMetadata(

@@ -499,10 +499,12 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
         .setVersion(1)
         .setExtraMetadata(Collections.emptyMap())
         .build();
-    HoodieReplaceCommitMetadata replaceCommitMetadata = new HoodieReplaceCommitMetadata();
-    replaceCommitMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE_TABLE);
+    HoodieReplaceCommitMetadata completeReplaceMetadata = new HoodieReplaceCommitMetadata();
+    HoodieCommitMetadata inflightReplaceMetadata = new HoodieCommitMetadata();
+    completeReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE_TABLE);
+    inflightReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE_TABLE);
     HoodieTestTable.of(metaClient)
-        .addReplaceCommit(instantTime, requestedReplaceMetadata, replaceCommitMetadata);
+        .addReplaceCommit(instantTime, requestedReplaceMetadata, completeReplaceMetadata, inflightReplaceMetadata);
   }
 
   private void createReplaceMetadata(String instantTime) throws Exception {
@@ -515,11 +517,13 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
         .setVersion(1)
         .setExtraMetadata(Collections.emptyMap())
         .build();
-    HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
-    replaceMetadata.addReplaceFileId(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1);
-    replaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
+    HoodieReplaceCommitMetadata completeReplaceMetadata = new HoodieReplaceCommitMetadata();
+    HoodieCommitMetadata inflightReplaceMetadata = new HoodieCommitMetadata();
+    completeReplaceMetadata.addReplaceFileId(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1);
+    completeReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
+    inflightReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
     HoodieTestTable.of(metaClient)
-        .addReplaceCommit(instantTime, requestedReplaceMetadata, replaceMetadata)
+        .addReplaceCommit(instantTime, requestedReplaceMetadata, completeReplaceMetadata, inflightReplaceMetadata)
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 

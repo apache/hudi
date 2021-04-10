@@ -413,7 +413,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     requestedReplaceMetadata.setClusteringPlan(clusteringPlan);
     requestedReplaceMetadata.setVersion(TimelineLayoutVersion.CURR_VERSION);
     HoodieTestTable.of(metaClient)
-        .addReplaceCommit(instantTime, requestedReplaceMetadata, replaceMetadata)
+        .addReplaceCommit(instantTime, requestedReplaceMetadata, replaceMetadata, null)
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 

@@ -99,13 +99,23 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testInflightReplace() throws Exception {
+  public void testEmptyInflightReplace() throws Exception {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
     createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE_TABLE, true);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
             new HoodieInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, newCommitTime), metaClient);
     assertEquals(metaEntry.getActionState(), State.INFLIGHT.toString());
-    assertEquals(metaEntry.getHoodieInflightReplaceMetadata().getOperationType(), WriteOperationType.INSERT_OVERWRITE_TABLE.toString());
+    assertNull(metaEntry.getHoodieInflightReplaceMetadata());
+  }
+
+  @Test
+  public void testNonEmptyInflightReplace() throws Exception {
+    String newCommitTime = HoodieTestTable.makeNewCommitTime();
+    createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE_TABLE, false);
+    HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, newCommitTime), metaClient);
+    assertEquals(metaEntry.getActionState(), State.INFLIGHT.toString());
+    assertEquals(metaEntry.getHoodieInflightReplaceMetadata().getOperationType(), WriteOperationType.INSERT_OVERWRITE_TABLE.name());
   }
 
   @Test
@@ -207,9 +217,10 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     // some cases requestedReplaceMetadata will be null
     // e.g. insert_overwrite_table or insert_overwrite without clustering
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = null;
+    HoodieCommitMetadata inflightReplaceMetadata = null;
     if (isClustering) {
       requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
-      requestedReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE.name());
+      requestedReplaceMetadata.setOperationType(writeOperationType.name());
       HoodieClusteringPlan clusteringPlan = new HoodieClusteringPlan();
       HoodieClusteringGroup clusteringGroup = new HoodieClusteringGroup();
       HoodieSliceInfo sliceInfo = new HoodieSliceInfo();
@@ -217,9 +228,15 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
       clusteringPlan.setInputGroups(Arrays.asList(clusteringGroup));
       requestedReplaceMetadata.setClusteringPlan(clusteringPlan);
       requestedReplaceMetadata.setVersion(TimelineLayoutVersion.CURR_VERSION);
+    } else {
+      // inflightReplaceMetadata will be null in clustering but not null
+      // in insert_overwrite or insert_overwrite_table
+      inflightReplaceMetadata = new HoodieCommitMetadata();
+      inflightReplaceMetadata.setOperationType(writeOperationType);
+      inflightReplaceMetadata.setCompacted(false);
     }
     HoodieTestTable.of(metaClient)
-        .addReplaceCommit(instantTime, requestedReplaceMetadata, replaceMetadata)
+        .addReplaceCommit(instantTime, requestedReplaceMetadata, replaceMetadata, inflightReplaceMetadata)
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
