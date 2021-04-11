@@ -20,7 +20,6 @@ package org.apache.hudi.integ.testsuite.converter;
 
 import static junit.framework.TestCase.assertTrue;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;

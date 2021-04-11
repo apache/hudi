@@ -19,7 +19,6 @@
 package org.apache.hudi.integ.testsuite.dag.scheduler;
 
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.integ.testsuite.dag.scheduler.DagScheduler;
 import org.apache.hudi.integ.testsuite.dag.WorkflowDag;
 import org.apache.hudi.integ.testsuite.dag.WriterContext;
 import org.apache.hudi.integ.testsuite.dag.nodes.DagNode;

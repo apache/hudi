@@ -66,7 +66,8 @@ class HoodieDataSourceInternalTable implements SupportsWrite {
     return new HashSet<TableCapability>() {{
         add(TableCapability.BATCH_WRITE);
         add(TableCapability.TRUNCATE);
-      }};
+      }
+    };
   }
 
   @Override
