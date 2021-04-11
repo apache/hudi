@@ -47,7 +47,7 @@ language: cn
 |------------|--------|-----------|--------------|
 |**Hive**|Y|Y|Y|
 |**Spark SQL**|Y|Y|Y|
-|**Spark Datasource**|Y|N|Y|
+|**Spark Datasource**|Y|Y|Y|
 |**PrestoDB**|Y|N|Y|
 |**Impala**|N|N|Y|
 
