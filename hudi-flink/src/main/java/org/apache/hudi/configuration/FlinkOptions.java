@@ -273,6 +273,12 @@ public class FlinkOptions {
       .defaultValue(128)
       .withDescription("Max log block size in MB for log file, default 128MB");
 
+  public static final ConfigOption<Integer> WRITE_MERGE_MAX_MEMORY = ConfigOptions
+      .key("write.merge.max_memory")
+      .intType()
+      .defaultValue(100) // default 100 MB
+      .withDescription("Max memory in MB for merge, default 100MB");
+
   // ------------------------------------------------------------------------
   //  Compaction Options
   // ------------------------------------------------------------------------
