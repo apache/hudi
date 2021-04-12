@@ -366,6 +366,8 @@
     <ul>
       <li><a href="#write-options-1">Write Options</a></li>
       <li><a href="#read-options-1">Read Options</a></li>
+      <li><a href="#index-sync-options">Index sync options</a></li>
+      <li><a href="#hive-sync-options">Hive sync options</a></li>
     </ul>
   </li>
   <li><a href="#writeclient-configs">WriteClient Configs</a>
@@ -623,6 +625,12 @@ The actual datasource level configs are listed below.</p>
       <td><span style="color:grey"> Key generator class, that implements will extract the key out of incoming record </span></td>
     </tr>
     <tr>
+      <td><code class="highlighter-rouge">write.partition.url_encode</code></td>
+      <td>N</td>
+      <td>false</td>
+      <td>Whether to encode the partition path url, default false</td>
+    </tr>
+    <tr>
       <td><code class="highlighter-rouge">write.tasks</code></td>
       <td>N</td>
       <td>4</td>
@@ -672,6 +680,24 @@ The actual datasource level configs are listed below.</p>
       <td>N</td>
       <td>3600</td>
       <td><span style="color:grey"> Max delta seconds time needed to trigger compaction, default 1 hour </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">compaction.max_memory</code></td>
+      <td>N</td>
+      <td>100</td>
+      <td>Max memory in MB for compaction spillable map, default 100MB</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">clean.async.enabled</code></td>
+      <td>N</td>
+      <td>true</td>
+      <td>Whether to cleanup the old commits immediately on new commits, enabled by default</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">clean.retain_commits</code></td>
+      <td>N</td>
+      <td>10</td>
+      <td>Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much you can incrementally pull on this table, default 10</td>
     </tr>
   </tbody>
 </table>
@@ -774,6 +800,132 @@ The actual datasource level configs are listed below.</p>
       <td>N</td>
       <td>N/A</td>
       <td><span style="color:grey"> Start commit instant for streaming read, the commit time format should be ‘yyyyMMddHHmmss’, by default reading from the latest instant </span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="index-sync-options">Index sync options</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Option Name</th>
+      <th>Required</th>
+      <th>Default</th>
+      <th>Remarks</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">index.bootstrap.enabled</code></td>
+      <td>N</td>
+      <td>false</td>
+      <td>Whether to bootstrap the index state from existing hoodie table, default false</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="hive-sync-options">Hive sync options</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Option Name</th>
+      <th>Required</th>
+      <th>Default</th>
+      <th>Remarks</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">hive_sync.enable</code></td>
+      <td>N</td>
+      <td>false</td>
+      <td>Asynchronously sync Hive meta to HMS, default false</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">hive_sync.db</code></td>
+      <td>N</td>
+      <td>default</td>
+      <td>Database name for hive sync, default ‘default’</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">hive_sync.table</code></td>
+      <td>N</td>
+      <td>unknown</td>
+      <td>Table name for hive sync, default ‘unknown’</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">hive_sync.file_format</code></td>
+      <td>N</td>
+      <td>PARQUET</td>
+      <td>File format for hive sync, default ‘PARQUET’</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">hive_sync.username</code></td>
+      <td>N</td>
+      <td>hive</td>
+      <td>Username for hive sync, default ‘hive’</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">hive_sync.password</code></td>
+      <td>N</td>
+      <td>hive</td>
+      <td>Password for hive sync, default ‘hive’</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">hive_sync.jdbc_url</code></td>
+      <td>N</td>
+      <td>jdbc:hive2://localhost:10000</td>
+      <td>Jdbc URL for hive sync, default ‘jdbc:hive2://localhost:10000’</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">hive_sync.partition_fields</code></td>
+      <td>N</td>
+      <td>’’</td>
+      <td>Partition fields for hive sync, default ‘’</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">hive_sync.partition_extractor_class</code></td>
+      <td>N</td>
+      <td>SlashEncodedDayPartitionValueExtractor.class</td>
+      <td>Tool to extract the partition value from HDFS path, default ‘SlashEncodedDayPartitionValueExtractor’</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">hive_sync.assume_date_partitioning</code></td>
+      <td>N</td>
+      <td>false</td>
+      <td>Assume partitioning is yyyy/mm/dd, default false</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">hive_sync.use_jdbc</code></td>
+      <td>N</td>
+      <td>true</td>
+      <td>Use JDBC when hive synchronization is enabled, default true</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">hive_sync.auto_create_db</code></td>
+      <td>N</td>
+      <td>true</td>
+      <td>Auto create hive database if it does not exists, default true</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">hive_sync.ignore_exceptions</code></td>
+      <td>N</td>
+      <td>false</td>
+      <td>Ignore exceptions during hive synchronization, default false</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">hive_sync.skip_ro_suffix</code></td>
+      <td>N</td>
+      <td>false</td>
+      <td>Skip the _ro suffix for Read optimized table when registering, default false</td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">hive_sync.support_timestamp</code></td>
+      <td>N</td>
+      <td>false</td>
+      <td>INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type. Disabled by default for backward compatibility.</td>
     </tr>
   </tbody>
 </table>

@@ -722,7 +722,7 @@ relying on the custom Hudi input formats again like Hive. Typically notebook use
 
 <div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- this defines a COPY_ON_WRITE table named 't1'</span>
 <span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">t1</span><span class="p">(</span>
-  <span class="n">uuid</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">20</span><span class="p">),</span>
+  <span class="n">uuid</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">20</span><span class="p">),</span> <span class="c1">-- you can use 'PRIMARY KEY NOT ENFORCED' syntax to specify the field as record key</span>
   <span class="n">name</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">10</span><span class="p">),</span>
   <span class="n">age</span> <span class="nb">INT</span><span class="p">,</span>
   <span class="n">ts</span> <span class="nb">TIMESTAMP</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span>
@@ -731,7 +731,7 @@ relying on the custom Hudi input formats again like Hive. Typically notebook use
 <span class="n">PARTITIONED</span> <span class="k">BY</span> <span class="p">(</span><span class="nv">`partition`</span><span class="p">)</span>
 <span class="k">WITH</span> <span class="p">(</span>
   <span class="s1">'connector'</span> <span class="o">=</span> <span class="s1">'hudi'</span><span class="p">,</span>
-  <span class="s1">'path'</span> <span class="o">=</span> <span class="s1">'schema://base-path'</span>
+  <span class="s1">'path'</span> <span class="o">=</span> <span class="s1">'table_base+path'</span>
 <span class="p">);</span>
 
 <span class="c1">-- query the data</span>
