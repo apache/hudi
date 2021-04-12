@@ -151,7 +151,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
       return ConnectionFactory.createConnection(hbaseConfig);
     } catch (IOException e) {
       throw new HoodieDependentSystemUnavailableException(HoodieDependentSystemUnavailableException.HBASE,
-          quorum + ":" + port);
+          quorum + ":" + port, e);
     }
   }
 
