@@ -207,7 +207,7 @@ public class StreamerUtil {
             .withMemoryConfig(
                 HoodieMemoryConfig.newBuilder()
                     .withMaxMemoryMaxSize(
-                        conf.getInteger(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024L,
+                        conf.getInteger(FlinkOptions.WRITE_MERGE_MAX_MEMORY) * 1024 * 1024L,
                         conf.getInteger(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024L
                         ).build())
             .forTable(conf.getString(FlinkOptions.TABLE_NAME))
