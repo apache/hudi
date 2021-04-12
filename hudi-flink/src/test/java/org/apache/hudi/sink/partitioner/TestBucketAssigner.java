@@ -146,6 +146,55 @@ public class TestBucketAssigner {
     assertBucketEquals(bucketInfo, "par3", BucketType.INSERT);
   }
 
+  /**
+   * Test that only partial small files are assigned to the task.
+   */
+  @Test
+  public void testInsertWithPartialSmallFiles() {
+    SmallFile f0 = new SmallFile();
+    f0.location = new HoodieRecordLocation("t0", "f0");
+    f0.sizeBytes = 12;
+
+    SmallFile f1 = new SmallFile();
+    f1.location = new HoodieRecordLocation("t0", "f1");
+    f1.sizeBytes = 122879; // no left space to append new records to this bucket
+
+    SmallFile f2 = new SmallFile();
+    f2.location = new HoodieRecordLocation("t0", "f2");
+    f2.sizeBytes = 56;
+
+    Map<String, List<SmallFile>> smallFilesMap = new HashMap<>();
+    smallFilesMap.put("par1", Arrays.asList(f0, f1, f2));
+
+    MockBucketAssigner mockBucketAssigner = new MockBucketAssigner(0, 2, context, writeConfig, smallFilesMap);
+    BucketInfo bucketInfo = mockBucketAssigner.addInsert("par1");
+    assertBucketEquals(bucketInfo, "par1", BucketType.UPDATE, "f0");
+
+    mockBucketAssigner.addInsert("par1");
+    bucketInfo = mockBucketAssigner.addInsert("par1");
+    assertBucketEquals(bucketInfo, "par1", BucketType.UPDATE, "f0");
+
+    bucketInfo = mockBucketAssigner.addInsert("par3");
+    assertBucketEquals(bucketInfo, "par3", BucketType.INSERT);
+
+    bucketInfo = mockBucketAssigner.addInsert("par3");
+    assertBucketEquals(bucketInfo, "par3", BucketType.INSERT);
+
+    MockBucketAssigner mockBucketAssigner2 = new MockBucketAssigner(1, 2, context, writeConfig, smallFilesMap);
+    BucketInfo bucketInfo2 = mockBucketAssigner2.addInsert("par1");
+    assertBucketEquals(bucketInfo2, "par1", BucketType.UPDATE, "f1");
+
+    mockBucketAssigner2.addInsert("par1");
+    bucketInfo2 = mockBucketAssigner2.addInsert("par1");
+    assertBucketEquals(bucketInfo2, "par1", BucketType.UPDATE, "f1");
+
+    bucketInfo2 = mockBucketAssigner2.addInsert("par3");
+    assertBucketEquals(bucketInfo2, "par3", BucketType.INSERT);
+
+    bucketInfo2 = mockBucketAssigner2.addInsert("par3");
+    assertBucketEquals(bucketInfo2, "par3", BucketType.INSERT);
+  }
+
   @Test
   public void testUpdateAndInsertWithSmallFiles() {
     SmallFile f0 = new SmallFile();
@@ -187,6 +236,60 @@ public class TestBucketAssigner {
     assertBucketEquals(bucketInfo, "par2", BucketType.UPDATE, "f2");
   }
 
+  /**
+   * Test that only partial small files are assigned to the task.
+   */
+  @Test
+  public void testUpdateAndInsertWithPartialSmallFiles() {
+    SmallFile f0 = new SmallFile();
+    f0.location = new HoodieRecordLocation("t0", "f0");
+    f0.sizeBytes = 12;
+
+    SmallFile f1 = new SmallFile();
+    f1.location = new HoodieRecordLocation("t0", "f1");
+    f1.sizeBytes = 122879; // no left space to append new records to this bucket
+
+    SmallFile f2 = new SmallFile();
+    f2.location = new HoodieRecordLocation("t0", "f2");
+    f2.sizeBytes = 56;
+
+    Map<String, List<SmallFile>> smallFilesMap = new HashMap<>();
+    smallFilesMap.put("par1", Arrays.asList(f0, f1, f2));
+
+    MockBucketAssigner mockBucketAssigner = new MockBucketAssigner(0, 2, context, writeConfig, smallFilesMap);
+    mockBucketAssigner.addUpdate("par1", "f0");
+
+    BucketInfo bucketInfo = mockBucketAssigner.addInsert("par1");
+    assertBucketEquals(bucketInfo, "par1", BucketType.UPDATE, "f0");
+
+    mockBucketAssigner.addInsert("par1");
+    bucketInfo = mockBucketAssigner.addInsert("par1");
+    assertBucketEquals(bucketInfo, "par1", BucketType.UPDATE, "f0");
+
+    mockBucketAssigner.addUpdate("par1", "f2");
+
+    mockBucketAssigner.addInsert("par1");
+    bucketInfo = mockBucketAssigner.addInsert("par1");
+    assertBucketEquals(bucketInfo, "par1", BucketType.UPDATE, "f0");
+
+
+    MockBucketAssigner mockBucketAssigner2 = new MockBucketAssigner(1, 2, context, writeConfig, smallFilesMap);
+    mockBucketAssigner2.addUpdate("par1", "f0");
+
+    BucketInfo bucketInfo2 = mockBucketAssigner2.addInsert("par1");
+    assertBucketEquals(bucketInfo2, "par1", BucketType.UPDATE, "f1");
+
+    mockBucketAssigner2.addInsert("par1");
+    bucketInfo2 = mockBucketAssigner2.addInsert("par1");
+    assertBucketEquals(bucketInfo2, "par1", BucketType.UPDATE, "f1");
+
+    mockBucketAssigner2.addUpdate("par1", "f2");
+
+    mockBucketAssigner2.addInsert("par1");
+    bucketInfo2 = mockBucketAssigner2.addInsert("par1");
+    assertBucketEquals(bucketInfo2, "par1", BucketType.UPDATE, "f1");
+  }
+
   private void assertBucketEquals(
       BucketInfo bucketInfo,
       String partition,
@@ -220,7 +323,16 @@ public class TestBucketAssigner {
         HoodieFlinkEngineContext context,
         HoodieWriteConfig config,
         Map<String, List<SmallFile>> smallFilesMap) {
-      super(context, config);
+      this(0, 1, context, config, smallFilesMap);
+    }
+
+    MockBucketAssigner(
+        int taskID,
+        int numTasks,
+        HoodieFlinkEngineContext context,
+        HoodieWriteConfig config,
+        Map<String, List<SmallFile>> smallFilesMap) {
+      super(taskID, numTasks, context, config);
       this.smallFilesMap = smallFilesMap;
     }
 

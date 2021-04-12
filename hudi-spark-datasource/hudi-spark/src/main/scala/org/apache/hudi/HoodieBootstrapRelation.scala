@@ -26,7 +26,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile}
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.{Row, SQLContext}
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
@@ -46,13 +46,14 @@ import scala.collection.JavaConverters._
   *
   * @param _sqlContext Spark SQL Context
   * @param userSchema User specified schema in the datasource query
-  * @param globPaths Globbed paths obtained from the user provided path for querying
+  * @param globPaths  The global paths to query. If it not none, read from the globPaths,
+  *                   else read data from tablePath using HoodiFileIndex.
   * @param metaClient Hoodie table meta client
   * @param optParams DataSource options passed by the user
   */
 class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
                               val userSchema: StructType,
-                              val globPaths: Seq[Path],
+                              val globPaths: Option[Seq[Path]],
                               val metaClient: HoodieTableMetaClient,
                               val optParams: Map[String, String]) extends BaseRelation
   with PrunedFilteredScan with Logging {
@@ -156,9 +157,14 @@ class HoodieBootstrapRelation(@transient val _sqlContext: SQLContext,
 
   def buildFileIndex(): HoodieBootstrapFileIndex = {
     logInfo("Building file index..")
-    val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(_sqlContext.sparkSession, globPaths)
-    val fileStatuses = inMemoryFileIndex.allFiles()
-
+    val fileStatuses  = if (globPaths.isDefined) {
+      // Load files from the global paths if it has defined to be compatible with the original mode
+      val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(_sqlContext.sparkSession, globPaths.get)
+      inMemoryFileIndex.allFiles()
+    } else { // Load files by the HoodieFileIndex.
+        HoodieFileIndex(sqlContext.sparkSession, metaClient, Some(schema), optParams,
+          FileStatusCache.getOrCreate(sqlContext.sparkSession)).allFiles
+    }
     if (fileStatuses.isEmpty) {
       throw new HoodieException("No files found for reading in user provided path.")
     }

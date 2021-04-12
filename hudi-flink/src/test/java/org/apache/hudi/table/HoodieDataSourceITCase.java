@@ -169,6 +169,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     options.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
     options.put(FlinkOptions.QUERY_TYPE.key(), FlinkOptions.QUERY_TYPE_READ_OPTIMIZED);
     options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "1");
+    options.put(FlinkOptions.COMPACTION_TASKS.key(), "1");
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     streamTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 select * from source";
@@ -180,7 +181,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   }
 
   @Test
-  void testStreamWriteWithCleaning() throws InterruptedException {
+  void testStreamWriteWithCleaning() {
     // create filesystem table named source
 
     // the source generates 4 commits but the cleaning task
@@ -206,6 +207,41 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     assertTrue(timeline.filterCompletedInstants()
             .getInstants().anyMatch(instant -> instant.getAction().equals("clean")),
         "some commits should be cleaned");
+  }
+
+  @Test
+  void testStreamReadWithDeletes() throws Exception {
+    // create filesystem table named source
+
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString(FlinkOptions.TABLE_NAME, "t1");
+    conf.setString(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+
+    // write one commit
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    // write another commit with deletes
+    TestData.writeData(TestData.DATA_SET_UPDATE_DELETE, conf);
+
+    String latestCommit = StreamerUtil.createWriteClient(conf, null)
+        .getLastCompletedInstant(FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    options.put(FlinkOptions.READ_AS_STREAMING.key(), "true");
+    options.put(FlinkOptions.READ_STREAMING_CHECK_INTERVAL.key(), "2");
+    options.put(FlinkOptions.READ_STREAMING_START_COMMIT.key(), latestCommit);
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
+    streamTableEnv.executeSql(hoodieTableDDL);
+
+    List<Row> result = execSelectSql(streamTableEnv, "select * from t1", 10);
+    final String expected = "["
+        + "id1,Danny,24,1970-01-01T00:00:00.001,par1, "
+        + "id2,Stephen,34,1970-01-01T00:00:00.002,par1, "
+        + "id3,null,null,null,null, "
+        + "id5,null,null,null,null, "
+        + "id9,null,null,null,null]";
+    assertRowsEquals(result, expected);
   }
 
   @ParameterizedTest

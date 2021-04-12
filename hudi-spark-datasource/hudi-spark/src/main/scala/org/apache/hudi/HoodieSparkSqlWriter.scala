@@ -100,6 +100,7 @@ private[hudi] object HoodieSparkSqlWriter {
     val fs = basePath.getFileSystem(sparkContext.hadoopConfiguration)
     tableExists = fs.exists(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME))
     var tableConfig = getHoodieTableConfig(sparkContext, path.get, hoodieTableConfigOpt)
+    val keyGenerator = DataSourceUtils.createKeyGenerator(toProperties(parameters))
 
     if (mode == SaveMode.Ignore && tableExists) {
       log.warn(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
@@ -112,12 +113,15 @@ private[hudi] object HoodieSparkSqlWriter {
         val archiveLogFolder = parameters.getOrElse(
           HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, "archived")
 
+        val partitionColumns = HoodieWriterUtils.getPartitionColumns(keyGenerator)
+
         val tableMetaClient = HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(tableType)
           .setTableName(tblName)
           .setArchiveLogFolder(archiveLogFolder)
           .setPayloadClassName(parameters(PAYLOAD_CLASS_OPT_KEY))
           .setPreCombineField(parameters.getOrDefault(PRECOMBINE_FIELD_OPT_KEY, null))
+          .setPartitionColumns(partitionColumns)
           .initTable(sparkContext.hadoopConfiguration, path.get)
         tableConfig = tableMetaClient.getTableConfig
       }
@@ -146,7 +150,6 @@ private[hudi] object HoodieSparkSqlWriter {
           log.info(s"Registered avro schema : ${schema.toString(true)}")
 
           // Convert to RDD[HoodieRecord]
-          val keyGenerator = DataSourceUtils.createKeyGenerator(toProperties(parameters))
           val genericRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, schema, structName, nameSpace)
           val shouldCombine = parameters(INSERT_DROP_DUPS_OPT_KEY).toBoolean || operation.equals(WriteOperationType.UPSERT);
           val hoodieAllIncomingRecords = genericRecords.map(gr => {
@@ -193,7 +196,6 @@ private[hudi] object HoodieSparkSqlWriter {
               classOf[org.apache.avro.Schema]))
 
           // Convert to RDD[HoodieKey]
-          val keyGenerator = DataSourceUtils.createKeyGenerator(toProperties(parameters))
           val genericRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, structName, nameSpace)
           val hoodieKeysToDelete = genericRecords.map(gr => keyGenerator.getKey(gr)).toJavaRDD()
 
@@ -283,6 +285,7 @@ private[hudi] object HoodieSparkSqlWriter {
     if (!tableExists) {
       val archiveLogFolder = parameters.getOrElse(
         HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, "archived")
+      val partitionColumns = HoodieWriterUtils.getPartitionColumns(parameters)
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(HoodieTableType.valueOf(tableType))
           .setTableName(tableName)
@@ -291,6 +294,7 @@ private[hudi] object HoodieSparkSqlWriter {
           .setPreCombineField(parameters.getOrDefault(PRECOMBINE_FIELD_OPT_KEY, null))
           .setBootstrapIndexClass(bootstrapIndexClass)
           .setBootstrapBasePath(bootstrapBasePath)
+          .setPartitionColumns(partitionColumns)
           .initTable(sparkContext.hadoopConfiguration, path)
     }
 

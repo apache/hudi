@@ -24,6 +24,7 @@ import org.apache.hudi.async.SparkAsyncCompactService;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
@@ -48,10 +49,8 @@ import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.JsonDFSSource;
 
-import com.beust.jcommander.IStringConverter;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-import com.beust.jcommander.ParameterException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -191,14 +190,6 @@ public class HoodieDeltaStreamer implements Serializable {
     LOG.info("DeltaSync shutdown. Closing write client. Error?" + error);
     deltaSyncService.ifPresent(DeltaSyncService::close);
     return true;
-  }
-
-  protected static class OperationConverter implements IStringConverter<WriteOperationType> {
-
-    @Override
-    public WriteOperationType convert(String value) throws ParameterException {
-      return WriteOperationType.valueOf(value);
-    }
   }
 
   public static class Config implements Serializable {

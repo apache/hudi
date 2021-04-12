@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.BatchWriteSuccessEvent;
 import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.utils.TestConfigurations;
@@ -53,11 +52,10 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Test cases for StreamingSinkFunction.
+ * Test cases for stream write.
  */
 public class TestWriteCopyOnWrite {
 
@@ -193,19 +191,19 @@ public class TestWriteCopyOnWrite {
     assertThat(writeStatuses.size(), is(0)); // no data write
 
     // fails the checkpoint
-    assertThrows(HoodieException.class,
-        () -> funcWrapper.checkpointFails(1),
-        "The last checkpoint was aborted, roll back the last write and throw");
+    funcWrapper.checkpointFails(1);
+    assertFalse(funcWrapper.getCoordinatorContext().isJobFailed(),
+        "The last checkpoint was aborted, ignore the events");
 
-    // the instant metadata should be cleared
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.REQUESTED, null);
+    // the instant metadata should be reused
+    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.REQUESTED, instant);
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, null);
 
     for (RowData rowData : TestData.DATA_SET_INSERT) {
       funcWrapper.invoke(rowData);
     }
 
-    // this returns early cause there is no inflight instant
+    // this returns early because there is no inflight instant
     funcWrapper.checkpointFunction(2);
     // do not sent the write event and fails the checkpoint,
     // behaves like the last checkpoint is successful.
@@ -451,6 +449,10 @@ public class TestWriteCopyOnWrite {
 
   @Test
   public void testIndexStateBootstrap() throws Exception {
+    // reset the config option
+    conf.setBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
+
     // open the function and ingest data
     funcWrapper.openFunction();
     for (RowData rowData : TestData.DATA_SET_INSERT) {
@@ -501,16 +503,11 @@ public class TestWriteCopyOnWrite {
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
 
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.REQUESTED, instant);
-    assertFalse(funcWrapper.isAllPartitionsLoaded(),
-        "All partitions assume to be loaded into the index state");
+
     funcWrapper.checkpointComplete(2);
     // the coordinator checkpoint commits the inflight instant.
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
     checkWrittenData(tempFile, EXPECTED2);
-    // next element triggers all partitions load check
-    funcWrapper.invoke(TestData.DATA_SET_INSERT.get(0));
-    assertTrue(funcWrapper.isAllPartitionsLoaded(),
-        "All partitions assume to be loaded into the index state");
   }
 
   // -------------------------------------------------------------------------

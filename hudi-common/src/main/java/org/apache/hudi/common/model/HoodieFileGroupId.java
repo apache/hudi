@@ -69,7 +69,7 @@ public class HoodieFileGroupId implements Serializable, Comparable<HoodieFileGro
   public int compareTo(HoodieFileGroupId o) {
     int ret = partitionPath.compareTo(o.partitionPath);
     if (ret == 0) {
-      ret = fileId.compareTo(fileId);
+      ret = fileId.compareTo(o.fileId);
     }
     return ret;
   }

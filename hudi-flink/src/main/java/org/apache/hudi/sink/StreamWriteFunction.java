@@ -18,11 +18,8 @@
 
 package org.apache.hudi.sink;
 
-import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
@@ -34,9 +31,9 @@ import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
-import org.apache.flink.runtime.state.CheckpointListener;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
@@ -53,8 +50,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiFunction;
 
 /**
@@ -107,21 +102,6 @@ public class StreamWriteFunction<K, I, O>
   private transient Map<String, DataBucket> buckets;
 
   /**
-   * The buffer lock to control data buffering/flushing.
-   */
-  private transient ReentrantLock bufferLock;
-
-  /**
-   * The condition to decide whether to add new records into the buffer.
-   */
-  private transient Condition addToBufferCondition;
-
-  /**
-   * Flag saying whether there is an on-going checkpoint.
-   */
-  private volatile boolean onCheckpointing = false;
-
-  /**
    * Config options.
    */
   private final Configuration config;
@@ -160,8 +140,8 @@ public class StreamWriteFunction<K, I, O>
   @Override
   public void open(Configuration parameters) throws IOException {
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
+    this.writeClient = StreamerUtil.createWriteClient(this.config, getRuntimeContext());
     initBuffer();
-    initWriteClient();
     initWriteFunction();
   }
 
@@ -172,32 +152,15 @@ public class StreamWriteFunction<K, I, O>
 
   @Override
   public void snapshotState(FunctionSnapshotContext functionSnapshotContext) {
-    bufferLock.lock();
-    try {
-      // Based on the fact that the coordinator starts the checkpoint first,
-      // it would check the validity.
-      this.onCheckpointing = true;
-      // wait for the buffer data flush out and request a new instant
-      flushRemaining(false);
-      // signal the task thread to start buffering
-      addToBufferCondition.signal();
-    } finally {
-      this.onCheckpointing = false;
-      bufferLock.unlock();
-    }
+    // Based on the fact that the coordinator starts the checkpoint first,
+    // it would check the validity.
+    // wait for the buffer data flush out and request a new instant
+    flushRemaining(false);
   }
 
   @Override
   public void processElement(I value, KeyedProcessFunction<K, I, O>.Context ctx, Collector<O> out) throws Exception {
-    bufferLock.lock();
-    try {
-      if (onCheckpointing) {
-        addToBufferCondition.await();
-      }
-      bufferRecord(value);
-    } finally {
-      bufferLock.unlock();
-    }
+    bufferRecord(value);
   }
 
   @Override
@@ -250,17 +213,6 @@ public class StreamWriteFunction<K, I, O>
 
   private void initBuffer() {
     this.buckets = new LinkedHashMap<>();
-    this.bufferLock = new ReentrantLock();
-    this.addToBufferCondition = this.bufferLock.newCondition();
-  }
-
-  private void initWriteClient() {
-    HoodieFlinkEngineContext context =
-        new HoodieFlinkEngineContext(
-            new SerializableConfiguration(StreamerUtil.getHadoopConf()),
-            new FlinkTaskContextSupplier(getRuntimeContext()));
-
-    writeClient = new HoodieFlinkWriteClient<>(context, StreamerUtil.getHoodieClientConfig(this.config));
   }
 
   private void initWriteFunction() {

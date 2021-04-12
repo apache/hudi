@@ -19,15 +19,14 @@
 package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -37,6 +36,7 @@ import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.util.List;
@@ -74,7 +74,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   @Override
   public void open() throws Exception {
     super.open();
-    initWriteClient();
+    this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
   }
 
   @Override
@@ -113,8 +113,16 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
       HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
       HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
       if (!pendingCompactionTimeline.containsInstant(instant)) {
-        throw new IllegalStateException(
-            "No Compaction request available at " + compactionInstantTime + " to run compaction");
+        // this means that the compaction plan was written to auxiliary path(.tmp)
+        // but not the meta path(.hoodie), this usually happens when the job crush
+        // exceptionally.
+
+        // clean the compaction plan in auxiliary path and cancels the compaction.
+
+        LOG.warn("The compaction plan was fetched through the auxiliary path(.tmp) but not the meta path(.hoodie).\n"
+            + "Clean the compaction plan in auxiliary path and cancels the compaction");
+        cleanInstant(table.getMetaClient(), instant);
+        return;
       }
 
       // Mark instant as compaction inflight
@@ -130,17 +138,24 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
     }
   }
 
+  private void cleanInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {
+    Path commitFilePath = new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName());
+    try {
+      if (metaClient.getFs().exists(commitFilePath)) {
+        boolean deleted = metaClient.getFs().delete(commitFilePath, false);
+        if (deleted) {
+          LOG.info("Removed instant " + instant);
+        } else {
+          throw new HoodieIOException("Could not delete instant " + instant);
+        }
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not remove requested commit " + commitFilePath, e);
+    }
+  }
+
   @VisibleForTesting
   public void setOutput(Output<StreamRecord<CompactionPlanEvent>> output) {
     this.output = output;
-  }
-
-  private void initWriteClient() {
-    HoodieFlinkEngineContext context =
-        new HoodieFlinkEngineContext(
-            new SerializableConfiguration(StreamerUtil.getHadoopConf()),
-            new FlinkTaskContextSupplier(getRuntimeContext()));
-
-    writeClient = new HoodieFlinkWriteClient<>(context, StreamerUtil.getHoodieClientConfig(this.conf));
   }
 }
