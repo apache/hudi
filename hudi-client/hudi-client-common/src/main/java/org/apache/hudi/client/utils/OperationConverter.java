@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.streamer;
+package org.apache.hudi.client.utils;
 
 import org.apache.hudi.common.model.WriteOperationType;
 
