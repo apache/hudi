@@ -44,11 +44,7 @@ import org.springframework.shell.core.annotation.CliOption;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -268,15 +264,12 @@ public class CommitsCommand implements CommandMarker {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
 
-    Option<HoodieInstant> hoodieInstantOptional = getCommitOrReplaceCommitInstant(timeline, instantTime);
-    if (!hoodieInstantOptional.isPresent()) {
+    Option<HoodieCommitMetadata> commitMetadataOptional = getCommitMetadataForInstant(timeline, instantTime);
+    if (!commitMetadataOptional.isPresent()) {
       return "Commit " + instantTime + " not found in Commits " + timeline;
     }
 
-    HoodieInstant hoodieInstant = hoodieInstantOptional.get();
-
-    HoodieCommitMetadata meta = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(hoodieInstant).get(),
-        HoodieCommitMetadata.class);
+    HoodieCommitMetadata meta = commitMetadataOptional.get();
     List<Comparable[]> rows = new ArrayList<>();
     for (Map.Entry<String, List<HoodieWriteStat>> entry : meta.getPartitionToWriteStats().entrySet()) {
       String path = entry.getKey();
@@ -333,16 +326,13 @@ public class CommitsCommand implements CommandMarker {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
 
-    Option<HoodieInstant> hoodieInstantOptional = getCommitOrReplaceCommitInstant(timeline, instantTime);
-    if (!hoodieInstantOptional.isPresent()) {
+    Option<HoodieCommitMetadata> commitMetadataOptional = getCommitMetadataForInstant(timeline, instantTime);
+    if (!commitMetadataOptional.isPresent()) {
       return "Commit " + instantTime + " not found in Commits " + timeline;
     }
 
-    HoodieInstant hoodieInstant = hoodieInstantOptional.get();
+    HoodieCommitMetadata meta = commitMetadataOptional.get();
 
-
-    HoodieCommitMetadata meta = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(hoodieInstant).get(),
-        HoodieCommitMetadata.class);
     long recordsWritten = meta.fetchTotalRecordsWritten();
     long bytesWritten = meta.fetchTotalBytesWritten();
     long avgRecSize = (long) Math.ceil((1.0 * bytesWritten) / recordsWritten);
@@ -376,15 +366,12 @@ public class CommitsCommand implements CommandMarker {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     HoodieTimeline timeline = activeTimeline.getCommitsTimeline().filterCompletedInstants();
 
-    Option<HoodieInstant> hoodieInstantOptional = getCommitOrReplaceCommitInstant(timeline, instantTime);
-    if (!hoodieInstantOptional.isPresent()) {
+    Option<HoodieCommitMetadata> commitMetadataOptional = getCommitMetadataForInstant(timeline, instantTime);
+    if (!commitMetadataOptional.isPresent()) {
       return "Commit " + instantTime + " not found in Commits " + timeline;
     }
 
-    HoodieInstant hoodieInstant = hoodieInstantOptional.get();
-
-    HoodieCommitMetadata meta = HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(hoodieInstant).get(),
-        HoodieCommitMetadata.class);
+    HoodieCommitMetadata meta = commitMetadataOptional.get();
     List<Comparable[]> rows = new ArrayList<>();
     for (Map.Entry<String, List<HoodieWriteStat>> entry : meta.getPartitionToWriteStats().entrySet()) {
       String path = entry.getKey();
@@ -446,16 +433,19 @@ public class CommitsCommand implements CommandMarker {
   /*
   Checks whether a commit or replacecommit action exists in the timeline.
   * */
-  private Option<HoodieInstant> getCommitOrReplaceCommitInstant(HoodieTimeline timeline, String instantTime) {
-    HoodieInstant hoodieInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime);
+  private Option<HoodieCommitMetadata> getCommitMetadataForInstant(HoodieTimeline timeline, String instantTime) throws IOException {
+    List<HoodieInstant> instants = Arrays.asList(
+            new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime),
+            new HoodieInstant(false, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime),
+            new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime));
 
-    if (!timeline.containsInstant(hoodieInstant)) {
-      hoodieInstant = new HoodieInstant(false, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime);
-      if (!timeline.containsInstant(hoodieInstant)) {
-        return Option.empty();
-      }
+    Option<HoodieInstant> hoodieInstant = Option.fromJavaOptional(instants.stream().filter(timeline::containsInstant).findAny());
+
+    if (hoodieInstant.isPresent()) {
+      return Option.of(HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant.get()).get(),
+              HoodieCommitMetadata.class));
     }
 
-    return Option.of(hoodieInstant);
+    return Option.empty();
   }
 }

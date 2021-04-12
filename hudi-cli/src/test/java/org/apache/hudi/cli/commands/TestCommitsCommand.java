@@ -76,6 +76,7 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
+    metaClient = HoodieCLI.getTableMetaClient();
   }
 
   private LinkedHashMap<String, Integer[]> generateData() throws Exception {
@@ -120,13 +121,13 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
     for (Map.Entry<String, Integer[]> entry : replaceCommitData.entrySet()) {
       String key = entry.getKey();
       Integer[] value = entry.getValue();
-      HoodieTestReplaceCommitMetadatGenerator.createReplaceCommitFileWithMetadata(tablePath, key, jsc.hadoopConfiguration(),
-              Option.of(value[0]), Option.of(value[1]));
+      HoodieTestReplaceCommitMetadatGenerator.createReplaceCommitFileWithMetadata(tablePath, key,
+              Option.of(value[0]), Option.of(value[1]), metaClient);
     }
 
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
     assertEquals(3, metaClient.reloadActiveTimeline().getCommitsTimeline().countInstants(),
-            "There should have 3 commits");
+            "There should be 3 commits");
 
     LinkedHashMap<String, Integer[]> data = replaceCommitData;
     replaceCommitData.putAll(commitData);
