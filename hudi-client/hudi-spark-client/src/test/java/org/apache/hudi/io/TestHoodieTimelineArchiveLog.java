@@ -252,7 +252,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
-    assertEquals(5, timeline.countInstants(), "Loaded 4 commits and the count should match");
+    assertEquals(5, timeline.countInstants(), "Loaded 5 commits and the count should match");
     HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
     boolean result = archiveLog.archiveIfRequired(context);
     assertTrue(result);
