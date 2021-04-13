@@ -42,6 +42,7 @@ Following tables show whether a given query is supported on specific query engin
 |**Spark Datasource**|Y|Y|
 |**Flink SQL**|Y|N|
 |**PrestoDB**|Y|N|
+|**Trino**|Y|N|
 |**Impala**|Y|N|
 
 
@@ -56,6 +57,7 @@ Note that `Read Optimized` queries are not applicable for COPY_ON_WRITE tables.
 |**Spark Datasource**|Y|Y|Y|
 |**Flink SQL**|Y|Y|Y|
 |**PrestoDB**|Y|N|Y|
+|**Trino**|N|N|Y|
 |**Impala**|N|N|Y|
 
 
@@ -232,6 +234,14 @@ for different versions of PrestoDB.
 | < 0.233              | Requires the `hudi-presto-bundle` jar to be placed into `<presto_install>/plugin/hive-hadoop2/`, across the installation. | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
 | >= 0.233             | No action needed. Hudi (0.5.1-incubating) is a compile time dependency. | Snapshot querying on COW tables. Read optimized querying on MOR tables. |
 | >= 0.240             | No action needed. Hudi 0.5.3 version is a compile time dependency. | Snapshot querying on both COW and MOR tables |
+
+## Trino
+
+[Trino](https://trino.io/) (formerly PrestoSQL) was forked off PrestoDB few years ago. Hudi supports snapshot queries on Copy-On-Write tables & Read Optimized queries
+on Merge-On-Read tables at the moment, through the initial input format based integration in PrestoDB (pre forking). This approach has
+known performance limitations with very large tables, which has been since fixed on PrestoDB. We are working on replicating the same fixes on Trino as well.
+
+To query Hudi tables on Trino, please place the `hudi-presto-bundle` jar into the Hive connector installation `<trino_install>/plugin/hive-hadoop2`.
 
 ## Impala (3.4 or later)
 
