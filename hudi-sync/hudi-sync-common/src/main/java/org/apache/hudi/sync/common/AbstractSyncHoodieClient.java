@@ -38,7 +38,6 @@ import java.io.Serializable;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -46,6 +45,8 @@ import java.util.Objects;
 public abstract class AbstractSyncHoodieClient {
 
   private static final Logger LOG = LogManager.getLogger(AbstractSyncHoodieClient.class);
+
+  public static final TypeOptimizer DECIMAL_TYPE_OPTIMIZER = new TypeOptimizer() {};
 
   protected final HoodieTableMetaClient metaClient;
   protected final HoodieTableType tableType;
@@ -140,17 +141,17 @@ public abstract class AbstractSyncHoodieClient {
     }
   }
 
-  public abstract static class TypeTransformer implements Serializable {
+  public abstract static class TypeOptimizer implements Serializable {
 
     static final String DEFAULT_TARGET_TYPE = "DECIMAL";
 
     protected String targetType;
 
-    public TypeTransformer() {
+    public TypeOptimizer() {
       this.targetType = DEFAULT_TARGET_TYPE;
     }
 
-    public TypeTransformer(String targetType) {
+    public TypeOptimizer(String targetType) {
       ValidationUtils.checkArgument(Objects.nonNull(targetType));
       this.targetType = targetType;
     }
@@ -175,15 +176,6 @@ public abstract class AbstractSyncHoodieClient {
     public String getColumnType(ResultSet resultSet) throws SQLException {
       return resultSet.getString(6);
     }
-  }
-
-  protected Map<String, String> extractSchema(ResultSet resultSet, TypeTransformer transformer)
-          throws SQLException {
-    Map<String, String> result = new HashMap<>();
-    while (resultSet.next()) {
-      transformer.doTransform(resultSet, result);
-    }
-    return result;
   }
 
   /**

@@ -276,11 +276,15 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
         throw new IllegalArgumentException(
             "Failed to get schema for table " + tableName + " does not exist");
       }
+      Map<String, String> schema = new HashMap<>();
       ResultSet result = null;
       try {
         DatabaseMetaData databaseMetaData = connection.getMetaData();
         result = databaseMetaData.getColumns(null, syncConfig.databaseName, tableName, null);
-        return extractSchema(result, new TypeTransformer() {});
+        while (result.next()) {
+          DECIMAL_TYPE_OPTIMIZER.doTransform(result, schema);
+        }
+        return schema;
       } catch (SQLException e) {
         throw new HoodieHiveSyncException("Failed to get table schema for " + tableName, e);
       } finally {
