@@ -208,12 +208,6 @@ public class AvroOrcUtils {
           ));
         }
 
-        final long millis = time % 1000;
-        if (millis > 0) {
-          // need to account for millis in the nanos portion
-          nanos += NANOS_PER_MICRO * MICROS_PER_MILLI * millis;
-        }
-
         tsColVec.time[vectorPos] = time;
         tsColVec.nanos[vectorPos] = nanos;
         break;
