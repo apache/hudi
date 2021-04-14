@@ -156,12 +156,12 @@ public abstract class AbstractSyncHoodieClient {
       this.targetType = targetType;
     }
 
-    public void doTransform(ResultSet resultSet, Map<String, String> schema) throws SQLException {
+    public void doOptimize(ResultSet resultSet, Map<String, String> schema) throws SQLException {
       schema.put(getColumnName(resultSet), targetType.equalsIgnoreCase(getColumnType(resultSet))
-                ? transform(resultSet) : getColumnType(resultSet));
+                ? optimize(resultSet) : getColumnType(resultSet));
     }
 
-    public String transform(ResultSet resultSet) throws SQLException {
+    public String optimize(ResultSet resultSet) throws SQLException {
       String columnType = getColumnType(resultSet);
       int columnSize = resultSet.getInt("COLUMN_SIZE");
       int decimalDigits = resultSet.getInt("DECIMAL_DIGITS");
