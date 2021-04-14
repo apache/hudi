@@ -39,7 +39,6 @@ import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
 import org.apache.orc.OrcFile;
 import org.apache.orc.TypeDescription;
 import org.apache.orc.Writer;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
@@ -95,13 +94,8 @@ public class HoodieOrcWriter<T extends HoodieRecordPayload, R extends IndexedRec
 
   @Override
   public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
-    String seqId = HoodieRecord.generateSequenceId(instantTime, taskContextSupplier.getPartitionIdSupplier().get(),
-        RECORD_INDEX.getAndIncrement());
-    HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord, record.getRecordKey(),
-        record.getPartitionPath(), file.getName());
-    HoodieAvroUtils
-        .addCommitMetadataToRecord((GenericRecord) avroRecord, instantTime, seqId);
-
+    prepRecordWithMetadata(avroRecord, record, instantTime,
+        taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX, file.getName());
     writeAvro(record.getRecordKey(), avroRecord);
   }
 
@@ -124,6 +118,8 @@ public class HoodieOrcWriter<T extends HoodieRecordPayload, R extends IndexedRec
 
     batch.size++;
 
+    // Batch size corresponds to the number of written rows out of 1024 total rows (by default)
+    // in the row batch, add the batch to file once all rows are filled and reset.
     if (batch.size == batch.getMaxSize()) {
       writer.addRowBatch(batch);
       batch.reset();

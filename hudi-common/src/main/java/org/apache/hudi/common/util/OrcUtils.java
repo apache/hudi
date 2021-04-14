@@ -90,7 +90,7 @@ public class OrcUtils {
       }
       return filteredRowKeys;
     } catch (IOException io) {
-      throw new HoodieIOException("Unable to read next batch from ORC file ", io);
+      throw new HoodieIOException("Unable to read row keys for ORC file" + filePath.getName(), io);
     }
   }
 
@@ -147,7 +147,7 @@ public class OrcUtils {
       }
       return footerVals;
     } catch (IOException io) {
-      throw new HoodieIOException("Unable to create an ORC reader.", io);
+      throw new HoodieIOException("Unable to read footer for ORC file" + orcFilePath.getName(), io);
     }
   }
 
@@ -157,7 +157,7 @@ public class OrcUtils {
       TypeDescription orcSchema = reader.getSchema();
       return AvroOrcUtils.createAvroSchema(orcSchema);
     } catch (IOException io) {
-      throw new HoodieIOException("Unable to create an ORC reader.", io);
+      throw new HoodieIOException("Unable to get Avro schema for ORC file" + orcFilePath.getName(), io);
     }
   }
 
@@ -166,7 +166,7 @@ public class OrcUtils {
       Reader reader = OrcFile.createReader(orcFilePath, OrcFile.readerOptions(conf));
       return reader.getNumberOfRows();
     } catch (IOException io) {
-      throw new HoodieIOException("Unable to create an ORC reader.", io);
+      throw new HoodieIOException("Unable to get row count for ORC file" + orcFilePath.getName(), io);
     }
   }
 }

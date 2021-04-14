@@ -47,8 +47,10 @@ public class HoodieStorageConfig extends DefaultHoodieConfig {
 
   public static final String ORC_FILE_MAX_BYTES = "hoodie.orc.max.file.size";
   public static final String DEFAULT_ORC_FILE_MAX_BYTES = String.valueOf(120 * 1024 * 1024);
+  // size of the memory buffer in bytes for writing
   public static final String ORC_STRIPE_SIZE = "hoodie.orc.stripe.size";
   public static final String DEFAULT_ORC_STRIPE_SIZE = String.valueOf(64 * 1024 * 1024);
+  // file system block size
   public static final String ORC_BLOCK_SIZE = "hoodie.orc.block.size";
   public static final String DEFAULT_ORC_BLOCK_SIZE = DEFAULT_ORC_FILE_MAX_BYTES;
 
