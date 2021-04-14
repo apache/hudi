@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
@@ -188,7 +189,8 @@ public class InstantGenerateOperator extends AbstractStreamOperator<HoodieRecord
    */
   private String startNewInstant(long checkpointId) {
     String newTime = writeClient.startCommit();
-    this.writeClient.transitionRequestedToInflight(this.cfg.tableType, newTime);
+    final String actionType = CommitUtils.getCommitActionType(HoodieTableType.valueOf(this.cfg.tableType));
+    this.writeClient.transitionRequestedToInflight(actionType, newTime);
     LOG.info("create instant [{}], at checkpoint [{}]", newTime, checkpointId);
     return newTime;
   }

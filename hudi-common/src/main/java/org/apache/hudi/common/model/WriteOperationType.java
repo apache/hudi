@@ -104,4 +104,8 @@ public enum WriteOperationType {
   public static boolean isChangingRecords(WriteOperationType operationType) {
     return operationType == UPSERT || operationType == UPSERT_PREPPED || operationType == DELETE;
   }
+
+  public static boolean isOverwrite(WriteOperationType operationType) {
+    return operationType == INSERT_OVERWRITE || operationType == INSERT_OVERWRITE_TABLE;
+  }
 }

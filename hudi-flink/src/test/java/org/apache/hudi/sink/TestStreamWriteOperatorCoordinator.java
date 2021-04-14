@@ -20,6 +20,7 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -104,9 +105,8 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator.handleEventFromOperator(1, event1);
 
     coordinator.notifyCheckpointComplete(1);
-    String inflight = coordinator.getWriteClient()
-        .getInflightAndRequestedInstant(FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
-    String lastCompleted = coordinator.getWriteClient().getLastCompletedInstant(FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+    String inflight = coordinator.getWriteClient().getLastPendingInstant(HoodieTableType.COPY_ON_WRITE);
+    String lastCompleted = coordinator.getWriteClient().getLastCompletedInstant(HoodieTableType.COPY_ON_WRITE);
     assertThat("Instant should be complete", lastCompleted, is(instant));
     assertNotEquals("", inflight, "Should start a new instant");
     assertNotEquals(instant, inflight, "Should start a new instant");
@@ -156,7 +156,7 @@ public class TestStreamWriteOperatorCoordinator {
 
     assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(1),
         "Returns early for empty write results");
-    String lastCompleted = coordinator.getWriteClient().getLastCompletedInstant(FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+    String lastCompleted = coordinator.getWriteClient().getLastCompletedInstant(HoodieTableType.COPY_ON_WRITE);
     assertNull(lastCompleted, "Returns early for empty write results");
     assertNull(coordinator.getEventBuffer()[0]);
 
@@ -172,7 +172,7 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator.handleEventFromOperator(1, event1);
     assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(2),
         "Commits the instant with partial events anyway");
-    lastCompleted = coordinator.getWriteClient().getLastCompletedInstant(FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+    lastCompleted = coordinator.getWriteClient().getLastCompletedInstant(HoodieTableType.COPY_ON_WRITE);
     assertThat("Commits the instant with partial events anyway", lastCompleted, is(instant));
   }
 

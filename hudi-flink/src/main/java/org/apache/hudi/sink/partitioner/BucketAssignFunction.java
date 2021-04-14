@@ -127,6 +127,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     this.bucketAssigner = BucketAssigners.create(
         getRuntimeContext().getIndexOfThisSubtask(),
         getRuntimeContext().getNumberOfParallelSubtasks(),
+        WriteOperationType.isOverwrite(WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION))),
         HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)),
         context,
         writeConfig);
@@ -190,7 +191,9 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
         default:
           throw new AssertionError();
       }
-      this.indexState.put(hoodieKey, location);
+      if (isChangingRecords) {
+        this.indexState.put(hoodieKey, location);
+      }
     }
     record.unseal();
     record.setCurrentLocation(location);
