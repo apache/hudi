@@ -20,7 +20,11 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -40,10 +44,14 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -117,6 +125,11 @@ public class StreamWriteOperatorCoordinator
   private HiveSyncContext hiveSyncContext;
 
   /**
+   * The table state.
+   */
+  private transient TableState tableState;
+
+  /**
    * Constructs a StreamingSinkOperatorCoordinator.
    *
    * @param conf    The config options
@@ -135,8 +148,8 @@ public class StreamWriteOperatorCoordinator
   public void start() throws Exception {
     // initialize event buffer
     reset();
-    // writeClient
     this.writeClient = StreamerUtil.createWriteClient(conf, null);
+    this.tableState = TableState.create(conf);
     // init table, create it if not exists.
     initTableIfNotExists(this.conf);
     // start a new instant
@@ -214,14 +227,16 @@ public class StreamWriteOperatorCoordinator
   }
 
   private void startInstant() {
-    this.instant = this.writeClient.startCommit();
-    this.writeClient.transitionRequestedToInflight(conf.getString(FlinkOptions.TABLE_TYPE), this.instant);
+    final String instant = HoodieActiveTimeline.createNewInstantTime();
+    this.writeClient.startCommitWithTime(instant, tableState.commitAction);
+    this.instant = instant;
+    this.writeClient.transitionRequestedToInflight(tableState.commitAction, this.instant);
     LOG.info("Create instant [{}] for table [{}] with type [{}]", this.instant,
             this.conf.getString(FlinkOptions.TABLE_NAME), conf.getString(FlinkOptions.TABLE_TYPE));
   }
 
   @Override
-  public void resetToCheckpoint(long checkpointID, @Nullable byte[] checkpointData) throws Exception {
+  public void resetToCheckpoint(long checkpointID, @Nullable byte[] checkpointData) {
     // no operation
   }
 
@@ -310,6 +325,7 @@ public class StreamWriteOperatorCoordinator
   }
 
   /** Performs the actual commit action. */
+  @SuppressWarnings("unchecked")
   private void doCommit(List<WriteStatus> writeResults) {
     // commit or rollback
     long totalErrorRecords = writeResults.stream().map(WriteStatus::getTotalErrorRecords).reduce(Long::sum).orElse(0L);
@@ -323,7 +339,11 @@ public class StreamWriteOperatorCoordinator
             + totalErrorRecords + "/" + totalRecords);
       }
 
-      boolean success = writeClient.commit(this.instant, writeResults, Option.of(checkpointCommitMetadata));
+      final Map<String, List<String>> partitionToReplacedFileIds = tableState.isOverwrite
+          ? writeClient.getPartitionToReplacedFileIds(tableState.operationType, writeResults)
+          : Collections.emptyMap();
+      boolean success = writeClient.commit(this.instant, writeResults, Option.of(checkpointCommitMetadata),
+          tableState.commitAction, partitionToReplacedFileIds);
       if (success) {
         reset();
         LOG.info("Commit instant [{}] success!", this.instant);
@@ -399,6 +419,28 @@ public class StreamWriteOperatorCoordinator
     @Override
     public OperatorCoordinator create(Context context) {
       return new StreamWriteOperatorCoordinator(this.conf, context);
+    }
+  }
+
+  /**
+   * Remember some table state variables.
+   */
+  private static class TableState implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private final WriteOperationType operationType;
+    private final String commitAction;
+    private final boolean isOverwrite;
+
+    private TableState(Configuration conf) {
+      this.operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
+      this.commitAction = CommitUtils.getCommitActionType(this.operationType,
+          HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE).toUpperCase(Locale.ROOT)));
+      this.isOverwrite = WriteOperationType.isOverwrite(this.operationType);
+    }
+
+    public static TableState create(Configuration conf) {
+      return new TableState(conf);
     }
   }
 }
