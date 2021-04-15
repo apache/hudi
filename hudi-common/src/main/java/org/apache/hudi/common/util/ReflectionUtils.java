@@ -47,10 +47,11 @@ public class ReflectionUtils {
 
   private static Map<String, Class<?>> clazzCache = new HashMap<>();
 
-  private static Class<?> getClass(String clazzName) {
+  public static Class<?> getClass(String clazzName) {
     if (!clazzCache.containsKey(clazzName)) {
       try {
-        Class<?> clazz = Class.forName(clazzName);
+        Class<?> clazz = Class.forName(clazzName, true,
+                Thread.currentThread().getContextClassLoader());
         clazzCache.put(clazzName, clazz);
       } catch (ClassNotFoundException e) {
         throw new HoodieException("Unable to load class", e);
@@ -80,7 +81,7 @@ public class ReflectionUtils {
   }
 
   /**
-   * Creates an instnace of the given class. Use this version when dealing with interface types as constructor args.
+   * Creates an instance of the given class. Use this version when dealing with interface types as constructor args.
    */
   public static Object loadClass(String clazz, Class<?>[] constructorArgTypes, Object... constructorArgs) {
     try {

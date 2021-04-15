@@ -53,7 +53,7 @@ public class FlexibleSchemaRecordGenerationIterator implements Iterator<GenericR
       List<String> partitionPathFieldNames, int numPartitions, int startPartition) {
     this.counter = maxEntriesToProduce;
     this.partitionPathFieldNames = new HashSet<>(partitionPathFieldNames);
-    if(partitionPathFieldNames != null && partitionPathFieldNames.size() > 0) {
+    if (partitionPathFieldNames != null && partitionPathFieldNames.size() > 0) {
       this.firstPartitionPathField = partitionPathFieldNames.get(0);
     }
     Schema schema = new Schema.Parser().parse(schemaStr);

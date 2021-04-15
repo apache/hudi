@@ -19,45 +19,29 @@
 package org.apache.hudi.sink.partitioner;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.sink.partitioner.delta.DeltaBucketAssigner;
+import org.apache.hudi.table.action.commit.SmallFile;
+
+import java.util.Collections;
+import java.util.List;
 
 /**
- * Utilities for {@code BucketAssigner}.
+ * BucketAssigner for INSERT OVERWRITE and INSERT OVERWRITE TABLE operations,
+ * this assigner always skip the existing small files because of the 'OVERWRITE' semantics.
+ *
+ * <p>Note: assumes the index can always index log files for Flink write.
  */
-public abstract class BucketAssigners {
-
-  private BucketAssigners() {}
-
-  /**
-   * Creates a {@code BucketAssigner}.
-   *
-   * @param taskID The task ID
-   * @param numTasks The number of tasks
-   * @param isOverwrite Whether the write operation is OVERWRITE
-   * @param tableType The table type
-   * @param context The engine context
-   * @param config The configuration
-   * @return the bucket assigner instance
-   */
-  public static BucketAssigner create(
+public class OverwriteBucketAssigner extends BucketAssigner {
+  public OverwriteBucketAssigner(
       int taskID,
       int numTasks,
-      boolean isOverwrite,
-      HoodieTableType tableType,
       HoodieFlinkEngineContext context,
       HoodieWriteConfig config) {
-    if (isOverwrite) {
-      return new OverwriteBucketAssigner(taskID, numTasks, context, config);
-    }
-    switch (tableType) {
-      case COPY_ON_WRITE:
-        return new BucketAssigner(taskID, numTasks, context, config);
-      case MERGE_ON_READ:
-        return new DeltaBucketAssigner(taskID, numTasks, context, config);
-      default:
-        throw new AssertionError();
-    }
+    super(taskID, numTasks, context, config);
+  }
+
+  @Override
+  protected List<SmallFile> getSmallFiles(String partitionPath) {
+    return Collections.emptyList();
   }
 }

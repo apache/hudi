@@ -27,7 +27,6 @@ import org.apache.hudi.integ.testsuite.dag.nodes.DelayNode;
 import org.apache.hudi.metrics.Metrics;
 
 import org.apache.spark.api.java.JavaSparkContext;
-import org.junit.runners.Suite;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

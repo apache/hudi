@@ -53,7 +53,9 @@ public enum StorageSchemes {
   // Databricks file system
   DBFS("dbfs", false),
   // IBM Cloud Object Storage
-  COS("cos", false);
+  COS("cos", false),
+  // Huawei Cloud Object Storage
+  OBS("obs", false);
 
   private String scheme;
   private boolean supportsAppend;

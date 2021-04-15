@@ -79,9 +79,7 @@ public class SparkMain {
 
     SparkCommand cmd = SparkCommand.valueOf(command);
 
-    JavaSparkContext jsc = sparkMasterContained(cmd)
-        ? SparkUtil.initJavaSparkConf("hoodie-cli-" + command, Option.of(args[1]), Option.of(args[2]))
-        : SparkUtil.initJavaSparkConf("hoodie-cli-" + command);
+    JavaSparkContext jsc = SparkUtil.initJavaSparkConf("hoodie-cli-" + command, Option.of(args[1]), Option.of(args[2]));
     int returnCode = 0;
     try {
       switch (cmd) {
@@ -112,29 +110,29 @@ public class SparkMain {
                   Integer.parseInt(args[9]), args[10], Integer.parseInt(args[11]), propsFilePath, configs);
           break;
         case COMPACT_RUN:
-          assert (args.length >= 9);
+          assert (args.length >= 10);
           propsFilePath = null;
-          if (!StringUtils.isNullOrEmpty(args[8])) {
-            propsFilePath = args[8];
+          if (!StringUtils.isNullOrEmpty(args[9])) {
+            propsFilePath = args[9];
           }
           configs = new ArrayList<>();
-          if (args.length > 9) {
+          if (args.length > 10) {
             configs.addAll(Arrays.asList(args).subList(9, args.length));
           }
-          returnCode = compact(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5], args[6],
-                  Integer.parseInt(args[7]), false, propsFilePath, configs);
+          returnCode = compact(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]), args[7],
+              Integer.parseInt(args[8]), false, propsFilePath, configs);
           break;
         case COMPACT_SCHEDULE:
-          assert (args.length >= 6);
+          assert (args.length >= 7);
           propsFilePath = null;
-          if (!StringUtils.isNullOrEmpty(args[5])) {
-            propsFilePath = args[5];
+          if (!StringUtils.isNullOrEmpty(args[6])) {
+            propsFilePath = args[6];
           }
           configs = new ArrayList<>();
-          if (args.length > 6) {
-            configs.addAll(Arrays.asList(args).subList(6, args.length));
+          if (args.length > 7) {
+            configs.addAll(Arrays.asList(args).subList(7, args.length));
           }
-          returnCode = compact(jsc, args[1], args[2], args[3], 1, "", args[4], 0, true, propsFilePath, configs);
+          returnCode = compact(jsc, args[3], args[4], args[5], 1, "", 0, true, propsFilePath, configs);
           break;
         case COMPACT_VALIDATE:
           assert (args.length == 7);
@@ -148,9 +146,9 @@ public class SparkMain {
           returnCode = 0;
           break;
         case COMPACT_UNSCHEDULE_FILE:
-          assert (args.length == 9);
-          doCompactUnscheduleFile(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]),
-                  Boolean.parseBoolean(args[7]), Boolean.parseBoolean(args[8]));
+          assert (args.length == 10);
+          doCompactUnscheduleFile(jsc, args[3], args[4], args[5], args[6], Integer.parseInt(args[7]),
+              Boolean.parseBoolean(args[8]), Boolean.parseBoolean(args[9]));
           returnCode = 0;
           break;
         case COMPACT_UNSCHEDULE_PLAN:
@@ -207,14 +205,6 @@ public class SparkMain {
       jsc.stop();
     }
     System.exit(returnCode);
-  }
-
-  private static boolean sparkMasterContained(SparkCommand command) {
-    List<SparkCommand> masterContained = Arrays.asList(SparkCommand.COMPACT_VALIDATE, SparkCommand.COMPACT_REPAIR,
-        SparkCommand.COMPACT_UNSCHEDULE_PLAN, SparkCommand.COMPACT_UNSCHEDULE_FILE, SparkCommand.CLEAN,
-        SparkCommand.IMPORT, SparkCommand.UPSERT, SparkCommand.DEDUPLICATE, SparkCommand.SAVEPOINT,
-        SparkCommand.DELETE_SAVEPOINT, SparkCommand.ROLLBACK_TO_SAVEPOINT, SparkCommand.ROLLBACK, SparkCommand.BOOTSTRAP);
-    return masterContained.contains(command);
   }
 
   protected static void clean(JavaSparkContext jsc, String basePath, String propsFilePath,
@@ -280,13 +270,14 @@ public class SparkMain {
     new HoodieCompactionAdminTool(cfg).run(jsc);
   }
 
-  private static void doCompactUnscheduleFile(JavaSparkContext jsc, String basePath, String fileId, String outputPath,
-      int parallelism, boolean skipValidation, boolean dryRun)
+  private static void doCompactUnscheduleFile(JavaSparkContext jsc, String basePath, String fileId, String partitionPath,
+      String outputPath, int parallelism, boolean skipValidation, boolean dryRun)
       throws Exception {
     HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
     cfg.basePath = basePath;
     cfg.operation = Operation.UNSCHEDULE_FILE;
     cfg.outputPath = outputPath;
+    cfg.partitionPath = partitionPath;
     cfg.fileId = fileId;
     cfg.parallelism = parallelism;
     cfg.dryRun = dryRun;
@@ -295,7 +286,7 @@ public class SparkMain {
   }
 
   private static int compact(JavaSparkContext jsc, String basePath, String tableName, String compactionInstant,
-      int parallelism, String schemaFile, String sparkMemory, int retry, boolean schedule, String propsFilePath,
+      int parallelism, String schemaFile, int retry, boolean schedule, String propsFilePath,
       List<String> configs) {
     HoodieCompactor.Config cfg = new HoodieCompactor.Config();
     cfg.basePath = basePath;
@@ -308,7 +299,6 @@ public class SparkMain {
     cfg.runSchedule = schedule;
     cfg.propsFilePath = propsFilePath;
     cfg.configs = configs;
-    jsc.getConf().set("spark.executor.memory", sparkMemory);
     return new HoodieCompactor(jsc, cfg).compact(retry);
   }
 
