@@ -165,8 +165,7 @@ public abstract class AbstractSyncHoodieClient {
       String columnType = getColumnType(resultSet);
       int columnSize = resultSet.getInt("COLUMN_SIZE");
       int decimalDigits = resultSet.getInt("DECIMAL_DIGITS");
-      columnType += String.format("(%s,%s)", columnSize, decimalDigits);
-      return columnType;
+      return columnType + String.format("(%s,%s)", columnSize, decimalDigits);
     }
 
     public String getColumnName(ResultSet resultSet) throws SQLException {
