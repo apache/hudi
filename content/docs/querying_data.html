@@ -376,6 +376,7 @@
   </li>
   <li><a href="#flink-sql">Flink SQL</a></li>
   <li><a href="#prestodb">PrestoDB</a></li>
+  <li><a href="#trino">Trino</a></li>
   <li><a href="#impala-34-or-later">Impala (3.4 or later)</a>
     <ul>
       <li><a href="#snapshot-query">Snapshot Query</a></li>
@@ -450,6 +451,11 @@ with special configurations that indicates to query planning that only increment
       <td>N</td>
     </tr>
     <tr>
+      <td><strong>Trino</strong></td>
+      <td>Y</td>
+      <td>N</td>
+    </tr>
+    <tr>
       <td><strong>Impala</strong></td>
       <td>Y</td>
       <td>N</td>
@@ -498,6 +504,12 @@ with special configurations that indicates to query planning that only increment
     <tr>
       <td><strong>PrestoDB</strong></td>
       <td>Y</td>
+      <td>N</td>
+      <td>Y</td>
+    </tr>
+    <tr>
+      <td><strong>Trino</strong></td>
+      <td>N</td>
       <td>N</td>
       <td>Y</td>
     </tr>
@@ -780,6 +792,14 @@ for different versions of PrestoDB.</p>
     </tr>
   </tbody>
 </table>
+
+<h2 id="trino">Trino</h2>
+
+<p><a href="https://trino.io/">Trino</a> (formerly PrestoSQL) was forked off PrestoDB few years ago. Hudi supports snapshot queries on Copy-On-Write tables &amp; Read Optimized queries
+on Merge-On-Read tables at the moment, through the initial input format based integration in PrestoDB (pre forking). This approach has
+known performance limitations with very large tables, which has been since fixed on PrestoDB. We are working on replicating the same fixes on Trino as well.</p>
+
+<p>To query Hudi tables on Trino, please place the <code class="highlighter-rouge">hudi-presto-bundle</code> jar into the Hive connector installation <code class="highlighter-rouge">&lt;trino_install&gt;/plugin/hive-hadoop2</code>.</p>
 
 <h2 id="impala-34-or-later">Impala (3.4 or later)</h2>
 
