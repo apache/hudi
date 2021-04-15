@@ -464,7 +464,8 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     assertTrue(result);
     HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
     List<HoodieInstant> archivedInstants = Arrays.asList(instant1, instant2, instant3);
-    assertEquals(new HashSet<>(archivedInstants), archivedTimeline.getInstants().collect(Collectors.toSet()));
+    assertEquals(new HashSet<>(archivedInstants),
+        archivedTimeline.filterCompletedInstants().getInstants().collect(Collectors.toSet()));
     assertFalse(wrapperFs.exists(markerPath));
   }
 

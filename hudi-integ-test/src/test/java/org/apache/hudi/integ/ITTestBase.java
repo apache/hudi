@@ -166,7 +166,7 @@ public abstract class ITTestBase {
     // try to capture stdout and stderr of the stuck process.
 
     boolean completed =
-      dockerClient.execStartCmd(createCmdResponse.getId()).withDetach(false).withTty(false).exec(callback)
+        dockerClient.execStartCmd(createCmdResponse.getId()).withDetach(false).withTty(false).exec(callback)
         .awaitCompletion(540, SECONDS);
     if (!completed) {
       callback.getStderr().flush();

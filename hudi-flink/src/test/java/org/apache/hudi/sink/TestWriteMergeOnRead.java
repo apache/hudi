@@ -90,7 +90,7 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
   }
 
   @Override
-  protected String getTableType() {
-    return HoodieTableType.MERGE_ON_READ.name();
+  protected HoodieTableType getTableType() {
+    return HoodieTableType.MERGE_ON_READ;
   }
 }
