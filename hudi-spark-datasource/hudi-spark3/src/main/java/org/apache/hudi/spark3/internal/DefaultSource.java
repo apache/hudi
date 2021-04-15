@@ -39,16 +39,16 @@ public class DefaultSource extends BaseDefaultSource implements TableProvider {
 
   @Override
   public StructType inferSchema(CaseInsensitiveStringMap options) {
-    return StructType.fromDDL(options.get(HoodieWriteConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL));
+    return StructType.fromDDL(options.get(HoodieWriteConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL.key()));
   }
 
   @Override
   public Table getTable(StructType schema, Transform[] partitioning, Map<String, String> properties) {
     String instantTime = properties.get(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY);
     String path = properties.get("path");
-    String tblName = properties.get(HoodieWriteConfig.TABLE_NAME);
+    String tblName = properties.get(HoodieWriteConfig.TABLE_NAME.key());
     // 1st arg to createHooodieConfig is not really reuqired to be set. but passing it anyways.
-    HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(properties.get(HoodieWriteConfig.AVRO_SCHEMA), path, tblName, properties);
+    HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(properties.get(HoodieWriteConfig.AVRO_SCHEMA.key()), path, tblName, properties);
     return new HoodieDataSourceInternalTable(instantTime, config, schema, getSparkSession(),
         getConfiguration());
   }

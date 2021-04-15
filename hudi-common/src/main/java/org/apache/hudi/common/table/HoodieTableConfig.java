@@ -18,10 +18,10 @@
 
 package org.apache.hudi.common.table;
 
-import java.util.Arrays;
-import org.apache.avro.Schema;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
+import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -39,6 +40,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.Map;
 import java.util.Properties;
@@ -51,54 +53,104 @@ import java.util.stream.Collectors;
  * @see HoodieTableMetaClient
  * @since 0.3.0
  */
-public class HoodieTableConfig implements Serializable {
+public class HoodieTableConfig extends HoodieConfig implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTableConfig.class);
 
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
-  public static final String HOODIE_TABLE_NAME_PROP_NAME = "hoodie.table.name";
-  public static final String HOODIE_TABLE_TYPE_PROP_NAME = "hoodie.table.type";
-  public static final String HOODIE_TABLE_VERSION_PROP_NAME = "hoodie.table.version";
-  public static final String HOODIE_TABLE_PRECOMBINE_FIELD = "hoodie.table.precombine.field";
-  public static final String HOODIE_TABLE_PARTITION_COLUMNS = "hoodie.table.partition.columns";
-  public static final String HOODIE_TABLE_RECORDKEY_FIELDS = "hoodie.table.recordkey.fields";
-  public static final String HOODIE_TABLE_CREATE_SCHEMA = "hoodie.table.create.schema";
 
-  @Deprecated
-  public static final String HOODIE_RO_FILE_FORMAT_PROP_NAME = "hoodie.table.ro.file.format";
-  @Deprecated
-  public static final String HOODIE_RT_FILE_FORMAT_PROP_NAME = "hoodie.table.rt.file.format";
-  public static final String HOODIE_BASE_FILE_FORMAT_PROP_NAME = "hoodie.table.base.file.format";
-  public static final String HOODIE_LOG_FILE_FORMAT_PROP_NAME = "hoodie.table.log.file.format";
-  public static final String HOODIE_TIMELINE_LAYOUT_VERSION = "hoodie.timeline.layout.version";
-  public static final String HOODIE_PAYLOAD_CLASS_PROP_NAME = "hoodie.compaction.payload.class";
-  public static final String HOODIE_ARCHIVELOG_FOLDER_PROP_NAME = "hoodie.archivelog.folder";
-  public static final String HOODIE_BOOTSTRAP_INDEX_ENABLE = "hoodie.bootstrap.index.enable";
-  public static final String HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME = "hoodie.bootstrap.index.class";
-  public static final String HOODIE_BOOTSTRAP_BASE_PATH = "hoodie.bootstrap.base.path";
+  public static final ConfigProperty<String> HOODIE_TABLE_NAME_PROP = ConfigProperty
+      .key("hoodie.table.name")
+      .noDefaultValue()
+      .withDocumentation("Table name that will be used for registering with Hive. Needs to be same across runs.");
 
-  public static final HoodieTableType DEFAULT_TABLE_TYPE = HoodieTableType.COPY_ON_WRITE;
-  public static final HoodieTableVersion DEFAULT_TABLE_VERSION = HoodieTableVersion.ZERO;
-  public static final HoodieFileFormat DEFAULT_BASE_FILE_FORMAT = HoodieFileFormat.PARQUET;
-  public static final HoodieFileFormat DEFAULT_LOG_FILE_FORMAT = HoodieFileFormat.HOODIE_LOG;
-  public static final String DEFAULT_PAYLOAD_CLASS = OverwriteWithLatestAvroPayload.class.getName();
+  public static final ConfigProperty<HoodieTableType> HOODIE_TABLE_TYPE_PROP = ConfigProperty
+      .key("hoodie.table.type")
+      .defaultValue(HoodieTableType.COPY_ON_WRITE)
+      .withDocumentation("The table type for the underlying data, for this write. This can’t change between writes.");
+
+  public static final ConfigProperty<HoodieTableVersion> HOODIE_TABLE_VERSION_PROP = ConfigProperty
+      .key("hoodie.table.version")
+      .defaultValue(HoodieTableVersion.ZERO)
+      .withDocumentation("");
+
+  public static final ConfigProperty<String> HOODIE_TABLE_PRECOMBINE_FIELD_PROP = ConfigProperty
+      .key("hoodie.table.precombine.field")
+      .noDefaultValue()
+      .withDocumentation("Field used in preCombining before actual write. When two records have the same key value, "
+          + "we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)");
+
+  public static final ConfigProperty<String> HOODIE_TABLE_PARTITION_COLUMNS_PROP = ConfigProperty
+      .key("hoodie.table.partition.columns")
+      .noDefaultValue()
+      .withDocumentation("Partition path field. Value to be used at the partitionPath component of HoodieKey. "
+          + "Actual value ontained by invoking .toString()");
+
+  public static final ConfigProperty<String> HOODIE_TABLE_RECORDKEY_FIELDS = ConfigProperty
+      .key("hoodie.table.recordkey.fields")
+      .noDefaultValue()
+      .withDocumentation("");
+
+  public static final ConfigProperty<String> HOODIE_TABLE_CREATE_SCHEMA = ConfigProperty
+      .key("hoodie.table.create.schema")
+      .noDefaultValue()
+      .withDocumentation("");
+
+  public static final ConfigProperty<HoodieFileFormat> HOODIE_BASE_FILE_FORMAT_PROP = ConfigProperty
+      .key("hoodie.table.base.file.format")
+      .defaultValue(HoodieFileFormat.PARQUET)
+      .withAlternatives("hoodie.table.ro.file.format")
+      .withDocumentation("");
+
+  public static final ConfigProperty<HoodieFileFormat> HOODIE_LOG_FILE_FORMAT_PROP = ConfigProperty
+      .key("hoodie.table.log.file.format")
+      .defaultValue(HoodieFileFormat.HOODIE_LOG)
+      .withAlternatives("hoodie.table.rt.file.format")
+      .withDocumentation("");
+
+  public static final ConfigProperty<String> HOODIE_TIMELINE_LAYOUT_VERSION_PROP = ConfigProperty
+      .key("hoodie.timeline.layout.version")
+      .noDefaultValue()
+      .withDocumentation("");
+
+  public static final ConfigProperty<String> HOODIE_PAYLOAD_CLASS_PROP = ConfigProperty
+      .key("hoodie.compaction.payload.class")
+      .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
+      .withDocumentation("");
+
+  public static final ConfigProperty<String> HOODIE_ARCHIVELOG_FOLDER_PROP = ConfigProperty
+      .key("hoodie.archivelog.folder")
+      .defaultValue("archived")
+      .withDocumentation("");
+
+  public static final ConfigProperty<String> HOODIE_BOOTSTRAP_INDEX_ENABLE_PROP = ConfigProperty
+      .key("hoodie.bootstrap.index.enable")
+      .noDefaultValue()
+      .withDocumentation("");
+
+  public static final ConfigProperty<String> HOODIE_BOOTSTRAP_INDEX_CLASS_PROP = ConfigProperty
+      .key("hoodie.bootstrap.index.class")
+      .defaultValue(HFileBootstrapIndex.class.getName())
+      .withDocumentation("");
+
+  public static final ConfigProperty<String> HOODIE_BOOTSTRAP_BASE_PATH_PROP = ConfigProperty
+      .key("hoodie.bootstrap.base.path")
+      .noDefaultValue()
+      .withDocumentation("Base path of the dataset that needs to be bootstrapped as a Hudi table");
+
   public static final String NO_OP_BOOTSTRAP_INDEX_CLASS = NoOpBootstrapIndex.class.getName();
-  public static final String DEFAULT_BOOTSTRAP_INDEX_CLASS = HFileBootstrapIndex.class.getName();
-  public static final String DEFAULT_ARCHIVELOG_FOLDER = "archived";
-
-  private Properties props;
 
   public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName) {
-    Properties props = new Properties();
+    super();
     Path propertyPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
     try {
       try (FSDataInputStream inputStream = fs.open(propertyPath)) {
         props.load(inputStream);
       }
-      if (props.containsKey(HOODIE_PAYLOAD_CLASS_PROP_NAME) && payloadClassName != null
-          && !props.getProperty(HOODIE_PAYLOAD_CLASS_PROP_NAME).equals(payloadClassName)) {
-        props.setProperty(HOODIE_PAYLOAD_CLASS_PROP_NAME, payloadClassName);
+      if (contains(HOODIE_PAYLOAD_CLASS_PROP) && payloadClassName != null
+          && !getString(HOODIE_PAYLOAD_CLASS_PROP).equals(payloadClassName)) {
+        setValue(HOODIE_PAYLOAD_CLASS_PROP, payloadClassName);
         try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
           props.store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
         }
@@ -106,21 +158,16 @@ public class HoodieTableConfig implements Serializable {
     } catch (IOException e) {
       throw new HoodieIOException("Could not load Hoodie properties from " + propertyPath, e);
     }
-    this.props = props;
-    ValidationUtils.checkArgument(props.containsKey(HOODIE_TABLE_TYPE_PROP_NAME) && props.containsKey(HOODIE_TABLE_NAME_PROP_NAME),
+    ValidationUtils.checkArgument(contains(HOODIE_TABLE_TYPE_PROP) && contains(HOODIE_TABLE_NAME_PROP),
         "hoodie.properties file seems invalid. Please check for left over `.updated` files if any, manually copy it to hoodie.properties and retry");
   }
 
-  public HoodieTableConfig(Properties props) {
-    this.props = props;
-  }
-
   /**
-   * For serailizing and de-serializing.
+   * For serializing and de-serializing.
    *
-   * @deprecated
    */
   public HoodieTableConfig() {
+    super();
   }
 
   /**
@@ -131,30 +178,26 @@ public class HoodieTableConfig implements Serializable {
     if (!fs.exists(metadataFolder)) {
       fs.mkdirs(metadataFolder);
     }
+    HoodieConfig hoodieConfig = new HoodieConfig(properties);
     Path propertyPath = new Path(metadataFolder, HOODIE_PROPERTIES_FILE);
     try (FSDataOutputStream outputStream = fs.create(propertyPath)) {
-      if (!properties.containsKey(HOODIE_TABLE_NAME_PROP_NAME)) {
-        throw new IllegalArgumentException(HOODIE_TABLE_NAME_PROP_NAME + " property needs to be specified");
+      if (!hoodieConfig.contains(HOODIE_TABLE_NAME_PROP)) {
+        throw new IllegalArgumentException(HOODIE_TABLE_NAME_PROP.key() + " property needs to be specified");
       }
-      if (!properties.containsKey(HOODIE_TABLE_TYPE_PROP_NAME)) {
-        properties.setProperty(HOODIE_TABLE_TYPE_PROP_NAME, DEFAULT_TABLE_TYPE.name());
+      hoodieConfig.setDefaultValue(HOODIE_TABLE_TYPE_PROP);
+      if (hoodieConfig.getString(HOODIE_TABLE_TYPE_PROP).equals(HoodieTableType.MERGE_ON_READ.name())) {
+        hoodieConfig.setDefaultValue(HOODIE_PAYLOAD_CLASS_PROP);
       }
-      if (properties.getProperty(HOODIE_TABLE_TYPE_PROP_NAME).equals(HoodieTableType.MERGE_ON_READ.name())
-          && !properties.containsKey(HOODIE_PAYLOAD_CLASS_PROP_NAME)) {
-        properties.setProperty(HOODIE_PAYLOAD_CLASS_PROP_NAME, DEFAULT_PAYLOAD_CLASS);
-      }
-      if (!properties.containsKey(HOODIE_ARCHIVELOG_FOLDER_PROP_NAME)) {
-        properties.setProperty(HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, DEFAULT_ARCHIVELOG_FOLDER);
-      }
-      if (!properties.containsKey(HOODIE_TIMELINE_LAYOUT_VERSION)) {
+      hoodieConfig.setDefaultValue(HOODIE_ARCHIVELOG_FOLDER_PROP);
+      if (!hoodieConfig.contains(HOODIE_TIMELINE_LAYOUT_VERSION_PROP)) {
         // Use latest Version as default unless forced by client
-        properties.setProperty(HOODIE_TIMELINE_LAYOUT_VERSION, TimelineLayoutVersion.CURR_VERSION.toString());
+        hoodieConfig.setValue(HOODIE_TIMELINE_LAYOUT_VERSION_PROP, TimelineLayoutVersion.CURR_VERSION.toString());
       }
-      if (properties.containsKey(HOODIE_BOOTSTRAP_BASE_PATH) && !properties.containsKey(HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME)) {
+      if (hoodieConfig.contains(HOODIE_BOOTSTRAP_BASE_PATH_PROP)) {
         // Use the default bootstrap index class.
-        properties.setProperty(HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME, getDefaultBootstrapIndexClass(properties));
+        hoodieConfig.setDefaultValue(HOODIE_BOOTSTRAP_INDEX_CLASS_PROP, getDefaultBootstrapIndexClass(properties));
       }
-      properties.store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
+      hoodieConfig.getProps().store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
     }
   }
 
@@ -162,15 +205,12 @@ public class HoodieTableConfig implements Serializable {
    * Read the table type from the table properties and if not found, return the default.
    */
   public HoodieTableType getTableType() {
-    if (props.containsKey(HOODIE_TABLE_TYPE_PROP_NAME)) {
-      return HoodieTableType.valueOf(props.getProperty(HOODIE_TABLE_TYPE_PROP_NAME));
-    }
-    return DEFAULT_TABLE_TYPE;
+    return HoodieTableType.valueOf(getStringOrDefault(HOODIE_TABLE_TYPE_PROP));
   }
 
   public Option<TimelineLayoutVersion> getTimelineLayoutVersion() {
-    return props.containsKey(HOODIE_TIMELINE_LAYOUT_VERSION)
-        ? Option.of(new TimelineLayoutVersion(Integer.valueOf(props.getProperty(HOODIE_TIMELINE_LAYOUT_VERSION))))
+    return contains(HOODIE_TIMELINE_LAYOUT_VERSION_PROP)
+        ? Option.of(new TimelineLayoutVersion(getInt(HOODIE_TIMELINE_LAYOUT_VERSION_PROP)))
         : Option.empty();
   }
 
@@ -178,13 +218,13 @@ public class HoodieTableConfig implements Serializable {
    * @return the hoodie.table.version from hoodie.properties file.
    */
   public HoodieTableVersion getTableVersion() {
-    return props.containsKey(HOODIE_TABLE_VERSION_PROP_NAME)
-        ? HoodieTableVersion.versionFromCode(Integer.parseInt(props.getProperty(HOODIE_TABLE_VERSION_PROP_NAME)))
-        : DEFAULT_TABLE_VERSION;
+    return contains(HOODIE_TABLE_VERSION_PROP)
+        ? HoodieTableVersion.versionFromCode(getInt(HOODIE_TABLE_VERSION_PROP))
+        : HOODIE_TABLE_VERSION_PROP.defaultValue();
   }
 
   public void setTableVersion(HoodieTableVersion tableVersion) {
-    props.put(HOODIE_TABLE_VERSION_PROP_NAME, Integer.toString(tableVersion.versionCode()));
+    setValue(HOODIE_TABLE_VERSION_PROP, Integer.toString(tableVersion.versionCode()));
   }
 
   /**
@@ -193,17 +233,17 @@ public class HoodieTableConfig implements Serializable {
   public String getPayloadClass() {
     // There could be tables written with payload class from com.uber.hoodie. Need to transparently
     // change to org.apache.hudi
-    return props.getProperty(HOODIE_PAYLOAD_CLASS_PROP_NAME, DEFAULT_PAYLOAD_CLASS).replace("com.uber.hoodie",
+    return getStringOrDefault(HOODIE_PAYLOAD_CLASS_PROP).replace("com.uber.hoodie",
         "org.apache.hudi");
   }
 
   public String getPreCombineField() {
-    return props.getProperty(HOODIE_TABLE_PRECOMBINE_FIELD);
+    return getString(HOODIE_TABLE_PRECOMBINE_FIELD_PROP);
   }
 
   public Option<String[]> getPartitionColumns() {
-    if (props.containsKey(HOODIE_TABLE_PARTITION_COLUMNS)) {
-      return Option.of(Arrays.stream(props.getProperty(HOODIE_TABLE_PARTITION_COLUMNS).split(","))
+    if (contains(HOODIE_TABLE_PARTITION_COLUMNS_PROP)) {
+      return Option.of(Arrays.stream(getString(HOODIE_TABLE_PARTITION_COLUMNS_PROP).split(","))
         .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[]{}));
     }
     return Option.empty();
@@ -215,24 +255,24 @@ public class HoodieTableConfig implements Serializable {
   public String getBootstrapIndexClass() {
     // There could be tables written with payload class from com.uber.hoodie. Need to transparently
     // change to org.apache.hudi
-    return props.getProperty(HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME, getDefaultBootstrapIndexClass(props));
+    return getStringOrDefault(HOODIE_BOOTSTRAP_INDEX_CLASS_PROP, getDefaultBootstrapIndexClass(props));
   }
 
   public static String getDefaultBootstrapIndexClass(Properties props) {
-    String defaultClass = DEFAULT_BOOTSTRAP_INDEX_CLASS;
-    if ("false".equalsIgnoreCase(props.getProperty(HOODIE_BOOTSTRAP_INDEX_ENABLE))) {
+    String defaultClass = HOODIE_BOOTSTRAP_INDEX_CLASS_PROP.defaultValue();
+    if ("false".equalsIgnoreCase(props.getProperty(HOODIE_BOOTSTRAP_INDEX_ENABLE_PROP.key()))) {
       defaultClass = NO_OP_BOOTSTRAP_INDEX_CLASS;
     }
     return defaultClass;
   }
 
   public Option<String> getBootstrapBasePath() {
-    return Option.ofNullable(props.getProperty(HOODIE_BOOTSTRAP_BASE_PATH));
+    return Option.ofNullable(getString(HOODIE_BOOTSTRAP_BASE_PATH_PROP));
   }
 
   public Option<Schema> getTableCreateSchema() {
-    if (props.containsKey(HOODIE_TABLE_CREATE_SCHEMA)) {
-      return Option.of(new Schema.Parser().parse(props.getProperty(HOODIE_TABLE_CREATE_SCHEMA)));
+    if (contains(HOODIE_TABLE_CREATE_SCHEMA)) {
+      return Option.of(new Schema.Parser().parse(getString(HOODIE_TABLE_CREATE_SCHEMA)));
     } else {
       return Option.empty();
     }
@@ -242,7 +282,7 @@ public class HoodieTableConfig implements Serializable {
    * Read the table name.
    */
   public String getTableName() {
-    return props.getProperty(HOODIE_TABLE_NAME_PROP_NAME);
+    return getString(HOODIE_TABLE_NAME_PROP);
   }
 
   /**
@@ -251,13 +291,7 @@ public class HoodieTableConfig implements Serializable {
    * @return HoodieFileFormat for the base file Storage format
    */
   public HoodieFileFormat getBaseFileFormat() {
-    if (props.containsKey(HOODIE_BASE_FILE_FORMAT_PROP_NAME)) {
-      return HoodieFileFormat.valueOf(props.getProperty(HOODIE_BASE_FILE_FORMAT_PROP_NAME));
-    }
-    if (props.containsKey(HOODIE_RO_FILE_FORMAT_PROP_NAME)) {
-      return HoodieFileFormat.valueOf(props.getProperty(HOODIE_RO_FILE_FORMAT_PROP_NAME));
-    }
-    return DEFAULT_BASE_FILE_FORMAT;
+    return HoodieFileFormat.valueOf(getStringOrDefault(HOODIE_BASE_FILE_FORMAT_PROP));
   }
 
   /**
@@ -266,28 +300,18 @@ public class HoodieTableConfig implements Serializable {
    * @return HoodieFileFormat for the log Storage format
    */
   public HoodieFileFormat getLogFileFormat() {
-    if (props.containsKey(HOODIE_LOG_FILE_FORMAT_PROP_NAME)) {
-      return HoodieFileFormat.valueOf(props.getProperty(HOODIE_LOG_FILE_FORMAT_PROP_NAME));
-    }
-    if (props.containsKey(HOODIE_RT_FILE_FORMAT_PROP_NAME)) {
-      return HoodieFileFormat.valueOf(props.getProperty(HOODIE_RT_FILE_FORMAT_PROP_NAME));
-    }
-    return DEFAULT_LOG_FILE_FORMAT;
+    return HoodieFileFormat.valueOf(getStringOrDefault(HOODIE_LOG_FILE_FORMAT_PROP));
   }
 
   /**
    * Get the relative path of archive log folder under metafolder, for this table.
    */
   public String getArchivelogFolder() {
-    return props.getProperty(HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, DEFAULT_ARCHIVELOG_FOLDER);
+    return getStringOrDefault(HOODIE_ARCHIVELOG_FOLDER_PROP);
   }
 
-  public Map<String, String> getProps() {
+  public Map<String, String> propsMap() {
     return props.entrySet().stream()
         .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));
-  }
-
-  public Properties getProperties() {
-    return props;
   }
 }

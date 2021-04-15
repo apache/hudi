@@ -136,7 +136,7 @@ public class TableCommand implements CommandMarker {
     rows.add(new Comparable[] {"basePath", client.getBasePath()});
     rows.add(new Comparable[] {"metaPath", client.getMetaPath()});
     rows.add(new Comparable[] {"fileSystem", client.getFs().getScheme()});
-    client.getTableConfig().getProps().entrySet().forEach(e -> {
+    client.getTableConfig().propsMap().entrySet().forEach(e -> {
       rows.add(new Comparable[] {e.getKey(), e.getValue()});
     });
     return HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);

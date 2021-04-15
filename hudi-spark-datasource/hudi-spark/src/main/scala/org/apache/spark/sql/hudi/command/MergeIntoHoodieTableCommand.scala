@@ -241,9 +241,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     // may be different from the target table, because the are transform logical in the update or
     // insert actions.
     var writeParams = parameters +
-      (OPERATION_OPT_KEY -> UPSERT_OPERATION_OPT_VAL) +
-      (HoodieWriteConfig.WRITE_SCHEMA_PROP -> getTableSchema.toString) +
-      (DataSourceWriteOptions.TABLE_TYPE_OPT_KEY -> targetTableType)
+      (OPERATION_OPT_KEY.key -> UPSERT_OPERATION_OPT_VAL) +
+      (HoodieWriteConfig.WRITE_SCHEMA_PROP.key -> getTableSchema.toString) +
+      (DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key -> targetTableType)
 
     // Map of Condition -> Assignments
     val updateConditionToAssignments =
@@ -288,8 +288,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     checkInsertAssignments(insertActions)
 
     var writeParams = parameters +
-      (OPERATION_OPT_KEY -> INSERT_OPERATION_OPT_VAL) +
-      (HoodieWriteConfig.WRITE_SCHEMA_PROP -> getTableSchema.toString)
+      (OPERATION_OPT_KEY.key -> INSERT_OPERATION_OPT_VAL) +
+      (HoodieWriteConfig.WRITE_SCHEMA_PROP.key -> getTableSchema.toString)
 
     writeParams += (PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
       serializedInsertConditionAndExpressions(insertActions))
@@ -431,24 +431,24 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
       withSparkConf(sparkSession, options) {
         Map(
           "path" -> path,
-          RECORDKEY_FIELD_OPT_KEY -> targetKey2SourceExpression.keySet.mkString(","),
-          KEYGENERATOR_CLASS_OPT_KEY -> classOf[SqlKeyGenerator].getCanonicalName,
-          PRECOMBINE_FIELD_OPT_KEY -> targetKey2SourceExpression.keySet.head, // set a default preCombine field
-          TABLE_NAME -> targetTableName,
-          PARTITIONPATH_FIELD_OPT_KEY -> targetTable.partitionColumnNames.mkString(","),
-          PAYLOAD_CLASS_OPT_KEY -> classOf[ExpressionPayload].getCanonicalName,
-          META_SYNC_ENABLED_OPT_KEY -> "true",
-          HIVE_USE_JDBC_OPT_KEY -> "false",
-          HIVE_DATABASE_OPT_KEY -> targetTableDb,
-          HIVE_TABLE_OPT_KEY -> targetTableName,
-          HIVE_SUPPORT_TIMESTAMP -> "true",
-          HIVE_STYLE_PARTITIONING_OPT_KEY -> "true",
-          HIVE_PARTITION_FIELDS_OPT_KEY -> targetTable.partitionColumnNames.mkString(","),
-          HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
-          URL_ENCODE_PARTITIONING_OPT_KEY -> "true", // enable the url decode for sql.
-          HoodieWriteConfig.INSERT_PARALLELISM -> "200", // set the default parallelism to 200 for sql
-          HoodieWriteConfig.UPSERT_PARALLELISM -> "200",
-          HoodieWriteConfig.DELETE_PARALLELISM -> "200",
+          RECORDKEY_FIELD_OPT_KEY.key -> targetKey2SourceExpression.keySet.mkString(","),
+          KEYGENERATOR_CLASS_OPT_KEY.key -> classOf[SqlKeyGenerator].getCanonicalName,
+          PRECOMBINE_FIELD_OPT_KEY.key -> targetKey2SourceExpression.keySet.head, // set a default preCombine field
+          TABLE_NAME.key -> targetTableName,
+          PARTITIONPATH_FIELD_OPT_KEY.key -> targetTable.partitionColumnNames.mkString(","),
+          PAYLOAD_CLASS_OPT_KEY.key -> classOf[ExpressionPayload].getCanonicalName,
+          META_SYNC_ENABLED_OPT_KEY.key -> "true",
+          HIVE_USE_JDBC_OPT_KEY.key -> "false",
+          HIVE_DATABASE_OPT_KEY.key -> targetTableDb,
+          HIVE_TABLE_OPT_KEY.key -> targetTableName,
+          HIVE_SUPPORT_TIMESTAMP.key -> "true",
+          HIVE_STYLE_PARTITIONING_OPT_KEY.key -> "true",
+          HIVE_PARTITION_FIELDS_OPT_KEY.key -> targetTable.partitionColumnNames.mkString(","),
+          HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
+          URL_ENCODE_PARTITIONING_OPT_KEY.key -> "true", // enable the url decode for sql.
+          HoodieWriteConfig.INSERT_PARALLELISM.key -> "200", // set the default parallelism to 200 for sql
+          HoodieWriteConfig.UPSERT_PARALLELISM.key -> "200",
+          HoodieWriteConfig.DELETE_PARALLELISM.key -> "200",
           SqlKeyGenerator.PARTITION_SCHEMA -> targetTable.partitionSchema.toDDL
         )
       })

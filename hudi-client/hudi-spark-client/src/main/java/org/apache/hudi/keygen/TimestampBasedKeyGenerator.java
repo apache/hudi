@@ -38,8 +38,8 @@ public class TimestampBasedKeyGenerator extends SimpleKeyGenerator {
   private final TimestampBasedAvroKeyGenerator timestampBasedAvroKeyGenerator;
 
   public TimestampBasedKeyGenerator(TypedProperties config) throws IOException {
-    this(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY),
-        config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY));
+    this(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key()),
+        config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key()));
   }
 
   TimestampBasedKeyGenerator(TypedProperties config, String partitionPathField) throws IOException {
