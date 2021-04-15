@@ -185,7 +185,7 @@ public class StreamReadMonitoringFunction
   @VisibleForTesting
   public void monitorDirAndForwardSplits(SourceContext<MergeOnReadInputSplit> context) {
     metaClient.reloadActiveTimeline();
-    HoodieTimeline commitTimeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
+    HoodieTimeline commitTimeline = metaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants();
     if (commitTimeline.empty()) {
       LOG.warn("No splits found for the table under path " + path);
       return;
