@@ -586,6 +586,101 @@ public class TestHBaseIndex extends FunctionalTestHarness {
   }
 
   @Test
+  public void testPartitionWriteStatusByInsertForAllInserts() {
+    HoodieWriteConfig config = getConfig();
+    SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
+    int parallelism = 4;
+    final JavaRDD<WriteStatus> writeStatusRDDWithAllInserts = jsc().parallelize(
+            Arrays.asList(
+                    getSampleWriteStatusWithFileId(1, 2),
+                    getSampleWriteStatusWithFileId(2, 3),
+                    getSampleWriteStatusWithFileId(3, 3),
+                    getSampleWriteStatusWithFileId(4, 3),
+                    getSampleWriteStatusWithFileId(5, 0)), parallelism);
+
+    int numWriteStatusWithInserts = Math.toIntExact(writeStatusRDDWithAllInserts
+            .filter(writeStatus -> writeStatus.getStat().getNumInserts() > 0).count());
+    JavaRDD<WriteStatus> partitionedRDD = index.partitionWriteStatusByInserts(writeStatusRDDWithAllInserts,
+            numWriteStatusWithInserts);
+    assertEquals(parallelism, writeStatusRDDWithAllInserts.getNumPartitions());
+    assertEquals(5, partitionedRDD.getNumPartitions());
+  }
+
+  @Test
+  public void testPartitionWriteStatusByInsertForNoInserts() {
+    HoodieWriteConfig config = getConfig();
+    SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
+    int parallelism = 4;
+    final JavaRDD<WriteStatus> writeStatusRDDWithNoInserts = jsc().parallelize(
+            Arrays.asList(
+                    getSampleWriteStatusWithFileId(0, 2),
+                    getSampleWriteStatusWithFileId(0, 3),
+                    getSampleWriteStatusWithFileId(0, 3),
+                    getSampleWriteStatusWithFileId(0, 3),
+                    getSampleWriteStatusWithFileId(0, 0)), parallelism);
+
+    int numWriteStatusWithInserts = Math.toIntExact(writeStatusRDDWithNoInserts
+            .filter(writeStatus -> writeStatus.getStat().getNumInserts() > 0).count());
+    JavaRDD<WriteStatus> partitionedRDD = index.partitionWriteStatusByInserts(writeStatusRDDWithNoInserts,
+            numWriteStatusWithInserts);
+    assertEquals(parallelism, writeStatusRDDWithNoInserts.getNumPartitions());
+    assertEquals(4, partitionedRDD.getNumPartitions());
+  }
+
+  @Test
+  public void testPartitionWriteStatusByInsertForInsertsAndUpdates() {
+    HoodieWriteConfig config = getConfig();
+    SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
+    int parallelism = 4;
+    // Number of Insert WriteStatus(es) < parallelism
+    JavaRDD<WriteStatus> writeStatusRDDWithInsertAndUpdates = jsc().parallelize(
+            Arrays.asList(
+                    getSampleWriteStatusWithFileId(1, 2),
+                    getSampleWriteStatusWithFileId(2, 3),
+                    getSampleWriteStatusWithFileId(3, 3),
+                    getSampleWriteStatusWithFileId(0, 3),
+                    getSampleWriteStatusWithFileId(0, 0)), parallelism);
+    int numWriteStatusWithInserts = Math.toIntExact(writeStatusRDDWithInsertAndUpdates
+            .filter(writeStatus -> writeStatus.getStat().getNumInserts() > 0).count());
+    JavaRDD<WriteStatus> partitionedRDD = index.partitionWriteStatusByInserts(writeStatusRDDWithInsertAndUpdates,
+            numWriteStatusWithInserts);
+    assertEquals(parallelism, writeStatusRDDWithInsertAndUpdates.getNumPartitions());
+    assertEquals(parallelism, partitionedRDD.getNumPartitions());
+
+    // Number of Insert WriteStatus(es) > parallelism
+    writeStatusRDDWithInsertAndUpdates = jsc().parallelize(
+            Arrays.asList(
+                    getSampleWriteStatusWithFileId(1, 2),
+                    getSampleWriteStatusWithFileId(2, 3),
+                    getSampleWriteStatusWithFileId(3, 3),
+                    getSampleWriteStatusWithFileId(4, 3),
+                    getSampleWriteStatusWithFileId(5, 0)), parallelism);
+
+    numWriteStatusWithInserts = Math.toIntExact(writeStatusRDDWithInsertAndUpdates
+            .filter(writeStatus -> writeStatus.getStat().getNumInserts() > 0).count());
+    partitionedRDD = index.partitionWriteStatusByInserts(writeStatusRDDWithInsertAndUpdates,
+            numWriteStatusWithInserts);
+    assertEquals(parallelism, writeStatusRDDWithInsertAndUpdates.getNumPartitions());
+    assertEquals(5, partitionedRDD.getNumPartitions());
+
+    // Number of Insert WriteStatus(es) = parallelism
+    writeStatusRDDWithInsertAndUpdates = jsc().parallelize(
+            Arrays.asList(
+                    getSampleWriteStatusWithFileId(1, 2),
+                    getSampleWriteStatusWithFileId(2, 3),
+                    getSampleWriteStatusWithFileId(3, 3),
+                    getSampleWriteStatusWithFileId(4, 3),
+                    getSampleWriteStatusWithFileId(0, 0)), parallelism);
+
+    numWriteStatusWithInserts = Math.toIntExact(writeStatusRDDWithInsertAndUpdates
+            .filter(writeStatus -> writeStatus.getStat().getNumInserts() > 0).count());
+    partitionedRDD = index.partitionWriteStatusByInserts(writeStatusRDDWithInsertAndUpdates,
+            numWriteStatusWithInserts);
+    assertEquals(parallelism, writeStatusRDDWithInsertAndUpdates.getNumPartitions());
+    assertEquals(parallelism, partitionedRDD.getNumPartitions());
+  }
+
+  @Test
   public void testsWriteStatusPartitioner() {
     HoodieWriteConfig config = getConfig();
     SparkHoodieHBaseIndex index = new SparkHoodieHBaseIndex(config);
@@ -757,7 +852,9 @@ public class TestHBaseIndex extends FunctionalTestHarness {
         WriteStatus newWriteStatus = new WriteStatus(true, 1.0);
         w.getWrittenRecords().forEach(r -> newWriteStatus.markSuccess(new HoodieRecord(r.getKey(), null), Option.empty()));
         assertEquals(w.getTotalRecords(), newWriteStatus.getTotalRecords());
-        newWriteStatus.setStat(new HoodieWriteStat());
+        HoodieWriteStat deleteWriteStat = new HoodieWriteStat();
+        deleteWriteStat.setNumDeletes(w.getWrittenRecords().size());
+        newWriteStatus.setStat(deleteWriteStat);
         return newWriteStatus;
       });
       JavaRDD<WriteStatus> deleteStatus = index.updateLocation(deleteWriteStatues, context(), hoodieTable);

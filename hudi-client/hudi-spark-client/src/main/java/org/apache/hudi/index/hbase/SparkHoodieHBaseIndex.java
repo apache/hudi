@@ -319,10 +319,21 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
         final RateLimiter limiter = RateLimiter.create(multiPutBatchSize, TimeUnit.SECONDS);
         while (statusIterator.hasNext()) {
           WriteStatus writeStatus = statusIterator.next();
+          writeStatusList.add(writeStatus);
           List<Mutation> mutations = new ArrayList<>();
           try {
             long numOfInserts = writeStatus.getStat().getNumInserts();
+            long numOfDeletes = writeStatus.getStat().getNumDeletes();
+            long numOfUpdates = writeStatus.getStat().getNumUpdateWrites();
+            long numOfErrors = writeStatus.getStat().getTotalWriteErrors();
             LOG.info("Num of inserts in this WriteStatus: " + numOfInserts);
+            LOG.info("Num of deletes in this WriteStatus: " + numOfDeletes);
+            LOG.info("Num of updates in this WriteStatus: " + numOfUpdates);
+            // TODO: Enable the if block after validating the stats in production (DI-2703)
+            /*if (numOfInserts == 0 && numOfDeletes == 0) {
+              LOG.info("Skipping WriteStatus with no inserts and deletes");
+              continue;
+            }*/
             LOG.info("Total inserts in this job: " + this.totalNumInserts);
             LOG.info("multiPutBatchSize for this job: " + this.multiPutBatchSize);
             // Create a rate limiter that allows `multiPutBatchSize` operations per second
@@ -333,6 +344,7 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
                 if (loc.isPresent()) {
                   if (rec.getCurrentLocation() != null) {
                     // This is an update, no need to update index
+                    --numOfUpdates;
                     continue;
                   }
                   Put put = new Put(Bytes.toBytes(rec.getRecordKey()));
@@ -340,17 +352,36 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
                   put.addColumn(SYSTEM_COLUMN_FAMILY, FILE_NAME_COLUMN, Bytes.toBytes(loc.get().getFileId()));
                   put.addColumn(SYSTEM_COLUMN_FAMILY, PARTITION_PATH_COLUMN, Bytes.toBytes(rec.getPartitionPath()));
                   mutations.add(put);
+                  --numOfInserts;
                 } else {
                   // Delete existing index for a deleted record
                   Delete delete = new Delete(Bytes.toBytes(rec.getRecordKey()));
                   mutations.add(delete);
+                  --numOfDeletes;
                 }
+              } else {
+                --numOfErrors;
               }
               if (mutations.size() < multiPutBatchSize) {
                 continue;
               }
               doMutations(mutator, mutations, limiter);
             }
+            if (numOfInserts != 0 || numOfDeletes != 0 || numOfUpdates != 0 || numOfErrors != 0) {
+              LOG.warn(String.format("All inserts, updates & deletes are not processed or Writestatus meta "
+                              + "information incorrect. Expected inserts: %d, actual inserts: %d. "
+                              + "Expected updates: %d, actual updates: %d. Expected deletes: %d, actual deletes: %d. "
+                              + "Expected errors: %d, actual errors: %d.",
+                      writeStatus.getStat().getNumInserts(),
+                      writeStatus.getStat().getNumInserts() - numOfInserts,
+                      writeStatus.getStat().getNumUpdateWrites(),
+                      writeStatus.getStat().getNumUpdateWrites() - numOfUpdates,
+                      writeStatus.getStat().getNumDeletes(),
+                      writeStatus.getStat().getNumDeletes() - numOfDeletes,
+                      writeStatus.getStat().getTotalWriteErrors(),
+                      writeStatus.getStat().getTotalWriteErrors() - numOfErrors));
+            }
+
             // process remaining puts and deletes, if any
             doMutations(mutator, mutations, limiter);
           } catch (Exception e) {
@@ -359,7 +390,6 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
             writeStatus.setGlobalError(we);
             throw new RuntimeException("Error updating index for " + writeStatus, e);
           }
-          writeStatusList.add(writeStatus);
         }
         final long endPutsTime = DateTime.now().getMillis();
         LOG.info("hbase puts task time for this task: " + (endPutsTime - startTimeForPutsTask));
@@ -404,14 +434,9 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
                                              HoodieTable<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>,
                                                             JavaRDD<WriteStatus>> hoodieTable) {
     final Option<Float> desiredQPSFraction =  calculateQPSFraction(writeStatusRDD);
-    final Map<String, Integer> fileIdPartitionMap = mapFileWithInsertsToUniquePartition(writeStatusRDD);
-    JavaRDD<WriteStatus> partitionedRDD = this.numWriteStatusWithInserts == 0 ? writeStatusRDD :
-                                          writeStatusRDD.mapToPair(w -> new Tuple2<>(w.getFileId(), w))
-                                              .partitionBy(new WriteStatusPartitioner(fileIdPartitionMap,
-                                                  this.numWriteStatusWithInserts))
-                                              .map(w -> w._2());
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     acquireQPSResourcesAndSetBatchSize(desiredQPSFraction, jsc);
+    JavaRDD<WriteStatus> partitionedRDD = partitionWriteStatusByInserts(writeStatusRDD, this.numWriteStatusWithInserts);
     JavaRDD<WriteStatus> writeStatusJavaRDD = partitionedRDD.mapPartitionsWithIndex(updateLocationFunction(),
         true);
     // caching the index updated status RDD
@@ -420,6 +445,20 @@ public class SparkHoodieHBaseIndex<T extends HoodieRecordPayload> extends SparkH
     writeStatusJavaRDD.count();
     this.hBaseIndexQPSResourceAllocator.releaseQPSResources();
     return writeStatusJavaRDD;
+  }
+
+  // Visible for testing
+  protected JavaRDD<WriteStatus> partitionWriteStatusByInserts(JavaRDD<WriteStatus> writeStatusRDD,
+                                                               int writeStatusWithInserts) {
+    if (writeStatusWithInserts == 0) {
+      return writeStatusRDD;
+    }
+    int targetPartitions = Math.max(writeStatusRDD.getNumPartitions(), writeStatusWithInserts);
+    final Map<String, Integer> fileIdPartitionMap = mapFileWithInsertsToUniquePartition(writeStatusRDD);
+    return writeStatusRDD.mapToPair(w -> new Tuple2<>(w.getFileId(), w))
+            .partitionBy(new WriteStatusPartitioner(fileIdPartitionMap,
+                    targetPartitions))
+            .map(w -> w._2());
   }
 
   private Option<Float> calculateQPSFraction(JavaRDD<WriteStatus> writeStatusRDD) {
