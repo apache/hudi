@@ -21,7 +21,6 @@ package org.apache.hudi.io;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -37,7 +36,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 
 /**
  * A {@link HoodieMergeHandle} that supports merge write incrementally(small data buffers).
@@ -63,14 +61,16 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
    * Records the current file handles number that rolls over.
    */
   private int rollNumber = 0;
+
+  /**
+   * Whether the handle should roll over to new, E.G. the handle has written some intermediate files already.
+   */
+  private volatile boolean shouldRollover = false;
+
   /**
    * Records the rolled over file paths.
    */
-  private List<Path> rolloverPaths;
-  /**
-   * Whether it is the first time to generate file handle, E.G. the handle has not rolled over yet.
-   */
-  private boolean needBootStrap = true;
+  private final List<Path> rolloverPaths;
 
   public FlinkMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                           Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
@@ -80,31 +80,21 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
   }
 
   /**
-   * Called by compactor code path.
-   */
-  public FlinkMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                          Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
-                          HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable, keyToNewRecords, partitionPath, fileId,
-        dataFileToBeMerged, taskContextSupplier);
-  }
-
-  /**
    * Use the fileId + "-" + rollNumber as the new fileId of a mini-batch write.
    */
-  protected String generatesDataFileName() {
-    final String fileID = this.needBootStrap ? fileId : fileId + "-" + rollNumber;
+  protected String generatesDataFileNameWithRollover() {
+    final String fileID = this.fileId + "-" + rollNumber;
     return FSUtils.makeDataFileName(instantTime, writeToken, fileID, hoodieTable.getBaseFileExtension());
   }
 
-  public boolean isNeedBootStrap() {
-    return needBootStrap;
+  public boolean shouldRollover() {
+    return shouldRollover;
   }
 
   @Override
   public List<WriteStatus> close() {
     List<WriteStatus> writeStatus = super.close();
-    this.needBootStrap = false;
+    this.shouldRollover = true;
     return writeStatus;
   }
 
@@ -138,12 +128,12 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
     this.writeStatus.setTotalErrorRecords(0);
     this.timer = new HoodieTimer().startTimer();
 
-    rollNumber++;
+    rollNumber += 1;
 
     rolloverPaths.add(newFilePath);
     oldFilePath = newFilePath;
     // Use the fileId + "-" + rollNumber as the new fileId of a mini-batch write.
-    String newFileName = generatesDataFileName();
+    String newFileName = generatesDataFileNameWithRollover();
     String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
         + newFileName).toString();
     newFilePath = new Path(config.getBasePath(), relativePath);
@@ -160,6 +150,7 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
 
   public void finishWrite() {
     // The file visibility should be kept by the configured ConsistencyGuard instance.
+    rolloverPaths.add(newFilePath);
     if (rolloverPaths.size() == 1) {
       // only one flush action, no need to roll over
       return;
@@ -176,7 +167,7 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
     Path lastPath = rolloverPaths.size() > 0
         ? rolloverPaths.get(rolloverPaths.size() - 1)
         : newFilePath;
-    String newFileName = FSUtils.makeDataFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension());
+    String newFileName = generatesDataFileName();
     String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
         + newFileName).toString();
     final Path desiredPath = new Path(config.getBasePath(), relativePath);
