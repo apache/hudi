@@ -641,7 +641,7 @@ Property: `hoodie.metadata.insert.parallelism` <br/>
 Property: `hoodie.metadata.compact.max.delta.commits` <br/>
 <span style="color:grey"> Controls how often the metadata table is compacted.</span>
 
-#### archiveCommitsWith(minToKeep = 30, maxToKeep = 20) {#enable}
+#### archiveCommitsWith(minToKeep = 20, maxToKeep = 30) {#enable}
 Property: `hoodie.metadata.keep.min.commits`, `hoodie.metadata.keep.max.commits` <br/>
 <span style="color:grey"> Controls the archival of the metadata table's timeline </span>
 
