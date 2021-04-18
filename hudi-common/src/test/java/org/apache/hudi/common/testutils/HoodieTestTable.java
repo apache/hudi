@@ -210,6 +210,13 @@ public class HoodieTestTable {
     return this;
   }
 
+  public HoodieTestTable addInflightRollback(String instantTime) throws IOException {
+    createInflightRollbackFile(basePath, instantTime);
+    currentInstantTime = instantTime;
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    return this;
+  }
+
   public HoodieTestTable addRollback(String instantTime, HoodieRollbackMetadata rollbackMetadata) throws IOException {
     createInflightRollbackFile(basePath, instantTime);
     createRollbackFile(basePath, instantTime, rollbackMetadata);
@@ -459,21 +466,6 @@ public class HoodieTestTable {
 
   public FileStatus[] listAllFilesInTempFolder() throws IOException {
     return FileSystemTestUtils.listRecursive(fs, new Path(Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME).toString())).toArray(new FileStatus[0]);
-  }
-
-  public HoodieTestTable addInflightRollback(String instantTime) throws IOException {
-    createInflightRollbackFile(basePath, instantTime);
-    currentInstantTime = instantTime;
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    return this;
-  }
-
-  public HoodieTestTable addRollback(String instantTime, HoodieRollbackMetadata rollbackMetadata) throws IOException {
-    createInflightRollbackFile(basePath, instantTime);
-    createRollbackFile(basePath, instantTime, rollbackMetadata);
-    currentInstantTime = instantTime;
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    return this;
   }
 
   public static class HoodieTestTableException extends RuntimeException {

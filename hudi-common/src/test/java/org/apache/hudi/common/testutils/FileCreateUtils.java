@@ -183,7 +183,7 @@ public class FileCreateUtils {
   public static void createRollbackFile(String basePath, String instantTime, HoodieRollbackMetadata hoodieRollbackMetadata) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.ROLLBACK_EXTENSION, serializeRollbackMetadata(hoodieRollbackMetadata).get());
   }
-  
+
   private static void createAuxiliaryMetaFile(String basePath, String instantTime, String suffix) throws IOException {
     Path parentPath = Paths.get(basePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME);
     Files.createDirectories(parentPath);
