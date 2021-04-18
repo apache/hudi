@@ -194,7 +194,7 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
     // archived 101 and 102 instants, remove 103 and 104 instant
     data.remove("103");
     data.remove("104");
-    String expected = generateExpectData(3, data);
+    String expected = generateExpectData(1, data);
     expected = removeNonWordAndStripSpace(expected);
     String got = removeNonWordAndStripSpace(cr.getResult().toString());
     assertEquals(expected, got);

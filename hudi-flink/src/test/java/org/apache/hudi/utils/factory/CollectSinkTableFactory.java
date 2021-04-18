@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utils.factory;
 
-import org.apache.hudi.operator.utils.TestConfigurations;
+import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
@@ -103,7 +103,11 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
 
     @Override
     public ChangelogMode getChangelogMode(ChangelogMode requestedMode) {
-      return ChangelogMode.insertOnly();
+      return ChangelogMode.newBuilder()
+          .addContainedKind(RowKind.INSERT)
+          .addContainedKind(RowKind.DELETE)
+          .addContainedKind(RowKind.UPDATE_AFTER)
+          .build();
     }
 
     @Override
@@ -139,14 +143,9 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
 
     @Override
     public void invoke(RowData value, SinkFunction.Context context) {
-      if (value.getRowKind() == RowKind.INSERT) {
-        Row row = (Row) converter.toExternal(value);
-        assert row != null;
-        RESULT.get(taskID).add(row);
-      } else {
-        throw new RuntimeException(
-            "CollectSinkFunction received " + value.getRowKind() + " messages.");
-      }
+      Row row = (Row) converter.toExternal(value);
+      assert row != null;
+      RESULT.get(taskID).add(row);
     }
 
     @Override

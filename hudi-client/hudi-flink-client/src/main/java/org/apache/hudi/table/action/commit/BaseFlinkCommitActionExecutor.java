@@ -143,7 +143,7 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
     result.setWriteStats(writeStats);
     // Finalize write
     finalizeWrite(instantTime, writeStats, result);
-
+    syncTableMetadata();
     try {
       LOG.info("Committing " + instantTime + ", action Type " + getCommitActionType());
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
@@ -240,7 +240,7 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
     } else {
       FlinkMergeHandle writeHandle = (FlinkMergeHandle) this.writeHandle;
       // add the incremental records.
-      if (!writeHandle.isNeedBootStrap()) {
+      if (writeHandle.shouldRollover()) {
         writeHandle.rollOver(recordItr);
       }
       return writeHandle;

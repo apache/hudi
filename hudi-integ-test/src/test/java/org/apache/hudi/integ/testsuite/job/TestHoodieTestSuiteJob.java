@@ -69,6 +69,8 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
   private static final String MOR_DAG_FILE_NAME = "unit-test-mor-dag.yaml";
   private static final String MOR_DAG_SOURCE_PATH = "/hudi-integ-test/src/test/resources/" + MOR_DAG_FILE_NAME;
 
+  private static final String COW_DAG_FILE_NAME_SPARK_DATASOURCE_NODES = "unit-test-cow-dag-spark-datasource.yaml";
+  private static final String COW_DAG_SPARK_DATASOURCE_NODES_RELATIVE_PATH = "/hudi-integ-test/src/test/resources/unit-test-cow-dag-spark-datasource.yaml";
 
   public static Stream<Arguments> configParams() {
     Object[][] data =
@@ -92,37 +94,13 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     UtilitiesTestBase.Helpers.copyToDFSFromAbsolutePath(System.getProperty("user.dir") + "/.."
         + MOR_DAG_SOURCE_PATH, dfs, dfsBasePath + "/" + MOR_DAG_FILE_NAME);
 
-    TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
-    props.setProperty("hoodie.datasource.write.partitionpath.field", "timestamp");
-    props.setProperty("hoodie.deltastreamer.keygen.timebased.timestamp.type", "UNIX_TIMESTAMP");
-    props.setProperty("hoodie.deltastreamer.keygen.timebased.output.dateformat", "yyyy/MM/dd");
-    props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
-    props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/source.avsc");
-    props.setProperty("hoodie.deltastreamer.source.dfs.root", dfsBasePath + "/input");
-    props.setProperty("hoodie.datasource.hive_sync.assume_date_partitioning", "true");
-    props.setProperty("hoodie.datasource.hive_sync.skip_ro_suffix", "true");
-    props.setProperty("hoodie.datasource.write.keytranslator.class", "org.apache.hudi"
-        + ".DayBasedPartitionPathKeyTranslator");
-    props.setProperty("hoodie.compact.inline.max.delta.commits", "3");
-    props.setProperty("hoodie.parquet.max.file.size", "1024000");
-    props.setProperty("hoodie.compact.inline.max.delta.commits", "0");
-    props.setProperty("hoodie.index.type", HoodieIndex.IndexType.GLOBAL_SIMPLE.name());
-    props.setProperty("hoodie.global.simple.index.parallelism", "2");
-    // Reduce shuffle parallelism, spark hangs when numPartitions >> numRecords to process
-    props.setProperty("hoodie.insert.shuffle.parallelism", "10");
-    props.setProperty("hoodie.upsert.shuffle.parallelism", "10");
-    props.setProperty("hoodie.bulkinsert.shuffle.parallelism", "10");
-    props.setProperty("hoodie.compact.inline.max.delta.commits", "0");
-    // Make path selection test suite specific
-    props.setProperty("hoodie.deltastreamer.source.input.selector", DFSTestSuitePathSelector.class.getName());
-    // Hive Configs
-    props.setProperty(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), "jdbc:hive2://127.0.0.1:9999/");
-    props.setProperty(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), "testdb1");
-    props.setProperty(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), "table1");
-    props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), "datestr");
-    props.setProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(), TimestampBasedKeyGenerator.class.getName());
+    TypedProperties props = getProperties();
     UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/test-source"
+        + ".properties");
+
+    UtilitiesTestBase.Helpers.copyToDFSFromAbsolutePath(System.getProperty("user.dir") + "/.."
+        + COW_DAG_SPARK_DATASOURCE_NODES_RELATIVE_PATH, dfs, dfsBasePath + "/" + COW_DAG_FILE_NAME_SPARK_DATASOURCE_NODES);
+    UtilitiesTestBase.Helpers.savePropsToDFS(getProperties(), dfs, dfsBasePath + "/test-source"
         + ".properties");
 
     // Properties used for the delta-streamer which incrementally pulls from upstream DFS Avro source and
@@ -159,6 +137,50 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
   private void cleanDFSDirs() throws Exception {
     dfs.delete(new Path(dfsBasePath + "/input"), true);
     dfs.delete(new Path(dfsBasePath + "/result"), true);
+  }
+
+  private static TypedProperties getProperties() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
+    props.setProperty("hoodie.datasource.write.partitionpath.field", "timestamp");
+    props.setProperty("hoodie.deltastreamer.keygen.timebased.timestamp.type", "UNIX_TIMESTAMP");
+    props.setProperty("hoodie.deltastreamer.keygen.timebased.output.dateformat", "yyyy/MM/dd");
+    props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
+    props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/source.avsc");
+    props.setProperty("hoodie.deltastreamer.source.dfs.root", dfsBasePath + "/input");
+    props.setProperty("hoodie.datasource.hive_sync.assume_date_partitioning", "true");
+    props.setProperty("hoodie.datasource.hive_sync.skip_ro_suffix", "true");
+    props.setProperty("hoodie.datasource.write.keytranslator.class", "org.apache.hudi"
+        + ".DayBasedPartitionPathKeyTranslator");
+    props.setProperty("hoodie.compact.inline.max.delta.commits", "3");
+    props.setProperty("hoodie.parquet.max.file.size", "1024000");
+    props.setProperty("hoodie.compact.inline.max.delta.commits", "0");
+    props.setProperty("hoodie.index.type", HoodieIndex.IndexType.GLOBAL_SIMPLE.name());
+    props.setProperty("hoodie.global.simple.index.parallelism", "2");
+    // Reduce shuffle parallelism, spark hangs when numPartitions >> numRecords to process
+    props.setProperty("hoodie.insert.shuffle.parallelism", "10");
+    props.setProperty("hoodie.upsert.shuffle.parallelism", "10");
+    props.setProperty("hoodie.bulkinsert.shuffle.parallelism", "10");
+    props.setProperty("hoodie.compact.inline.max.delta.commits", "0");
+    // Make path selection test suite specific
+    props.setProperty("hoodie.deltastreamer.source.input.selector", DFSTestSuitePathSelector.class.getName());
+    // Hive Configs
+    props.setProperty(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), "jdbc:hive2://127.0.0.1:9999/");
+    props.setProperty(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), "testdb1");
+    props.setProperty(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), "table1");
+    props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), "datestr");
+    props.setProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(), TimestampBasedKeyGenerator.class.getName());
+
+    props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider");
+    props.setProperty("hoodie.write.lock.hivemetastore.database", "testdb1");
+    props.setProperty("hoodie.write.lock.hivemetastore.table", "table1");
+    props.setProperty("hoodie.write.lock.zookeeper.url", "127.0.0.1");
+    props.setProperty("hoodie.write.lock.zookeeper.port", "2828");
+    props.setProperty("hoodie.write.lock.wait_time_ms", "1200000");
+    props.setProperty("hoodie.write.lock.num_retries", "10");
+    props.setProperty("hoodie.write.lock.zookeeper.lock_key", "test_table");
+    props.setProperty("hoodie.write.lock.zookeeper.zk_base_path", "/test");
+    return props;
   }
 
   // Tests in this class add to the test build time significantly. Since this is a Integration Test (end to end), we
@@ -224,6 +246,27 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     hoodieTestSuiteJob.runTestSuite();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(cfg.targetBasePath).build();
     //assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().getInstants().count(), 7);
+  }
+
+  @Test
+  public void testSparkDataSourceNodesDagWithLock() throws Exception {
+    boolean useDeltaStreamer = false;
+    this.cleanDFSDirs();
+
+    TypedProperties props = getProperties();
+    props.setProperty("hoodie.write.concurrency.mode", "optimistic_concurrency_control");
+    props.setProperty("hoodie.failed.writes.cleaner.policy", "LAZY");
+    UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/test-source"
+        + ".properties");
+    String inputBasePath = dfsBasePath + "/input";
+    String outputBasePath = dfsBasePath + "/result";
+    HoodieTestSuiteConfig cfg = makeConfig(inputBasePath, outputBasePath, useDeltaStreamer, HoodieTableType
+        .COPY_ON_WRITE.name());
+    cfg.workloadYamlPath = dfsBasePath + "/" + COW_DAG_FILE_NAME_SPARK_DATASOURCE_NODES;
+    HoodieTestSuiteJob hoodieTestSuiteJob = new HoodieTestSuiteJob(cfg, jsc);
+    hoodieTestSuiteJob.runTestSuite();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(new Configuration()).setBasePath(cfg.targetBasePath).build();
+    assertEquals(metaClient.getActiveTimeline().getCommitsTimeline().getInstants().count(), 3);
   }
 
   protected HoodieTestSuiteConfig makeConfig(String inputBasePath, String outputBasePath, boolean useDeltaStream,

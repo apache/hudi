@@ -20,23 +20,20 @@ package org.apache.hudi.source;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.operator.FlinkOptions;
-import org.apache.hudi.operator.StreamReadMonitoringFunction;
-import org.apache.hudi.operator.StreamReadOperator;
-import org.apache.hudi.operator.utils.TestConfigurations;
-import org.apache.hudi.operator.utils.TestData;
-import org.apache.hudi.source.format.FilePathUtils;
-import org.apache.hudi.source.format.mor.MergeOnReadInputFormat;
-import org.apache.hudi.source.format.mor.MergeOnReadInputSplit;
-import org.apache.hudi.source.format.mor.MergeOnReadTableState;
+import org.apache.hudi.table.format.FilePathUtils;
+import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
+import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
+import org.apache.hudi.table.format.mor.MergeOnReadTableState;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.TestConfigurations;
+import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 
 import org.apache.avro.Schema;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.core.fs.Path;
 import org.apache.flink.runtime.checkpoint.OperatorSubtaskState;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
@@ -48,6 +45,7 @@ import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -242,8 +240,9 @@ public class TestStreamReadOperator {
 
   private OneInputStreamOperatorTestHarness<MergeOnReadInputSplit, RowData> createReader() throws Exception {
     final String basePath = tempFile.getAbsolutePath();
+    final org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf();
     final HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(StreamerUtil.getHadoopConf()).setBasePath(basePath).build();
+        .setConf(hadoopConf).setBasePath(basePath).build();
     final List<String> partitionKeys = Collections.singletonList("partition");
 
     // This input format is used to opening the emitted split.
@@ -261,16 +260,17 @@ public class TestStreamReadOperator {
         TestConfigurations.ROW_TYPE,
         tableAvroSchema.toString(),
         AvroSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE).toString(),
-        Collections.emptyList());
-    Path[] paths = FilePathUtils.getReadPaths(
-        new Path(basePath), conf, partitionKeys, conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME));
-    MergeOnReadInputFormat inputFormat = new MergeOnReadInputFormat(
-        conf,
-        paths,
-        hoodieTableState,
-        rowDataType.getChildren(),
-        "default",
-        1000L);
+        Collections.emptyList(),
+        new String[0]);
+    Path[] paths = FilePathUtils.getReadPaths(new Path(basePath), conf, hadoopConf, partitionKeys);
+    MergeOnReadInputFormat inputFormat = MergeOnReadInputFormat.builder()
+        .config(conf)
+        .paths(FilePathUtils.toFlinkPaths(paths))
+        .tableState(hoodieTableState)
+        .fieldTypes(rowDataType.getChildren())
+        .defaultPartName("default").limit(1000L)
+        .emitDelete(true)
+        .build();
 
     OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory(inputFormat);
     OneInputStreamOperatorTestHarness<MergeOnReadInputSplit, RowData> harness = new OneInputStreamOperatorTestHarness<>(

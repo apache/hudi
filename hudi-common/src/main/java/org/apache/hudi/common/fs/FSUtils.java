@@ -19,7 +19,6 @@
 package org.apache.hudi.common.fs;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -274,6 +273,16 @@ public class FSUtils {
       return tableMetadata.getAllPartitionPaths();
     } catch (Exception e) {
       throw new HoodieException("Error fetching partition paths from metadata table", e);
+    }
+  }
+
+  public static FileStatus[] getFilesInPartition(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
+                                                 String basePathStr, Path partitionPath) {
+    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext,
+        metadataConfig, basePathStr, FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR)) {
+      return tableMetadata.getAllFilesInPartition(partitionPath);
+    } catch (Exception e) {
+      throw new HoodieException("Error get files in partition: " + partitionPath, e);
     }
   }
 
@@ -542,14 +551,12 @@ public class FSUtils {
 
   /**
    * This is due to HUDI-140 GCS has a different behavior for detecting EOF during seek().
-   * 
-   * @param inputStream FSDataInputStream
+   *
+   * @param fs fileSystem instance.
    * @return true if the inputstream or the wrapped one is of type GoogleHadoopFSInputStream
    */
-  public static boolean isGCSInputStream(FSDataInputStream inputStream) {
-    return inputStream.getClass().getCanonicalName().equals("com.google.cloud.hadoop.fs.gcs.GoogleHadoopFSInputStream")
-        || inputStream.getWrappedStream().getClass().getCanonicalName()
-            .equals("com.google.cloud.hadoop.fs.gcs.GoogleHadoopFSInputStream");
+  public static boolean isGCSFileSystem(FileSystem fs) {
+    return fs.getScheme().equals(StorageSchemes.GCS.getScheme());
   }
 
   public static Configuration registerFileSystem(Path file, Configuration conf) {

@@ -18,45 +18,56 @@
 
 package org.apache.hudi.utils.factory;
 
-import org.apache.hudi.operator.FlinkOptions;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.utils.source.ContinuousFileSource;
 
+import org.apache.flink.configuration.ConfigOption;
+import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.api.ValidationException;
-import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.connector.source.DynamicTableSource;
+import org.apache.flink.table.factories.DynamicTableSourceFactory;
 import org.apache.flink.table.factories.FactoryUtil;
-import org.apache.flink.table.factories.TableSourceFactory;
-import org.apache.flink.table.sources.TableSource;
 
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.Set;
 
 /**
  * Factory for ContinuousFileSource.
  */
-public class ContinuousFileSourceFactory implements TableSourceFactory<RowData> {
+public class ContinuousFileSourceFactory implements DynamicTableSourceFactory {
   public static final String FACTORY_ID = "continuous-file-source";
 
+  public static final ConfigOption<Integer> CHECKPOINTS = ConfigOptions
+      .key("checkpoints")
+      .intType()
+      .defaultValue(2)
+      .withDescription("Number of checkpoints to write the data set as, default 2");
+
   @Override
-  public TableSource<RowData> createTableSource(Context context) {
-    Configuration conf = FlinkOptions.fromMap(context.getTable().getOptions());
+  public DynamicTableSource createDynamicTableSource(Context context) {
+    FactoryUtil.TableFactoryHelper helper = FactoryUtil.createTableFactoryHelper(this, context);
+    helper.validate();
+
+    Configuration conf = (Configuration) helper.getOptions();
     Path path = new Path(conf.getOptional(FlinkOptions.PATH).orElseThrow(() ->
         new ValidationException("Option [path] should be not empty.")));
-    return new ContinuousFileSource(context.getTable().getSchema(), path, conf);
+    return new ContinuousFileSource(context.getCatalogTable().getSchema(), path, conf);
   }
 
   @Override
-  public Map<String, String> requiredContext() {
-    Map<String, String> context = new HashMap<>();
-    context.put(FactoryUtil.CONNECTOR.key(), FACTORY_ID);
-    return context;
+  public String factoryIdentifier() {
+    return FACTORY_ID;
   }
 
   @Override
-  public List<String> supportedProperties() {
-    return Collections.singletonList("*");
+  public Set<ConfigOption<?>> requiredOptions() {
+    return Collections.singleton(FlinkOptions.PATH);
+  }
+
+  @Override
+  public Set<ConfigOption<?>> optionalOptions() {
+    return Collections.singleton(CHECKPOINTS);
   }
 }

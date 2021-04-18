@@ -79,135 +79,132 @@ public class SparkMain {
 
     SparkCommand cmd = SparkCommand.valueOf(command);
 
-    JavaSparkContext jsc = sparkMasterContained(cmd)
-        ? SparkUtil.initJavaSparkConf("hoodie-cli-" + command, Option.of(args[1]), Option.of(args[2]))
-        : SparkUtil.initJavaSparkConf("hoodie-cli-" + command);
+    JavaSparkContext jsc = SparkUtil.initJavaSparkConf("hoodie-cli-" + command, Option.of(args[1]), Option.of(args[2]));
     int returnCode = 0;
-    switch (cmd) {
-      case ROLLBACK:
-        assert (args.length == 5);
-        returnCode = rollback(jsc, args[3], args[4]);
-        break;
-      case DEDUPLICATE:
-        assert (args.length == 8);
-        returnCode = deduplicatePartitionPath(jsc, args[3], args[4], args[5], Boolean.parseBoolean(args[6]), args[7]);
-        break;
-      case ROLLBACK_TO_SAVEPOINT:
-        assert (args.length == 5);
-        returnCode = rollbackToSavepoint(jsc, args[3], args[4]);
-        break;
-      case IMPORT:
-      case UPSERT:
-        assert (args.length >= 13);
-        String propsFilePath = null;
-        if (!StringUtils.isNullOrEmpty(args[12])) {
-          propsFilePath = args[12];
-        }
-        List<String> configs = new ArrayList<>();
-        if (args.length > 13) {
-          configs.addAll(Arrays.asList(args).subList(13, args.length));
-        }
-        returnCode = dataLoad(jsc, command, args[3], args[4], args[5], args[6], args[7], args[8],
-            Integer.parseInt(args[9]), args[10], Integer.parseInt(args[11]), propsFilePath, configs);
-        break;
-      case COMPACT_RUN:
-        assert (args.length >= 9);
-        propsFilePath = null;
-        if (!StringUtils.isNullOrEmpty(args[8])) {
-          propsFilePath = args[8];
-        }
-        configs = new ArrayList<>();
-        if (args.length > 9) {
-          configs.addAll(Arrays.asList(args).subList(9, args.length));
-        }
-        returnCode = compact(jsc, args[1], args[2], args[3], Integer.parseInt(args[4]), args[5], args[6],
-            Integer.parseInt(args[7]), false, propsFilePath, configs);
-        break;
-      case COMPACT_SCHEDULE:
-        assert (args.length >= 6);
-        propsFilePath = null;
-        if (!StringUtils.isNullOrEmpty(args[5])) {
-          propsFilePath = args[5];
-        }
-        configs = new ArrayList<>();
-        if (args.length > 6) {
-          configs.addAll(Arrays.asList(args).subList(6, args.length));
-        }
-        returnCode = compact(jsc, args[1], args[2], args[3], 1, "", args[4], 0, true, propsFilePath, configs);
-        break;
-      case COMPACT_VALIDATE:
-        assert (args.length == 7);
-        doCompactValidate(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]));
-        returnCode = 0;
-        break;
-      case COMPACT_REPAIR:
-        assert (args.length == 8);
-        doCompactRepair(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]),
-            Boolean.parseBoolean(args[7]));
-        returnCode = 0;
-        break;
-      case COMPACT_UNSCHEDULE_FILE:
-        assert (args.length == 9);
-        doCompactUnscheduleFile(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]),
-            Boolean.parseBoolean(args[7]), Boolean.parseBoolean(args[8]));
-        returnCode = 0;
-        break;
-      case COMPACT_UNSCHEDULE_PLAN:
-        assert (args.length == 9);
-        doCompactUnschedule(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]),
-            Boolean.parseBoolean(args[7]), Boolean.parseBoolean(args[8]));
-        returnCode = 0;
-        break;
-      case CLEAN:
-        assert (args.length >= 5);
-        propsFilePath = null;
-        if (!StringUtils.isNullOrEmpty(args[4])) {
-          propsFilePath = args[4];
-        }
-        configs = new ArrayList<>();
-        if (args.length > 5) {
-          configs.addAll(Arrays.asList(args).subList(5, args.length));
-        }
-        clean(jsc, args[3], propsFilePath, configs);
-        break;
-      case SAVEPOINT:
-        assert (args.length == 7);
-        returnCode = createSavepoint(jsc, args[3], args[4], args[5], args[6]);
-        break;
-      case DELETE_SAVEPOINT:
-        assert (args.length == 5);
-        returnCode = deleteSavepoint(jsc, args[3], args[4]);
-        break;
-      case BOOTSTRAP:
-        assert (args.length >= 18);
-        propsFilePath = null;
-        if (!StringUtils.isNullOrEmpty(args[17])) {
-          propsFilePath = args[17];
-        }
-        configs = new ArrayList<>();
-        if (args.length > 18) {
-          configs.addAll(Arrays.asList(args).subList(18, args.length));
-        }
-        returnCode = doBootstrap(jsc, args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10],
-            args[11], args[12], args[13], args[14], args[15], args[16], propsFilePath, configs);
-        break;
-      case UPGRADE:
-      case DOWNGRADE:
-        assert (args.length == 5);
-        returnCode = upgradeOrDowngradeTable(jsc, args[3], args[4]);
-        break;
-      default:
-        break;
+    try {
+      switch (cmd) {
+        case ROLLBACK:
+          assert (args.length == 5);
+          returnCode = rollback(jsc, args[3], args[4]);
+          break;
+        case DEDUPLICATE:
+          assert (args.length == 8);
+          returnCode = deduplicatePartitionPath(jsc, args[3], args[4], args[5], Boolean.parseBoolean(args[6]), args[7]);
+          break;
+        case ROLLBACK_TO_SAVEPOINT:
+          assert (args.length == 5);
+          returnCode = rollbackToSavepoint(jsc, args[3], args[4]);
+          break;
+        case IMPORT:
+        case UPSERT:
+          assert (args.length >= 13);
+          String propsFilePath = null;
+          if (!StringUtils.isNullOrEmpty(args[12])) {
+            propsFilePath = args[12];
+          }
+          List<String> configs = new ArrayList<>();
+          if (args.length > 13) {
+            configs.addAll(Arrays.asList(args).subList(13, args.length));
+          }
+          returnCode = dataLoad(jsc, command, args[3], args[4], args[5], args[6], args[7], args[8],
+                  Integer.parseInt(args[9]), args[10], Integer.parseInt(args[11]), propsFilePath, configs);
+          break;
+        case COMPACT_RUN:
+          assert (args.length >= 10);
+          propsFilePath = null;
+          if (!StringUtils.isNullOrEmpty(args[9])) {
+            propsFilePath = args[9];
+          }
+          configs = new ArrayList<>();
+          if (args.length > 10) {
+            configs.addAll(Arrays.asList(args).subList(9, args.length));
+          }
+          returnCode = compact(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]), args[7],
+              Integer.parseInt(args[8]), false, propsFilePath, configs);
+          break;
+        case COMPACT_SCHEDULE:
+          assert (args.length >= 7);
+          propsFilePath = null;
+          if (!StringUtils.isNullOrEmpty(args[6])) {
+            propsFilePath = args[6];
+          }
+          configs = new ArrayList<>();
+          if (args.length > 7) {
+            configs.addAll(Arrays.asList(args).subList(7, args.length));
+          }
+          returnCode = compact(jsc, args[3], args[4], args[5], 1, "", 0, true, propsFilePath, configs);
+          break;
+        case COMPACT_VALIDATE:
+          assert (args.length == 7);
+          doCompactValidate(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]));
+          returnCode = 0;
+          break;
+        case COMPACT_REPAIR:
+          assert (args.length == 8);
+          doCompactRepair(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]),
+                  Boolean.parseBoolean(args[7]));
+          returnCode = 0;
+          break;
+        case COMPACT_UNSCHEDULE_FILE:
+          assert (args.length == 10);
+          doCompactUnscheduleFile(jsc, args[3], args[4], args[5], args[6], Integer.parseInt(args[7]),
+              Boolean.parseBoolean(args[8]), Boolean.parseBoolean(args[9]));
+          returnCode = 0;
+          break;
+        case COMPACT_UNSCHEDULE_PLAN:
+          assert (args.length == 9);
+          doCompactUnschedule(jsc, args[3], args[4], args[5], Integer.parseInt(args[6]),
+                  Boolean.parseBoolean(args[7]), Boolean.parseBoolean(args[8]));
+          returnCode = 0;
+          break;
+        case CLEAN:
+          assert (args.length >= 5);
+          propsFilePath = null;
+          if (!StringUtils.isNullOrEmpty(args[4])) {
+            propsFilePath = args[4];
+          }
+          configs = new ArrayList<>();
+          if (args.length > 5) {
+            configs.addAll(Arrays.asList(args).subList(5, args.length));
+          }
+          clean(jsc, args[3], propsFilePath, configs);
+          break;
+        case SAVEPOINT:
+          assert (args.length == 7);
+          returnCode = createSavepoint(jsc, args[3], args[4], args[5], args[6]);
+          break;
+        case DELETE_SAVEPOINT:
+          assert (args.length == 5);
+          returnCode = deleteSavepoint(jsc, args[3], args[4]);
+          break;
+        case BOOTSTRAP:
+          assert (args.length >= 18);
+          propsFilePath = null;
+          if (!StringUtils.isNullOrEmpty(args[17])) {
+            propsFilePath = args[17];
+          }
+          configs = new ArrayList<>();
+          if (args.length > 18) {
+            configs.addAll(Arrays.asList(args).subList(18, args.length));
+          }
+          returnCode = doBootstrap(jsc, args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10],
+                  args[11], args[12], args[13], args[14], args[15], args[16], propsFilePath, configs);
+          break;
+        case UPGRADE:
+        case DOWNGRADE:
+          assert (args.length == 5);
+          returnCode = upgradeOrDowngradeTable(jsc, args[3], args[4]);
+          break;
+        default:
+          break;
+      }
+    } catch (Throwable throwable) {
+      LOG.error("Fail to execute command", throwable);
+      returnCode = -1;
+    } finally {
+      jsc.stop();
     }
     System.exit(returnCode);
-  }
-
-  private static boolean sparkMasterContained(SparkCommand command) {
-    List<SparkCommand> masterContained = Arrays.asList(SparkCommand.COMPACT_VALIDATE, SparkCommand.COMPACT_REPAIR,
-        SparkCommand.COMPACT_UNSCHEDULE_PLAN, SparkCommand.COMPACT_UNSCHEDULE_FILE, SparkCommand.CLEAN,
-        SparkCommand.IMPORT, SparkCommand.UPSERT, SparkCommand.DEDUPLICATE, SparkCommand.SAVEPOINT,
-        SparkCommand.DELETE_SAVEPOINT, SparkCommand.ROLLBACK_TO_SAVEPOINT, SparkCommand.ROLLBACK, SparkCommand.BOOTSTRAP);
-    return masterContained.contains(command);
   }
 
   protected static void clean(JavaSparkContext jsc, String basePath, String propsFilePath,
@@ -273,13 +270,14 @@ public class SparkMain {
     new HoodieCompactionAdminTool(cfg).run(jsc);
   }
 
-  private static void doCompactUnscheduleFile(JavaSparkContext jsc, String basePath, String fileId, String outputPath,
-      int parallelism, boolean skipValidation, boolean dryRun)
+  private static void doCompactUnscheduleFile(JavaSparkContext jsc, String basePath, String fileId, String partitionPath,
+      String outputPath, int parallelism, boolean skipValidation, boolean dryRun)
       throws Exception {
     HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
     cfg.basePath = basePath;
     cfg.operation = Operation.UNSCHEDULE_FILE;
     cfg.outputPath = outputPath;
+    cfg.partitionPath = partitionPath;
     cfg.fileId = fileId;
     cfg.parallelism = parallelism;
     cfg.dryRun = dryRun;
@@ -288,7 +286,7 @@ public class SparkMain {
   }
 
   private static int compact(JavaSparkContext jsc, String basePath, String tableName, String compactionInstant,
-      int parallelism, String schemaFile, String sparkMemory, int retry, boolean schedule, String propsFilePath,
+      int parallelism, String schemaFile, int retry, boolean schedule, String propsFilePath,
       List<String> configs) {
     HoodieCompactor.Config cfg = new HoodieCompactor.Config();
     cfg.basePath = basePath;
@@ -301,7 +299,6 @@ public class SparkMain {
     cfg.runSchedule = schedule;
     cfg.propsFilePath = propsFilePath;
     cfg.configs = configs;
-    jsc.getConf().set("spark.executor.memory", sparkMemory);
     return new HoodieCompactor(jsc, cfg).compact(retry);
   }
 

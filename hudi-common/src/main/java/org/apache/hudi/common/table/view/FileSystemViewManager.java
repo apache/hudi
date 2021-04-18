@@ -214,7 +214,7 @@ public class FileSystemViewManager {
                                                         final FileSystemViewStorageConfig config,
                                                         final String basePath) {
     return createViewManager(context, metadataConfig, config,
-        () -> HoodieTableMetadata.create(context, metadataConfig, basePath, config.getSpillableDir()));
+        () -> HoodieTableMetadata.create(context, metadataConfig, basePath, config.getSpillableDir(), true));
   }
 
   /**

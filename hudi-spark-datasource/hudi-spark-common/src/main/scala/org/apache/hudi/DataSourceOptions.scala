@@ -68,6 +68,9 @@ object DataSourceReadOptions {
 
   val READ_PRE_COMBINE_FIELD = HoodieWriteConfig.PRECOMBINE_FIELD_PROP
 
+  val ENABLE_HOODIE_FILE_INDEX = "hoodie.file.index.enable"
+  val DEFAULT_ENABLE_HOODIE_FILE_INDEX = true
+
   @Deprecated
   val VIEW_TYPE_OPT_KEY = "hoodie.datasource.view.type"
   @Deprecated
@@ -373,4 +376,11 @@ object DataSourceWriteOptions {
   // Async Compaction - Enabled by default for MOR
   val ASYNC_COMPACT_ENABLE_OPT_KEY = "hoodie.datasource.compaction.async.enable"
   val DEFAULT_ASYNC_COMPACT_ENABLE_OPT_VAL = "true"
+
+  // Avro Kafka Source configs
+  val KAFKA_AVRO_VALUE_DESERIALIZER = "hoodie.deltastreamer.source.kafka.value.deserializer.class"
+
+  // Schema provider class to be set to be used in custom kakfa deserializer
+  val SCHEMA_PROVIDER_CLASS_PROP = "hoodie.deltastreamer.schemaprovider.class"
+
 }

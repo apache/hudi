@@ -126,6 +126,9 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     }
     Stream<GenericRecord> insertStream = dataGenerator.generateInsertsStream(instantTime, numInserts, false, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .map(AbstractBaseTestSource::toGenericRecord);
+    if (Boolean.valueOf(props.getOrDefault("hoodie.test.source.generate.inserts", "false").toString())) {
+      return insertStream;
+    }
     return Stream.concat(deleteStream, Stream.concat(updateStream, insertStream));
   }
 

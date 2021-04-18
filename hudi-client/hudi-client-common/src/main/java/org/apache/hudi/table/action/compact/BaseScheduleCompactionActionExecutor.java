@@ -53,22 +53,24 @@ public abstract class BaseScheduleCompactionActionExecutor<T extends HoodieRecor
 
   @Override
   public Option<HoodieCompactionPlan> execute() {
-    // if there are inflight writes, their instantTime must not be less than that of compaction instant time
-    table.getActiveTimeline().getCommitsTimeline().filterPendingExcludingCompaction().firstInstant()
-        .ifPresent(earliestInflight -> ValidationUtils.checkArgument(
-            HoodieTimeline.compareTimestamps(earliestInflight.getTimestamp(), HoodieTimeline.GREATER_THAN, instantTime),
-            "Earliest write inflight instant time must be later than compaction time. Earliest :" + earliestInflight
-                + ", Compaction scheduled at " + instantTime));
-
-    // Committed and pending compaction instants should have strictly lower timestamps
-    List<HoodieInstant> conflictingInstants = table.getActiveTimeline()
-        .getWriteTimeline().getInstants()
-        .filter(instant -> HoodieTimeline.compareTimestamps(
-            instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, instantTime))
-        .collect(Collectors.toList());
-    ValidationUtils.checkArgument(conflictingInstants.isEmpty(),
-        "Following instants have timestamps >= compactionInstant (" + instantTime + ") Instants :"
-            + conflictingInstants);
+    if (!config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
+        && !config.getFailedWritesCleanPolicy().isLazy()) {
+      // if there are inflight writes, their instantTime must not be less than that of compaction instant time
+      table.getActiveTimeline().getCommitsTimeline().filterPendingExcludingCompaction().firstInstant()
+          .ifPresent(earliestInflight -> ValidationUtils.checkArgument(
+              HoodieTimeline.compareTimestamps(earliestInflight.getTimestamp(), HoodieTimeline.GREATER_THAN, instantTime),
+              "Earliest write inflight instant time must be later than compaction time. Earliest :" + earliestInflight
+                  + ", Compaction scheduled at " + instantTime));
+      // Committed and pending compaction instants should have strictly lower timestamps
+      List<HoodieInstant> conflictingInstants = table.getActiveTimeline()
+          .getWriteTimeline().getInstants()
+          .filter(instant -> HoodieTimeline.compareTimestamps(
+              instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, instantTime))
+          .collect(Collectors.toList());
+      ValidationUtils.checkArgument(conflictingInstants.isEmpty(),
+          "Following instants have timestamps >= compactionInstant (" + instantTime + ") Instants :"
+              + conflictingInstants);
+    }
 
     HoodieCompactionPlan plan = scheduleCompaction();
     if (plan != null && (plan.getOperations() != null) && (!plan.getOperations().isEmpty())) {

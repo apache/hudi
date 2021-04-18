@@ -383,7 +383,7 @@ public class CompactionAdminClient extends AbstractHoodieClient {
    * @return list of pairs of log-files (old, new) and for each pair, rename must be done to successfully unschedule
    *         compaction.
    */
-  protected List<Pair<HoodieLogFile, HoodieLogFile>> getRenamingActionsForUnschedulingCompactionPlan(
+  public List<Pair<HoodieLogFile, HoodieLogFile>> getRenamingActionsForUnschedulingCompactionPlan(
       HoodieTableMetaClient metaClient, String compactionInstant, int parallelism,
       Option<HoodieTableFileSystemView> fsViewOpt, boolean skipValidation) throws IOException {
     HoodieTableFileSystemView fsView = fsViewOpt.isPresent() ? fsViewOpt.get()

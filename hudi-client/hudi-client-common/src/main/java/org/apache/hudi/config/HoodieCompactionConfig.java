@@ -43,7 +43,6 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   public static final String CLEANER_POLICY_PROP = "hoodie.cleaner.policy";
   public static final String AUTO_CLEAN_PROP = "hoodie.clean.automatic";
   public static final String ASYNC_CLEAN_PROP = "hoodie.clean.async";
-
   // Turn on inline compaction - after fw delta commits a inline compaction will be run
   public static final String INLINE_COMPACT_PROP = "hoodie.compact.inline";
   // Run a compaction every N delta commits
@@ -109,7 +108,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   public static final String COMPACTION_REVERSE_LOG_READ_ENABLED_PROP = "hoodie.compaction.reverse.log.read";
   public static final String DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED = "false";
   private static final String DEFAULT_CLEANER_POLICY = HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name();
-  public static final String FAILED_WRITES_CLEANER_POLICY_PROP = "hoodie.failed.writes.cleaner.policy";
+  public static final String FAILED_WRITES_CLEANER_POLICY_PROP = "hoodie.cleaner.policy.failed.writes";
   private  static final String DEFAULT_FAILED_WRITES_CLEANER_POLICY =
       HoodieFailedWritesCleaningPolicy.EAGER.name();
   private static final String DEFAULT_AUTO_CLEAN = "true";

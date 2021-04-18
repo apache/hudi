@@ -71,7 +71,7 @@ public class FlinkMergeHelper<T extends HoodieRecordPayload> extends AbstractMer
     final GenericDatumWriter<GenericRecord> gWriter;
     final GenericDatumReader<GenericRecord> gReader;
     Schema readSchema;
-    if (isNeedBootStrap(mergeHandle)
+    if (isFirstTimeMerge(mergeHandle)
         && (externalSchemaTransformation || baseFile.getBootstrapBaseFile().isPresent())) {
       readSchema = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), mergeHandle.getOldFilePath()).getSchema();
       gWriter = new GenericDatumWriter<>(readSchema);
@@ -86,7 +86,7 @@ public class FlinkMergeHelper<T extends HoodieRecordPayload> extends AbstractMer
     HoodieFileReader<GenericRecord> reader = HoodieFileReaderFactory.<GenericRecord>getFileReader(cfgForHoodieFile, mergeHandle.getOldFilePath());
     try {
       final Iterator<GenericRecord> readerIterator;
-      if (isNeedBootStrap(mergeHandle) && baseFile.getBootstrapBaseFile().isPresent()) {
+      if (isFirstTimeMerge(mergeHandle) && baseFile.getBootstrapBaseFile().isPresent()) {
         readerIterator = getMergingIterator(table, mergeHandle, baseFile, reader, readSchema, externalSchemaTransformation);
       } else {
         readerIterator = reader.getRecordIterator(readSchema);
@@ -115,8 +115,8 @@ public class FlinkMergeHelper<T extends HoodieRecordPayload> extends AbstractMer
     }
   }
 
-  private static boolean isNeedBootStrap(HoodieMergeHandle<?, ?, ?, ?> mergeHandle) {
-    return mergeHandle instanceof FlinkMergeHandle && ((FlinkMergeHandle) mergeHandle).isNeedBootStrap();
+  private static boolean isFirstTimeMerge(HoodieMergeHandle<?, ?, ?, ?> mergeHandle) {
+    return mergeHandle instanceof FlinkMergeHandle && !((FlinkMergeHandle) mergeHandle).shouldRollover();
   }
 
 }
