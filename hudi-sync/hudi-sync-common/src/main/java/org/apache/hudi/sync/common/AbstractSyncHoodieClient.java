@@ -46,7 +46,7 @@ public abstract class AbstractSyncHoodieClient {
 
   private static final Logger LOG = LogManager.getLogger(AbstractSyncHoodieClient.class);
 
-  public static final TypeOptimizer DECIMAL_TYPE_OPTIMIZER = new TypeOptimizer() {};
+  public static final TypeConverter DECIMAL_TYPE_CONVERTER = new TypeConverter("DECIMAL") {};
 
   protected final HoodieTableMetaClient metaClient;
   protected final HoodieTableType tableType;
@@ -141,27 +141,21 @@ public abstract class AbstractSyncHoodieClient {
     }
   }
 
-  public abstract static class TypeOptimizer implements Serializable {
-
-    static final String DEFAULT_TARGET_TYPE = "DECIMAL";
+  public abstract static class TypeConverter implements Serializable {
 
     protected String targetType;
 
-    public TypeOptimizer() {
-      this.targetType = DEFAULT_TARGET_TYPE;
-    }
-
-    public TypeOptimizer(String targetType) {
+    public TypeConverter(String targetType) {
       ValidationUtils.checkArgument(Objects.nonNull(targetType));
       this.targetType = targetType;
     }
 
-    public void doOptimize(ResultSet resultSet, Map<String, String> schema) throws SQLException {
+    public void doConvert(ResultSet resultSet, Map<String, String> schema) throws SQLException {
       schema.put(getColumnName(resultSet), targetType.equalsIgnoreCase(getColumnType(resultSet))
-                ? optimize(resultSet) : getColumnType(resultSet));
+                ? convert(resultSet) : getColumnType(resultSet));
     }
 
-    public String optimize(ResultSet resultSet) throws SQLException {
+    public String convert(ResultSet resultSet) throws SQLException {
       String columnType = getColumnType(resultSet);
       int columnSize = resultSet.getInt("COLUMN_SIZE");
       int decimalDigits = resultSet.getInt("DECIMAL_DIGITS");
