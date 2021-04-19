@@ -20,7 +20,6 @@ package org.apache.hudi.cli.testutils;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -138,6 +137,5 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
     }));
     return metadata;
   }
-
 
 }
