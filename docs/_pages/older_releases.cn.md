@@ -10,7 +10,7 @@ language: cn
 ## [Release 0.5.2-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.2-incubating) ([docs](/docs/0.5.2-quick-start-guide.html))
 
 ### Download Information
- * Source Release : [Apache Hudi 0.5.2-incubating Source Release](https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz) ([asc](https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.sha512))
+ * Source Release : [Apache Hudi 0.5.2-incubating Source Release](https://downloads.apache.org/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz) ([asc](https://downloads.apache.org/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.sha512))
  * Apache Hudi jars corresponding to this release is available [here](https://repository.apache.org/#nexus-search;quick~hudi)
 
 ### Migration Guide for this release
@@ -36,7 +36,7 @@ temp_query --sql "select Instant, NumInserts, NumWrites from satishkotha_debug w
 ## [Release 0.5.1-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.1-incubating) ([docs](/docs/0.5.1-quick-start-guide.html))
 
 ### Download Information
- * Source Release : [Apache Hudi 0.5.1-incubating Source Release](https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz) ([asc](https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.sha512))
+ * Source Release : [Apache Hudi 0.5.1-incubating Source Release](https://downloads.apache.org/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz) ([asc](https://downloads.apache.org/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.sha512))
  * Apache Hudi jars corresponding to this release is available [here](https://repository.apache.org/#nexus-search;quick~hudi)
 
 ### Migration Guide for this release
@@ -55,6 +55,26 @@ temp_query --sql "select Instant, NumInserts, NumWrites from satishkotha_debug w
 
 ### Raw Release Notes
  The raw release notes are available [here](https://jira.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12346087)
+
+## [Release 0.5.0-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.0-incubating) ([docs](/docs/0.5.0-quick-start-guide.html))
+
+### Download Information
+* Source Release : [Apache Hudi 0.5.0-incubating Source Release](https://downloads.apache.org/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz) ([asc](https://downloads.apache.org/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.sha512))
+* Apache Hudi jars corresponding to this release is available [here](https://repository.apache.org/#nexus-search;quick~hudi)
+
+### Release Highlights
+* Package and format renaming from com.uber.hoodie to org.apache.hudi (See migration guide section below)
+* Major redo of Hudi bundles to address class and jar version mismatches in different environments
+* Upgrade from Hive 1.x to Hive 2.x for compile time dependencies - Hive 1.x runtime integration still works with a patch : See [the discussion thread](https://lists.apache.org/thread.html/48b3f0553f47c576fd7072f56bb0d8a24fb47d4003880d179c7f88a3@%3Cdev.hudi.apache.org%3E)
+* DeltaStreamer now supports continuous running mode with managed concurrent compaction
+* Support for Composite Keys as record key
+* HoodieCombinedInputFormat to scale huge hive queries running on Hoodie tables
+
+### Migration Guide for this release
+This is the first Apache release for Hudi. Prior to this release, Hudi Jars were published using "com.uber.hoodie" maven co-ordinates. We have a [migration guide](https://cwiki.apache.org/confluence/display/HUDI/Migration+Guide+From+com.uber.hoodie+to+org.apache.hudi)
+
+### Raw Release Notes
+The raw release notes are available [here](https://jira.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12346087)
 
 ## [Release 0.4.7](https://github.com/apache/hudi/releases/tag/hoodie-0.4.7)
 

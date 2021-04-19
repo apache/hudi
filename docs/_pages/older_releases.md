@@ -12,7 +12,7 @@ more recent releases listed [here](http://hudi.apache.org/releases.html)
 ## [Release 0.5.2-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.2-incubating) ([docs](/docs/0.5.2-quick-start-guide.html))
 
 ### Download Information
-* Source Release : [Apache Hudi 0.5.2-incubating Source Release](https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz) ([asc](https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.sha512))
+* Source Release : [Apache Hudi 0.5.2-incubating Source Release](https://downloads.apache.org/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz) ([asc](https://downloads.apache.org/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.sha512))
 * Apache Hudi jars corresponding to this release is available [here](https://repository.apache.org/#nexus-search;quick~hudi)
 
 ### Migration Guide for this release
@@ -38,7 +38,7 @@ The raw release notes are available [here](https://issues.apache.org/jira/secure
 ## [Release 0.5.1-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.1-incubating) ([docs](/docs/0.5.1-quick-start-guide.html))
 
 ### Download Information
-* Source Release : [Apache Hudi 0.5.1-incubating Source Release](https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz) ([asc](https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.sha512))
+* Source Release : [Apache Hudi 0.5.1-incubating Source Release](https://downloads.apache.org/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz) ([asc](https://downloads.apache.org/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.sha512))
 * Apache Hudi jars corresponding to this release is available [here](https://repository.apache.org/#nexus-search;quick~hudi)
 
 ### Migration Guide for this release
@@ -83,7 +83,7 @@ The raw release notes are available [here](https://issues.apache.org/jira/secure
 ## [Release 0.5.0-incubating](https://github.com/apache/hudi/releases/tag/release-0.5.0-incubating) ([docs](/docs/0.5.0-quick-start-guide.html))
 
 ### Download Information
-* Source Release : [Apache Hudi 0.5.0-incubating Source Release](https://downloads.apache.org/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz) ([asc](https://downloads.apache.org/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/incubator/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.sha512))
+* Source Release : [Apache Hudi 0.5.0-incubating Source Release](https://downloads.apache.org/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz) ([asc](https://downloads.apache.org/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.sha512))
 * Apache Hudi jars corresponding to this release is available [here](https://repository.apache.org/#nexus-search;quick~hudi)
 
 ### Release Highlights
