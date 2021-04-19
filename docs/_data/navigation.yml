@@ -13,6 +13,8 @@ main:
     url: /docs/powered_by.html
   - title: "Releases"
     url: /releases.html
+  - title: "Download"
+    url: /download.html
 
 # doc links
 docs:
@@ -63,6 +65,8 @@ cn_main:
     url: https://cwiki.apache.org/confluence/display/HUDI/FAQ
   - title: "发布"
     url: /cn/releases.html
+  - title: "下载"
+    url: /cn/download.html
 
 # doc links
 cn_docs:
