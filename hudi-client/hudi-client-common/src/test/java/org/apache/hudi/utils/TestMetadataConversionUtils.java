@@ -236,7 +236,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
       inflightReplaceMetadata.setCompacted(false);
     }
     HoodieTestTable.of(metaClient)
-        .addReplaceCommit(instantTime, requestedReplaceMetadata, replaceMetadata, inflightReplaceMetadata)
+        .addReplaceCommit(instantTime, Option.of(requestedReplaceMetadata), Option.of(inflightReplaceMetadata), replaceMetadata)
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 

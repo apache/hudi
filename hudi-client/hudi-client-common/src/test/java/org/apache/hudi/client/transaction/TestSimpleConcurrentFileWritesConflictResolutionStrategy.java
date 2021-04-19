@@ -383,7 +383,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     requestedReplaceMetadata.setClusteringPlan(clusteringPlan);
     requestedReplaceMetadata.setVersion(TimelineLayoutVersion.CURR_VERSION);
     HoodieTestTable.of(metaClient)
-        .addRequestedReplace(instantTime, requestedReplaceMetadata)
+        .addRequestedReplace(instantTime, Option.of(requestedReplaceMetadata))
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
@@ -413,7 +413,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     requestedReplaceMetadata.setClusteringPlan(clusteringPlan);
     requestedReplaceMetadata.setVersion(TimelineLayoutVersion.CURR_VERSION);
     HoodieTestTable.of(metaClient)
-        .addReplaceCommit(instantTime, requestedReplaceMetadata, replaceMetadata, null)
+        .addReplaceCommit(instantTime, Option.of(requestedReplaceMetadata), Option.empty(), replaceMetadata)
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 

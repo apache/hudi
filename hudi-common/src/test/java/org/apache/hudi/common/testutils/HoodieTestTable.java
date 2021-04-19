@@ -163,9 +163,9 @@ public class HoodieTestTable {
 
   public HoodieTestTable addReplaceCommit(
       String instantTime,
-      HoodieRequestedReplaceMetadata requestedReplaceMetadata,
-      HoodieReplaceCommitMetadata completeReplaceMetadata,
-      HoodieCommitMetadata inflightReplaceMetadata) throws Exception {
+      Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata,
+      Option<HoodieCommitMetadata> inflightReplaceMetadata,
+      HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
     createRequestedReplaceCommit(basePath, instantTime, requestedReplaceMetadata);
     createInflightReplaceCommit(basePath, instantTime, inflightReplaceMetadata);
     createReplaceCommit(basePath, instantTime, completeReplaceMetadata);
@@ -174,7 +174,7 @@ public class HoodieTestTable {
     return this;
   }
 
-  public HoodieTestTable addRequestedReplace(String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata) throws Exception {
+  public HoodieTestTable addRequestedReplace(String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata) throws Exception {
     createRequestedReplaceCommit(basePath, instantTime, requestedReplaceMetadata);
     currentInstantTime = instantTime;
     metaClient = HoodieTableMetaClient.reload(metaClient);

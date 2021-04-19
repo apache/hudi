@@ -505,7 +505,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     completeReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE_TABLE);
     inflightReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE_TABLE);
     HoodieTestTable.of(metaClient)
-        .addReplaceCommit(instantTime, requestedReplaceMetadata, completeReplaceMetadata, inflightReplaceMetadata);
+        .addReplaceCommit(instantTime, Option.of(requestedReplaceMetadata), Option.of(inflightReplaceMetadata), completeReplaceMetadata);
   }
 
   private void createReplaceMetadata(String instantTime) throws Exception {
@@ -524,7 +524,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     completeReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
     inflightReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
     HoodieTestTable.of(metaClient)
-        .addReplaceCommit(instantTime, requestedReplaceMetadata, completeReplaceMetadata, inflightReplaceMetadata)
+        .addReplaceCommit(instantTime, Option.of(requestedReplaceMetadata), Option.of(inflightReplaceMetadata), completeReplaceMetadata)
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 

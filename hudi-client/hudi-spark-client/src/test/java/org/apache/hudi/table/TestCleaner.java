@@ -847,7 +847,7 @@ public class TestCleaner extends HoodieClientTestBase {
     Map<String, String> partitionAndFileId002 = testTable.forReplaceCommit("00000000000002").getFileIdsWithBaseFilesInPartitions(p0);
     String file2P0C1 = partitionAndFileId002.get(p0);
     Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceMetadata = generateReplaceCommitMetadata(p0, file1P0C0, file2P0C1);
-    testTable.addReplaceCommit("00000000000002", replaceMetadata.getKey(), replaceMetadata.getValue(), null);
+    testTable.addReplaceCommit("00000000000002", Option.of(replaceMetadata.getKey()), Option.empty(), replaceMetadata.getValue());
 
     // run cleaner
     List<HoodieCleanStat> hoodieCleanStatsTwo = runCleaner(config);
@@ -861,7 +861,7 @@ public class TestCleaner extends HoodieClientTestBase {
     Map<String, String> partitionAndFileId003 = testTable.forReplaceCommit("00000000000003").getFileIdsWithBaseFilesInPartitions(p1);
     String file3P1C2 = partitionAndFileId003.get(p1);
     replaceMetadata = generateReplaceCommitMetadata(p1, file1P1C0, file3P1C2);
-    testTable.addReplaceCommit("00000000000003", replaceMetadata.getKey(), replaceMetadata.getValue(), null);
+    testTable.addReplaceCommit("00000000000003", Option.of(replaceMetadata.getKey()), Option.empty(), replaceMetadata.getValue());
 
     // run cleaner
     List<HoodieCleanStat> hoodieCleanStatsThree = runCleaner(config);
@@ -876,7 +876,7 @@ public class TestCleaner extends HoodieClientTestBase {
     Map<String, String> partitionAndFileId004 = testTable.forReplaceCommit("00000000000004").getFileIdsWithBaseFilesInPartitions(p0);
     String file4P0C3 = partitionAndFileId004.get(p0);
     replaceMetadata = generateReplaceCommitMetadata(p0, file2P0C1, file4P0C3);
-    testTable.addReplaceCommit("00000000000004", replaceMetadata.getKey(), replaceMetadata.getValue(), null);
+    testTable.addReplaceCommit("00000000000004", Option.of(replaceMetadata.getKey()), Option.empty(), replaceMetadata.getValue());
 
     // run cleaner
     List<HoodieCleanStat> hoodieCleanStatsFour = runCleaner(config);
@@ -892,7 +892,7 @@ public class TestCleaner extends HoodieClientTestBase {
     Map<String, String> partitionAndFileId005 = testTable.forReplaceCommit("00000000000005").getFileIdsWithBaseFilesInPartitions(p1);
     String file4P1C4 = partitionAndFileId005.get(p1);
     replaceMetadata = generateReplaceCommitMetadata(p0, file3P1C2, file4P1C4);
-    testTable.addReplaceCommit("00000000000005", replaceMetadata.getKey(), replaceMetadata.getValue(), null);
+    testTable.addReplaceCommit("00000000000005", Option.of(replaceMetadata.getKey()), Option.empty(), replaceMetadata.getValue());
     
     List<HoodieCleanStat> hoodieCleanStatsFive = runCleaner(config, 2);
     assertTrue(testTable.baseFileExists(p0, "00000000000004", file4P0C3));
