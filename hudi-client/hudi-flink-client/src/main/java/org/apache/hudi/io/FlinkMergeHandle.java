@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.MarkerFiles;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -70,13 +71,16 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
   /**
    * Records the rolled over file paths.
    */
-  private final List<Path> rolloverPaths;
+  private List<Path> rolloverPaths;
 
   public FlinkMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                           Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                           TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier);
-    rolloverPaths = new ArrayList<>();
+    if (rolloverPaths == null) {
+      // #createMarkerFile may already initialize it already
+      rolloverPaths = new ArrayList<>();
+    }
   }
 
   /**
@@ -102,6 +106,25 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
     // No need to update location for Flink hoodie records because all the records are pre-tagged
     // with the desired locations.
     return false;
+  }
+
+  @Override
+  protected void createMarkerFile(String partitionPath, String dataFileName) {
+    MarkerFiles markerFiles = new MarkerFiles(hoodieTable, instantTime);
+    boolean created = markerFiles.createIfNotExists(partitionPath, dataFileName, getIOType());
+    if (!created) {
+      // If the marker file already exists, that means the write task
+      // was pulled up again with same data file name, performs rolling over action here:
+      // use the new file path as the base file path (file1),
+      // and generates new file path with roll over number (file2).
+      // the incremental data set would merge into the file2 instead of file1.
+      //
+      // When the task do finalization in #finishWrite, the intermediate files would be cleaned.
+      oldFilePath = newFilePath;
+      rolloverPaths = new ArrayList<>();
+      rolloverPaths.add(oldFilePath);
+      newFilePath = makeNewFilePathWithRollover();
+    }
   }
 
   /**
@@ -132,11 +155,7 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
 
     rolloverPaths.add(newFilePath);
     oldFilePath = newFilePath;
-    // Use the fileId + "-" + rollNumber as the new fileId of a mini-batch write.
-    String newFileName = generatesDataFileNameWithRollover();
-    String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
-        + newFileName).toString();
-    newFilePath = new Path(config.getBasePath(), relativePath);
+    newFilePath = makeNewFilePathWithRollover();
 
     try {
       fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config, writerSchemaWithMetafields, taskContextSupplier);
@@ -146,6 +165,16 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
 
     LOG.info(String.format("Merging new data into oldPath %s, as newPath %s", oldFilePath.toString(),
         newFilePath.toString()));
+  }
+
+  /**
+   * Use the fileId + "-" + rollNumber as the new fileId of a mini-batch write.
+   */
+  private Path makeNewFilePathWithRollover() {
+    String newFileName = generatesDataFileNameWithRollover();
+    String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
+        + newFileName).toString();
+    return new Path(config.getBasePath(), relativePath);
   }
 
   public void finishWrite() {
