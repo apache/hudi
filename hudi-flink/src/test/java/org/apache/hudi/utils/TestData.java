@@ -207,10 +207,26 @@ public class TestData {
    * Returns string format of a list of RowData.
    */
   public static String rowDataToString(List<RowData> rows) {
+    return rowDataToString(rows, false);
+  }
+
+  /**
+   * Returns string format of a list of RowData.
+   *
+   * @param withChangeFlag Whether to print the change flag
+   */
+  public static String rowDataToString(List<RowData> rows, boolean withChangeFlag) {
     DataStructureConverter<Object, Object> converter =
         DataStructureConverters.getConverter(TestConfigurations.ROW_DATA_TYPE);
     return rows.stream()
-        .map(row -> converter.toExternal(row).toString())
+        .map(row -> {
+          final String rowStr = converter.toExternal(row).toString();
+          if (withChangeFlag) {
+            return row.getRowKind().shortString() + "(" + rowStr + ")";
+          } else {
+            return rowStr;
+          }
+        })
         .sorted(Comparator.naturalOrder())
         .collect(Collectors.toList()).toString();
   }
@@ -256,8 +272,28 @@ public class TestData {
    * @param expected Expected string of the sorted rows
    */
   public static void assertRowsEquals(List<Row> rows, String expected) {
+    assertRowsEquals(rows, expected, false);
+  }
+
+  /**
+   * Sort the {@code rows} using field at index 0 and asserts
+   * it equals with the expected string {@code expected}.
+   *
+   * @param rows     Actual result rows
+   * @param expected Expected string of the sorted rows
+   * @param withChangeFlag Whether compares with change flags
+   */
+  public static void assertRowsEquals(List<Row> rows, String expected, boolean withChangeFlag) {
     String rowsString = rows.stream()
         .sorted(Comparator.comparing(o -> toStringSafely(o.getField(0))))
+        .map(row -> {
+          final String rowStr = row.toString();
+          if (withChangeFlag) {
+            return row.getKind().shortString() + "(" + rowStr + ")";
+          } else {
+            return rowStr;
+          }
+        })
         .collect(Collectors.toList()).toString();
     assertThat(rowsString, is(expected));
   }

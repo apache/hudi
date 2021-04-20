@@ -21,6 +21,7 @@ package org.apache.hudi.table.format;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.HoodieTableSource;
+import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -154,7 +155,7 @@ public class TestInputFormat {
   }
 
   @Test
-  void testReadWithDeletes() throws Exception {
+  void testReadWithDeletesMOR() throws Exception {
     beforeEach(HoodieTableType.MERGE_ON_READ);
 
     // write another commit to read again
@@ -163,16 +164,36 @@ public class TestInputFormat {
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
     assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
     ((MergeOnReadInputFormat) inputFormat).isEmitDelete(true);
+    ((MergeOnReadInputFormat) inputFormat).setOperationPos(5);
 
     List<RowData> result = readData(inputFormat);
 
-    final String actual = TestData.rowDataToString(result);
+    final String actual = TestData.rowDataToString(result, true);
     final String expected = "["
-        + "id1,Danny,24,1970-01-01T00:00:00.001,par1, "
-        + "id2,Stephen,34,1970-01-01T00:00:00.002,par1, "
-        + "id3,null,null,null,null, "
-        + "id5,null,null,null,null, "
-        + "id9,null,null,null,null]";
+        + "+I(id1,Danny,24,1970-01-01T00:00:00.001,par1), "
+        + "+I(id2,Stephen,34,1970-01-01T00:00:00.002,par1), "
+        + "-D(id3,Julian,53,1970-01-01T00:00:00.003,par2), "
+        + "-D(id5,Sophia,18,1970-01-01T00:00:00.005,par3), "
+        + "-D(id9,Jane,19,1970-01-01T00:00:00.006,par3)]";
+    assertThat(actual, is(expected));
+  }
+
+  @Test
+  void testReadWithDeletesCOW() throws Exception {
+    beforeEach(HoodieTableType.COPY_ON_WRITE);
+
+    // write another commit to read again
+    TestData.writeData(TestData.DATA_SET_UPDATE_DELETE, conf);
+
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    assertThat(inputFormat, instanceOf(CopyOnWriteInputFormat.class));
+
+    List<RowData> result = readData(inputFormat);
+
+    final String actual = TestData.rowDataToString(result, true);
+    final String expected = "["
+        + "+I(id1,Danny,24,1970-01-01T00:00:00.001,par1), "
+        + "+I(id2,Stephen,34,1970-01-01T00:00:00.002,par1)]";
     assertThat(actual, is(expected));
   }
 

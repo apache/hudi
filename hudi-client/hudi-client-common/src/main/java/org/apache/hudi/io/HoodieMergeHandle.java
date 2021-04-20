@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieCdcOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -243,6 +244,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
           + hoodieRecord.getPartitionPath() + " but trying to insert into partition: " + partitionPath);
       writeStatus.markFailure(hoodieRecord, failureEx, recordMetadata);
       return false;
+    }
+    if (HoodieCdcOperation.isDelete(hoodieRecord.getOperation())) {
+      indexedRecord = Option.empty();
     }
     try {
       if (indexedRecord.isPresent()) {

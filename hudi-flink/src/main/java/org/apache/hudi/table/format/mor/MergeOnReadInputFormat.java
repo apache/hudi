@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format.mor;
 
+import org.apache.hudi.common.model.HoodieCdcOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
@@ -129,6 +130,11 @@ public class MergeOnReadInputFormat
    */
   private boolean emitDelete;
 
+  /**
+   * Position of the hoodie cdc operation.
+   */
+  private int operationPos;
+
   private MergeOnReadInputFormat(
       Configuration conf,
       Path[] paths,
@@ -136,7 +142,8 @@ public class MergeOnReadInputFormat
       List<DataType> fieldTypes,
       String defaultPartName,
       long limit,
-      boolean emitDelete) {
+      boolean emitDelete,
+      int operationPos) {
     this.conf = conf;
     this.paths = paths;
     this.tableState = tableState;
@@ -148,6 +155,7 @@ public class MergeOnReadInputFormat
     this.requiredPos = tableState.getRequiredPositions();
     this.limit = limit;
     this.emitDelete = emitDelete;
+    this.operationPos = operationPos;
   }
 
   /**
@@ -343,12 +351,17 @@ public class MergeOnReadInputFormat
                 return hasNext();
               }
             }
+            final IndexedRecord avroRecord = curAvroRecord.get();
             GenericRecord requiredAvroRecord = buildAvroRecordBySchema(
-                curAvroRecord.get(),
+                avroRecord,
                 requiredSchema,
                 requiredPos,
                 recordBuilder);
             currentRecord = (RowData) avroToRowDataConverter.convert(requiredAvroRecord);
+            final RowKind rowKind = FormatUtils.getRowKind(avroRecord, operationPos);
+            if (rowKind != null) {
+              currentRecord.setRowKind(rowKind);
+            }
             return true;
           }
         } else {
@@ -531,8 +544,7 @@ public class MergeOnReadInputFormat
           if (keyToSkip.contains(curKey)) {
             return reachedEnd();
           } else {
-            Option<IndexedRecord> insertAvroRecord =
-                logRecords.get(curKey).getData().getInsertValue(tableSchema);
+            Option<IndexedRecord> insertAvroRecord = getInsertValue(curKey);
             if (!insertAvroRecord.isPresent()) {
               // stand alone delete record, skipping
               return reachedEnd();
@@ -563,11 +575,23 @@ public class MergeOnReadInputFormat
       }
     }
 
+    private Option<IndexedRecord> getInsertValue(String curKey) throws IOException {
+      final HoodieRecord<?> record = logRecords.get(curKey);
+      if (HoodieCdcOperation.isDelete(record.getOperation())) {
+        return Option.empty();
+      }
+      return record.getData().getInsertValue(tableSchema);
+    }
+
     private Option<IndexedRecord> mergeRowWithLog(
         RowData curRow,
         String curKey) throws IOException {
+      final HoodieRecord<?> record = logRecords.get(curKey);
+      if (HoodieCdcOperation.isDelete(record.getOperation())) {
+        return Option.empty();
+      }
       GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, curRow);
-      return logRecords.get(curKey).getData().combineAndGetUpdateValue(historyAvroRecord, tableSchema);
+      return record.getData().combineAndGetUpdateValue(historyAvroRecord, tableSchema);
     }
   }
 
@@ -582,6 +606,7 @@ public class MergeOnReadInputFormat
     private String defaultPartName;
     private long limit = -1;
     private boolean emitDelete = false;
+    private int operationPos = -1;
 
     public Builder config(Configuration conf) {
       this.conf = conf;
@@ -618,14 +643,24 @@ public class MergeOnReadInputFormat
       return this;
     }
 
+    public Builder operationPos(int operationPos) {
+      this.operationPos = operationPos;
+      return this;
+    }
+
     public MergeOnReadInputFormat build() {
       return new MergeOnReadInputFormat(conf, paths, tableState,
-          fieldTypes, defaultPartName, limit, emitDelete);
+          fieldTypes, defaultPartName, limit, emitDelete, operationPos);
     }
   }
 
   @VisibleForTesting
   public void isEmitDelete(boolean emitDelete) {
     this.emitDelete = emitDelete;
+  }
+
+  @VisibleForTesting
+  public void setOperationPos(int operationPos) {
+    this.operationPos = operationPos;
   }
 }

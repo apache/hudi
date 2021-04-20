@@ -30,6 +30,7 @@ import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
+import org.apache.hudi.util.ChangelogModes;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -44,7 +45,6 @@ import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.connector.sink.abilities.SupportsOverwrite;
 import org.apache.flink.table.connector.sink.abilities.SupportsPartitioning;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.types.RowKind;
 
 import java.util.Map;
 
@@ -114,11 +114,7 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
   @Override
   public ChangelogMode getChangelogMode(ChangelogMode changelogMode) {
     // ignore RowKind.UPDATE_BEFORE
-    return ChangelogMode.newBuilder()
-        .addContainedKind(RowKind.DELETE)
-        .addContainedKind(RowKind.INSERT)
-        .addContainedKind(RowKind.UPDATE_AFTER)
-        .build();
+    return ChangelogModes.UPSERT;
   }
 
   @Override

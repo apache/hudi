@@ -235,14 +235,16 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     streamTableEnv.executeSql(hoodieTableDDL);
 
-    List<Row> result = execSelectSql(streamTableEnv, "select * from t1", 10);
-    final String expected = "["
-        + "id1,Danny,24,1970-01-01T00:00:00.001,par1, "
-        + "id2,Stephen,34,1970-01-01T00:00:00.002,par1, "
-        + "id3,null,null,null,null, "
-        + "id5,null,null,null,null, "
-        + "id9,null,null,null,null]";
-    assertRowsEquals(result, expected);
+    final String sinkDDL = "create table sink(\n"
+        + "  name varchar(20),\n"
+        + "  age_sum int\n"
+        + ") with (\n"
+        + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "'"
+        + ")";
+    List<Row> result = execSelectSql(streamTableEnv,
+        "select name, sum(age) from t1 group by name", sinkDDL, 10);
+    final String expected = "[+I(Danny,24), +I(Stephen,34)]";
+    assertRowsEquals(result, expected, true);
   }
 
   @ParameterizedTest
@@ -370,7 +372,12 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   }
 
   private List<Row> execSelectSql(TableEnvironment tEnv, String select, long timeout) throws InterruptedException {
-    tEnv.executeSql(TestConfigurations.getCollectSinkDDL("sink"));
+    final String sinkDDL = TestConfigurations.getCollectSinkDDL("sink");
+    return execSelectSql(tEnv, select, sinkDDL, timeout);
+  }
+
+  private List<Row> execSelectSql(TableEnvironment tEnv, String select, String sinkDDL, long timeout) throws InterruptedException {
+    tEnv.executeSql(sinkDDL);
     TableResult tableResult = tEnv.executeSql("insert into sink " + select);
     // wait for the timeout then cancels the job
     TimeUnit.SECONDS.sleep(timeout);

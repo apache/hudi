@@ -145,6 +145,7 @@ public class CollectSinkTableFactory implements DynamicTableSinkFactory {
     public void invoke(RowData value, SinkFunction.Context context) {
       Row row = (Row) converter.toExternal(value);
       assert row != null;
+      row.setKind(value.getRowKind());
       RESULT.get(taskID).add(row);
     }
 
