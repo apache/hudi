@@ -164,7 +164,10 @@ public class HoodieClusteringJob {
     String schemaStr = getSchemaFromLatestInstant();
     SparkRDDWriteClient client =
         UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props);
+    if (cfg.clusteringInstantTime != null) {
+      client.scheduleClusteringAtInstant(cfg.clusteringInstantTime, Option.empty());
+      return Option.of(cfg.clusteringInstantTime);
+    }
     return client.scheduleClustering(Option.empty());
   }
-
 }
