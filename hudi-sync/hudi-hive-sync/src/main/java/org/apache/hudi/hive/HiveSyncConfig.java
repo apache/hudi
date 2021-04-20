@@ -88,6 +88,12 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--verify-metadata-file-listing"}, description = "Verify file listing from Hudi's metadata against file system")
   public Boolean verifyMetadataFileListing = HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE;
 
+  @Parameter(names = {"--table-properties"}, description = "Table properties to hive table")
+  public String tableProperties;
+
+  @Parameter(names = {"--serde-properties"}, description = "Serde properties to hive table")
+  public String serdeProperties;
+
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;
 
@@ -114,32 +120,36 @@ public class HiveSyncConfig implements Serializable {
     newConfig.verifyMetadataFileListing = cfg.verifyMetadataFileListing;
     newConfig.supportTimestamp = cfg.supportTimestamp;
     newConfig.decodePartition = cfg.decodePartition;
+    newConfig.tableProperties = cfg.tableProperties;
+    newConfig.serdeProperties = cfg.serdeProperties;
     return newConfig;
   }
 
   @Override
   public String toString() {
     return "HiveSyncConfig{"
-        + "databaseName='" + databaseName + '\''
-        + ", tableName='" + tableName + '\''
-        + ", baseFileFormat='" + baseFileFormat + '\''
-        + ", hiveUser='" + hiveUser + '\''
-        + ", hivePass='" + hivePass + '\''
-        + ", jdbcUrl='" + jdbcUrl + '\''
-        + ", basePath='" + basePath + '\''
-        + ", partitionFields=" + partitionFields
-        + ", partitionValueExtractorClass='" + partitionValueExtractorClass + '\''
-        + ", assumeDatePartitioning=" + assumeDatePartitioning
-        + ", usePreApacheInputFormat=" + usePreApacheInputFormat
-        + ", useJdbc=" + useJdbc
-        + ", autoCreateDatabase=" + autoCreateDatabase
-        + ", ignoreExceptions=" + ignoreExceptions
-        + ", skipROSuffix=" + skipROSuffix
-        + ", help=" + help
-        + ", supportTimestamp=" + supportTimestamp
-        + ", decodePartition=" + decodePartition
-        + ", useFileListingFromMetadata=" + useFileListingFromMetadata
-        + ", verifyMetadataFileListing=" + verifyMetadataFileListing
-        + '}';
+      + "databaseName='" + databaseName + '\''
+      + ", tableName='" + tableName + '\''
+      + ", baseFileFormat='" + baseFileFormat + '\''
+      + ", hiveUser='" + hiveUser + '\''
+      + ", hivePass='" + hivePass + '\''
+      + ", jdbcUrl='" + jdbcUrl + '\''
+      + ", basePath='" + basePath + '\''
+      + ", partitionFields=" + partitionFields
+      + ", partitionValueExtractorClass='" + partitionValueExtractorClass + '\''
+      + ", assumeDatePartitioning=" + assumeDatePartitioning
+      + ", usePreApacheInputFormat=" + usePreApacheInputFormat
+      + ", useJdbc=" + useJdbc
+      + ", autoCreateDatabase=" + autoCreateDatabase
+      + ", ignoreExceptions=" + ignoreExceptions
+      + ", skipROSuffix=" + skipROSuffix
+      + ", useFileListingFromMetadata=" + useFileListingFromMetadata
+      + ", verifyMetadataFileListing=" + verifyMetadataFileListing
+      + ", tableProperties='" + tableProperties + '\''
+      + ", serdeProperties='" + serdeProperties + '\''
+      + ", help=" + help
+      + ", supportTimestamp=" + supportTimestamp
+      + ", decodePartition=" + decodePartition
+      + '}';
   }
 }
