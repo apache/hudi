@@ -84,7 +84,7 @@ public class FlinkOptions {
       .key("index.state.ttl")
       .doubleType()
       .defaultValue(1.5D)
-      .withDescription("index state ttl in days. default is 1.5 day.");
+      .withDescription("Index state ttl in days, default 1.5 day");
 
   // ------------------------------------------------------------------------
   //  Read Options
