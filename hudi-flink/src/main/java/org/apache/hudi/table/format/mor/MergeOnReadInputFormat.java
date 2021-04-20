@@ -29,6 +29,7 @@ import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.cow.ParquetColumnarRowSplitReader;
 import org.apache.hudi.table.format.cow.ParquetSplitReaderUtil;
 import org.apache.hudi.util.AvroToRowDataConverters;
+import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.util.StringToRowDataConverter;
@@ -63,6 +64,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.flink.table.data.vector.VectorizedColumnBatch.DEFAULT_SIZE;
 import static org.apache.flink.table.filesystem.RowPartitionComputer.restorePartValueFromType;
+import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_COMMIT_TIME_COL_POS;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS;
 import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
 
@@ -180,7 +182,7 @@ public class MergeOnReadInputFormat
           new Schema.Parser().parse(this.tableState.getAvroSchema()),
           new Schema.Parser().parse(this.tableState.getRequiredAvroSchema()),
           this.requiredPos,
-          getFullSchemaReader(split.getTablePath()));
+          getFullSchemaReader(split.getBasePath().get()));
     } else {
       throw new HoodieException("Unable to select an Iterator to read the Hoodie MOR File Split for "
           + "file path: " + split.getBasePath()
@@ -337,7 +339,7 @@ public class MergeOnReadInputFormat
             // efficient.
             if (split.getInstantRange().isPresent()) {
               // based on the fact that commit time is always the first field
-              String commitTime = curAvroRecord.get().get(0).toString();
+              String commitTime = curAvroRecord.get().get(HOODIE_COMMIT_TIME_COL_POS).toString();
               if (!split.getInstantRange().get().isInRange(commitTime)) {
                 // filter out the records that are not in range
                 return hasNext();
@@ -431,6 +433,11 @@ public class MergeOnReadInputFormat
     // iterator for log files
     private final Iterator<RowData> iterator;
 
+    // add the flag because the flink ParquetColumnarRowSplitReader is buggy:
+    // method #reachedEnd() returns false after it returns true.
+    // refactor it out once FLINK-22370 is resolved.
+    private boolean readLogs = false;
+
     private RowData currentRecord;
 
     SkipMergeIterator(ParquetColumnarRowSplitReader reader, Iterator<RowData> iterator) {
@@ -440,10 +447,11 @@ public class MergeOnReadInputFormat
 
     @Override
     public boolean reachedEnd() throws IOException {
-      if (!this.reader.reachedEnd()) {
+      if (!readLogs && !this.reader.reachedEnd()) {
         currentRecord = this.reader.nextRecord();
         return false;
       }
+      readLogs = true;
       if (this.iterator.hasNext()) {
         currentRecord = this.iterator.next();
         return false;
@@ -479,6 +487,12 @@ public class MergeOnReadInputFormat
     private final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter;
     private final GenericRecordBuilder recordBuilder;
 
+    private final RowDataProjection projection;
+    // add the flag because the flink ParquetColumnarRowSplitReader is buggy:
+    // method #reachedEnd() returns false after it returns true.
+    // refactor it out once FLINK-22370 is resolved.
+    private boolean readLogs = false;
+
     private Set<String> keyToSkip = new HashSet<>();
 
     private RowData currentRecord;
@@ -501,11 +515,12 @@ public class MergeOnReadInputFormat
       this.recordBuilder = new GenericRecordBuilder(requiredSchema);
       this.rowDataToAvroConverter = RowDataToAvroConverters.createConverter(tableRowType);
       this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(requiredRowType);
+      this.projection = RowDataProjection.instance(requiredRowType, requiredPos);
     }
 
     @Override
     public boolean reachedEnd() throws IOException {
-      if (!this.reader.reachedEnd()) {
+      if (!readLogs && !this.reader.reachedEnd()) {
         currentRecord = this.reader.nextRecord();
         final String curKey = currentRecord.getString(HOODIE_RECORD_KEY_COL_POS).toString();
         if (logRecords.containsKey(curKey)) {
@@ -524,19 +539,18 @@ public class MergeOnReadInputFormat
             return false;
           }
         }
+        // project the full record in base with required positions
+        currentRecord = projection.project(currentRecord);
         return false;
       } else {
-        if (logKeysIterator.hasNext()) {
+        readLogs = true;
+        while (logKeysIterator.hasNext()) {
           final String curKey = logKeysIterator.next();
-          if (keyToSkip.contains(curKey)) {
-            return reachedEnd();
-          } else {
+          if (!keyToSkip.contains(curKey)) {
             Option<IndexedRecord> insertAvroRecord =
                 logRecords.get(curKey).getData().getInsertValue(tableSchema);
-            if (!insertAvroRecord.isPresent()) {
-              // stand alone delete record, skipping
-              return reachedEnd();
-            } else {
+            if (insertAvroRecord.isPresent()) {
+              // the record is a DELETE if insertAvroRecord not present, skipping
               GenericRecord requiredAvroRecord = buildAvroRecordBySchema(
                   insertAvroRecord.get(),
                   requiredSchema,
