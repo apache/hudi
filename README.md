@@ -111,6 +111,7 @@ Final steps:
  - in `docs/_pages/releases.md` Add a new section on the very top for this release. Refer to `Release 0.5.0-incubating` 
  for reference. Ensure the links for github release tag, docs, source release, raw release notes are pointing to this 
  latest release. Also include following subsections - `Download Information`, `Release Highlights` and `Raw Release Notes`.
+ - Update `docs/_pages/download.md` to include the download links.
  
 #### Link to this version's doc
 
