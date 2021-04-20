@@ -26,10 +26,12 @@ import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.metastore.api.Database;
+import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
@@ -71,7 +73,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   private final PartitionValueExtractor partitionValueExtractor;
   private IMetaStoreClient client;
   private SessionState sessionState;
-  private org.apache.hadoop.hive.ql.Driver hiveDriver;
+  private Driver hiveDriver;
   private HiveSyncConfig syncConfig;
   private FileSystem fs;
   private Connection connection;
@@ -91,16 +93,15 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       createHiveConnection();
     }
     try {
-      final long startTime = System.currentTimeMillis();
+      HoodieTimer timer = new HoodieTimer().startTimer();
       this.sessionState = new SessionState(configuration,
               UserGroupInformation.getCurrentUser().getShortUserName());
       SessionState.start(this.sessionState);
       this.sessionState.setCurrentDatabase(syncConfig.databaseName);
       hiveDriver = new org.apache.hadoop.hive.ql.Driver(configuration);
       this.client = Hive.get(configuration).getMSC();
-      final long endTime = System.currentTimeMillis();
       LOG.info(String.format("Time taken to start SessionState and create Driver and client: "
-              + "%s ms", (endTime - startTime)));
+              + "%s ms", (timer.endTimer())));
     } catch (MetaException | HiveException | IOException e) {
       if (this.sessionState != null) {
         try {
