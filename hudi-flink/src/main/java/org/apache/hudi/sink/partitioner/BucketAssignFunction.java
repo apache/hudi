@@ -146,9 +146,9 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
             "indexState",
             TypeInformation.of(HoodieKey.class),
             TypeInformation.of(HoodieRecordLocation.class));
-    long ttl = conf.getLong(FlinkOptions.INDEX_STATE_TTL);
+    double ttl = conf.getDouble(FlinkOptions.INDEX_STATE_TTL) * 24 * 60 * 60 * 1000;
     if (ttl > 0) {
-      indexStateDesc.enableTimeToLive(StateTtlConfigUtil.createTtlConfig(ttl));
+      indexStateDesc.enableTimeToLive(StateTtlConfigUtil.createTtlConfig((long) ttl));
     }
     indexState = context.getKeyedStateStore().getMapState(indexStateDesc);
     if (bootstrapIndex) {
