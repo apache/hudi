@@ -1680,7 +1680,7 @@ var store = [{
         "url": "https://hudi.apache.org/blog/hudi-clustering-intro/",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
         "title": "Apache Hudi Key Generators",
-        "excerpt":"Every record in Hudi is uniquely identified by a HoodieKey, which is a pair of record key and partition path where the record belongs to. Hudi has imposed this constraint so that updates and deletes can be applied to the record of interest. Hudi relies on the partition path field...","categories": ["blog"],
+        "excerpt":"Every record in Hudi is uniquely identified by a primary key, which is a pair of record key and partition path where the record belongs to. Using primary keys, Hudi can impose a) partition level uniqueness integrity constraint b) enable fast updates and deletes on records. One should choose the...","categories": ["blog"],
         "tags": [],
         "url": "https://hudi.apache.org/blog/hudi-key-generators/",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
