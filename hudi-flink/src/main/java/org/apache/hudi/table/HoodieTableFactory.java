@@ -20,6 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
+import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
 
 import org.apache.flink.configuration.ConfigOption;
@@ -129,13 +130,21 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       String recordKey = String.join(",", pkColumns);
       conf.setString(FlinkOptions.RECORD_KEY_FIELD, recordKey);
     }
-    List<String> partitions = table.getPartitionKeys();
-    if (partitions.size() > 0) {
+    List<String> partitionKeys = table.getPartitionKeys();
+    if (partitionKeys.size() > 0) {
       // the PARTITIONED BY syntax always has higher priority than option FlinkOptions#PARTITION_PATH_FIELD
-      conf.setString(FlinkOptions.PARTITION_PATH_FIELD, String.join(",", partitions));
+      conf.setString(FlinkOptions.PARTITION_PATH_FIELD, String.join(",", partitionKeys));
     }
     // tweak the key gen class if possible
-    boolean complexHoodieKey = pkColumns.size() > 1 || partitions.size() > 1;
+    final String[] partitions = conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",");
+    if (partitions.length == 1 && partitions[0].equals("")) {
+      conf.setString(FlinkOptions.KEYGEN_CLASS, NonpartitionedAvroKeyGenerator.class.getName());
+      LOG.info("Table option [{}] is reset to {} because this is a non-partitioned table",
+          FlinkOptions.KEYGEN_CLASS.key(), NonpartitionedAvroKeyGenerator.class.getName());
+      return;
+    }
+    final String[] pks = conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",");
+    boolean complexHoodieKey = pks.length > 1 || partitions.length > 1;
     if (complexHoodieKey && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS)) {
       conf.setString(FlinkOptions.KEYGEN_CLASS, ComplexAvroKeyGenerator.class.getName());
       LOG.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",

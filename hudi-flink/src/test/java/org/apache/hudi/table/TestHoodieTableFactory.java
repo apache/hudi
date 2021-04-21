@@ -20,6 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
+import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
@@ -119,6 +120,14 @@ public class TestHoodieTableFactory {
     final Configuration conf2 = tableSource2.getConf();
     assertThat(conf2.get(FlinkOptions.RECORD_KEY_FIELD), is("f0,f1"));
     assertThat(conf2.get(FlinkOptions.KEYGEN_CLASS), is(ComplexAvroKeyGenerator.class.getName()));
+
+    // definition with complex primary keys and empty partition paths
+    this.conf.setString(FlinkOptions.KEYGEN_CLASS, FlinkOptions.KEYGEN_CLASS.defaultValue());
+    final MockContext sourceContext3 = MockContext.getInstance(this.conf, schema2, "");
+    final HoodieTableSource tableSource3 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext3);
+    final Configuration conf3 = tableSource3.getConf();
+    assertThat(conf3.get(FlinkOptions.RECORD_KEY_FIELD), is("f0,f1"));
+    assertThat(conf3.get(FlinkOptions.KEYGEN_CLASS), is(NonpartitionedAvroKeyGenerator.class.getName()));
   }
 
   @Test
@@ -167,6 +176,14 @@ public class TestHoodieTableFactory {
     final Configuration conf2 = tableSink2.getConf();
     assertThat(conf2.get(FlinkOptions.RECORD_KEY_FIELD), is("f0,f1"));
     assertThat(conf2.get(FlinkOptions.KEYGEN_CLASS), is(ComplexAvroKeyGenerator.class.getName()));
+
+    // definition with complex primary keys and empty partition paths
+    this.conf.setString(FlinkOptions.KEYGEN_CLASS, FlinkOptions.KEYGEN_CLASS.defaultValue());
+    final MockContext sinkContext3 = MockContext.getInstance(this.conf, schema2, "");
+    final HoodieTableSink tableSink3 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sinkContext3);
+    final Configuration conf3 = tableSink3.getConf();
+    assertThat(conf3.get(FlinkOptions.RECORD_KEY_FIELD), is("f0,f1"));
+    assertThat(conf3.get(FlinkOptions.KEYGEN_CLASS), is(NonpartitionedAvroKeyGenerator.class.getName()));
   }
 
   // -------------------------------------------------------------------------
