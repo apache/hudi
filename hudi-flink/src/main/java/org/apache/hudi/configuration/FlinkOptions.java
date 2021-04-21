@@ -239,9 +239,9 @@ public class FlinkOptions {
   public static final ConfigOption<String> PARTITION_PATH_FIELD = ConfigOptions
       .key(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY)
       .stringType()
-      .defaultValue("partition-path")
+      .defaultValue("")
       .withDescription("Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`.\n"
-          + "Actual value obtained by invoking .toString()");
+          + "Actual value obtained by invoking .toString(), default ''");
 
   public static final ConfigOption<Boolean> PARTITION_PATH_URL_ENCODE = ConfigOptions
       .key("write.partition.url_encode")
