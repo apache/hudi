@@ -352,6 +352,42 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     assertRowsEquals(result, "[id1,Sophia,18,1970-01-01T00:00:05,par1]");
   }
 
+  @ParameterizedTest
+  @EnumSource(value = ExecMode.class)
+  void testWriteNonPartitionedTable(ExecMode execMode) {
+    TableEnvironment tableEnv = execMode == ExecMode.BATCH ? batchTableEnv : streamTableEnv;
+    String hoodieTableDDL = "create table t1(\n"
+        + "  uuid varchar(20),\n"
+        + "  name varchar(10),\n"
+        + "  age int,\n"
+        + "  ts timestamp(3),\n"
+        + "  `partition` varchar(20),\n"
+        + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
+        + ")\n"
+        + "with (\n"
+        + "  'connector' = 'hudi',\n"
+        + "  'path' = '" + tempFile.getAbsolutePath() + "'\n"
+        + ")";
+    tableEnv.executeSql(hoodieTableDDL);
+
+    final String insertInto1 = "insert into t1 values\n"
+        + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1')";
+
+    execInsertSql(tableEnv, insertInto1);
+
+    final String insertInto2 = "insert into t1 values\n"
+        + "('id1','Stephen',33,TIMESTAMP '1970-01-01 00:00:02','par2'),\n"
+        + "('id1','Julian',53,TIMESTAMP '1970-01-01 00:00:03','par3'),\n"
+        + "('id1','Fabian',31,TIMESTAMP '1970-01-01 00:00:04','par4'),\n"
+        + "('id1','Sophia',18,TIMESTAMP '1970-01-01 00:00:05','par5')";
+
+    execInsertSql(tableEnv, insertInto2);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result, "[id1,Sophia,18,1970-01-01T00:00:05,par5]");
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
