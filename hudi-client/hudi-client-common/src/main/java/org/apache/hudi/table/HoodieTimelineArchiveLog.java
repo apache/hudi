@@ -366,7 +366,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
   }
 
   private IndexedRecord convertToAvroRecord(HoodieTimeline commitTimeline, HoodieInstant hoodieInstant)
-      throws IOException {
+          throws IOException {
     return MetadataConversionUtils.createMetaWrapper(hoodieInstant, metaClient);
   }
 }

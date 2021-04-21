@@ -341,6 +341,14 @@ public class HoodieTestDataGenerator {
   }
 
   private static void createMetadataFile(String f, String basePath, Configuration configuration, HoodieCommitMetadata commitMetadata) {
+    try {
+      createMetadataFile(f, basePath, configuration, commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+    } catch (IOException e) {
+      throw new HoodieIOException(e.getMessage(), e);
+    }
+  }
+
+  private static void createMetadataFile(String f, String basePath, Configuration configuration, byte[] content) {
     Path commitFile = new Path(
         basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
     FSDataOutputStream os = null;
@@ -348,7 +356,7 @@ public class HoodieTestDataGenerator {
       FileSystem fs = FSUtils.getFs(basePath, configuration);
       os = fs.create(commitFile, true);
       // Write empty commit metadata
-      os.writeBytes(new String(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+      os.write(content);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     } finally {
