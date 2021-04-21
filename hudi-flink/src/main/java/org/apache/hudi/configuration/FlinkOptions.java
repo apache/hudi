@@ -80,6 +80,12 @@ public class FlinkOptions {
       .defaultValue(false)
       .withDescription("Whether to bootstrap the index state from existing hoodie table, default false");
 
+  public static final ConfigOption<Double> INDEX_STATE_TTL = ConfigOptions
+      .key("index.state.ttl")
+      .doubleType()
+      .defaultValue(1.5D)
+      .withDescription("Index state ttl in days, default 1.5 day");
+
   // ------------------------------------------------------------------------
   //  Read Options
   // ------------------------------------------------------------------------
