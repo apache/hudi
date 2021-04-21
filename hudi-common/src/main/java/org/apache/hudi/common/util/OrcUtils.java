@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -26,8 +27,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.orc.storage.ql.exec.vector.BytesColumnVector;
 import org.apache.orc.storage.ql.exec.vector.VectorizedRowBatch;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
@@ -49,6 +54,112 @@ import org.apache.orc.TypeDescription;
  * Utility functions for ORC files.
  */
 public class OrcUtils {
+
+  /**
+   * Fetch {@link HoodieKey}s from the given ORC file.
+   *
+   * @param filePath      The ORC file path.
+   * @param configuration configuration to build fs object
+   * @return {@link List} of {@link HoodieKey}s fetched from the ORC file
+   */
+  public List<HoodieKey> fetchRecordKeyPartitionPathFromOrc(Configuration configuration, Path filePath) {
+    List<HoodieKey> hoodieKeys = new ArrayList<>();
+    try {
+      if (!filePath.getFileSystem(configuration).exists(filePath)) {
+        return new ArrayList<>();
+      }
+
+      Configuration conf = new Configuration(configuration);
+      conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
+      Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(conf));
+
+      Schema readSchema = HoodieAvroUtils.getRecordKeyPartitionPathSchema();
+      TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(readSchema);
+      List<String> fieldNames = orcSchema.getFieldNames();
+      VectorizedRowBatch batch = orcSchema.createRowBatch();
+      RecordReader recordReader = reader.rows(new Options(conf).schema(orcSchema));
+
+      // column indices for the RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD fields
+      int keyCol = -1;
+      int partitionCol = -1;
+      for (int i = 0; i < fieldNames.size(); i++) {
+        if (fieldNames.get(i).equals(HoodieRecord.RECORD_KEY_METADATA_FIELD)) {
+          keyCol = i;
+        }
+        if (fieldNames.get(i).equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD)) {
+          partitionCol = i;
+        }
+      }
+      if (keyCol == -1 || partitionCol == -1) {
+        throw new HoodieException(String.format("Couldn't find row keys or partition path in %s.", filePath));
+      }
+      while (recordReader.nextBatch(batch)) {
+        BytesColumnVector rowKeys = (BytesColumnVector) batch.cols[keyCol];
+        BytesColumnVector partitionPaths = (BytesColumnVector) batch.cols[partitionCol];
+        for (int i = 0; i < batch.size; i++) {
+          String rowKey = rowKeys.toString(i);
+          String partitionPath = partitionPaths.toString(i);
+          hoodieKeys.add(new HoodieKey(rowKey, partitionPath));
+        }
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to read from ORC file " + filePath, e);
+    }
+    return hoodieKeys;
+  }
+
+  /**
+   * NOTE: This literally reads the entire file contents, thus should be used with caution.
+   */
+  public List<GenericRecord> readAvroRecords(Configuration configuration, Path filePath) {
+    List<GenericRecord> records = new ArrayList<>();
+    try {
+      Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(configuration));
+      TypeDescription orcSchema = reader.getSchema();
+      Schema avroSchema = AvroOrcUtils.createAvroSchema(orcSchema);
+      RecordReader recordReader = reader.rows(new Options(configuration).schema(orcSchema));
+      OrcReaderIterator<GenericRecord> iterator = new OrcReaderIterator<>(recordReader, avroSchema, orcSchema);
+      while (iterator.hasNext()) {
+        GenericRecord record = iterator.next();
+        records.add(record);
+      }
+    } catch (IOException io) {
+      throw new HoodieIOException("Unable to read Avro records from an ORC file.", io);
+    }
+    return records;
+  }
+
+  /**
+   * NOTE: This literally reads the entire file contents, thus should be used with caution.
+   */
+  public List<GenericRecord> readAvroRecords(Configuration configuration, Path filePath, Schema avroSchema) {
+    List<GenericRecord> records = new ArrayList<>();
+    try {
+      TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(avroSchema);
+      Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(configuration));
+      RecordReader recordReader = reader.rows(new Options(configuration).schema(orcSchema));
+      OrcReaderIterator<GenericRecord> iterator = new OrcReaderIterator<>(recordReader, avroSchema, orcSchema);
+      while (iterator.hasNext()) {
+        GenericRecord record = iterator.next();
+        records.add(record);
+      }
+    } catch (IOException io) {
+      throw new HoodieIOException("Unable to create an ORC reader.", io);
+    }
+    return records;
+  }
+
+  /**
+   * Read the rowKey list from the given ORC file.
+   *
+   * @param filePath      The ORC file path.
+   * @param configuration configuration to build fs object
+   * @return Set Set of row keys
+   */
+  public Set<String> readRowKeysFromOrc(Configuration configuration, Path filePath) {
+    return filterOrcRowKeys(configuration, filePath, new HashSet<>());
+  }
+
   /**
    * Read the rowKey list matching the given filter, from the given ORC file. If the filter is empty, then this will
    * return all the rowkeys.
