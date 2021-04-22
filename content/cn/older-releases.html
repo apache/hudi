@@ -94,6 +94,8 @@
               <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
             </li><li class="masthead__menu-item">
               <a href="/cn/releases.html" target="_self" >发布</a>
+            </li><li class="masthead__menu-item">
+              <a href="/cn/download.html" target="_self" >下载</a>
             </li></ul>
         <button class="greedy-nav__toggle hidden" type="button">
           <span class="visually-hidden">Toggle menu</span>
@@ -206,9 +208,17 @@
       <li><a href="#raw-release-notes-1">Raw Release Notes</a></li>
     </ul>
   </li>
+  <li><a href="#release-050-incubating-docs">Release 0.5.0-incubating (docs)</a>
+    <ul>
+      <li><a href="#download-information-2">Download Information</a></li>
+      <li><a href="#release-highlights-2">Release Highlights</a></li>
+      <li><a href="#migration-guide-for-this-release-3">Migration Guide for this release</a></li>
+      <li><a href="#raw-release-notes-2">Raw Release Notes</a></li>
+    </ul>
+  </li>
   <li><a href="#release-047">Release 0.4.7</a>
     <ul>
-      <li><a href="#release-highlights-2">Release Highlights</a></li>
+      <li><a href="#release-highlights-3">Release Highlights</a></li>
       <li><a href="#pr-list">PR LIST</a></li>
     </ul>
   </li>
@@ -220,7 +230,7 @@
 
 <h3 id="download-information">Download Information</h3>
 <ul>
-  <li>Source Release : <a href="https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz">Apache Hudi 0.5.2-incubating Source Release</a> (<a href="https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/incubator/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.sha512">sha512</a>)</li>
+  <li>Source Release : <a href="https://downloads.apache.org/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz">Apache Hudi 0.5.2-incubating Source Release</a> (<a href="https://downloads.apache.org/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.sha512">sha512</a>)</li>
   <li>Apache Hudi jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
 </ul>
 
@@ -255,7 +265,7 @@
 
 <h3 id="download-information-1">Download Information</h3>
 <ul>
-  <li>Source Release : <a href="https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz">Apache Hudi 0.5.1-incubating Source Release</a> (<a href="https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/incubator/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.sha512">sha512</a>)</li>
+  <li>Source Release : <a href="https://downloads.apache.org/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz">Apache Hudi 0.5.1-incubating Source Release</a> (<a href="https://downloads.apache.org/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.sha512">sha512</a>)</li>
   <li>Apache Hudi jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
 </ul>
 
@@ -280,9 +290,33 @@
 <h3 id="raw-release-notes-1">Raw Release Notes</h3>
 <p>The raw release notes are available <a href="https://jira.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&amp;version=12346087">here</a></p>
 
-<h2 id="release-047"><a href="https://github.com/apache/hudi/releases/tag/hoodie-0.4.7">Release 0.4.7</a></h2>
+<h2 id="release-050-incubating-docs"><a href="https://github.com/apache/hudi/releases/tag/release-0.5.0-incubating">Release 0.5.0-incubating</a> (<a href="/docs/0.5.0-quick-start-guide.html">docs</a>)</h2>
+
+<h3 id="download-information-2">Download Information</h3>
+<ul>
+  <li>Source Release : <a href="https://downloads.apache.org/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz">Apache Hudi 0.5.0-incubating Source Release</a> (<a href="https://downloads.apache.org/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.sha512">sha512</a>)</li>
+  <li>Apache Hudi jars corresponding to this release is available <a href="https://repository.apache.org/#nexus-search;quick~hudi">here</a></li>
+</ul>
 
 <h3 id="release-highlights-2">Release Highlights</h3>
+<ul>
+  <li>Package and format renaming from com.uber.hoodie to org.apache.hudi (See migration guide section below)</li>
+  <li>Major redo of Hudi bundles to address class and jar version mismatches in different environments</li>
+  <li>Upgrade from Hive 1.x to Hive 2.x for compile time dependencies - Hive 1.x runtime integration still works with a patch : See <a href="https://lists.apache.org/thread.html/48b3f0553f47c576fd7072f56bb0d8a24fb47d4003880d179c7f88a3@%3Cdev.hudi.apache.org%3E">the discussion thread</a></li>
+  <li>DeltaStreamer now supports continuous running mode with managed concurrent compaction</li>
+  <li>Support for Composite Keys as record key</li>
+  <li>HoodieCombinedInputFormat to scale huge hive queries running on Hoodie tables</li>
+</ul>
+
+<h3 id="migration-guide-for-this-release-3">Migration Guide for this release</h3>
+<p>This is the first Apache release for Hudi. Prior to this release, Hudi Jars were published using “com.uber.hoodie” maven co-ordinates. We have a <a href="https://cwiki.apache.org/confluence/display/HUDI/Migration+Guide+From+com.uber.hoodie+to+org.apache.hudi">migration guide</a></p>
+
+<h3 id="raw-release-notes-2">Raw Release Notes</h3>
+<p>The raw release notes are available <a href="https://jira.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&amp;version=12346087">here</a></p>
+
+<h2 id="release-047"><a href="https://github.com/apache/hudi/releases/tag/hoodie-0.4.7">Release 0.4.7</a></h2>
+
+<h3 id="release-highlights-3">Release Highlights</h3>
 
 <ul>
   <li>Major releases with fundamental changes to filesystem listing &amp; write failure handling</li>

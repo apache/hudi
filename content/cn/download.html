@@ -3,21 +3,21 @@
   <head>
     <meta charset="utf-8">
 
-<!-- begin _includes/seo.html --><title>Monitor Hudi metrics with Datadog - Apache Hudi</title>
-<meta name="description" content="Introducing the feature of reporting Hudi metrics via Datadog HTTP API">
+<!-- begin _includes/seo.html --><title>Download - Apache Hudi</title>
+<meta name="description" content="Apache Hudi brings upserts, deletes and stream processing to data lakes built on HDFS or cloud storage.">
 
-<meta property="og:type" content="article">
+<meta property="og:type" content="website">
 <meta property="og:locale" content="en_US">
 <meta property="og:site_name" content="">
-<meta property="og:title" content="Monitor Hudi metrics with Datadog">
-<meta property="og:url" content="https://hudi.apache.org/blog/monitoring-hudi-metrics-with-datadog/">
-
-
-  <meta property="og:description" content="Introducing the feature of reporting Hudi metrics via Datadog HTTP API">
+<meta property="og:title" content="Download">
+<meta property="og:url" content="https://hudi.apache.org/cn/download">
 
 
 
 
+
+
+  <meta property="article:modified_time" content="2019-12-30T14:59:57-05:00">
 
 
 
@@ -184,78 +184,70 @@
     <div class="page__inner-wrap">
       
         <header>
-          <h1 id="page-title" class="page__title" itemprop="headline">Monitor Hudi metrics with Datadog
+          <h1 id="page-title" class="page__title" itemprop="headline">Download
 </h1>
           <!-- Output author details if some exist. -->
-          <div class="page__author"><a href="https://cwiki.apache.org/confluence/display/~rxu">Raymond Xu</a> posted on <time datetime="2020-05-28">May 28, 2020</time></span>
+          
         </header>
       
 
       <section class="page__content" itemprop="text">
         
-          <style>
-            .page {
-              padding-right: 0 !important;
-            }
-          </style>
+        <aside class="sidebar__right sticky">
+          <nav class="toc">
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
+            <ul class="toc__menu">
+  <li><a href="#release-080">Release 0.8.0</a></li>
+  <li><a href="#release-070">Release 0.7.0</a></li>
+  <li><a href="#release-060">Release 0.6.0</a></li>
+  <li><a href="#release-053">Release 0.5.3</a></li>
+  <li><a href="#release-052-incubating">Release 0.5.2-incubating</a></li>
+  <li><a href="#release-051-incubating">Release 0.5.1-incubating</a></li>
+  <li><a href="#release-050-incubating">Release 0.5.0-incubating</a></li>
+</ul>
+          </nav>
+        </aside>
         
-        <h2 id="availability">Availability</h2>
-
-<p><strong>0.6.0 (unreleased)</strong></p>
-
-<h2 id="introduction">Introduction</h2>
-
-<p><a href="https://www.datadoghq.com/">Datadog</a> is a popular monitoring service. In the upcoming <code class="highlighter-rouge">0.6.0</code> release of Apache Hudi, we will introduce the feature of reporting Hudi metrics via Datadog HTTP API, in addition to the current reporter types: Graphite and JMX.</p>
-
-<h2 id="configurations">Configurations</h2>
-
-<p>Similar to other supported reporters, turning on Datadog reporter requires these 2 properties.</p>
-
-<div class="language-properties highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="py">hoodie.metrics.on</span><span class="p">=</span><span class="s">true</span>
-<span class="py">hoodie.metrics.reporter.type</span><span class="p">=</span><span class="s">DATADOG</span>
-</code></pre></div></div>
-
-<p>The following property sets the Datadog API site. It determines whether the requests will be sent to <code class="highlighter-rouge">api.datadoghq.eu</code> (EU) or <code class="highlighter-rouge">api.datadoghq.com</code> (US). Set this according to your Datadog account settings.</p>
-
-<div class="language-properties highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="py">hoodie.metrics.datadog.api.site</span><span class="p">=</span><span class="s">EU # or US</span>
-</code></pre></div></div>
-
-<p>The property <code class="highlighter-rouge">hoodie.metrics.datadog.api.key</code> allows you to set the api key directly from the configuration.</p>
-
-<div class="language-properties highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="py">hoodie.metrics.datadog.api.key</span><span class="p">=</span><span class="s">&lt;your api key&gt;</span>
-<span class="py">hoodie.metrics.datadog.api.key.supplier</span><span class="p">=</span><span class="s">&lt;your api key supplier&gt;</span>
-</code></pre></div></div>
-
-<p>Due to security consideration in some cases, you may prefer to return the api key at runtime. To go with this approach, implement <code class="highlighter-rouge">java.util.function.Supplier&lt;String&gt;</code> and set the implementation’s FQCN to <code class="highlighter-rouge">hoodie.metrics.datadog.api.key.supplier</code>, and make sure <code class="highlighter-rouge">hoodie.metrics.datadog.api.key</code> is <em>not</em> set since it will take higher precedence.</p>
-
-<p>The following property helps segregate metrics by setting different prefixes for different jobs.</p>
-
-<div class="language-properties highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="py">hoodie.metrics.datadog.metric.prefix</span><span class="p">=</span><span class="s">&lt;your metrics prefix&gt;</span>
-</code></pre></div></div>
-
-<p>Note that it will use <code class="highlighter-rouge">.</code> to delimit the prefix and the metric name. For example, if the prefix is set to <code class="highlighter-rouge">foo</code>, then <code class="highlighter-rouge">foo.</code> will be prepended to the metric name.</p>
-
-<p>There are other optional properties, which are explained in the configuration reference page.</p>
-
-<h2 id="demo">Demo</h2>
-
-<p>In this demo, we ran a <code class="highlighter-rouge">HoodieDeltaStreamer</code> job with metrics turn on and other configurations set properly.</p>
-
-<p><img src="/assets/images/blog/2020-05-28-datadog-metrics-demo.png" alt="datadog metrics demo" /></p>
-
-<p>As shown above, we were able to collect Hudi’s action-related metrics like</p>
-
+        <h2 id="release-080">Release 0.8.0</h2>
 <ul>
-  <li><code class="highlighter-rouge">&lt;prefix&gt;.&lt;table name&gt;.commit.totalScanTime</code></li>
-  <li><code class="highlighter-rouge">&lt;prefix&gt;.&lt;table name&gt;.clean.duration</code></li>
-  <li><code class="highlighter-rouge">&lt;prefix&gt;.&lt;table name&gt;.index.lookup.duration</code></li>
+  <li>Source Release : <a href="https://www.apache.org/dyn/closer.lua/hudi/0.8.0/hudi-0.8.0.src.tgz">Apache Hudi 0.8.0 Source Release</a> (<a href="https://downloads.apache.org/hudi/0.8.0/hudi-0.8.0.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/hudi/0.8.0/hudi-0.8.0.src.tgz.sha512">sha512</a>)</li>
+  <li>Release Note : (<a href="/releases.html#release-080-docs">Release Note for Apache Hudi 0.8.0</a>)</li>
 </ul>
 
-<p>as well as <code class="highlighter-rouge">HoodieDeltaStreamer</code>-specific metrics</p>
-
+<h2 id="release-070">Release 0.7.0</h2>
 <ul>
-  <li><code class="highlighter-rouge">&lt;prefix&gt;.&lt;table name&gt;.deltastreamer.duration</code></li>
-  <li><code class="highlighter-rouge">&lt;prefix&gt;.&lt;table name&gt;.deltastreamer.hiveSyncDuration</code></li>
+  <li>Source Release : <a href="https://www.apache.org/dyn/closer.lua/hudi/0.7.0/hudi-0.7.0.src.tgz">Apache Hudi 0.7.0 Source Release</a> (<a href="https://downloads.apache.org/hudi/0.7.0/hudi-0.7.0.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/hudi/0.7.0/hudi-0.7.0.src.tgz.sha512">sha512</a>)</li>
+  <li>Release Note : (<a href="/releases.html#release-070-docs">Release Note for Apache Hudi 0.7.0</a>)</li>
+</ul>
+
+<h2 id="release-060">Release 0.6.0</h2>
+<ul>
+  <li>Source Release : <a href="https://www.apache.org/dyn/closer.lua/hudi/0.6.0/hudi-0.6.0.src.tgz">Apache Hudi 0.6.0 Source Release</a> (<a href="https://downloads.apache.org/hudi/0.6.0/hudi-0.6.0.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/hudi/0.6.0/hudi-0.6.0.src.tgz.sha512">sha512</a>)</li>
+  <li>Release Note : (<a href="/releases.html#release-060-docs">Release Note for Apache Hudi 0.6.0</a>)</li>
+</ul>
+
+<h2 id="release-053">Release 0.5.3</h2>
+<ul>
+  <li>Source Release : <a href="https://www.apache.org/dyn/closer.lua/hudi/0.5.3/hudi-0.5.3.src.tgz">Apache Hudi 0.5.3 Source Release</a> (<a href="https://downloads.apache.org/hudi/0.5.3/hudi-0.5.3.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/hudi/0.5.3/hudi-0.5.3.src.tgz.sha512">sha512</a>)</li>
+  <li>Release Note : (<a href="/releases.html#release-053-docs">Release Note for Apache Hudi 0.5.3</a>)</li>
+</ul>
+
+<h2 id="release-052-incubating">Release 0.5.2-incubating</h2>
+<ul>
+  <li>Source Release : <a href="https://www.apache.org/dyn/closer.lua/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz">Apache Hudi 0.5.2-incubating Source Release</a> (<a href="https://downloads.apache.org/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/hudi/0.5.2-incubating/hudi-0.5.2-incubating.src.tgz.sha512">sha512</a>)</li>
+  <li>Release Note : (<a href="/older-releases#release-052-incubating-docs">Release Note for Apache Hudi 0.5.2</a>)</li>
+</ul>
+
+<h2 id="release-051-incubating">Release 0.5.1-incubating</h2>
+<ul>
+  <li>Source Release : <a href="https://www.apache.org/dyn/closer.lua/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz">Apache Hudi 0.5.1-incubating Source Release</a> (<a href="https://downloads.apache.org/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/hudi/0.5.1-incubating/hudi-0.5.1-incubating.src.tgz.sha512">sha512</a>)</li>
+  <li>Release Note : (<a href="/older-releases#release-051-incubating-docs">Release Note for Apache Hudi 0.5.1</a>)</li>
+</ul>
+
+<h2 id="release-050-incubating">Release 0.5.0-incubating</h2>
+<ul>
+  <li>Source Release : <a href="https://www.apache.org/dyn/closer.lua/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz">Apache Hudi 0.5.0-incubating Source Release</a> (<a href="https://downloads.apache.org/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.asc">asc</a>, <a href="https://downloads.apache.org/hudi/0.5.0-incubating/hudi-0.5.0-incubating.src.tgz.sha512">sha512</a>)</li>
+  <li>Release Note : (<a href="/older-releases#release-050-incubating-docs">Release Note for Apache Hudi 0.5.0</a>)</li>
 </ul>
 
       </section>
