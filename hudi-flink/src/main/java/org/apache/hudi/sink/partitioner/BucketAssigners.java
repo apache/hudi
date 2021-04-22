@@ -33,20 +33,29 @@ public abstract class BucketAssigners {
   /**
    * Creates a {@code BucketAssigner}.
    *
+   * @param taskID The task ID
+   * @param numTasks The number of tasks
+   * @param isOverwrite Whether the write operation is OVERWRITE
    * @param tableType The table type
-   * @param context   The engine context
-   * @param config    The configuration
+   * @param context The engine context
+   * @param config The configuration
    * @return the bucket assigner instance
    */
   public static BucketAssigner create(
+      int taskID,
+      int numTasks,
+      boolean isOverwrite,
       HoodieTableType tableType,
       HoodieFlinkEngineContext context,
       HoodieWriteConfig config) {
+    if (isOverwrite) {
+      return new OverwriteBucketAssigner(taskID, numTasks, context, config);
+    }
     switch (tableType) {
       case COPY_ON_WRITE:
-        return new BucketAssigner(context, config);
+        return new BucketAssigner(taskID, numTasks, context, config);
       case MERGE_ON_READ:
-        return new DeltaBucketAssigner(context, config);
+        return new DeltaBucketAssigner(taskID, numTasks, context, config);
       default:
         throw new AssertionError();
     }

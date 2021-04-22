@@ -28,6 +28,8 @@ public enum StorageSchemes {
   FILE("file", false),
   // Hadoop File System
   HDFS("hdfs", true),
+  // Baidu Advanced File System
+  AFS("afs", true),
   // Mapr File System
   MAPRFS("maprfs", true),
   // Apache Ignite FS
@@ -53,7 +55,9 @@ public enum StorageSchemes {
   // Databricks file system
   DBFS("dbfs", false),
   // IBM Cloud Object Storage
-  COS("cos", false);
+  COS("cos", false),
+  // Huawei Cloud Object Storage
+  OBS("obs", false);
 
   private String scheme;
   private boolean supportsAppend;

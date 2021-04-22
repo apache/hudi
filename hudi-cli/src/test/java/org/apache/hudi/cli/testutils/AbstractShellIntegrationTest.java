@@ -18,6 +18,7 @@
 
 package org.apache.hudi.cli.testutils;
 
+import org.apache.hudi.common.model.HoodieTableType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
@@ -36,5 +37,9 @@ public abstract class AbstractShellIntegrationTest extends AbstractShellBaseInte
   @AfterEach
   public void teardown() throws Exception {
     cleanupResources();
+  }
+
+  protected HoodieTableType getTableType() {
+    return HoodieTableType.MERGE_ON_READ;
   }
 }

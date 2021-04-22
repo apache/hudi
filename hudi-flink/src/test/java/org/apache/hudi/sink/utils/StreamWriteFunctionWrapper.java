@@ -33,7 +33,9 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
 import org.apache.flink.runtime.io.disk.iomanager.IOManagerAsync;
+import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.memory.MemoryManager;
+import org.apache.flink.runtime.operators.coordination.MockOperatorCoordinatorContext;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.testutils.MockEnvironment;
 import org.apache.flink.runtime.operators.testutils.MockEnvironmentBuilder;
@@ -57,6 +59,7 @@ public class StreamWriteFunctionWrapper<I> {
   private final IOManager ioManager;
   private final StreamingRuntimeContext runtimeContext;
   private final MockOperatorEventGateway gateway;
+  private final MockOperatorCoordinatorContext coordinatorContext;
   private final StreamWriteOperatorCoordinator coordinator;
   private final MockFunctionInitializationContext functionInitializationContext;
 
@@ -84,13 +87,15 @@ public class StreamWriteFunctionWrapper<I> {
     this.gateway = new MockOperatorEventGateway();
     this.conf = conf;
     // one function
-    this.coordinator = new StreamWriteOperatorCoordinator(conf, 1);
+    this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1);
+    this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
     this.functionInitializationContext = new MockFunctionInitializationContext();
     this.compactFunctionWrapper = new CompactFunctionWrapper(this.conf);
   }
 
   public void openFunction() throws Exception {
     this.coordinator.start();
+    this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
     toHoodieFunction = new RowDataToHoodieFunction<>(TestConfigurations.ROW_TYPE, conf);
     toHoodieFunction.setRuntimeContext(runtimeContext);
     toHoodieFunction.open(conf);
@@ -181,15 +186,15 @@ public class StreamWriteFunctionWrapper<I> {
     return coordinator;
   }
 
+  public MockOperatorCoordinatorContext getCoordinatorContext() {
+    return coordinatorContext;
+  }
+
   public void clearIndexState() {
     this.bucketAssignerFunction.clearIndexState();
   }
 
   public boolean isKeyInState(HoodieKey hoodieKey) {
     return this.bucketAssignerFunction.isKeyInState(hoodieKey);
-  }
-
-  public boolean isAllPartitionsLoaded() {
-    return this.bucketAssignerFunction.isAllPartitionsLoaded();
   }
 }

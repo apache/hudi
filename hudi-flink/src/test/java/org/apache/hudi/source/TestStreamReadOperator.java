@@ -260,15 +260,17 @@ public class TestStreamReadOperator {
         TestConfigurations.ROW_TYPE,
         tableAvroSchema.toString(),
         AvroSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE).toString(),
-        Collections.emptyList());
+        Collections.emptyList(),
+        new String[0]);
     Path[] paths = FilePathUtils.getReadPaths(new Path(basePath), conf, hadoopConf, partitionKeys);
-    MergeOnReadInputFormat inputFormat = new MergeOnReadInputFormat(
-        conf,
-        FilePathUtils.toFlinkPaths(paths),
-        hoodieTableState,
-        rowDataType.getChildren(),
-        "default",
-        1000L);
+    MergeOnReadInputFormat inputFormat = MergeOnReadInputFormat.builder()
+        .config(conf)
+        .paths(FilePathUtils.toFlinkPaths(paths))
+        .tableState(hoodieTableState)
+        .fieldTypes(rowDataType.getChildren())
+        .defaultPartName("default").limit(1000L)
+        .emitDelete(true)
+        .build();
 
     OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory(inputFormat);
     OneInputStreamOperatorTestHarness<MergeOnReadInputSplit, RowData> harness = new OneInputStreamOperatorTestHarness<>(

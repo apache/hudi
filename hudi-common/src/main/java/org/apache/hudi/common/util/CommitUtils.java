@@ -41,6 +41,17 @@ public class CommitUtils {
   private static final Logger LOG = LogManager.getLogger(CommitUtils.class);
 
   /**
+   * Gets the commit action type for given write operation and table type.
+   */
+  public static String getCommitActionType(WriteOperationType operation, HoodieTableType tableType) {
+    if (operation == WriteOperationType.INSERT_OVERWRITE || operation == WriteOperationType.INSERT_OVERWRITE_TABLE) {
+      return HoodieTimeline.REPLACE_COMMIT_ACTION;
+    } else {
+      return getCommitActionType(tableType);
+    }
+  }
+
+  /**
    * Gets the commit action type for given table type.
    */
   public static String getCommitActionType(HoodieTableType tableType) {
