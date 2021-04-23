@@ -45,7 +45,7 @@ import java.util.Properties;
  * An Utility which can incrementally consume data from Kafka and apply it to the target table.
  * currently, it only support COW table and insert, upsert operation.
  */
-public class HoodieFlinkStreamerV2 {
+public class HoodieFlinkStreamer {
   public static void main(String[] args) throws Exception {
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
