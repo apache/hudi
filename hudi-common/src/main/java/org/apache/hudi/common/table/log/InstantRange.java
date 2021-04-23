@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.format.mor;
+package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 
@@ -66,7 +66,7 @@ public abstract class InstantRange implements Serializable {
    * Represents a range type.
    */
   public enum RangeType {
-    OPEN_CLOSE, CLOSE_CLOSE;
+    OPEN_CLOSE, CLOSE_CLOSE
   }
 
   private static class OpenCloseRange extends InstantRange {

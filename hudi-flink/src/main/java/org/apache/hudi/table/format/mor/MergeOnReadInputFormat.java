@@ -64,7 +64,6 @@ import java.util.stream.IntStream;
 
 import static org.apache.flink.table.data.vector.VectorizedColumnBatch.DEFAULT_SIZE;
 import static org.apache.flink.table.filesystem.RowPartitionComputer.restorePartValueFromType;
-import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_COMMIT_TIME_COL_POS;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS;
 import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
 
@@ -334,17 +333,6 @@ public class MergeOnReadInputFormat
             // skipping if the condition is unsatisfied
             // continue;
           } else {
-            // should improve the code when log scanner supports
-            // seeking by log blocks with commit time which is more
-            // efficient.
-            if (split.getInstantRange().isPresent()) {
-              // based on the fact that commit time is always the first field
-              String commitTime = curAvroRecord.get().get(HOODIE_COMMIT_TIME_COL_POS).toString();
-              if (!split.getInstantRange().get().isInRange(commitTime)) {
-                // filter out the records that are not in range
-                continue;
-              }
-            }
             GenericRecord requiredAvroRecord = buildAvroRecordBySchema(
                 curAvroRecord.get(),
                 requiredSchema,

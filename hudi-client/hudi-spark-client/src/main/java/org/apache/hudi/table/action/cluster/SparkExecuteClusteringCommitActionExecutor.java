@@ -179,11 +179,18 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
         try {
           Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
           HoodieFileReader<? extends IndexedRecord> baseFileReader = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
-          HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(table.getMetaClient().getFs(),
-              table.getMetaClient().getBasePath(), clusteringOp.getDeltaFilePaths(), readerSchema, instantTime,
-              maxMemoryPerCompaction, config.getCompactionLazyBlockReadEnabled(),
-              config.getCompactionReverseLogReadEnabled(), config.getMaxDFSStreamBufferSize(),
-              config.getSpillableMapBasePath());
+          HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
+              .withFileSystem(table.getMetaClient().getFs())
+              .withBasePath(table.getMetaClient().getBasePath())
+              .withLogFilePaths(clusteringOp.getDeltaFilePaths())
+              .withReaderSchema(readerSchema)
+              .withLatestInstantTime(instantTime)
+              .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
+              .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
+              .withReverseReader(config.getCompactionReverseLogReadEnabled())
+              .withBufferSize(config.getMaxDFSStreamBufferSize())
+              .withSpillableMapBasePath(config.getSpillableMapBasePath())
+              .build();
 
           recordIterators.add(HoodieFileSliceReader.getFileSliceReader(baseFileReader, scanner, readerSchema,
               table.getMetaClient().getTableConfig().getPayloadClass()));
