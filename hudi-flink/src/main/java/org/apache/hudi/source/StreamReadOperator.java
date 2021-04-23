@@ -152,6 +152,8 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
       return;
     }
 
+    LOG.info("Processing input split : {}", split);
+
     format.open(split);
     try {
       RowData nextElement = null;
