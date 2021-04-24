@@ -282,7 +282,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
         DatabaseMetaData databaseMetaData = connection.getMetaData();
         result = databaseMetaData.getColumns(null, syncConfig.databaseName, tableName, null);
         while (result.next()) {
-          DECIMAL_TYPE_CONVERTER.doConvert(result, schema);
+          DECIMAL_TYPE_CONVERTOR.doConvert(result, schema);
         }
         return schema;
       } catch (SQLException e) {

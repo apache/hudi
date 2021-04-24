@@ -44,6 +44,7 @@ import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -633,6 +634,20 @@ public class TestHiveSyncTool {
 
     assertFalse(hiveClient.doesTableExist(HiveTestUtil.hiveSyncConfig.tableName),
         "Table " + HiveTestUtil.hiveSyncConfig.tableName + " should not exist initially");
+  }
+
+  @ParameterizedTest
+  @MethodSource("useJdbc")
+  public void testTypeConverter(boolean useJdbc) throws Exception {
+    HiveTestUtil.hiveSyncConfig.useJdbc = useJdbc;
+    HiveTestUtil.createCOWTable("100", 5, true);
+    HoodieHiveClient hiveClient =
+        new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    //ALTER TABLE test_hive_tb2 ADD COLUMNS(age Int);
+    String sql = String.format("ALTER TABLE %s ADD COLUMNS(decimal_col DECIMAL(8,9))", HiveTestUtil.hiveSyncConfig.tableName);
+    hiveClient.updateHiveSQLUsingHiveDriver(sql);
+    Map<String, String> tableSchema = hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName);
+    assertTrue(tableSchema.containsValue("DECIMAL(8,9)"), "An error occurred in decimal type converting.");
   }
 
 }

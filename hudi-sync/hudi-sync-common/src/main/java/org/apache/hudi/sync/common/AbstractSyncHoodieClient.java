@@ -46,7 +46,7 @@ public abstract class AbstractSyncHoodieClient {
 
   private static final Logger LOG = LogManager.getLogger(AbstractSyncHoodieClient.class);
 
-  public static final TypeConverter DECIMAL_TYPE_CONVERTER = new TypeConverter("DECIMAL") {};
+  public static final TypeConverter DECIMAL_TYPE_CONVERTOR = new TypeConverter() {};
 
   protected final HoodieTableMetaClient metaClient;
   protected final HoodieTableType tableType;
@@ -143,7 +143,13 @@ public abstract class AbstractSyncHoodieClient {
 
   public abstract static class TypeConverter implements Serializable {
 
+    static final String DEFAULT_TARGET_TYPE = "DECIMAL";
+
     protected String targetType;
+
+    public TypeConverter() {
+      this.targetType = DEFAULT_TARGET_TYPE;
+    }
 
     public TypeConverter(String targetType) {
       ValidationUtils.checkArgument(Objects.nonNull(targetType));
