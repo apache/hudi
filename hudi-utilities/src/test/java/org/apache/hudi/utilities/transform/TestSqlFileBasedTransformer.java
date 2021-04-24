@@ -29,7 +29,6 @@ import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
-import static org.junit.Assert.*;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -40,6 +39,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
   @BeforeAll
@@ -104,7 +104,7 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
             .collectAsList()
             .toArray(new String[0]);
     String[] actual = transformedRow.as(Encoders.STRING()).collectAsList().toArray(new String[0]);
-    Assert.assertArrayEquals(expected, actual);
+    assertArrayEquals(expected, actual);
   }
 
   private Dataset<Row> getInputDatasetRows() {
