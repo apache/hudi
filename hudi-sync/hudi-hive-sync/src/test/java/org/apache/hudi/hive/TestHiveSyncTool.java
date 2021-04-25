@@ -642,13 +642,36 @@ public class TestHiveSyncTool {
     HiveTestUtil.createCOWTable("100", 5, true);
     HoodieHiveClient hiveClient =
         new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
-    String sql = String.format("CREATE TABLE IF NOT EXISTS `%s.%s` (`decimal_col` DECIMAL(9,8))",
-        HiveTestUtil.hiveSyncConfig.databaseName,HiveTestUtil.hiveSyncConfig.tableName);
-    hiveClient.updateHiveSQL(sql);
-    assertTrue(hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName).containsValue("DECIMAL(9,8)"),
-        "An error occurred in decimal type converting.");
-    hiveClient.updateHiveSQL(String.format("DROP TABLE IF EXISTS `%s.%s`",
-        HiveTestUtil.hiveSyncConfig.databaseName, HiveTestUtil.hiveSyncConfig.tableName));
+    String tableName = HiveTestUtil.hiveSyncConfig.tableName;
+    String tableAbsoluteName = String.format(" `%s.%s` ", HiveTestUtil.hiveSyncConfig.databaseName, tableName);
+    String dropTableSql = String.format("DROP TABLE IF EXISTS %s ", tableAbsoluteName);
+    String createTableSqlPrefix = String.format("CREATE TABLE IF NOT EXISTS %s ", tableAbsoluteName);
+    String errorMsg = "An error occurred in decimal type converting.";
+    hiveClient.updateHiveSQL(dropTableSql);
+
+    // test one column in DECIMAL
+    String oneTargetColumnSql = createTableSqlPrefix + "(`decimal_col` DECIMAL(9,8), `bigint_col` BIGINT)";
+    hiveClient.updateHiveSQL(oneTargetColumnSql);
+    System.out.println(hiveClient.getTableSchema(tableName));
+    assertTrue(hiveClient.getTableSchema(tableName).containsValue("DECIMAL(9,8)"), errorMsg);
+    hiveClient.updateHiveSQL(dropTableSql);
+
+    // test multiple columns in DECIMAL
+    String multipleTargetColumnSql =
+        createTableSqlPrefix + "(`decimal_col1` DECIMAL(9,8), `bigint_col` BIGINT, `decimal_col2` DECIMAL(7,4))";
+    hiveClient.updateHiveSQL(multipleTargetColumnSql);
+    System.out.println(hiveClient.getTableSchema(tableName));
+    assertTrue(hiveClient.getTableSchema(tableName).containsValue("DECIMAL(9,8)")
+        && hiveClient.getTableSchema(tableName).containsValue("DECIMAL(7,4)"), errorMsg);
+    hiveClient.updateHiveSQL(dropTableSql);
+
+    // test no columns in DECIMAL
+    String noTargetColumnsSql = createTableSqlPrefix + "(`bigint_col` BIGINT)";
+    hiveClient.updateHiveSQL(noTargetColumnsSql);
+    System.out.println(hiveClient.getTableSchema(tableName));
+    assertTrue(hiveClient.getTableSchema(tableName).size() == 1 && hiveClient.getTableSchema(tableName)
+        .containsValue("BIGINT"), errorMsg);
+    hiveClient.updateHiveSQL(dropTableSql);
   }
 
 }
