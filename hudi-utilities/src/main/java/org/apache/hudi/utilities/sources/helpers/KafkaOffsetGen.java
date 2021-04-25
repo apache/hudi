@@ -157,9 +157,9 @@ public class KafkaOffsetGen {
 
     private static final String KAFKA_TOPIC_NAME = "hoodie.deltastreamer.source.kafka.topic";
     private static final String MAX_EVENTS_FROM_KAFKA_SOURCE_PROP = "hoodie.deltastreamer.kafka.source.maxEvents";
-    // "auto.reset.offsets" is kafka native config param. Do not change the config param name.
-    public static final String KAFKA_AUTO_RESET_OFFSETS = "auto.reset.offsets";
-    private static final KafkaResetOffsetStrategies DEFAULT_KAFKA_AUTO_RESET_OFFSETS = KafkaResetOffsetStrategies.LATEST;
+    // "auto.offset.reset" is kafka native config param. Do not change the config param name.
+    public static final String KAFKA_AUTO_OFFSET_RESET = "auto.offset.reset";
+    private static final KafkaResetOffsetStrategies DEFAULT_KAFKA_AUTO_OFFSET_RESET = KafkaResetOffsetStrategies.LATEST;
     public static final long DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE = 5000000;
     public static long maxEventsFromKafkaSource = DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE;
   }
@@ -182,7 +182,7 @@ public class KafkaOffsetGen {
     });
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.KAFKA_TOPIC_NAME));
     topicName = props.getString(Config.KAFKA_TOPIC_NAME);
-    String kafkaAutoResetOffsetsStr = props.getString(Config.KAFKA_AUTO_RESET_OFFSETS, Config.DEFAULT_KAFKA_AUTO_RESET_OFFSETS.name().toLowerCase());
+    String kafkaAutoResetOffsetsStr = props.getString(Config.KAFKA_AUTO_OFFSET_RESET, Config.DEFAULT_KAFKA_AUTO_OFFSET_RESET.name().toLowerCase());
     boolean found = false;
     for (KafkaResetOffsetStrategies entry: KafkaResetOffsetStrategies.values()) {
       if (entry.name().toLowerCase().equals(kafkaAutoResetOffsetsStr)) {
@@ -192,7 +192,7 @@ public class KafkaOffsetGen {
       }
     }
     if (!found) {
-      throw new HoodieDeltaStreamerException(Config.KAFKA_AUTO_RESET_OFFSETS + " config set to unknown value " + kafkaAutoResetOffsetsStr);
+      throw new HoodieDeltaStreamerException(Config.KAFKA_AUTO_OFFSET_RESET + " config set to unknown value " + kafkaAutoResetOffsetsStr);
     }
   }
 
