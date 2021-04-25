@@ -113,7 +113,7 @@ public class HoodieHiveUtils {
   }
 
   /**
-   * Returns a list of tableNames for which hoodie.<tableName>.consume.mode is set else returns empty List
+   * Returns a list of tableNames for which hoodie.<tableName>.consume.mode is set to incremental else returns empty List
    *
    * @param job
    * @return
