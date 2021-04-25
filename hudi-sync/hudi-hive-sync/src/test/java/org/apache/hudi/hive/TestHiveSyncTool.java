@@ -44,7 +44,6 @@ import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -645,8 +644,8 @@ public class TestHiveSyncTool {
         new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     String sql = String.format("ALTER TABLE %s ADD COLUMNS(decimal_col DECIMAL(8,9))", HiveTestUtil.hiveSyncConfig.tableName);
     hiveClient.updateHiveSQLUsingHiveDriver(sql);
-    Map<String, String> tableSchema = hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName);
-    assertTrue(tableSchema.containsValue("DECIMAL(8,9)"), "An error occurred in decimal type converting.");
+    assertTrue(hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName).containsValue("DECIMAL(8,9)"),
+        "An error occurred in decimal type converting.");
   }
 
 }
