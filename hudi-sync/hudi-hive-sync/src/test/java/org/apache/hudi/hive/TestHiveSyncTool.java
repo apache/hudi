@@ -643,7 +643,6 @@ public class TestHiveSyncTool {
     HiveTestUtil.createCOWTable("100", 5, true);
     HoodieHiveClient hiveClient =
         new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
-    //ALTER TABLE test_hive_tb2 ADD COLUMNS(age Int);
     String sql = String.format("ALTER TABLE %s ADD COLUMNS(decimal_col DECIMAL(8,9))", HiveTestUtil.hiveSyncConfig.tableName);
     hiveClient.updateHiveSQLUsingHiveDriver(sql);
     Map<String, String> tableSchema = hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName);
