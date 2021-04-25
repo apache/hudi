@@ -378,7 +378,7 @@ public class TestWriteCopyOnWrite {
   @Test
   public void testInsertWithMiniBatches() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.001); // 1Kb batch size
+    conf.setDouble(FlinkOptions.WRITE_BUCKET_SIZE, 0.001); // 1Kb batch size
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // open the function and ingest data
@@ -430,6 +430,68 @@ public class TestWriteCopyOnWrite {
     final OperatorEvent event4 = funcWrapper.getNextEvent();
     funcWrapper.getCoordinator().handleEventFromOperator(0, event3);
     funcWrapper.getCoordinator().handleEventFromOperator(0, event4);
+    funcWrapper.checkpointComplete(2);
+
+    // Same the original base file content.
+    checkWrittenData(tempFile, expected, 1);
+  }
+
+  @Test
+  public void testInsertWithSmallBuffer() throws Exception {
+    // reset the config option
+    conf.setDouble(FlinkOptions.WRITE_BUFFER_SIZE, 0.001); // 1Kb buffer size
+    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
+
+    // open the function and ingest data
+    funcWrapper.openFunction();
+    // each record is 424 bytes. so 3 records expect to trigger buffer flush:
+    // flush half of the buckets once at a time.
+    for (RowData rowData : TestData.DATA_SET_INSERT_DUPLICATES) {
+      funcWrapper.invoke(rowData);
+    }
+
+    Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
+    assertThat("Should have 1 data bucket", dataBuffer.size(), is(1));
+    assertThat("4 records expect to flush out as a mini-batch",
+        dataBuffer.values().stream().findFirst().map(List::size).orElse(-1),
+        is(1));
+
+    // this triggers the data write and event send
+    funcWrapper.checkpointFunction(1);
+    dataBuffer = funcWrapper.getDataBuffer();
+    assertThat("All data should be flushed out", dataBuffer.size(), is(0));
+
+    for (int i = 0; i < 3; i++) {
+      final OperatorEvent event = funcWrapper.getNextEvent(); // remove the first event first
+      assertThat("The operator expect to send an event", event, instanceOf(BatchWriteSuccessEvent.class));
+      funcWrapper.getCoordinator().handleEventFromOperator(0, event);
+    }
+    assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
+
+    String instant = funcWrapper.getWriteClient()
+        .getLastPendingInstant(getTableType());
+
+    funcWrapper.checkpointComplete(1);
+
+    Map<String, String> expected = getMiniBatchExpected();
+    checkWrittenData(tempFile, expected, 1);
+
+    // started a new instant already
+    checkInflightInstant(funcWrapper.getWriteClient());
+    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
+
+    // insert duplicates again
+    for (RowData rowData : TestData.DATA_SET_INSERT_DUPLICATES) {
+      funcWrapper.invoke(rowData);
+    }
+
+    funcWrapper.checkpointFunction(2);
+
+    for (int i = 0; i < 3; i++) {
+      final OperatorEvent event = funcWrapper.getNextEvent(); // remove the first event first
+      funcWrapper.getCoordinator().handleEventFromOperator(0, event);
+    }
+
     funcWrapper.checkpointComplete(2);
 
     // Same the original base file content.

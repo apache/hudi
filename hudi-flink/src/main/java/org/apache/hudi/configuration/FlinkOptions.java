@@ -267,11 +267,17 @@ public class FlinkOptions {
       .defaultValue(4)
       .withDescription("Parallelism of tasks that do actual write, default is 4");
 
-  public static final ConfigOption<Double> WRITE_BATCH_SIZE = ConfigOptions
-      .key("write.batch.size.MB")
+  public static final ConfigOption<Double> WRITE_BUFFER_SIZE = ConfigOptions
+      .key("write.buffer.size.MB")
+      .doubleType()
+      .defaultValue(256D) // 256MB
+      .withDescription("Total buffer size in MB to flush data into the underneath filesystem, default 256MB");
+
+  public static final ConfigOption<Double> WRITE_BUCKET_SIZE = ConfigOptions
+      .key("write.bucket.size.MB")
       .doubleType()
       .defaultValue(64D) // 64MB
-      .withDescription("Batch buffer size in MB to flush data into the underneath filesystem, default 64MB");
+      .withDescription("Bucket size in MB to flush data into the underneath filesystem, default 64MB");
 
   public static final ConfigOption<Integer> WRITE_LOG_BLOCK_SIZE = ConfigOptions
       .key("write.log_block.size.MB")
