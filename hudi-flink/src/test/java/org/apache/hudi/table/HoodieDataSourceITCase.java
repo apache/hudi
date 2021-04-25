@@ -330,7 +330,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     TableEnvironment tableEnv = execMode == ExecMode.BATCH ? batchTableEnv : streamTableEnv;
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
-    options.put(FlinkOptions.WRITE_BATCH_SIZE.key(), "0.001");
+    options.put(FlinkOptions.WRITE_BUCKET_SIZE.key(), "0.001");
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);
 
