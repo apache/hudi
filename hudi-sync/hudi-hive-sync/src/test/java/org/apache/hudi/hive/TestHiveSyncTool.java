@@ -642,10 +642,13 @@ public class TestHiveSyncTool {
     HiveTestUtil.createCOWTable("100", 5, true);
     HoodieHiveClient hiveClient =
         new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
-    String sql = String.format("ALTER TABLE %s ADD COLUMNS(decimal_col DECIMAL(8,9))", HiveTestUtil.hiveSyncConfig.tableName);
-    hiveClient.updateHiveSQLUsingHiveDriver(sql);
-    assertTrue(hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName).containsValue("DECIMAL(8,9)"),
+    String sql = String.format("CREATE TABLE IF NOT EXISTS `%s.%s` (`decimal_col` DECIMAL(9,8))",
+        HiveTestUtil.hiveSyncConfig.databaseName,HiveTestUtil.hiveSyncConfig.tableName);
+    hiveClient.updateHiveSQL(sql);
+    assertTrue(hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName).containsValue("DECIMAL(9,8)"),
         "An error occurred in decimal type converting.");
+    hiveClient.updateHiveSQL(String.format("DROP TABLE IF EXISTS `%s.%s`",
+        HiveTestUtil.hiveSyncConfig.databaseName, HiveTestUtil.hiveSyncConfig.tableName));
   }
 
 }
