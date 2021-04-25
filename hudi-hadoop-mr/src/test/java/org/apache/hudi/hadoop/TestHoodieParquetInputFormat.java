@@ -58,6 +58,7 @@ import java.util.List;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -119,7 +120,6 @@ public class TestHoodieParquetInputFormat {
     assertFalse(filteredTimeline.containsInstant(t4));
     assertFalse(filteredTimeline.containsInstant(t5));
     assertFalse(filteredTimeline.containsInstant(t6));
-
     // remove compaction instant and setup timeline again
     instants.remove(t3);
     timeline = new HoodieActiveTimeline(metaClient);
@@ -193,6 +193,21 @@ public class TestHoodieParquetInputFormat {
   }
 
   @Test
+  public void testSnapshotWithInvalidCommitShouldThrowException() throws IOException {
+    File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
+    InputFormatTestUtil.commit(basePath, "100");
+
+    FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
+    InputFormatTestUtil.setupSnapshotIncludePendingCommits(jobConf, "1");
+    Exception exception = assertThrows(HoodieIOException.class, () -> inputFormat.listStatus(jobConf));
+    assertEquals("Valid timestamp is required for hoodie.%s.consume.commit in validate mode", exception.getMessage());
+
+    InputFormatTestUtil.setupSnapshotMaxCommitTimeQueryMode(jobConf, "1");
+    exception = assertThrows(HoodieIOException.class, () -> inputFormat.listStatus(jobConf));
+    assertEquals("Valid timestamp is required for hoodie.%s.consume.commit in validate mode", exception.getMessage());
+  }
+
+  @Test
   public void testPointInTimeQueryWithUpdates() throws IOException {
     // initial commit
     File partitionDir = InputFormatTestUtil.prepareTable(basePath, baseFileFormat, 10, "100");
@@ -212,14 +227,14 @@ public class TestHoodieParquetInputFormat {
     ensureFilesInCommit("Commit 200 has not been committed. We should not see files from this commit", files, "200", 0);
     InputFormatTestUtil.commit(basePath, "200");
 
-    InputFormatTestUtil.setupSnapshotMaxCommitTimeQueryMode(jobConf, "150");
+    InputFormatTestUtil.setupSnapshotMaxCommitTimeQueryMode(jobConf, "100");
 
     files = inputFormat.listStatus(jobConf);
     assertEquals(10, files.length);
     ensureFilesInCommit("We shouldn't have any file pertaining to commit 200", files, "200", 0);
     ensureFilesInCommit("All files should be from commit 100", files, "100", 10);
 
-    InputFormatTestUtil.setupSnapshotMaxCommitTimeQueryMode(jobConf, "250");
+    InputFormatTestUtil.setupSnapshotMaxCommitTimeQueryMode(jobConf, "200");
     files = inputFormat.listStatus(jobConf);
     assertEquals(10, files.length);
     ensureFilesInCommit("5 files for commit 200", files, "200", 5);
@@ -497,6 +512,11 @@ public class TestHoodieParquetInputFormat {
       // expected because validate is called with invalid instantTime
     }
     
+    //Creating a new jobCOnf Object because old one has hoodie.%.consume.commit set
+    jobConf = new JobConf();
+    inputFormat.setConf(jobConf);
+    FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
+
     // verify that snapshot mode skips uncommitted files
     InputFormatTestUtil.setupSnapshotScanMode(jobConf);
     files = inputFormat.listStatus(jobConf);

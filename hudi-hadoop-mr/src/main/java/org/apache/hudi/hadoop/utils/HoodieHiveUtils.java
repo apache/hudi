@@ -24,7 +24,6 @@ import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -69,7 +68,6 @@ public class HoodieHiveUtils {
   public static final String HOODIE_STOP_AT_COMPACTION_PATTERN = "hoodie.%s.ro.stop.at.compaction";
   public static final String INCREMENTAL_SCAN_MODE = "INCREMENTAL";
   public static final String SNAPSHOT_SCAN_MODE = "SNAPSHOT";
-  public static final String HOODIE_SNAPSHOT_CONSUME_COMMIT_PATTERN = "hoodie.%s.consume.snapshot.time";
   public static final String DEFAULT_SCAN_MODE = SNAPSHOT_SCAN_MODE;
   public static final int DEFAULT_MAX_COMMITS = 1;
   public static final int MAX_COMMIT_ALL = -1;
@@ -99,6 +97,13 @@ public class HoodieHiveUtils {
     return job.getConfiguration().get(startCommitTimestampName);
   }
 
+  /**
+   * Gets the n'th parent for the Path. Assumes the path has at-least n components
+   *
+   * @param path
+   * @param n
+   * @return
+   */
   public static Path getNthParent(Path path, int n) {
     Path parent = path;
     for (int i = 0; i < n; i++) {
@@ -107,6 +112,12 @@ public class HoodieHiveUtils {
     return parent;
   }
 
+  /**
+   * Returns a list of tableNames for which hoodie.<tableName>.consume.mode is set else returns empty List
+   *
+   * @param job
+   * @return
+   */
   public static List<String> getIncrementalTableNames(JobContext job) {
     Map<String, String> tablesModeMap = job.getConfiguration()
         .getValByRegex(HOODIE_CONSUME_MODE_PATTERN_STRING.pattern());
@@ -124,31 +135,48 @@ public class HoodieHiveUtils {
     return result;
   }
 
+  /**
+   * Depending on the configs hoodie.%s.consume.pending.commits and hoodie.%s.consume.commit of job
+   *
+   * (hoodie.<tableName>.consume.pending.commits, hoodie.<tableName>.consume.commit) ->
+   *      (true, validCommit)       -> returns activeTimeline filtered until validCommit
+   *      (true, InValidCommit)     -> Raises HoodieIOException
+   *      (true, notSet)            -> Raises HoodieIOException
+   *      (false, validCommit)      -> returns compeltedTimeline filtered until validCommit
+   *      (false, InValidCommit)    -> Raises HoodieIOException
+   *      (false or notSet, notSet) -> returns completedTimeline unfiltered
+   *
+   *      validCommit is one which exists in the timeline being checked and vice versa
+   *
+   * @param tableName
+   * @param job
+   * @param metaClient
+   * @return
+   */
   public static HoodieTimeline getTableTimeline(final String tableName, final JobConf job, final HoodieTableMetaClient metaClient) {
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline();
+
     boolean includePendingCommits = job.getBoolean(String.format(HOODIE_CONSUME_PENDING_COMMITS, tableName), false);
+    String maxCommit = job.get(String.format(HOODIE_CONSUME_COMMIT, tableName));
+
     if (includePendingCommits) {
-      HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline();
-      String maxCommit = job.get(String.format(HOODIE_CONSUME_COMMIT, tableName));
-      if (maxCommit == null || !timeline.containsInstant(maxCommit)) {
-        LOG.info("Timestamp configured for validation: " + maxCommit + " commits timeline:" + timeline + " table: " + tableName);
-        throw new HoodieIOException("Valid timestamp is required for " + HOODIE_CONSUME_COMMIT + " in validate mode");
-      }
-      return timeline.findInstantsBeforeOrEquals(maxCommit);
+      return filterIfInstantExists(tableName, timeline, maxCommit);
+    }
+
+    timeline = timeline.filterCompletedInstants();
+    if (maxCommit != null) {
+      return filterIfInstantExists(tableName, timeline, maxCommit);
     }
 
     // by default return all completed commits.
-    return metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    return timeline;
   }
 
-  public static Option<String> getSnapshotMaxCommitTime(JobConf job, String tableName) {
-    String maxCommitTime = job.get(getSnapshotMaxCommitKey(tableName));
-    if (maxCommitTime != null) {
-      return Option.of(maxCommitTime);
+  private static HoodieTimeline filterIfInstantExists(String tableName, HoodieTimeline timeline, String maxCommit) {
+    if (maxCommit == null || !timeline.containsInstant(maxCommit)) {
+      LOG.info("Timestamp configured for validation: " + maxCommit + " commits timeline:" + timeline + " table: " + tableName);
+      throw new HoodieIOException("Valid timestamp is required for " + HOODIE_CONSUME_COMMIT + " in validate mode");
     }
-    return Option.empty();
-  }
-
-  private static String getSnapshotMaxCommitKey(String tableName) {
-    return String.format(HoodieHiveUtils.HOODIE_SNAPSHOT_CONSUME_COMMIT_PATTERN, tableName);
+    return timeline.findInstantsBeforeOrEquals(maxCommit);
   }
 }

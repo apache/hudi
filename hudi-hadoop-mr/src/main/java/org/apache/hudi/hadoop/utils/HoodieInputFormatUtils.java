@@ -439,16 +439,8 @@ public class HoodieInputFormatUtils {
         }
         HoodieTimeline timeline = HoodieHiveUtils.getTableTimeline(metaClient.getTableConfig().getTableName(), job, metaClient);
 
-        String tableName = metaClient.getTableConfig().getTableName();
-        Option<String> maxCommitInstant = HoodieHiveUtils.getSnapshotMaxCommitTime(job, tableName);
-
-        if (maxCommitInstant.isPresent()) {
-          timeline = timeline.filter(hoodieInstant -> HoodieTimeline.compareTimestamps(hoodieInstant.getTimestamp(), HoodieTimeline.LESSER_THAN_OR_EQUALS, maxCommitInstant.get()));
-        }
-
-        HoodieTimeline finalTimeline = timeline;
         HoodieTableFileSystemView fsView = fsViewCache.computeIfAbsent(metaClient, tableMetaClient ->
-            FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext, tableMetaClient, buildMetadataConfig(job), finalTimeline));
+            FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext, tableMetaClient, buildMetadataConfig(job), timeline));
         List<HoodieBaseFile> filteredBaseFiles = new ArrayList<>();
 
         for (Path p : entry.getValue()) {

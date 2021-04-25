@@ -133,7 +133,7 @@ public class InputFormatTestUtil {
   public static void setupSnapshotMaxCommitTimeQueryMode(JobConf jobConf, String maxInstantTime) {
     setUpScanMode(jobConf);
     String validateTimestampName =
-            String.format(HoodieHiveUtils.HOODIE_SNAPSHOT_CONSUME_COMMIT_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
+            String.format(HoodieHiveUtils.HOODIE_CONSUME_COMMIT, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
     jobConf.set(validateTimestampName, maxInstantTime);
   }
 
