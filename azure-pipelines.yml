@@ -27,7 +27,6 @@ variables:
   SPARK_VERSION: '2.4.4'
   HADOOP_VERSION: '2.7'
   SPARK_HOME: $(Pipeline.Workspace)/spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION)
-  SKIP_IT: true
 
 stages:
   - stage: test
@@ -144,22 +143,10 @@ stages:
               jdkArchitectureOption: 'x64'
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: integration_tests
-        condition: eq(variables.SKIP_IT, false)
         steps:
           - script: |
               echo 'Downloading spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION)'
-              wget http://archive.apache.org/dist/spark/spark-$(SPARK_VERSION)/spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION).tgz -O /tmp/spark-$(SPARK_VERSION).tgz
-              tar -xvf /tmp/spark-$(SPARK_VERSION).tgz
+              wget https://archive.apache.org/dist/spark/spark-$(SPARK_VERSION)/spark-$(SPARK_VERSION)-bin-hadoop$(HADOOP_VERSION).tgz -O $(Pipeline.Workspace)/spark-$(SPARK_VERSION).tgz
+              tar -xvf $(Pipeline.Workspace)/spark-$(SPARK_VERSION).tgz -C $(Pipeline.Workspace)/
               mkdir /tmp/spark-events/
-          - task: Maven@3
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'verify'
-              options: -Pintegration-tests
-              publishJUnitResults: false
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              testRunTitle: 'unit tests utilities'
-              javaHomeOption: 'JDKVersion'
-              jdkVersionOption: '1.8'
-              jdkArchitectureOption: 'x64'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+              mvn -Pintegration-tests verify
