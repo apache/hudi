@@ -90,7 +90,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     try {
       HoodieCommitMetadata metadata = new HoodieCommitMetadata();
       profile.getPartitionPaths().forEach(path -> {
-        WorkloadStat partitionStat = profile.getWorkloadStat(path.toString());
+        WorkloadStat partitionStat = profile.getWorkloadStat(path);
         HoodieWriteStat insertStat = new HoodieWriteStat();
         insertStat.setNumInserts(partitionStat.getNumInserts());
         insertStat.setFileId("");
