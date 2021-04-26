@@ -73,6 +73,9 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")
   public Boolean useJdbc = true;
 
+  @Parameter(names = {"--use-hms"}, description = "Use hms client for ddl commands")
+  public Boolean useHMS = false;
+
   @Parameter(names = {"--auto-create-database"}, description = "Auto create hive database")
   public Boolean autoCreateDatabase = true;
 

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hadoop.hive.metastore.api.MetaException;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.Option;
@@ -68,7 +70,7 @@ public class HiveSyncTool extends AbstractSyncTool {
 
     try {
       this.hoodieHiveClient = new HoodieHiveClient(cfg, configuration, fs);
-    } catch (RuntimeException e) {
+    } catch (RuntimeException | HiveException | MetaException e) { //TODO-jsbali FIx this
       if (cfg.ignoreExceptions) {
         LOG.error("Got runtime exception when hive syncing, but continuing as ignoreExceptions config is set ", e);
       } else {
@@ -135,7 +137,7 @@ public class HiveSyncTool extends AbstractSyncTool {
     // check if the database exists else create it
     if (cfg.autoCreateDatabase) {
       try {
-        hoodieHiveClient.updateHiveSQL("create database if not exists " + cfg.databaseName);
+        hoodieHiveClient.createDatabase(cfg.databaseName);
       } catch (Exception e) {
         // this is harmless since table creation will fail anyways, creation of DB is needed for in-memory testing
         LOG.warn("Unable to create database", e);

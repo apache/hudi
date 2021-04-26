@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hive.util;
 
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.SchemaDifference;
@@ -39,6 +40,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Schema Utilities.
@@ -138,7 +140,7 @@ public class HiveSchemaUtil {
    * @param messageType : Parquet Schema
    * @return : Hive Table schema read from parquet file MAP[String,String]
    */
-  private static Map<String, String> convertParquetSchemaToHiveSchema(MessageType messageType, boolean supportTimestamp) throws IOException {
+  public static Map<String, String> convertParquetSchemaToHiveSchema(MessageType messageType, boolean supportTimestamp) throws IOException {
     Map<String, String> schema = new LinkedHashMap<>();
     List<Type> parquetFields = messageType.getFields();
     for (Type parquetType : parquetFields) {
@@ -152,6 +154,22 @@ public class HiveSchemaUtil {
 
       schema.put(hiveCompatibleFieldName(key, false), result.toString());
     }
+    return schema;
+  }
+
+  public static List<FieldSchema> convertParquetSchemaToHiveFieldSchema(MessageType messageType, HiveSyncConfig syncConfig) {
+    List<Type> parquetFields = messageType.getFields();
+
+    List<FieldSchema> schema = parquetFields.stream().map(parquetType -> {
+      StringBuilder result = new StringBuilder();
+      String key = parquetType.getName();
+      if (parquetType.isRepetition(Type.Repetition.REPEATED)) {
+        result.append(createHiveArray(parquetType, "", syncConfig.supportTimestamp));
+      } else {
+        result.append(convertField(parquetType, syncConfig.supportTimestamp));
+      }
+      return new FieldSchema(hiveCompatibleFieldName(key, false),result.toString().toLowerCase(),"");
+    }).filter(field -> !syncConfig.partitionFields.contains(field.getName())).collect(Collectors.toList());
     return schema;
   }
 
@@ -444,7 +462,7 @@ public class HiveSchemaUtil {
     return sb.toString();
   }
 
-  private static String getPartitionKeyType(Map<String, String> hiveSchema, String partitionKey) {
+  public static String getPartitionKeyType(Map<String, String> hiveSchema, String partitionKey) {
     if (hiveSchema.containsKey(partitionKey)) {
       return hiveSchema.get(partitionKey);
     }

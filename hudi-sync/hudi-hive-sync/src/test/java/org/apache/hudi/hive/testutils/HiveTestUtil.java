@@ -43,7 +43,8 @@ import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
-import org.apache.hudi.hive.HoodieHiveClient;
+import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
+import org.apache.hudi.hive.ddl.QueryBasedDDLExecutor;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -53,6 +54,8 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.api.MetaException;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hive.service.server.HiveServer2;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -92,8 +95,9 @@ public class HiveTestUtil {
   private static DateTimeFormatter dtfOut;
   public static FileSystem fileSystem;
   private static Set<String> createdTablesSet = new HashSet<>();
+  public static QueryBasedDDLExecutor ddlExecutor;
 
-  public static void setUp() throws IOException, InterruptedException {
+  public static void setUp() throws IOException, InterruptedException, HiveException, MetaException {
     if (dfsCluster == null) {
       HdfsTestService service = new HdfsTestService();
       dfsCluster = service.start(true);
@@ -121,11 +125,12 @@ public class HiveTestUtil {
     hiveSyncConfig.partitionFields = Collections.singletonList("datestr");
 
     dtfOut = DateTimeFormat.forPattern("yyyy/MM/dd");
+    ddlExecutor = new HiveQueryDDLExecutor(hiveSyncConfig, fileSystem, getHiveConf());
 
     clear();
   }
 
-  public static void clear() throws IOException {
+  public static void clear() throws IOException, HiveException, MetaException {
     fileSystem.delete(new Path(hiveSyncConfig.basePath), true);
     HoodieTableMetaClient.withPropertyBuilder()
       .setTableType(HoodieTableType.COPY_ON_WRITE)
@@ -133,13 +138,12 @@ public class HiveTestUtil {
       .setPayloadClass(HoodieAvroPayload.class)
       .initTable(configuration, hiveSyncConfig.basePath);
 
-    HoodieHiveClient client = new HoodieHiveClient(hiveSyncConfig, hiveServer.getHiveConf(), fileSystem);
     for (String tableName : createdTablesSet) {
-      client.updateHiveSQL("drop table if exists " + tableName);
+      ddlExecutor.runSQL("drop table if exists " + tableName);
     }
     createdTablesSet.clear();
-    client.updateHiveSQL("drop database if exists " + hiveSyncConfig.databaseName);
-    client.updateHiveSQL("create database " + hiveSyncConfig.databaseName);
+    ddlExecutor.runSQL("drop database if exists " + hiveSyncConfig.databaseName);
+    ddlExecutor.runSQL("create database " + hiveSyncConfig.databaseName);
   }
 
   public static HiveConf getHiveConf() {
