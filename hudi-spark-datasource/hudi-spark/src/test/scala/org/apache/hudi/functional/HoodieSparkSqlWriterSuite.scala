@@ -20,7 +20,6 @@ package org.apache.hudi.functional
 import java.time.Instant
 import java.util
 import java.util.{Collections, Date, UUID}
-
 import org.apache.commons.io.FileUtils
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
@@ -503,7 +502,8 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     val params = Map(
       "path" -> basePath,
       DataSourceWriteOptions.TABLE_NAME_OPT_KEY -> "test_hoodie",
-      DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY -> "partition"
+      DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY -> "partition",
+      DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX -> "true"
     )
     val parameters = HoodieWriterUtils.parametersWithWriteDefaults(params)
     val newParams = addSqlTablePropertiesMethod.invoke(HoodieSparkSqlWriter,
@@ -518,6 +518,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     val hiveSyncConfig = buildSyncConfigMethod.invoke(HoodieSparkSqlWriter,
       new Path(basePath), newParams).asInstanceOf[HiveSyncConfig]
 
+    assert(hiveSyncConfig.skipROSuffix == true)
     assertResult("spark.sql.sources.provider=hudi\n" +
       "spark.sql.sources.schema.partCol.0=partition\n" +
       "spark.sql.sources.schema.numParts=1\n" +
