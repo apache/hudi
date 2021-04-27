@@ -186,8 +186,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
               .toJmxHost(writeConfig.getJmxHost());
           break;
         case DATADOG:
-          // TODO:
-          break;
+        case PROMETHEUS:
+        case PROMETHEUS_PUSHGATEWAY:
         case CONSOLE:
         case INMEMORY:
           break;

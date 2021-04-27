@@ -18,13 +18,12 @@
 
 package org.apache.hudi.sink;
 
-import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -34,28 +33,29 @@ import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
-import org.apache.flink.runtime.state.CheckpointListener;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 /**
  * Sink function to write the data to the underneath filesystem.
@@ -63,7 +63,7 @@ import java.util.function.BiFunction;
  * <p><h2>Work Flow</h2>
  *
  * <p>The function firstly buffers the data as a batch of {@link HoodieRecord}s,
- * It flushes(write) the records batch when a batch exceeds the configured size {@link FlinkOptions#WRITE_BATCH_SIZE}
+ * It flushes(write) the records batch when a batch exceeds the configured size {@link FlinkOptions#WRITE_BUCKET_SIZE}
  * or a Flink checkpoint starts. After a batch has been written successfully,
  * the function notifies its operator coordinator {@link StreamWriteOperatorCoordinator} to mark a successful write.
  *
@@ -102,24 +102,14 @@ public class StreamWriteFunction<K, I, O>
   private static final Logger LOG = LoggerFactory.getLogger(StreamWriteFunction.class);
 
   /**
+   * Write buffer size detector.
+   */
+  private transient BufferSizeDetector detector;
+
+  /**
    * Write buffer as buckets for a checkpoint. The key is bucket ID.
    */
   private transient Map<String, DataBucket> buckets;
-
-  /**
-   * The buffer lock to control data buffering/flushing.
-   */
-  private transient ReentrantLock bufferLock;
-
-  /**
-   * The condition to decide whether to add new records into the buffer.
-   */
-  private transient Condition addToBufferCondition;
-
-  /**
-   * Flag saying whether there is an on-going checkpoint.
-   */
-  private volatile boolean onCheckpointing = false;
 
   /**
    * Config options.
@@ -149,6 +139,11 @@ public class StreamWriteFunction<K, I, O>
   private transient OperatorEventGateway eventGateway;
 
   /**
+   * Commit action type.
+   */
+  private transient String actionType;
+
+  /**
    * Constructs a StreamingSinkFunction.
    *
    * @param config The config options
@@ -160,8 +155,11 @@ public class StreamWriteFunction<K, I, O>
   @Override
   public void open(Configuration parameters) throws IOException {
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
+    this.writeClient = StreamerUtil.createWriteClient(this.config, getRuntimeContext());
+    this.actionType = CommitUtils.getCommitActionType(
+        WriteOperationType.fromValue(config.getString(FlinkOptions.OPERATION)),
+        HoodieTableType.valueOf(config.getString(FlinkOptions.TABLE_TYPE)));
     initBuffer();
-    initWriteClient();
     initWriteFunction();
   }
 
@@ -172,37 +170,21 @@ public class StreamWriteFunction<K, I, O>
 
   @Override
   public void snapshotState(FunctionSnapshotContext functionSnapshotContext) {
-    bufferLock.lock();
-    try {
-      // Based on the fact that the coordinator starts the checkpoint first,
-      // it would check the validity.
-      this.onCheckpointing = true;
-      // wait for the buffer data flush out and request a new instant
-      flushRemaining(false);
-      // signal the task thread to start buffering
-      addToBufferCondition.signal();
-    } finally {
-      this.onCheckpointing = false;
-      bufferLock.unlock();
-    }
+    // Based on the fact that the coordinator starts the checkpoint first,
+    // it would check the validity.
+    // wait for the buffer data flush out and request a new instant
+    flushRemaining(false);
   }
 
   @Override
   public void processElement(I value, KeyedProcessFunction<K, I, O>.Context ctx, Collector<O> out) throws Exception {
-    bufferLock.lock();
-    try {
-      if (onCheckpointing) {
-        addToBufferCondition.await();
-      }
-      bufferRecord(value);
-    } finally {
-      bufferLock.unlock();
-    }
+    bufferRecord(value);
   }
 
   @Override
   public void close() {
     if (this.writeClient != null) {
+      this.writeClient.cleanHandles();
       this.writeClient.close();
     }
   }
@@ -249,18 +231,8 @@ public class StreamWriteFunction<K, I, O>
   // -------------------------------------------------------------------------
 
   private void initBuffer() {
+    this.detector = new BufferSizeDetector(this.config.getDouble(FlinkOptions.WRITE_BUFFER_SIZE));
     this.buckets = new LinkedHashMap<>();
-    this.bufferLock = new ReentrantLock();
-    this.addToBufferCondition = this.bufferLock.newCondition();
-  }
-
-  private void initWriteClient() {
-    HoodieFlinkEngineContext context =
-        new HoodieFlinkEngineContext(
-            new SerializableConfiguration(StreamerUtil.getHadoopConf()),
-            new FlinkTaskContextSupplier(getRuntimeContext()));
-
-    writeClient = new HoodieFlinkWriteClient<>(context, StreamerUtil.getHoodieClientConfig(this.config));
   }
 
   private void initWriteFunction() {
@@ -272,6 +244,12 @@ public class StreamWriteFunction<K, I, O>
       case UPSERT:
         this.writeFunction = (records, instantTime) -> this.writeClient.upsert(records, instantTime);
         break;
+      case INSERT_OVERWRITE:
+        this.writeFunction = (records, instantTime) -> this.writeClient.insertOverwrite(records, instantTime);
+        break;
+      case INSERT_OVERWRITE_TABLE:
+        this.writeFunction = (records, instantTime) -> this.writeClient.insertOverwriteTable(records, instantTime);
+        break;
       default:
         throw new RuntimeException("Unsupported write operation : " + writeOperation);
     }
@@ -280,18 +258,49 @@ public class StreamWriteFunction<K, I, O>
   /**
    * Data bucket.
    */
-  private static class DataBucket {
+  private static class DataBucket implements Comparable<DataBucket> {
     private final List<HoodieRecord> records;
-    private final BufferSizeDetector detector;
+    private final BucketSizeTracer tracer;
 
     private DataBucket(Double batchSize) {
       this.records = new ArrayList<>();
-      this.detector = new BufferSizeDetector(batchSize);
+      this.tracer = new BucketSizeTracer(batchSize);
     }
 
     public void reset() {
       this.records.clear();
-      this.detector.reset();
+      this.tracer.reset();
+    }
+
+    @Override
+    public int compareTo(@NotNull DataBucket other) {
+      return Double.compare(tracer.threshold, other.tracer.threshold);
+    }
+  }
+
+  /**
+   * Tool to detect if to flush out the existing bucket.
+   */
+  private static class BucketSizeTracer {
+    private final double threshold;
+
+    private long totalSize = 0L;
+
+    BucketSizeTracer(double bucketSizeMb) {
+      this.threshold = bucketSizeMb * 1024 * 1024;
+    }
+
+    /**
+     * Trace the bucket size with given record size,
+     * returns true if the bucket size exceeds specified threshold.
+     */
+    boolean trace(long recordSize) {
+      totalSize += recordSize;
+      return totalSize > this.threshold;
+    }
+
+    void reset() {
+      this.totalSize = 0L;
     }
   }
 
@@ -303,13 +312,13 @@ public class StreamWriteFunction<K, I, O>
     private final Random random = new Random(47);
     private static final int DENOMINATOR = 100;
 
-    private final double batchSizeBytes;
+    private final double threshold;
 
     private long lastRecordSize = -1L;
     private long totalSize = 0L;
 
     BufferSizeDetector(double batchSizeMb) {
-      this.batchSizeBytes = batchSizeMb * 1024 * 1024;
+      this.threshold = batchSizeMb * 1024 * 1024;
     }
 
     boolean detect(Object record) {
@@ -317,7 +326,7 @@ public class StreamWriteFunction<K, I, O>
         lastRecordSize = ObjectSizeCalculator.getObjectSize(record);
       }
       totalSize += lastRecordSize;
-      return totalSize > this.batchSizeBytes;
+      return totalSize > this.threshold;
     }
 
     boolean sampling() {
@@ -328,6 +337,10 @@ public class StreamWriteFunction<K, I, O>
     void reset() {
       this.lastRecordSize = -1L;
       this.totalSize = 0L;
+    }
+
+    public void countDown(long bucketSize) {
+      this.totalSize -= bucketSize;
     }
   }
 
@@ -344,17 +357,34 @@ public class StreamWriteFunction<K, I, O>
    * Buffers the given record.
    *
    * <p>Flush the data bucket first if the bucket records size is greater than
-   * the configured value {@link FlinkOptions#WRITE_BATCH_SIZE}.
+   * the configured value {@link FlinkOptions#WRITE_BUCKET_SIZE}.
    *
    * @param value HoodieRecord
    */
   private void bufferRecord(I value) {
+    boolean flushBuffer = detector.detect(value);
+    if (flushBuffer) {
+      List<DataBucket> sortedBuckets = this.buckets.values().stream()
+          .sorted(Comparator.comparingDouble(b -> b.tracer.totalSize))
+          .collect(Collectors.toList());
+      // flush half number of buckets to avoid flushing too small buckets
+      // which cause small files.
+      int numBucketsToFlush = (sortedBuckets.size() + 1) / 2;
+      LOG.info("Flush {} data buckets because the total buffer size [{} bytes] exceeds the threshold [{} bytes]",
+          numBucketsToFlush, detector.totalSize, detector.threshold);
+      for (int i = 0; i < numBucketsToFlush; i++) {
+        DataBucket bucket = sortedBuckets.get(i);
+        flushBucket(bucket);
+        detector.countDown(bucket.tracer.totalSize);
+        bucket.reset();
+      }
+    }
     final String bucketID = getBucketID(value);
 
     DataBucket bucket = this.buckets.computeIfAbsent(bucketID,
-        k -> new DataBucket(this.config.getDouble(FlinkOptions.WRITE_BATCH_SIZE)));
-    boolean needFlush = bucket.detector.detect(value);
-    if (needFlush) {
+        k -> new DataBucket(this.config.getDouble(FlinkOptions.WRITE_BUCKET_SIZE)));
+    boolean flushBucket = bucket.tracer.trace(detector.lastRecordSize);
+    if (flushBucket) {
       flushBucket(bucket);
       bucket.reset();
     }
@@ -363,7 +393,7 @@ public class StreamWriteFunction<K, I, O>
 
   @SuppressWarnings("unchecked, rawtypes")
   private void flushBucket(DataBucket bucket) {
-    this.currentInstant = this.writeClient.getInflightAndRequestedInstant(this.config.get(FlinkOptions.TABLE_TYPE));
+    this.currentInstant = this.writeClient.getLastPendingInstant(this.actionType);
     if (this.currentInstant == null) {
       // in case there are empty checkpoints that has no input data
       LOG.info("No inflight instant when flushing data, cancel.");
@@ -387,7 +417,7 @@ public class StreamWriteFunction<K, I, O>
 
   @SuppressWarnings("unchecked, rawtypes")
   private void flushRemaining(boolean isEndInput) {
-    this.currentInstant = this.writeClient.getInflightAndRequestedInstant(this.config.get(FlinkOptions.TABLE_TYPE));
+    this.currentInstant = this.writeClient.getLastPendingInstant(this.actionType);
     if (this.currentInstant == null) {
       // in case there are empty checkpoints that has no input data
       LOG.info("No inflight instant when flushing data, cancel.");
@@ -421,6 +451,7 @@ public class StreamWriteFunction<K, I, O>
         .build();
     this.eventGateway.sendEventToCoordinator(event);
     this.buckets.clear();
+    this.detector.reset();
     this.currentInstant = "";
   }
 }

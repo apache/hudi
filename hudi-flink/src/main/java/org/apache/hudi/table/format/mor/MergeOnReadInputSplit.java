@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format.mor;
 
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.flink.core.io.InputSplit;

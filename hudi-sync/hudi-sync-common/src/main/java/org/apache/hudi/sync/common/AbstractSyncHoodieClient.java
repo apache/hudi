@@ -62,8 +62,20 @@ public abstract class AbstractSyncHoodieClient {
     this.fs = fs;
   }
 
+  /**
+   * Create the table.
+   * @param tableName The table name.
+   * @param storageSchema The table schema.
+   * @param inputFormatClass The input format class of this table.
+   * @param outputFormatClass The output format class of this table.
+   * @param serdeClass The serde class of this table.
+   * @param serdeProperties The serde properites of this table.
+   * @param tableProperties The table properties for this table.
+   */
   public abstract void createTable(String tableName, MessageType storageSchema,
-                                   String inputFormatClass, String outputFormatClass, String serdeClass);
+                                   String inputFormatClass, String outputFormatClass,
+                                   String serdeClass, Map<String, String> serdeProperties,
+                                   Map<String, String> tableProperties);
 
   public abstract boolean doesTableExist(String tableName);
 
@@ -74,6 +86,8 @@ public abstract class AbstractSyncHoodieClient {
   public abstract void addPartitionsToTable(String tableName, List<String> partitionsToAdd);
 
   public abstract void updatePartitionsToTable(String tableName, List<String> changedPartitions);
+
+  public  void updateTableProperties(String tableName, Map<String, String> tableProperties) {}
 
   public abstract Map<String, String> getTableSchema(String tableName);
 

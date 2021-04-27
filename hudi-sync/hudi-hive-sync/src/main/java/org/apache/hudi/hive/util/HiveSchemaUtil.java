@@ -395,7 +395,8 @@ public class HiveSchemaUtil {
   }
 
   public static String generateCreateDDL(String tableName, MessageType storageSchema, HiveSyncConfig config, String inputFormatClass,
-                                         String outputFormatClass, String serdeClass) throws IOException {
+                                         String outputFormatClass, String serdeClass, Map<String, String> serdeProperties,
+                                         Map<String, String> tableProperties) throws IOException {
     Map<String, String> hiveSchema = convertParquetSchemaToHiveSchema(storageSchema, config.supportTimestamp);
     String columns = generateSchemaString(storageSchema, config.partitionFields, config.supportTimestamp);
 
@@ -415,8 +416,31 @@ public class HiveSchemaUtil {
       sb.append(" PARTITIONED BY (").append(partitionsStr).append(")");
     }
     sb.append(" ROW FORMAT SERDE '").append(serdeClass).append("'");
+    if (serdeProperties != null && !serdeProperties.isEmpty()) {
+      sb.append(" WITH SERDEPROPERTIES (").append(propertyToString(serdeProperties)).append(")");
+    }
     sb.append(" STORED AS INPUTFORMAT '").append(inputFormatClass).append("'");
     sb.append(" OUTPUTFORMAT '").append(outputFormatClass).append("' LOCATION '").append(config.basePath).append("'");
+
+    if (tableProperties != null && !tableProperties.isEmpty()) {
+      sb.append(" TBLPROPERTIES(").append(propertyToString(tableProperties)).append(")");
+    }
+    return sb.toString();
+  }
+
+  private static String propertyToString(Map<String, String> properties) {
+    if (properties == null || properties.isEmpty()) {
+      return "";
+    }
+    StringBuilder sb = new StringBuilder();
+    boolean first = true;
+    for (Map.Entry<String, String> entry: properties.entrySet()) {
+      if (!first) {
+        sb.append(",");
+      }
+      sb.append("'").append(entry.getKey()).append("'='").append(entry.getValue()).append("'");
+      first = false;
+    }
     return sb.toString();
   }
 

@@ -236,6 +236,13 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     prepareParquetDFSFiles(PARQUET_NUM_RECORDS, PARQUET_SOURCE_ROOT);
   }
 
+  @AfterAll
+  public static void release() {
+    if (testUtils != null) {
+      testUtils.teardown();
+    }
+  }
+
   private static void populateInvalidTableConfigFilePathProps(TypedProperties props) {
     props.setProperty("hoodie.datasource.write.keygenerator.class", TestHoodieDeltaStreamer.TestGenerator.class.getName());
     props.setProperty("hoodie.deltastreamer.keygen.timebased.output.dateformat", "yyyyMMdd");
@@ -260,7 +267,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   protected static void populateCommonKafkaProps(TypedProperties props) {
     //Kafka source properties
     props.setProperty("bootstrap.servers", testUtils.brokerAddress());
-    props.setProperty(Config.KAFKA_AUTO_RESET_OFFSETS, "earliest");
+    props.setProperty(Config.KAFKA_AUTO_OFFSET_RESET, "earliest");
     props.setProperty("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
     props.setProperty("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
     props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents", String.valueOf(5000));
@@ -1345,7 +1352,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     props.setProperty("hoodie.deltastreamer.source.kafka.topic",topicName);
     props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source_uber.avsc");
     props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target_uber.avsc");
-    props.setProperty(Config.KAFKA_AUTO_RESET_OFFSETS, autoResetValue);
+    props.setProperty(Config.KAFKA_AUTO_OFFSET_RESET, autoResetValue);
 
     UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/" + propsFileName);
   }

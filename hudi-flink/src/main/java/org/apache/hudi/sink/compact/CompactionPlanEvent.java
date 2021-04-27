@@ -28,12 +28,23 @@ import java.io.Serializable;
 public class CompactionPlanEvent implements Serializable {
   private static final long serialVersionUID = 1L;
 
-  private final String compactionInstantTime;
+  private String compactionInstantTime;
 
-  private final CompactionOperation operation;
+  private CompactionOperation operation;
+
+  public CompactionPlanEvent() {
+  }
 
   public CompactionPlanEvent(String instantTime, CompactionOperation operation) {
     this.compactionInstantTime = instantTime;
+    this.operation = operation;
+  }
+
+  public void setCompactionInstantTime(String compactionInstantTime) {
+    this.compactionInstantTime = compactionInstantTime;
+  }
+
+  public void setOperation(CompactionOperation operation) {
     this.operation = operation;
   }
 

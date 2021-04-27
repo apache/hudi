@@ -210,6 +210,13 @@ public class HoodieTestTable {
     return this;
   }
 
+  public HoodieTestTable addInflightRollback(String instantTime) throws IOException {
+    createInflightRollbackFile(basePath, instantTime);
+    currentInstantTime = instantTime;
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    return this;
+  }
+
   public HoodieTestTable addRollback(String instantTime, HoodieRollbackMetadata rollbackMetadata) throws IOException {
     createInflightRollbackFile(basePath, instantTime);
     createRollbackFile(basePath, instantTime, rollbackMetadata);

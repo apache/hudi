@@ -47,8 +47,8 @@ public class TestSchemaPostProcessor extends UtilitiesTestBase {
   private static String ORIGINAL_SCHEMA = "{\"name\":\"t3_biz_operation_t_driver\",\"type\":\"record\",\"fields\":[{\"name\":\"ums_id_\",\"type\":[\"null\",\"string\"],\"default\":null},"
                                               + "{\"name\":\"ums_ts_\",\"type\":[\"null\",\"string\"],\"default\":null}]}";
 
-  private static String RESULT_SCHEMA = "{\"type\":\"record\",\"name\":\"hoodie_source\",\"namespace\":\"hoodie.source\",\"fields\":[{\"name\":\"ums_id_\",\"type\":[\"string\",\"null\"]},"
-                                            + "{\"name\":\"ums_ts_\",\"type\":[\"string\",\"null\"]}]}";
+  private static String RESULT_SCHEMA = "{\"type\":\"record\",\"name\":\"hoodie_source\",\"namespace\":\"hoodie.source\",\"fields\":[{\"name\":\"ums_id_\",\"type\":[\"null\",\"string\"],"
+                                              + "\"default\":null},{\"name\":\"ums_ts_\",\"type\":[\"null\",\"string\"],\"default\":null}]}";
 
   @Test
   public void testPostProcessor() throws IOException {

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import java.util.Arrays;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -57,6 +58,7 @@ public class HoodieTableConfig implements Serializable {
   public static final String HOODIE_TABLE_TYPE_PROP_NAME = "hoodie.table.type";
   public static final String HOODIE_TABLE_VERSION_PROP_NAME = "hoodie.table.version";
   public static final String HOODIE_TABLE_PRECOMBINE_FIELD = "hoodie.table.precombine.field";
+  public static final String HOODIE_TABLE_PARTITION_COLUMNS = "hoodie.table.partition.columns";
 
   @Deprecated
   public static final String HOODIE_RO_FILE_FORMAT_PROP_NAME = "hoodie.table.ro.file.format";
@@ -191,6 +193,14 @@ public class HoodieTableConfig implements Serializable {
 
   public String getPreCombineField() {
     return props.getProperty(HOODIE_TABLE_PRECOMBINE_FIELD);
+  }
+
+  public Option<String[]> getPartitionColumns() {
+    if (props.containsKey(HOODIE_TABLE_PARTITION_COLUMNS)) {
+      return Option.of(Arrays.stream(props.getProperty(HOODIE_TABLE_PARTITION_COLUMNS).split(","))
+        .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[]{}));
+    }
+    return Option.empty();
   }
 
   /**

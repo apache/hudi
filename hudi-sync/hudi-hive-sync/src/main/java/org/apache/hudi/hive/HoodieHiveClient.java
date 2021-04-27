@@ -138,6 +138,26 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     }
   }
 
+  /**
+   * Update the table properties to the table.
+   */
+  @Override
+  public void updateTableProperties(String tableName, Map<String, String> tableProperties) {
+    if (tableProperties == null || tableProperties.isEmpty()) {
+      return;
+    }
+    try {
+      Table table = client.getTable(syncConfig.databaseName, tableName);
+      for (Map.Entry<String, String> entry: tableProperties.entrySet()) {
+        table.putToParameters(entry.getKey(), entry.getValue());
+      }
+      client.alter_table(syncConfig.databaseName, tableName, table);
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException("Failed to update table properties for table: "
+          + tableName, e);
+    }
+  }
+
   private String constructAddPartitions(String tableName, List<String> partitions) {
     StringBuilder alterSQL = new StringBuilder("ALTER TABLE ");
     alterSQL.append(HIVE_ESCAPE_CHARACTER).append(syncConfig.databaseName)
@@ -255,10 +275,13 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
   }
 
   @Override
-  public void createTable(String tableName, MessageType storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass) {
+  public void createTable(String tableName, MessageType storageSchema, String inputFormatClass,
+                          String outputFormatClass, String serdeClass,
+                          Map<String, String> serdeProperties, Map<String, String> tableProperties) {
     try {
       String createSQLQuery =
-          HiveSchemaUtil.generateCreateDDL(tableName, storageSchema, syncConfig, inputFormatClass, outputFormatClass, serdeClass);
+          HiveSchemaUtil.generateCreateDDL(tableName, storageSchema, syncConfig, inputFormatClass,
+              outputFormatClass, serdeClass, serdeProperties, tableProperties);
       LOG.info("Creating table with " + createSQLQuery);
       updateHiveSQL(createSQLQuery);
     } catch (IOException e) {

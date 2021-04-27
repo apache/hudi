@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.BatchWriteSuccessEvent;
 import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.utils.TestConfigurations;
@@ -53,11 +52,10 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Test cases for StreamingSinkFunction.
+ * Test cases for stream write.
  */
 public class TestWriteCopyOnWrite {
 
@@ -94,7 +92,7 @@ public class TestWriteCopyOnWrite {
   public void before() throws Exception {
     final String basePath = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(basePath);
-    conf.setString(FlinkOptions.TABLE_TYPE, getTableType());
+    conf.setString(FlinkOptions.TABLE_TYPE, getTableType().name());
     setUp(conf);
     this.funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
   }
@@ -127,8 +125,7 @@ public class TestWriteCopyOnWrite {
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
 
-    String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant(getTableType());
+    String instant = funcWrapper.getWriteClient().getLastPendingInstant(getTableType());
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
     MatcherAssert.assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
@@ -154,7 +151,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(2);
 
     String instant2 = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant(getTableType());
+        .getLastPendingInstant(getTableType());
     assertNotEquals(instant, instant2);
 
     final OperatorEvent nextEvent2 = funcWrapper.getNextEvent();
@@ -183,7 +180,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(1);
 
     String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant(getTableType());
+        .getLastPendingInstant(getTableType());
     assertNotNull(instant);
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
@@ -193,19 +190,19 @@ public class TestWriteCopyOnWrite {
     assertThat(writeStatuses.size(), is(0)); // no data write
 
     // fails the checkpoint
-    assertThrows(HoodieException.class,
-        () -> funcWrapper.checkpointFails(1),
-        "The last checkpoint was aborted, roll back the last write and throw");
+    funcWrapper.checkpointFails(1);
+    assertFalse(funcWrapper.getCoordinatorContext().isJobFailed(),
+        "The last checkpoint was aborted, ignore the events");
 
-    // the instant metadata should be cleared
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.REQUESTED, null);
+    // the instant metadata should be reused
+    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.REQUESTED, instant);
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, null);
 
     for (RowData rowData : TestData.DATA_SET_INSERT) {
       funcWrapper.invoke(rowData);
     }
 
-    // this returns early cause there is no inflight instant
+    // this returns early because there is no inflight instant
     funcWrapper.checkpointFunction(2);
     // do not sent the write event and fails the checkpoint,
     // behaves like the last checkpoint is successful.
@@ -225,7 +222,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(1);
 
     String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant(getTableType());
+        .getLastPendingInstant(getTableType());
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
     assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
@@ -311,7 +308,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(2);
 
     String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant(getTableType());
+        .getLastPendingInstant(getTableType());
 
     nextEvent = funcWrapper.getNextEvent();
     assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
@@ -356,7 +353,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(2);
 
     String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant(getTableType());
+        .getLastPendingInstant(getTableType());
 
     nextEvent = funcWrapper.getNextEvent();
     assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
@@ -381,7 +378,7 @@ public class TestWriteCopyOnWrite {
   @Test
   public void testInsertWithMiniBatches() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.001); // 1Kb batch size
+    conf.setDouble(FlinkOptions.WRITE_BUCKET_SIZE, 0.001); // 1Kb batch size
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // open the function and ingest data
@@ -411,7 +408,7 @@ public class TestWriteCopyOnWrite {
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
 
     String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant(getTableType());
+        .getLastPendingInstant(getTableType());
 
     funcWrapper.checkpointComplete(1);
 
@@ -439,6 +436,68 @@ public class TestWriteCopyOnWrite {
     checkWrittenData(tempFile, expected, 1);
   }
 
+  @Test
+  public void testInsertWithSmallBuffer() throws Exception {
+    // reset the config option
+    conf.setDouble(FlinkOptions.WRITE_BUFFER_SIZE, 0.001); // 1Kb buffer size
+    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
+
+    // open the function and ingest data
+    funcWrapper.openFunction();
+    // each record is 424 bytes. so 3 records expect to trigger buffer flush:
+    // flush half of the buckets once at a time.
+    for (RowData rowData : TestData.DATA_SET_INSERT_DUPLICATES) {
+      funcWrapper.invoke(rowData);
+    }
+
+    Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
+    assertThat("Should have 1 data bucket", dataBuffer.size(), is(1));
+    assertThat("4 records expect to flush out as a mini-batch",
+        dataBuffer.values().stream().findFirst().map(List::size).orElse(-1),
+        is(1));
+
+    // this triggers the data write and event send
+    funcWrapper.checkpointFunction(1);
+    dataBuffer = funcWrapper.getDataBuffer();
+    assertThat("All data should be flushed out", dataBuffer.size(), is(0));
+
+    for (int i = 0; i < 3; i++) {
+      final OperatorEvent event = funcWrapper.getNextEvent(); // remove the first event first
+      assertThat("The operator expect to send an event", event, instanceOf(BatchWriteSuccessEvent.class));
+      funcWrapper.getCoordinator().handleEventFromOperator(0, event);
+    }
+    assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
+
+    String instant = funcWrapper.getWriteClient()
+        .getLastPendingInstant(getTableType());
+
+    funcWrapper.checkpointComplete(1);
+
+    Map<String, String> expected = getMiniBatchExpected();
+    checkWrittenData(tempFile, expected, 1);
+
+    // started a new instant already
+    checkInflightInstant(funcWrapper.getWriteClient());
+    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
+
+    // insert duplicates again
+    for (RowData rowData : TestData.DATA_SET_INSERT_DUPLICATES) {
+      funcWrapper.invoke(rowData);
+    }
+
+    funcWrapper.checkpointFunction(2);
+
+    for (int i = 0; i < 3; i++) {
+      final OperatorEvent event = funcWrapper.getNextEvent(); // remove the first event first
+      funcWrapper.getCoordinator().handleEventFromOperator(0, event);
+    }
+
+    funcWrapper.checkpointComplete(2);
+
+    // Same the original base file content.
+    checkWrittenData(tempFile, expected, 1);
+  }
+
   Map<String, String> getMiniBatchExpected() {
     Map<String, String> expected = new HashMap<>();
     expected.put("par1", "[id1,par1,id1,Danny,23,1,par1, "
@@ -451,6 +510,10 @@ public class TestWriteCopyOnWrite {
 
   @Test
   public void testIndexStateBootstrap() throws Exception {
+    // reset the config option
+    conf.setBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
+
     // open the function and ingest data
     funcWrapper.openFunction();
     for (RowData rowData : TestData.DATA_SET_INSERT) {
@@ -491,7 +554,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(2);
 
     String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant(getTableType());
+        .getLastPendingInstant(getTableType());
 
     nextEvent = funcWrapper.getNextEvent();
     assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
@@ -501,16 +564,11 @@ public class TestWriteCopyOnWrite {
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
 
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.REQUESTED, instant);
-    assertFalse(funcWrapper.isAllPartitionsLoaded(),
-        "All partitions assume to be loaded into the index state");
+
     funcWrapper.checkpointComplete(2);
     // the coordinator checkpoint commits the inflight instant.
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
     checkWrittenData(tempFile, EXPECTED2);
-    // next element triggers all partitions load check
-    funcWrapper.invoke(TestData.DATA_SET_INSERT.get(0));
-    assertTrue(funcWrapper.isAllPartitionsLoaded(),
-        "All partitions assume to be loaded into the index state");
   }
 
   // -------------------------------------------------------------------------
@@ -519,7 +577,7 @@ public class TestWriteCopyOnWrite {
 
   @SuppressWarnings("rawtypes")
   private void checkInflightInstant(HoodieFlinkWriteClient writeClient) {
-    final String instant = writeClient.getInflightAndRequestedInstant(getTableType());
+    final String instant = writeClient.getLastPendingInstant(getTableType());
     assertNotNull(instant);
   }
 
@@ -531,7 +589,7 @@ public class TestWriteCopyOnWrite {
     final String instant;
     switch (state) {
       case REQUESTED:
-        instant = writeClient.getInflightAndRequestedInstant(getTableType());
+        instant = writeClient.getLastPendingInstant(getTableType());
         break;
       case COMPLETED:
         instant = writeClient.getLastCompletedInstant(getTableType());
@@ -542,8 +600,8 @@ public class TestWriteCopyOnWrite {
     assertThat(instant, is(instantStr));
   }
 
-  protected String getTableType() {
-    return HoodieTableType.COPY_ON_WRITE.name();
+  protected HoodieTableType getTableType() {
+    return HoodieTableType.COPY_ON_WRITE;
   }
 
   protected void checkWrittenData(File baseFile, Map<String, String> expected) throws Exception {

@@ -47,6 +47,8 @@ import org.apache.hudi.table.action.clean.FlinkCleanActionExecutor;
 import org.apache.hudi.table.action.clean.FlinkScheduleCleanActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkDeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertCommitActionExecutor;
+import org.apache.hudi.table.action.commit.FlinkInsertOverwriteCommitActionExecutor;
+import org.apache.hudi.table.action.commit.FlinkInsertOverwriteTableCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkMergeHelper;
 import org.apache.hudi.table.action.commit.FlinkUpsertCommitActionExecutor;
@@ -182,6 +184,24 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   }
 
   @Override
+  public HoodieWriteMetadata<List<WriteStatus>> insertOverwrite(
+      HoodieEngineContext context,
+      HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+      String instantTime,
+      List<HoodieRecord<T>> records) {
+    return new FlinkInsertOverwriteCommitActionExecutor(context, writeHandle, config, this, instantTime, records).execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata<List<WriteStatus>> insertOverwriteTable(
+      HoodieEngineContext context,
+      HoodieWriteHandle<?, ?, ?, ?> writeHandle,
+      String instantTime,
+      List<HoodieRecord<T>> records) {
+    return new FlinkInsertOverwriteTableCommitActionExecutor(context, writeHandle, config, this, instantTime, records).execute();
+  }
+
+  @Override
   public HoodieWriteMetadata<List<WriteStatus>> upsert(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> records) {
     throw new HoodieNotSupportedException("This method should not be invoked");
   }
@@ -229,12 +249,12 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> insertOverwrite(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> records) {
-    throw new HoodieNotSupportedException("InsertOverWrite is not supported yet");
+    throw new HoodieNotSupportedException("This method should not be invoked");
   }
 
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> insertOverwriteTable(HoodieEngineContext context, String instantTime, List<HoodieRecord<T>> records) {
-    throw new HoodieNotSupportedException("insertOverwriteTable is not supported yet");
+    throw new HoodieNotSupportedException("This method should not be invoked");
   }
 
   @Override

@@ -20,24 +20,22 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.MarkerFiles;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 /**
  * A {@link HoodieCreateHandle} that supports create write incrementally(mini-batches).
@@ -70,13 +68,23 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
         taskContextSupplier);
   }
 
-  /**
-   * Called by the compactor code path.
-   */
-  public FlinkCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                           String partitionPath, String fileId, Map<String, HoodieRecord<T>> recordMap,
-                           TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable, partitionPath, fileId, recordMap, taskContextSupplier);
+  @Override
+  protected void createMarkerFile(String partitionPath, String dataFileName) {
+    MarkerFiles markerFiles = new MarkerFiles(hoodieTable, instantTime);
+    boolean created = markerFiles.createIfNotExists(partitionPath, dataFileName, getIOType());
+    if (!created) {
+      // If the marker file already exists, that means the write task
+      // was pulled up again with same data file name, removes the legacy
+      // data file first.
+      try {
+        if (fs.exists(path)) {
+          fs.delete(path, false);
+          LOG.warn("Legacy data file: " + path + " delete success");
+        }
+      } catch (IOException e) {
+        throw new HoodieException("Error while deleting legacy data file: " + path, e);
+      }
+    }
   }
 
   /**
@@ -89,7 +97,7 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
    */
   private WriteStatus getIncrementalWriteStatus() {
     try {
-      setUpWriteStatus();
+      setupWriteStatus();
       // reset the write status
       recordsWritten = 0;
       recordsDeleted = 0;
@@ -102,32 +110,20 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
     }
   }
 
-  /**
-   * Set up the write status.
-   *
-   * @throws IOException if error occurs
-   */
-  private void setUpWriteStatus() throws IOException {
-    long fileSizeInBytes = fileWriter.getBytesWritten();
+  @Override
+  protected long computeTotalWriteBytes() throws IOException {
+    long fileSizeInBytes = computeFileSizeInBytes();
     long incFileSizeInBytes = fileSizeInBytes - lastFileSize;
     this.lastFileSize = fileSizeInBytes;
-    HoodieWriteStat stat = new HoodieWriteStat();
-    stat.setPartitionPath(writeStatus.getPartitionPath());
-    stat.setNumWrites(recordsWritten);
-    stat.setNumDeletes(recordsDeleted);
-    stat.setNumInserts(insertRecordsWritten);
-    stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
-    stat.setFileId(writeStatus.getFileId());
-    stat.setPath(new Path(config.getBasePath()), path);
-    stat.setTotalWriteBytes(incFileSizeInBytes);
-    stat.setFileSizeInBytes(fileSizeInBytes);
-    stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
-    HoodieWriteStat.RuntimeStats runtimeStats = new HoodieWriteStat.RuntimeStats();
-    runtimeStats.setTotalCreateTime(timer.endTimer());
-    stat.setRuntimeStats(runtimeStats);
-    writeStatus.setStat(stat);
+    return incFileSizeInBytes;
   }
 
+  @Override
+  protected long computeFileSizeInBytes() {
+    return fileWriter.getBytesWritten();
+  }
+
+  @Override
   public void finishWrite() {
     LOG.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
     try {

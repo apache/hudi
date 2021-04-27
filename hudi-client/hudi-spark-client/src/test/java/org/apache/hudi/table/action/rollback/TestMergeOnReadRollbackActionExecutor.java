@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
+import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -154,5 +155,20 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
               true,
               true);
     });
+  }
+
+  /**
+   * Test Cases for rollbacking when has not base file.
+   */
+  @Test
+  public void testRollbackWhenFirstCommitFail() throws Exception {
+
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      client.startCommitWithTime("001");
+      client.insert(jsc.emptyRDD(), "001");
+      client.rollback("001");
+    }
   }
 }

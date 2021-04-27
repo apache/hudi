@@ -18,6 +18,7 @@
 
 package org.apache.hudi.streamer;
 
+import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;

@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import com.beust.jcommander.Parameter;
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -271,7 +272,7 @@ public class HoodieMultiTableDeltaStreamer {
     public long sourceLimit = Long.MAX_VALUE;
 
     @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT (use when input "
-        + "is purely new data/inserts to gain speed)", converter = HoodieDeltaStreamer.OperationConverter.class)
+        + "is purely new data/inserts to gain speed)", converter = OperationConverter.class)
     public WriteOperationType operation = WriteOperationType.UPSERT;
 
     @Parameter(names = {"--filter-dupes"},

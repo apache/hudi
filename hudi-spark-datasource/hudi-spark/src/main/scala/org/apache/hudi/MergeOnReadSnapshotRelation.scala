@@ -21,7 +21,6 @@ package org.apache.hudi
 import org.apache.hudi.common.model.HoodieBaseFile
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.hadoop.fs.Path
@@ -29,7 +28,7 @@ import org.apache.hadoop.mapred.JobConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.execution.datasources.{FileStatusCache, PartitionedFile}
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.{Row, SQLContext}
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
@@ -54,7 +53,7 @@ case class HoodieMergeOnReadTableState(tableStructSchema: StructType,
 class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
                                   val optParams: Map[String, String],
                                   val userSchema: StructType,
-                                  val globPaths: Seq[Path],
+                                  val globPaths: Option[Seq[Path]],
                                   val metaClient: HoodieTableMetaClient)
   extends BaseRelation with PrunedFilteredScan with Logging {
 
@@ -133,25 +132,54 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
   }
 
   def buildFileIndex(): List[HoodieMergeOnReadFileSplit] = {
-    val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sqlContext.sparkSession, globPaths)
-    val fileStatuses = inMemoryFileIndex.allFiles()
-    if (fileStatuses.isEmpty) {
-      throw new HoodieException("No files found for reading in user provided path.")
+    val fileStatuses = if (globPaths.isDefined) {
+      // Load files from the global paths if it has defined to be compatible with the original mode
+      val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sqlContext.sparkSession, globPaths.get)
+      inMemoryFileIndex.allFiles()
+    } else { // Load files by the HoodieFileIndex.
+      val hoodieFileIndex = HoodieFileIndex(sqlContext.sparkSession, metaClient,
+        Some(tableStructSchema), optParams, FileStatusCache.getOrCreate(sqlContext.sparkSession))
+      hoodieFileIndex.allFiles
     }
 
-    val fsView = new HoodieTableFileSystemView(metaClient,
-      metaClient.getActiveTimeline.getCommitsTimeline
-        .filterCompletedInstants, fileStatuses.toArray)
-    val latestFiles: List[HoodieBaseFile] = fsView.getLatestBaseFiles.iterator().asScala.toList
-    val latestCommit = fsView.getLastInstant.get().getTimestamp
-    val fileGroup = HoodieRealtimeInputFormatUtils.groupLogsByBaseFile(conf, latestFiles.asJava).asScala
-    val fileSplits = fileGroup.map(kv => {
-      val baseFile = kv._1
-      val logPaths = if (kv._2.isEmpty) Option.empty else Option(kv._2.asScala.toList)
-      val partitionedFile = PartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen)
-      HoodieMergeOnReadFileSplit(Option(partitionedFile), logPaths, latestCommit,
-        metaClient.getBasePath, maxCompactionMemoryInBytes, mergeType)
-    }).toList
-    fileSplits
+    if (fileStatuses.isEmpty) { // If this an empty table, return an empty split list.
+      List.empty[HoodieMergeOnReadFileSplit]
+    } else {
+      val fsView = new HoodieTableFileSystemView(metaClient,
+        metaClient.getActiveTimeline.getCommitsTimeline
+          .filterCompletedInstants, fileStatuses.toArray)
+      val latestFiles: List[HoodieBaseFile] = fsView.getLatestBaseFiles.iterator().asScala.toList
+      val latestCommit = fsView.getLastInstant.get().getTimestamp
+      val fileGroup = HoodieRealtimeInputFormatUtils.groupLogsByBaseFile(conf, latestFiles.asJava).asScala
+      val fileSplits = fileGroup.map(kv => {
+        val baseFile = kv._1
+        val logPaths = if (kv._2.isEmpty) Option.empty else Option(kv._2.asScala.toList)
+
+        val filePath = MergeOnReadSnapshotRelation.getFilePath(baseFile.getFileStatus.getPath)
+        val partitionedFile = PartitionedFile(InternalRow.empty, filePath, 0, baseFile.getFileLen)
+        HoodieMergeOnReadFileSplit(Option(partitionedFile), logPaths, latestCommit,
+          metaClient.getBasePath, maxCompactionMemoryInBytes, mergeType)
+      }).toList
+      fileSplits
+    }
+  }
+}
+
+object MergeOnReadSnapshotRelation {
+
+  def getFilePath(path: Path): String = {
+    // Here we use the Path#toUri to encode the path string, as there is a decode in
+    // ParquetFileFormat#buildReaderWithPartitionValues in the spark project when read the table
+    // .So we should encode the file path here. Otherwise, there is a FileNotException throw
+    // out.
+    // For example, If the "pt" is the partition path field, and "pt" = "2021/02/02", If
+    // we enable the URL_ENCODE_PARTITIONING_OPT_KEY and write data to hudi table.The data
+    // path in the table will just like "/basePath/2021%2F02%2F02/xxxx.parquet". When we read
+    // data from the table, if there are no encode for the file path,
+    // ParquetFileFormat#buildReaderWithPartitionValues will decode it to
+    // "/basePath/2021/02/02/xxxx.parquet" witch will result to a FileNotException.
+    // See FileSourceScanExec#createBucketedReadRDD in spark project which do the same thing
+    // when create PartitionedFile.
+    path.toUri.toString
   }
 }

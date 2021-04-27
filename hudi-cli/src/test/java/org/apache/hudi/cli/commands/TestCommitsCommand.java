@@ -24,10 +24,12 @@ import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
+import org.apache.hudi.cli.testutils.HoodieTestReplaceCommitMetadatGenerator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -75,6 +77,7 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
+    metaClient = HoodieCLI.getTableMetaClient();
   }
 
   private LinkedHashMap<String, Integer[]> generateData() throws Exception {
@@ -94,6 +97,42 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
     assertEquals(3, metaClient.reloadActiveTimeline().getCommitsTimeline().countInstants(),
         "There should have 3 commits");
+    return data;
+  }
+
+  /*
+  * generates both replace commit and commit data
+  * */
+  private LinkedHashMap<HoodieInstant, Integer[]> generateMixedData() throws Exception {
+    // generate data and metadata
+    LinkedHashMap<HoodieInstant, Integer[]> replaceCommitData = new LinkedHashMap<>();
+    replaceCommitData.put(new HoodieInstant(false, HoodieTimeline.REPLACE_COMMIT_ACTION, "103"), new Integer[] {15, 10});
+
+    LinkedHashMap<HoodieInstant, Integer[]> commitData = new LinkedHashMap<>();
+    commitData.put(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "102"), new Integer[] {15, 10});
+    commitData.put(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "101"), new Integer[] {20, 10});
+
+    for (Map.Entry<HoodieInstant, Integer[]> entry : commitData.entrySet()) {
+      String key = entry.getKey().getTimestamp();
+      Integer[] value = entry.getValue();
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, key, jsc.hadoopConfiguration(),
+              Option.of(value[0]), Option.of(value[1]));
+    }
+
+    for (Map.Entry<HoodieInstant, Integer[]> entry : replaceCommitData.entrySet()) {
+      String key = entry.getKey().getTimestamp();
+      Integer[] value = entry.getValue();
+      HoodieTestReplaceCommitMetadatGenerator.createReplaceCommitFileWithMetadata(tablePath, key,
+              Option.of(value[0]), Option.of(value[1]), metaClient);
+    }
+
+    metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
+    assertEquals(3, metaClient.reloadActiveTimeline().getCommitsTimeline().countInstants(),
+            "There should be 3 commits");
+
+    LinkedHashMap<HoodieInstant, Integer[]> data = replaceCommitData;
+    data.putAll(commitData);
+
     return data;
   }
 
@@ -194,7 +233,7 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
     // archived 101 and 102 instants, remove 103 and 104 instant
     data.remove("103");
     data.remove("104");
-    String expected = generateExpectData(3, data);
+    String expected = generateExpectData(1, data);
     expected = removeNonWordAndStripSpace(expected);
     String got = removeNonWordAndStripSpace(cr.getResult().toString());
     assertEquals(expected, got);
@@ -216,14 +255,15 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
     // prevCommit not null, so add 0, update 1
     Arrays.asList(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
         HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH).stream().forEach(partition ->
-        rows.add(new Comparable[] {partition, 0, 1, 0, value[1], HoodieTestCommitMetadataGenerator.DEFAULT_TOTAL_WRITE_BYTES, 0})
+        rows.add(new Comparable[] {HoodieTimeline.COMMIT_ACTION, partition, 0, 1, 0, value[1], HoodieTestCommitMetadataGenerator.DEFAULT_TOTAL_WRITE_BYTES, 0})
     );
 
     Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
     fieldNameToConverterMap.put(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN,
         entry -> NumericUtils.humanReadableByteCount((Long.parseLong(entry.toString()))));
 
-    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION_PATH)
+    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_ACTION)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION_PATH)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FILES_ADDED)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FILES_UPDATED)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_RECORDS_INSERTED)
@@ -235,6 +275,43 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
     expected = removeNonWordAndStripSpace(expected);
     String got = removeNonWordAndStripSpace(cr.getResult().toString());
     assertEquals(expected, got);
+  }
+
+  @Test
+  public void testShowCommitPartitionsWithReplaceCommits() throws Exception {
+    Map<HoodieInstant, Integer[]> data = generateMixedData();
+
+    for (HoodieInstant commitInstant: data.keySet()) {
+      CommandResult cr = getShell().executeCommand(String.format("commit showpartitions --commit %s", commitInstant.getTimestamp()));
+
+      assertTrue(cr.isSuccess());
+
+      Integer[] value = data.get(commitInstant);
+      List<Comparable[]> rows = new ArrayList<>();
+      // prevCommit not null, so add 0, update 1
+      Arrays.asList(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
+          HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH).stream().forEach(partition ->
+          rows.add(new Comparable[] {commitInstant.getAction(), partition, 0, 1, 0, value[1], HoodieTestCommitMetadataGenerator.DEFAULT_TOTAL_WRITE_BYTES, 0})
+      );
+
+      Map<String, Function<Object, String>> fieldNameToConverterMap = new HashMap<>();
+      fieldNameToConverterMap.put(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN,
+          entry -> NumericUtils.humanReadableByteCount((Long.parseLong(entry.toString()))));
+
+      TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_ACTION)
+          .addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION_PATH)
+          .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FILES_ADDED)
+          .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_FILES_UPDATED)
+          .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_RECORDS_INSERTED)
+          .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_RECORDS_UPDATED)
+          .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN)
+          .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_ERRORS);
+
+      String expected = HoodiePrintHelper.print(header, fieldNameToConverterMap, "", false, -1, false, rows);
+      expected = removeNonWordAndStripSpace(expected);
+      String got = removeNonWordAndStripSpace(cr.getResult().toString());
+      assertEquals(expected, got);
+    }
   }
 
   /**
@@ -252,12 +329,13 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
     List<Comparable[]> rows = new ArrayList<>();
     Arrays.asList(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
         HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH).stream().forEach(partition ->
-        rows.add(new Comparable[] {partition, HoodieTestCommitMetadataGenerator.DEFAULT_FILEID,
+        rows.add(new Comparable[] {HoodieTimeline.COMMIT_ACTION, partition, HoodieTestCommitMetadataGenerator.DEFAULT_FILEID,
             HoodieTestCommitMetadataGenerator.DEFAULT_PRE_COMMIT,
             value[1], value[0], HoodieTestCommitMetadataGenerator.DEFAULT_TOTAL_WRITE_BYTES,
             // default 0 errors and blank file with 0 size
             0, 0}));
-    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION_PATH)
+    TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_ACTION)
+        .addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION_PATH)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_FILE_ID)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_PREVIOUS_COMMIT)
         .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_RECORDS_UPDATED)
@@ -270,6 +348,40 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
     expected = removeNonWordAndStripSpace(expected);
     String got = removeNonWordAndStripSpace(cr.getResult().toString());
     assertEquals(expected, got);
+  }
+
+  @Test
+  public void testShowCommitFilesWithReplaceCommits() throws Exception {
+    Map<HoodieInstant, Integer[]> data = generateMixedData();
+
+    for (HoodieInstant commitInstant : data.keySet()) {
+      CommandResult cr = getShell().executeCommand(String.format("commit showfiles --commit %s", commitInstant.getTimestamp()));
+      assertTrue(cr.isSuccess());
+
+      Integer[] value = data.get(commitInstant);
+      List<Comparable[]> rows = new ArrayList<>();
+      Arrays.asList(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH,
+          HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH).stream().forEach(partition ->
+          rows.add(new Comparable[] {commitInstant.getAction(), partition, HoodieTestCommitMetadataGenerator.DEFAULT_FILEID,
+              HoodieTestCommitMetadataGenerator.DEFAULT_PRE_COMMIT,
+              value[1], value[0], HoodieTestCommitMetadataGenerator.DEFAULT_TOTAL_WRITE_BYTES,
+              // default 0 errors and blank file with 0 size
+              0, 0}));
+      TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_ACTION)
+          .addTableHeaderField(HoodieTableHeaderFields.HEADER_PARTITION_PATH)
+          .addTableHeaderField(HoodieTableHeaderFields.HEADER_FILE_ID)
+          .addTableHeaderField(HoodieTableHeaderFields.HEADER_PREVIOUS_COMMIT)
+          .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_RECORDS_UPDATED)
+          .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_RECORDS_WRITTEN)
+          .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_BYTES_WRITTEN)
+          .addTableHeaderField(HoodieTableHeaderFields.HEADER_TOTAL_ERRORS)
+          .addTableHeaderField(HoodieTableHeaderFields.HEADER_FILE_SIZE);
+
+      String expected = HoodiePrintHelper.print(header, new HashMap<>(), "", false, -1, false, rows);
+      expected = removeNonWordAndStripSpace(expected);
+      String got = removeNonWordAndStripSpace(cr.getResult().toString());
+      assertEquals(expected, got);
+    }
   }
 
   /**

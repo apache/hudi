@@ -23,6 +23,9 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.util.RowDataToAvroConverters;
@@ -36,7 +39,11 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.RowKind;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
+import java.io.Serializable;
+import java.lang.reflect.Constructor;
 
 /**
  * Function that transforms RowData to HoodieRecord.
@@ -64,6 +71,11 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord<?
   private transient KeyGenerator keyGenerator;
 
   /**
+   * Utilities to create hoodie pay load instance.
+   */
+  private transient PayloadCreation payloadCreation;
+
+  /**
    * Config options.
    */
   private final Configuration config;
@@ -79,6 +91,7 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord<?
     this.avroSchema = StreamerUtil.getSourceSchema(this.config);
     this.converter = RowDataToAvroConverters.createConverter(this.rowType);
     this.keyGenerator = StreamerUtil.createKeyGenerator(FlinkOptions.flatOptions(this.config));
+    this.payloadCreation = PayloadCreation.instance(config);
   }
 
   @SuppressWarnings("unchecked")
@@ -95,19 +108,61 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord<?
    * @throws IOException if error occurs
    */
   @SuppressWarnings("rawtypes")
-  private HoodieRecord toHoodieRecord(I record) throws IOException {
-    boolean shouldCombine = this.config.getBoolean(FlinkOptions.INSERT_DROP_DUPS)
-        || WriteOperationType.fromValue(this.config.getString(FlinkOptions.OPERATION)) == WriteOperationType.UPSERT;
+  private HoodieRecord toHoodieRecord(I record) throws Exception {
     GenericRecord gr = (GenericRecord) this.converter.convert(this.avroSchema, record);
-    final String payloadClazz = this.config.getString(FlinkOptions.PAYLOAD_CLASS);
-    Comparable orderingVal = (Comparable) HoodieAvroUtils.getNestedFieldVal(gr,
-        this.config.getString(FlinkOptions.PRECOMBINE_FIELD), false);
     final HoodieKey hoodieKey = keyGenerator.getKey(gr);
     // nullify the payload insert data to mark the record as a DELETE
-    gr = record.getRowKind() == RowKind.DELETE ? null : gr;
-    HoodieRecordPayload payload = shouldCombine
-        ? StreamerUtil.createPayload(payloadClazz, gr, orderingVal)
-        : StreamerUtil.createPayload(payloadClazz, gr);
+    final boolean isDelete = record.getRowKind() == RowKind.DELETE;
+    HoodieRecordPayload payload = payloadCreation.createPayload(gr, isDelete);
     return new HoodieRecord<>(hoodieKey, payload);
+  }
+
+  /**
+   * Util to create hoodie pay load instance.
+   */
+  private static class PayloadCreation implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private final boolean shouldCombine;
+    private final Constructor<?> constructor;
+    private final String preCombineField;
+
+    private PayloadCreation(
+        boolean shouldCombine,
+        Constructor<?> constructor,
+        @Nullable String preCombineField) {
+      this.shouldCombine = shouldCombine;
+      this.constructor = constructor;
+      this.preCombineField = preCombineField;
+    }
+
+    public static PayloadCreation instance(Configuration conf) throws Exception {
+      boolean shouldCombine = conf.getBoolean(FlinkOptions.INSERT_DROP_DUPS)
+          || WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)) == WriteOperationType.UPSERT;
+      String preCombineField = null;
+      final Class<?>[] argTypes;
+      final Constructor<?> constructor;
+      if (shouldCombine) {
+        preCombineField = conf.getString(FlinkOptions.PRECOMBINE_FIELD);
+        argTypes = new Class<?>[] {GenericRecord.class, Comparable.class};
+      } else {
+        argTypes = new Class<?>[] {Option.class};
+      }
+      final String clazz = conf.getString(FlinkOptions.PAYLOAD_CLASS);
+      constructor = ReflectionUtils.getClass(clazz).getConstructor(argTypes);
+      return new PayloadCreation(shouldCombine, constructor, preCombineField);
+    }
+
+    public HoodieRecordPayload<?> createPayload(GenericRecord record, boolean isDelete) throws Exception {
+      if (shouldCombine) {
+        ValidationUtils.checkState(preCombineField != null);
+        Comparable<?> orderingVal = (Comparable<?>) HoodieAvroUtils.getNestedFieldVal(record,
+            preCombineField, false);
+        return (HoodieRecordPayload<?>) constructor.newInstance(
+            isDelete ? null : record, orderingVal);
+      } else {
+        return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.of(record));
+      }
+    }
   }
 }

@@ -28,7 +28,9 @@ import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
 import org.apache.flink.runtime.io.disk.iomanager.IOManagerAsync;
+import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.memory.MemoryManager;
+import org.apache.flink.runtime.operators.coordination.MockOperatorCoordinatorContext;
 import org.apache.flink.runtime.operators.testutils.MockEnvironment;
 import org.apache.flink.runtime.operators.testutils.MockEnvironmentBuilder;
 import org.apache.flink.streaming.api.operators.Output;
@@ -78,6 +80,9 @@ public class CompactFunctionWrapper {
     compactFunction = new CompactFunction(conf);
     compactFunction.setRuntimeContext(runtimeContext);
     compactFunction.open(conf);
+    final NonThrownExecutor syncExecutor = new MockCoordinatorExecutor(
+        new MockOperatorCoordinatorContext(new OperatorID(), 1));
+    compactFunction.setExecutor(syncExecutor);
 
     commitSink = new CompactionCommitSink(conf);
     commitSink.setRuntimeContext(runtimeContext);

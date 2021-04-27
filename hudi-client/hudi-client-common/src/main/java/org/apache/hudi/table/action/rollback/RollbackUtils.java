@@ -112,6 +112,9 @@ public class RollbackUtils {
     String commit = instantToRollback.getTimestamp();
     HoodieWriteConfig config = table.getConfig();
     List<String> partitions = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
+    if (partitions.isEmpty()) {
+      return new ArrayList<>();
+    }
     int sparkPartitions = Math.max(Math.min(partitions.size(), config.getRollbackParallelism()), 1);
     context.setJobStatus(RollbackUtils.class.getSimpleName(), "Generate all rollback requests");
     return context.flatMap(partitions, partitionPath -> {
