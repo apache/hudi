@@ -190,21 +190,30 @@ The actual datasource level configs are listed below.
 | `write.ignore.failed` | N | true | <span style="color:grey"> Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch. By default true (in favor of streaming progressing over data integrity) </span> |
 | `hoodie.datasource.write.recordkey.field` | N | uuid | <span style="color:grey"> Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using the dot notation eg: `a.b.c` </span> |
 | `hoodie.datasource.write.keygenerator.class` | N | SimpleAvroKeyGenerator.class | <span style="color:grey"> Key generator class, that implements will extract the key out of incoming record </span> |
-| `write.partition.url_encode` | N | false | Whether to encode the partition path url, default false |
-| `write.tasks` | N | 4 | <span style="color:grey"> Parallelism of tasks that do actual write, default is 4 </span> |
-| `write.batch.size.MB` | N | 128 | <span style="color:grey"> Batch buffer size in MB to flush data into the underneath filesystem </span> |
+| `write.partition.url_encode` | N | false | <span style="color:grey"> Whether to encode the partition path url, default false </span> |
+| `write.log.max.size` | N | 1024 | <span style="color:grey"> Maximum size allowed in MB for a log file before it is rolled over to the next version, default 1GB </span> |
 
 If the table type is MERGE_ON_READ, you can also specify the asynchronous compaction strategy through options:
 
 |  Option Name  | Required | Default | Remarks |
 |  -----------  | -------  | ------- | ------- |
+| `compaction.tasks` | N | 10 | <span style="color:grey"> Parallelism of tasks that do actual compaction, default is 10 </span> |
 | `compaction.async.enabled` | N | true | <span style="color:grey"> Async Compaction, enabled by default for MOR </span> |
 | `compaction.trigger.strategy` | N | num_commits | <span style="color:grey"> Strategy to trigger compaction, options are 'num_commits': trigger compaction when reach N delta commits; 'time_elapsed': trigger compaction when time elapsed > N seconds since last compaction; 'num_and_time': trigger compaction when both NUM_COMMITS and TIME_ELAPSED are satisfied; 'num_or_time': trigger compaction when NUM_COMMITS or TIME_ELAPSED is satisfied. Default is 'num_commits' </span> |
 | `compaction.delta_commits` | N | 5 | <span style="color:grey"> Max delta commits needed to trigger compaction, default 5 commits </span> |
 | `compaction.delta_seconds` | N | 3600 | <span style="color:grey"> Max delta seconds time needed to trigger compaction, default 1 hour </span> |
-| `compaction.max_memory` | N | 100 | Max memory in MB for compaction spillable map, default 100MB |
-| `clean.async.enabled` | N | true | Whether to cleanup the old commits immediately on new commits, enabled by default |
-| `clean.retain_commits` | N | 10 | Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much you can incrementally pull on this table, default 10 |
+| `compaction.max_memory` | N | 100 | <span style="color:grey"> Max memory in MB for compaction spillable map, default 100MB </span> |
+| `clean.async.enabled` | N | true | <span style="color:grey"> Whether to cleanup the old commits immediately on new commits, enabled by default </span> |
+| `clean.retain_commits` | N | 10 | <span style="color:grey"> Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much you can incrementally pull on this table, default 10 </span> |
+
+Options about memory consumption:
+
+|  Option Name  | Required | Default | Remarks |
+|  -----------  | -------  | ------- | ------- |
+| `write.rate.limit` | N | -1 | <span style="color:grey"> Write records rate limit per second to reduce risk of OOM, default -1 (no limit) </span> |
+| `write.batch.size` | N | 64 | <span style="color:grey"> Batch size per bucket in MB to flush data into the underneath filesystem, default 64MB </span> |
+| `write.log_block.size` | N | 128 | <span style="color:grey"> Max log block size in MB for log file, default 128MB </span> |
+| `compaction.max_memory` | N | 100 | <span style="color:grey"> Max memory in MB for compaction spillable map, default 100MB </span> |
 
 ### Read Options
 
@@ -220,7 +229,7 @@ If the table type is MERGE_ON_READ, you can also specify the asynchronous compac
 | `hoodie.datasource.hive_style_partition` | N | false | <span style="color:grey"> Whether the partition path is with Hive style, e.g. '{partition key}={partition value}', default false </span> |
 | `read.utc-timezone` | N | true | <span style="color:grey"> Use UTC timezone or local timezone to the conversion between epoch time and LocalDateTime. Hive 0.x/1.x/2.x use local timezone. But Hive 3.x use UTC timezone, by default true </span> |
 
-If the table type is MERGE_ON_READ, streaming read is supported through options:
+Streaming read is supported through options:
 
 |  Option Name  | Required | Default | Remarks |
 |  -----------  | -------  | ------- | ------- |
@@ -232,27 +241,28 @@ If the table type is MERGE_ON_READ, streaming read is supported through options:
 
 |  Option Name  | Required | Default | Remarks |
 |  -----------  | -------  | ------- | ------- |
-| `index.bootstrap.enabled` | N | false | Whether to bootstrap the index state from existing hoodie table, default false |
+| `index.bootstrap.enabled` | N | false | <span style="color:grey"> Whether to bootstrap the index state from existing hoodie table, default false </span> |
+| `index.state.ttl` | N | 1.5 | <span style="color:grey"> Index state ttl in days, default 1.5 day </span> |
 
 ### Hive sync options
 
 |  Option Name  | Required | Default | Remarks |
 |  -----------  | -------  | ------- | ------- |
-| `hive_sync.enable` | N | false | Asynchronously sync Hive meta to HMS, default false |
-| `hive_sync.db` | N | default | Database name for hive sync, default 'default' |
-| `hive_sync.table` | N | unknown | Table name for hive sync, default 'unknown' |
-| `hive_sync.file_format` | N | PARQUET | File format for hive sync, default 'PARQUET' |
-| `hive_sync.username` | N | hive | Username for hive sync, default 'hive' |
-| `hive_sync.password` | N | hive | Password for hive sync, default 'hive' |
-| `hive_sync.jdbc_url` | N | jdbc:hive2://localhost:10000 | Jdbc URL for hive sync, default 'jdbc:hive2://localhost:10000' |
-| `hive_sync.partition_fields` | N | '' | Partition fields for hive sync, default '' |
-| `hive_sync.partition_extractor_class` | N | SlashEncodedDayPartitionValueExtractor.class | Tool to extract the partition value from HDFS path, default 'SlashEncodedDayPartitionValueExtractor' |
-| `hive_sync.assume_date_partitioning` | N | false | Assume partitioning is yyyy/mm/dd, default false |
-| `hive_sync.use_jdbc` | N | true | Use JDBC when hive synchronization is enabled, default true |
-| `hive_sync.auto_create_db` | N | true | Auto create hive database if it does not exists, default true |
-| `hive_sync.ignore_exceptions` | N | false | Ignore exceptions during hive synchronization, default false |
-| `hive_sync.skip_ro_suffix` | N | false | Skip the _ro suffix for Read optimized table when registering, default false |
-| `hive_sync.support_timestamp` | N | false | INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type. Disabled by default for backward compatibility. |
+| `hive_sync.enable` | N | false | <span style="color:grey"> Asynchronously sync Hive meta to HMS, default false </span> |
+| `hive_sync.db` | N | default | <span style="color:grey"> Database name for hive sync, default 'default' </span> |
+| `hive_sync.table` | N | unknown | <span style="color:grey"> Table name for hive sync, default 'unknown' </span> |
+| `hive_sync.file_format` | N | PARQUET | <span style="color:grey"> File format for hive sync, default 'PARQUET' </span> |
+| `hive_sync.username` | N | hive | <span style="color:grey"> Username for hive sync, default 'hive' </span> |
+| `hive_sync.password` | N | hive | <span style="color:grey"> Password for hive sync, default 'hive' </span> |
+| `hive_sync.jdbc_url` | N | jdbc:hive2://localhost:10000 | <span style="color:grey"> Jdbc URL for hive sync, default 'jdbc:hive2://localhost:10000' </span> |
+| `hive_sync.partition_fields` | N | '' | <span style="color:grey"> Partition fields for hive sync, default '' </span> |
+| `hive_sync.partition_extractor_class` | N | SlashEncodedDayPartitionValueExtractor.class | <span style="color:grey"> Tool to extract the partition value from HDFS path, default 'SlashEncodedDayPartitionValueExtractor' </span> |
+| `hive_sync.assume_date_partitioning` | N | false | <span style="color:grey"> Assume partitioning is yyyy/mm/dd, default false </span> |
+| `hive_sync.use_jdbc` | N | true | <span style="color:grey"> Use JDBC when hive synchronization is enabled, default true </span> |
+| `hive_sync.auto_create_db` | N | true | <span style="color:grey"> Auto create hive database if it does not exists, default true </span> |
+| `hive_sync.ignore_exceptions` | N | false | <span style="color:grey"> Ignore exceptions during hive synchronization, default false </span> |
+| `hive_sync.skip_ro_suffix` | N | false | <span style="color:grey"> Skip the _ro suffix for Read optimized table when registering, default false </span> |
+| `hive_sync.support_timestamp` | N | false | <span style="color:grey"> INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type. Disabled by default for backward compatibility </span> |
 
 ## WriteClient Configs {#writeclient-configs}
 
