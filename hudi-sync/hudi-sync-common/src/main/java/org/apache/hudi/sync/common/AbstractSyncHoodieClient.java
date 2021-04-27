@@ -46,7 +46,7 @@ public abstract class AbstractSyncHoodieClient {
 
   private static final Logger LOG = LogManager.getLogger(AbstractSyncHoodieClient.class);
 
-  public static final TypeConverter DECIMAL_TYPE_CONVERTOR = new TypeConverter() {};
+  public static final TypeConverter TYPE_CONVERTOR = new TypeConverter() {};
 
   protected final HoodieTableMetaClient metaClient;
   protected final HoodieTableType tableType;

@@ -122,7 +122,7 @@ public class HoodieDLAClient extends AbstractSyncHoodieClient {
       DatabaseMetaData databaseMetaData = connection.getMetaData();
       result = databaseMetaData.getColumns(dlaConfig.databaseName, dlaConfig.databaseName, tableName, null);
       while (result.next()) {
-        DECIMAL_TYPE_CONVERTOR.doConvert(result, schema);
+        TYPE_CONVERTOR.doConvert(result, schema);
       }
       return schema;
     } catch (SQLException e) {
