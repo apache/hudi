@@ -203,6 +203,7 @@ public class StreamerUtil {
                     // override and hardcode to 20,
                     // actually Flink cleaning is always with parallelism 1 now
                     .withCleanerParallelism(20)
+                    .archiveCommitsWith(conf.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), conf.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS))
                     .build())
             .withMemoryConfig(
                 HoodieMemoryConfig.newBuilder()

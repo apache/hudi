@@ -63,7 +63,8 @@ import java.util.stream.Collectors;
  * <p><h2>Work Flow</h2>
  *
  * <p>The function firstly buffers the data as a batch of {@link HoodieRecord}s,
- * It flushes(write) the records batch when a batch exceeds the configured size {@link FlinkOptions#WRITE_BUCKET_SIZE}
+ * It flushes(write) the records bucket when the bucket size exceeds the configured threshold {@link FlinkOptions#WRITE_BUCKET_SIZE}
+ * or the whole data buffer size exceeds the configured threshold {@link FlinkOptions#WRITE_BUFFER_SIZE}
  * or a Flink checkpoint starts. After a batch has been written successfully,
  * the function notifies its operator coordinator {@link StreamWriteOperatorCoordinator} to mark a successful write.
  *
@@ -356,8 +357,13 @@ public class StreamWriteFunction<K, I, O>
   /**
    * Buffers the given record.
    *
-   * <p>Flush the data bucket first if the bucket records size is greater than
-   * the configured value {@link FlinkOptions#WRITE_BUCKET_SIZE}.
+   * <p>Flush the data bucket first if one of the condition meets:
+   *
+   * <ul>
+   *   <li>The bucket size is greater than the configured value {@link FlinkOptions#WRITE_BUCKET_SIZE}.</li>
+   *   <li>Flush half of the data buckets if the whole buffer size
+   *   exceeds the configured threshold {@link FlinkOptions#WRITE_BUFFER_SIZE}.</li>
+   * </ul>
    *
    * @param value HoodieRecord
    */
@@ -365,19 +371,26 @@ public class StreamWriteFunction<K, I, O>
     boolean flushBuffer = detector.detect(value);
     if (flushBuffer) {
       List<DataBucket> sortedBuckets = this.buckets.values().stream()
-          .sorted(Comparator.comparingDouble(b -> b.tracer.totalSize))
+          .filter(b -> b.records.size() > 0)
+          .sorted(Comparator.comparingLong(b -> b.tracer.totalSize))
           .collect(Collectors.toList());
-      // flush half number of buckets to avoid flushing too small buckets
+      // flush half bytes size of buckets to avoid flushing too small buckets
       // which cause small files.
-      int numBucketsToFlush = (sortedBuckets.size() + 1) / 2;
-      LOG.info("Flush {} data buckets because the total buffer size [{} bytes] exceeds the threshold [{} bytes]",
-          numBucketsToFlush, detector.totalSize, detector.threshold);
-      for (int i = 0; i < numBucketsToFlush; i++) {
-        DataBucket bucket = sortedBuckets.get(i);
+      long totalSize = detector.totalSize;
+      long flushedBytes = 0;
+      for (DataBucket bucket : sortedBuckets) {
+        final long bucketSize = bucket.tracer.totalSize;
         flushBucket(bucket);
-        detector.countDown(bucket.tracer.totalSize);
+        detector.countDown(bucketSize);
         bucket.reset();
+
+        flushedBytes += bucketSize;
+        if (flushedBytes > detector.totalSize / 2) {
+          break;
+        }
       }
+      LOG.info("Flush {} bytes data buckets because the total buffer size {} bytes exceeds the threshold {} bytes",
+          flushedBytes, totalSize, detector.threshold);
     }
     final String bucketID = getBucketID(value);
 
@@ -386,6 +399,7 @@ public class StreamWriteFunction<K, I, O>
     boolean flushBucket = bucket.tracer.trace(detector.lastRecordSize);
     if (flushBucket) {
       flushBucket(bucket);
+      detector.countDown(bucket.tracer.totalSize);
       bucket.reset();
     }
     bucket.records.add((HoodieRecord<?>) value);

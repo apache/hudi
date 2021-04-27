@@ -115,6 +115,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     conf.setString(FlinkOptions.TABLE_NAME.key(), tableName);
     // hoodie key about options
     setupHoodieKeyOptions(conf, table);
+    // cleaning options
+    setupCleaningOptions(conf);
     // infer avro schema from physical DDL schema
     inferAvroSchema(conf, schema.toRowDataType().notNull().getLogicalType());
   }
@@ -149,6 +151,22 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       conf.setString(FlinkOptions.KEYGEN_CLASS, ComplexAvroKeyGenerator.class.getName());
       LOG.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
           FlinkOptions.KEYGEN_CLASS.key(), ComplexAvroKeyGenerator.class.getName());
+    }
+  }
+
+  /**
+   * Sets up the cleaning options from the table definition.
+   */
+  private static void setupCleaningOptions(Configuration conf) {
+    int commitsToRetain = conf.getInteger(FlinkOptions.CLEAN_RETAIN_COMMITS);
+    int minCommitsToKeep = conf.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS);
+    if (commitsToRetain >= minCommitsToKeep) {
+      LOG.info("Table option [{}] is reset to {} to be greater than {}={},\n"
+              + "to avoid risk of missing data from few instants in incremental pull",
+          FlinkOptions.ARCHIVE_MIN_COMMITS.key(), commitsToRetain + 10,
+          FlinkOptions.CLEAN_RETAIN_COMMITS.key(), commitsToRetain);
+      conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, commitsToRetain + 10);
+      conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, commitsToRetain + 20);
     }
   }
 
