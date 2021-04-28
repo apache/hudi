@@ -21,10 +21,6 @@ The hudi-flink-bundle jar is archived with scala 2.11, so it’s recommended to 
 
 ### Step.2 start flink cluster
 Start a standalone flink cluster within hadoop environment.
-Before you start up the cluster, we suggest to config the cluster as follows:
-
-- in `$FLINK_HOME/conf/flink-conf.yaml`, add config option `taskmanager.numberOfTaskSlots: 4`
-- in `$FLINK_HOME/conf/workers`, add item `localhost` as 4 lines so that there are 4 workers on the local cluster
 
 Now starts the cluster:
 
@@ -80,6 +76,8 @@ PARTITIONED BY (`partition`)
 WITH (
   'connector' = 'hudi',
   'path' = 'table_base_path',
+  'write.tasks' = '1', -- default is 4 ,required more resource
+  'compaction.tasks' = '1', -- default is 10 ,required more resource
   'table.type' = 'MERGE_ON_READ' -- this creates a MERGE_ON_READ table, by default is COPY_ON_WRITE
 );
 
@@ -140,6 +138,7 @@ WITH (
   'connector' = 'hudi',
   'path' = 'table_base_path',
   'table.type' = 'MERGE_ON_READ',
+  'read.tasks' = '1', -- default is 4 ,required more resource
   'read.streaming.enabled' = 'true',  -- this option enable the streaming read
   'read.streaming.start-commit' = '20210316134557', -- specifies the start commit instant time
   'read.streaming.check-interval' = '4' -- specifies the check interval for finding new source commits, default 60s.
