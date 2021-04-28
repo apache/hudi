@@ -21,10 +21,6 @@ The hudi-flink-bundle jar is archived with scala 2.11, so it’s recommended to 
 
 ### Step.2 start flink cluster
 Start a standalone flink cluster within hadoop environment.
-Before you start up the cluster, we suggest to config the cluster as follows:
-
-- in `$FLINK_HOME/conf/flink-conf.yaml`, add config option `taskmanager.numberOfTaskSlots: 4`
-- in `$FLINK_HOME/conf/workers`, add item `localhost` as 4 lines so that there are 4 workers on the local cluster
 
 Now starts the cluster:
 
