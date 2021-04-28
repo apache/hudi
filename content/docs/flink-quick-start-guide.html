@@ -390,13 +390,7 @@ quick start tool for SQL users.</p>
 The hudi-flink-bundle jar is archived with scala 2.11, so it’s recommended to use flink 1.12.x bundled with scala 2.11.</p>
 
 <h3 id="step2-start-flink-cluster">Step.2 start flink cluster</h3>
-<p>Start a standalone flink cluster within hadoop environment.
-Before you start up the cluster, we suggest to config the cluster as follows:</p>
-
-<ul>
-  <li>in <code class="highlighter-rouge">$FLINK_HOME/conf/flink-conf.yaml</code>, add config option <code class="highlighter-rouge">taskmanager.numberOfTaskSlots: 4</code></li>
-  <li>in <code class="highlighter-rouge">$FLINK_HOME/conf/workers</code>, add item <code class="highlighter-rouge">localhost</code> as 4 lines so that there are 4 workers on the local cluster</li>
-</ul>
+<p>Start a standalone flink cluster within hadoop environment.</p>
 
 <p>Now starts the cluster:</p>
 
@@ -449,6 +443,8 @@ The SQL CLI only executes the SQL line by line.</p>
 <span class="k">WITH</span> <span class="p">(</span>
   <span class="s1">'connector'</span> <span class="o">=</span> <span class="s1">'hudi'</span><span class="p">,</span>
   <span class="s1">'path'</span> <span class="o">=</span> <span class="s1">'table_base_path'</span><span class="p">,</span>
+  <span class="s1">'write.tasks'</span> <span class="o">=</span> <span class="s1">'1'</span><span class="p">,</span> <span class="c1">-- default is 4 ,required more resource</span>
+  <span class="s1">'compaction.tasks'</span> <span class="o">=</span> <span class="s1">'1'</span><span class="p">,</span> <span class="c1">-- default is 10 ,required more resource</span>
   <span class="s1">'table.type'</span> <span class="o">=</span> <span class="s1">'MERGE_ON_READ'</span> <span class="c1">-- this creates a MERGE_ON_READ table, by default is COPY_ON_WRITE</span>
 <span class="p">);</span>
 
@@ -504,6 +500,7 @@ We do not need to specify endTime, if we want all changes after the given commit
   <span class="s1">'connector'</span> <span class="o">=</span> <span class="s1">'hudi'</span><span class="p">,</span>
   <span class="s1">'path'</span> <span class="o">=</span> <span class="s1">'table_base_path'</span><span class="p">,</span>
   <span class="s1">'table.type'</span> <span class="o">=</span> <span class="s1">'MERGE_ON_READ'</span><span class="p">,</span>
+  <span class="s1">'read.tasks'</span> <span class="o">=</span> <span class="s1">'1'</span><span class="p">,</span> <span class="c1">-- default is 4 ,required more resource</span>
   <span class="s1">'read.streaming.enabled'</span> <span class="o">=</span> <span class="s1">'true'</span><span class="p">,</span>  <span class="c1">-- this option enable the streaming read</span>
   <span class="s1">'read.streaming.start-commit'</span> <span class="o">=</span> <span class="s1">'20210316134557'</span><span class="p">,</span> <span class="c1">-- specifies the start commit instant time</span>
   <span class="s1">'read.streaming.check-interval'</span> <span class="o">=</span> <span class="s1">'4'</span> <span class="c1">-- specifies the check interval for finding new source commits, default 60s.</span>
