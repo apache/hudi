@@ -57,7 +57,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Pazp-unit-tests -pl hudi-client/hudi-spark-client
+              options: -Punit-tests -pl hudi-client/hudi-spark-client
               publishJUnitResults: false
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               testRunTitle: 'unit tests spark client'
@@ -89,7 +89,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Pazp-unit-tests -pl hudi-utilities
+              options: -Punit-tests -pl hudi-utilities
               publishJUnitResults: false
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               testRunTitle: 'unit tests utilities'
@@ -121,7 +121,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: -Pazp-unit-tests -pl !hudi-utilities,!hudi-client/hudi-spark-client
+              options: -Punit-tests -pl !hudi-utilities,!hudi-client/hudi-spark-client
               publishJUnitResults: false
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
               testRunTitle: 'unit tests other modules'
