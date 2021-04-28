@@ -113,6 +113,12 @@ public class EmbeddedTimelineService {
     return viewManager;
   }
 
+  public boolean canReuse(String basePath) {
+    return this.server != null
+        && this.viewManager != null
+        && this.basePath.equals(basePath);
+  }
+
   public void stop() {
     if (null != server) {
       LOG.info("Closing Timeline server");
