@@ -156,7 +156,7 @@ public class HoodieMultiTableDeltaStreamer {
       String schemaRegistrySuffix = typedProperties.getString(Constants.SCHEMA_REGISTRY_URL_SUFFIX_PROP, null);
       String sourceSchemaRegistrySuffix;
       String targetSchemaRegistrySuffix;
-      if (schemaRegistrySuffix == null || "".equals(schemaRegistrySuffix)) {
+      if (StringUtils.isNullOrEmpty(schemaRegistrySuffix)) {
         sourceSchemaRegistrySuffix = typedProperties.getString(Constants.SCHEMA_REGISTRY_SOURCE_URL_SUFFIX);
         targetSchemaRegistrySuffix = typedProperties.getString(Constants.SCHEMA_REGISTRY_TARGET_URL_SUFFIX);
       } else {
