@@ -19,6 +19,7 @@
 package org.apache.hudi.source;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -111,6 +112,8 @@ public class StreamReadMonitoringFunction
 
   private final long maxCompactionMemoryInBytes;
 
+  private final boolean isDelta;
+
   public StreamReadMonitoringFunction(
       Configuration conf,
       Path path,
@@ -121,6 +124,7 @@ public class StreamReadMonitoringFunction
     this.metaClient = metaClient;
     this.interval = conf.getInteger(FlinkOptions.READ_STREAMING_CHECK_INTERVAL);
     this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
+    this.isDelta = conf.getString(FlinkOptions.TABLE_TYPE).equalsIgnoreCase(FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
   }
 
   @Override
@@ -185,7 +189,10 @@ public class StreamReadMonitoringFunction
   @VisibleForTesting
   public void monitorDirAndForwardSplits(SourceContext<MergeOnReadInputSplit> context) {
     metaClient.reloadActiveTimeline();
-    HoodieTimeline commitTimeline = metaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants();
+    HoodieTimeline commitTimeline = isDelta
+        // if is delta, exclude the parquet files from compaction
+        ? metaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants()
+        : metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     if (commitTimeline.empty()) {
       LOG.warn("No splits found for the table under path " + path);
       return;
@@ -238,8 +245,9 @@ public class StreamReadMonitoringFunction
               .sorted(HoodieLogFile.getLogFileComparator())
               .map(logFile -> logFile.getPath().toString())
               .collect(Collectors.toList()));
+          String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
           return new MergeOnReadInputSplit(cnt.getAndAdd(1),
-              null, logPaths, commitToIssue,
+              basePath, logPaths, commitToIssue,
               metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, instantRange);
         }).collect(Collectors.toList()))
         .flatMap(Collection::stream)
