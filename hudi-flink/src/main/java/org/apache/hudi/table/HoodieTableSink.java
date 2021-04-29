@@ -68,7 +68,7 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       // Read from kafka source
       RowType rowType = (RowType) schema.toRowDataType().notNull().getLogicalType();
       int numWriteTasks = conf.getInteger(FlinkOptions.WRITE_TASKS);
-      StreamWriteOperatorFactory<HoodieRecord> operatorFactory = new StreamWriteOperatorFactory<>(conf);
+      StreamWriteOperatorFactory<HoodieRecord> operatorFactory = new StreamWriteOperatorFactory<>(StreamerUtil.getSerHadoopConf(), conf);
 
       DataStream<Object> pipeline = dataStream
           .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class))

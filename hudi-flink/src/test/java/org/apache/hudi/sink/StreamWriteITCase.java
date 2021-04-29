@@ -100,7 +100,7 @@ public class StreamWriteITCase extends TestLogger {
         (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
             .getLogicalType();
     StreamWriteOperatorFactory<HoodieRecord> operatorFactory =
-        new StreamWriteOperatorFactory<>(conf);
+        new StreamWriteOperatorFactory<>(StreamerUtil.getSerHadoopConf(), conf);
 
     JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
         rowType,
@@ -226,7 +226,7 @@ public class StreamWriteITCase extends TestLogger {
         (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
             .getLogicalType();
     StreamWriteOperatorFactory<HoodieRecord> operatorFactory =
-        new StreamWriteOperatorFactory<>(conf);
+        new StreamWriteOperatorFactory<>(StreamerUtil.getSerHadoopConf(), conf);
 
     JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
         rowType,

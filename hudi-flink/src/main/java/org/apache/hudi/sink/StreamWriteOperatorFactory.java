@@ -18,6 +18,8 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.hudi.common.config.SerializableConfiguration;
+
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
@@ -38,11 +40,13 @@ public class StreamWriteOperatorFactory<I>
   private static final long serialVersionUID = 1L;
 
   private final StreamWriteOperator<I> operator;
+  private final SerializableConfiguration serConf;
   private final Configuration conf;
 
-  public StreamWriteOperatorFactory(Configuration conf) {
+  public StreamWriteOperatorFactory(SerializableConfiguration serConf, Configuration conf) {
     super(new StreamWriteOperator<>(conf));
     this.operator = (StreamWriteOperator<I>) getOperator();
+    this.serConf = serConf;
     this.conf = conf;
   }
 
@@ -61,7 +65,7 @@ public class StreamWriteOperatorFactory<I>
 
   @Override
   public OperatorCoordinator.Provider getCoordinatorProvider(String s, OperatorID operatorID) {
-    return new StreamWriteOperatorCoordinator.Provider(operatorID, this.conf);
+    return new StreamWriteOperatorCoordinator.Provider(operatorID, this.serConf, this.conf);
   }
 
   @Override

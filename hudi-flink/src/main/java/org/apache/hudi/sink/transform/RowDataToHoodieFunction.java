@@ -197,7 +197,7 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord<?
   // -------------------------------------------------------------------------
 
   /**
-   * Tool to decide whether the limit the processing rate.
+   * Tool to decide whether to limit the processing rate.
    * Sampling the record to compute the process time with 0.01 percentage.
    */
   private static class RateLimiter {

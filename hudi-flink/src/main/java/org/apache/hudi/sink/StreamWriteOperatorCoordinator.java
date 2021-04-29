@@ -20,6 +20,7 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -72,6 +73,11 @@ import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
 public class StreamWriteOperatorCoordinator
     implements OperatorCoordinator {
   private static final Logger LOG = LoggerFactory.getLogger(StreamWriteOperatorCoordinator.class);
+
+  /**
+   * Serializable hadoop conf.
+   */
+  private final SerializableConfiguration serConf;
 
   /**
    * Config options.
@@ -132,12 +138,15 @@ public class StreamWriteOperatorCoordinator
   /**
    * Constructs a StreamingSinkOperatorCoordinator.
    *
+   * @param serConf Serializable hadoop conf
    * @param conf    The config options
    * @param context The coordinator context
    */
   public StreamWriteOperatorCoordinator(
+      SerializableConfiguration serConf,
       Configuration conf,
       Context context) {
+    this.serConf = serConf;
     this.conf = conf;
     this.context = context;
     this.parallelism = context.currentParallelism();
@@ -285,7 +294,7 @@ public class StreamWriteOperatorCoordinator
 
   private void initHiveSync() {
     this.hiveSyncExecutor = new NonThrownExecutor(LOG);
-    this.hiveSyncContext = HiveSyncContext.create(conf);
+    this.hiveSyncContext = HiveSyncContext.create(serConf, conf);
   }
 
   private void reset() {
@@ -404,10 +413,12 @@ public class StreamWriteOperatorCoordinator
    */
   public static class Provider implements OperatorCoordinator.Provider {
     private final OperatorID operatorId;
+    private final SerializableConfiguration serConf;
     private final Configuration conf;
 
-    public Provider(OperatorID operatorId, Configuration conf) {
+    public Provider(OperatorID operatorId, SerializableConfiguration serConf, Configuration conf) {
       this.operatorId = operatorId;
+      this.serConf = serConf;
       this.conf = conf;
     }
 
@@ -418,7 +429,7 @@ public class StreamWriteOperatorCoordinator
 
     @Override
     public OperatorCoordinator create(Context context) {
-      return new StreamWriteOperatorCoordinator(this.conf, context);
+      return new StreamWriteOperatorCoordinator(this.serConf, this.conf, context);
     }
   }
 

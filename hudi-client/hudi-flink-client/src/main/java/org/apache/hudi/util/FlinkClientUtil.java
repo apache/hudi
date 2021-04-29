@@ -74,6 +74,10 @@ public class FlinkClientUtil {
       if (mapredSite.exists()) {
         hadoopConfiguration.addResource(new Path(mapredSite.getAbsolutePath()));
       }
+      File hiveSite = new File(hadoopConfDir, "hive-site.xml");
+      if (hiveSite.exists()) {
+        hadoopConfiguration.addResource(new Path(hiveSite.getAbsolutePath()));
+      }
       return hadoopConfiguration;
     }
     return null;

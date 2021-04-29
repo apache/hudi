@@ -66,7 +66,7 @@ public class TestStreamWriteOperatorCoordinator {
   @BeforeEach
   public void before() throws Exception {
     OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 2);
-    coordinator = new StreamWriteOperatorCoordinator(
+    coordinator = new StreamWriteOperatorCoordinator(StreamerUtil.getSerHadoopConf(),
         TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), context);
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(context));
@@ -182,7 +182,7 @@ public class TestStreamWriteOperatorCoordinator {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setBoolean(FlinkOptions.HIVE_SYNC_ENABLED, true);
     OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 1);
-    coordinator = new StreamWriteOperatorCoordinator(conf, context);
+    coordinator = new StreamWriteOperatorCoordinator(StreamerUtil.getSerHadoopConf(), conf, context);
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(context));
 

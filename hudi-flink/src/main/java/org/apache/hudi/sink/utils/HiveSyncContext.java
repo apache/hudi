@@ -18,11 +18,11 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -51,11 +51,10 @@ public class HiveSyncContext {
     return new HiveSyncTool(this.syncConfig, this.hiveConf, this.fs);
   }
 
-  public static HiveSyncContext create(Configuration conf) {
+  public static HiveSyncContext create(SerializableConfiguration serConf, Configuration conf) {
     HiveSyncConfig syncConfig = buildSyncConfig(conf);
-    org.apache.hadoop.conf.Configuration hadoopConf = StreamerUtil.getHadoopConf();
     String path = conf.getString(FlinkOptions.PATH);
-    FileSystem fs = FSUtils.getFs(path, hadoopConf);
+    FileSystem fs = FSUtils.getFs(path, serConf.get());
     HiveConf hiveConf = new HiveConf();
     hiveConf.addResource(fs.getConf());
     return new HiveSyncContext(syncConfig, hiveConf, fs);

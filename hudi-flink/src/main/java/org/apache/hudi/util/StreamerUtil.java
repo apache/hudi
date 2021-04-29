@@ -137,6 +137,10 @@ public class StreamerUtil {
     return FlinkClientUtil.getHadoopConf();
   }
 
+  public static SerializableConfiguration getSerHadoopConf() {
+    return new SerializableConfiguration(FlinkClientUtil.getHadoopConf());
+  }
+
   /**
    * Create a key generator class via reflection, passing in any configs needed.
    * <p>
