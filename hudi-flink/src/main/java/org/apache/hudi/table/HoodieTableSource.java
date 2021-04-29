@@ -180,7 +180,11 @@ public class HoodieTableSource implements
         if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING)) {
           StreamReadMonitoringFunction monitoringFunction = new StreamReadMonitoringFunction(
               conf, FilePathUtils.toFlinkPath(path), metaClient, maxCompactionMemoryInBytes);
-          OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) getInputFormat(true));
+          InputFormat<RowData, ?> inputFormat = getInputFormat(true);
+          if (!(inputFormat instanceof MergeOnReadInputFormat)) {
+            throw new HoodieException("No successful commits under path " + path);
+          }
+          OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) inputFormat);
           SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, "streaming_source")
               .setParallelism(1)
               .uid("uid_streaming_source")
