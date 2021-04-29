@@ -44,6 +44,8 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Constructor;
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Function that transforms RowData to HoodieRecord.
@@ -80,6 +82,12 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord<?
    */
   private final Configuration config;
 
+  /**
+   * Rate limit per second for this task.
+   * The task sleep a little while when the consuming rate exceeds the threshold.
+   */
+  private transient RateLimiter rateLimiter;
+
   public RowDataToHoodieFunction(RowType rowType, Configuration config) {
     this.rowType = rowType;
     this.config = config;
@@ -92,12 +100,30 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord<?
     this.converter = RowDataToAvroConverters.createConverter(this.rowType);
     this.keyGenerator = StreamerUtil.createKeyGenerator(FlinkOptions.flatOptions(this.config));
     this.payloadCreation = PayloadCreation.instance(config);
+    long totalLimit = this.config.getLong(FlinkOptions.WRITE_RATE_LIMIT);
+    if (totalLimit > 0) {
+      this.rateLimiter = new RateLimiter(totalLimit / getRuntimeContext().getNumberOfParallelSubtasks());
+    }
   }
 
   @SuppressWarnings("unchecked")
   @Override
   public O map(I i) throws Exception {
-    return (O) toHoodieRecord(i);
+    if (rateLimiter != null) {
+      final O hoodieRecord;
+      if (rateLimiter.sampling()) {
+        long startTime = System.currentTimeMillis();
+        hoodieRecord = (O) toHoodieRecord(i);
+        long endTime = System.currentTimeMillis();
+        rateLimiter.processTime(endTime - startTime);
+      } else {
+        hoodieRecord = (O) toHoodieRecord(i);
+      }
+      rateLimiter.sleepIfNeeded();
+      return hoodieRecord;
+    } else {
+      return (O) toHoodieRecord(i);
+    }
   }
 
   /**
@@ -162,6 +188,45 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord<?
             isDelete ? null : record, orderingVal);
       } else {
         return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.of(record));
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  //  Inner Class
+  // -------------------------------------------------------------------------
+
+  /**
+   * Tool to decide whether the limit the processing rate.
+   * Sampling the record to compute the process time with 0.01 percentage.
+   */
+  private static class RateLimiter {
+    private final Random random = new Random(47);
+    private static final int DENOMINATOR = 100;
+
+    private final long maxProcessTime;
+
+    private long processTime = -1L;
+    private long timeToSleep = -1;
+
+    RateLimiter(long rate) {
+      ValidationUtils.checkArgument(rate > 0, "rate should be positive");
+      this.maxProcessTime = 1000 / rate;
+    }
+
+    void processTime(long processTime) {
+      this.processTime = processTime;
+      this.timeToSleep = maxProcessTime - processTime;
+    }
+
+    boolean sampling() {
+      // 0.01 sampling percentage
+      return processTime == -1 || random.nextInt(DENOMINATOR) == 1;
+    }
+
+    void sleepIfNeeded() throws Exception {
+      if (timeToSleep > 0) {
+        TimeUnit.MILLISECONDS.sleep(timeToSleep);
       }
     }
   }
