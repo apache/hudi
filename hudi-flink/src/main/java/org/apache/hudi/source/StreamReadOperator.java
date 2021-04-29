@@ -80,7 +80,7 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
   // them to the executor. This state is used to ensure that only one read task is in that splits queue at a time, so that
   // read tasks do not accumulate ahead of checkpoint tasks. When there is a read task in the queue, this is set to RUNNING.
   // When there are no more files to read, this will be set to IDLE.
-  private transient SplitState currentSplitState;
+  private transient volatile SplitState currentSplitState;
 
   private StreamReadOperator(MergeOnReadInputFormat format, ProcessingTimeService timeService,
                              MailboxExecutor mailboxExecutor) {
@@ -141,7 +141,7 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
   private void enqueueProcessSplits() {
     if (currentSplitState == SplitState.IDLE && !splits.isEmpty()) {
       currentSplitState = SplitState.RUNNING;
-      executor.execute(this::processSplits, this.getClass().getSimpleName());
+      executor.execute(this::processSplits, "process input split");
     }
   }
 
@@ -155,8 +155,8 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
     // This log is important to indicate the consuming process, there is only one log message for one data bucket.
     LOG.info("Processing input split : {}", split);
 
-    format.open(split);
     try {
+      format.open(split);
       RowData nextElement = null;
       while (!format.reachedEnd()) {
         nextElement = format.nextRecord(nextElement);
