@@ -426,6 +426,7 @@ public class HoodieInputFormatUtils {
                                                                  List<Path> snapshotPaths) throws IOException {
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(job);
     List<FileStatus> returns = new ArrayList<>();
+
     Map<HoodieTableMetaClient, List<Path>> groupedPaths = HoodieInputFormatUtils
         .groupSnapshotPathsByMetaClient(tableMetaClientMap.values(), snapshotPaths);
     Map<HoodieTableMetaClient, HoodieTableFileSystemView> fsViewCache = new HashMap<>();
@@ -437,12 +438,11 @@ public class HoodieInputFormatUtils {
         if (LOG.isDebugEnabled()) {
           LOG.debug("Hoodie Metadata initialized with completed commit instant as :" + metaClient);
         }
-        HoodieTimeline timeline = HoodieHiveUtils.getTableTimeline(metaClient.getTableConfig().getTableName(), job, metaClient);
 
+        HoodieTimeline timeline = HoodieHiveUtils.getTableTimeline(metaClient.getTableConfig().getTableName(), job, metaClient);
         HoodieTableFileSystemView fsView = fsViewCache.computeIfAbsent(metaClient, tableMetaClient ->
             FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext, tableMetaClient, buildMetadataConfig(job), timeline));
         List<HoodieBaseFile> filteredBaseFiles = new ArrayList<>();
-
         for (Path p : entry.getValue()) {
           String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), p);
           List<HoodieBaseFile> matched = fsView.getLatestBaseFiles(relativePartitionPath).collect(Collectors.toList());

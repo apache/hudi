@@ -159,23 +159,19 @@ public class HoodieHiveUtils {
     boolean includePendingCommits = job.getBoolean(String.format(HOODIE_CONSUME_PENDING_COMMITS, tableName), false);
     String maxCommit = job.get(String.format(HOODIE_CONSUME_COMMIT, tableName));
 
-    if (includePendingCommits) {
-      return filterIfInstantExists(tableName, timeline, maxCommit);
+    if (!includePendingCommits) {
+      timeline = timeline.filterCompletedInstants();
+      if (maxCommit == null) {
+        return timeline;
+      }
     }
-
-    timeline = timeline.filterCompletedInstants();
-    if (maxCommit != null) {
-      return filterIfInstantExists(tableName, timeline, maxCommit);
-    }
-
-    // by default return all completed commits.
-    return timeline;
+    return filterIfInstantExists(tableName, timeline, maxCommit);
   }
 
   private static HoodieTimeline filterIfInstantExists(String tableName, HoodieTimeline timeline, String maxCommit) {
     if (maxCommit == null || !timeline.containsInstant(maxCommit)) {
-      LOG.info("Timestamp configured for validation: " + maxCommit + " commits timeline:" + timeline + " table: " + tableName);
-      throw new HoodieIOException("Valid timestamp is required for " + HOODIE_CONSUME_COMMIT + " in validate mode");
+      LOG.info("Timestamp " + maxCommit + " doesn't exist in the commits timeline:" + timeline + " table: " + tableName);
+      throw new HoodieIOException("Valid timestamp is required for " + HOODIE_CONSUME_COMMIT + " in snapshot mode");
     }
     return timeline.findInstantsBeforeOrEquals(maxCommit);
   }

@@ -200,11 +200,11 @@ public class TestHoodieParquetInputFormat {
     FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
     InputFormatTestUtil.setupSnapshotIncludePendingCommits(jobConf, "1");
     Exception exception = assertThrows(HoodieIOException.class, () -> inputFormat.listStatus(jobConf));
-    assertEquals("Valid timestamp is required for hoodie.%s.consume.commit in validate mode", exception.getMessage());
+    assertEquals("Valid timestamp is required for hoodie.%s.consume.commit in snapshot mode", exception.getMessage());
 
     InputFormatTestUtil.setupSnapshotMaxCommitTimeQueryMode(jobConf, "1");
     exception = assertThrows(HoodieIOException.class, () -> inputFormat.listStatus(jobConf));
-    assertEquals("Valid timestamp is required for hoodie.%s.consume.commit in validate mode", exception.getMessage());
+    assertEquals("Valid timestamp is required for hoodie.%s.consume.commit in snapshot mode", exception.getMessage());
   }
 
   @Test
