@@ -21,12 +21,14 @@ package org.apache.hudi.hadoop;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableGloballyConsistentMetaClient;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.junit.jupiter.api.AfterAll;
@@ -159,7 +161,22 @@ public class TestInputPathHandler {
   @Test
   public void testInputPathHandler() throws IOException {
     inputPathHandler = new InputPathHandler(dfs.getConf(), inputPaths.toArray(
-        new Path[0]), incrementalTables);
+        new Path[0]), incrementalTables, new JobConf());
+    List<Path> actualPaths = inputPathHandler.getGroupedIncrementalPaths().values().stream()
+        .flatMap(List::stream).collect(Collectors.toList());
+    assertTrue(actualComparesToExpected(actualPaths, incrementalPaths));
+    actualPaths = inputPathHandler.getSnapshotPaths();
+    assertTrue(actualComparesToExpected(actualPaths, snapshotPaths));
+    actualPaths = inputPathHandler.getNonHoodieInputPaths();
+    assertTrue(actualComparesToExpected(actualPaths, nonHoodiePaths));
+  }
+
+  @Test
+  public void testInputPathHandlerWithGloballyReplicatedTimeStamp() throws IOException {
+    JobConf jobConf = new JobConf();
+    jobConf.set(HoodieTableGloballyConsistentMetaClient.GLOBALLY_CONSISTENT_READ_TIMESTAMP, "1");
+    inputPathHandler = new InputPathHandler(dfs.getConf(), inputPaths.toArray(
+        new Path[inputPaths.size()]), incrementalTables, jobConf);
     List<Path> actualPaths = inputPathHandler.getGroupedIncrementalPaths().values().stream()
         .flatMap(List::stream).collect(Collectors.toList());
     assertTrue(actualComparesToExpected(actualPaths, incrementalPaths));

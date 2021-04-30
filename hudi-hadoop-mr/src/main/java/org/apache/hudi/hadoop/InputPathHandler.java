@@ -24,6 +24,7 @@ import org.apache.hudi.exception.TableNotFoundException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -39,6 +40,14 @@ import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getTableMetaCl
  * InputPathHandler takes in a set of input paths and incremental tables list. Then, classifies the
  * input paths to incremental, snapshot paths and non-hoodie paths. This is then accessed later to
  * mutate the JobConf before processing incremental mode queries and snapshot queries.
+ *
+ * Note: We are adding jobConf of a mapreduce or spark job. The properties in the jobConf are two
+ * type: session properties and table properties from metastore. While session property is common
+ * for all the tables in a query the table properties are unique per table so there is no need to
+ * check if it belongs to the table for which the path handler is now instantiated. The jobConf has
+ * all table properties such as name, last modification time and so on which are unique to a table.
+ * This class is written in such a way that it can handle multiple tables and properties unique to
+ * a table but for table level property such check is not required.
  */
 public class InputPathHandler {
 
@@ -50,13 +59,15 @@ public class InputPathHandler {
   private final Map<HoodieTableMetaClient, List<Path>> groupedIncrementalPaths;
   private final List<Path> snapshotPaths;
   private final List<Path> nonHoodieInputPaths;
+  private final JobConf jobConf;
 
-  public InputPathHandler(Configuration conf, Path[] inputPaths, List<String> incrementalTables) throws IOException {
+  public InputPathHandler(Configuration conf, Path[] inputPaths, List<String> incrementalTables, JobConf jobConf) throws IOException {
     this.conf = conf;
     tableMetaClientMap = new HashMap<>();
     snapshotPaths = new ArrayList<>();
     nonHoodieInputPaths = new ArrayList<>();
     groupedIncrementalPaths = new HashMap<>();
+    this.jobConf = jobConf;
     parseInputPaths(inputPaths, incrementalTables);
   }
 
@@ -97,7 +108,7 @@ public class InputPathHandler {
         // This path is for a table that we dont know about yet.
         HoodieTableMetaClient metaClient;
         try {
-          metaClient = getTableMetaClientForBasePath(inputPath.getFileSystem(conf), inputPath);
+          metaClient = getTableMetaClientForBasePath(inputPath.getFileSystem(conf), inputPath, jobConf);
           String tableName = metaClient.getTableConfig().getTableName();
           tableMetaClientMap.put(tableName, metaClient);
           tagAsIncrementalOrSnapshot(inputPath, tableName, metaClient, incrementalTables);
