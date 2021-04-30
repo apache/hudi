@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -88,6 +89,8 @@ public abstract class AbstractHoodieLogRecordScanner {
   private final boolean reverseReader;
   // Buffer Size for log file reader
   private final int bufferSize;
+  // optional instant range for incremental block filtering
+  private final Option<InstantRange> instantRange;
   // FileSystem
   private final FileSystem fs;
   // Total log files read - for metrics
@@ -105,8 +108,8 @@ public abstract class AbstractHoodieLogRecordScanner {
   // Progress
   private float progress = 0.0f;
 
-  public AbstractHoodieLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
-      String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize) {
+  protected AbstractHoodieLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
+      String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize, Option<InstantRange> instantRange) {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
@@ -118,6 +121,7 @@ public abstract class AbstractHoodieLogRecordScanner {
     this.reverseReader = reverseReader;
     this.fs = fs;
     this.bufferSize = bufferSize;
+    this.instantRange = instantRange;
   }
 
   /**
@@ -141,6 +145,7 @@ public abstract class AbstractHoodieLogRecordScanner {
         totalLogFiles.set(scannedLogFiles.size());
         // Use the HoodieLogFileReader to iterate through the blocks in the log file
         HoodieLogBlock r = logFormatReaderWrapper.next();
+        final String instantTime = r.getLogBlockHeader().get(INSTANT_TIME);
         totalLogBlocks.incrementAndGet();
         if (r.getBlockType() != CORRUPT_BLOCK
             && !HoodieTimeline.compareTimestamps(r.getLogBlockHeader().get(INSTANT_TIME), HoodieTimeline.LESSER_THAN_OR_EQUALS, this.latestInstantTime
@@ -149,10 +154,13 @@ public abstract class AbstractHoodieLogRecordScanner {
           break;
         }
         if (r.getBlockType() != CORRUPT_BLOCK && r.getBlockType() != COMMAND_BLOCK) {
-          String instantTime = r.getLogBlockHeader().get(INSTANT_TIME);
           if (!completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime)
               || inflightInstantsTimeline.containsInstant(instantTime)) {
             // hit an uncommitted block possibly from a failed write, move to the next one and skip processing this one
+            continue;
+          }
+          if (instantRange.isPresent() && !instantRange.get().isInRange(instantTime)) {
+            // filter the log block by instant range
             continue;
           }
         }
@@ -391,6 +399,10 @@ public abstract class AbstractHoodieLogRecordScanner {
     public abstract Builder withReverseReader(boolean reverseReader);
 
     public abstract Builder withBufferSize(int bufferSize);
+
+    public Builder withInstantRange(Option<InstantRange> instantRange) {
+      throw new UnsupportedOperationException();
+    }
 
     public abstract AbstractHoodieLogRecordScanner build();
   }

@@ -79,6 +79,7 @@ public class FormatUtils {
         .withSpillableMapBasePath(
             config.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP,
                 HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
+        .withInstantRange(split.getInstantRange())
         .build();
   }
 

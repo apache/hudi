@@ -20,13 +20,14 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.MarkerFiles;
 
 import org.apache.avro.Schema;
 import org.apache.log4j.LogManager;
@@ -35,7 +36,6 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 /**
  * A {@link HoodieCreateHandle} that supports create write incrementally(mini-batches).
@@ -68,13 +68,23 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
         taskContextSupplier);
   }
 
-  /**
-   * Called by the compactor code path.
-   */
-  public FlinkCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                           String partitionPath, String fileId, Map<String, HoodieRecord<T>> recordMap,
-                           TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable, partitionPath, fileId, recordMap, taskContextSupplier);
+  @Override
+  protected void createMarkerFile(String partitionPath, String dataFileName) {
+    MarkerFiles markerFiles = new MarkerFiles(hoodieTable, instantTime);
+    boolean created = markerFiles.createIfNotExists(partitionPath, dataFileName, getIOType());
+    if (!created) {
+      // If the marker file already exists, that means the write task
+      // was pulled up again with same data file name, removes the legacy
+      // data file first.
+      try {
+        if (fs.exists(path)) {
+          fs.delete(path, false);
+          LOG.warn("Legacy data file: " + path + " delete success");
+        }
+      } catch (IOException e) {
+        throw new HoodieException("Error while deleting legacy data file: " + path, e);
+      }
+    }
   }
 
   /**
@@ -109,7 +119,7 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
   }
 
   @Override
-  protected long computeFileSizeInBytes() throws IOException {
+  protected long computeFileSizeInBytes() {
     return fileWriter.getBytesWritten();
   }
 

@@ -239,7 +239,7 @@ public class HoodieInputFormatUtils {
            * those partitions.
            */
           for (Path path : inputPaths) {
-            if (path.toString().contains(s)) {
+            if (path.toString().endsWith(s)) {
               return true;
             }
           }

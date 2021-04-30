@@ -82,8 +82,9 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   @TempDir
   File tempFile;
 
-  @Test
-  void testStreamWriteAndRead() throws Exception {
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testStreamWriteAndRead(HoodieTableType tableType) throws Exception {
     // create filesystem table named source
     String createSource = TestConfigurations.getFileSourceDDL("source");
     streamTableEnv.executeSql(createSource);
@@ -91,7 +92,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
     options.put(FlinkOptions.READ_AS_STREAMING.key(), "true");
-    options.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    options.put(FlinkOptions.TABLE_TYPE.key(), tableType.name());
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     streamTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 select * from source";
@@ -106,8 +107,9 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     assertRowsEquals(rows2, TestData.DATA_SET_SOURCE_INSERT);
   }
 
-  @Test
-  void testStreamReadAppendData() throws Exception {
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testStreamReadAppendData(HoodieTableType tableType) throws Exception {
     // create filesystem table named source
     String createSource = TestConfigurations.getFileSourceDDL("source");
     String createSource2 = TestConfigurations.getFileSourceDDL("source2", "test_source_2.data");
@@ -117,7 +119,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
     options.put(FlinkOptions.READ_AS_STREAMING.key(), "true");
-    options.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    options.put(FlinkOptions.TABLE_TYPE.key(), tableType.name());
     String createHoodieTable = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     streamTableEnv.executeSql(createHoodieTable);
     String insertInto = "insert into t1 select * from source";
@@ -322,6 +324,70 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         + "id1,Danny,24,1970-01-01T00:00:01,par1, "
         + "id2,Stephen,34,1970-01-01T00:00:02,par2]";
     assertRowsEquals(result2, expected);
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = ExecMode.class)
+  void testUpsertWithMiniBatches(ExecMode execMode) {
+    TableEnvironment tableEnv = execMode == ExecMode.BATCH ? batchTableEnv : streamTableEnv;
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.WRITE_BATCH_SIZE.key(), "0.001");
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
+    tableEnv.executeSql(hoodieTableDDL);
+
+    final String insertInto1 = "insert into t1 values\n"
+        + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1')";
+
+    execInsertSql(tableEnv, insertInto1);
+
+    final String insertInto2 = "insert into t1 values\n"
+        + "('id1','Stephen',33,TIMESTAMP '1970-01-01 00:00:02','par1'),\n"
+        + "('id1','Julian',53,TIMESTAMP '1970-01-01 00:00:03','par1'),\n"
+        + "('id1','Fabian',31,TIMESTAMP '1970-01-01 00:00:04','par1'),\n"
+        + "('id1','Sophia',18,TIMESTAMP '1970-01-01 00:00:05','par1')";
+
+    execInsertSql(tableEnv, insertInto2);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result, "[id1,Sophia,18,1970-01-01T00:00:05,par1]");
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = ExecMode.class)
+  void testWriteNonPartitionedTable(ExecMode execMode) {
+    TableEnvironment tableEnv = execMode == ExecMode.BATCH ? batchTableEnv : streamTableEnv;
+    String hoodieTableDDL = "create table t1(\n"
+        + "  uuid varchar(20),\n"
+        + "  name varchar(10),\n"
+        + "  age int,\n"
+        + "  ts timestamp(3),\n"
+        + "  `partition` varchar(20),\n"
+        + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
+        + ")\n"
+        + "with (\n"
+        + "  'connector' = 'hudi',\n"
+        + "  'path' = '" + tempFile.getAbsolutePath() + "'\n"
+        + ")";
+    tableEnv.executeSql(hoodieTableDDL);
+
+    final String insertInto1 = "insert into t1 values\n"
+        + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1')";
+
+    execInsertSql(tableEnv, insertInto1);
+
+    final String insertInto2 = "insert into t1 values\n"
+        + "('id1','Stephen',33,TIMESTAMP '1970-01-01 00:00:02','par2'),\n"
+        + "('id1','Julian',53,TIMESTAMP '1970-01-01 00:00:03','par3'),\n"
+        + "('id1','Fabian',31,TIMESTAMP '1970-01-01 00:00:04','par4'),\n"
+        + "('id1','Sophia',18,TIMESTAMP '1970-01-01 00:00:05','par5')";
+
+    execInsertSql(tableEnv, insertInto2);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result, "[id1,Sophia,18,1970-01-01T00:00:05,par5]");
   }
 
   // -------------------------------------------------------------------------

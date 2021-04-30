@@ -101,9 +101,12 @@ public class HoodieDLAClient extends AbstractSyncHoodieClient {
   }
 
   @Override
-  public void createTable(String tableName, MessageType storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass) {
+  public void createTable(String tableName, MessageType storageSchema, String inputFormatClass,
+                          String outputFormatClass, String serdeClass,
+                          Map<String, String> serdeProperties, Map<String, String> tableProperties) {
     try {
-      String createSQLQuery = HiveSchemaUtil.generateCreateDDL(tableName, storageSchema, toHiveSyncConfig(), inputFormatClass, outputFormatClass, serdeClass);
+      String createSQLQuery = HiveSchemaUtil.generateCreateDDL(tableName, storageSchema, toHiveSyncConfig(),
+          inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
       LOG.info("Creating table with " + createSQLQuery);
       updateDLASQL(createSQLQuery);
     } catch (IOException e) {
@@ -122,14 +125,7 @@ public class HoodieDLAClient extends AbstractSyncHoodieClient {
       DatabaseMetaData databaseMetaData = connection.getMetaData();
       result = databaseMetaData.getColumns(dlaConfig.databaseName, dlaConfig.databaseName, tableName, null);
       while (result.next()) {
-        String columnName = result.getString(4);
-        String columnType = result.getString(6);
-        if ("DECIMAL".equals(columnType)) {
-          int columnSize = result.getInt("COLUMN_SIZE");
-          int decimalDigits = result.getInt("DECIMAL_DIGITS");
-          columnType += String.format("(%s,%s)", columnSize, decimalDigits);
-        }
-        schema.put(columnName, columnType);
+        TYPE_CONVERTOR.doConvert(result, schema);
       }
       return schema;
     } catch (SQLException e) {

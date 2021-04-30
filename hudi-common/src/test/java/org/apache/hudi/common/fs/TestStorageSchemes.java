@@ -32,6 +32,7 @@ public class TestStorageSchemes {
   @Test
   public void testStorageSchemes() {
     assertTrue(StorageSchemes.isSchemeSupported("hdfs"));
+    assertTrue(StorageSchemes.isSchemeSupported("afs"));
     assertFalse(StorageSchemes.isSchemeSupported("s2"));
     assertFalse(StorageSchemes.isAppendSupported("s3a"));
     assertFalse(StorageSchemes.isAppendSupported("gs"));
