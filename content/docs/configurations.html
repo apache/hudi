@@ -630,19 +630,13 @@ The actual datasource level configs are listed below.</p>
       <td><code class="highlighter-rouge">write.partition.url_encode</code></td>
       <td>N</td>
       <td>false</td>
-      <td>Whether to encode the partition path url, default false</td>
+      <td><span style="color:grey"> Whether to encode the partition path url, default false </span></td>
     </tr>
     <tr>
-      <td><code class="highlighter-rouge">write.tasks</code></td>
+      <td><code class="highlighter-rouge">write.log.max.size</code></td>
       <td>N</td>
-      <td>4</td>
-      <td><span style="color:grey"> Parallelism of tasks that do actual write, default is 4 </span></td>
-    </tr>
-    <tr>
-      <td><code class="highlighter-rouge">write.batch.size.MB</code></td>
-      <td>N</td>
-      <td>128</td>
-      <td><span style="color:grey"> Batch buffer size in MB to flush data into the underneath filesystem </span></td>
+      <td>1024</td>
+      <td><span style="color:grey"> Maximum size allowed in MB for a log file before it is rolled over to the next version, default 1GB </span></td>
     </tr>
   </tbody>
 </table>
@@ -659,6 +653,12 @@ The actual datasource level configs are listed below.</p>
     </tr>
   </thead>
   <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">compaction.tasks</code></td>
+      <td>N</td>
+      <td>10</td>
+      <td><span style="color:grey"> Parallelism of tasks that do actual compaction, default is 10 </span></td>
+    </tr>
     <tr>
       <td><code class="highlighter-rouge">compaction.async.enabled</code></td>
       <td>N</td>
@@ -687,19 +687,58 @@ The actual datasource level configs are listed below.</p>
       <td><code class="highlighter-rouge">compaction.max_memory</code></td>
       <td>N</td>
       <td>100</td>
-      <td>Max memory in MB for compaction spillable map, default 100MB</td>
+      <td><span style="color:grey"> Max memory in MB for compaction spillable map, default 100MB </span></td>
     </tr>
     <tr>
       <td><code class="highlighter-rouge">clean.async.enabled</code></td>
       <td>N</td>
       <td>true</td>
-      <td>Whether to cleanup the old commits immediately on new commits, enabled by default</td>
+      <td><span style="color:grey"> Whether to cleanup the old commits immediately on new commits, enabled by default </span></td>
     </tr>
     <tr>
       <td><code class="highlighter-rouge">clean.retain_commits</code></td>
       <td>N</td>
       <td>10</td>
-      <td>Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much you can incrementally pull on this table, default 10</td>
+      <td><span style="color:grey"> Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much you can incrementally pull on this table, default 10 </span></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Options about memory consumption:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Option Name</th>
+      <th>Required</th>
+      <th>Default</th>
+      <th>Remarks</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="highlighter-rouge">write.rate.limit</code></td>
+      <td>N</td>
+      <td>-1</td>
+      <td><span style="color:grey"> Write records rate limit per second to reduce risk of OOM, default -1 (no limit) </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">write.batch.size</code></td>
+      <td>N</td>
+      <td>64</td>
+      <td><span style="color:grey"> Batch size per bucket in MB to flush data into the underneath filesystem, default 64MB </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">write.log_block.size</code></td>
+      <td>N</td>
+      <td>128</td>
+      <td><span style="color:grey"> Max log block size in MB for log file, default 128MB </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">compaction.max_memory</code></td>
+      <td>N</td>
+      <td>100</td>
+      <td><span style="color:grey"> Max memory in MB for compaction spillable map, default 100MB </span></td>
     </tr>
   </tbody>
 </table>
@@ -773,7 +812,7 @@ The actual datasource level configs are listed below.</p>
   </tbody>
 </table>
 
-<p>If the table type is MERGE_ON_READ, streaming read is supported through options:</p>
+<p>Streaming read is supported through options:</p>
 
 <table>
   <thead>
@@ -822,7 +861,13 @@ The actual datasource level configs are listed below.</p>
       <td><code class="highlighter-rouge">index.bootstrap.enabled</code></td>
       <td>N</td>
       <td>false</td>
-      <td>Whether to bootstrap the index state from existing hoodie table, default false</td>
+      <td><span style="color:grey"> Whether to bootstrap the index state from existing hoodie table, default false </span></td>
+    </tr>
+    <tr>
+      <td><code class="highlighter-rouge">index.state.ttl</code></td>
+      <td>N</td>
+      <td>1.5</td>
+      <td><span style="color:grey"> Index state ttl in days, default 1.5 day </span></td>
     </tr>
   </tbody>
 </table>
@@ -843,91 +888,91 @@ The actual datasource level configs are listed below.</p>
       <td><code class="highlighter-rouge">hive_sync.enable</code></td>
       <td>N</td>
       <td>false</td>
-      <td>Asynchronously sync Hive meta to HMS, default false</td>
+      <td><span style="color:grey"> Asynchronously sync Hive meta to HMS, default false </span></td>
     </tr>
     <tr>
       <td><code class="highlighter-rouge">hive_sync.db</code></td>
       <td>N</td>
       <td>default</td>
-      <td>Database name for hive sync, default ‘default’</td>
+      <td><span style="color:grey"> Database name for hive sync, default ‘default’ </span></td>
     </tr>
     <tr>
       <td><code class="highlighter-rouge">hive_sync.table</code></td>
       <td>N</td>
       <td>unknown</td>
-      <td>Table name for hive sync, default ‘unknown’</td>
+      <td><span style="color:grey"> Table name for hive sync, default ‘unknown’ </span></td>
     </tr>
     <tr>
       <td><code class="highlighter-rouge">hive_sync.file_format</code></td>
       <td>N</td>
       <td>PARQUET</td>
-      <td>File format for hive sync, default ‘PARQUET’</td>
+      <td><span style="color:grey"> File format for hive sync, default ‘PARQUET’ </span></td>
     </tr>
     <tr>
       <td><code class="highlighter-rouge">hive_sync.username</code></td>
       <td>N</td>
       <td>hive</td>
-      <td>Username for hive sync, default ‘hive’</td>
+      <td><span style="color:grey"> Username for hive sync, default ‘hive’ </span></td>
     </tr>
     <tr>
       <td><code class="highlighter-rouge">hive_sync.password</code></td>
       <td>N</td>
       <td>hive</td>
-      <td>Password for hive sync, default ‘hive’</td>
+      <td><span style="color:grey"> Password for hive sync, default ‘hive’ </span></td>
     </tr>
     <tr>
       <td><code class="highlighter-rouge">hive_sync.jdbc_url</code></td>
       <td>N</td>
       <td>jdbc:hive2://localhost:10000</td>
-      <td>Jdbc URL for hive sync, default ‘jdbc:hive2://localhost:10000’</td>
+      <td><span style="color:grey"> Jdbc URL for hive sync, default ‘jdbc:hive2://localhost:10000’ </span></td>
     </tr>
     <tr>
       <td><code class="highlighter-rouge">hive_sync.partition_fields</code></td>
       <td>N</td>
       <td>’’</td>
-      <td>Partition fields for hive sync, default ‘’</td>
+      <td><span style="color:grey"> Partition fields for hive sync, default ‘’ </span></td>
     </tr>
     <tr>
       <td><code class="highlighter-rouge">hive_sync.partition_extractor_class</code></td>
       <td>N</td>
       <td>SlashEncodedDayPartitionValueExtractor.class</td>
-      <td>Tool to extract the partition value from HDFS path, default ‘SlashEncodedDayPartitionValueExtractor’</td>
+      <td><span style="color:grey"> Tool to extract the partition value from HDFS path, default ‘SlashEncodedDayPartitionValueExtractor’ </span></td>
     </tr>
     <tr>
       <td><code class="highlighter-rouge">hive_sync.assume_date_partitioning</code></td>
       <td>N</td>
       <td>false</td>
-      <td>Assume partitioning is yyyy/mm/dd, default false</td>
+      <td><span style="color:grey"> Assume partitioning is yyyy/mm/dd, default false </span></td>
     </tr>
     <tr>
       <td><code class="highlighter-rouge">hive_sync.use_jdbc</code></td>
       <td>N</td>
       <td>true</td>
-      <td>Use JDBC when hive synchronization is enabled, default true</td>
+      <td><span style="color:grey"> Use JDBC when hive synchronization is enabled, default true </span></td>
     </tr>
     <tr>
       <td><code class="highlighter-rouge">hive_sync.auto_create_db</code></td>
       <td>N</td>
       <td>true</td>
-      <td>Auto create hive database if it does not exists, default true</td>
+      <td><span style="color:grey"> Auto create hive database if it does not exists, default true </span></td>
     </tr>
     <tr>
       <td><code class="highlighter-rouge">hive_sync.ignore_exceptions</code></td>
       <td>N</td>
       <td>false</td>
-      <td>Ignore exceptions during hive synchronization, default false</td>
+      <td><span style="color:grey"> Ignore exceptions during hive synchronization, default false </span></td>
     </tr>
     <tr>
       <td><code class="highlighter-rouge">hive_sync.skip_ro_suffix</code></td>
       <td>N</td>
       <td>false</td>
-      <td>Skip the _ro suffix for Read optimized table when registering, default false</td>
+      <td><span style="color:grey"> Skip the _ro suffix for Read optimized table when registering, default false </span></td>
     </tr>
     <tr>
       <td><code class="highlighter-rouge">hive_sync.support_timestamp</code></td>
       <td>N</td>
       <td>false</td>
-      <td>INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type. Disabled by default for backward compatibility.</td>
+      <td><span style="color:grey"> INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type. Disabled by default for backward compatibility </span></td>
     </tr>
   </tbody>
 </table>
