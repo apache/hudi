@@ -26,7 +26,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.HoodieROTablePathFilter;
@@ -156,11 +155,6 @@ public class HoodieTableSource implements
     this.hadoopConf = StreamerUtil.getHadoopConf();
     this.metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
     this.maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(new JobConf(this.hadoopConf));
-    if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING)) {
-      ValidationUtils.checkArgument(
-          conf.getString(FlinkOptions.TABLE_TYPE).equalsIgnoreCase(FlinkOptions.TABLE_TYPE_MERGE_ON_READ),
-          "Streaming read is only supported for table type: " + FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
-    }
   }
 
   @Override
@@ -381,6 +375,25 @@ public class HoodieTableSource implements
                 .emitDelete(isStreaming)
                 .build();
           case COPY_ON_WRITE:
+            if (isStreaming) {
+              final MergeOnReadTableState hoodieTableState2 = new MergeOnReadTableState(
+                  rowType,
+                  requiredRowType,
+                  tableAvroSchema.toString(),
+                  AvroSchemaConverter.convertToSchema(requiredRowType).toString(),
+                  Collections.emptyList(),
+                  conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(","));
+              return MergeOnReadInputFormat.builder()
+                  .config(this.conf)
+                  .paths(FilePathUtils.toFlinkPaths(paths))
+                  .tableState(hoodieTableState2)
+                  // use the explicit fields data type because the AvroSchemaConverter
+                  // is not very stable.
+                  .fieldTypes(rowDataType.getChildren())
+                  .defaultPartName(conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME))
+                  .limit(this.limit)
+                  .build();
+            }
             FileInputFormat<RowData> format = new CopyOnWriteInputFormat(
                 FilePathUtils.toFlinkPaths(paths),
                 this.schema.getFieldNames(),
