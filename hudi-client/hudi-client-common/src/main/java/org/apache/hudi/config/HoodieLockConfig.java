@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.lock.LockProvider;
+import org.apache.hudi.common.util.Option;
 
 import java.io.File;
 import java.io.FileReader;
@@ -159,9 +160,17 @@ public class HoodieLockConfig extends HoodieConfig {
   public static final ConfigProperty<String> ZK_LOCK_KEY = ConfigProperty
       .key(ZK_LOCK_KEY_PROP_KEY)
       .noDefaultValue()
+      .withInferFunction(p -> {
+        if (p.contains(HoodieWriteConfig.TBL_NAME)) {
+          return Option.of(p.getString(HoodieWriteConfig.TBL_NAME));
+        } else {
+          return Option.empty();
+        }
+      })
       .sinceVersion("0.8.0")
       .withDocumentation("Key name under base_path at which to create a ZNode and acquire lock. "
-          + "Final path on zk will look like base_path/lock_key. We recommend setting this to the table name");
+          + "Final path on zk will look like base_path/lock_key. If this parameter is not set, we would "
+          + "set it as the table name");
 
   // Pluggable type of lock provider
   public static final ConfigProperty<String> LOCK_PROVIDER_CLASS_NAME = ConfigProperty
