@@ -28,7 +28,6 @@ import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 
-import org.apache.flink.calcite.shaded.org.apache.commons.io.FileUtils;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.table.api.EnvironmentSettings;
@@ -50,13 +49,13 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.utils.TestData.assertRowsEquals;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * IT cases for Hoodie table source and sink.
@@ -396,28 +395,20 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   @ParameterizedTest
   @EnumSource(value = ExecMode.class)
   void testStreamReadEmptyTablePath(ExecMode execMode) throws Exception {
-    // create filesystem table named source
-    String createSource = TestConfigurations.getFileSourceDDL("source");
-    String createSource2 = TestConfigurations.getFileSourceDDL("source2", "test_source_2.data");
-    streamTableEnv.executeSql(createSource);
-    streamTableEnv.executeSql(createSource2);
+    // create an empty table
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    StreamerUtil.initTableIfNotExists(conf);
 
+    // create a flink source table
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
     options.put(FlinkOptions.READ_AS_STREAMING.key(), "true");
     options.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
     String createHoodieTable = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     streamTableEnv.executeSql(createHoodieTable);
-    String insertInto = "insert into t1 select * from source";
-    execInsertSql(streamTableEnv, insertInto);
 
-    // delete data under the table path
-    for (File file : Objects.requireNonNull(tempFile.listFiles(pathname -> !pathname.getName().contains(".hoodie")))) {
-      FileUtils.forceDelete(file);
-    }
     // execute query and assert throws exception
-
-    assertThrows(HoodieException.class, () -> execSelectSql(streamTableEnv, "select * from t1", 10),"No successful commits under path " + tempFile.getAbsolutePath());
+    assertThrows(HoodieException.class, () -> execSelectSql(streamTableEnv, "select * from t1", 10), "No successful commits under path " + tempFile.getAbsolutePath());
 
   }
 
