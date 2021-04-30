@@ -25,7 +25,7 @@ import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPER
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.exception.{HoodieException, InvalidTableException}
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 
 import org.apache.log4j.LogManager
@@ -110,6 +110,9 @@ class DefaultSource extends RelationProvider
     val queryType = parameters(QUERY_TYPE.key)
 
     log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
+    if (metaClient.getCommitsTimeline.filterCompletedInstants.empty()) {
+      throw new InvalidTableException("No valid commits found in the given path " + metaClient.getBasePath)
+    }
 
     (tableType, queryType, isBootstrappedTable) match {
       case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
