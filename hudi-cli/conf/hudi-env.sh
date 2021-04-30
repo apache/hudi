@@ -20,3 +20,11 @@
 export HADOOP_CONF_DIR=${HADOOP_CONF_DIR:-"/etc/hadoop/conf"}
 export SPARK_CONF_DIR=${SPARK_CONF_DIR:-"/etc/spark/conf"}
 export CLIENT_JAR=${CLIENT_JAR}
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+export HOODIE_JAR=`ls $DIR/../target/hudi-cli-*.jar | grep -v source | grep -v javadoc`
+export OTHER_JARS=`ls ${DIR}/../target/lib/* | grep -v 'hudi-[^/]*jar' | tr '\n' ':'`
+
+if [ -z "$CLIENT_JAR" ]; then
+  echo "Client jar location not set, please set it in $DIR/hudi-env.sh"
+fi
