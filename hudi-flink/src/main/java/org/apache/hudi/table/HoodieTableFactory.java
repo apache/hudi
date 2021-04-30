@@ -40,9 +40,8 @@ import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Hoodie data source/sink factory.
@@ -59,6 +58,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
     Configuration conf = (Configuration) helper.getOptions();
     TableSchema schema = TableSchemaUtils.getPhysicalSchema(context.getCatalogTable().getSchema());
+    validateRequiredOptions(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier().getObjectName(), context.getCatalogTable(), schema);
 
     Path path = new Path(conf.getOptional(FlinkOptions.PATH).orElseThrow(() ->
@@ -75,6 +75,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   public DynamicTableSink createDynamicTableSink(Context context) {
     Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
     TableSchema schema = TableSchemaUtils.getPhysicalSchema(context.getCatalogTable().getSchema());
+    validateRequiredOptions(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier().getObjectName(), context.getCatalogTable(), schema);
     return new HoodieTableSink(conf, schema);
   }
@@ -97,6 +98,34 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
+
+  /** Validate required options. e.g record key and pre combine key.
+   *
+   * @param conf The table options
+   * @param schema The table schema
+   */
+  private void validateRequiredOptions(Configuration conf, TableSchema schema) {
+    List<String> fields = Arrays.stream(schema.getFieldNames()).collect(Collectors.toList());
+
+    // validate record key in pk absence.
+    if (!schema.getPrimaryKey().isPresent()) {
+      Optional<String> notExistsField = Arrays.stream(conf.get(FlinkOptions.RECORD_KEY_FIELD).split(","))
+              .filter(field -> !fields.contains(field))
+              .findAny();
+      notExistsField
+              .ifPresent(e-> {
+                throw new ValidationException("The " + e + " field not exists in table schema."
+                        + "Please define primary key or modify hoodie.datasource.write.recordkey.field option.");
+              });
+    }
+
+    // validate pre combine key
+    String preCombineField = conf.get(FlinkOptions.PRECOMBINE_FIELD);
+    if (!fields.contains(preCombineField)) {
+      throw new ValidationException("The " + preCombineField + " field not exists in table schema."
+              + "Please check write.precombine.field option.");
+    }
+  }
 
   /**
    * Setup the config options based on the table definition, for e.g the table name, primary key.
