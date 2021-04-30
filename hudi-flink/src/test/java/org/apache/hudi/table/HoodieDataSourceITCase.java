@@ -21,12 +21,14 @@ package org.apache.hudi.table;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestUtils;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 
+import org.apache.flink.calcite.shaded.org.apache.commons.io.FileUtils;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.table.api.EnvironmentSettings;
@@ -48,12 +50,13 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.utils.TestData.assertRowsEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * IT cases for Hoodie table source and sink.
@@ -388,6 +391,34 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     List<Row> result = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t1").execute().collect());
     assertRowsEquals(result, "[id1,Sophia,18,1970-01-01T00:00:05,par5]");
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = ExecMode.class)
+  void testStreamReadEmptyTablePath(ExecMode execMode) throws Exception {
+    // create filesystem table named source
+    String createSource = TestConfigurations.getFileSourceDDL("source");
+    String createSource2 = TestConfigurations.getFileSourceDDL("source2", "test_source_2.data");
+    streamTableEnv.executeSql(createSource);
+    streamTableEnv.executeSql(createSource2);
+
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.READ_AS_STREAMING.key(), "true");
+    options.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    String createHoodieTable = TestConfigurations.getCreateHoodieTableDDL("t1", options);
+    streamTableEnv.executeSql(createHoodieTable);
+    String insertInto = "insert into t1 select * from source";
+    execInsertSql(streamTableEnv, insertInto);
+
+    // delete data under the table path
+    for (File file : Objects.requireNonNull(tempFile.listFiles(pathname -> !pathname.getName().contains(".hoodie")))) {
+      FileUtils.forceDelete(file);
+    }
+    // execute query and assert throws exception
+
+    assertThrows(HoodieException.class, () -> execSelectSql(streamTableEnv, "select * from t1", 10),"No successful commits under path " + tempFile.getAbsolutePath());
+
   }
 
   // -------------------------------------------------------------------------
