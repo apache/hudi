@@ -408,8 +408,8 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     streamTableEnv.executeSql(createHoodieTable);
 
     // execute query and assert throws exception
-    assertThrows(HoodieException.class, () -> execSelectSql(streamTableEnv, "select * from t1", 10)
-                , "No successful commits under path " + tempFile.getAbsolutePath());
+    assertThrows(HoodieException.class, () -> execSelectSql(streamTableEnv, "select * from t1", 10),
+            "No successful commits under path " + tempFile.getAbsolutePath());
 
   }
 
