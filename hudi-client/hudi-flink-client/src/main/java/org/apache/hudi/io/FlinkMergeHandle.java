@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.MarkerFiles;
@@ -71,16 +72,13 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
   /**
    * Records the rolled over file paths.
    */
-  private List<Path> rolloverPaths;
+  private final List<Path> rolloverPaths;
 
   public FlinkMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                           Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                           TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier);
-    if (rolloverPaths == null) {
-      // #createMarkerFile may already initialize it already
-      rolloverPaths = new ArrayList<>();
-    }
+    rolloverPaths = new ArrayList<>();
   }
 
   /**
@@ -114,16 +112,18 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
     boolean created = markerFiles.createIfNotExists(partitionPath, dataFileName, getIOType());
     if (!created) {
       // If the marker file already exists, that means the write task
-      // was pulled up again with same data file name, performs rolling over action here:
-      // use the new file path as the base file path (file1),
-      // and generates new file path with roll over number (file2).
-      // the incremental data set would merge into the file2 instead of file1.
-      //
-      // When the task do finalization in #finishWrite, the intermediate files would be cleaned.
-      oldFilePath = newFilePath;
-      rolloverPaths = new ArrayList<>();
-      rolloverPaths.add(oldFilePath);
-      newFilePath = makeNewFilePathWithRollover();
+      // was pulled up again with same data file name, deletes the duplicate
+      // data file because the file is very probably broken.
+      try {
+        if (getFileSystem().exists(newFilePath)) {
+          LOG.warn("Found duplicate data file: " + newFilePath + ", the same name file was created by"
+              + " the old write task from a crushed container,"
+              + " delete the data file because it is very probably broken");
+          getFileSystem().delete(newFilePath, false);
+        }
+      } catch (IOException e) {
+        throw new HoodieException("Error while deleting legacy data file: " + newFilePath, e);
+      }
     }
   }
 

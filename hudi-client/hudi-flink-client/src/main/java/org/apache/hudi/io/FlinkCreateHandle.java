@@ -78,8 +78,10 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
       // data file first.
       try {
         if (fs.exists(path)) {
+          LOG.warn("Found duplicate data file: " + path + ", the same name file was created by"
+              + " the old write task from a crushed container,"
+              + " delete the data file because it is very probably broken");
           fs.delete(path, false);
-          LOG.warn("Legacy data file: " + path + " delete success");
         }
       } catch (IOException e) {
         throw new HoodieException("Error while deleting legacy data file: " + path, e);
