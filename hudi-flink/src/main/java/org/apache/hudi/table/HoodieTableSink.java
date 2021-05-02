@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperatorFactory;
@@ -40,6 +41,7 @@ import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.sink.DataStreamSinkProvider;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
+import org.apache.flink.table.connector.sink.abilities.SupportsOverwrite;
 import org.apache.flink.table.connector.sink.abilities.SupportsPartitioning;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.RowKind;
@@ -49,10 +51,11 @@ import java.util.Map;
 /**
  * Hoodie table sink.
  */
-public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning {
+public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, SupportsOverwrite {
 
   private final Configuration conf;
   private final TableSchema schema;
+  private boolean overwrite = false;
 
   public HoodieTableSink(Configuration conf, TableSchema schema) {
     this.conf = conf;
@@ -91,6 +94,7 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning {
             .transform("compact_task",
                 TypeInformation.of(CompactionCommitEvent.class),
                 new KeyedProcessOperator<>(new CompactFunction(conf)))
+            .setParallelism(conf.getInteger(FlinkOptions.COMPACTION_TASKS))
             .addSink(new CompactionCommitSink(conf))
             .name("compact_commit")
             .setParallelism(1); // compaction commit should be singleton
@@ -128,7 +132,21 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning {
   }
 
   @Override
-  public void applyStaticPartition(Map<String, String> map) {
-    // no operation
+  public void applyStaticPartition(Map<String, String> partition) {
+    // #applyOverwrite should have been invoked.
+    if (this.overwrite) {
+      final String operationType;
+      if (partition.size() > 0) {
+        operationType = WriteOperationType.INSERT_OVERWRITE.value();
+      } else {
+        operationType = WriteOperationType.INSERT_OVERWRITE_TABLE.value();
+      }
+      this.conf.setString(FlinkOptions.OPERATION, operationType);
+    }
+  }
+
+  @Override
+  public void applyOverwrite(boolean b) {
+    this.overwrite = b;
   }
 }

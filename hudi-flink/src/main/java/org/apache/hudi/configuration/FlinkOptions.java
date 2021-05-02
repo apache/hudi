@@ -72,6 +72,21 @@ public class FlinkOptions {
           + " column value is null/empty string");
 
   // ------------------------------------------------------------------------
+  //  Index Options
+  // ------------------------------------------------------------------------
+  public static final ConfigOption<Boolean> INDEX_BOOTSTRAP_ENABLED = ConfigOptions
+      .key("index.bootstrap.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to bootstrap the index state from existing hoodie table, default false");
+
+  public static final ConfigOption<Double> INDEX_STATE_TTL = ConfigOptions
+      .key("index.state.ttl")
+      .doubleType()
+      .defaultValue(1.5D)
+      .withDescription("Index state ttl in days, default 1.5 day");
+
+  // ------------------------------------------------------------------------
   //  Read Options
   // ------------------------------------------------------------------------
   public static final ConfigOption<Integer> READ_TASKS = ConfigOptions
@@ -230,9 +245,9 @@ public class FlinkOptions {
   public static final ConfigOption<String> PARTITION_PATH_FIELD = ConfigOptions
       .key(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY)
       .stringType()
-      .defaultValue("partition-path")
+      .defaultValue("")
       .withDescription("Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`.\n"
-          + "Actual value obtained by invoking .toString()");
+          + "Actual value obtained by invoking .toString(), default ''");
 
   public static final ConfigOption<Boolean> PARTITION_PATH_URL_ENCODE = ConfigOptions
       .key("write.partition.url_encode")
@@ -253,10 +268,34 @@ public class FlinkOptions {
       .withDescription("Parallelism of tasks that do actual write, default is 4");
 
   public static final ConfigOption<Double> WRITE_BATCH_SIZE = ConfigOptions
-      .key("write.batch.size.MB")
+      .key("write.batch.size")
       .doubleType()
-      .defaultValue(2D) // 2MB
-      .withDescription("Batch buffer size in MB to flush data into the underneath filesystem");
+      .defaultValue(64D) // 64MB
+      .withDescription("Batch buffer size in MB to flush data into the underneath filesystem, default 64MB");
+
+  public static final ConfigOption<Long> WRITE_RATE_LIMIT = ConfigOptions
+      .key("write.rate.limit")
+      .longType()
+      .defaultValue(-1L) // default no limit
+      .withDescription("Write records rate limit per second to reduce risk of OOM, default -1 (no limit)");
+
+  public static final ConfigOption<Integer> WRITE_LOG_BLOCK_SIZE = ConfigOptions
+      .key("write.log_block.size")
+      .intType()
+      .defaultValue(128)
+      .withDescription("Max log block size in MB for log file, default 128MB");
+
+  public static final ConfigOption<Integer> WRITE_LOG_MAX_SIZE = ConfigOptions
+      .key("write.log.max.size")
+      .intType()
+      .defaultValue(1024)
+      .withDescription("Maximum size allowed in MB for a log file before it is rolled over to the next version, default 1GB");
+
+  public static final ConfigOption<Integer> WRITE_MERGE_MAX_MEMORY = ConfigOptions
+      .key("write.merge.max_memory")
+      .intType()
+      .defaultValue(100) // default 100 MB
+      .withDescription("Max memory in MB for merge, default 100MB");
 
   // ------------------------------------------------------------------------
   //  Compaction Options
@@ -267,6 +306,12 @@ public class FlinkOptions {
       .booleanType()
       .defaultValue(true) // default true for MOR write
       .withDescription("Async Compaction, enabled by default for MOR");
+
+  public static final ConfigOption<Integer> COMPACTION_TASKS = ConfigOptions
+      .key("compaction.tasks")
+      .intType()
+      .defaultValue(10) // default WRITE_TASKS * COMPACTION_DELTA_COMMITS * 0.5 (assumes two commits generate one bucket)
+      .withDescription("Parallelism of tasks that do actual compaction, default is 10");
 
   public static final String NUM_COMMITS = "num_commits";
   public static final String TIME_ELAPSED = "time_elapsed";
@@ -312,6 +357,18 @@ public class FlinkOptions {
       .defaultValue(10)// default 10 commits
       .withDescription("Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
           + "This also directly translates into how much you can incrementally pull on this table, default 10");
+
+  public static final ConfigOption<Integer> ARCHIVE_MAX_COMMITS = ConfigOptions
+      .key("archive.max_commits")
+      .intType()
+      .defaultValue(30)// default max 30 commits
+      .withDescription("Max number of commits to keep before archiving older commits into a sequential log, default 30");
+
+  public static final ConfigOption<Integer> ARCHIVE_MIN_COMMITS = ConfigOptions
+      .key("archive.min_commits")
+      .intType()
+      .defaultValue(20)// default min 20 commits
+      .withDescription("Min number of commits to keep before archiving older commits into a sequential log, default 20");
 
   // ------------------------------------------------------------------------
   //  Hive Sync Options

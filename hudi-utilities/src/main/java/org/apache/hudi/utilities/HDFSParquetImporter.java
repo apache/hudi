@@ -102,7 +102,7 @@ public class HDFSParquetImporter implements Serializable {
   }
 
   private boolean isUpsert() {
-    return "upsert".equals(cfg.command.toLowerCase());
+    return "upsert".equalsIgnoreCase(cfg.command);
   }
 
   public int dataImport(JavaSparkContext jsc, int retry) {

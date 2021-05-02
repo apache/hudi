@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.hudi.hive.util.ConfigUtils;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent.PartitionEventType;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
@@ -162,9 +163,9 @@ public class HiveSyncTool extends AbstractSyncTool {
     LOG.info("Last commit time synced was found to be " + lastCommitTimeSynced.orElse("null"));
     List<String> writtenPartitionsSince = hoodieHiveClient.getPartitionsWrittenToSince(lastCommitTimeSynced);
     LOG.info("Storage partitions scan complete. Found " + writtenPartitionsSince.size());
+
     // Sync the partitions if needed
     syncPartitions(tableName, writtenPartitionsSince);
-
     hoodieHiveClient.updateLastCommitTimeSynced(tableName);
     LOG.info("Sync complete for " + tableName);
   }
@@ -196,7 +197,8 @@ public class HiveSyncTool extends AbstractSyncTool {
       // Custom serde will not work with ALTER TABLE REPLACE COLUMNS
       // https://github.com/apache/hive/blob/release-1.1.0/ql/src/java/org/apache/hadoop/hive
       // /ql/exec/DDLTask.java#L3488
-      hoodieHiveClient.createTable(tableName, schema, inputFormatClassName, outputFormatClassName, serDeFormatClassName);
+      hoodieHiveClient.createTable(tableName, schema, inputFormatClassName,
+          outputFormatClassName, serDeFormatClassName, ConfigUtils.toMap(cfg.serdeProperties), ConfigUtils.toMap(cfg.tableProperties));
     } else {
       // Check if the table schema has evolved
       Map<String, String> tableSchema = hoodieHiveClient.getTableSchema(tableName);
@@ -204,6 +206,12 @@ public class HiveSyncTool extends AbstractSyncTool {
       if (!schemaDiff.isEmpty()) {
         LOG.info("Schema difference found for " + tableName);
         hoodieHiveClient.updateTableDefinition(tableName, schema);
+        // Sync the table properties if the schema has changed
+        if (cfg.tableProperties != null) {
+          Map<String, String> tableProperties = ConfigUtils.toMap(cfg.tableProperties);
+          hoodieHiveClient.updateTableProperties(tableName, tableProperties);
+          LOG.info("Sync table properties for " + tableName + ", table properties is: " + cfg.tableProperties);
+        }
       } else {
         LOG.info("No Schema difference for " + tableName);
       }

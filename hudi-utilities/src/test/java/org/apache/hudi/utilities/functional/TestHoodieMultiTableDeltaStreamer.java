@@ -213,6 +213,24 @@ public class TestHoodieMultiTableDeltaStreamer extends TestHoodieDeltaStreamer {
     }
   }
 
+  @Test
+  public void testTableLevelProperties() throws IOException {
+    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, dfsBasePath + "/config", TestDataSource.class.getName(), false);
+    HoodieMultiTableDeltaStreamer streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
+    List<TableExecutionContext> tableExecutionContexts = streamer.getTableExecutionContexts();
+    tableExecutionContexts.forEach(tableExecutionContext -> {
+      switch (tableExecutionContext.getTableName()) {
+        case "dummy_table_short_trip":
+          String tableLevelKeyGeneratorClass = tableExecutionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY());
+          assertEquals(TestHoodieDeltaStreamer.TestTableLevelGenerator.class.getName(), tableLevelKeyGeneratorClass);
+          break;
+        default:
+          String defaultKeyGeneratorClass = tableExecutionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY());
+          assertEquals(TestHoodieDeltaStreamer.TestGenerator.class.getName(), defaultKeyGeneratorClass);
+      }
+    });
+  }
+
   private String populateCommonPropsAndWriteToFile() throws IOException {
     TypedProperties commonProps = new TypedProperties();
     populateCommonProps(commonProps);

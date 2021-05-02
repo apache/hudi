@@ -20,6 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
+import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
 
 import org.apache.flink.configuration.ConfigOption;
@@ -114,6 +115,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     conf.setString(FlinkOptions.TABLE_NAME.key(), tableName);
     // hoodie key about options
     setupHoodieKeyOptions(conf, table);
+    // cleaning options
+    setupCleaningOptions(conf);
     // infer avro schema from physical DDL schema
     inferAvroSchema(conf, schema.toRowDataType().notNull().getLogicalType());
   }
@@ -129,17 +132,41 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       String recordKey = String.join(",", pkColumns);
       conf.setString(FlinkOptions.RECORD_KEY_FIELD, recordKey);
     }
-    List<String> partitions = table.getPartitionKeys();
-    if (partitions.size() > 0) {
+    List<String> partitionKeys = table.getPartitionKeys();
+    if (partitionKeys.size() > 0) {
       // the PARTITIONED BY syntax always has higher priority than option FlinkOptions#PARTITION_PATH_FIELD
-      conf.setString(FlinkOptions.PARTITION_PATH_FIELD, String.join(",", partitions));
+      conf.setString(FlinkOptions.PARTITION_PATH_FIELD, String.join(",", partitionKeys));
     }
     // tweak the key gen class if possible
-    boolean complexHoodieKey = pkColumns.size() > 1 || partitions.size() > 1;
+    final String[] partitions = conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",");
+    if (partitions.length == 1 && partitions[0].equals("")) {
+      conf.setString(FlinkOptions.KEYGEN_CLASS, NonpartitionedAvroKeyGenerator.class.getName());
+      LOG.info("Table option [{}] is reset to {} because this is a non-partitioned table",
+          FlinkOptions.KEYGEN_CLASS.key(), NonpartitionedAvroKeyGenerator.class.getName());
+      return;
+    }
+    final String[] pks = conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",");
+    boolean complexHoodieKey = pks.length > 1 || partitions.length > 1;
     if (complexHoodieKey && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS)) {
       conf.setString(FlinkOptions.KEYGEN_CLASS, ComplexAvroKeyGenerator.class.getName());
       LOG.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
           FlinkOptions.KEYGEN_CLASS.key(), ComplexAvroKeyGenerator.class.getName());
+    }
+  }
+
+  /**
+   * Sets up the cleaning options from the table definition.
+   */
+  private static void setupCleaningOptions(Configuration conf) {
+    int commitsToRetain = conf.getInteger(FlinkOptions.CLEAN_RETAIN_COMMITS);
+    int minCommitsToKeep = conf.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS);
+    if (commitsToRetain >= minCommitsToKeep) {
+      LOG.info("Table option [{}] is reset to {} to be greater than {}={},\n"
+              + "to avoid risk of missing data from few instants in incremental pull",
+          FlinkOptions.ARCHIVE_MIN_COMMITS.key(), commitsToRetain + 10,
+          FlinkOptions.CLEAN_RETAIN_COMMITS.key(), commitsToRetain);
+      conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, commitsToRetain + 10);
+      conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, commitsToRetain + 20);
     }
   }
 

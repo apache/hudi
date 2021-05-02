@@ -203,6 +203,8 @@
                       <include>org.apache.hbase:hbase-client</include>
                       <include>org.apache.hbase:hbase-protocol</include>
                       <include>org.apache.hbase:hbase-server</include>
+                      <include>com.esotericsoftware:kryo-shaded</include>
+                      <include>com.esotericsoftware:minlog</include>
                       <include>log4j:log4j</include>
                   </includes>
                 </artifactSet>

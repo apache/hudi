@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.testutils.RawTripTestPayload.deleteRecordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieUpsertException
 import org.apache.hudi.keygen._
@@ -52,6 +53,8 @@ class TestCOWDataSource extends HoodieClientTestBase {
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
+    "hoodie.bulkinsert.shuffle.parallelism" -> "2",
+    "hoodie.delete.shuffle.parallelism" -> "1",
     DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY -> "timestamp",
@@ -124,6 +127,37 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(actualSchema != null)
     assertEquals(schema, actualSchema)
   }
+
+  @Test
+  def testCopyOnWriteDeletes(): Unit = {
+    // Insert Operation
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+
+    val snapshotDF1 = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/*/*/*")
+    assertEquals(100, snapshotDF1.count())
+
+    val records2 = deleteRecordsToStrings(dataGen.generateUniqueDeletes(20)).toList
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2 , 2))
+
+    inputDF2.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val snapshotDF2 = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/*/*/*")
+    assertEquals(snapshotDF1.count() - inputDF2.count(), snapshotDF2.count())
+  }
+
 
   @ParameterizedTest
   //TODO(metadata): Needs HUDI-1459 to be fixed

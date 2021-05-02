@@ -240,7 +240,7 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
     } else {
       FlinkMergeHandle writeHandle = (FlinkMergeHandle) this.writeHandle;
       // add the incremental records.
-      if (!writeHandle.isNeedBootStrap()) {
+      if (writeHandle.shouldRollover()) {
         writeHandle.rollOver(recordItr);
       }
       return writeHandle;

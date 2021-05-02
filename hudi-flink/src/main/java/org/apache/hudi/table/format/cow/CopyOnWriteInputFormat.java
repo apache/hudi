@@ -40,6 +40,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -209,7 +210,13 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
 
         // get the block locations and make sure they are in order with respect to their offset
         final BlockLocation[] blocks = fs.getFileBlockLocations(file, 0, len);
-        Arrays.sort(blocks);
+        Arrays.sort(blocks, new Comparator<BlockLocation>() {
+          @Override
+          public int compare(BlockLocation o1, BlockLocation o2) {
+            long diff = o1.getLength() - o2.getOffset();
+            return diff < 0L ? -1 : (diff > 0L ? 1 : 0);
+          }
+        });
 
         long bytesUnassigned = len;
         long position = 0;

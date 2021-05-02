@@ -92,7 +92,7 @@ public class TestWriteCopyOnWrite {
   public void before() throws Exception {
     final String basePath = tempFile.getAbsolutePath();
     conf = TestConfigurations.getDefaultConf(basePath);
-    conf.setString(FlinkOptions.TABLE_TYPE, getTableType());
+    conf.setString(FlinkOptions.TABLE_TYPE, getTableType().name());
     setUp(conf);
     this.funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
   }
@@ -125,8 +125,7 @@ public class TestWriteCopyOnWrite {
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
 
-    String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant(getTableType());
+    String instant = funcWrapper.getWriteClient().getLastPendingInstant(getTableType());
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
     MatcherAssert.assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
@@ -152,7 +151,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(2);
 
     String instant2 = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant(getTableType());
+        .getLastPendingInstant(getTableType());
     assertNotEquals(instant, instant2);
 
     final OperatorEvent nextEvent2 = funcWrapper.getNextEvent();
@@ -181,7 +180,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(1);
 
     String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant(getTableType());
+        .getLastPendingInstant(getTableType());
     assertNotNull(instant);
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
@@ -223,7 +222,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(1);
 
     String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant(getTableType());
+        .getLastPendingInstant(getTableType());
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
     assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
@@ -309,7 +308,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(2);
 
     String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant(getTableType());
+        .getLastPendingInstant(getTableType());
 
     nextEvent = funcWrapper.getNextEvent();
     assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
@@ -354,7 +353,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(2);
 
     String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant(getTableType());
+        .getLastPendingInstant(getTableType());
 
     nextEvent = funcWrapper.getNextEvent();
     assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
@@ -409,7 +408,7 @@ public class TestWriteCopyOnWrite {
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
 
     String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant(getTableType());
+        .getLastPendingInstant(getTableType());
 
     funcWrapper.checkpointComplete(1);
 
@@ -449,6 +448,10 @@ public class TestWriteCopyOnWrite {
 
   @Test
   public void testIndexStateBootstrap() throws Exception {
+    // reset the config option
+    conf.setBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
+
     // open the function and ingest data
     funcWrapper.openFunction();
     for (RowData rowData : TestData.DATA_SET_INSERT) {
@@ -489,7 +492,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(2);
 
     String instant = funcWrapper.getWriteClient()
-        .getInflightAndRequestedInstant(getTableType());
+        .getLastPendingInstant(getTableType());
 
     nextEvent = funcWrapper.getNextEvent();
     assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
@@ -512,7 +515,7 @@ public class TestWriteCopyOnWrite {
 
   @SuppressWarnings("rawtypes")
   private void checkInflightInstant(HoodieFlinkWriteClient writeClient) {
-    final String instant = writeClient.getInflightAndRequestedInstant(getTableType());
+    final String instant = writeClient.getLastPendingInstant(getTableType());
     assertNotNull(instant);
   }
 
@@ -524,7 +527,7 @@ public class TestWriteCopyOnWrite {
     final String instant;
     switch (state) {
       case REQUESTED:
-        instant = writeClient.getInflightAndRequestedInstant(getTableType());
+        instant = writeClient.getLastPendingInstant(getTableType());
         break;
       case COMPLETED:
         instant = writeClient.getLastCompletedInstant(getTableType());
@@ -535,8 +538,8 @@ public class TestWriteCopyOnWrite {
     assertThat(instant, is(instantStr));
   }
 
-  protected String getTableType() {
-    return HoodieTableType.COPY_ON_WRITE.name();
+  protected HoodieTableType getTableType() {
+    return HoodieTableType.COPY_ON_WRITE;
   }
 
   protected void checkWrittenData(File baseFile, Map<String, String> expected) throws Exception {

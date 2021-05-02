@@ -32,19 +32,34 @@ public class CompactionCommitEvent implements Serializable {
   /**
    * The compaction commit instant time.
    */
-  private final String instant;
+  private String instant;
   /**
    * The write statuses.
    */
-  private final List<WriteStatus> writeStatuses;
+  private List<WriteStatus> writeStatuses;
   /**
    * The compaction task identifier.
    */
-  private final int taskID;
+  private int taskID;
+
+  public CompactionCommitEvent() {
+  }
 
   public CompactionCommitEvent(String instant, List<WriteStatus> writeStatuses, int taskID) {
     this.instant = instant;
     this.writeStatuses = writeStatuses;
+    this.taskID = taskID;
+  }
+
+  public void setInstant(String instant) {
+    this.instant = instant;
+  }
+
+  public void setWriteStatuses(List<WriteStatus> writeStatuses) {
+    this.writeStatuses = writeStatuses;
+  }
+
+  public void setTaskID(int taskID) {
     this.taskID = taskID;
   }
 

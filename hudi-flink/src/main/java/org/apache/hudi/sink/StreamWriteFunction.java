@@ -21,7 +21,9 @@ package org.apache.hudi.sink;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -129,6 +131,11 @@ public class StreamWriteFunction<K, I, O>
   private transient OperatorEventGateway eventGateway;
 
   /**
+   * Commit action type.
+   */
+  private transient String actionType;
+
+  /**
    * Constructs a StreamingSinkFunction.
    *
    * @param config The config options
@@ -141,6 +148,9 @@ public class StreamWriteFunction<K, I, O>
   public void open(Configuration parameters) throws IOException {
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.writeClient = StreamerUtil.createWriteClient(this.config, getRuntimeContext());
+    this.actionType = CommitUtils.getCommitActionType(
+        WriteOperationType.fromValue(config.getString(FlinkOptions.OPERATION)),
+        HoodieTableType.valueOf(config.getString(FlinkOptions.TABLE_TYPE)));
     initBuffer();
     initWriteFunction();
   }
@@ -166,6 +176,7 @@ public class StreamWriteFunction<K, I, O>
   @Override
   public void close() {
     if (this.writeClient != null) {
+      this.writeClient.cleanHandles();
       this.writeClient.close();
     }
   }
@@ -223,6 +234,12 @@ public class StreamWriteFunction<K, I, O>
         break;
       case UPSERT:
         this.writeFunction = (records, instantTime) -> this.writeClient.upsert(records, instantTime);
+        break;
+      case INSERT_OVERWRITE:
+        this.writeFunction = (records, instantTime) -> this.writeClient.insertOverwrite(records, instantTime);
+        break;
+      case INSERT_OVERWRITE_TABLE:
+        this.writeFunction = (records, instantTime) -> this.writeClient.insertOverwriteTable(records, instantTime);
         break;
       default:
         throw new RuntimeException("Unsupported write operation : " + writeOperation);
@@ -315,7 +332,7 @@ public class StreamWriteFunction<K, I, O>
 
   @SuppressWarnings("unchecked, rawtypes")
   private void flushBucket(DataBucket bucket) {
-    this.currentInstant = this.writeClient.getInflightAndRequestedInstant(this.config.get(FlinkOptions.TABLE_TYPE));
+    this.currentInstant = this.writeClient.getLastPendingInstant(this.actionType);
     if (this.currentInstant == null) {
       // in case there are empty checkpoints that has no input data
       LOG.info("No inflight instant when flushing data, cancel.");
@@ -339,7 +356,7 @@ public class StreamWriteFunction<K, I, O>
 
   @SuppressWarnings("unchecked, rawtypes")
   private void flushRemaining(boolean isEndInput) {
-    this.currentInstant = this.writeClient.getInflightAndRequestedInstant(this.config.get(FlinkOptions.TABLE_TYPE));
+    this.currentInstant = this.writeClient.getLastPendingInstant(this.actionType);
     if (this.currentInstant == null) {
       // in case there are empty checkpoints that has no input data
       LOG.info("No inflight instant when flushing data, cancel.");
