@@ -42,6 +42,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
@@ -314,14 +315,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
         DatabaseMetaData databaseMetaData = connection.getMetaData();
         result = databaseMetaData.getColumns(null, syncConfig.databaseName, tableName, null);
         while (result.next()) {
-          String columnName = result.getString(4);
-          String columnType = result.getString(6);
-          if ("DECIMAL".equals(columnType)) {
-            int columnSize = result.getInt("COLUMN_SIZE");
-            int decimalDigits = result.getInt("DECIMAL_DIGITS");
-            columnType += String.format("(%s,%s)", columnSize, decimalDigits);
-          }
-          schema.put(columnName, columnType);
+          TYPE_CONVERTOR.doConvert(result, schema);
         }
         return schema;
       } catch (SQLException e) {
@@ -404,7 +398,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       }
     } else {
       updateHiveSQLUsingHiveDriver(s);
-      CommandProcessorResponse response = updateHiveSQLUsingHiveDriver(s);
+      /*CommandProcessorResponse response = updateHiveSQLUsingHiveDriver(s);
       if (response == null) {
         throw new HoodieHiveSyncException("Failed in executing SQL null response" + s);
       }
@@ -416,7 +410,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
         } else {
           throw new HoodieHiveSyncException(String.format("Failed in executing SQL %s", s));
         }
-      }
+      }*/
     }
   }
 
@@ -562,7 +556,8 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
         connection.close();
       }
       if (client != null) {
-        client.close();
+        Hive.closeCurrent();
+        //client.close();
         client = null;
       }
     } catch (SQLException e) {

@@ -16,7 +16,19 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hive;
+package org.apache.hudi.hive.testutils;
+
+import org.apache.hudi.hive.replication.HiveSyncGlobalCommitConfig;
+import org.apache.hudi.hive.replication.HiveSyncGlobalCommitTool;
+
+import org.apache.hadoop.fs.Path;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.util.Collections;
 
 import static org.apache.hudi.common.table.HoodieTableGloballyConsistentMetaClient.GLOBALLY_CONSISTENT_READ_TIMESTAMP;
 import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitConfig.LOCAL_BASE_PATH;
@@ -25,24 +37,15 @@ import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitConfig.LOCAL_
 import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitConfig.REMOTE_BASE_PATH;
 import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitConfig.REMOTE_HIVE_SERVER_JDBC_URLS;
 import static org.apache.hudi.hive.replication.HiveSyncGlobalCommitConfig.REMOTE_HIVE_SITE_URI;
-
-import java.util.Collections;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.hive.replication.HiveSyncGlobalCommitConfig;
-import org.apache.hudi.hive.replication.HiveSyncGlobalCommitTool;
-import org.apache.hudi.hive.util.TestCluster;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.ClassRule;
-import org.junit.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHiveSyncGlobalCommitTool {
 
-  @ClassRule
-  public static TestCluster localCluster = new TestCluster();
-  @ClassRule
-  public static TestCluster remoteCluster = new TestCluster();
+  TestCluster localCluster;
+  TestCluster remoteCluster;
 
   private static String DB_NAME = "foo";
   private static String TBL_NAME = "bar";
@@ -69,25 +72,31 @@ public class TestHiveSyncGlobalCommitTool {
   }
 
   private void compareEqualLastReplicatedTimeStamp(HiveSyncGlobalCommitConfig config) throws Exception {
-    Assert.assertEquals("compare replicated timestamps", localCluster.getHMSClient()
+    assertEquals(localCluster.getHMSClient()
         .getTable(config.databaseName, config.tableName).getParameters()
         .get(GLOBALLY_CONSISTENT_READ_TIMESTAMP), remoteCluster.getHMSClient()
         .getTable(config.databaseName, config.tableName).getParameters()
-        .get(GLOBALLY_CONSISTENT_READ_TIMESTAMP));
+        .get(GLOBALLY_CONSISTENT_READ_TIMESTAMP), "compare replicated timestamps");
   }
 
-  @Before
+  @BeforeEach
   public void setUp() throws Exception {
+    localCluster = new TestCluster();
+    localCluster.setup();
+    remoteCluster = new TestCluster();
+    remoteCluster.setup();
     localCluster.forceCreateDb(DB_NAME);
     remoteCluster.forceCreateDb(DB_NAME);
     localCluster.dfsCluster.getFileSystem().delete(new Path(localCluster.tablePath(DB_NAME, TBL_NAME)), true);
     remoteCluster.dfsCluster.getFileSystem().delete(new Path(remoteCluster.tablePath(DB_NAME, TBL_NAME)), true);
   }
 
-  @After
+  @AfterEach
   public void clear() throws Exception {
     localCluster.getHMSClient().dropTable(DB_NAME, TBL_NAME);
     remoteCluster.getHMSClient().dropTable(DB_NAME, TBL_NAME);
+    localCluster.shutDown();
+    remoteCluster.shutDown();
   }
 
   @Test
@@ -98,7 +107,7 @@ public class TestHiveSyncGlobalCommitTool {
     remoteCluster.createCOWTable(commitTime, 5, DB_NAME, TBL_NAME);
     HiveSyncGlobalCommitConfig config = getGlobalCommitConfig(commitTime, DB_NAME, TBL_NAME);
     HiveSyncGlobalCommitTool tool = new HiveSyncGlobalCommitTool(config);
-    Assert.assertTrue(tool.commit());
+    assertTrue(tool.commit());
     compareEqualLastReplicatedTimeStamp(config);
   }
 
@@ -110,19 +119,19 @@ public class TestHiveSyncGlobalCommitTool {
     remoteCluster.createCOWTable(commitTime, 5, DB_NAME, TBL_NAME);
     HiveSyncGlobalCommitConfig config = getGlobalCommitConfig(commitTime, DB_NAME, TBL_NAME);
     HiveSyncGlobalCommitTool tool = new HiveSyncGlobalCommitTool(config);
-    Assert.assertFalse(localCluster.getHMSClient().tableExists(DB_NAME, TBL_NAME));
-    Assert.assertFalse(remoteCluster.getHMSClient().tableExists(DB_NAME, TBL_NAME));
+    assertFalse(localCluster.getHMSClient().tableExists(DB_NAME, TBL_NAME));
+    assertFalse(remoteCluster.getHMSClient().tableExists(DB_NAME, TBL_NAME));
     // stop the remote cluster hive server to simulate cluster going down
     remoteCluster.stopHiveServer2();
-    Assert.assertFalse(tool.commit());
-    Assert.assertEquals(commitTime, localCluster.getHMSClient()
+    assertFalse(tool.commit());
+    assertEquals(commitTime, localCluster.getHMSClient()
         .getTable(config.databaseName, config.tableName).getParameters()
         .get(GLOBALLY_CONSISTENT_READ_TIMESTAMP));
-    Assert.assertTrue(tool.rollback()); // do a rollback
-    Assert.assertNotEquals(commitTime, localCluster.getHMSClient()
+    assertTrue(tool.rollback()); // do a rollback
+    assertNotEquals(commitTime, localCluster.getHMSClient()
         .getTable(config.databaseName, config.tableName).getParameters()
         .get(GLOBALLY_CONSISTENT_READ_TIMESTAMP));
-    Assert.assertFalse(remoteCluster.getHMSClient().tableExists(DB_NAME, TBL_NAME));
+    assertFalse(remoteCluster.getHMSClient().tableExists(DB_NAME, TBL_NAME));
     remoteCluster.startHiveServer2();
   }
 }

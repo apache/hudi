@@ -20,6 +20,7 @@ package org.apache.hudi.table.format.mor;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
@@ -163,9 +164,17 @@ public class MergeOnReadInputFormat
   public void open(MergeOnReadInputSplit split) throws IOException {
     this.currentReadCount = 0L;
     this.hadoopConf = StreamerUtil.getHadoopConf();
-    if (!split.getLogPaths().isPresent()) {
-      // base file only
-      this.iterator = new BaseFileOnlyIterator(getRequiredSchemaReader(split.getBasePath().get()));
+    if (!(split.getLogPaths().isPresent() && split.getLogPaths().get().size() > 0)) {
+      if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING)) {
+        // base file only with commit time filtering
+        this.iterator = new BaseFileOnlyFilteringIterator(
+            split.getInstantRange(),
+            this.tableState.getRequiredRowType(),
+            getReader(split.getBasePath().get(), getRequiredPosWithCommitTime(this.requiredPos)));
+      } else {
+        // base file only
+        this.iterator = new BaseFileOnlyIterator(getRequiredSchemaReader(split.getBasePath().get()));
+      }
     } else if (!split.getBasePath().isPresent()) {
       // log files only
       this.iterator = new LogFileOnlyIterator(getLogFileIterator(split));
@@ -334,17 +343,6 @@ public class MergeOnReadInputFormat
             // skipping if the condition is unsatisfied
             // continue;
           } else {
-            // should improve the code when log scanner supports
-            // seeking by log blocks with commit time which is more
-            // efficient.
-            if (split.getInstantRange().isPresent()) {
-              // based on the fact that commit time is always the first field
-              String commitTime = curAvroRecord.get().get(HOODIE_COMMIT_TIME_COL_POS).toString();
-              if (!split.getInstantRange().get().isInRange(commitTime)) {
-                // filter out the records that are not in range
-                continue;
-              }
-            }
             GenericRecord requiredAvroRecord = buildAvroRecordBySchema(
                 curAvroRecord.get(),
                 requiredSchema,
@@ -392,6 +390,57 @@ public class MergeOnReadInputFormat
     @Override
     public RowData nextRecord() {
       return this.reader.nextRecord();
+    }
+
+    @Override
+    public void close() throws IOException {
+      if (this.reader != null) {
+        this.reader.close();
+      }
+    }
+  }
+
+  /**
+   * Similar with {@link BaseFileOnlyIterator} but with instant time filtering.
+   */
+  static class BaseFileOnlyFilteringIterator implements RecordIterator {
+    // base file reader
+    private final ParquetColumnarRowSplitReader reader;
+    private final InstantRange instantRange;
+    private final RowDataProjection projection;
+
+    private RowData currentRecord;
+
+    BaseFileOnlyFilteringIterator(
+        Option<InstantRange> instantRange,
+        RowType requiredRowType,
+        ParquetColumnarRowSplitReader reader) {
+      this.reader = reader;
+      this.instantRange = instantRange.orElse(null);
+      int[] positions = IntStream.range(1, 1 + requiredRowType.getFieldCount()).toArray();
+      projection = RowDataProjection.instance(requiredRowType, positions);
+    }
+
+    @Override
+    public boolean reachedEnd() throws IOException {
+      while (!this.reader.reachedEnd()) {
+        currentRecord = this.reader.nextRecord();
+        if (instantRange != null) {
+          boolean isInRange = instantRange.isInRange(currentRecord.getString(HOODIE_COMMIT_TIME_COL_POS).toString());
+          if (isInRange) {
+            return false;
+          }
+        } else {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    @Override
+    public RowData nextRecord() {
+      // can promote: no need to project with null instant range
+      return projection.project(currentRecord);
     }
 
     @Override
@@ -635,6 +684,17 @@ public class MergeOnReadInputFormat
       return new MergeOnReadInputFormat(conf, paths, tableState,
           fieldTypes, defaultPartName, limit, emitDelete);
     }
+  }
+
+  // -------------------------------------------------------------------------
+  //  Utilities
+  // -------------------------------------------------------------------------
+
+  private static int[] getRequiredPosWithCommitTime(int[] requiredPos) {
+    int[] requiredPos2 = new int[requiredPos.length + 1];
+    requiredPos2[0] = HOODIE_COMMIT_TIME_COL_POS;
+    System.arraycopy(requiredPos, 0, requiredPos2, 1, requiredPos.length);
+    return requiredPos2;
   }
 
   @VisibleForTesting

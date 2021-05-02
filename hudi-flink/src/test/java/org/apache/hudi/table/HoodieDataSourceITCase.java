@@ -82,8 +82,9 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   @TempDir
   File tempFile;
 
-  @Test
-  void testStreamWriteAndRead() throws Exception {
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testStreamWriteAndRead(HoodieTableType tableType) throws Exception {
     // create filesystem table named source
     String createSource = TestConfigurations.getFileSourceDDL("source");
     streamTableEnv.executeSql(createSource);
@@ -91,7 +92,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
     options.put(FlinkOptions.READ_AS_STREAMING.key(), "true");
-    options.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    options.put(FlinkOptions.TABLE_TYPE.key(), tableType.name());
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     streamTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 select * from source";
@@ -106,8 +107,9 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     assertRowsEquals(rows2, TestData.DATA_SET_SOURCE_INSERT);
   }
 
-  @Test
-  void testStreamReadAppendData() throws Exception {
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testStreamReadAppendData(HoodieTableType tableType) throws Exception {
     // create filesystem table named source
     String createSource = TestConfigurations.getFileSourceDDL("source");
     String createSource2 = TestConfigurations.getFileSourceDDL("source2", "test_source_2.data");
@@ -117,7 +119,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
     options.put(FlinkOptions.READ_AS_STREAMING.key(), "true");
-    options.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    options.put(FlinkOptions.TABLE_TYPE.key(), tableType.name());
     String createHoodieTable = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     streamTableEnv.executeSql(createHoodieTable);
     String insertInto = "insert into t1 select * from source";

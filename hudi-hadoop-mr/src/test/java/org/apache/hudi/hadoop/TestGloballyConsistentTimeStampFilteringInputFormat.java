@@ -18,21 +18,27 @@
 
 package org.apache.hudi.hadoop;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.mapred.InputSplit;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import org.apache.hudi.common.table.HoodieTableGloballyConsistentMetaClient;
-import org.apache.hudi.common.util.FSUtils;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
+import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
 public class TestGloballyConsistentTimeStampFilteringInputFormat
     extends TestHoodieParquetInputFormat {
 
   @Override
+  @BeforeEach
   public void setUp() {
     super.setUp();
     jobConf.set(HoodieTableGloballyConsistentMetaClient.GLOBALLY_CONSISTENT_READ_TIMESTAMP,
@@ -40,6 +46,7 @@ public class TestGloballyConsistentTimeStampFilteringInputFormat
   }
 
   @Override
+  @Test
   public void testInputFormatLoad() throws IOException {
     super.testInputFormatLoad();
 
@@ -67,6 +74,7 @@ public class TestGloballyConsistentTimeStampFilteringInputFormat
   }
 
   @Override
+  @Test
   public void testInputFormatUpdates() throws IOException {
     super.testInputFormatUpdates();
 
@@ -95,13 +103,13 @@ public class TestGloballyConsistentTimeStampFilteringInputFormat
 
     // set globally replicated timestamp to 400 so commits from 500, 600 does not show up
     jobConf.set(HoodieTableGloballyConsistentMetaClient.GLOBALLY_CONSISTENT_READ_TIMESTAMP, "400");
-    InputFormatTestUtil.setupIncremental(jobConf, "100", HoodieHiveUtil.MAX_COMMIT_ALL);
+    InputFormatTestUtil.setupIncremental(jobConf, "100", HoodieHiveUtils.MAX_COMMIT_ALL);
 
     FileStatus[] files = inputFormat.listStatus(jobConf);
 
     assertEquals(
-        "Pulling ALL commits from 100, should get us the 3 files from 400 commit, 1 file from 300 "
-            + "commit and 1 file from 200 commit", 5, files.length);
+         5, files.length,"Pulling ALL commits from 100, should get us the 3 files from 400 commit, 1 file from 300 "
+            + "commit and 1 file from 200 commit");
     ensureFilesInCommit("Pulling 3 commits from 100, should get us the 3 files from 400 commit",
         files, "400", 3);
     ensureFilesInCommit("Pulling 3 commits from 100, should get us the 1 files from 300 commit",
@@ -112,14 +120,14 @@ public class TestGloballyConsistentTimeStampFilteringInputFormat
     List<String> commits = Arrays.asList("100", "200", "300", "400", "500", "600");
     for (int idx = 0; idx < commits.size(); ++idx) {
       for (int jdx = 0; jdx < commits.size(); ++jdx) {
-        InputFormatTestUtil.setupIncremental(jobConf, commits.get(idx), HoodieHiveUtil.MAX_COMMIT_ALL);
+        InputFormatTestUtil.setupIncremental(jobConf, commits.get(idx), HoodieHiveUtils.MAX_COMMIT_ALL);
         jobConf.set(HoodieTableGloballyConsistentMetaClient.GLOBALLY_CONSISTENT_READ_TIMESTAMP,
             commits.get(jdx));
 
         files = inputFormat.listStatus(jobConf);
 
         if (jdx <= idx) {
-          assertEquals("all commits should be filtered", 0, files.length);
+          assertEquals(0, files.length,"all commits should be filtered");
         } else {
           // only commits upto the timestamp is allowed
           for (FileStatus file : files) {

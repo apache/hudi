@@ -74,7 +74,7 @@ public class InputPathHandler {
   /**
    * Takes in the original InputPaths and classifies each of them into incremental, snapshot and
    * non-hoodie InputPaths. The logic is as follows:
-   *
+   *TestGloballyConsistentTimeStampFilteringInputFormat.java
    * 1. Check if an inputPath starts with the same basepath as any of the metadata basepaths we know
    *    1a. If yes, this belongs to a Hoodie table that we already know about. Simply classify this
    *        as incremental or snapshot - We can get the table name of this inputPath from the
