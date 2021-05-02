@@ -25,13 +25,11 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -46,16 +44,6 @@ public class JavaHoodieBackedErrorTableWriter<T extends HoodieRecordPayload> ext
 
   JavaHoodieBackedErrorTableWriter(Configuration hadoopConf, HoodieWriteConfig writeConfig, HoodieEngineContext engineContext) {
     super(hadoopConf, writeConfig, engineContext);
-  }
-
-  @Override
-  protected void initialize(HoodieEngineContext engineContext, HoodieTableMetaClient datasetMetaClient) {
-
-    try {
-      bootstrapErrorTable(datasetMetaClient);
-    } catch (IOException e) {
-      LOG.error("init error table fail", e);
-    }
   }
 
   @Override

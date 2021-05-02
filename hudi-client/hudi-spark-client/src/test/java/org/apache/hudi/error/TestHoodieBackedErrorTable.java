@@ -76,12 +76,12 @@ public class TestHoodieBackedErrorTable extends HoodieClientTestBase {
     List<WriteStatus> writeStatuses = insertAndCheck(writeClient1, insertKeys1, commitTime1);
 
     assertHasWriteErrors(writeStatuses);
-    assertEquals(50, writeStatuses.get(0).getFailedRecords().size(), "shoule contain 50 records");
+    assertEquals(50, writeStatuses.get(0).getFailedRecords().size(), "should contain 50 records");
     String basePath = writeClient1.getConfig().getBasePath();
     DateTimeZone dateTimeZone = null;
     long timeMillis = System.currentTimeMillis();
     assertEquals(50, readRowKeysFromParquet(hadoopConf, new Path(basePath + "/" + HoodieTableMetaClient.ERROR_TABLE_FOLDER_NAME  + "/"
-            + new DateTime(timeMillis, dateTimeZone).toString("yyyy/MM/dd"))).size(), "shoule contain 50 records");
+            + new DateTime(timeMillis, dateTimeZone).toString("yyyy/MM/dd"))).size(), "should contain 50 records");
   }
 
   private List<WriteStatus> insertAndCheck(SparkRDDWriteClient client, List<HoodieKey> insertKeys, String commitTime) {

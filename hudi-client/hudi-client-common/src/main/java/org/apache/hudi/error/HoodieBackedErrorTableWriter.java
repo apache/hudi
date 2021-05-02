@@ -43,6 +43,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -95,10 +96,11 @@ public abstract class HoodieBackedErrorTableWriter<T extends HoodieRecordPayload
       this.tableName = writeConfig.getTableName() + HoodieErrorTableConfig.ERROR_TABLE_NAME_SUFFIX;
       this.basePath = getErrorTableBasePath(writeConfig);
       this.errorTableWriteConfig = createErrorDataWriteConfig(writeConfig);
-      initialize(engineContext, metaClient);
-      this.metaClient = HoodieTableMetaClient.builder()
-                            .setConf(hadoopConf)
-                            .setBasePath(errorTableWriteConfig.getBasePath()).build();
+      try {
+        bootstrapErrorTable(metaClient);
+      } catch (IOException e) {
+        throw new HoodieException("init hoodie error table fail!", e);
+      }
     }
   }
 
@@ -134,35 +136,24 @@ public abstract class HoodieBackedErrorTableWriter<T extends HoodieRecordPayload
    * @param datasetMetaClient
    * @throws IOException
    */
-  protected void bootstrapErrorTable(HoodieTableMetaClient datasetMetaClient) throws IOException {
+  private void bootstrapErrorTable(HoodieTableMetaClient datasetMetaClient) throws IOException {
 
-    if (datasetMetaClient == null) {
-      HoodieTableMetaClient.withPropertyBuilder()
-          .setTableType(HoodieTableType.COPY_ON_WRITE)
-          .setTableName(tableName)
-          .setArchiveLogFolder("archived")
-          .setPayloadClassName(OverwriteWithLatestAvroPayload.class.getName())
-          .setBaseFileFormat(HoodieFileFormat.PARQUET.toString())
-          .initTable(new Configuration(hadoopConf.get()), errorTableWriteConfig.getBasePath());
-    } else {
+    if (datasetMetaClient != null) {
       boolean exists = datasetMetaClient.getFs().exists(new Path(errorTableWriteConfig.getBasePath(), HoodieTableMetaClient.METAFOLDER_NAME));
-      if (!exists) {
-        HoodieTableMetaClient.withPropertyBuilder()
+      if (exists) {
+        return;
+      }
+    }
+
+    this.metaClient = HoodieTableMetaClient.withPropertyBuilder()
             .setTableType(HoodieTableType.COPY_ON_WRITE)
             .setTableName(tableName)
             .setArchiveLogFolder("archived")
             .setPayloadClassName(OverwriteWithLatestAvroPayload.class.getName())
             .setBaseFileFormat(HoodieFileFormat.PARQUET.toString())
             .initTable(new Configuration(hadoopConf.get()), errorTableWriteConfig.getBasePath());
-      }
-    }
   }
 
-  /**
-   *  Build hudi error table base path.
-   * @param writeConfig
-   * @return
-   */
   private String getErrorTableBasePath(HoodieWriteConfig writeConfig) {
 
     if (StringUtils.isNullOrEmpty(writeConfig.getErrorTableBasePath())) {
@@ -171,18 +162,11 @@ public abstract class HoodieBackedErrorTableWriter<T extends HoodieRecordPayload
     return writeConfig.getErrorTableBasePath();
   }
 
-  /**
-   *  Build hudi error table name.
-   * @param writeConfig
-   * @return
-   */
   private String getErrorTableName(HoodieWriteConfig writeConfig) {
 
     return StringUtils.isNullOrEmpty(writeConfig.getErrorTableName())
                ? writeConfig.getTableName() + HoodieErrorTableConfig.ERROR_TABLE_NAME_SUFFIX : writeConfig.getErrorTableName();
   }
-
-  protected abstract void initialize(HoodieEngineContext engineContext, HoodieTableMetaClient datasetMetaClient);
 
   public abstract void commit(O writeStatuses, HoodieTable<T, I, K, O> hoodieTable);
 
