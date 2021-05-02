@@ -720,7 +720,6 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .mode(SaveMode.Append)
       .save(basePath)
 
-
     // 2. write records with schema2 add column age
     val schema2 = StructType(StructField("_row_key", StringType, true) :: StructField("name", StringType, true) ::
       StructField("age", StringType, true) :: StructField("timestamp", IntegerType, true) ::
@@ -738,7 +737,6 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
     val recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*")
-    recordsReadDF.show(false)
     val resultSchema = new StructType(recordsReadDF.schema.filter(p=> !p.name.startsWith("_hoodie")).toArray)
     assertEquals(resultSchema, schema2)
 
@@ -774,17 +772,14 @@ class TestCOWDataSource extends HoodieClientTestBase {
       "{\"_row_key\":\"1\",\"name\":\"lisi\",\"timestamp\":1,\"partition\":1}")
 
     val inputDF = spark.read.schema(schema1.toDDL).json(spark.sparkContext.parallelize(records, 2))
-    inputDF.show(false)
 
     inputDF.write.format("org.apache.hudi")
       .options(opts)
       .mode(SaveMode.Append)
       .save(basePath)
-    inputDF.printSchema()
 
     val recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*")
-    recordsReadDF.show(false)
 
     val resultSchema = new StructType(recordsReadDF.schema.filter(p=> !p.name.startsWith("_hoodie")).toArray)
     assertEquals(resultSchema, schema1)
