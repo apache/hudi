@@ -56,7 +56,6 @@ public class TableSchemaResolver {
 
   private static final Logger LOG = LogManager.getLogger(TableSchemaResolver.class);
   private HoodieTableMetaClient metaClient;
-  private static Schema nullSchema = Schema.create(Schema.Type.NULL);
 
   public TableSchemaResolver(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
@@ -332,12 +331,8 @@ public class TableSchemaResolver {
         final Field oldSchemaField = SchemaCompatibility.lookupWriterField(oldSchema, newSchemaField);
         if (oldSchemaField == null) {
           if (newSchemaField.defaultVal() == null) {
-            // For spark datasource added new filed will be nullable and convert to avro union type with null (SchemaConverters.toAvroType)
-            if (!(newSchemaField.schema().getType().equals(Schema.Type.UNION)
-                && newSchemaField.schema().getTypes().contains(nullSchema))) {
-              // C3: newly added field in newSchema does not have a default value
-              return false;
-            }
+            // C3: newly added field in newSchema does not have a default value
+            return false;
           }
         }
       }
