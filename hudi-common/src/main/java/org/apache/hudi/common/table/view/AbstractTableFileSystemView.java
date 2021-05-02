@@ -271,7 +271,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       if (!isPartitionAvailableInStore(partitionPathStr)) {
         // Not loaded yet
         try {
-          LOG.debug("Building file system view for partition (" + partitionPathStr + ")");
+          LOG.info("Building file system view for partition (" + partitionPathStr + ")");
 
           // Create the path if it does not exist already
           Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePath(), partitionPathStr);

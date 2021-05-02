@@ -135,9 +135,9 @@ public class RequestHandler {
       synchronized (view) {
         if (isLocalViewBehind(ctx)) {
           HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
-          LOG.debug("Syncing view as client passed last known instant " + lastKnownInstantFromClient
-              + " as last known instant but server has the folling timeline :"
-              + localTimeline.getInstants().collect(Collectors.toList()));
+          LOG.info("Syncing view as client passed last known instant " + lastKnownInstantFromClient
+              + " as last known instant but server has the following last instant on timeline :"
+              + localTimeline.lastInstant());
           view.sync();
           return true;
         }

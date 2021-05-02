@@ -438,6 +438,24 @@ public class HoodieDeltaStreamer implements Serializable {
     }
   }
 
+  private static String toSortedTruncatedString(TypedProperties props) {
+    List<String> allKeys = new ArrayList<>();
+    for (Object k : props.keySet()) {
+      allKeys.add(k.toString());
+    }
+    Collections.sort(allKeys);
+    StringBuilder propsLog = new StringBuilder("Creating delta streamer with configs:\n");
+    for (String key : allKeys) {
+      String value = Option.ofNullable(props.get(key)).orElse("").toString();
+      // Truncate too long values.
+      if (value.length() > 255 && !LOG.isDebugEnabled()) {
+        value = value.substring(0, 128) + "[...]";
+      }
+      propsLog.append(key).append(": ").append(value).append("\n");
+    }
+    return propsLog.toString();
+  }
+
   public static final Config getConfig(String[] args) {
     Config cfg = new Config();
     JCommander cmd = new JCommander(cfg, null, args);
@@ -545,24 +563,7 @@ public class HoodieDeltaStreamer implements Serializable {
           "'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed.");
 
       this.props = properties.get();
-
-      List<String> allKeys = new ArrayList<>();
-      for (Object k : props.keySet()) {
-        allKeys.add(k.toString());
-      }
-      Collections.sort(allKeys);
-
-      StringBuilder propsLog = new StringBuilder("Creating delta streamer with configs:\n");
-
-      for (String key : allKeys) {
-        String value = props.getProperty(key);
-        // Truncate too long values.
-        if (value.length() > 255 && !LOG.isDebugEnabled()) {
-          value = value.substring(0, 128) + "[...]";
-        }
-        propsLog.append(key).append(": ").append(value).append("\n");
-      }
-      LOG.info(propsLog.toString());
+      LOG.info(toSortedTruncatedString(props));
 
       this.schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
           UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc), props, jssc, cfg.transformerClassNames);
