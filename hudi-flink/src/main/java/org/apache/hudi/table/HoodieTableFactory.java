@@ -115,7 +115,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       Arrays.stream(conf.get(FlinkOptions.RECORD_KEY_FIELD).split(","))
               .filter(field -> !fields.contains(field))
               .findAny()
-              .ifPresent(e-> {
+              .ifPresent(e -> {
                 throw new ValidationException("The " + e + " field not exists in table schema."
                         + "Please define primary key or modify hoodie.datasource.write.recordkey.field option.");
               });
