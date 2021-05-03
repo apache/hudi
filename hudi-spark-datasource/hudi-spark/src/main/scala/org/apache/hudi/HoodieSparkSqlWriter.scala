@@ -49,7 +49,6 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
-import org.apache.spark.storage.StorageLevel
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ListBuffer
