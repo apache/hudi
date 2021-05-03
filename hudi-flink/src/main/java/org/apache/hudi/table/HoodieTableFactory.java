@@ -40,11 +40,7 @@ import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -113,11 +109,10 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
     // validate record key in pk absence.
     if (!schema.getPrimaryKey().isPresent()) {
-      Optional<String> notExistsField = Arrays.stream(conf.get(FlinkOptions.RECORD_KEY_FIELD).split(","))
+      Arrays.stream(conf.get(FlinkOptions.RECORD_KEY_FIELD).split(","))
               .filter(field -> !fields.contains(field))
-              .findAny();
-      notExistsField
-              .ifPresent(e-> {
+              .findAny()
+              .ifPresent(e -> {
                 throw new ValidationException("The " + e + " field not exists in table schema."
                         + "Please define primary key or modify hoodie.datasource.write.recordkey.field option.");
               });
