@@ -125,7 +125,8 @@ public class TestDFSHoodieTestSuiteWriterAdapter extends UtilitiesTestBase {
   public void testDFSWorkloadSinkWithMultipleFilesFunctional() throws IOException {
     DeltaConfig dfsSinkConfig = new DFSDeltaConfig(DeltaOutputMode.DFS, DeltaInputType.AVRO,
         new SerializableConfiguration(jsc.hadoopConfiguration()), dfsBasePath, dfsBasePath,
-        schemaProvider.getSourceSchema().toString(), 10240L, jsc.defaultParallelism(), false);
+        schemaProvider.getSourceSchema().toString(), 10240L, jsc.defaultParallelism(),
+            false, null);
     DeltaWriterAdapter<GenericRecord> dfsDeltaWriterAdapter = DeltaWriterFactory
         .getDeltaWriterAdapter(dfsSinkConfig, 1);
     FlexibleSchemaRecordGenerationIterator itr = new FlexibleSchemaRecordGenerationIterator(1000,

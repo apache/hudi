@@ -47,7 +47,7 @@ public class DeltaWriterFactory {
                 StringUtils
                     .join(new String[] {dfsDeltaConfig.getDeltaBasePath(), dfsDeltaConfig.getBatchId().toString()},
                         "/"), dfsDeltaConfig.getSchemaStr(), dfsDeltaConfig.getMaxFileSize());
-            return new DFSDeltaWriterAdapter(fileDeltaInputGenerator, batchId);
+            return new DFSDeltaWriterAdapter(fileDeltaInputGenerator, dfsDeltaConfig);
           default:
             throw new IllegalArgumentException("Invalid delta input format " + config.getDeltaInputType());
         }

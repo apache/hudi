@@ -56,7 +56,7 @@ public class TestSuiteFileBasedSchemaProvider extends FilebasedSchemaProvider {
       fields.add(newField);
     }
     Schema.Field sourceOrderingField =
-        new Schema.Field(SchemaUtils.SOURCE_ORDERING_FIELD, Schema.create(Type.INT), "", 0);
+        new Schema.Field(SchemaUtils.SOURCE_ORDERING_FIELD, Schema.create(Type.LONG), "", 0);
     fields.add(sourceOrderingField);
     Schema mergedSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false);
     mergedSchema.setFields(fields);

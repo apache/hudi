@@ -81,6 +81,7 @@ public class ValidateDatasetNode extends DagNode<Boolean> {
 
     String recordKeyField = context.getWriterContext().getProps().getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY());
     String partitionPathField = context.getWriterContext().getProps().getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY());
+    String sourceOrderingField = context.getHoodieTestSuiteWriter().getCfg().sourceOrderingField;
     // todo: fix hard coded fields from configs.
     // read input and resolve insert, updates, etc.
     Dataset<Row> inputDf = session.read().format("avro").load(inputPath);
@@ -88,8 +89,8 @@ public class ValidateDatasetNode extends DagNode<Boolean> {
     Dataset<Row> inputSnapshotDf = inputDf.groupByKey(
         (MapFunction<Row, String>) value -> partitionPathField + "+" + recordKeyField, Encoders.STRING())
         .reduceGroups((ReduceFunction<Row>) (v1, v2) -> {
-          int ts1 = v1.getAs(SchemaUtils.SOURCE_ORDERING_FIELD);
-          int ts2 = v2.getAs(SchemaUtils.SOURCE_ORDERING_FIELD);
+          long ts1 = v1.getAs(sourceOrderingField);
+          long ts2 = v2.getAs(sourceOrderingField);
           if (ts1 > ts2) {
             return v1;
           } else {

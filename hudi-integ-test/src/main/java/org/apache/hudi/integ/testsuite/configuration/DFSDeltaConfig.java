@@ -40,11 +40,13 @@ public class DFSDeltaConfig extends DeltaConfig {
   private int inputParallelism;
   // Whether to delete older input data once it has been ingested
   private boolean deleteOldInputData;
+  // Source ordering field that is given as part of run time configs.
+  private String sourceOrderingField;
 
   public DFSDeltaConfig(DeltaOutputMode deltaOutputMode, DeltaInputType deltaInputType,
                         SerializableConfiguration configuration,
                         String deltaBasePath, String targetBasePath, String schemaStr, Long maxFileSize,
-                        int inputParallelism, boolean deleteOldInputData) {
+                        int inputParallelism, boolean deleteOldInputData, String sourceOrderingField) {
     super(deltaOutputMode, deltaInputType, configuration);
     this.deltaBasePath = deltaBasePath;
     this.schemaStr = schemaStr;
@@ -52,6 +54,7 @@ public class DFSDeltaConfig extends DeltaConfig {
     this.datasetOutputPath = targetBasePath;
     this.inputParallelism = inputParallelism;
     this.deleteOldInputData = deleteOldInputData;
+    this.sourceOrderingField = sourceOrderingField;
   }
 
   public String getDeltaBasePath() {
@@ -84,5 +87,9 @@ public class DFSDeltaConfig extends DeltaConfig {
 
   public boolean shouldDeleteOldInputData() {
     return deleteOldInputData;
+  }
+
+  public String getSourceOrderingField() {
+    return sourceOrderingField;
   }
 }
