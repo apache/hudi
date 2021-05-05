@@ -18,10 +18,7 @@
 
 package org.apache.hudi.common.bootstrap.index;
 
-import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-
-import java.util.List;
 
 /**
  * No Op Bootstrap Index , which is a empty implement and not do anything.
