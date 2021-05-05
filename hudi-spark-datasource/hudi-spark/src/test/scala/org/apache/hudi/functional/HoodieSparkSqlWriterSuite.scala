@@ -42,7 +42,7 @@ import org.mockito.Mockito.{spy, times, verify}
 import org.scalatest.{FunSuite, Matchers}
 
 import scala.collection.JavaConversions._
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
 
@@ -518,7 +518,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     val hiveSyncConfig = buildSyncConfigMethod.invoke(HoodieSparkSqlWriter,
       new Path(basePath), newParams).asInstanceOf[HiveSyncConfig]
 
-    assert(hiveSyncConfig.skipROSuffix == true)
+    assertTrue(hiveSyncConfig.skipROSuffix)
     assertResult("spark.sql.sources.provider=hudi\n" +
       "spark.sql.sources.schema.partCol.0=partition\n" +
       "spark.sql.sources.schema.numParts=1\n" +
@@ -559,7 +559,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     val hiveSyncConfig = buildSyncConfigMethod.invoke(HoodieSparkSqlWriter,
       new Path(basePath), newParams).asInstanceOf[HiveSyncConfig]
 
-    assert(hiveSyncConfig.skipROSuffix == false)
+    assertFalse(hiveSyncConfig.skipROSuffix)
   }
 
   case class Test(uuid: String, ts: Long)
