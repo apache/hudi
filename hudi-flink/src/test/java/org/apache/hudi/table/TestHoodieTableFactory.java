@@ -99,6 +99,7 @@ public class TestHoodieTableFactory {
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
         .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0")
         .build();
     final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema1, "f2");
@@ -113,6 +114,7 @@ public class TestHoodieTableFactory {
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20).notNull())
         .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0", "f1")
         .build();
     final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema2, "f2");
@@ -137,6 +139,7 @@ public class TestHoodieTableFactory {
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
         .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0")
         .build();
     // set up new retains commits that is less than min archive commits
@@ -183,6 +186,7 @@ public class TestHoodieTableFactory {
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
         .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0")
         .build();
     final MockContext sinkContext1 = MockContext.getInstance(this.conf, schema1, "f2");
@@ -197,6 +201,7 @@ public class TestHoodieTableFactory {
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20).notNull())
         .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0", "f1")
         .build();
     final MockContext sinkContext2 = MockContext.getInstance(this.conf, schema2, "f2");
@@ -221,6 +226,7 @@ public class TestHoodieTableFactory {
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
         .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0")
         .build();
     // set up new retains commits that is less than min archive commits
