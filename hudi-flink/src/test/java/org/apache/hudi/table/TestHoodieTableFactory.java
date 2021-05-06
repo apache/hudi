@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.flink.table.api.ValidationException;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
@@ -44,7 +45,9 @@ import java.util.Objects;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Test cases for {@link HoodieTableFactory}.
@@ -72,6 +75,43 @@ public class TestHoodieTableFactory {
     this.conf.setString(FlinkOptions.PATH, tempFile.getAbsolutePath());
     this.conf.setString(FlinkOptions.TABLE_NAME, "t1");
     StreamerUtil.initTableIfNotExists(this.conf);
+  }
+
+  @Test
+  void testRequiredOptionsForSource() {
+    // miss pk and pre combine key will throw exception
+    TableSchema schema1 = TableSchema.builder()
+            .field("f0", DataTypes.INT().notNull())
+            .field("f1", DataTypes.VARCHAR(20))
+            .field("f2", DataTypes.TIMESTAMP(3))
+            .build();
+    final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema1, "f2");
+    assertThrows(ValidationException.class, () -> new HoodieTableFactory().createDynamicTableSource(sourceContext1));
+    assertThrows(ValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext1));
+
+    // given the pk and miss the pre combine key will throw exception
+    TableSchema schema2 = TableSchema.builder()
+            .field("f0", DataTypes.INT().notNull())
+            .field("f1", DataTypes.VARCHAR(20))
+            .field("f2", DataTypes.TIMESTAMP(3))
+            .primaryKey("f0")
+            .build();
+    final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema2, "f2");
+    assertThrows(ValidationException.class, () -> new HoodieTableFactory().createDynamicTableSource(sourceContext2));
+    assertThrows(ValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext2));
+
+    // given pk and pre combine key will be ok
+    TableSchema schema3 = TableSchema.builder()
+            .field("f0", DataTypes.INT().notNull())
+            .field("f1", DataTypes.VARCHAR(20))
+            .field("f2", DataTypes.TIMESTAMP(3))
+            .field("ts", DataTypes.TIMESTAMP(3))
+            .primaryKey("f0")
+            .build();
+    final MockContext sourceContext3 = MockContext.getInstance(this.conf, schema3, "f2");
+
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext3));
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext3));
   }
 
   @Test
