@@ -38,6 +38,11 @@ import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.sql.Date;
+import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
@@ -49,7 +54,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
  */
 public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
   public enum TimestampType implements Serializable {
-    UNIX_TIMESTAMP, DATE_STRING, MIXED, EPOCHMILLISECONDS, SCALAR
+    UNIX_TIMESTAMP, DATE_STRING, MIXED, EPOCHMILLISECONDS, SCALAR, DATE, DATETIME
   }
 
   private final TimeUnit timeUnit;
@@ -208,6 +213,14 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
       }
 
       timeMs = inputFormatter.get().parseDateTime(partitionVal.toString()).getMillis();
+    } else if (partitionVal instanceof LocalDate) {
+      timeMs = ((LocalDate) partitionVal).atStartOfDay().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+    } else if (partitionVal instanceof LocalDateTime) {
+      timeMs = ((LocalDateTime) partitionVal).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+    } else if (partitionVal instanceof Date) {
+      timeMs = ((Date) partitionVal).getTime();
+    } else if (partitionVal instanceof Timestamp) {
+      timeMs = ((Timestamp) partitionVal).getTime();
     } else {
       throw new HoodieNotSupportedException(
           "Unexpected type for partition field: " + partitionVal.getClass().getName());

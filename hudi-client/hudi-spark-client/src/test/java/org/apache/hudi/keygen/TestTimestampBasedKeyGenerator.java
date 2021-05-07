@@ -31,12 +31,16 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
 import org.apache.spark.sql.types.StructType;
+import org.joda.time.DateTimeZone;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 import scala.Function1;
 
@@ -377,5 +381,47 @@ public class TestTimestampBasedKeyGenerator {
 
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("04/01/2020", keyGen.getPartitionPath(baseRow));
+  }
+
+  @Test
+  public void test_ExpectsMatch_LogicalType_Date() throws IOException {
+    LocalDate today = LocalDate.now();
+    baseRecord.put("dob", (int) today.toEpochDay());
+    properties = this.getBaseKeyConfig(
+            "DATE",
+            "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ,yyyyMMdd",
+            "",
+            null,
+            "yyyy-MM-dd",
+            DateTimeZone.getDefault().getID());
+
+    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "dob");
+    BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
+    HoodieKey hk1 = keyGen.getKey(baseRecord);
+    Assertions.assertEquals(today.toString(), hk1.getPartitionPath());
+
+    baseRow = genericRecordToRow(baseRecord);
+    assertEquals(today.toString(), keyGen.getPartitionPath(baseRow));
+  }
+
+  @Test
+  public void test_ExpectsMatch_LogicalType_Timestamp() throws IOException {
+    LocalDateTime now = LocalDateTime.now();
+    baseRecord.put("updatedAt", now.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+    properties = this.getBaseKeyConfig(
+            "DATETIME",
+            "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ,yyyyMMdd",
+            "",
+            "UTC",
+            "yyyy-MM-dd",
+            DateTimeZone.getDefault().getID());
+
+    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "updatedAt");
+    BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
+    HoodieKey hk1 = keyGen.getKey(baseRecord);
+    Assertions.assertEquals(now.toLocalDate().toString(), hk1.getPartitionPath());
+
+    baseRow = genericRecordToRow(baseRecord);
+    assertEquals(now.toLocalDate().toString(), keyGen.getPartitionPath(baseRow));
   }
 }

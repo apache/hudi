@@ -21,6 +21,8 @@
   "name": "User",
   "fields": [
     {"name": "field1", "type": ["null", "string"], "default": null},
-    {"name": "createTime", "type": ["null", "long"], "default": null}
+    {"name": "createTime", "type": ["null", "long"], "default": null},
+    {"name": "dob", "type": {"type": "int" ,"logicalType": "date"}},
+    {"name": "updatedAt", "type": {"type": "long", "logicalType": "timestamp-millis"}}
   ]
 }
