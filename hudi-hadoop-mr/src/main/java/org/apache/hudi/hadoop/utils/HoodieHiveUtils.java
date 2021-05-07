@@ -142,7 +142,7 @@ public class HoodieHiveUtils {
    *      (true, validCommit)       -> returns activeTimeline filtered until validCommit
    *      (true, InValidCommit)     -> Raises HoodieIOException
    *      (true, notSet)            -> Raises HoodieIOException
-   *      (false, validCommit)      -> returns compeltedTimeline filtered until validCommit
+   *      (false, validCommit)      -> returns completedTimeline filtered until validCommit
    *      (false, InValidCommit)    -> Raises HoodieIOException
    *      (false or notSet, notSet) -> returns completedTimeline unfiltered
    *
@@ -159,13 +159,11 @@ public class HoodieHiveUtils {
     boolean includePendingCommits = job.getBoolean(String.format(HOODIE_CONSUME_PENDING_COMMITS, tableName), false);
     String maxCommit = job.get(String.format(HOODIE_CONSUME_COMMIT, tableName));
 
-    if (!includePendingCommits) {
-      timeline = timeline.filterCompletedInstants();
-      if (maxCommit == null) {
-        return timeline;
-      }
+    if (!includePendingCommits && maxCommit == null) {
+      return timeline.filterCompletedInstants();
     }
-    return filterIfInstantExists(tableName, timeline, maxCommit);
+
+    return filterIfInstantExists(tableName, includePendingCommits ? timeline : timeline.filterCompletedInstants(), maxCommit);
   }
 
   private static HoodieTimeline filterIfInstantExists(String tableName, HoodieTimeline timeline, String maxCommit) {
