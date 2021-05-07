@@ -31,6 +31,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -76,14 +77,17 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
     List<String> commitFileNames = Arrays.asList(HoodieTimeline.makeCommitFileName(commitTime), HoodieTimeline.makeInflightCommitFileName(commitTime),
         HoodieTimeline.makeRequestedCommitFileName(commitTime));
     for (String name : commitFileNames) {
-      Path commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + name);
-      try (FSDataOutputStream os = FSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
-        // Generate commitMetadata
-        HoodieCommitMetadata commitMetadata =
-            generateCommitMetadata(basePath, commitTime, fileId1, fileId2, writes, updates);
-        // Write empty commit metadata
-        os.writeBytes(new String(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-      }
+      HoodieCommitMetadata commitMetadata =
+              generateCommitMetadata(basePath, commitTime, fileId1, fileId2, writes, updates);
+      String content = commitMetadata.toJsonString();
+      createFileWithMetadata(basePath, configuration, name, content);
+    }
+  }
+
+  static void createFileWithMetadata(String basePath, Configuration configuration, String name, String content) throws IOException {
+    Path commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + name);
+    try (FSDataOutputStream os = FSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
+      os.writeBytes(new String(content.getBytes(StandardCharsets.UTF_8)));
     }
   }
 
@@ -133,4 +137,5 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
     }));
     return metadata;
   }
+
 }

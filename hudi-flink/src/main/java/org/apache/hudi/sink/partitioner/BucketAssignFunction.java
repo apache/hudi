@@ -37,17 +37,18 @@ import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.api.common.state.MapState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.runtime.state.CheckpointListener;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
+import org.apache.flink.table.runtime.util.StateTtlConfigUtil;
 import org.apache.flink.util.Collector;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -127,6 +128,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     this.bucketAssigner = BucketAssigners.create(
         getRuntimeContext().getIndexOfThisSubtask(),
         getRuntimeContext().getNumberOfParallelSubtasks(),
+        WriteOperationType.isOverwrite(WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION))),
         HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)),
         context,
         writeConfig);
@@ -144,6 +146,10 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
             "indexState",
             TypeInformation.of(HoodieKey.class),
             TypeInformation.of(HoodieRecordLocation.class));
+    double ttl = conf.getDouble(FlinkOptions.INDEX_STATE_TTL) * 24 * 60 * 60 * 1000;
+    if (ttl > 0) {
+      indexStateDesc.enableTimeToLive(StateTtlConfigUtil.createTtlConfig((long) ttl));
+    }
     indexState = context.getKeyedStateStore().getMapState(indexStateDesc);
     if (bootstrapIndex) {
       MapStateDescriptor<String, Integer> partitionLoadStateDesc =
@@ -190,7 +196,9 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
         default:
           throw new AssertionError();
       }
-      this.indexState.put(hoodieKey, location);
+      if (isChangingRecords) {
+        this.indexState.put(hoodieKey, location);
+      }
     }
     record.unseal();
     record.setCurrentLocation(location);

@@ -36,6 +36,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 
 import scala.Function1;
 
@@ -116,6 +117,13 @@ public class TestTimestampBasedKeyGenerator {
     TimestampBasedKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
     assertEquals("2020-01-06 12", hk1.getPartitionPath());
+
+    // timezone is GMT+8:00, createTime is BigDecimal
+    baseRecord.put("createTime", new BigDecimal(1578283932000.00001));
+    properties = getBaseKeyConfig("EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT+8:00", null);
+    keyGen = new TimestampBasedKeyGenerator(properties);
+    HoodieKey bigDecimalKey = keyGen.getKey(baseRecord);
+    assertEquals("2020-01-06 12", bigDecimalKey.getPartitionPath());
 
     // test w/ Row
     baseRow = genericRecordToRow(baseRecord);
@@ -200,6 +208,13 @@ public class TestTimestampBasedKeyGenerator {
     // test w/ Row
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("1970-01-02 12", keyGen.getPartitionPath(baseRow));
+
+    // timezone is GMT. number of days store integer in mysql
+    baseRecord.put("createTime", 18736);
+    properties = getBaseKeyConfig("SCALAR", "yyyy-MM-dd", "GMT", "DAYS");
+    keyGen = new TimestampBasedKeyGenerator(properties);
+    HoodieKey scalarSecondsKey = keyGen.getKey(baseRecord);
+    assertEquals("2021-04-19", scalarSecondsKey.getPartitionPath());
 
   }
 

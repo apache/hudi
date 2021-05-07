@@ -353,6 +353,9 @@ object DataSourceWriteOptions {
   val HIVE_IGNORE_EXCEPTIONS_OPT_KEY = "hoodie.datasource.hive_sync.ignore_exceptions"
   val HIVE_SKIP_RO_SUFFIX = "hoodie.datasource.hive_sync.skip_ro_suffix"
   val HIVE_SUPPORT_TIMESTAMP = "hoodie.datasource.hive_sync.support_timestamp"
+  val HIVE_TABLE_PROPERTIES = "hoodie.datasource.hive_sync.table_properties"
+  val HIVE_TABLE_SERDE_PROPERTIES = "hoodie.datasource.hive_sync.serde_properties"
+  val HIVE_SYNC_AS_DATA_SOURCE_TABLE = "hoodie.datasource.hive_sync.sync_as_datasource"
 
   // DEFAULT FOR HIVE SPECIFIC CONFIGS
   val DEFAULT_HIVE_SYNC_ENABLED_OPT_VAL = "false"
@@ -372,6 +375,7 @@ object DataSourceWriteOptions {
   val DEFAULT_HIVE_IGNORE_EXCEPTIONS_OPT_KEY = "false"
   val DEFAULT_HIVE_SKIP_RO_SUFFIX_VAL = "false"
   val DEFAULT_HIVE_SUPPORT_TIMESTAMP = "false"
+  val DEFAULT_HIVE_SYNC_AS_DATA_SOURCE_TABLE = "true"
 
   // Async Compaction - Enabled by default for MOR
   val ASYNC_COMPACT_ENABLE_OPT_KEY = "hoodie.datasource.compaction.async.enable"

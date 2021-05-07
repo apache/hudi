@@ -19,9 +19,11 @@
 package org.apache.hudi.source;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -29,7 +31,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.table.format.mor.InstantRange;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -190,7 +191,7 @@ public class StreamReadMonitoringFunction
       LOG.warn("No splits found for the table under path " + path);
       return;
     }
-    List<HoodieInstant> instants = getUncompactedInstants(commitTimeline, this.issuedInstant);
+    List<HoodieInstant> instants = filterInstantsWithStart(commitTimeline, this.issuedInstant);
     // get the latest instant that satisfies condition
     final HoodieInstant instantToIssue = instants.size() == 0 ? null : instants.get(instants.size() - 1);
     final InstantRange instantRange;
@@ -238,8 +239,9 @@ public class StreamReadMonitoringFunction
               .sorted(HoodieLogFile.getLogFileComparator())
               .map(logFile -> logFile.getPath().toString())
               .collect(Collectors.toList()));
+          String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
           return new MergeOnReadInputSplit(cnt.getAndAdd(1),
-              null, logPaths, commitToIssue,
+              basePath, logPaths, commitToIssue,
               metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, instantRange);
         }).collect(Collectors.toList()))
         .flatMap(Collection::stream)
@@ -295,29 +297,26 @@ public class StreamReadMonitoringFunction
   }
 
   /**
-   * Returns the uncompacted instants with a given issuedInstant to start from.
+   * Returns the instants with a given issuedInstant to start from.
    *
    * @param commitTimeline The completed commits timeline
    * @param issuedInstant  The last issued instant that has already been delivered to downstream
    * @return the filtered hoodie instants
    */
-  private List<HoodieInstant> getUncompactedInstants(
+  private List<HoodieInstant> filterInstantsWithStart(
       HoodieTimeline commitTimeline,
       final String issuedInstant) {
     if (issuedInstant != null) {
       return commitTimeline.getInstants()
-          .filter(s -> !s.getAction().equals(HoodieTimeline.COMPACTION_ACTION))
           .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN, issuedInstant))
           .collect(Collectors.toList());
     } else if (this.conf.getOptional(FlinkOptions.READ_STREAMING_START_COMMIT).isPresent()) {
       String definedStartCommit = this.conf.get(FlinkOptions.READ_STREAMING_START_COMMIT);
       return commitTimeline.getInstants()
-          .filter(s -> !s.getAction().equals(HoodieTimeline.COMPACTION_ACTION))
           .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN_OR_EQUALS, definedStartCommit))
           .collect(Collectors.toList());
     } else {
       return commitTimeline.getInstants()
-          .filter(s -> !s.getAction().equals(HoodieTimeline.COMPACTION_ACTION))
           .collect(Collectors.toList());
     }
   }
@@ -349,14 +348,26 @@ public class StreamReadMonitoringFunction
 
   private List<FileStatus> getWritePathsOfInstant(HoodieCommitMetadata metadata, FileSystem fs) {
     return metadata.getFileIdAndFullPaths(path.toString()).values().stream()
-        .map(path -> {
+        .map(org.apache.hadoop.fs.Path::new)
+        // filter out the file paths that does not exist, some files may be cleaned by
+        // the cleaner.
+        .filter(path -> {
           try {
-            return fs.getFileStatus(new org.apache.hadoop.fs.Path(path));
+            return fs.exists(path);
+          } catch (IOException e) {
+            LOG.error("Checking exists of path: {} error", path);
+            throw new HoodieException(e);
+          }
+        }).map(path -> {
+          try {
+            return fs.getFileStatus(path);
           } catch (IOException e) {
             LOG.error("Get write status of path: {} error", path);
             throw new HoodieException(e);
           }
         })
+        // filter out crushed files
+        .filter(fileStatus -> fileStatus.getLen() > 0)
         .collect(Collectors.toList());
   }
 

@@ -81,8 +81,10 @@ public class MetadataConversionUtils {
         break;
       }
       case HoodieTimeline.ROLLBACK_ACTION: {
-        archivedMetaWrapper.setHoodieRollbackMetadata(TimelineMetadataUtils.deserializeAvroMetadata(
-                metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieRollbackMetadata.class));
+        if (hoodieInstant.isCompleted()) {
+          archivedMetaWrapper.setHoodieRollbackMetadata(TimelineMetadataUtils.deserializeAvroMetadata(
+                  metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieRollbackMetadata.class));
+        }
         archivedMetaWrapper.setActionType(ActionType.rollback.name());
         break;
       }

@@ -20,6 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
+import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
@@ -119,6 +120,42 @@ public class TestHoodieTableFactory {
     final Configuration conf2 = tableSource2.getConf();
     assertThat(conf2.get(FlinkOptions.RECORD_KEY_FIELD), is("f0,f1"));
     assertThat(conf2.get(FlinkOptions.KEYGEN_CLASS), is(ComplexAvroKeyGenerator.class.getName()));
+
+    // definition with complex primary keys and empty partition paths
+    this.conf.setString(FlinkOptions.KEYGEN_CLASS, FlinkOptions.KEYGEN_CLASS.defaultValue());
+    final MockContext sourceContext3 = MockContext.getInstance(this.conf, schema2, "");
+    final HoodieTableSource tableSource3 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext3);
+    final Configuration conf3 = tableSource3.getConf();
+    assertThat(conf3.get(FlinkOptions.RECORD_KEY_FIELD), is("f0,f1"));
+    assertThat(conf3.get(FlinkOptions.KEYGEN_CLASS), is(NonpartitionedAvroKeyGenerator.class.getName()));
+  }
+
+  @Test
+  void testSetupCleaningOptionsForSource() {
+    // definition with simple primary key and partition path
+    TableSchema schema1 = TableSchema.builder()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .primaryKey("f0")
+        .build();
+    // set up new retains commits that is less than min archive commits
+    this.conf.setString(FlinkOptions.CLEAN_RETAIN_COMMITS.key(), "11");
+
+    final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema1, "f2");
+    final HoodieTableSource tableSource1 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext1);
+    final Configuration conf1 = tableSource1.getConf();
+    assertThat(conf1.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), is(20));
+    assertThat(conf1.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS), is(30));
+
+    // set up new retains commits that is greater than min archive commits
+    this.conf.setString(FlinkOptions.CLEAN_RETAIN_COMMITS.key(), "25");
+
+    final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema1, "f2");
+    final HoodieTableSource tableSource2 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext2);
+    final Configuration conf2 = tableSource2.getConf();
+    assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), is(35));
+    assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS), is(45));
   }
 
   @Test
@@ -167,6 +204,42 @@ public class TestHoodieTableFactory {
     final Configuration conf2 = tableSink2.getConf();
     assertThat(conf2.get(FlinkOptions.RECORD_KEY_FIELD), is("f0,f1"));
     assertThat(conf2.get(FlinkOptions.KEYGEN_CLASS), is(ComplexAvroKeyGenerator.class.getName()));
+
+    // definition with complex primary keys and empty partition paths
+    this.conf.setString(FlinkOptions.KEYGEN_CLASS, FlinkOptions.KEYGEN_CLASS.defaultValue());
+    final MockContext sinkContext3 = MockContext.getInstance(this.conf, schema2, "");
+    final HoodieTableSink tableSink3 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sinkContext3);
+    final Configuration conf3 = tableSink3.getConf();
+    assertThat(conf3.get(FlinkOptions.RECORD_KEY_FIELD), is("f0,f1"));
+    assertThat(conf3.get(FlinkOptions.KEYGEN_CLASS), is(NonpartitionedAvroKeyGenerator.class.getName()));
+  }
+
+  @Test
+  void testSetupCleaningOptionsForSink() {
+    // definition with simple primary key and partition path
+    TableSchema schema1 = TableSchema.builder()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .primaryKey("f0")
+        .build();
+    // set up new retains commits that is less than min archive commits
+    this.conf.setString(FlinkOptions.CLEAN_RETAIN_COMMITS.key(), "11");
+
+    final MockContext sinkContext1 = MockContext.getInstance(this.conf, schema1, "f2");
+    final HoodieTableSink tableSink1 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sinkContext1);
+    final Configuration conf1 = tableSink1.getConf();
+    assertThat(conf1.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), is(20));
+    assertThat(conf1.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS), is(30));
+
+    // set up new retains commits that is greater than min archive commits
+    this.conf.setString(FlinkOptions.CLEAN_RETAIN_COMMITS.key(), "25");
+
+    final MockContext sinkContext2 = MockContext.getInstance(this.conf, schema1, "f2");
+    final HoodieTableSink tableSink2 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sinkContext2);
+    final Configuration conf2 = tableSink2.getConf();
+    assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), is(35));
+    assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS), is(45));
   }
 
   // -------------------------------------------------------------------------

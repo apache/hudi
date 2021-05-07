@@ -72,6 +72,17 @@ public class InputFormatTestUtil {
         commitNumber);
   }
 
+  public static File prepareMultiPartitionTable(java.nio.file.Path basePath, HoodieFileFormat baseFileFormat, int numberOfFiles,
+                                  String commitNumber, String finalLevelPartitionName)
+      throws IOException {
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+        baseFileFormat);
+    java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", finalLevelPartitionName));
+    Files.createDirectories(partitionPath);
+    return simulateInserts(partitionPath.toFile(), baseFileFormat.getFileExtension(), "fileId1" + finalLevelPartitionName, numberOfFiles,
+        commitNumber);
+  }
+
   public static File simulateInserts(File partitionPath, String baseFileExtension, String fileId, int numberOfFiles,
                                      String commitNumber)
       throws IOException {
