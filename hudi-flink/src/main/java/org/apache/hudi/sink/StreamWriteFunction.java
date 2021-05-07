@@ -33,7 +33,6 @@ import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
@@ -92,7 +91,7 @@ import java.util.function.BiFunction;
  */
 public class StreamWriteFunction<K, I, O>
     extends KeyedProcessFunction<K, I, O>
-    implements CheckpointedFunction, CheckpointListener {
+    implements CheckpointedFunction {
 
   private static final long serialVersionUID = 1L;
 
@@ -179,11 +178,6 @@ public class StreamWriteFunction<K, I, O>
       this.writeClient.cleanHandles();
       this.writeClient.close();
     }
-  }
-
-  @Override
-  public void notifyCheckpointComplete(long checkpointId) {
-    this.writeClient.cleanHandles();
   }
 
   /**
@@ -390,6 +384,7 @@ public class StreamWriteFunction<K, I, O>
         .build();
     this.eventGateway.sendEventToCoordinator(event);
     this.buckets.clear();
+    this.writeClient.cleanHandles();
     this.currentInstant = "";
   }
 }
