@@ -42,19 +42,19 @@
     <module>hudi-spark-datasource</module>
     <module>hudi-timeline-service</module>
     <module>hudi-sync</module>
+    <module>hudi-flink</module>
+    <module>hudi-utilities</module>
     <module>packaging/hudi-hadoop-mr-bundle</module>
     <module>packaging/hudi-hive-sync-bundle</module>
     <module>packaging/hudi-spark-bundle</module>
     <module>packaging/hudi-presto-bundle</module>
     <module>packaging/hudi-utilities-bundle</module>
     <module>packaging/hudi-timeline-server-bundle</module>
-    <module>docker/hoodie/hadoop</module>
-    <module>hudi-integ-test</module>
-    <module>packaging/hudi-integ-test-bundle</module>
-    <module>hudi-examples</module>
-    <module>hudi-flink</module>
     <module>packaging/hudi-flink-bundle</module>
-    <module>hudi-utilities</module>
+<!--    <module>docker/hoodie/hadoop</module>-->
+<!--    <module>hudi-integ-test</module>-->
+<!--    <module>packaging/hudi-integ-test-bundle</module>-->
+    <module>hudi-examples</module>
   </modules>
 
   <licenses>
