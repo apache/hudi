@@ -87,8 +87,9 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
    * Use the fileId + "-" + rollNumber as the new fileId of a mini-batch write.
    */
   protected String generatesDataFileNameWithRollover() {
-    final String fileID = this.fileId + "-" + rollNumber;
-    return FSUtils.makeDataFileName(instantTime, writeToken, fileID, hoodieTable.getBaseFileExtension());
+    // make the intermediate file as hidden
+    return FSUtils.makeDataFileName("." + instantTime,
+        writeToken + "-" + rollNumber, this.fileId, hoodieTable.getBaseFileExtension());
   }
 
   public boolean shouldRollover() {
@@ -193,13 +194,8 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
         throw new HoodieIOException("Error when clean the temporary roll file: " + path, e);
       }
     }
-    Path lastPath = rolloverPaths.size() > 0
-        ? rolloverPaths.get(rolloverPaths.size() - 1)
-        : newFilePath;
-    String newFileName = generatesDataFileName();
-    String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
-        + newFileName).toString();
-    final Path desiredPath = new Path(config.getBasePath(), relativePath);
+    final Path lastPath = rolloverPaths.get(rolloverPaths.size() - 1);
+    final Path desiredPath = rolloverPaths.get(0);
     try {
       fs.rename(lastPath, desiredPath);
     } catch (IOException e) {
