@@ -33,10 +33,6 @@
   <artifactId>hudi-utilities-flink_${scala.binary.version}</artifactId>
   <packaging>jar</packaging>
 
-  <properties>
-    <maven.compiler.source>8</maven.compiler.source>
-    <maven.compiler.target>8</maven.compiler.target>
-  </properties>
   <dependencies>
     <!-- Flink Dependencies -->
     <dependency>
