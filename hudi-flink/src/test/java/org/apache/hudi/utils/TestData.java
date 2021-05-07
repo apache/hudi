@@ -18,17 +18,6 @@
 
 package org.apache.hudi.utils;
 
-import org.apache.hudi.client.FlinkTaskContextSupplier;
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
-import org.apache.hudi.table.HoodieFlinkTable;
-
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.configuration.Configuration;
@@ -48,6 +37,16 @@ import org.apache.flink.types.Row;
 import org.apache.flink.types.RowKind;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.client.FlinkTaskContextSupplier;
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
+import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.parquet.Strings;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.hadoop.ParquetReader;
@@ -55,13 +54,7 @@ import org.apache.parquet.hadoop.ParquetReader;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Properties;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -71,7 +64,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Data set for testing, also some utilities to check the results. */
+/**
+ * Data set for testing, also some utilities to check the results.
+ */
 public class TestData {
   public static List<RowData> DATA_SET_INSERT = Arrays.asList(
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
@@ -115,12 +110,6 @@ public class TestData {
   );
 
   public static List<RowData> DATA_SET_INSERT_DUPLICATES = new ArrayList<>();
-  static {
-    IntStream.range(0, 5).forEach(i -> DATA_SET_INSERT_DUPLICATES.add(
-        insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
-            TimestampData.fromEpochMillis(1), StringData.fromString("par1"))));
-  }
-
   // data set of test_source.data
   public static List<RowData> DATA_SET_SOURCE_INSERT = Arrays.asList(
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
@@ -140,7 +129,6 @@ public class TestData {
       insertRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
           TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
   );
-
   // merged data set of test_source.data and test_source_2.data
   public static List<RowData> DATA_SET_SOURCE_MERGED = Arrays.asList(
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
@@ -166,7 +154,6 @@ public class TestData {
       insertRow(StringData.fromString("id11"), StringData.fromString("Phoebe"), 52,
           TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
   );
-
   // data set of test_source.data with partition 'par1' overwrite
   public static List<RowData> DATA_SET_SOURCE_INSERT_OVERWRITE = Arrays.asList(
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
@@ -186,7 +173,6 @@ public class TestData {
       insertRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
           TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
   );
-
   public static List<RowData> DATA_SET_UPDATE_DELETE = Arrays.asList(
       // this is update
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
@@ -203,6 +189,12 @@ public class TestData {
           TimestampData.fromEpochMillis(6), StringData.fromString("par3"))
   );
 
+  static {
+    IntStream.range(0, 5).forEach(i -> DATA_SET_INSERT_DUPLICATES.add(
+        insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+            TimestampData.fromEpochMillis(1), StringData.fromString("par1"))));
+  }
+
   /**
    * Returns string format of a list of RowData.
    */
@@ -218,8 +210,8 @@ public class TestData {
   /**
    * Write a list of row data with Hoodie format base on the given configuration.
    *
-   * @param dataBuffer  The data buffer to write
-   * @param conf        The flink configuration
+   * @param dataBuffer The data buffer to write
+   * @param conf       The flink configuration
    * @throws Exception if error occurs
    */
   public static void writeData(
@@ -356,8 +348,8 @@ public class TestData {
    *
    * <p>Note: Replace it with the Flink reader when it is supported.
    *
-   * @param basePath   The file base to check, should be a directory
-   * @param expected   The expected results mapping, the key should be the partition path
+   * @param basePath The file base to check, should be a directory
+   * @param expected The expected results mapping, the key should be the partition path
    */
   public static void checkWrittenFullData(
       File basePath,
@@ -401,12 +393,12 @@ public class TestData {
    *
    * <p>Note: Replace it with the Flink reader when it is supported.
    *
-   * @param fs         The file system
+   * @param fs            The file system
    * @param latestInstant The latest committed instant of current table
-   * @param baseFile   The file base to check, should be a directory
-   * @param expected   The expected results mapping, the key should be the partition path
-   * @param partitions The expected partition number
-   * @param schema     The read schema
+   * @param baseFile      The file base to check, should be a directory
+   * @param expected      The expected results mapping, the key should be the partition path
+   * @param partitions    The expected partition number
+   * @param schema        The read schema
    */
   public static void checkWrittenDataMOR(
       FileSystem fs,
@@ -435,7 +427,7 @@ public class TestData {
               GenericRecord record = (GenericRecord) hoodieRecord.getData()
                   .getInsertValue(schema, new Properties())
                   .orElse(null);
-              return record == null ? (String) null : filterOutVariables(record);
+              return record == null ? null : filterOutVariables(record);
             } catch (IOException e) {
               throw new RuntimeException(e);
             }

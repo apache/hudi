@@ -26,14 +26,47 @@
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
     <version>0.9.0-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
-  <artifactId>hudi-utilities</artifactId>
-  <packaging>pom</packaging>
+  <artifactId>hudi-utilities-flink_${scala.binary.version}</artifactId>
+  <packaging>jar</packaging>
 
-  <modules>
-    <module>hudi-utilities-spark</module>
-    <module>hudi-utilities-flink</module>
-  </modules>
+  <properties>
+    <maven.compiler.source>8</maven.compiler.source>
+    <maven.compiler.target>8</maven.compiler.target>
+  </properties>
+  <dependencies>
+    <!-- Flink Dependencies -->
+    <dependency>
+      <groupId>org.apache.flink</groupId>
+      <artifactId>flink-json</artifactId>
+      <version>${flink.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.flink</groupId>
+      <artifactId>flink-table-runtime-blink_${scala.binary.version}</artifactId>
+      <version>${flink.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.flink</groupId>
+      <artifactId>flink-connector-kafka_${scala.binary.version}</artifactId>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.kafka</groupId>
+      <artifactId>kafka-clients</artifactId>
+      <version>${kafka.version}</version>
+    </dependency>
+
+
+    <!--   Hoodie Dependencies -->
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-flink_2.11</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+  </dependencies>
 </project>

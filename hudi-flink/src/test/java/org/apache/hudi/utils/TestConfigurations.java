@@ -19,7 +19,6 @@
 package org.apache.hudi.utils;
 
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 import org.apache.hudi.utils.factory.ContinuousFileSourceFactory;
 
@@ -140,15 +139,4 @@ public class TestConfigurations {
     return conf;
   }
 
-  public static FlinkStreamerConfig getDefaultStreamerConf(String tablePath) {
-    FlinkStreamerConfig streamerConf = new FlinkStreamerConfig();
-    streamerConf.targetBasePath = tablePath;
-    streamerConf.readSchemaFilePath = Objects.requireNonNull(Thread.currentThread()
-        .getContextClassLoader().getResource("test_read_schema.avsc")).toString();
-    streamerConf.targetTableName = "TestHoodieTable";
-    streamerConf.partitionPathField = "partition";
-    streamerConf.tableType = "COPY_ON_WRITE";
-    streamerConf.checkpointInterval = 4000L;
-    return streamerConf;
-  }
 }

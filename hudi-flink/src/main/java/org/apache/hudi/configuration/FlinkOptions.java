@@ -25,8 +25,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-import org.apache.hudi.streamer.FlinkStreamerConfig;
-import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
@@ -472,37 +470,6 @@ public class FlinkOptions {
 
   // Prefix for Hoodie specific properties.
   private static final String PROPERTIES_PREFIX = "properties.";
-
-  /**
-   * Transforms a {@code HoodieFlinkStreamer.Config} into {@code Configuration}.
-   * The latter is more suitable for the table APIs. It reads all the properties
-   * in the properties file (set by `--props` option) and cmd line options
-   * (set by `--hoodie-conf` option).
-   */
-  @SuppressWarnings("unchecked, rawtypes")
-  public static org.apache.flink.configuration.Configuration fromStreamerConfig(FlinkStreamerConfig config) {
-    Map<String, String> propsMap = new HashMap<String, String>((Map) StreamerUtil.getProps(config));
-    org.apache.flink.configuration.Configuration conf = fromMap(propsMap);
-
-    conf.setString(FlinkOptions.PATH, config.targetBasePath);
-    conf.setString(READ_AVRO_SCHEMA_PATH, config.readSchemaFilePath);
-    conf.setString(FlinkOptions.TABLE_NAME, config.targetTableName);
-    // copy_on_write works same as COPY_ON_WRITE
-    conf.setString(FlinkOptions.TABLE_TYPE, config.tableType.toUpperCase());
-    conf.setString(FlinkOptions.OPERATION, config.operation.value());
-    conf.setString(FlinkOptions.PRECOMBINE_FIELD, config.sourceOrderingField);
-    conf.setString(FlinkOptions.PAYLOAD_CLASS, config.payloadClassName);
-    conf.setBoolean(FlinkOptions.INSERT_DROP_DUPS, config.filterDupes);
-    conf.setInteger(FlinkOptions.RETRY_TIMES, Integer.parseInt(config.instantRetryTimes));
-    conf.setLong(FlinkOptions.RETRY_INTERVAL_MS, Long.parseLong(config.instantRetryInterval));
-    conf.setBoolean(FlinkOptions.IGNORE_FAILED, config.commitOnErrors);
-    conf.setString(FlinkOptions.RECORD_KEY_FIELD, config.recordKeyField);
-    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, config.partitionPathField);
-    conf.setString(FlinkOptions.KEYGEN_CLASS, config.keygenClass);
-    conf.setInteger(FlinkOptions.WRITE_TASKS, config.writeTaskNum);
-
-    return conf;
-  }
 
   /**
    * Collects the config options that start with 'properties.' into a 'key'='value' list.

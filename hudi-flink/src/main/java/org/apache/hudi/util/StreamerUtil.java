@@ -26,12 +26,8 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
@@ -39,22 +35,17 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.keygen.KeyGenerator;
-import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
-import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.util.Preconditions;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,7 +56,6 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.Properties;
 
 /**
@@ -75,26 +65,6 @@ public class StreamerUtil {
   private static final String DEFAULT_ARCHIVE_LOG_FOLDER = "archived";
 
   private static final Logger LOG = LoggerFactory.getLogger(StreamerUtil.class);
-
-  public static TypedProperties appendKafkaProps(FlinkStreamerConfig config) {
-    TypedProperties properties = getProps(config);
-    properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.kafkaBootstrapServers);
-    properties.put(ConsumerConfig.GROUP_ID_CONFIG, config.kafkaGroupId);
-    return properties;
-  }
-
-  public static TypedProperties getProps(FlinkStreamerConfig cfg) {
-    if (cfg.propsFilePath.isEmpty()) {
-      return new TypedProperties();
-    }
-    return readConfig(
-        FSUtils.getFs(cfg.propsFilePath, getHadoopConf()),
-        new Path(cfg.propsFilePath), cfg.configs).getConfig();
-  }
-
-  public static Schema getSourceSchema(FlinkStreamerConfig cfg) {
-    return new FilebasedSchemaProvider(FlinkOptions.fromStreamerConfig(cfg)).getSourceSchema();
-  }
 
   public static Schema getSourceSchema(org.apache.flink.configuration.Configuration conf) {
     if (conf.getOptional(FlinkOptions.READ_AVRO_SCHEMA_PATH).isPresent()) {
@@ -143,22 +113,6 @@ public class StreamerUtil {
    * Create a key generator class via reflection, passing in any configs needed.
    * <p>
    * If the class name of key generator is configured through the properties file, i.e., {@code props}, use the corresponding key generator class; otherwise, use the default key generator class
-   * specified in {@code DataSourceWriteOptions}.
-   */
-  public static KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
-    String keyGeneratorClass = props.getString("hoodie.datasource.write.keygenerator.class",
-        SimpleAvroKeyGenerator.class.getName());
-    try {
-      return (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);
-    } catch (Throwable e) {
-      throw new IOException("Could not load key generator class " + keyGeneratorClass, e);
-    }
-  }
-
-  /**
-   * Create a key generator class via reflection, passing in any configs needed.
-   * <p>
-   * If the class name of key generator is configured through the properties file, i.e., {@code props}, use the corresponding key generator class; otherwise, use the default key generator class
    * specified in {@link FlinkOptions}.
    */
   public static KeyGenerator createKeyGenerator(Configuration conf) throws IOException {
@@ -168,23 +122,6 @@ public class StreamerUtil {
     } catch (Throwable e) {
       throw new IOException("Could not load key generator class " + keyGeneratorClass, e);
     }
-  }
-
-  /**
-   * Create a payload class via reflection, passing in an ordering/precombine value.
-   */
-  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Comparable orderingVal)
-      throws IOException {
-    try {
-      return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[] {GenericRecord.class, Comparable.class}, record, orderingVal);
-    } catch (Throwable e) {
-      throw new IOException("Could not create payload for class: " + payloadClass, e);
-    }
-  }
-
-  public static HoodieWriteConfig getHoodieClientConfig(FlinkStreamerConfig conf) {
-    return getHoodieClientConfig(FlinkOptions.fromStreamerConfig(conf));
   }
 
   public static HoodieWriteConfig getHoodieClientConfig(Configuration conf) {
@@ -281,27 +218,6 @@ public class StreamerUtil {
   /** Generates the bucket ID using format {partition path}_{fileID}. */
   public static String generateBucketKey(String partitionPath, String fileId) {
     return String.format("%s_%s", partitionPath, fileId);
-  }
-
-  /** Returns whether the location represents an insert. */
-  public static boolean isInsert(HoodieRecordLocation loc) {
-    return Objects.equals(loc.getInstantTime(), "I");
-  }
-
-  public static String getTablePath(FileSystem fs, Path[] userProvidedPaths) throws IOException {
-    LOG.info("Getting table path..");
-    for (Path path : userProvidedPaths) {
-      try {
-        Option<Path> tablePath = TablePathUtils.getTablePath(fs, path);
-        if (tablePath.isPresent()) {
-          return tablePath.get().toString();
-        }
-      } catch (HoodieException he) {
-        LOG.warn("Error trying to get table path from " + path.toString(), he);
-      }
-    }
-
-    throw new TableNotFoundException("Unable to find a hudi table for the user provided paths.");
   }
 
   /**
