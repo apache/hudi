@@ -434,7 +434,14 @@ object HoodieSparkSqlWriter {
       DataSourceWriteOptions.DEFAULT_HIVE_SYNC_AS_DATA_SOURCE_TABLE).toBoolean
     if (syncAsDtaSourceTable) {
       hiveSyncConfig.tableProperties = parameters.getOrElse(HIVE_TABLE_PROPERTIES, null)
-      hiveSyncConfig.serdeProperties = createSqlTableSerdeProperties(parameters, basePath.toString)
+      val serdePropText = createSqlTableSerdeProperties(parameters, basePath.toString)
+      val serdeProp = ConfigUtils.toMap(serdePropText)
+      serdeProp.put(ConfigUtils.SPARK_QUERY_TYPE_KEY, DataSourceReadOptions.QUERY_TYPE_OPT_KEY)
+      serdeProp.put(ConfigUtils.SPARK_QUERY_AS_RO_KEY, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
+      serdeProp.put(ConfigUtils.SPARK_QUERY_AS_RT_KEY, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+
+      hiveSyncConfig.serdeProperties = ConfigUtils.configToString(serdeProp)
+
     }
     hiveSyncConfig
   }

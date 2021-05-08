@@ -264,11 +264,15 @@ public class TestHiveSyncTool {
 
   @ParameterizedTest
   @MethodSource({"useJdbcAndSchemaFromCommitMetadata"})
-  public void testSyncWithProperties(boolean useJdbc, boolean useSchemaFromCommitMetadata) throws Exception {
+  public void testSyncCOWTableWithProperties(boolean useJdbc,
+                                             boolean useSchemaFromCommitMetadata) throws Exception {
     HiveSyncConfig hiveSyncConfig = HiveTestUtil.hiveSyncConfig;
     Map<String, String> serdeProperties = new HashMap<String, String>() {
       {
         put("path", hiveSyncConfig.basePath);
+        put(ConfigUtils.SPARK_QUERY_TYPE_KEY, "hoodie.datasource.query.type");
+        put(ConfigUtils.SPARK_QUERY_AS_RO_KEY, "read_optimized");
+        put(ConfigUtils.SPARK_QUERY_AS_RT_KEY, "snapshot");
       }
     };
 
@@ -304,10 +308,79 @@ public class TestHiveSyncTool {
     assertTrue(results.get(results.size() - 1).startsWith("transient_lastDdlTime"));
 
     results.clear();
+    // validate serde properties
     hiveDriver.run("SHOW CREATE TABLE " + dbTableName);
     hiveDriver.getResults(results);
     String ddl = String.join("\n", results);
     assertTrue(ddl.contains("'path'='" + hiveSyncConfig.basePath + "'"));
+    assertTrue(ddl.contains("'hoodie.datasource.query.type'='snapshot'"));
+  }
+
+  @ParameterizedTest
+  @MethodSource({"useJdbcAndSchemaFromCommitMetadata"})
+  public void testSyncMORTableWithProperties(boolean useJdbc,
+                                             boolean useSchemaFromCommitMetadata) throws Exception {
+    HiveSyncConfig hiveSyncConfig = HiveTestUtil.hiveSyncConfig;
+    Map<String, String> serdeProperties = new HashMap<String, String>() {
+      {
+        put("path", hiveSyncConfig.basePath);
+        put(ConfigUtils.SPARK_QUERY_TYPE_KEY, "hoodie.datasource.query.type");
+        put(ConfigUtils.SPARK_QUERY_AS_RO_KEY, "read_optimized");
+        put(ConfigUtils.SPARK_QUERY_AS_RT_KEY, "snapshot");
+      }
+    };
+
+    Map<String, String> tableProperties = new HashMap<String, String>() {
+      {
+        put("tp_0", "p0");
+        put("tp_1", "p1");
+      }
+    };
+    hiveSyncConfig.useJdbc = useJdbc;
+    hiveSyncConfig.serdeProperties = ConfigUtils.configToString(serdeProperties);
+    hiveSyncConfig.tableProperties = ConfigUtils.configToString(tableProperties);
+    String instantTime = "100";
+    String deltaCommitTime = "101";
+    HiveTestUtil.createMORTable(instantTime, deltaCommitTime, 5, true,
+        useSchemaFromCommitMetadata);
+
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    tool.syncHoodieTable();
+
+    String roTableName = hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_READ_OPTIMIZED_TABLE;
+    String rtTableName = hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
+
+    String[] tableNames = new String[] {roTableName, rtTableName};
+    String[] expectQueryTypes = new String[] {"read_optimized", "snapshot"};
+
+    SessionState.start(HiveTestUtil.getHiveConf());
+    Driver hiveDriver = new org.apache.hadoop.hive.ql.Driver(HiveTestUtil.getHiveConf());
+
+    for (int i = 0;i < 2; i++) {
+      String dbTableName = hiveSyncConfig.databaseName + "." + tableNames[i];
+      String expectQueryType = expectQueryTypes[i];
+
+      hiveDriver.run("SHOW TBLPROPERTIES " + dbTableName);
+      List<String> results = new ArrayList<>();
+      hiveDriver.getResults(results);
+
+      String tblPropertiesWithoutDdlTime = String.join("\n",
+          results.subList(0, results.size() - 1));
+      assertEquals(
+          "EXTERNAL\tTRUE\n"
+          + "last_commit_time_sync\t101\n"
+          + "tp_0\tp0\n"
+          + "tp_1\tp1", tblPropertiesWithoutDdlTime);
+      assertTrue(results.get(results.size() - 1).startsWith("transient_lastDdlTime"));
+
+      results.clear();
+      // validate serde properties
+      hiveDriver.run("SHOW CREATE TABLE " + dbTableName);
+      hiveDriver.getResults(results);
+      String ddl = String.join("\n", results);
+      assertTrue(ddl.contains("'path'='" + hiveSyncConfig.basePath + "'"));
+      assertTrue(ddl.contains("'hoodie.datasource.query.type'='" + expectQueryType + "'"));
+    }
   }
 
   @ParameterizedTest
