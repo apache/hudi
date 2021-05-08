@@ -27,12 +27,13 @@ import org.apache.avro.LogicalTypes.{TimestampMicros, TimestampMillis}
 import org.apache.avro.Schema.Type._
 import org.apache.avro.generic.GenericData.{Fixed, Record}
 import org.apache.avro.generic.{GenericData, GenericFixed, GenericRecord}
-import org.apache.avro.{LogicalTypes, Schema}
+import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.avro.{IncompatibleSchemaException, SchemaConverters}
 import org.apache.spark.sql.catalyst.expressions.GenericRow
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.types._
+import org.apache.hudi.AvroConversionUtils._
 
 import scala.collection.JavaConverters._
 
@@ -137,7 +138,7 @@ object AvroConversionHelper {
         case (struct: StructType, RECORD) =>
           val length = struct.fields.length
           val converters = new Array[AnyRef => AnyRef](length)
-          val avroFieldIndexes = new Array[Int](length)
+          val avroFieldNames = new Array[String](length)
           var i = 0
           while (i < length) {
             val sqlField = struct.fields(i)
@@ -146,7 +147,7 @@ object AvroConversionHelper {
               val converter = createConverter(avroField.schema(), sqlField.dataType,
                 path :+ sqlField.name)
               converters(i) = converter
-              avroFieldIndexes(i) = avroField.pos()
+              avroFieldNames(i) = avroField.name()
             } else if (!sqlField.nullable) {
               throw new IncompatibleSchemaException(
                 s"Cannot find non-nullable field ${sqlField.name} at path ${path.mkString(".")} " +
@@ -168,7 +169,7 @@ object AvroConversionHelper {
               while (i < converters.length) {
                 if (converters(i) != null) {
                   val converter = converters(i)
-                  result(i) = converter(record.get(avroFieldIndexes(i)))
+                  result(i) = converter(record.get(avroFieldNames(i)))
                 }
                 i += 1
               }
@@ -363,6 +364,135 @@ object AvroConversionHelper {
             record
           }
         }
+    }
+  }
+
+  def createConverterToAvroV2(dataType: DataType,
+                            structName: String,
+                            recordNamespace: String): Any => Any = {
+    dataType match {
+      case BinaryType => (item: Any) =>
+        item match {
+          case null => null
+          case bytes: Array[Byte] => ByteBuffer.wrap(bytes)
+        }
+      case IntegerType | LongType |
+           FloatType | DoubleType | StringType | BooleanType => identity
+      case ByteType => (item: Any) =>
+        if (item == null) null else item.asInstanceOf[Byte].intValue
+      case ShortType => (item: Any) =>
+        if (item == null) null else item.asInstanceOf[Short].intValue
+      case dec: DecimalType =>
+        val schema = SchemaConverters.toAvroType(dec, nullable = false, structName, recordNamespace)
+        (item: Any) => {
+          Option(item).map { _ =>
+            val bigDecimalValue = item.asInstanceOf[java.math.BigDecimal]
+            val decimalConversions = new DecimalConversion()
+            decimalConversions.toFixed(bigDecimalValue, schema, LogicalTypes.decimal(dec.precision, dec.scale))
+          }.orNull
+        }
+      case TimestampType => (item: Any) =>
+        // Convert time to microseconds since spark-avro by default converts TimestampType to
+        // Avro Logical TimestampMicros
+        Option(item).map(_.asInstanceOf[Timestamp].getTime * 1000).orNull
+      case DateType => (item: Any) =>
+        Option(item).map(_.asInstanceOf[Date].toLocalDate.toEpochDay.toInt).orNull
+      case ArrayType(elementType, _) =>
+        val elementConverter = createConverterToAvro(
+          elementType,
+          structName,
+          recordNamespace)
+        (item: Any) => {
+          if (item == null) {
+            null
+          } else {
+            val sourceArray = item.asInstanceOf[Seq[Any]]
+            val sourceArraySize = sourceArray.size
+            val targetList = new util.ArrayList[Any](sourceArraySize)
+            var idx = 0
+            while (idx < sourceArraySize) {
+              targetList.add(elementConverter(sourceArray(idx)))
+              idx += 1
+            }
+            targetList
+          }
+        }
+      case MapType(StringType, valueType, _) =>
+        val valueConverter = createConverterToAvro(
+          valueType,
+          structName,
+          recordNamespace)
+        (item: Any) => {
+          if (item == null) {
+            null
+          } else {
+            val javaMap = new util.HashMap[String, Any]()
+            item.asInstanceOf[Map[String, Any]].foreach { case (key, value) =>
+              javaMap.put(key, valueConverter(value))
+            }
+            javaMap
+          }
+        }
+      case structType: StructType =>
+        val schema: Schema = removeNamespaceFromFixedFields(convertStructTypeToAvroSchema(structType, structName, recordNamespace))
+        val childNameSpace = if (recordNamespace != "") s"$recordNamespace.$structName" else structName
+        val fieldConverters = structType.fields.map(field =>
+          createConverterToAvro(
+            field.dataType,
+            field.name,
+            childNameSpace))
+        (item: Any) => {
+          if (item == null) {
+            null
+          } else {
+            val record = new Record(schema)
+            val convertersIterator = fieldConverters.iterator
+            val fieldNamesIterator = dataType.asInstanceOf[StructType].fieldNames.iterator
+            val rowIterator = item.asInstanceOf[Row].toSeq.iterator
+
+            while (convertersIterator.hasNext) {
+              val converter = convertersIterator.next()
+              record.put(fieldNamesIterator.next(), converter(rowIterator.next()))
+            }
+            record
+          }
+        }
+    }
+  }
+
+  /**
+   * Remove namespace from fixed field.
+   * org.apache.spark.sql.avro.SchemaConverters.toAvroType method adds namespace to fixed avro field
+   * https://github.com/apache/spark/blob/master/external/avro/src/main/scala/org/apache/spark/sql/avro/SchemaConverters.scala#L177
+   * So, we need to remove that namespace so that reader schema without namespace do not throw erorr like this one
+   * org.apache.avro.AvroTypeException: Found hoodie.source.hoodie_source.height.fixed, expecting fixed
+   *
+   * @param schema Schema from which namespace needs to be removed for fixed fields
+   * @return input schema with namespace removed for fixed fields, if any
+   */
+  def removeNamespaceFromFixedFields(schema: Schema): Schema  ={
+    val fields = new util.ArrayList[Schema.Field]
+    var isSchemaChanged = false
+
+    import scala.collection.JavaConversions._
+
+    for (field <- schema.getFields) {
+      var fieldSchema = field.schema
+      if (fieldSchema.getType.getName == "fixed" && fieldSchema.getLogicalType != null
+        && fieldSchema.getLogicalType.getName == "decimal" && fieldSchema.getNamespace != "") {
+        isSchemaChanged = true
+        val name = fieldSchema.getName
+        val avroType = fieldSchema.getLogicalType.asInstanceOf[LogicalTypes.Decimal]
+        fieldSchema = avroType.addToSchema(SchemaBuilder.fixed(name).size(fieldSchema.getFixedSize))
+      }
+      fields.add(new Schema.Field(field.name, fieldSchema, field.doc, field.defaultVal))
+    }
+
+    if (isSchemaChanged) {
+      Schema.createRecord(schema.getName, "", schema.getNamespace, false, fields)
+    }
+    else {
+      schema
     }
   }
 }

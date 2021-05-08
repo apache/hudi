@@ -89,12 +89,12 @@ object HoodieSparkUtils {
     new InMemoryFileIndex(sparkSession, globbedPaths, Map(), Option.empty, fileStatusCache)
   }
 
-  def createRdd(df: DataFrame, structName: String, recordNamespace: String): RDD[GenericRecord] = {
+  def createRdd(df: DataFrame, structName: String, recordNamespace: String, useV2Converter: Boolean = false): RDD[GenericRecord] = {
     val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, recordNamespace)
-    createRdd(df, avroSchema, structName, recordNamespace)
+    createRdd(df, avroSchema, structName, recordNamespace, useV2Converter)
   }
 
-  def createRdd(df: DataFrame, avroSchema: Schema, structName: String, recordNamespace: String)
+  def createRdd(df: DataFrame, avroSchema: Schema, structName: String, recordNamespace: String, useV2Converter: Boolean)
   : RDD[GenericRecord] = {
     // Use the Avro schema to derive the StructType which has the correct nullability information
     val dataType = SchemaConverters.toSqlType(avroSchema).dataType.asInstanceOf[StructType]
@@ -104,7 +104,11 @@ object HoodieSparkUtils {
       .mapPartitions { records =>
         if (records.isEmpty) Iterator.empty
         else {
-          val convertor = AvroConversionHelper.createConverterToAvro(dataType, structName, recordNamespace)
+          var convertor = AvroConversionHelper.createConverterToAvro(dataType, structName, recordNamespace)
+          if (useV2Converter) {
+            println("DEBUG:Removing namespace")
+            convertor = AvroConversionHelper.createConverterToAvroV2(dataType, structName, recordNamespace)
+          }
           records.map { x => convertor(x).asInstanceOf[GenericRecord] }
         }
       }

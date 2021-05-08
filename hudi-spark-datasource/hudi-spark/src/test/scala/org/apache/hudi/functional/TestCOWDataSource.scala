@@ -53,7 +53,8 @@ class TestCOWDataSource extends HoodieClientTestBase {
     DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY -> "timestamp",
-    HoodieWriteConfig.TABLE_NAME -> "hoodie_test"
+    HoodieWriteConfig.TABLE_NAME -> "hoodie_test",
+    DataSourceWriteOptions.DROP_NAMESPACE_OPT_KEY -> "false"
   )
 
   val verificationCol: String = "driver"
@@ -84,6 +85,37 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .save(basePath)
 
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+  }
+
+  @Test
+  def testCopyOnWriteInsertUpdateWithoutNamespace(): Unit = {
+    // Insert Operation
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+
+    val snapshotDF1 = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/*/*/*")
+    assertEquals(100, snapshotDF1.count())
+
+    // Upsert Operation without Hudi metadata columns
+    val records2 = recordsToStrings(dataGen.generateUpdates("001", 100)).toList
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2 , 2))
+
+    val commonOptsV2 = commonOpts + ("hoodie.drop.namespace" -> "true")
+    inputDF2.write.format("org.apache.hudi")
+      .options(commonOptsV2)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val snapshotDF2 = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/*/*/*")
+    assertEquals(inputDF2.count(), snapshotDF2.count())
   }
 
   @ParameterizedTest

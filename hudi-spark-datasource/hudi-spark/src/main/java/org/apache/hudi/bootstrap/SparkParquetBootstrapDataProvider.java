@@ -65,7 +65,7 @@ public class SparkParquetBootstrapDataProvider extends FullRecordBootstrapDataPr
       KeyGenerator keyGenerator = DataSourceUtils.createKeyGenerator(props);
       String structName = tableName + "_record";
       String namespace = "hoodie." + tableName;
-      RDD<GenericRecord> genericRecords = HoodieSparkUtils.createRdd(inputDataset, structName, namespace);
+      RDD<GenericRecord> genericRecords = HoodieSparkUtils.createRdd(inputDataset, structName, namespace, props.getBoolean("hoodie.drop.namespace"));
       return genericRecords.toJavaRDD().map(gr -> {
         String orderingVal = HoodieAvroUtils.getNestedFieldValAsString(
             gr, props.getString("hoodie.datasource.write.precombine.field"), false);

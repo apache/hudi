@@ -247,6 +247,12 @@ object DataSourceWriteOptions {
   val DEFAULT_PRECOMBINE_FIELD_OPT_VAL = "ts"
 
   /**
+   * Test dropping namespace to support schema evolution
+   */
+  val DROP_NAMESPACE_OPT_KEY = "hoodie.drop.namespace"
+  val DEFAULT_DROP_NAMESPACE_OPT_VAL = "false"
+
+  /**
     * Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.
     * This will render any value set for `PRECOMBINE_FIELD_OPT_VAL` in-effective
     */
