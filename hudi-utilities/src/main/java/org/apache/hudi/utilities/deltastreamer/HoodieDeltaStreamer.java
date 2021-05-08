@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.async.AsyncClusteringService;
 import org.apache.hudi.async.AsyncCompactService;
 import org.apache.hudi.async.HoodieAsyncService;
@@ -120,13 +121,13 @@ public class HoodieDeltaStreamer implements Serializable {
                              Option<TypedProperties> props) throws IOException {
     // Resolving the properties first in a consistent way
     if (props.isPresent()) {
-      this.properties = props.get();
+      this.properties = setDefaults(props.get());
     } else if (cfg.propsFilePath.equals(Config.DEFAULT_DFS_SOURCE_PROPERTIES)) {
-      this.properties = UtilHelpers.getConfig(cfg.configs).getConfig();
+      this.properties = setDefaults(UtilHelpers.getConfig(cfg.configs).getConfig());
     } else {
-      this.properties = UtilHelpers.readConfig(
+      this.properties = setDefaults(UtilHelpers.readConfig(
           FSUtils.getFs(cfg.propsFilePath, jssc.hadoopConfiguration()),
-          new Path(cfg.propsFilePath), cfg.configs).getConfig();
+          new Path(cfg.propsFilePath), cfg.configs).getConfig());
     }
 
     if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
@@ -144,6 +145,13 @@ public class HoodieDeltaStreamer implements Serializable {
 
   public void shutdownGracefully() {
     deltaSyncService.ifPresent(ds -> ds.shutdown(false));
+  }
+
+  private TypedProperties setDefaults(TypedProperties props) {
+    if (!props.containsKey(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH_FOR_INPUT_BATCH_OPT_KEY())) {
+      props.setProperty(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH_FOR_INPUT_BATCH_OPT_KEY(), DataSourceWriteOptions.DEFAULT_HANDLE_SCHEMA_MISMATCH_FOR_INPUT_BATCH_OPT_VAL());
+    }
+    return props;
   }
 
   /**

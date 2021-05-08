@@ -415,6 +415,13 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
+   * @return {@code true} if any commits are found, else {@code false}.
+   */
+  public boolean isTimelineNonEmpty() {
+    return getCommitsTimeline().getInstants().collect(Collectors.toList()).size() > 0;
+  }
+
+  /**
    * Get the commit timeline visible for this table.
    */
   public HoodieTimeline getCommitsTimeline() {

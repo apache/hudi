@@ -51,7 +51,7 @@ public class SparkBasedReader {
 
     return HoodieSparkUtils
         .createRdd(dataSet.toDF(), structName.orElse(RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME),
-            nameSpace.orElse(RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE))
+            nameSpace.orElse(RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE), false)
         .toJavaRDD();
   }
 
@@ -63,7 +63,7 @@ public class SparkBasedReader {
 
     return HoodieSparkUtils
         .createRdd(dataSet.toDF(), structName.orElse(RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME),
-            RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE)
+            RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE, false)
         .toJavaRDD();
   }
 

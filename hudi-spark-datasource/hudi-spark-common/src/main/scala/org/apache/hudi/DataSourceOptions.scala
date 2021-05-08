@@ -308,6 +308,16 @@ object DataSourceWriteOptions {
     .defaultValue(classOf[HiveSyncTool].getName)
     .withDocumentation("Sync tool class name used to sync to metastore. Defaults to Hive.")
 
+  val HANDLE_SCHEMA_MISMATCH: ConfigProperty[Boolean] = ConfigProperty
+    .key("hoodie.datasource.write.handle.schema.mismatch")
+    .defaultValue(false)
+    .withDocumentation("When a new batch of write has records with old schema, but latest table schema got "
+      + "evolved, this config will upgrade the records to leverage latest table schema(default vals will be "
+      + "injected to missing fields). If not, the batch would fail.")
+
+  val HANDLE_SCHEMA_MISMATCH_FOR_INPUT_BATCH_OPT_KEY = "hoodie.datasource.write.handle.schema.mismatch"
+  val DEFAULT_HANDLE_SCHEMA_MISMATCH_FOR_INPUT_BATCH_OPT_VAL = "false"
+
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
   // unexpected issues with config getting reset

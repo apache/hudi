@@ -75,8 +75,8 @@ public final class SourceFormatAdapter {
                   // pass in the schema for the Row-to-Avro conversion
                   // to avoid nullability mismatch between Avro schema and Row schema
                   ? HoodieSparkUtils.createRdd(rdd, r.getSchemaProvider().getSourceSchema(),
-                  HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD() : HoodieSparkUtils.createRdd(rdd,
-                  HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD();
+                  HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, true).toJavaRDD() : HoodieSparkUtils.createRdd(rdd,
+                  HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, false).toJavaRDD();
             })
             .orElse(null)), r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }

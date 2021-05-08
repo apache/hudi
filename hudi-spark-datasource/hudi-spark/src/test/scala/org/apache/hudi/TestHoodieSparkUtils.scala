@@ -18,15 +18,22 @@
 
 package org.apache.hudi
 
+import org.apache.avro.generic.GenericRecord
+
 import java.io.File
 import java.nio.file.Paths
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.spark.sql.SparkSession
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.apache.hudi.testutils.DataSourceTestUtils
+import org.apache.spark.sql.avro.IncompatibleSchemaException
+import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
+import org.apache.spark.sql.{Row, SparkSession}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertTrue, fail}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+
+import java.util
+import scala.collection.JavaConverters
 
 class TestHoodieSparkUtils {
 
@@ -103,4 +110,115 @@ class TestHoodieSparkUtils {
     assertEquals(files.sortWith(_.toString < _.toString), indexedFilePaths.sortWith(_.toString < _.toString))
     spark.stop()
   }
+
+  @Test
+  def testCreateRddSchemaEvol(): Unit = {
+    val spark = SparkSession.builder
+      .appName("Hoodie Datasource test")
+      .master("local[2]")
+      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .getOrCreate
+
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
+    val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+    var records = DataSourceTestUtils.generateRandomRows(5)
+    var recordsSeq = convertRowListToSeq(records)
+    val df1 = spark.createDataFrame(spark.sparkContext.parallelize(recordsSeq), structType)
+
+    var genRecRDD = HoodieSparkUtils.createRdd(df1, schema,"test_struct_name", "test_namespace", true)
+    genRecRDD.collect()
+
+    val evolSchema = DataSourceTestUtils.getStructTypeExampleEvolvedSchema
+    records = DataSourceTestUtils.generateRandomRowsEvolvedSchema(5)
+    recordsSeq = convertRowListToSeq(records)
+
+    genRecRDD = HoodieSparkUtils.createRdd(df1, evolSchema,"test_struct_name", "test_namespace", true)
+    genRecRDD.collect()
+
+    // pass in evolved schema but with records serialized with old schema. should be able to convert with out any exception.
+    // Before https://github.com/apache/hudi/pull/2927, this will throw exception.
+    genRecRDD = HoodieSparkUtils.createRdd(df1, evolSchema, "test_struct_name", "test_namespace", true)
+    val genRecs = genRecRDD.collect()
+    // if this succeeds w/o throwing any exception, test succeeded.
+    assertEquals(genRecs.size, 5)
+    spark.stop()
+  }
+
+  @Test
+  def testCreateRddWithNestedSchemas(): Unit = {
+    val spark = SparkSession.builder
+      .appName("Hoodie Datasource test")
+      .master("local[2]")
+      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .getOrCreate
+
+    val innerStruct1 = new StructType().add("innerKey","string",false).add("innerValue", "long", true)
+    val structType1 = new StructType().add("key", "string", false)
+      .add("nonNullableInnerStruct",innerStruct1,false).add("nullableInnerStruct",innerStruct1,true)
+    val schema1 = AvroConversionUtils.convertStructTypeToAvroSchema(structType1, "test_struct_name", "test_namespace")
+    val records1 = Seq(Row("key1", Row("innerKey1_1", 1L), Row("innerKey1_2", 2L)))
+
+    val df1 = spark.createDataFrame(spark.sparkContext.parallelize(records1), structType1)
+    val genRecRDD1 = HoodieSparkUtils.createRdd(df1, schema1, "test_struct_name", "test_namespace", true)
+    assert(schema1.equals(genRecRDD1.collect()(0).getSchema))
+
+    // create schema2 which has one addition column at the root level compared to schema1
+    val structType2 = new StructType().add("key", "string", false)
+      .add("nonNullableInnerStruct",innerStruct1,false).add("nullableInnerStruct",innerStruct1,true)
+      .add("nullableInnerStruct2",innerStruct1,true)
+    val schema2 = AvroConversionUtils.convertStructTypeToAvroSchema(structType2, "test_struct_name", "test_namespace")
+    val records2 = Seq(Row("key2", Row("innerKey2_1", 2L), Row("innerKey2_2", 2L), Row("innerKey2_3", 2L)))
+    val df2 = spark.createDataFrame(spark.sparkContext.parallelize(records2), structType2)
+    val genRecRDD2 = HoodieSparkUtils.createRdd(df2, schema2, "test_struct_name", "test_namespace", true)
+    assert(schema2.equals(genRecRDD2.collect()(0).getSchema))
+
+    // send records1 with schema2. should succeed since the new column is nullable.
+    val genRecRDD3 = HoodieSparkUtils.createRdd(df1, schema2, "test_struct_name", "test_namespace", true)
+    assert(genRecRDD3.collect()(0).getSchema.equals(schema2))
+    genRecRDD3.foreach(entry => assertNull(entry.get("nonNullableInnerStruct2")))
+
+    val innerStruct3 = new StructType().add("innerKey","string",false).add("innerValue", "long", true)
+      .add("new_nested_col","string",true)
+
+    // create a schema which has one additional nested column compared to schema1, which is nullable
+    val structType4 = new StructType().add("key", "string", false)
+      .add("nonNullableInnerStruct",innerStruct1,false).add("nullableInnerStruct",innerStruct3,true)
+
+    val schema4 = AvroConversionUtils.convertStructTypeToAvroSchema(structType4, "test_struct_name", "test_namespace")
+    val records4 = Seq(Row("key2", Row("innerKey2_1", 2L), Row("innerKey2_2", 2L, "new_nested_col_val1")))
+    val df4 = spark.createDataFrame(spark.sparkContext.parallelize(records4), structType4)
+    val genRecRDD4 = HoodieSparkUtils.createRdd(df4, schema4, "test_struct_name", "test_namespace", true)
+    assert(schema4.equals(genRecRDD4.collect()(0).getSchema))
+
+    // convert batch 1 with schema4. should succeed.
+    val genRecRDD5 = HoodieSparkUtils.createRdd(df1, schema4, "test_struct_name", "test_namespace", true)
+    assert(schema4.equals(genRecRDD4.collect()(0).getSchema))
+    val genRec = genRecRDD5.collect()(0)
+    val nestedRec : GenericRecord = genRec.get("nullableInnerStruct").asInstanceOf[GenericRecord]
+    assertNull(nestedRec.get("new_nested_col"))
+    assertNotNull(nestedRec.get("innerKey"))
+    assertNotNull(nestedRec.get("innerValue"))
+
+    val innerStruct4 = new StructType().add("innerKey","string",false).add("innerValue", "long", true)
+      .add("new_nested_col","string",false)
+    // create a schema which has one additional nested column compared to schema1, which is non nullable
+    val structType6 = new StructType().add("key", "string", false)
+      .add("nonNullableInnerStruct",innerStruct1,false).add("nullableInnerStruct",innerStruct4,true)
+
+    val schema6 = AvroConversionUtils.convertStructTypeToAvroSchema(structType6, "test_struct_name", "test_namespace")
+    // convert batch 1 with schema5. should fail since the missed out column is not nullable.
+    try {
+      val genRecRDD6 = HoodieSparkUtils.createRdd(df1, schema6, "test_struct_name", "test_namespace", true)
+      genRecRDD6.collect()
+      fail("createRdd should fail, because records don't have a column which is not nullable in the passed in schema")
+    } catch {
+      case e: Exception =>
+        e.getCause.asInstanceOf[NullPointerException]
+        assertTrue(e.getMessage.contains("null of string in field new_nested_col of"))
+    }
+    spark.stop()
+  }
+
+  def convertRowListToSeq(inputList: util.List[Row]): Seq[Row] =
+    JavaConverters.asScalaIteratorConverter(inputList.iterator).asScala.toSeq
 }

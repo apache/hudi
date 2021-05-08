@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.HoodieWriterUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
@@ -365,7 +366,7 @@ public class DeltaSync implements Serializable {
 
     final Option<JavaRDD<GenericRecord>> avroRDDOptional;
     final String checkpointStr;
-    final SchemaProvider schemaProvider;
+    SchemaProvider schemaProvider;
     if (transformer.isPresent()) {
       // Transformation is needed. Fetch New rows in Row Format, apply transformation and then convert them
       // to generic records for writing
@@ -374,7 +375,9 @@ public class DeltaSync implements Serializable {
 
       Option<Dataset<Row>> transformed =
           dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(jssc, sparkSession, data, props));
+
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
+      boolean handleSchemaMismatch = props.getBoolean(DataSourceWriteOptions.HANDLE_SCHEMA_MISMATCH_FOR_INPUT_BATCH_OPT_KEY());
       if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null) {
         // If the target schema is specified through Avro schema,
         // pass in the schema for the Row-to-Avro conversion
@@ -382,7 +385,8 @@ public class DeltaSync implements Serializable {
         avroRDDOptional = transformed
             .map(t -> HoodieSparkUtils.createRdd(
                 t, this.userProvidedSchemaProvider.getTargetSchema(),
-                HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD());
+                HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE,
+                handleSchemaMismatch).toJavaRDD());
         schemaProvider = this.userProvidedSchemaProvider;
       } else {
         // Use Transformed Row's schema if not overridden. If target schema is not specified
@@ -391,11 +395,14 @@ public class DeltaSync implements Serializable {
             transformed
                 .map(r -> (SchemaProvider) new DelegatingSchemaProvider(props, jssc,
                     dataAndCheckpoint.getSchemaProvider(),
-                    UtilHelpers.createRowBasedSchemaProvider(r.schema(), props, jssc)))
+                    handleSchemaMismatch
+                        ? UtilHelpers.createLatestSchemaProvider(r.schema(), jssc, fs, cfg.targetBasePath) :
+                        UtilHelpers.createRowBasedSchemaProvider(r.schema(), props, jssc)))
                 .orElse(dataAndCheckpoint.getSchemaProvider());
         avroRDDOptional = transformed
             .map(t -> HoodieSparkUtils.createRdd(
-                t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD());
+                t, schemaProvider.getTargetSchema(), HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE,
+                handleSchemaMismatch).toJavaRDD());
       }
     } else {
       // Pull the data from the source & prepare the write
