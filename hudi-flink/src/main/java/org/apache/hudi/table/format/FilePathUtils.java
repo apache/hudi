@@ -245,22 +245,22 @@ public class FilePathUtils {
       int level,
       int expectLevel,
       List<FileStatus> results) throws IOException {
-    if (expectLevel == level && isNotHiddenFile(fileStatus)) {
+    if (expectLevel == level && isHiddenFile(fileStatus)) {
       results.add(fileStatus);
       return;
     }
 
-    if (fileStatus.isDirectory() && isNotHiddenFile(fileStatus)) {
+    if (fileStatus.isDirectory() && isHiddenFile(fileStatus)) {
       for (FileStatus stat : fs.listStatus(fileStatus.getPath())) {
         listStatusRecursively(fs, stat, level + 1, expectLevel, results);
       }
     }
   }
 
-  private static boolean isNotHiddenFile(FileStatus fileStatus) {
+  private static boolean isHiddenFile(FileStatus fileStatus) {
     String name = fileStatus.getPath().getName();
     // the log files is hidden file
-    return !name.startsWith("_") && (!name.startsWith(".") || name.contains(".log."));
+    return name.startsWith("_") || (name.startsWith(".") && !name.contains(".log."));
   }
 
   /**
