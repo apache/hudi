@@ -55,6 +55,7 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
 
   private static final Logger LOG = LogManager.getLogger(FlinkCreateHandle.class);
   private long lastFileSize = 0L;
+  private long totalRecordsWritten = 0L;
 
   public FlinkCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
@@ -143,6 +144,7 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
     try {
       setupWriteStatus();
       // reset the write status
+      totalRecordsWritten += recordsWritten;
       recordsWritten = 0;
       recordsDeleted = 0;
       insertRecordsWritten = 0;
@@ -169,7 +171,7 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
 
   @Override
   public void finishWrite() {
-    LOG.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
+    LOG.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + totalRecordsWritten);
     try {
       fileWriter.close();
     } catch (IOException e) {
