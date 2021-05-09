@@ -132,21 +132,6 @@ public class FilePathUtils {
   }
 
   /**
-   * Generates partition values from path.
-   *
-   * @param currPath      Partition file path
-   * @param hivePartition Whether the partition path is with Hive style
-   * @param partitionKeys Partition keys
-   * @return Sequential partition specs.
-   */
-  public static List<String> extractPartitionValues(
-      Path currPath,
-      boolean hivePartition,
-      String[] partitionKeys) {
-    return new ArrayList<>(extractPartitionKeyValues(currPath, hivePartition, partitionKeys).values());
-  }
-
-  /**
    * Generates partition key value mapping from path.
    *
    * @param currPath      Partition file path
@@ -260,22 +245,22 @@ public class FilePathUtils {
       int level,
       int expectLevel,
       List<FileStatus> results) throws IOException {
-    if (expectLevel == level && !isHiddenFile(fileStatus)) {
+    if (expectLevel == level && isNotHiddenFile(fileStatus)) {
       results.add(fileStatus);
       return;
     }
 
-    if (fileStatus.isDir() && !isHiddenFile(fileStatus)) {
+    if (fileStatus.isDirectory() && isNotHiddenFile(fileStatus)) {
       for (FileStatus stat : fs.listStatus(fileStatus.getPath())) {
         listStatusRecursively(fs, stat, level + 1, expectLevel, results);
       }
     }
   }
 
-  private static boolean isHiddenFile(FileStatus fileStatus) {
+  private static boolean isNotHiddenFile(FileStatus fileStatus) {
     String name = fileStatus.getPath().getName();
     // the log files is hidden file
-    return name.startsWith("_") || name.startsWith(".") && !name.contains(".log.");
+    return !name.startsWith("_") && (!name.startsWith(".") || name.contains(".log."));
   }
 
   /**
@@ -393,7 +378,7 @@ public class FilePathUtils {
    */
   public static org.apache.flink.core.fs.Path[] toFlinkPaths(Path[] paths) {
     return Arrays.stream(paths)
-        .map(p -> toFlinkPath(p))
+        .map(FilePathUtils::toFlinkPath)
         .toArray(org.apache.flink.core.fs.Path[]::new);
   }
 
