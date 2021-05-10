@@ -141,17 +141,28 @@ public class InputFormatTestUtil {
     jobConf.set(validateTimestampName, instantTime);
   }
 
+  public static void setupSnapshotMaxCommitTimeQueryMode(JobConf jobConf, String maxInstantTime) {
+    setUpScanMode(jobConf);
+    String validateTimestampName =
+            String.format(HoodieHiveUtils.HOODIE_CONSUME_COMMIT, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
+    jobConf.set(validateTimestampName, maxInstantTime);
+  }
+
   public static void setupSnapshotScanMode(JobConf jobConf) {
     setupSnapshotScanMode(jobConf, false);
   }
   
   private static void setupSnapshotScanMode(JobConf jobConf, boolean includePending) {
-    String modePropertyName =
-        String.format(HoodieHiveUtils.HOODIE_CONSUME_MODE_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
-    jobConf.set(modePropertyName, HoodieHiveUtils.SNAPSHOT_SCAN_MODE);
+    setUpScanMode(jobConf);
     String includePendingCommitsName =
         String.format(HoodieHiveUtils.HOODIE_CONSUME_PENDING_COMMITS, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
     jobConf.setBoolean(includePendingCommitsName, includePending);
+  }
+
+  private static void setUpScanMode(JobConf jobConf) {
+    String modePropertyName =
+        String.format(HoodieHiveUtils.HOODIE_CONSUME_MODE_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
+    jobConf.set(modePropertyName, HoodieHiveUtils.SNAPSHOT_SCAN_MODE);
   }
 
   public static File prepareParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
