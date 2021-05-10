@@ -279,7 +279,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           long beginLsTs = System.currentTimeMillis();
           FileStatus[] statuses = listPartition(partitionPath);
           long endLsTs = System.currentTimeMillis();
-          LOG.info("#files found in partition (" + partitionPathStr + ") =" + statuses.length + ", Time taken ="
+          LOG.debug("#files found in partition (" + partitionPathStr + ") =" + statuses.length + ", Time taken ="
               + (endLsTs - beginLsTs));
           List<HoodieFileGroup> groups = addFilesToView(statuses);
 
@@ -293,7 +293,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         LOG.debug("View already built for Partition :" + partitionPathStr + ", FOUND is ");
       }
       long endTs = System.currentTimeMillis();
-      LOG.info("Time to load partition (" + partitionPathStr + ") =" + (endTs - beginTs));
+      LOG.debug("Time to load partition (" + partitionPathStr + ") =" + (endTs - beginTs));
       return true;
     });
   }
