@@ -21,6 +21,7 @@ package org.apache.hudi.io;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.collection.Pair;
@@ -121,6 +122,11 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
     } catch (IOException e) {
       throw new HoodieException("Checking existing path for create handle error: " + path, e);
     }
+  }
+
+  @Override
+  public boolean canWrite(HoodieRecord record) {
+    return true;
   }
 
   /**
