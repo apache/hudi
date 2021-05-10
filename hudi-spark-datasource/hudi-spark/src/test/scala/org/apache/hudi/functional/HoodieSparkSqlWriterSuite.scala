@@ -463,8 +463,8 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
           assert(updatesDf.intersect(trimmedDf2).except(updatesDf).count() == 0)
 
           // getting new schema with new column
-          schema = DataSourceTestUtils.getStructTypeExampleEvolvedSchema
-          structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+          val evolSchema = DataSourceTestUtils.getStructTypeExampleEvolvedSchema
+          val evolStructType = AvroConversionUtils.convertAvroSchemaToStructType(evolSchema)
           records = DataSourceTestUtils.generateRandomRowsEvolvedSchema(5)
           recordsSeq = convertRowListToSeq(records)
           val df3 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
@@ -482,6 +482,17 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
 
           // ensure 2nd batch of updates matches.
           assert(df3.intersect(trimmedDf3).except(df3).count() == 0)
+
+          // ingest new batch with old schema.
+          records = DataSourceTestUtils.generateRandomRows(10)
+          recordsSeq = convertRowListToSeq(records)
+          val df4 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
+          // write to Hudi
+          HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, df4)
+
+          val snapshotDF4 = spark.read.format("org.apache.hudi")
+            .load(path.toAbsolutePath.toString + "/*/*/*/*")
+          assertEquals(25, snapshotDF4.count())
 
         } finally {
           spark.stop()

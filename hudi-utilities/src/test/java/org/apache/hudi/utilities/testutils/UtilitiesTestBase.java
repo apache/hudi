@@ -249,6 +249,12 @@ public class UtilitiesTestBase {
       os.close();
     }
 
+    public static void deleteFileFromDfs(FileSystem fs, String targetPath) throws IOException {
+      if (fs.exists(new Path(targetPath))) {
+        fs.delete(new Path(targetPath), true);
+      }
+    }
+
     public static void savePropsToDFS(TypedProperties props, FileSystem fs, String targetPath) throws IOException {
       String[] lines = props.keySet().stream().map(k -> String.format("%s=%s", k, props.get(k))).toArray(String[]::new);
       saveStringsToDFS(lines, fs, targetPath);

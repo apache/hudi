@@ -115,6 +115,10 @@
           {
             "name" : "currency",
             "type" : "string"
+          },
+          {
+            "name" : "tip_history",
+            "type" : "string"
           }
         ]
       }
@@ -124,6 +128,13 @@
     "name" : "_hoodie_is_deleted",
     "type" : "boolean",
     "default" : false
-  } ]
+  },
+  {
+      "name": "evoluted_optional_union_field",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+  }]
 }
-

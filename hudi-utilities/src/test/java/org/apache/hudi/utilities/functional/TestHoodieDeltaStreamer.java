@@ -47,6 +47,7 @@ import org.apache.hudi.utilities.DummySchemaProvider;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
 import org.apache.hudi.utilities.sources.CsvDFSSource;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 import org.apache.hudi.utilities.sources.InputBatch;
@@ -150,6 +151,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   private static final Logger LOG = LogManager.getLogger(TestHoodieDeltaStreamer.class);
   public static KafkaTestUtils testUtils;
   protected static String topicName;
+  private static String defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
 
   protected static int testNum = 1;
 
@@ -168,6 +170,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/sql-transformer.properties", dfs,
         dfsBasePath + "/sql-transformer.properties");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/source.avsc", dfs, dfsBasePath + "/source.avsc");
+    UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/source_evolved.avsc", dfs, dfsBasePath + "/source_evolved.avsc");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/source-flattened.avsc", dfs, dfsBasePath + "/source-flattened.avsc");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/target.avsc", dfs, dfsBasePath + "/target.avsc");
     UtilitiesTestBase.Helpers.copyToDFS("delta-streamer-config/target-flattened.avsc", dfs, dfsBasePath + "/target-flattened.avsc");
@@ -371,7 +374,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
         cfg.payloadClassName = payloadClassName;
       }
       if (useSchemaProviderClass) {
-        cfg.schemaProviderClassName = FilebasedSchemaProvider.class.getName();
+        cfg.schemaProviderClassName = defaultSchemaProviderClassName;
       }
       return cfg;
     }
@@ -694,6 +697,85 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     assertEquals(expectedFieldNames.size(), fields.length);
     assertTrue(fieldNames.containsAll(HoodieRecord.HOODIE_META_COLUMNS));
     assertTrue(fieldNames.containsAll(expectedFieldNames));
+  }
+
+  @Test
+  public void testSchemaEvolution() throws Exception {
+    String tableBasePath = dfsBasePath + "/test_table_schema_evolution";
+
+    // Insert data produced with Schema A, pass Schema A
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, Collections.singletonList(TestIdentityTransformer.class.getName()));
+    cfg.configs.add("hoodie.deltastreamer.schemaprovider.source.schema.file=" + dfsBasePath + "/source.avsc");
+    cfg.configs.add("hoodie.deltastreamer.schemaprovider.target.schema.file=" + dfsBasePath + "/source.avsc");
+    cfg.configs.add(SparkAvroPostProcessor.Config.SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE + "=false");
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    TestHelpers.assertRecordCount(10, tableBasePath + "/*/*.parquet", sqlContext);
+    TestHelpers.assertCommitMetadata("00000", tableBasePath, dfs, 1);
+
+    System.out.println("Batch 1111111 completed --------------------------------------------------\n\n\n");
+    // Upsert data produced with Schema B, pass Schema B
+    // set default schema provider so that target schema is null
+    // defaultSchemaProviderClassName = TestFileBasedSchemaProviderNullTargetSchema.class.getName();
+    cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, Collections.singletonList(TripsWithEvolvedOptionalFieldTransformer.class.getName()));
+    //cfg.configs.add("hoodie.deltastreamer.schemaprovider.source.schema.file=" + dfsBasePath + "/source_evolved.avsc");
+    cfg.configs.add("hoodie.deltastreamer.schemaprovider.target.schema.file=" + dfsBasePath + "/source_evolved.avsc");
+    cfg.configs.add("hoodie.deltastreamer.schemaprovider.source.schema.file=" + dfsBasePath + "/source.avsc");
+    //cfg.configs.add("hoodie.deltastreamer.schemaprovider.target.schema.file=" + dfsBasePath + "/source.avsc");
+    cfg.configs.add(SparkAvroPostProcessor.Config.SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE + "=false");
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    // out of 10 new records, 5 are inserts and 5 are updates.
+    TestHelpers.assertRecordCount(15, tableBasePath + "/*/*.parquet", sqlContext);
+    TestHelpers.assertCommitMetadata("00001", tableBasePath, dfs, 2);
+    List<Row> counts = TestHelpers.countsPerCommit(tableBasePath + "/*/*.parquet", sqlContext);
+    assertEquals(15, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
+
+    sqlContext.read().format("org.apache.hudi").load(tableBasePath + "/*/*.parquet").createOrReplaceTempView("tmp_trips");
+    long recordCount =
+        sqlContext.sparkSession().sql("select * from tmp_trips where evoluted_optional_union_field is not NULL").count();
+    assertEquals(10, recordCount);
+
+    System.out.println("Batch 222222 completed --------------------------------------------------\n\n\n");
+
+    // Upsert data produced with Schema A, pass Schema B
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE);
+
+    TypedProperties props = new TypedProperties();
+    props.setProperty("include", "sql-transformer.properties");
+    props.setProperty("hoodie.datasource.write.keygenerator.class", TestGenerator.class.getName());
+    props.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
+    props.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
+    props.setProperty("hoodie.deltastreamer.schemaprovider.source.schema.file", dfsBasePath + "/source.avsc");
+
+    // Hive Configs
+    props.setProperty(DataSourceWriteOptions.HIVE_URL_OPT_KEY(), "jdbc:hive2://127.0.0.1:9999/");
+    props.setProperty(DataSourceWriteOptions.HIVE_DATABASE_OPT_KEY(), "testdb1");
+    props.setProperty(DataSourceWriteOptions.HIVE_TABLE_OPT_KEY(), "hive_trips");
+    props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY(), "datestr");
+    props.setProperty(DataSourceWriteOptions.HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY(),
+        MultiPartKeysValueExtractor.class.getName());
+    UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/" + PROPS_FILENAME_TEST_SOURCE);
+
+    defaultSchemaProviderClassName = TestFileBasedSchemaProviderNullTargetSchema.class.getName();
+    cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, Collections.singletonList(TestIdentityTransformer.class.getName()));
+    cfg.configs.add("hoodie.deltastreamer.schemaprovider.source.schema.file=" + dfsBasePath + "/source.avsc");
+    cfg.configs.add(SparkAvroPostProcessor.Config.SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE + "=false");
+    // cfg.configs.add("hoodie.deltastreamer.schemaprovider.target.schema.file=" + dfsBasePath + "/source_evolved.avsc");
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    // again, 10 new records, 5 inserts and 5 updates.
+    TestHelpers.assertRecordCount(20, tableBasePath + "/*/*.parquet", sqlContext);
+    TestHelpers.assertCommitMetadata("00002", tableBasePath, dfs, 3);
+    counts = TestHelpers.countsPerCommit(tableBasePath + "/*/*.parquet", sqlContext);
+    assertEquals(20, counts.stream().mapToLong(entry -> entry.getLong(1)).sum());
+
+    sqlContext.read().format("org.apache.hudi").load(tableBasePath + "/*/*").createOrReplaceTempView("tmp_trips");
+    Dataset<Row> result = sqlContext.sparkSession().sql("select * from tmp_trips order by _hoodie_commit_time");
+    List<Row> rows = result.collectAsList();
+    System.out.println("\n\nSnapshot read ---------------- ");
+    rows.forEach(entry -> System.out.println("Snapshot read from hudi " + entry.toString()));
+    recordCount = result.count();
+    assertEquals(20, recordCount);
+    System.out.println("grouped by commit time " + Arrays.toString(
+        sqlContext.sparkSession().sql("select _hoodie_commit_time, count(*) as rows from tmp_trips group by 1").collectAsList().toArray()));
   }
 
   @Test
@@ -1666,4 +1748,28 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       return rowDataset;
     }
   }
+
+  /**
+   * Add new field evoluted_optional_union_field with value of the field rider.
+   */
+  public static class TripsWithEvolvedOptionalFieldTransformer implements Transformer {
+    @Override
+    public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
+        TypedProperties properties) {
+      return rowDataset.withColumn("evoluted_optional_union_field", functions.col("rider"));
+    }
+  }
+
+  public static class TestFileBasedSchemaProviderNullTargetSchema extends FilebasedSchemaProvider {
+
+    public TestFileBasedSchemaProviderNullTargetSchema(TypedProperties props, JavaSparkContext jssc) {
+      super(props, jssc);
+    }
+
+    @Override
+    public Schema getTargetSchema() {
+      return null;
+    }
+  }
+
 }

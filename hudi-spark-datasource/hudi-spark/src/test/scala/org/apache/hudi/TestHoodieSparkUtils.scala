@@ -20,13 +20,16 @@ package org.apache.hudi
 
 import java.io.File
 import java.nio.file.Paths
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.spark.sql.SparkSession
+import org.apache.hudi.testutils.DataSourceTestUtils
+import org.apache.spark.sql.{Row, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+
+import java.util
+import scala.collection.JavaConverters
 
 class TestHoodieSparkUtils {
 
@@ -103,4 +106,51 @@ class TestHoodieSparkUtils {
     assertEquals(files.sortWith(_.toString < _.toString), indexedFilePaths.sortWith(_.toString < _.toString))
     spark.stop()
   }
+
+  @Test
+  def testCreateRdd(@TempDir tempDir: File): Unit = {
+    val spark = SparkSession.builder
+      .appName("Hoodie Datasource test")
+      .master("local[2]")
+      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .getOrCreate
+
+    var schema = DataSourceTestUtils.getStructTypeExampleSchema
+    var structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+    var records = DataSourceTestUtils.generateRandomRows(5)
+    var recordsSeq = convertRowListToSeq(records)
+    var df1 = spark.createDataFrame(spark.sparkContext.parallelize(recordsSeq), structType)
+
+    df1.collect().foreach(entry => System.out.println("Df row " + entry.mkString(",")))
+    System.out.println("DF schema " + df1.schema.toString())
+
+    var genRecRDD = HoodieSparkUtils.createRdd(df1, schema,"test_struct_name", "test_namespace")
+    var genRecs = genRecRDD.collect()
+    System.out.println("Schema of genRec 111 " + genRecs(0).getSchema.toString)
+    genRecs.foreach(entry => System.out.println("Gen Rec 111 " + entry.toString))
+
+    val evolSchema = DataSourceTestUtils.getStructTypeExampleEvolvedSchema
+    val evolStructType = AvroConversionUtils.convertAvroSchemaToStructType(evolSchema)
+    records = DataSourceTestUtils.generateRandomRowsEvolvedSchema(5)
+    recordsSeq = convertRowListToSeq(records)
+    val df3 = spark.createDataFrame(spark.sparkContext.parallelize(recordsSeq), evolStructType)
+
+    genRecRDD = HoodieSparkUtils.createRdd(df1, evolSchema, "test_struct_name", "test_namespace")
+    genRecs = genRecRDD.collect()
+    System.out.println("Schema of genRec 222 " + genRecs(0).getSchema.toString)
+    genRecs.foreach(entry => System.out.println("Gen Rec 222 " + entry.toString))
+
+    val dfRows = AvroConversionUtils.createDataFrame(genRecRDD, evolSchema.toString, spark)
+    dfRows.collect().foreach(entry => System.out.println("Df resultant row " + entry.mkString(",")))
+    System.out.println("DF resultant schema " + df1.schema.toString())
+
+    val finalGenRecRDD = HoodieSparkUtils.createRdd(dfRows, evolSchema, "test_struct_name","test_namespace")
+    genRecs = finalGenRecRDD.collect()
+    System.out.println("Schema of genRec 333 " + genRecs(0).getSchema.toString)
+    genRecs.foreach(entry => System.out.println("Gen Rec 333 " + entry.toString))
+
+  }
+
+  def convertRowListToSeq(inputList: util.List[Row]): Seq[Row] =
+    JavaConverters.asScalaIteratorConverter(inputList.iterator).asScala.toSeq
 }

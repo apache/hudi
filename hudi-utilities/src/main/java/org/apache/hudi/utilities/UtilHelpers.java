@@ -24,6 +24,8 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -33,16 +35,17 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
+import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor.Config;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
 import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
-import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
@@ -91,21 +94,22 @@ import java.util.Properties;
  * Bunch of helper methods.
  */
 public class UtilHelpers {
+
   private static final Logger LOG = LogManager.getLogger(UtilHelpers.class);
 
   public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,
-                                    SparkSession sparkSession, SchemaProvider schemaProvider,
-                                    HoodieDeltaStreamerMetrics metrics) throws IOException {
+      SparkSession sparkSession, SchemaProvider schemaProvider,
+      HoodieDeltaStreamerMetrics metrics) throws IOException {
     try {
       try {
         return (Source) ReflectionUtils.loadClass(sourceClass,
-            new Class<?>[]{TypedProperties.class, JavaSparkContext.class,
+            new Class<?>[] {TypedProperties.class, JavaSparkContext.class,
                 SparkSession.class, SchemaProvider.class,
                 HoodieDeltaStreamerMetrics.class},
             cfg, jssc, sparkSession, schemaProvider, metrics);
       } catch (HoodieException e) {
         return (Source) ReflectionUtils.loadClass(sourceClass,
-            new Class<?>[]{TypedProperties.class, JavaSparkContext.class,
+            new Class<?>[] {TypedProperties.class, JavaSparkContext.class,
                 SparkSession.class, SchemaProvider.class},
             cfg, jssc, sparkSession, schemaProvider);
       }
@@ -207,7 +211,7 @@ public class UtilHelpers {
   /**
    * Parse Schema from file.
    *
-   * @param fs         File System
+   * @param fs File System
    * @param schemaFile Schema File
    */
   public static String parseSchema(FileSystem fs, String schemaFile) throws Exception {
@@ -257,8 +261,6 @@ public class UtilHelpers {
 
   /**
    * Build Spark Context for ingestion/compaction.
-   *
-   * @return
    */
   public static JavaSparkContext buildSparkContext(String appName, String sparkMaster, String sparkMemory) {
     SparkConf sparkConf = buildSparkConf(appName, sparkMaster);
@@ -269,13 +271,13 @@ public class UtilHelpers {
   /**
    * Build Hoodie write client.
    *
-   * @param jsc         Java Spark Context
-   * @param basePath    Base Path
-   * @param schemaStr   Schema
+   * @param jsc Java Spark Context
+   * @param basePath Base Path
+   * @param schemaStr Schema
    * @param parallelism Parallelism
    */
   public static SparkRDDWriteClient createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
-                                                             int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
+      int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
     HoodieCompactionConfig compactionConfig = compactionStrategyClass
         .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
             .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())
@@ -311,7 +313,6 @@ public class UtilHelpers {
    * Returns a factory for creating connections to the given JDBC URL.
    *
    * @param options - JDBC options that contains url, table and other information.
-   * @return
    * @throws SQLException if the driver could not open a JDBC connection.
    */
   private static Connection createConnectionFactory(Map<String, String> options) throws SQLException {
@@ -407,15 +408,15 @@ public class UtilHelpers {
       return null;
     }
 
-    if (provider instanceof  SchemaProviderWithPostProcessor) {
-      return (SchemaProviderWithPostProcessor)provider;
+    if (provider instanceof SchemaProviderWithPostProcessor) {
+      return (SchemaProviderWithPostProcessor) provider;
     }
 
     String schemaPostProcessorClass = cfg.getString(Config.SCHEMA_POST_PROCESSOR_PROP, null);
     boolean enableSparkAvroPostProcessor = Boolean.valueOf(cfg.getString(SparkAvroPostProcessor.Config.SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE, "true"));
 
     if (transformerClassNames != null && !transformerClassNames.isEmpty()
-            && enableSparkAvroPostProcessor && StringUtils.isNullOrEmpty(schemaPostProcessorClass)) {
+        && enableSparkAvroPostProcessor && StringUtils.isNullOrEmpty(schemaPostProcessorClass)) {
       schemaPostProcessorClass = SparkAvroPostProcessor.class.getName();
     }
 
@@ -429,8 +430,56 @@ public class UtilHelpers {
     return wrapSchemaProviderWithPostProcessor(rowSchemaProvider, cfg, jssc, null);
   }
 
+  public static SchemaProvider createLatestSchemaProvider(StructType structType,
+      JavaSparkContext jssc, FileSystem fs, String basePath) {
+    SchemaProvider rowSchemaProvider = new RowBasedSchemaProvider(structType);
+    Schema incomingSchema = rowSchemaProvider.getTargetSchema();
+    Schema targetSchema = incomingSchema;
+
+    try {
+      if (fs.exists(new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME))) {
+        HoodieTableMetaClient tableMetaClient = HoodieTableMetaClient.builder().setConf(jssc.sc().hadoopConfiguration()).setBasePath(basePath).build();
+        TableSchemaResolver
+            tableSchemaResolver = new TableSchemaResolver(tableMetaClient);
+        if (tableSchemaResolver.areCommitsAvailable()) {
+          Schema tableSchema = tableSchemaResolver.getTableAvroSchemaWithoutMetadataFields();
+          tableSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
+              AvroConversionUtils.convertAvroSchemaToStructType(tableSchema), RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME,
+              RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE);
+          LOG.warn("Comparing incoming schema " + incomingSchema.toString());
+          LOG.warn("Comparing with latest table schema " + tableSchema.toString());
+          if (tableSchema != null && TableSchemaResolver.isSchemaSubset(tableSchema, incomingSchema)) {
+            // if incoming schema is a subset (old schema) compared to table schema. For eg, one of the
+            // ingestion pipeline is still producing events in old schema
+            targetSchema = tableSchema;
+            LOG.warn("Using latest table schema to rewrite incoming records " + tableSchema.toString());
+          }
+        }
+      }
+    } catch (IllegalArgumentException e) {
+      LOG.warn("Likely first commit and hence could not find any schema for the table");
+    } catch (InvalidTableException e) {
+      LOG.warn("Likely first commit and hence could not find any schema for the table");
+    } catch (Exception e) {
+      LOG.warn("Unknown exception thrown " + e.getMessage() + ", Falling back to rowbased schame provvider for target schema");
+    }
+    Schema finalTargetSchema = targetSchema;
+    return new SchemaProvider(null) {
+      @Override
+      public Schema getSourceSchema() {
+        return rowSchemaProvider.getSourceSchema();
+      }
+
+      @Override
+      public Schema getTargetSchema() {
+        return finalTargetSchema;
+      }
+    };
+  }
+
   @FunctionalInterface
   public interface CheckedSupplier<T> {
+
     T get() throws Throwable;
   }
 

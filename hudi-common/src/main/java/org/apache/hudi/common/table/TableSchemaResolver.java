@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table;
 
 import java.io.IOException;
+import java.util.stream.Collectors;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
@@ -59,6 +60,13 @@ public class TableSchemaResolver {
 
   public TableSchemaResolver(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
+  }
+
+  /**
+   * @return {@code true} if any commits are found, else {@code false}.
+   */
+  public boolean areCommitsAvailable() {
+    return metaClient.getCommitsTimeline().getInstants().collect(Collectors.toList()).size() > 0;
   }
 
   /**
@@ -351,6 +359,56 @@ public class TableSchemaResolver {
 
   public static boolean isSchemaCompatible(String oldSchema, String newSchema) {
     return isSchemaCompatible(new Schema.Parser().parse(oldSchema), new Schema.Parser().parse(newSchema));
+  }
+
+  /**
+   * Check if both schemas are equivalent.
+   * @param oldSchema old schema to be validated against.
+   * @param newSchema new schema to be validated against.
+   * @return {@code true} if both schema matches. else {@code false}.
+   */
+  public static boolean isSchemaEquals(Schema oldSchema, Schema newSchema) {
+    if (oldSchema.getType() == newSchema.getType() && newSchema.getType() == Schema.Type.RECORD) {
+      // record names must match:
+      if (!SchemaCompatibility.schemaNameEquals(newSchema, oldSchema)) {
+        return false;
+      }
+
+      // Verify that every field in old schema is present and equals to new schema's field
+      for (final Field oldSchemaField : oldSchema.getFields()) {
+        final Field newSchemaField = SchemaCompatibility.lookupWriterField(newSchema, oldSchemaField);
+        if (newSchemaField == null || !newSchemaField.equals(oldSchemaField)) {
+          return false;
+        }
+      }
+
+      // Verify that every field in new schema is present and equals to old schema's field
+      for (final Field newSchemaField : newSchema.getFields()) {
+        final Field oldSchemaField = SchemaCompatibility.lookupWriterField(oldSchema, newSchemaField);
+        if (oldSchemaField == null || !oldSchemaField.equals(newSchemaField)) {
+          return false;
+        }
+      }
+      return true;
+    } else {
+      org.apache.avro.SchemaCompatibility.SchemaPairCompatibility oldToNewCompatResult =
+          org.apache.avro.SchemaCompatibility.checkReaderWriterCompatibility(newSchema, oldSchema);
+      org.apache.avro.SchemaCompatibility.SchemaPairCompatibility newtoOldCompatResult =
+          org.apache.avro.SchemaCompatibility.checkReaderWriterCompatibility(newSchema, oldSchema);
+
+      return oldToNewCompatResult.getType() == org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE
+          && newtoOldCompatResult.getType() == org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
+    }
+  }
+
+  /**
+   * Check if incoming schema is a subset of table schema.
+   * @param tableSchema table schema.
+   * @param incomingSchema incoming schema.
+   * @return {@code true} if incoming schema is a subset of table schema. else {@code false}.
+   */
+  public static boolean isSchemaSubset(Schema tableSchema, Schema incomingSchema) {
+    return !isSchemaEquals(tableSchema, incomingSchema) && isSchemaCompatible(incomingSchema, tableSchema);
   }
 
   /**

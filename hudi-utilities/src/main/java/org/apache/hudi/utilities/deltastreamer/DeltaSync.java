@@ -182,6 +182,7 @@ public class DeltaSync implements Serializable {
    */
   private transient Option<EmbeddedTimelineService> embeddedTimelineService = Option.empty();
 
+  private HoodieTableMetaClient metaClient;
   /**
    * Write Client.
    */
@@ -223,22 +224,22 @@ public class DeltaSync implements Serializable {
    */
   public void refreshTimeline() throws IOException {
     if (fs.exists(new Path(cfg.targetBasePath))) {
-      HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf())).setBasePath(cfg.targetBasePath).setPayloadClassName(cfg.payloadClassName).build();
-      switch (meta.getTableType()) {
+      metaClient = HoodieTableMetaClient.builder().setConf(new Configuration(fs.getConf())).setBasePath(cfg.targetBasePath).setPayloadClassName(cfg.payloadClassName).build();
+      switch (metaClient.getTableType()) {
         case COPY_ON_WRITE:
-          this.commitTimelineOpt = Option.of(meta.getActiveTimeline().getCommitTimeline().filterCompletedInstants());
+          this.commitTimelineOpt = Option.of(metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants());
           break;
         case MERGE_ON_READ:
-          this.commitTimelineOpt = Option.of(meta.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants());
+          this.commitTimelineOpt = Option.of(metaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants());
           break;
         default:
-          throw new HoodieException("Unsupported table type :" + meta.getTableType());
+          throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
       }
     } else {
       this.commitTimelineOpt = Option.empty();
       String partitionColumns = HoodieWriterUtils.getPartitionColumns(keyGenerator);
 
-      HoodieTableMetaClient.withPropertyBuilder()
+      metaClient = HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
           .setArchiveLogFolder("archived")
@@ -348,7 +349,7 @@ public class DeltaSync implements Serializable {
 
     final Option<JavaRDD<GenericRecord>> avroRDDOptional;
     final String checkpointStr;
-    final SchemaProvider schemaProvider;
+    SchemaProvider schemaProvider;
     if (transformer.isPresent()) {
       // Transformation is needed. Fetch New rows in Row Format, apply transformation and then convert them
       // to generic records for writing
@@ -374,11 +375,12 @@ public class DeltaSync implements Serializable {
             transformed
                 .map(r -> (SchemaProvider) new DelegatingSchemaProvider(props, jssc,
                     dataAndCheckpoint.getSchemaProvider(),
-                    UtilHelpers.createRowBasedSchemaProvider(r.schema(), props, jssc)))
+                    UtilHelpers.createLatestSchemaProvider(r.schema(), jssc, fs, cfg.targetBasePath)))
                 .orElse(dataAndCheckpoint.getSchemaProvider());
         avroRDDOptional = transformed
             .map(t -> HoodieSparkUtils.createRdd(
-                t, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD());
+                t, schemaProvider.getTargetSchema(), HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE).toJavaRDD());
+        LOG.warn("Row based schema provider. target schema. " + schemaProvider.getTargetSchema().toString(true));
       }
     } else {
       // Pull the data from the source & prepare the write
@@ -402,6 +404,7 @@ public class DeltaSync implements Serializable {
 
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
+
     JavaRDD<HoodieRecord> records = avroRDD.map(gr -> {
       HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
           (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false))
@@ -409,6 +412,8 @@ public class DeltaSync implements Serializable {
       return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
     });
 
+    LOG.warn("Source schema in schema provider " + schemaProvider.getSourceSchema().toString());
+    LOG.warn("Target schema in schema provider " + schemaProvider.getTargetSchema().toString());
     return Pair.of(schemaProvider, Pair.of(checkpointStr, records));
   }
 
@@ -729,4 +734,5 @@ public class DeltaSync implements Serializable {
   public Option<HoodieTimeline> getCommitTimelineOpt() {
     return commitTimelineOpt;
   }
+
 }

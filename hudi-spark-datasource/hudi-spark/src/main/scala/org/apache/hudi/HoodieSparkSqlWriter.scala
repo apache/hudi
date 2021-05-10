@@ -30,12 +30,12 @@ import org.apache.hudi.client.HoodieWriteResult
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.util.{CommitUtils, ReflectionUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BOOTSTRAP_BASE_PATH_PROP, BOOTSTRAP_INDEX_CLASS_PROP, DEFAULT_BOOTSTRAP_INDEX_CLASS}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.exception.{HoodieException, InvalidTableException}
 import org.apache.hudi.hive.util.ConfigUtils
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
 import org.apache.hudi.internal.DataSourceInternalWriterHelper
@@ -148,10 +148,10 @@ private[hudi] object HoodieSparkSqlWriter {
           sparkContext.getConf.registerKryoClasses(
             Array(classOf[org.apache.avro.generic.GenericData],
               classOf[org.apache.avro.Schema]))
-          val schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
+          var schema = AvroConversionUtils.convertStructTypeToAvroSchema(df.schema, structName, nameSpace)
+          schema = getLatestSchema(fs, basePath, sparkContext, schema)
           sparkContext.getConf.registerAvroSchemas(schema)
           log.info(s"Registered avro schema : ${schema.toString(true)}")
-
           // Convert to RDD[HoodieRecord]
           val genericRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, schema, structName, nameSpace)
           val shouldCombine = parameters(INSERT_DROP_DUPS_OPT_KEY).toBoolean || operation.equals(WriteOperationType.UPSERT);
@@ -246,6 +246,37 @@ private[hudi] object HoodieSparkSqlWriter {
 
       (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, writeClient, tableConfig)
     }
+  }
+
+  /**
+   * Checks if schema needs upgrade (if incoming records's schema is old while table schema got evolved).
+   * @param fs instance of FileSystem.
+   * @param basePath base path.
+   * @param sparkContext instance of spark context.
+   * @param schema incoming record's schema.
+   * @return latest schema.
+   */
+  def getLatestSchema(fs: FileSystem, basePath: Path, sparkContext: SparkContext, schema: Schema) : Schema = {
+    var latestSchema: Schema = null
+    if(fs.exists(new Path(basePath.toString + "/" + HoodieTableMetaClient.METAFOLDER_NAME))) {
+      val tableMetaClient = HoodieTableMetaClient.builder.setConf(sparkContext.hadoopConfiguration).setBasePath(basePath.toString).build()
+      try {
+        val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
+        if(tableSchemaResolver.areCommitsAvailable()) {
+          val tableSchema = tableSchemaResolver.getTableAvroSchemaWithoutMetadataFields
+          if (tableSchema != null && TableSchemaResolver.isSchemaSubset(tableSchema, schema)) {
+            // if incoming schema is a subset (old schema) compared to table schema. For eg, one of the
+            // ingestion pipeline is still producing events in old schema
+            latestSchema = tableSchema;
+            log.warn("Using latest table schema to rewrite incoming records " + tableSchema.toString)
+          }
+        }
+      } catch {
+        case e: IllegalArgumentException => log.warn("Likely first commit and hence could not find any schema for the table")
+        case e: InvalidTableException => log.warn("Likely first commit and hence could not find any schema for the table")
+      }
+    }
+    latestSchema
   }
 
   def bootstrap(sqlContext: SQLContext,
