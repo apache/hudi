@@ -133,6 +133,13 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   }
 
   /**
+   * Returns the data file name.
+   */
+  protected String generatesDataFileName() {
+    return FSUtils.makeDataFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension());
+  }
+
+  /**
    * Extract old file path, initialize StorageWriter and WriteStatus.
    */
   private void init(String fileId, String partitionPath, HoodieBaseFile baseFileToMerge) {
@@ -148,8 +155,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
           new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
       partitionMetadata.trySave(getPartitionId());
 
-      String newFileName = FSUtils.makeDataFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension());
-      makeOldAndNewFilePaths(partitionPath, latestValidFilePath, newFileName);
+      oldFilePath = new Path(config.getBasePath() + "/" + partitionPath + "/" + latestValidFilePath);
+      String newFileName = generatesDataFileName();
+      String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
+          + newFileName).toString();
+      newFilePath = new Path(config.getBasePath(), relativePath);
 
       LOG.info(String.format("Merging new data into oldPath %s, as newPath %s", oldFilePath.toString(),
           newFilePath.toString()));
@@ -171,11 +181,6 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       throw new HoodieUpsertException("Failed to initialize HoodieUpdateHandle for FileId: " + fileId + " on commit "
           + instantTime + " on path " + hoodieTable.getMetaClient().getBasePath(), io);
     }
-  }
-
-  protected void makeOldAndNewFilePaths(String partitionPath, String oldFileName, String newFileName) {
-    oldFilePath = makeNewFilePath(partitionPath, oldFileName);
-    newFilePath = makeNewFilePath(partitionPath, newFileName);
   }
 
   /**

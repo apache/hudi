@@ -120,15 +120,6 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   }
 
   /**
-   * Make new file path with given file name.
-   */
-  protected Path makeNewFilePath(String partitionPath, String fileName) {
-    String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
-        + fileName).toString();
-    return new Path(config.getBasePath(), relativePath);
-  }
-
-  /**
    * Creates an empty marker file corresponding to storage writer path.
    *
    * @param partitionPath Partition path

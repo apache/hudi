@@ -33,7 +33,6 @@ import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
@@ -53,7 +52,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.function.BiFunction;
-import java.util.stream.Collectors;
 
 /**
  * Sink function to write the data to the underneath filesystem.
@@ -61,8 +59,7 @@ import java.util.stream.Collectors;
  * <p><h2>Work Flow</h2>
  *
  * <p>The function firstly buffers the data as a batch of {@link HoodieRecord}s,
- * It flushes(write) the records batch when the batch size exceeds the configured size {@link FlinkOptions#WRITE_BATCH_SIZE}
- * or the total buffer size exceeds the configured size {@link FlinkOptions#WRITE_TASK_MAX_SIZE}
+ * It flushes(write) the records batch when a batch exceeds the configured size {@link FlinkOptions#WRITE_BATCH_SIZE}
  * or a Flink checkpoint starts. After a batch has been written successfully,
  * the function notifies its operator coordinator {@link StreamWriteOperatorCoordinator} to mark a successful write.
  *
@@ -94,7 +91,7 @@ import java.util.stream.Collectors;
  */
 public class StreamWriteFunction<K, I, O>
     extends KeyedProcessFunction<K, I, O>
-    implements CheckpointedFunction, CheckpointListener {
+    implements CheckpointedFunction {
 
   private static final long serialVersionUID = 1L;
 
@@ -138,11 +135,6 @@ public class StreamWriteFunction<K, I, O>
   private transient String actionType;
 
   /**
-   * Total size tracer.
-   */
-  private transient TotalSizeTracer tracer;
-
-  /**
    * Constructs a StreamingSinkFunction.
    *
    * @param config The config options
@@ -158,7 +150,6 @@ public class StreamWriteFunction<K, I, O>
     this.actionType = CommitUtils.getCommitActionType(
         WriteOperationType.fromValue(config.getString(FlinkOptions.OPERATION)),
         HoodieTableType.valueOf(config.getString(FlinkOptions.TABLE_TYPE)));
-    this.tracer = new TotalSizeTracer(this.config);
     initBuffer();
     initWriteFunction();
   }
@@ -177,7 +168,7 @@ public class StreamWriteFunction<K, I, O>
   }
 
   @Override
-  public void processElement(I value, KeyedProcessFunction<K, I, O>.Context ctx, Collector<O> out) {
+  public void processElement(I value, KeyedProcessFunction<K, I, O>.Context ctx, Collector<O> out) throws Exception {
     bufferRecord(value);
   }
 
@@ -187,11 +178,6 @@ public class StreamWriteFunction<K, I, O>
       this.writeClient.cleanHandles();
       this.writeClient.close();
     }
-  }
-
-  @Override
-  public void notifyCheckpointComplete(long checkpointId) {
-    this.writeClient.cleanHandles();
   }
 
   /**
@@ -309,44 +295,6 @@ public class StreamWriteFunction<K, I, O>
   }
 
   /**
-   * Tool to trace the total buffer size. It computes the maximum buffer size,
-   * if current buffer size is greater than the maximum buffer size, the data bucket
-   * flush triggers.
-   */
-  private static class TotalSizeTracer {
-    private long bufferSize = 0L;
-    private final double maxBufferSize;
-
-    TotalSizeTracer(Configuration conf) {
-      long mergeReaderMem = 100; // constant 100MB
-      long mergeMapMaxMem = conf.getInteger(FlinkOptions.WRITE_MERGE_MAX_MEMORY);
-      this.maxBufferSize = (conf.getDouble(FlinkOptions.WRITE_TASK_MAX_SIZE) - mergeReaderMem - mergeMapMaxMem) * 1024 * 1024;
-      final String errMsg = String.format("'%s' should be at least greater than '%s' plus merge reader memory(constant 100MB now)",
-          FlinkOptions.WRITE_TASK_MAX_SIZE.key(), FlinkOptions.WRITE_MERGE_MAX_MEMORY.key());
-      ValidationUtils.checkState(this.maxBufferSize > 0, errMsg);
-    }
-
-    /**
-     * Trace the given record size {@code recordSize}.
-     *
-     * @param recordSize The record size
-     * @return true if the buffer size exceeds the maximum buffer size
-     */
-    boolean trace(long recordSize) {
-      this.bufferSize += recordSize;
-      return this.bufferSize > this.maxBufferSize;
-    }
-
-    void countDown(long size) {
-      this.bufferSize -= size;
-    }
-
-    public void reset() {
-      this.bufferSize = 0;
-    }
-  }
-
-  /**
    * Returns the bucket ID with the given value {@code value}.
    */
   private String getBucketID(I value) {
@@ -361,9 +309,6 @@ public class StreamWriteFunction<K, I, O>
    * <p>Flush the data bucket first if the bucket records size is greater than
    * the configured value {@link FlinkOptions#WRITE_BATCH_SIZE}.
    *
-   * <p>Flush the max size data bucket if the total buffer size exceeds the configured
-   * threshold {@link FlinkOptions#WRITE_TASK_MAX_SIZE}.
-   *
    * @param value HoodieRecord
    */
   private void bufferRecord(I value) {
@@ -371,21 +316,10 @@ public class StreamWriteFunction<K, I, O>
 
     DataBucket bucket = this.buckets.computeIfAbsent(bucketID,
         k -> new DataBucket(this.config.getDouble(FlinkOptions.WRITE_BATCH_SIZE)));
-    boolean flushBucket = bucket.detector.detect(value);
-    boolean flushBuffer = this.tracer.trace(bucket.detector.lastRecordSize);
-    if (flushBucket) {
+    boolean needFlush = bucket.detector.detect(value);
+    if (needFlush) {
       flushBucket(bucket);
-      this.tracer.countDown(bucket.detector.totalSize);
       bucket.reset();
-    } else if (flushBuffer) {
-      // find the max size bucket and flush it out
-      List<DataBucket> sortedBuckets = this.buckets.values().stream()
-          .sorted((b1, b2) -> Long.compare(b2.detector.totalSize, b1.detector.totalSize))
-          .collect(Collectors.toList());
-      final DataBucket bucketToFlush = sortedBuckets.get(0);
-      flushBucket(bucketToFlush);
-      this.tracer.countDown(bucketToFlush.detector.totalSize);
-      bucketToFlush.reset();
     }
     bucket.records.add((HoodieRecord<?>) value);
   }
@@ -450,7 +384,7 @@ public class StreamWriteFunction<K, I, O>
         .build();
     this.eventGateway.sendEventToCoordinator(event);
     this.buckets.clear();
-    this.tracer.reset();
+    this.writeClient.cleanHandles();
     this.currentInstant = "";
   }
 }
