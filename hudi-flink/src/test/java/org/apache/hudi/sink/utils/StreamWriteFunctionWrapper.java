@@ -163,7 +163,6 @@ public class StreamWriteFunctionWrapper<I> {
     functionInitializationContext.getOperatorStateStore().checkpointSuccess(checkpointId);
     coordinator.notifyCheckpointComplete(checkpointId);
     this.bucketAssignerFunction.notifyCheckpointComplete(checkpointId);
-    this.writeFunction.notifyCheckpointComplete(checkpointId);
     if (conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED)) {
       try {
         compactFunctionWrapper.compact(checkpointId);
