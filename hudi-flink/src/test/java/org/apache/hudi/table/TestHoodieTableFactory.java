@@ -343,4 +343,5 @@ public class TestHoodieTableFactory {
       return false;
     }
   }
+
 }

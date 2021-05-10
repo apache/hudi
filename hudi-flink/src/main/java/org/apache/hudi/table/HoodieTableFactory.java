@@ -61,7 +61,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
     Configuration conf = (Configuration) helper.getOptions();
     TableSchema schema = TableSchemaUtils.getPhysicalSchema(context.getCatalogTable().getSchema());
-    validateRequiredOptions(conf, schema);
+    validateRequiredFields(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier().getObjectName(), context.getCatalogTable(), schema);
 
     Path path = new Path(conf.getOptional(FlinkOptions.PATH).orElseThrow(() ->
@@ -78,7 +78,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   public DynamicTableSink createDynamicTableSink(Context context) {
     Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
     TableSchema schema = TableSchemaUtils.getPhysicalSchema(context.getCatalogTable().getSchema());
-    validateRequiredOptions(conf, schema);
+    validateRequiredFields(conf, schema);
     setupConfOptions(conf, context.getObjectIdentifier().getObjectName(), context.getCatalogTable(), schema);
     return new HoodieTableSink(conf, schema);
   }
@@ -107,7 +107,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    * @param conf The table options
    * @param schema The table schema
    */
-  private void validateRequiredOptions(Configuration conf, TableSchema schema) {
+  private void validateRequiredFields(Configuration conf, TableSchema schema) {
     List<String> fields = Arrays.stream(schema.getFieldNames()).collect(Collectors.toList());
 
     // validate record key in pk absence.
