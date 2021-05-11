@@ -205,6 +205,10 @@ public class TestHiveSyncTool {
     // Lets do the sync
     HiveSyncTool tool = new HiveSyncTool(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     tool.syncHoodieTable();
+    // we need renew the hiveclient after tool.syncHoodieTable(), because it will close hive
+    // session, then lead to connection retry, we can see there is a exception at log.
+    hiveClient =
+            new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     assertTrue(hiveClient.doesTableExist(HiveTestUtil.hiveSyncConfig.tableName),
         "Table " + HiveTestUtil.hiveSyncConfig.tableName + " should exist after sync completes");
     assertEquals(hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName).size(),
@@ -249,6 +253,8 @@ public class TestHiveSyncTool {
 
     tool = new HiveSyncTool(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     tool.syncHoodieTable();
+    hiveClient =
+            new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     // Sync should update the changed partition to correct path
     List<Partition> tablePartitions = hiveClient.scanTablePartitions(HiveTestUtil.hiveSyncConfig.tableName);
     assertEquals(6, tablePartitions.size(), "The one partition we wrote should be added to hive");
