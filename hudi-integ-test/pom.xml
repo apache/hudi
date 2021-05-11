@@ -113,7 +113,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-utilities_${scala.binary.version}</artifactId>
+      <artifactId>hudi-utilities-spark_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
       <scope>provided</scope>
       <exclusions>
@@ -209,7 +209,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-utilities_${scala.binary.version}</artifactId>
+      <artifactId>hudi-utilities-spark_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
       <classifier>tests</classifier>
       <type>test-jar</type>

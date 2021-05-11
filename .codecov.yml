@@ -31,16 +31,16 @@ ignore:
   - "hudi-common/src/main/java/org/apache/hudi/avro/model/*"
   - "hudi-common/src/main/java/org/apache/hudi/avro/MercifulJsonConverter.java"
   - "hudi-common/src/main/java/org/apache/hudi/common/HoodieJsonPayload"
-  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieCleaner.java"
-  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieCompactionAdminTool.java"
-  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieCompactor.java"
-  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieSnapshotCopier.java"
-  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HoodieWithTimelineServer.java"
-  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/UpgradePayloadFromUberToApache.java"
-  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/perf/TimelineServerPerf.java"
-  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HDFSParquetImporter.java"
-  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/HiveIncrementalPuller.java"
-  - "hudi-utilities/src/main/java/org/apache/hudi/utilities/adhoc/UpgradePayloadFromUberToApache.java"
+  - "hudi-utilities/hudi-utilities-spark/src/main/java/org/apache/hudi/utilities/HoodieCleaner.java"
+  - "hudi-utilities/hudi-utilities-spark/src/main/java/org/apache/hudi/utilities/HoodieCompactionAdminTool.java"
+  - "hudi-utilities/hudi-utilities-spark/src/main/java/org/apache/hudi/utilities/HoodieCompactor.java"
+  - "hudi-utilities/hudi-utilities-spark/src/main/java/org/apache/hudi/utilities/HoodieSnapshotCopier.java"
+  - "hudi-utilities/hudi-utilities-spark/src/main/java/org/apache/hudi/utilities/HoodieWithTimelineServer.java"
+  - "hudi-utilities/hudi-utilities-spark/src/main/java/org/apache/hudi/utilities/UpgradePayloadFromUberToApache.java"
+  - "hudi-utilities/hudi-utilities-spark/src/main/java/org/apache/hudi/utilities/perf/TimelineServerPerf.java"
+  - "hudi-utilities/hudi-utilities-spark/src/main/java/org/apache/hudi/utilities/HDFSParquetImporter.java"
+  - "hudi-utilities/hudi-utilities-spark/src/main/java/org/apache/hudi/utilities/HiveIncrementalPuller.java"
+  - "hudi-utilities/hudi-utilities-spark/src/main/java/org/apache/hudi/utilities/adhoc/UpgradePayloadFromUberToApache.java"
   - "hudi-client/src/main/java/org/apache/hudi/metrics/JmxMetricsReporter.java"
   - "hudi-client/src/main/java/org/apache/hudi/metrics/JmxReporterServer.java"
   - "hudi-client/src/main/java/org/apache/hudi/metrics/MetricsGraphiteReporter.java"
@@ -86,4 +86,4 @@ flags:
       - hudi-timeline-service/src/main/
   hudiutilities:
     paths:
-      - hudi-utilities/src/main/
+      - hudi-utilities/hudi-utilities-spark/src/main/
