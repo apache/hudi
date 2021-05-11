@@ -754,7 +754,7 @@ public class TestCleaner extends HoodieClientTestBase {
     List<HoodieCleanStat> hoodieCleanStats = runCleaner(config);
     assertEquals(3,
         getCleanStat(hoodieCleanStats, p0).getSuccessDeleteFiles()
-            .size(), "Must clean three files, one parquet and 2 log files");
+            .size(), "Must clean three files, one base and 2 log files");
     assertFalse(testTable.baseFileExists(p0, "000", file1P0));
     assertFalse(testTable.logFilesExist(p0, "000", file1P0, 1, 2));
     assertTrue(testTable.baseFileExists(p0, "001", file1P0));
@@ -797,7 +797,7 @@ public class TestCleaner extends HoodieClientTestBase {
     List<HoodieCleanStat> hoodieCleanStats = runCleaner(config);
     assertEquals(3,
             getCleanStat(hoodieCleanStats, p0).getSuccessDeleteFiles()
-                    .size(), "Must clean three files, one parquet and 2 log files");
+                    .size(), "Must clean three files, one base and 2 log files");
     assertFalse(testTable.baseFileExists(p0, "000", file1P0));
     assertFalse(testTable.logFilesExist(p0, "000", file1P0, 1, 2));
     assertTrue(testTable.baseFileExists(p0, "001", file1P0));
@@ -935,8 +935,9 @@ public class TestCleaner extends HoodieClientTestBase {
     String partition1 = DEFAULT_PARTITION_PATHS[0];
     String partition2 = DEFAULT_PARTITION_PATHS[1];
 
-    String fileName1 = "data1_1_000.parquet";
-    String fileName2 = "data2_1_000.parquet";
+    String extension = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
+    String fileName1 = "data1_1_000" + extension;
+    String fileName2 = "data2_1_000" + extension;
 
     String filePath1 = metaClient.getBasePath() + "/" + partition1 + "/" + fileName1;
     String filePath2 = metaClient.getBasePath() + "/" + partition1 + "/" + fileName2;
@@ -1025,8 +1026,9 @@ public class TestCleaner extends HoodieClientTestBase {
     String partition1 = DEFAULT_PARTITION_PATHS[0];
     String partition2 = DEFAULT_PARTITION_PATHS[1];
 
-    String fileName1 = "data1_1_000.parquet";
-    String fileName2 = "data2_1_000.parquet";
+    String extension = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
+    String fileName1 = "data1_1_000" + extension;
+    String fileName2 = "data2_1_000" + extension;
 
     Map<String, List<String>> filesToBeCleanedPerPartition = new HashMap<>();
     filesToBeCleanedPerPartition.put(partition1, Arrays.asList(fileName1));
@@ -1314,7 +1316,7 @@ public class TestCleaner extends HoodieClientTestBase {
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2).build())
         .build();
     // Deletions:
-    // . FileId Parquet Logs Total Retained Commits
+    // . FileId Base Logs Total Retained Commits
     // FileId7 5 10 15 009, 011
     // FileId6 5 10 15 009
     // FileId5 3 6 9 005
@@ -1338,7 +1340,7 @@ public class TestCleaner extends HoodieClientTestBase {
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(2).build())
             .build();
     // Deletions:
-    // . FileId Parquet Logs Total Retained Commits
+    // . FileId Base Logs Total Retained Commits
     // FileId7 5 10 15 009, 011
     // FileId6 4 8 12 007, 009
     // FileId5 2 4 6 003 005

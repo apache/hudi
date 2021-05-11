@@ -21,6 +21,7 @@ package org.apache.hudi.common.fs;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -56,6 +57,7 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   private final long minCleanToKeep = 10;
 
   private static String TEST_WRITE_TOKEN = "1-0-1";
+  private static final String BASE_FILE_EXTENSION = HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension();
 
   @Rule
   public final EnvironmentVariables environmentVariables = new EnvironmentVariables();
@@ -69,14 +71,14 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testMakeDataFileName() {
     String instantTime = COMMIT_FORMATTER.format(new Date());
     String fileName = UUID.randomUUID().toString();
-    assertEquals(FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName), fileName + "_" + TEST_WRITE_TOKEN + "_" + instantTime + ".parquet");
+    assertEquals(FSUtils.makeDataFileName(instantTime, TEST_WRITE_TOKEN, fileName), fileName + "_" + TEST_WRITE_TOKEN + "_" + instantTime + BASE_FILE_EXTENSION);
   }
 
   @Test
   public void testMaskFileName() {
     String instantTime = COMMIT_FORMATTER.format(new Date());
     int taskPartitionId = 2;
-    assertEquals(FSUtils.maskWithoutFileId(instantTime, taskPartitionId), "*_" + taskPartitionId + "_" + instantTime + ".parquet");
+    assertEquals(FSUtils.maskWithoutFileId(instantTime, taskPartitionId), "*_" + taskPartitionId + "_" + instantTime + BASE_FILE_EXTENSION);
   }
 
   @Test
@@ -100,9 +102,12 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     });
 
     // Files inside partitions and marker directories
-    List<String> files = Arrays.asList("2016/04/15/1_1-0-1_20190528120000.parquet",
-        "2016/05/16/2_1-0-1_20190528120000.parquet", ".hoodie/.temp/2/2016/05/16/2_1-0-1_20190528120000.parquet",
-        ".hoodie/.temp/2/2016/04/15/1_1-0-1_20190528120000.parquet");
+    List<String> files = Stream.of("2016/04/15/1_1-0-1_20190528120000",
+        "2016/05/16/2_1-0-1_20190528120000",
+        ".hoodie/.temp/2/2016/05/16/2_1-0-1_20190528120000",
+        ".hoodie/.temp/2/2016/04/15/1_1-0-1_20190528120000")
+        .map(fileName -> fileName + BASE_FILE_EXTENSION)
+        .collect(Collectors.toList());
 
     files.forEach(f -> {
       try {

@@ -49,7 +49,6 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.util.Properties;
 
-import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
 
@@ -120,7 +119,6 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
       .setTableName(RAW_TRIPS_TEST_NAME)
       .setTableType(COPY_ON_WRITE)
       .setPayloadClass(HoodieAvroPayload.class)
-      .setBaseFileFormat(PARQUET.toString())
       .fromProperties(props)
       .build();
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, props);
