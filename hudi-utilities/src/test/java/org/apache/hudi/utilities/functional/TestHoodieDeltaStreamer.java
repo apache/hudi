@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -47,6 +48,7 @@ import org.apache.hudi.utilities.DummySchemaProvider;
 import org.apache.hudi.utilities.HoodieClusteringJob;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
 import org.apache.hudi.utilities.sources.CsvDFSSource;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 import org.apache.hudi.utilities.sources.InputBatch;
@@ -107,6 +109,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -150,6 +153,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   private static final Logger LOG = LogManager.getLogger(TestHoodieDeltaStreamer.class);
   public static KafkaTestUtils testUtils;
   protected static String topicName;
+  private static String defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
 
   protected static int testNum = 1;
 
@@ -371,7 +375,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
         cfg.payloadClassName = payloadClassName;
       }
       if (useSchemaProviderClass) {
-        cfg.schemaProviderClassName = FilebasedSchemaProvider.class.getName();
+        cfg.schemaProviderClassName = defaultSchemaProviderClassName;
       }
       return cfg;
     }
@@ -491,6 +495,20 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       int numDeltaCommits = (int) timeline.getInstants().count();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
     }
+  }
+
+  /**
+   * args for schema post processor test.
+   * @return
+   */
+  private static Stream<Arguments> schemaPostProcessorArgs() {
+    return Stream.of(
+        Arguments.of(true, false, true),
+        Arguments.of(true, true, true),
+        Arguments.of(true, true, false),
+        Arguments.of(false, false, true),
+        Arguments.of(false, true, true),
+        Arguments.of(false, true, false));
   }
 
   @Test
@@ -720,6 +738,44 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   public void testLatestCheckpointCarryOverWithMultipleWriters() throws Exception {
     testLatestCheckpointCarryOverWithMultipleWriters(HoodieTableType.COPY_ON_WRITE, "continuous_cow_checkpoint");
   }
+
+  @ParameterizedTest
+  @MethodSource("schemaPostProcessorArgs")
+  public void testSchemaPostProcessor(boolean enableSchemaPostProcessor, boolean addTransformer, boolean provideUserSchema) throws Exception {
+    String tableBasePath = dfsBasePath + "/test_table_schema_post_processor_" + enableSchemaPostProcessor + "_" + addTransformer + "_" + provideUserSchema;
+    if (provideUserSchema) {
+      defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
+    } else {
+      defaultSchemaProviderClassName = TestFileBasedSchemaProviderNullTargetSchema.class.getName();
+    }
+    // Insert data produced with Schema A, pass Schema A
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, addTransformer ?
+        Collections.singletonList(TestIdentityTransformer.class.getName()) : Collections.emptyList(), PROPS_FILENAME_TEST_SOURCE,
+        false, true, false, null, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL());
+    cfg.configs.add("hoodie.deltastreamer.schemaprovider.source.schema.file=" + dfsBasePath + "/source.avsc");
+    cfg.configs.add("hoodie.deltastreamer.schemaprovider.target.schema.file=" + dfsBasePath + "/source.avsc");
+    if (!enableSchemaPostProcessor) {
+      cfg.configs.add(SparkAvroPostProcessor.Config.SPARK_AVRO_POST_PROCESSOR_PROP_ENABLE + "=false");
+    }
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+    TestHelpers.assertRecordCount(1000, tableBasePath + "/*/*", sqlContext);
+    TestHelpers.assertCommitMetadata("00000", tableBasePath, dfs, 1);
+
+    TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(dfs.getConf()).build());
+    Schema tableSchema = tableSchemaResolver.getTableAvroSchemaWithoutMetadataFields();
+    assertNotNull(tableSchema);
+
+    LOG.warn("table schema " + tableSchema.toString());
+    Schema expectedSchema = new Schema.Parser().parse(dfs.open(new Path(dfsBasePath + "/source.avsc")));
+    LOG.warn("Expected schema " + expectedSchema.toString());
+    //if (!useUserProvidedSchema) {
+      //expectedSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
+        //  AvroConversionUtils.convertAvroSchemaToStructType(expectedSchema), HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE);
+    // }
+    assertEquals(expectedSchema, tableSchema);
+
+  }
+
 
   private void testUpsertsContinuousMode(HoodieTableType tableType, String tempDir) throws Exception {
     String tableBasePath = dfsBasePath + "/" + tempDir;
@@ -1664,6 +1720,21 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
         TypedProperties properties) {
       return rowDataset;
+    }
+  }
+
+  /**
+   * {@link FilebasedSchemaProvider} to be used in tests where target schema is null.
+   */
+  public static class TestFileBasedSchemaProviderNullTargetSchema extends FilebasedSchemaProvider {
+
+    public TestFileBasedSchemaProviderNullTargetSchema(TypedProperties props, JavaSparkContext jssc) {
+      super(props, jssc);
+    }
+
+    @Override
+    public Schema getTargetSchema() {
+      return null;
     }
   }
 }

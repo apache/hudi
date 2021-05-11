@@ -19,6 +19,8 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.avro.Schema;
+
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.util.Option;
 
 /**

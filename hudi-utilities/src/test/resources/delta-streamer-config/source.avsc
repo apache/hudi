@@ -27,7 +27,11 @@
     "type" : "string"
   }, {
     "name" : "rider",
-    "type" : "string"
+    "type": [
+            "null",
+            "string"
+          ],
+          "default": null
   }, {
     "name" : "driver",
     "type" : "string"

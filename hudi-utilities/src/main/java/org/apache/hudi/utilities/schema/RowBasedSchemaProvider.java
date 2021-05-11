@@ -20,12 +20,17 @@ package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 
 import org.apache.avro.Schema;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.types.StructType;
 
 public class RowBasedSchemaProvider extends SchemaProvider {
+
+  private static final Logger LOG = LogManager.getLogger(RowBasedSchemaProvider.class);
 
   // Used in GenericRecord conversions
   public static final String HOODIE_RECORD_NAMESPACE = "hoodie.source";
@@ -44,7 +49,12 @@ public class RowBasedSchemaProvider extends SchemaProvider {
 
   @Override
   public Schema getSourceSchema() {
-    return AvroConversionUtils.convertStructTypeToAvroSchema(rowStruct, HOODIE_RECORD_STRUCT_NAME,
+    //AvroConversionUtils.getAvroSchemaWithDefaults(
+     Schema schema = AvroConversionUtils.convertStructTypeToAvroSchema(rowStruct, HOODIE_RECORD_STRUCT_NAME,
         HOODIE_RECORD_NAMESPACE);
+    LOG.warn("Row based init schema "+ schema.toString());
+    schema = AvroConversionUtils.getAvroSchemaWithDefaults(schema);
+    LOG.warn("Row based schema after defaults " + schema.toString());
+    return schema;
   }
 }

@@ -358,6 +358,10 @@ public class DeltaSync implements Serializable {
       Option<Dataset<Row>> transformed =
           dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(jssc, sparkSession, data, props));
       checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
+
+      Dataset<Row> rows = transformed.get();
+      LOG.warn("Transformed row schema " + rows.schema().toString());
+
       if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetSchema() != null) {
         // If the target schema is specified through Avro schema,
         // pass in the schema for the Row-to-Avro conversion
@@ -408,6 +412,8 @@ public class DeltaSync implements Serializable {
           : DataSourceUtils.createPayload(cfg.payloadClassName, gr);
       return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
     });
+
+    LOG.warn("Delta sync end target schema " + schemaProvider.getTargetSchema().toString());
 
     return Pair.of(schemaProvider, Pair.of(checkpointStr, records));
   }

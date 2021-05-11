@@ -40,8 +40,8 @@ public class SparkAvroPostProcessor extends SchemaPostProcessor {
 
   @Override
   public Schema processSchema(Schema schema) {
-    return AvroConversionUtils.convertStructTypeToAvroSchema(
+    return schema != null ? AvroConversionUtils.convertStructTypeToAvroSchema(
         AvroConversionUtils.convertAvroSchemaToStructType(schema), RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME, 
-        RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE);
+        RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE): null;
   }
 }

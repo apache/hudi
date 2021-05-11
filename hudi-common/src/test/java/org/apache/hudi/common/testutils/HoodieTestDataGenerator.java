@@ -90,7 +90,11 @@ public class HoodieTestDataGenerator {
   public static final int DEFAULT_PARTITION_DEPTH = 3;
   public static final String TRIP_SCHEMA_PREFIX = "{\"type\": \"record\"," + "\"name\": \"triprec\"," + "\"fields\": [ "
       + "{\"name\": \"timestamp\",\"type\": \"long\"}," + "{\"name\": \"_row_key\", \"type\": \"string\"},"
-      + "{\"name\": \"rider\", \"type\": \"string\"}," + "{\"name\": \"driver\", \"type\": \"string\"},"
+      + "{\"name\": \"rider\", \"type\": [\n"
+      + "        \"null\",\n"
+      + "        \"string\"\n"
+      + "      ],\n"
+      + "      \"default\": null}," + "{\"name\": \"driver\", \"type\": \"string\"},"
       + "{\"name\": \"begin_lat\", \"type\": \"double\"}," + "{\"name\": \"begin_lon\", \"type\": \"double\"},"
       + "{\"name\": \"end_lat\", \"type\": \"double\"}," + "{\"name\": \"end_lon\", \"type\": \"double\"},";
   public static final String TRIP_SCHEMA_SUFFIX = "{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false} ]}";
