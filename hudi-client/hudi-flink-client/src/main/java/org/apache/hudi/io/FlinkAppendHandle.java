@@ -75,6 +75,11 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O> extends H
         && hoodieRecord.getCurrentLocation().getInstantTime().equals("U");
   }
 
+  @Override
+  public boolean canWrite(HoodieRecord record) {
+    return true;
+  }
+
   /**
    * Returns whether there is need to bootstrap this file handle.
    * E.G. the first time that the handle is created.
