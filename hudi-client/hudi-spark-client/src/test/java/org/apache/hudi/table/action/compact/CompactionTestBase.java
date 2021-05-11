@@ -135,7 +135,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
       List<HoodieBaseFile> dataFilesToRead = getCurrentLatestBaseFiles(hoodieTable);
       assertTrue(dataFilesToRead.stream().findAny().isPresent(),
-          "should list the parquet files we wrote in the delta commit");
+          "should list the base files we wrote in the delta commit");
       validateDeltaCommit(firstInstant, fgIdToCompactionOperation, cfg);
     }
 

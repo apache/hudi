@@ -32,6 +32,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -130,7 +131,8 @@ public class FSUtils {
 
   // TODO: this should be removed
   public static String makeDataFileName(String instantTime, String writeToken, String fileId) {
-    return String.format("%s_%s_%s%s", fileId, writeToken, instantTime, HoodieFileFormat.PARQUET.getFileExtension());
+    return String.format("%s_%s_%s%s", fileId, writeToken, instantTime,
+        HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension());
   }
 
   public static String makeDataFileName(String instantTime, String writeToken, String fileId, String fileExtension) {
@@ -142,7 +144,7 @@ public class FSUtils {
   }
 
   public static String maskWithoutFileId(String instantTime, int taskPartitionId) {
-    return String.format("*_%s_%s%s", taskPartitionId, instantTime, HoodieFileFormat.PARQUET.getFileExtension());
+    return String.format("*_%s_%s%s", taskPartitionId, instantTime, HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension());
   }
 
   public static String getCommitFromCommitFile(String commitFileName) {
@@ -329,7 +331,7 @@ public class FSUtils {
   }
 
   /**
-   * Check if the file is a parquet file of a log file. Then get the fileId appropriately.
+   * Check if the file is a base file of a log file. Then get the fileId appropriately.
    */
   public static String getFileIdFromFilePath(Path filePath) {
     if (FSUtils.isLogFile(filePath)) {
