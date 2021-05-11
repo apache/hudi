@@ -144,6 +144,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
       val (writeResult, writeClient: SparkRDDWriteClient[HoodieRecordPayload[Nothing]]) =
         if (operation != WriteOperationType.DELETE) {
+
           // register classes & schemas
           val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tblName)
           sparkContext.getConf.registerKryoClasses(
@@ -574,7 +575,19 @@ private[hudi] object HoodieSparkSqlWriter {
       }
       (commitSuccess && metaSyncSuccess, compactionInstant)
     } else {
-      log.error(s"${tableInstantInfo.operation} failed with errors, please check task logs for details")
+      log.error(s"${tableInstantInfo.operation} failed with errors")
+      if (log.isTraceEnabled) {
+        log.trace("Printing out the top 100 errors")
+        writeResult.getWriteStatuses.rdd.filter(ws => ws.hasErrors)
+          .take(100)
+          .foreach(ws => {
+            log.trace("Global error :", ws.getGlobalError)
+            if (ws.getErrors.size() > 0) {
+              ws.getErrors.foreach(kt =>
+                log.trace(s"Error for key: ${kt._1}", kt._2))
+            }
+          })
+      }
       (false, common.util.Option.empty())
     }
   }
