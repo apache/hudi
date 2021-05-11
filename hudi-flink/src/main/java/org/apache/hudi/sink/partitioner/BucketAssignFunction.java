@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.DataFileUtils;
+import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
@@ -213,7 +213,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   private void loadRecords(String partitionPath) throws Exception {
     LOG.info("Start loading records under partition {} into the index state", partitionPath);
     HoodieTable<?, ?, ?, ?> hoodieTable = bucketAssigner.getTable();
-    DataFileUtils fileUtils = DataFileUtils.getInstance(hoodieTable.getBaseFileFormat());
+    BaseFileUtils fileUtils = BaseFileUtils.getInstance(hoodieTable.getBaseFileFormat());
     List<HoodieBaseFile> latestBaseFiles =
         HoodieIndexUtils.getLatestBaseFilesForPartition(partitionPath, hoodieTable);
     final int parallelism = getRuntimeContext().getNumberOfParallelSubtasks();

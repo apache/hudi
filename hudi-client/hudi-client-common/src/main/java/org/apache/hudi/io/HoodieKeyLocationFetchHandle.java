@@ -22,7 +22,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.DataFileUtils;
+import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -48,7 +48,7 @@ public class HoodieKeyLocationFetchHandle<T extends HoodieRecordPayload, I, K, O
 
   public Stream<Pair<HoodieKey, HoodieRecordLocation>> locations() {
     HoodieBaseFile baseFile = partitionPathBaseFilePair.getRight();
-    return DataFileUtils.getInstance(baseFile.getPath()).fetchRecordKeyPartitionPath(
+    return BaseFileUtils.getInstance(baseFile.getPath()).fetchRecordKeyPartitionPath(
         hoodieTable.getHadoopConf(), new Path(baseFile.getPath())).stream()
         .map(entry -> Pair.of(entry,
             new HoodieRecordLocation(baseFile.getCommitTime(), baseFile.getFileId())));

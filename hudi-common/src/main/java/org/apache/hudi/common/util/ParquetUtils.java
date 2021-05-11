@@ -55,7 +55,7 @@ import java.util.function.Function;
 /**
  * Utility functions involving with parquet.
  */
-public class ParquetUtils extends DataFileUtils {
+public class ParquetUtils extends BaseFileUtils {
 
   /**
    * Read the rowKey list from the given parquet file.

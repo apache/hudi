@@ -30,23 +30,23 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 
-public abstract class DataFileUtils {
+public abstract class BaseFileUtils {
 
-  public static DataFileUtils getInstance(String path) {
+  public static BaseFileUtils getInstance(String path) {
     if (path.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
       return new ParquetUtils();
     }
     throw new UnsupportedOperationException("The format for file " + path + " is not supported yet.");
   }
 
-  public static DataFileUtils getInstance(HoodieFileFormat fileFormat) {
+  public static BaseFileUtils getInstance(HoodieFileFormat fileFormat) {
     if (HoodieFileFormat.PARQUET.equals(fileFormat)) {
       return new ParquetUtils();
     }
     throw new UnsupportedOperationException(fileFormat.name() + " format not supported yet.");
   }
 
-  public static DataFileUtils getInstance(HoodieTableMetaClient metaClient) {
+  public static BaseFileUtils getInstance(HoodieTableMetaClient metaClient) {
     return getInstance(metaClient.getTableConfig().getBaseFileFormat());
   }
 
