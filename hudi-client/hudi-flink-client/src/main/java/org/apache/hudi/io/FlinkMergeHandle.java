@@ -238,4 +238,20 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
       throw new HoodieIOException("Error when rename the temporary roll file: " + lastPath + " to: " + desiredPath, e);
     }
   }
+
+  @Override
+  public void closeGracefully() {
+    try {
+      finishWrite();
+    } catch (Throwable throwable) {
+      LOG.warn("Error while trying to dispose the MERGE handle", throwable);
+      try {
+        fs.delete(newFilePath, false);
+        LOG.info("Deleting the intermediate MERGE data file: " + newFilePath + " success!");
+      } catch (IOException e) {
+        // logging a warning and ignore the exception.
+        LOG.warn("Deleting the intermediate MERGE data file: " + newFilePath + " failed", e);
+      }
+    }
+  }
 }

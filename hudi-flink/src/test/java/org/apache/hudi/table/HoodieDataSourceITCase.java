@@ -392,9 +392,8 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     assertRowsEquals(result, "[id1,Sophia,18,1970-01-01T00:00:05,par5]");
   }
 
-  @ParameterizedTest
-  @EnumSource(value = ExecMode.class)
-  void testStreamReadEmptyTablePath(ExecMode execMode) throws Exception {
+  @Test
+  void testStreamReadEmptyTablePath() throws Exception {
     // create an empty table
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     StreamerUtil.initTableIfNotExists(conf);
