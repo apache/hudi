@@ -102,7 +102,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   //  Utilities
   // -------------------------------------------------------------------------
 
-  /** Validate required options. e.g record key and pre combine key.
+  /** Validate required options. For e.g, record key and pre_combine key.
    *
    * @param conf The table options
    * @param schema The table schema
@@ -115,17 +115,17 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       Arrays.stream(conf.get(FlinkOptions.RECORD_KEY_FIELD).split(","))
           .filter(field -> !fields.contains(field))
           .findAny()
-          .ifPresent(e -> {
-            throw new ValidationException("The " + e + " field not exists in table schema."
-                + "Please define primary key or modify hoodie.datasource.write.recordkey.field option.");
+          .ifPresent(f -> {
+            throw new ValidationException("Field '" + f + "' does not exist in the table schema."
+                + "Please define primary key or modify 'hoodie.datasource.write.recordkey.field' option.");
           });
     }
 
-    // validate pre combine key
+    // validate pre_combine key
     String preCombineField = conf.get(FlinkOptions.PRECOMBINE_FIELD);
     if (!fields.contains(preCombineField)) {
-      throw new ValidationException("The " + preCombineField + " field not exists in table schema."
-          + "Please check write.precombine.field option.");
+      throw new ValidationException("Field " + preCombineField + " does not exist in the table schema."
+          + "Please check 'write.precombine.field' option.");
     }
   }
 

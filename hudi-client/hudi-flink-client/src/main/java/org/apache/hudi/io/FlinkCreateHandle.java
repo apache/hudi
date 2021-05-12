@@ -185,6 +185,22 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
     }
   }
 
+  @Override
+  public void closeGracefully() {
+    try {
+      finishWrite();
+    } catch (Throwable throwable) {
+      LOG.warn("Error while trying to dispose the CREATE handle", throwable);
+      try {
+        fs.delete(path, false);
+        LOG.info("Deleting the intermediate CREATE data file: " + path + " success!");
+      } catch (IOException e) {
+        // logging a warning and ignore the exception.
+        LOG.warn("Deleting the intermediate CREATE data file: " + path + " failed", e);
+      }
+    }
+  }
+
   /**
    * Performs actions to durably, persist the current changes and returns a WriteStatus object.
    */
