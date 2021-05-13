@@ -445,6 +445,11 @@ This is useful to store checkpointing information, in a consistent way with the 
 <p>Property: <code class="highlighter-rouge">hoodie.datasource.write.insert.drop.duplicates</code>, Default: <code class="highlighter-rouge">false</code> <br />
   <span style="color:grey">If set to true, filters out all duplicate records from incoming dataframe, during insert operations. </span></p>
 
+<h4 id="ENABLE_ROW_WRITER_OPT_KEY">ENABLE_ROW_WRITER_OPT_KEY</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.datasource.write.row.writer.enable</code>, Default: <code class="highlighter-rouge">false</code> <br />
+<span style="color:grey">When set to true, will perform write operations directly using the spark native <code class="highlighter-rouge">Row</code>
+representation. This is expected to be faster by 20 to 30% than regular bulk_insert by setting this config</span></p>
+
 <h4 id="HIVE_SYNC_ENABLED_OPT_KEY">HIVE_SYNC_ENABLED_OPT_KEY</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.datasource.hive_sync.enable</code>, Default: <code class="highlighter-rouge">false</code> <br />
   <span style="color:grey">When set to true, register/sync the table to Apache Hive metastore</span></p>
@@ -592,10 +597,6 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
 <h4 id="withAutoCommit">withAutoCommit(autoCommit = true)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.auto.commit</code><br />
 <span style="color:grey">Should HoodieWriteClient autoCommit after insert and upsert. The client can choose to turn off auto-commit and commit on a “defined success condition”</span></p>
-
-<h4 id="withAssumeDatePartitioning">withAssumeDatePartitioning(assumeDatePartitioning = false)</h4>
-<p>Property: <code class="highlighter-rouge">hoodie.assume.date.partitioning</code><br />
-<span style="color:grey">Should HoodieWriteClient assume the data is partitioned by dates, i.e three levels from base path. This is a stop-gap to support tables created by versions &lt; 0.3.1. Will be removed eventually </span></p>
 
 <h4 id="withConsistencyCheckEnabled">withConsistencyCheckEnabled(enabled = false)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.consistency.check.enabled</code><br />
@@ -908,6 +909,10 @@ with keys/footers, avoiding full cost of rewriting the dataset. <code class="hig
 <h4 id="enable">archiveCommitsWith(minToKeep = 30, maxToKeep = 20)</h4>
 <p>Property: <code class="highlighter-rouge">hoodie.metadata.keep.min.commits</code>, <code class="highlighter-rouge">hoodie.metadata.keep.max.commits</code> <br />
 <span style="color:grey"> Controls the archival of the metadata table’s timeline </span></p>
+
+<h4 id="withAssumeDatePartitioning">withAssumeDatePartitioning(assumeDatePartitioning = false)</h4>
+<p>Property: <code class="highlighter-rouge">hoodie.assume.date.partitioning</code><br />
+<span style="color:grey">Should HoodieWriteClient assume the data is partitioned by dates, i.e three levels from base path. This is a stop-gap to support tables created by versions &lt; 0.3.1. Will be removed eventually </span></p>
 
 <h3 id="clustering-configs">Clustering Configs</h3>
 <p>Controls clustering operations in hudi. Each clustering has to be configured for its strategy, and config params. This config drives the same.</p>
