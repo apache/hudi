@@ -68,7 +68,7 @@ public class StreamWriteFunctionWrapper<I> {
   /** Function that assigns bucket ID. */
   private BucketAssignFunction<String, HoodieRecord<?>, HoodieRecord<?>> bucketAssignerFunction;
   /** Stream write function. */
-  private StreamWriteFunction<Object, HoodieRecord<?>, Object> writeFunction;
+  private StreamWriteFunction<HoodieRecord<?>, Object> writeFunction;
 
   private CompactFunctionWrapper compactFunctionWrapper;
 

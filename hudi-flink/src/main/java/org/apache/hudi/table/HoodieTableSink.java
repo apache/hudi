@@ -79,8 +79,6 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
               TypeInformation.of(HoodieRecord.class),
               new KeyedProcessOperator<>(new BucketAssignFunction<>(conf)))
           .uid("uid_bucket_assigner")
-          // shuffle by fileId(bucket id)
-          .keyBy(record -> record.getCurrentLocation().getFileId())
           .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
           .uid("uid_hoodie_stream_write")
           .setParallelism(numWriteTasks);
