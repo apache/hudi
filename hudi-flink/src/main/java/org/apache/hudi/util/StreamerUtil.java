@@ -63,10 +63,7 @@ import javax.annotation.Nullable;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
-import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
-import java.util.Properties;
+import java.util.*;
 
 /**
  * Utilities for Flink stream read and write.
@@ -219,7 +216,7 @@ public class StreamerUtil {
                 .logFileMaxSize(conf.getInteger(FlinkOptions.WRITE_LOG_MAX_SIZE) * 1024 * 1024)
                 .build())
             .withAutoCommit(false)
-            .withProps(flinkConf2TypedProperties(FlinkOptions.flatOptions(conf)));
+            .withProps(flinkConf2Map(FlinkOptions.flatOptions(conf)));
 
     builder = builder.withSchema(getSourceSchema(conf).toString());
     return builder.build();
@@ -243,6 +240,23 @@ public class StreamerUtil {
       }
     }
     return new TypedProperties(properties);
+  }
+
+  public static Map<String, Object>  flinkConf2Map(Configuration conf) {
+    Properties properties = new Properties();
+    // put all the set up options
+    conf.addAllToProperties(properties);
+    // put all the default options
+    for (ConfigOption<?> option : FlinkOptions.optionalOptions()) {
+      if (!conf.contains(option) && option.hasDefaultValue()) {
+        properties.put(option.key(), option.defaultValue());
+      }
+    }
+    Map<String, Object> map = new HashMap<>();
+    for (Object key : properties.keySet()) {
+      map.put((String) key, properties.get(key));
+    }
+    return map;
   }
 
   public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
