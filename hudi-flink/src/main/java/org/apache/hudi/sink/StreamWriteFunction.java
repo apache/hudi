@@ -188,7 +188,7 @@ public class StreamWriteFunction<I, O>
   @Override
   public void close() {
     if (this.writeClient != null) {
-      this.writeClient.cleanHandles();
+      this.writeClient.cleanHandlesGracefully();
       this.writeClient.close();
     }
   }

@@ -21,6 +21,7 @@ package org.apache.hudi.io;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.collection.Pair;
@@ -123,6 +124,11 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
     }
   }
 
+  @Override
+  public boolean canWrite(HoodieRecord record) {
+    return true;
+  }
+
   /**
    * Use the writeToken + "-" + rollNumber as the new writeToken of a mini-batch write.
    */
@@ -176,6 +182,22 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
       fileWriter.close();
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to close the Insert Handle for path " + path, e);
+    }
+  }
+
+  @Override
+  public void closeGracefully() {
+    try {
+      finishWrite();
+    } catch (Throwable throwable) {
+      LOG.warn("Error while trying to dispose the CREATE handle", throwable);
+      try {
+        fs.delete(path, false);
+        LOG.info("Deleting the intermediate CREATE data file: " + path + " success!");
+      } catch (IOException e) {
+        // logging a warning and ignore the exception.
+        LOG.warn("Deleting the intermediate CREATE data file: " + path + " failed", e);
+      }
     }
   }
 

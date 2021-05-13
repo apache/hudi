@@ -26,6 +26,7 @@ import org.apache.hudi.common.bootstrap.index.BootstrapIndex.IndexWriter;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.collection.Pair;
@@ -62,7 +63,7 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
 
   private static final String[] PARTITIONS = {"2020/03/18", "2020/03/19", "2020/03/20", "2020/03/21"};
   private static final Set<String> PARTITION_SET = Arrays.stream(PARTITIONS).collect(Collectors.toSet());
-  private static final String BOOTSTRAP_BASE_PATH = "/tmp/source/parquet_tables/table1";
+  private static final String BOOTSTRAP_BASE_PATH = "/tmp/source/data_tables/table1";
 
   @BeforeEach
   public void init() throws IOException {
@@ -168,7 +169,7 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
     return Arrays.stream(partitions).map(partition -> {
       return Pair.of(partition, IntStream.range(0, numEntriesPerPartition).mapToObj(idx -> {
         String hudiFileId = UUID.randomUUID().toString();
-        String sourceFileName = idx + ".parquet";
+        String sourceFileName = idx + HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension();
         HoodieFileStatus sourceFileStatus = HoodieFileStatus.newBuilder()
             .setPath(HoodiePath.newBuilder().setUri(sourceBasePath + "/" + partition + "/" + sourceFileName).build())
             .setLength(256 * 1024 * 1024L)
