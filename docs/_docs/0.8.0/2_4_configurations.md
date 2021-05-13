@@ -94,7 +94,12 @@ This is useful to store checkpointing information, in a consistent way with the 
 #### INSERT_DROP_DUPS_OPT_KEY {#INSERT_DROP_DUPS_OPT_KEY}
   Property: `hoodie.datasource.write.insert.drop.duplicates`, Default: `false` <br/>
   <span style="color:grey">If set to true, filters out all duplicate records from incoming dataframe, during insert operations. </span>
-  
+
+#### ENABLE_ROW_WRITER_OPT_KEY {#ENABLE_ROW_WRITER_OPT_KEY}
+Property: `hoodie.datasource.write.row.writer.enable`, Default: `false` <br/>
+<span style="color:grey">When set to true, will perform write operations directly using the spark native `Row`
+representation. This is expected to be faster by 20 to 30% than regular bulk_insert by setting this config</span>
+
 #### HIVE_SYNC_ENABLED_OPT_KEY {#HIVE_SYNC_ENABLED_OPT_KEY}
   Property: `hoodie.datasource.hive_sync.enable`, Default: `false` <br/>
   <span style="color:grey">When set to true, register/sync the table to Apache Hive metastore</span>
@@ -287,6 +292,11 @@ Property: `hoodie.combine.before.insert`, `hoodie.combine.before.upsert`<br/>
 #### combineDeleteInput(on_Delete = true) {#combineDeleteInput}
 Property: `hoodie.combine.before.delete`<br/>
 <span style="color:grey">Flag which first combines the input RDD and merges multiple partial records into a single record before deleting in DFS</span>
+
+#### withMergeAllowDuplicateOnInserts(mergeAllowDuplicateOnInserts = false) {#withMergeAllowDuplicateOnInserts}
+Property: `hoodie.merge.allow.duplicate.on.inserts` <br/>
+<span style="color:grey"> When enabled, will route new records as inserts and will not merge with existing records.
+Result could contain duplicate entries. </span>
 
 #### withWriteStatusStorageLevel(level = MEMORY_AND_DISK_SER) {#withWriteStatusStorageLevel} 
 Property: `hoodie.write.status.storage.level`<br/>

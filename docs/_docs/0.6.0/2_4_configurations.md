@@ -93,7 +93,12 @@ This is useful to store checkpointing information, in a consistent way with the 
 #### INSERT_DROP_DUPS_OPT_KEY {#INSERT_DROP_DUPS_OPT_KEY}
   Property: `hoodie.datasource.write.insert.drop.duplicates`, Default: `false` <br/>
   <span style="color:grey">If set to true, filters out all duplicate records from incoming dataframe, during insert operations. </span>
-  
+
+#### ENABLE_ROW_WRITER_OPT_KEY {#ENABLE_ROW_WRITER_OPT_KEY}
+Property: `hoodie.datasource.write.row.writer.enable`, Default: `false` <br/>
+<span style="color:grey">When set to true, will perform write operations directly using the spark native `Row`
+representation. This is expected to be faster by 20 to 30% than regular bulk_insert by setting this config</span>
+
 #### HIVE_SYNC_ENABLED_OPT_KEY {#HIVE_SYNC_ENABLED_OPT_KEY}
   Property: `hoodie.datasource.hive_sync.enable`, Default: `false` <br/>
   <span style="color:grey">When set to true, register/sync the table to Apache Hive metastore</span>
