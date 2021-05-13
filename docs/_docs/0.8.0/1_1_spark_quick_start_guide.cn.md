@@ -21,11 +21,11 @@ spark-shell \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 // spark-shell for spark 2 with scala 2.12
 spark-shell \
-  --packages org.apache.hudi:hudi-spark-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \
+  --packages org.apache.hudi:hudi-spark-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:2.4.4 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 // spark-shell for spark 2 with scala 2.11
 spark-shell \
-  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.8.0,org.apache.spark:spark-avro_2.11:3.0.1 \
+  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.8.0,org.apache.spark:spark-avro_2.11:2.4.4 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
