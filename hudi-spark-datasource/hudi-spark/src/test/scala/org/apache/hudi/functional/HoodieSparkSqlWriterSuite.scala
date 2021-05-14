@@ -411,7 +411,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
         initSparkContext("test_schema_evolution")
         val path = java.nio.file.Files.createTempDirectory("hoodie_test_path")
         try {
-          val hoodieFooTableName = "hoodie_foo_tbl"
+          val hoodieFooTableName = "hoodie_foo_tbl_" + tableType
           //create a new table
           val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
             HoodieWriteConfig.TABLE_NAME -> hoodieFooTableName,

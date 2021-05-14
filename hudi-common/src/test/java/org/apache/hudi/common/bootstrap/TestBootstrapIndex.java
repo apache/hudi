@@ -24,6 +24,7 @@ import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex.IndexWriter;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
+import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -31,6 +32,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 
 import java.io.IOException;
@@ -41,6 +43,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -84,6 +87,21 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
 
     // Run again this time recreating bootstrap index
     testBootstrapIndexOneRound(5);
+  }
+
+  @Test
+  public void testNoOpBootstrapIndex() throws IOException {
+    Map<String, String> props = metaClient.getTableConfig().getProps();
+    props.put(HoodieTableConfig.HOODIE_BOOTSTRAP_INDEX_ENABLE, "false");
+    Properties properties = new Properties();
+    for (Map.Entry<String, String> prop : props.entrySet()) {
+      properties.setProperty(prop.getKey(), prop.getValue());
+    }
+    HoodieTableConfig.createHoodieProperties(metaClient.getFs(), new Path(metaClient.getMetaPath()), properties);
+
+    metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).build();
+    BootstrapIndex bootstrapIndex = BootstrapIndex.getBootstrapIndex(metaClient);
+    assert (bootstrapIndex instanceof NoOpBootstrapIndex);
   }
 
   @Test
