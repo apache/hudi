@@ -128,8 +128,9 @@ public class FlinkMergeAndReplaceHandle<T extends HoodieRecordPayload, I, K, O>
    */
   protected String newFileNameWithRollover(int rollNumber) {
     // make the intermediate file as hidden
+    final String fileID = "." + this.fileId;
     return FSUtils.makeDataFileName(instantTime, writeToken + "-" + rollNumber,
-        this.fileId, hoodieTable.getBaseFileExtension());
+        fileID, hoodieTable.getBaseFileExtension());
   }
 
   @Override
