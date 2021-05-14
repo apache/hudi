@@ -64,10 +64,14 @@ public abstract class BootstrapIndex implements Serializable {
    * @return
    */
   public final boolean useIndex() {
-    boolean validInstantTime = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant()
-        .map(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS,
-            HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS)).orElse(false);
-    return  validInstantTime && metaClient.getTableConfig().getBootstrapBasePath().isPresent() && isPresent();
+    if (isPresent()) {
+      boolean validInstantTime = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant()
+          .map(i -> HoodieTimeline.compareTimestamps(i.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS,
+              HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS)).orElse(false);
+      return validInstantTime && metaClient.getTableConfig().getBootstrapBasePath().isPresent();
+    } else {
+      return false;
+    }
   }
 
   /**
