@@ -500,9 +500,8 @@ public class TestWriteCopyOnWrite {
 
   Map<String, String> getMiniBatchExpected() {
     Map<String, String> expected = new HashMap<>();
-    expected.put("par1", "[id1,par1,id1,Danny,23,1,par1, "
-        + "id1,par1,id1,Danny,23,1,par1, "
-        + "id1,par1,id1,Danny,23,1,par1, "
+    // the last 3 lines are merged
+    expected.put("par1", "["
         + "id1,par1,id1,Danny,23,1,par1, "
         + "id1,par1,id1,Danny,23,1,par1]");
     return expected;

@@ -106,9 +106,16 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                            TaskContextSupplier taskContextSupplier) {
+    this(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier,
+        hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).get());
+  }
+
+  public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                           Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                           TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
     init(fileId, recordItr);
-    init(fileId, partitionPath, hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).get());
+    init(fileId, partitionPath, baseFile);
   }
 
   /**
@@ -171,6 +178,10 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       throw new HoodieUpsertException("Failed to initialize HoodieUpdateHandle for FileId: " + fileId + " on commit "
           + instantTime + " on path " + hoodieTable.getMetaClient().getBasePath(), io);
     }
+  }
+
+  protected void setWriteStatusPath() {
+    writeStatus.getStat().setPath(new Path(config.getBasePath()), newFilePath);
   }
 
   protected void makeOldAndNewFilePaths(String partitionPath, String oldFileName, String newFileName) {
