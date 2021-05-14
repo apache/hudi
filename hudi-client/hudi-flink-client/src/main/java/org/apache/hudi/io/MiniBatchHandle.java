@@ -18,28 +18,36 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hadoop.fs.Path;
+
 /**
  * Hoodie write handle that supports write as mini-batch.
  */
 public interface MiniBatchHandle {
 
   /**
-   * Returns whether the handle should roll over to new,
-   * E.G. the handle has written some intermediate data buffer already.
+   * Finalize the write of one mini-batch. Usually these mini-bathes
+   * come from one checkpoint interval. The file handle may roll over to new name
+   * if the name conflicts, give a chance to clean the intermediate file.
    */
-  default boolean shouldRollover() {
-    return false;
-  }
-
-  /**
-   * Finish the write of multiple mini-batches. Usually these mini-bathes
-   * come from one checkpoint interval.
-   */
-  void finishWrite();
+  default void finalizeWrite() {}
 
   /**
    * Close the file handle gracefully, if any error happens during the file handle close,
    * clean the file to not left corrupted file.
    */
   void closeGracefully();
+
+  /**
+   * Returns the write file path.
+   */
+  Path getWritePath();
+
+  /**
+   * Whether the old write file should be replaced with the same name new file
+   * using content merged with incremental new data batch.
+   */
+  default boolean shouldReplace() {
+    return true;
+  }
 }
