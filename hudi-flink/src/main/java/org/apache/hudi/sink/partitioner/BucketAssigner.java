@@ -241,7 +241,8 @@ public class BucketAssigner {
           .getLatestBaseFilesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp()).collect(Collectors.toList());
 
       for (HoodieBaseFile file : allFiles) {
-        if (file.getFileSize() < config.getParquetSmallFileLimit()) {
+        // filter out the corrupted files.
+        if (file.getFileSize() < config.getParquetSmallFileLimit() && file.getFileSize() > 0) {
           String filename = file.getFileName();
           SmallFile sf = new SmallFile();
           sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));

@@ -480,6 +480,13 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
   }
 
   /**
+   * Returns the possible invalid data file name with given marker files.
+   */
+  protected Set<String> getInvalidDataPaths(MarkerFiles markers) throws IOException {
+    return markers.createdAndMergedDataPaths(context, config.getFinalizeWriteParallelism());
+  }
+
+  /**
    * Reconciles WriteStats and marker files to detect and safely delete duplicate data files created because of Spark
    * retries.
    *
@@ -505,7 +512,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
       }
 
       // we are not including log appends here, since they are already fail-safe.
-      Set<String> invalidDataPaths = markers.createdAndMergedDataPaths(context, config.getFinalizeWriteParallelism());
+      Set<String> invalidDataPaths = getInvalidDataPaths(markers);
       Set<String> validDataPaths = stats.stream()
           .map(HoodieWriteStat::getPath)
           .filter(p -> p.endsWith(this.getBaseFileExtension()))
