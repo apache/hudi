@@ -28,7 +28,6 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.TableSchema;
-import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.CatalogTableImpl;
 import org.apache.flink.table.catalog.ObjectIdentifier;
@@ -45,9 +44,7 @@ import java.util.Objects;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Test cases for {@link HoodieTableFactory}.
@@ -78,43 +75,6 @@ public class TestHoodieTableFactory {
   }
 
   @Test
-  void testRequiredOptionsForSource() {
-    // miss pk and pre combine key will throw exception
-    TableSchema schema1 = TableSchema.builder()
-        .field("f0", DataTypes.INT().notNull())
-        .field("f1", DataTypes.VARCHAR(20))
-        .field("f2", DataTypes.TIMESTAMP(3))
-        .build();
-    final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema1, "f2");
-    assertThrows(ValidationException.class, () -> new HoodieTableFactory().createDynamicTableSource(sourceContext1));
-    assertThrows(ValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext1));
-
-    // given the pk and miss the pre combine key will throw exception
-    TableSchema schema2 = TableSchema.builder()
-        .field("f0", DataTypes.INT().notNull())
-        .field("f1", DataTypes.VARCHAR(20))
-        .field("f2", DataTypes.TIMESTAMP(3))
-        .primaryKey("f0")
-        .build();
-    final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema2, "f2");
-    assertThrows(ValidationException.class, () -> new HoodieTableFactory().createDynamicTableSource(sourceContext2));
-    assertThrows(ValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext2));
-
-    // given pk and pre combine key will be ok
-    TableSchema schema3 = TableSchema.builder()
-        .field("f0", DataTypes.INT().notNull())
-        .field("f1", DataTypes.VARCHAR(20))
-        .field("f2", DataTypes.TIMESTAMP(3))
-        .field("ts", DataTypes.TIMESTAMP(3))
-        .primaryKey("f0")
-        .build();
-    final MockContext sourceContext3 = MockContext.getInstance(this.conf, schema3, "f2");
-
-    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext3));
-    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext3));
-  }
-
-  @Test
   void testInferAvroSchemaForSource() {
     // infer the schema if not specified
     final HoodieTableSource tableSource1 =
@@ -139,7 +99,6 @@ public class TestHoodieTableFactory {
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
         .field("f2", DataTypes.TIMESTAMP(3))
-        .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0")
         .build();
     final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema1, "f2");
@@ -154,7 +113,6 @@ public class TestHoodieTableFactory {
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20).notNull())
         .field("f2", DataTypes.TIMESTAMP(3))
-        .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0", "f1")
         .build();
     final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema2, "f2");
@@ -179,7 +137,6 @@ public class TestHoodieTableFactory {
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
         .field("f2", DataTypes.TIMESTAMP(3))
-        .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0")
         .build();
     // set up new retains commits that is less than min archive commits
@@ -226,7 +183,6 @@ public class TestHoodieTableFactory {
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
         .field("f2", DataTypes.TIMESTAMP(3))
-        .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0")
         .build();
     final MockContext sinkContext1 = MockContext.getInstance(this.conf, schema1, "f2");
@@ -241,7 +197,6 @@ public class TestHoodieTableFactory {
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20).notNull())
         .field("f2", DataTypes.TIMESTAMP(3))
-        .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0", "f1")
         .build();
     final MockContext sinkContext2 = MockContext.getInstance(this.conf, schema2, "f2");
@@ -266,7 +221,6 @@ public class TestHoodieTableFactory {
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
         .field("f2", DataTypes.TIMESTAMP(3))
-        .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0")
         .build();
     // set up new retains commits that is less than min archive commits

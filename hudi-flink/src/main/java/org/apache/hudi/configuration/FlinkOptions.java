@@ -265,6 +265,13 @@ public class FlinkOptions {
       .defaultValue(4)
       .withDescription("Parallelism of tasks that do actual write, default is 4");
 
+  public static final ConfigOption<Double> WRITE_TASK_MAX_SIZE = ConfigOptions
+      .key("write.task.max.size")
+      .doubleType()
+      .defaultValue(1024D) // 1GB
+      .withDescription("Maximum memory in MB for a write task, when the threshold hits,\n"
+          + "it flushes the max size data bucket to avoid OOM, default 1GB");
+
   public static final ConfigOption<Double> WRITE_BATCH_SIZE = ConfigOptions
       .key("write.batch.size")
       .doubleType()

@@ -694,9 +694,7 @@ public class DeltaSync implements Serializable {
         schemas.add(targetSchema);
       }
 
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("Registering Schema: " + schemas);
-      }
+      LOG.info("Registering Schema :" + schemas);
       jssc.sc().getConf().registerAvroSchemas(JavaConversions.asScalaBuffer(schemas).toList());
     }
   }

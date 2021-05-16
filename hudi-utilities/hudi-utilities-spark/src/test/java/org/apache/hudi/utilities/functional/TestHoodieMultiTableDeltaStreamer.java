@@ -163,12 +163,7 @@ public class TestHoodieMultiTableDeltaStreamer extends TestHoodieDeltaStreamer {
     //insert updates for already existing records in kafka topics
     testUtils.sendMessages(topicName1, Helpers.jsonifyRecords(dataGenerator.generateUpdatesAsPerSchema("001", 5, HoodieTestDataGenerator.TRIP_SCHEMA)));
     testUtils.sendMessages(topicName2, Helpers.jsonifyRecords(dataGenerator.generateUpdatesAsPerSchema("001", 10, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
-
-    streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
-    streamer.getTableExecutionContexts().get(1).setProperties(properties);
-    streamer.getTableExecutionContexts().get(0).setProperties(properties1);
     streamer.sync();
-
     assertEquals(2, streamer.getSuccessTables().size());
     assertTrue(streamer.getFailedTables().isEmpty());
 

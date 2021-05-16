@@ -64,10 +64,7 @@ public class HiveSchemaUtil {
     } catch (IOException e) {
       throw new HoodieHiveSyncException("Failed to convert parquet schema to hive schema", e);
     }
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Getting schema difference for " + tableSchema + "\r\n\r\n" + newTableSchema);
-    }
-
+    LOG.info("Getting schema difference for " + tableSchema + "\r\n\r\n" + newTableSchema);
     SchemaDifference.Builder schemaDiffBuilder = SchemaDifference.newBuilder(storageSchema, tableSchema);
     Set<String> tableColumns = new HashSet<>();
 
@@ -112,9 +109,7 @@ public class HiveSchemaUtil {
         schemaDiffBuilder.addTableColumn(entry.getKey(), entry.getValue());
       }
     }
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Difference between schemas: " + schemaDiffBuilder.build().toString());
-    }
+    LOG.info("Difference between schemas: " + schemaDiffBuilder.build().toString());
 
     return schemaDiffBuilder.build();
   }
