@@ -23,7 +23,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.ReplaceArchivalHelper;
@@ -37,7 +36,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
-import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 
 /**
@@ -73,9 +71,8 @@ public class MetadataConversionUtils {
               .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieReplaceCommitMetadata.class);
           archivedMetaWrapper.setHoodieReplaceCommitMetadata(ReplaceArchivalHelper.convertReplaceCommitMetadata(replaceCommitMetadata));
         } else {
-          HoodieRequestedReplaceMetadata requestedReplaceMetadata =
-              ClusteringUtils.getRequestedReplaceMetadata(metaClient, hoodieInstant).get();
-          archivedMetaWrapper.setHoodieRequestedReplaceMetadata(requestedReplaceMetadata);
+          archivedMetaWrapper.setHoodieRequestedReplaceMetadata(
+              TimelineMetadataUtils.deserializeRequestedReplaceMetadata(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get()));
         }
         archivedMetaWrapper.setActionType(ActionType.replacecommit.name());
         break;

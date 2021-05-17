@@ -295,7 +295,6 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     props.setProperty("hoodie.deltastreamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
 
     props.setProperty("include", "base.properties");
-    props.setProperty("hoodie.embed.timeline.server", "false");
     props.setProperty("hoodie.write.concurrency.mode", "optimistic_concurrency_control");
     props.setProperty("hoodie.cleaner.policy.failed.writes", "LAZY");
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider");
