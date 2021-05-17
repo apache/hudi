@@ -137,14 +137,15 @@ public class RowKeyGeneratorHelper {
     Object toReturn = null;
 
     while (index < totalCount) {
+      if (valueToProcess.isNullAt(positions.get(index))) {
+        toReturn = NULL_RECORDKEY_PLACEHOLDER;
+        break;
+      }
+
       if (index < totalCount - 1) {
-        if (valueToProcess.isNullAt(positions.get(index))) {
-          toReturn = NULL_RECORDKEY_PLACEHOLDER;
-          break;
-        }
         valueToProcess = (Row) valueToProcess.get(positions.get(index));
       } else { // last index
-        if (null != valueToProcess.getAs(positions.get(index)) && valueToProcess.getAs(positions.get(index)).toString().isEmpty()) {
+        if (valueToProcess.getAs(positions.get(index)).toString().isEmpty()) {
           toReturn = EMPTY_RECORDKEY_PLACEHOLDER;
           break;
         }
