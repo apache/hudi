@@ -256,8 +256,20 @@ public class TestData {
    * @param expected Expected string of the sorted rows
    */
   public static void assertRowsEquals(List<Row> rows, String expected) {
+    assertRowsEquals(rows, expected, 0);
+  }
+
+  /**
+   * Sort the {@code rows} using field at index {@code orderingPos} and asserts
+   * it equals with the expected string {@code expected}.
+   *
+   * @param rows     Actual result rows
+   * @param expected Expected string of the sorted rows
+   * @param orderingPos Field position for ordering
+   */
+  public static void assertRowsEquals(List<Row> rows, String expected, int orderingPos) {
     String rowsString = rows.stream()
-        .sorted(Comparator.comparing(o -> toStringSafely(o.getField(0))))
+        .sorted(Comparator.comparing(o -> toStringSafely(o.getField(orderingPos))))
         .collect(Collectors.toList()).toString();
     assertThat(rowsString, is(expected));
   }
