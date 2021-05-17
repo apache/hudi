@@ -18,19 +18,20 @@
 
 package org.apache.hudi.sink.compact;
 
-import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.table.HoodieFlinkCopyOnWriteTable;
 import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor;
 import org.apache.hudi.util.StreamerUtil;
 
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -39,6 +40,7 @@ import java.util.List;
  * In order to execute scalable, the input should shuffle by the compact event {@link CompactionPlanEvent}.
  */
 public class CompactFunction extends KeyedProcessFunction<Long, CompactionPlanEvent, CompactionCommitEvent> {
+  private static final Logger LOG = LoggerFactory.getLogger(CompactFunction.class);
 
   /**
    * Config options.
@@ -55,6 +57,11 @@ public class CompactFunction extends KeyedProcessFunction<Long, CompactionPlanEv
    */
   private int taskID;
 
+  /**
+   * Executor service to execute the compaction task.
+   */
+  private transient NonThrownExecutor executor;
+
   public CompactFunction(Configuration conf) {
     this.conf = conf;
   }
@@ -62,33 +69,34 @@ public class CompactFunction extends KeyedProcessFunction<Long, CompactionPlanEv
   @Override
   public void open(Configuration parameters) throws Exception {
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
-    initWriteClient();
+    this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
+    this.executor = new NonThrownExecutor(LOG);
   }
 
   @Override
   public void processElement(CompactionPlanEvent event, Context context, Collector<CompactionCommitEvent> collector) throws Exception {
     final String instantTime = event.getCompactionInstantTime();
     final CompactionOperation compactionOperation = event.getOperation();
-
-    HoodieFlinkMergeOnReadTableCompactor compactor = new HoodieFlinkMergeOnReadTableCompactor();
-    List<WriteStatus> writeStatuses = compactor.compact(
-        new HoodieFlinkCopyOnWriteTable<>(
-            this.writeClient.getConfig(),
-            this.writeClient.getEngineContext(),
-            this.writeClient.getHoodieTable().getMetaClient()),
-        this.writeClient.getHoodieTable().getMetaClient(),
-        this.writeClient.getConfig(),
-        compactionOperation,
-        instantTime);
-    collector.collect(new CompactionCommitEvent(instantTime, writeStatuses, taskID));
+    // executes the compaction task asynchronously to not block the checkpoint barrier propagate.
+    executor.execute(
+        () -> {
+          HoodieFlinkMergeOnReadTableCompactor compactor = new HoodieFlinkMergeOnReadTableCompactor();
+          List<WriteStatus> writeStatuses = compactor.compact(
+              new HoodieFlinkCopyOnWriteTable<>(
+                  this.writeClient.getConfig(),
+                  this.writeClient.getEngineContext(),
+                  this.writeClient.getHoodieTable().getMetaClient()),
+              this.writeClient.getHoodieTable().getMetaClient(),
+              this.writeClient.getConfig(),
+              compactionOperation,
+              instantTime);
+          collector.collect(new CompactionCommitEvent(instantTime, writeStatuses, taskID));
+        }, "Execute compaction for instant %s from task %d", instantTime, taskID
+    );
   }
 
-  private void initWriteClient() {
-    HoodieFlinkEngineContext context =
-        new HoodieFlinkEngineContext(
-            new SerializableConfiguration(StreamerUtil.getHadoopConf()),
-            new FlinkTaskContextSupplier(getRuntimeContext()));
-
-    writeClient = new HoodieFlinkWriteClient<>(context, StreamerUtil.getHoodieClientConfig(conf));
+  @VisibleForTesting
+  public void setExecutor(NonThrownExecutor executor) {
+    this.executor = executor;
   }
 }

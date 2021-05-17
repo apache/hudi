@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -131,7 +132,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
 
   @BeforeEach
   public void init() throws IOException {
-    init(HoodieFileFormat.PARQUET);
+    init(HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT);
   }
 
   @AfterEach
@@ -345,7 +346,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       List<HoodieRecord> records004 = dataGen.generateUpdates(updateTime, 100);
       updateRecords(records004, client, cfg, updateTime);
 
-      // verify RO incremental reads - only one parquet file shows up because updates to into log files
+      // verify RO incremental reads - only one base file shows up because updates to into log files
       incrementalROFiles = getROIncrementalFiles(partitionPath, false);
       validateFiles(partitionPath, 1, incrementalROFiles, false, roJobConf, 200, commitTime1);
       assertEquals(firstFilePath, incrementalROFiles[0].getPath());
@@ -358,7 +359,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       String compactionCommitTime = "005";
       client.scheduleCompactionAtInstant("005", Option.empty());
 
-      // verify RO incremental reads - only one parquet file shows up because updates go into log files
+      // verify RO incremental reads - only one base file shows up because updates go into log files
       incrementalROFiles = getROIncrementalFiles(partitionPath, true);
       validateFiles(partitionPath,1, incrementalROFiles, false, roJobConf, 200, commitTime1);
 
@@ -436,7 +437,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
 
       /**
-       * Write 1 (only inserts, written as parquet file)
+       * Write 1 (only inserts, written as base file)
        */
       String newCommitTime = "001";
       client.startCommitWithTime(newCommitTime);
@@ -465,7 +466,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
       dataFilesToRead = tableView.getLatestBaseFiles();
       assertTrue(dataFilesToRead.findAny().isPresent(),
-          "should list the parquet files we wrote in the delta commit");
+          "should list the base files we wrote in the delta commit");
 
       /**
        * Write 2 (only updates, written to .log file)
@@ -613,7 +614,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
       dataFilesToRead = tableView.getLatestBaseFiles();
       assertTrue(dataFilesToRead.findAny().isPresent(),
-          "should list the parquet files we wrote in the delta commit");
+          "should list the base files we wrote in the delta commit");
 
       /**
        * Write 2 (inserts + updates - testing failed delta commit)
@@ -630,7 +631,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
         List<String> dataFiles = tableView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
         List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf, dataFiles,
             basePath);
-        assertEquals(recordsRead.size(), 200);
+        assertEquals(200, recordsRead.size());
 
         statuses = secondClient.upsert(jsc.parallelize(copyOfRecords, 1), commitTime1).collect();
         // Verify there are no errors
@@ -674,7 +675,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
         // Test successful delta commit rollback
         thirdClient.rollback(commitTime2);
         allFiles = listAllBaseFilesInPath(hoodieTable);
-        // After rollback, there should be no parquet file with the failed commit time
+        // After rollback, there should be no base file with the failed commit time
         assertEquals(0, Arrays.stream(allFiles)
             .filter(file -> file.getPath().getName().contains(commitTime2)).count());
 
@@ -768,7 +769,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       tableView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
       dataFilesToRead = tableView.getLatestBaseFiles();
       assertTrue(dataFilesToRead.findAny().isPresent(),
-          "Should list the parquet files we wrote in the delta commit");
+          "Should list the base files we wrote in the delta commit");
 
       /**
        * Write 2 (inserts + updates)
@@ -901,7 +902,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
 
       /**
-       * Write 1 (only inserts, written as parquet file)
+       * Write 1 (only inserts, written as base file)
        */
       String newCommitTime = "001";
       client.startCommitWithTime(newCommitTime);
@@ -926,17 +927,17 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       BaseFileOnlyView roView = getHoodieTableFileSystemView(metaClient,
           metaClient.getCommitsTimeline().filterCompletedInstants(), allFiles);
       Stream<HoodieBaseFile> dataFilesToRead = roView.getLatestBaseFiles();
-      Map<String, Long> parquetFileIdToSize =
+      Map<String, Long> fileIdToSize =
           dataFilesToRead.collect(Collectors.toMap(HoodieBaseFile::getFileId, HoodieBaseFile::getFileSize));
 
       roView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
       dataFilesToRead = roView.getLatestBaseFiles();
       List<HoodieBaseFile> dataFilesList = dataFilesToRead.collect(Collectors.toList());
       assertTrue(dataFilesList.size() > 0,
-          "Should list the parquet files we wrote in the delta commit");
+          "Should list the base files we wrote in the delta commit");
 
       /**
-       * Write 2 (only updates + inserts, written to .log file + correction of existing parquet file size)
+       * Write 2 (only updates + inserts, written to .log file + correction of existing base file size)
        */
       newCommitTime = "002";
       client.startCommitWithTime(newCommitTime);
@@ -961,10 +962,10 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
           hoodieTable.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants(), allFiles);
       dataFilesToRead = roView.getLatestBaseFiles();
       List<HoodieBaseFile> newDataFilesList = dataFilesToRead.collect(Collectors.toList());
-      Map<String, Long> parquetFileIdToNewSize =
+      Map<String, Long> fileIdToNewSize =
           newDataFilesList.stream().collect(Collectors.toMap(HoodieBaseFile::getFileId, HoodieBaseFile::getFileSize));
 
-      assertTrue(parquetFileIdToNewSize.entrySet().stream().anyMatch(entry -> parquetFileIdToSize.get(entry.getKey()) < entry.getValue()));
+      assertTrue(fileIdToNewSize.entrySet().stream().anyMatch(entry -> fileIdToSize.get(entry.getKey()) < entry.getValue()));
 
       List<String> dataFiles = roView.getLatestBaseFiles().map(HoodieBaseFile::getPath).collect(Collectors.toList());
       List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(hadoopConf, dataFiles,
@@ -1082,8 +1083,9 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       // Do a compaction
       String instantTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
       statuses = (JavaRDD<WriteStatus>) writeClient.compact(instantTime);
-      assertEquals(statuses.map(status -> status.getStat().getPath().contains("parquet")).count(), numLogFiles);
-      assertEquals(statuses.count(), numLogFiles);
+      String extension = table.getBaseFileExtension();
+      assertEquals(numLogFiles, statuses.map(status -> status.getStat().getPath().contains(extension)).count());
+      assertEquals(numLogFiles, statuses.count());
       writeClient.commitCompaction(instantTime, statuses, Option.empty());
     }
   }
@@ -1215,9 +1217,10 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       // Do a compaction
       newCommitTime = writeClient.scheduleCompaction(Option.empty()).get().toString();
       statuses = (JavaRDD<WriteStatus>) writeClient.compact(newCommitTime);
-      // Ensure all log files have been compacted into parquet files
-      assertEquals(statuses.map(status -> status.getStat().getPath().contains("parquet")).count(), numLogFiles);
-      assertEquals(statuses.count(), numLogFiles);
+      // Ensure all log files have been compacted into base files
+      String extension = table.getBaseFileExtension();
+      assertEquals(numLogFiles, statuses.map(status -> status.getStat().getPath().contains(extension)).count());
+      assertEquals(numLogFiles, statuses.count());
       //writeClient.commitCompaction(newCommitTime, statuses, Option.empty());
       // Trigger a rollback of compaction
       table.getActiveTimeline().reload();
@@ -1463,7 +1466,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
 
       /**
-       * Write 1 (only inserts, written as parquet file)
+       * Write 1 (only inserts, written as base file)
        */
       String newCommitTime = "001";
       client.startCommitWithTime(newCommitTime);
@@ -1493,7 +1496,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       roView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
       dataFilesToRead = roView.getLatestBaseFiles();
       assertTrue(dataFilesToRead.findAny().isPresent(),
-          "should list the parquet files we wrote in the delta commit");
+          "should list the base files we wrote in the delta commit");
 
       /**
        * Write 2 (only updates, written to .log file)
@@ -1603,7 +1606,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     roView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
     dataFilesToRead = roView.getLatestBaseFiles();
     assertTrue(dataFilesToRead.findAny().isPresent(),
-        "should list the parquet files we wrote in the delta commit");
+        "should list the base files we wrote in the delta commit");
   }
 
   private void updateRecords(List<HoodieRecord> records, SparkRDDWriteClient client,

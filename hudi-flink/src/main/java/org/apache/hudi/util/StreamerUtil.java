@@ -33,6 +33,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodieMemoryConfig;
+import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
@@ -55,6 +57,8 @@ import org.apache.hadoop.fs.Path;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nullable;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -179,19 +183,6 @@ public class StreamerUtil {
     }
   }
 
-  /**
-   * Create a payload class via reflection, do not ordering/precombine value.
-   */
-  public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record)
-      throws IOException {
-    try {
-      return (HoodieRecordPayload) ReflectionUtils.loadClass(payloadClass,
-          new Class<?>[] {Option.class}, Option.of(record));
-    } catch (Throwable e) {
-      throw new IOException("Could not create payload for class: " + payloadClass, e);
-    }
-  }
-
   public static HoodieWriteConfig getHoodieClientConfig(FlinkStreamerConfig conf) {
     return getHoodieClientConfig(FlinkOptions.fromStreamerConfig(conf));
   }
@@ -214,8 +205,19 @@ public class StreamerUtil {
                     // override and hardcode to 20,
                     // actually Flink cleaning is always with parallelism 1 now
                     .withCleanerParallelism(20)
+                    .archiveCommitsWith(conf.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), conf.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS))
                     .build())
+            .withMemoryConfig(
+                HoodieMemoryConfig.newBuilder()
+                    .withMaxMemoryMaxSize(
+                        conf.getInteger(FlinkOptions.WRITE_MERGE_MAX_MEMORY) * 1024 * 1024L,
+                        conf.getInteger(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024L
+                        ).build())
             .forTable(conf.getString(FlinkOptions.TABLE_NAME))
+            .withStorageConfig(HoodieStorageConfig.newBuilder()
+                .logFileDataBlockMaxSize(conf.getInteger(FlinkOptions.WRITE_LOG_BLOCK_SIZE) * 1024 * 1024)
+                .logFileMaxSize(conf.getInteger(FlinkOptions.WRITE_LOG_MAX_SIZE) * 1024 * 1024)
+                .build())
             .withAutoCommit(false)
             .withProps(flinkConf2TypedProperties(FlinkOptions.flatOptions(conf)));
 
@@ -323,5 +325,20 @@ public class StreamerUtil {
             new FlinkTaskContextSupplier(runtimeContext));
 
     return new HoodieFlinkWriteClient<>(context, getHoodieClientConfig(conf));
+  }
+
+  /**
+   * Plus the old instant time with given milliseconds and returns.
+   */
+  public static String instantTimePlus(String oldInstant, long milliseconds) {
+    long oldTime = Long.parseLong(oldInstant);
+    return String.valueOf(oldTime + milliseconds);
+  }
+
+  /**
+   * Copied from Objects#equal.
+   */
+  public static boolean equal(@Nullable Object a, @Nullable Object b) {
+    return a == b || (a != null && a.equals(b));
   }
 }

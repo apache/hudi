@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop.functional;
 
+import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
@@ -26,6 +27,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.MiniClusterUtil;
 import org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat;
+import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 
 import org.apache.avro.Schema;
@@ -51,6 +53,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 
 import static org.apache.hadoop.hive.ql.exec.Utilities.HAS_MAP_WORK;
@@ -82,6 +85,142 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
     assertTrue(fs.mkdirs(new Path(tempDir.toAbsolutePath().toString())));
     HoodieTestUtils.init(MiniClusterUtil.configuration, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
+  }
+
+  @Test
+  public void multiLevelPartitionReadersRealtimeCombineHoodieInputFormat() throws Exception {
+    // test for HUDI-1718
+    Configuration conf = new Configuration();
+    // initial commit
+    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
+    HoodieTestUtils.init(hadoopConf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
+    String commitTime = "100";
+    final int numRecords = 1000;
+    // Create 3 parquet files with 1000 records each
+    File partitionDir = InputFormatTestUtil.prepareParquetTable(tempDir, schema, 3, numRecords, commitTime);
+    InputFormatTestUtil.commit(tempDir, commitTime);
+
+    TableDesc tblDesc = Utilities.defaultTd;
+    // Set the input format
+    tblDesc.setInputFileFormatClass(HoodieParquetRealtimeInputFormat.class);
+    LinkedHashMap<Path, PartitionDesc> pt = new LinkedHashMap<>();
+    LinkedHashMap<Path, ArrayList<String>> talias = new LinkedHashMap<>();
+    LinkedHashMap<String, String> partSpec = new LinkedHashMap<>();
+    // add three level partitions info
+    partSpec.put("year", "2016");
+    partSpec.put("month", "05");
+    partSpec.put("day", "01");
+    PartitionDesc partDesc = new PartitionDesc(tblDesc, partSpec);
+
+    pt.put(new Path(tempDir.toAbsolutePath().toString()), partDesc);
+
+    ArrayList<String> arrayList = new ArrayList<>();
+    arrayList.add(tempDir.toAbsolutePath().toString());
+    talias.put(new Path(tempDir.toAbsolutePath().toString()), arrayList);
+
+    MapredWork mrwork = new MapredWork();
+    mrwork.getMapWork().setPathToPartitionInfo(pt);
+    mrwork.getMapWork().setPathToAliases(talias);
+
+    Path mapWorkPath = new Path(tempDir.toAbsolutePath().toString());
+    Utilities.setMapRedWork(conf, mrwork, mapWorkPath);
+    jobConf = new JobConf(conf);
+    // Add the paths
+    FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
+    jobConf.set(HAS_MAP_WORK, "true");
+    // The following config tells Hive to choose ExecMapper to read the MAP_WORK
+    jobConf.set(MAPRED_MAPPER_CLASS, ExecMapper.class.getName());
+    // setting the split size to be 3 to create one split for 3 file groups
+    jobConf.set(org.apache.hadoop.mapreduce.lib.input.FileInputFormat.SPLIT_MAXSIZE, "128000000");
+
+    HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
+    String tripsHiveColumnTypes = "double,string,string,string,double,double,double,double,double";
+    InputFormatTestUtil.setPropsForInputFormat(jobConf, schema, tripsHiveColumnTypes);
+    // unset META_TABLE_PARTITION_COLUMNS to trigger HUDI-1718
+    jobConf.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
+    InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 1);
+    // Since the SPLIT_SIZE is 3, we should create only 1 split with all 3 file groups
+    assertEquals(1, splits.length);
+
+    // if HUDI-1718 is not fixed, the follow code will throw exception
+    RecordReader<NullWritable, ArrayWritable> recordReader =
+        combineHiveInputFormat.getRecordReader(splits[0], jobConf, null);
+    NullWritable nullWritable = recordReader.createKey();
+    ArrayWritable arrayWritable = recordReader.createValue();
+    int counter = 0;
+    while (recordReader.next(nullWritable, arrayWritable)) {
+      // read over all the splits
+      counter++;
+    }
+    // should read out 3 splits, each for file0, file1, file2 containing 1000 records each
+    assertEquals(3000, counter);
+  }
+
+  @Test
+  public void testMutilReaderRealtimeComineHoodieInputFormat() throws Exception {
+    // test for hudi-1722
+    Configuration conf = new Configuration();
+    // initial commit
+    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
+    HoodieTestUtils.init(hadoopConf, tempDir.toAbsolutePath().toString(), HoodieTableType.MERGE_ON_READ);
+    String commitTime = "100";
+    final int numRecords = 1000;
+    // Create 3 parquet files with 1000 records each
+    File partitionDir = InputFormatTestUtil.prepareParquetTable(tempDir, schema, 3, numRecords, commitTime);
+    InputFormatTestUtil.commit(tempDir, commitTime);
+
+    String newCommitTime = "101";
+    // to trigger the bug of HUDI-1772, only update fileid2
+    // insert 1000 update records to log file 2
+    // now fileid0, fileid1 has no log files, fileid2 has log file
+    HoodieLogFormat.Writer writer =
+            InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid2", commitTime, newCommitTime,
+                    numRecords, numRecords, 0);
+    writer.close();
+
+    TableDesc tblDesc = Utilities.defaultTd;
+    // Set the input format
+    tblDesc.setInputFileFormatClass(HoodieParquetRealtimeInputFormat.class);
+    PartitionDesc partDesc = new PartitionDesc(tblDesc, null);
+    LinkedHashMap<Path, PartitionDesc> pt = new LinkedHashMap<>();
+    LinkedHashMap<Path, ArrayList<String>> tableAlias = new LinkedHashMap<>();
+    ArrayList<String> alias = new ArrayList<>();
+    alias.add(tempDir.toAbsolutePath().toString());
+    tableAlias.put(new Path(tempDir.toAbsolutePath().toString()), alias);
+    pt.put(new Path(tempDir.toAbsolutePath().toString()), partDesc);
+
+    MapredWork mrwork = new MapredWork();
+    mrwork.getMapWork().setPathToPartitionInfo(pt);
+    mrwork.getMapWork().setPathToAliases(tableAlias);
+    Path mapWorkPath = new Path(tempDir.toAbsolutePath().toString());
+    Utilities.setMapRedWork(conf, mrwork, mapWorkPath);
+    jobConf = new JobConf(conf);
+    // Add the paths
+    FileInputFormat.setInputPaths(jobConf, partitionDir.getPath());
+    jobConf.set(HAS_MAP_WORK, "true");
+    // The following config tells Hive to choose ExecMapper to read the MAP_WORK
+    jobConf.set(MAPRED_MAPPER_CLASS, ExecMapper.class.getName());
+    // set SPLIT_MAXSIZE larger  to create one split for 3 files groups
+    jobConf.set(org.apache.hadoop.mapreduce.lib.input.FileInputFormat.SPLIT_MAXSIZE, "128000000");
+
+    HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
+    String tripsHiveColumnTypes = "double,string,string,string,double,double,double,double,double";
+    InputFormatTestUtil.setProjectFieldsForInputFormat(jobConf, schema, tripsHiveColumnTypes);
+    InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 1);
+    // Since the SPLIT_SIZE is 3, we should create only 1 split with all 3 file groups
+    assertEquals(1, splits.length);
+    RecordReader<NullWritable, ArrayWritable> recordReader =
+            combineHiveInputFormat.getRecordReader(splits[0], jobConf, null);
+    NullWritable nullWritable = recordReader.createKey();
+    ArrayWritable arrayWritable = recordReader.createValue();
+    int counter = 0;
+    while (recordReader.next(nullWritable, arrayWritable)) {
+      // read over all the splits
+      counter++;
+    }
+    // should read out 3 splits, each for file0, file1, file2 containing 1000 records each
+    assertEquals(3000, counter);
+    recordReader.close();
   }
 
   @Test

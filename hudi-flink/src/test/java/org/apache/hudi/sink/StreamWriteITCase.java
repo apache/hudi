@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink;
 
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -29,7 +28,6 @@ import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
-import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -39,10 +37,8 @@ import org.apache.hudi.utils.source.ContinuousFileSource;
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.common.io.FilePathFilter;
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
-import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.io.TextInputFormat;
-import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.core.fs.Path;
@@ -120,8 +116,8 @@ public class StreamWriteITCase extends TestLogger {
         .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
         .setParallelism(4)
         .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class))
-        // Key-by partition path, to avoid multiple subtasks write to a partition at the same time
-        .keyBy(HoodieRecord::getPartitionPath)
+        // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
+        .keyBy(HoodieRecord::getRecordKey)
         .transform(
             "bucket_assigner",
             TypeInformation.of(HoodieRecord.class),
@@ -132,75 +128,6 @@ public class StreamWriteITCase extends TestLogger {
         .transform("hoodie_stream_write", null, operatorFactory)
         .uid("uid_hoodie_stream_write");
     execEnv.addOperator(dataStream.getTransformation());
-
-    JobClient client = execEnv.executeAsync(execEnv.getStreamGraph(conf.getString(FlinkOptions.TABLE_NAME)));
-    // wait for the streaming job to finish
-    client.getJobExecutionResult().get();
-
-    TestData.checkWrittenFullData(tempFile, EXPECTED);
-  }
-
-  @Test
-  public void testWriteToHoodieLegacy() throws Exception {
-    FlinkStreamerConfig streamerConf = TestConfigurations.getDefaultStreamerConf(tempFile.getAbsolutePath());
-    Configuration conf = FlinkOptions.fromStreamerConfig(streamerConf);
-    StreamerUtil.initTableIfNotExists(conf);
-    StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment();
-    execEnv.getConfig().disableObjectReuse();
-    execEnv.setParallelism(4);
-    // set up checkpoint interval
-    execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
-    execEnv.getConfig().setGlobalJobParameters(streamerConf);
-
-    // Read from file source
-    RowType rowType =
-        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
-            .getLogicalType();
-
-    JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
-        rowType,
-        InternalTypeInfo.of(rowType),
-        false,
-        true,
-        TimestampFormat.ISO_8601
-    );
-    String sourcePath = Objects.requireNonNull(Thread.currentThread()
-        .getContextClassLoader().getResource("test_source.data")).toString();
-
-    execEnv
-        // use continuous file source to trigger checkpoint
-        .addSource(new ContinuousFileSource.BoundedSourceFunction(new Path(sourcePath), 2))
-        .name("continuous_file_source")
-        .setParallelism(1)
-        .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
-        .setParallelism(4)
-        .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class))
-        .transform(InstantGenerateOperator.NAME, TypeInformation.of(HoodieRecord.class), new InstantGenerateOperator())
-        .name("instant_generator")
-        .uid("instant_generator_id")
-
-        // Keyby partition path, to avoid multiple subtasks writing to a partition at the same time
-        .keyBy(HoodieRecord::getPartitionPath)
-        // use the bucket assigner to generate bucket IDs
-        .transform(
-            "bucket_assigner",
-            TypeInformation.of(HoodieRecord.class),
-            new KeyedProcessOperator<>(new BucketAssignFunction<>(conf)))
-        .uid("uid_bucket_assigner")
-        // shuffle by fileId(bucket id)
-        .keyBy(record -> record.getCurrentLocation().getFileId())
-        // write operator, where the write operation really happens
-        .transform(KeyedWriteProcessOperator.NAME, TypeInformation.of(new TypeHint<Tuple3<String, List<WriteStatus>, Integer>>() {
-        }), new KeyedWriteProcessOperator(new KeyedWriteProcessFunction()))
-        .name("write_process")
-        .uid("write_process_uid")
-        .setParallelism(4)
-
-        // Commit can only be executed once, so make it one parallelism
-        .addSink(new CommitSink())
-        .name("commit_sink")
-        .uid("commit_sink_uid")
-        .setParallelism(1);
 
     JobClient client = execEnv.executeAsync(execEnv.getStreamGraph(conf.getString(FlinkOptions.TABLE_NAME)));
     // wait for the streaming job to finish
@@ -249,8 +176,8 @@ public class StreamWriteITCase extends TestLogger {
         .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
         .setParallelism(4)
         .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class))
-        // Key-by partition path, to avoid multiple subtasks write to a partition at the same time
-        .keyBy(HoodieRecord::getPartitionPath)
+        // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
+        .keyBy(HoodieRecord::getRecordKey)
         .transform(
             "bucket_assigner",
             TypeInformation.of(HoodieRecord.class),

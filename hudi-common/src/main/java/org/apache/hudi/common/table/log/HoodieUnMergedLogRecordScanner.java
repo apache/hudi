@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
@@ -34,10 +35,9 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
 
   private final LogRecordScannerCallback callback;
 
-  public HoodieUnMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
-      String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize,
-      LogRecordScannerCallback callback) {
-    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize);
+  private HoodieUnMergedLogRecordScanner(FileSystem fs, String basePath, List<String> logFilePaths, Schema readerSchema,
+      String latestInstantTime, boolean readBlocksLazily, boolean reverseReader, int bufferSize, LogRecordScannerCallback callback) {
+    super(fs, basePath, logFilePaths, readerSchema, latestInstantTime, readBlocksLazily, reverseReader, bufferSize, Option.empty());
     this.callback = callback;
   }
 

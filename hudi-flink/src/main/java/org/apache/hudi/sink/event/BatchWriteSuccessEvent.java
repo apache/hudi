@@ -35,7 +35,7 @@ public class BatchWriteSuccessEvent implements OperatorEvent {
 
   private List<WriteStatus> writeStatuses;
   private final int taskID;
-  private final String instantTime;
+  private String instantTime;
   private boolean isLastBatch;
   /**
    * Flag saying whether the event comes from the end of input, e.g. the source
@@ -102,8 +102,9 @@ public class BatchWriteSuccessEvent implements OperatorEvent {
    * @param other The event to be merged
    */
   public void mergeWith(BatchWriteSuccessEvent other) {
-    ValidationUtils.checkArgument(this.instantTime.equals(other.instantTime));
     ValidationUtils.checkArgument(this.taskID == other.taskID);
+    // the instant time could be monotonically increasing
+    this.instantTime = other.instantTime;
     this.isLastBatch |= other.isLastBatch; // true if one of the event isLastBatch true.
     List<WriteStatus> statusList = new ArrayList<>();
     statusList.addAll(this.writeStatuses);

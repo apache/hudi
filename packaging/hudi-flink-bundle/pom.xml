@@ -133,6 +133,7 @@
                   <include>org.apache.hive:hive-jdbc</include>
 
                   <include>org.apache.hbase:hbase-common</include>
+                  <include>commons-codec:commons-codec</include>
                 </includes>
               </artifactSet>
               <relocations>
@@ -159,6 +160,10 @@
                 <relocation>
                   <pattern>org.apache.hadoop.hive.metastore.</pattern>
                   <shadedPattern>${flink.bundle.hive.shade.prefix}org.apache.hadoop.hive.metastore.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.hadoop.hive.ql.</pattern>
+                  <shadedPattern>${flink.bundle.hive.shade.prefix}org.apache.hadoop.hive.ql.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hive.common.</pattern>
@@ -226,11 +231,27 @@
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-common</artifactId>
       <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <artifactId>guava</artifactId>
+          <groupId>com.google.guava</groupId>
+       </exclusion>
+       <exclusion>
+          <artifactId>rocksdbjni</artifactId>
+          <groupId>org.rocksdb</groupId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-client-common</artifactId>
       <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <artifactId>guava</artifactId>
+          <groupId>com.google.guava</groupId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
@@ -241,6 +262,12 @@
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-flink_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <artifactId>guava</artifactId>
+          <groupId>com.google.guava</groupId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
@@ -256,6 +283,12 @@
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-timeline-service</artifactId>
       <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <artifactId>rocksdbjni</artifactId>
+          <groupId>org.rocksdb</groupId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>javax.servlet</groupId>
@@ -364,6 +397,12 @@
       <artifactId>hive-service</artifactId>
       <version>${hive.version}</version>
       <scope>${flink.bundle.hive.scope}</scope>
+      <exclusions>
+        <exclusion>
+          <artifactId>guava</artifactId>
+          <groupId>com.google.guava</groupId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>${hive.groupid}</groupId>
@@ -384,6 +423,10 @@
           <groupId>org.eclipse.jetty.aggregate</groupId>
           <artifactId>*</artifactId>
         </exclusion>
+        <exclusion>
+          <artifactId>guava</artifactId>
+          <groupId>com.google.guava</groupId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -399,6 +442,10 @@
         <exclusion>
           <groupId>javax.servlet.jsp</groupId>
           <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <artifactId>guava</artifactId>
+          <groupId>com.google.guava</groupId>
         </exclusion>
       </exclusions>
     </dependency>
@@ -459,6 +506,12 @@
       <groupId>org.apache.hbase</groupId>
       <artifactId>hbase-common</artifactId>
       <version>${hbase.version}</version>
+      <exclusions>
+        <exclusion>
+          <artifactId>guava</artifactId>
+          <groupId>com.google.guava</groupId>
+        </exclusion>
+      </exclusions>
     </dependency>
   </dependencies>
 

@@ -26,7 +26,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.HoodieROTablePathFilter;
@@ -156,11 +155,6 @@ public class HoodieTableSource implements
     this.hadoopConf = StreamerUtil.getHadoopConf();
     this.metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
     this.maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(new JobConf(this.hadoopConf));
-    if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING)) {
-      ValidationUtils.checkArgument(
-          conf.getString(FlinkOptions.TABLE_TYPE).equalsIgnoreCase(FlinkOptions.TABLE_TYPE_MERGE_ON_READ),
-          "Streaming read is only supported for table type: " + FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
-    }
   }
 
   @Override
@@ -180,7 +174,11 @@ public class HoodieTableSource implements
         if (conf.getBoolean(FlinkOptions.READ_AS_STREAMING)) {
           StreamReadMonitoringFunction monitoringFunction = new StreamReadMonitoringFunction(
               conf, FilePathUtils.toFlinkPath(path), metaClient, maxCompactionMemoryInBytes);
-          OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) getInputFormat(true));
+          InputFormat<RowData, ?> inputFormat = getInputFormat(true);
+          if (!(inputFormat instanceof MergeOnReadInputFormat)) {
+            throw new HoodieException("No successful commits under path " + path);
+          }
+          OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) inputFormat);
           SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, "streaming_source")
               .setParallelism(1)
               .uid("uid_streaming_source")
@@ -191,9 +189,9 @@ public class HoodieTableSource implements
         } else {
           InputFormatSourceFunction<RowData> func = new InputFormatSourceFunction<>(getInputFormat(), typeInfo);
           DataStreamSource<RowData> source = execEnv.addSource(func, asSummaryString(), typeInfo);
-          return source.name("streaming_source")
+          return source.name("bounded_source")
               .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS))
-              .uid("uid_streaming_source");
+              .uid("uid_bounded_source");
         }
       }
     };
@@ -363,21 +361,45 @@ public class HoodieTableSource implements
                 requiredRowType,
                 tableAvroSchema.toString(),
                 AvroSchemaConverter.convertToSchema(requiredRowType).toString(),
-                inputSplits);
-            return new MergeOnReadInputFormat(
-                this.conf,
-                FilePathUtils.toFlinkPaths(paths),
-                hoodieTableState,
-                rowDataType.getChildren(), // use the explicit fields data type because the AvroSchemaConverter is not very stable.
-                "default",
-                this.limit);
+                inputSplits,
+                conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(","));
+            return MergeOnReadInputFormat.builder()
+                .config(this.conf)
+                .paths(FilePathUtils.toFlinkPaths(paths))
+                .tableState(hoodieTableState)
+                // use the explicit fields data type because the AvroSchemaConverter
+                // is not very stable.
+                .fieldTypes(rowDataType.getChildren())
+                .defaultPartName(conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME))
+                .limit(this.limit)
+                .emitDelete(isStreaming)
+                .build();
           case COPY_ON_WRITE:
+            if (isStreaming) {
+              final MergeOnReadTableState hoodieTableState2 = new MergeOnReadTableState(
+                  rowType,
+                  requiredRowType,
+                  tableAvroSchema.toString(),
+                  AvroSchemaConverter.convertToSchema(requiredRowType).toString(),
+                  Collections.emptyList(),
+                  conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(","));
+              return MergeOnReadInputFormat.builder()
+                  .config(this.conf)
+                  .paths(FilePathUtils.toFlinkPaths(paths))
+                  .tableState(hoodieTableState2)
+                  // use the explicit fields data type because the AvroSchemaConverter
+                  // is not very stable.
+                  .fieldTypes(rowDataType.getChildren())
+                  .defaultPartName(conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME))
+                  .limit(this.limit)
+                  .build();
+            }
             FileInputFormat<RowData> format = new CopyOnWriteInputFormat(
                 FilePathUtils.toFlinkPaths(paths),
                 this.schema.getFieldNames(),
                 this.schema.getFieldDataTypes(),
                 this.requiredPos,
-                "default",
+                this.conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME),
                 this.limit == NO_LIMIT_CONSTANT ? Long.MAX_VALUE : this.limit, // ParquetInputFormat always uses the limit value
                 getParquetConf(this.conf, this.hadoopConf),
                 this.conf.getBoolean(FlinkOptions.UTC_TIMEZONE)

@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -205,6 +206,13 @@ public class HoodieTestTable {
     createRequestedCleanFile(basePath, instantTime, cleanerPlan);
     createInflightCleanFile(basePath, instantTime, cleanerPlan);
     createCleanFile(basePath, instantTime, metadata);
+    currentInstantTime = instantTime;
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    return this;
+  }
+
+  public HoodieTestTable addInflightRollback(String instantTime) throws IOException {
+    createInflightRollbackFile(basePath, instantTime);
     currentInstantTime = instantTime;
     metaClient = HoodieTableMetaClient.reload(metaClient);
     return this;
@@ -430,7 +438,7 @@ public class HoodieTestTable {
   }
 
   public FileStatus[] listAllBaseFiles() throws IOException {
-    return listAllBaseFiles(HoodieFileFormat.PARQUET.getFileExtension());
+    return listAllBaseFiles(HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension());
   }
 
   public FileStatus[] listAllBaseFiles(String fileExtension) throws IOException {

@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,15 +16,19 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.exception;
+package org.apache.hudi.client.utils;
 
-public class HoodieFlinkStreamerException extends HoodieException {
+import org.apache.hudi.common.model.WriteOperationType;
 
-  public HoodieFlinkStreamerException(String msg, Throwable e) {
-    super(msg, e);
-  }
+import com.beust.jcommander.IStringConverter;
+import com.beust.jcommander.ParameterException;
 
-  public HoodieFlinkStreamerException(String msg) {
-    super(msg);
+/**
+ * Converter that converts a string into enum WriteOperationType.
+ */
+public class OperationConverter implements IStringConverter<WriteOperationType> {
+  @Override
+  public WriteOperationType convert(String value) throws ParameterException {
+    return WriteOperationType.valueOf(value);
   }
 }

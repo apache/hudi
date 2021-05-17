@@ -20,6 +20,7 @@
 package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -92,6 +93,11 @@ public class RawTripTestPayload implements HoodieRecordPayload<RawTripTestPayloa
     } catch (IOException e) {
       return Option.empty();
     }
+  }
+
+  public static List<String> deleteRecordsToStrings(List<HoodieKey> records) {
+    return records.stream().map(record -> "{\"_row_key\": \"" + record.getRecordKey() + "\",\"partition\": \"" + record.getPartitionPath() + "\"}")
+        .collect(Collectors.toList());
   }
 
   public String getPartitionPath() {

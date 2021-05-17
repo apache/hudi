@@ -72,6 +72,17 @@ public class InputFormatTestUtil {
         commitNumber);
   }
 
+  public static File prepareMultiPartitionTable(java.nio.file.Path basePath, HoodieFileFormat baseFileFormat, int numberOfFiles,
+                                  String commitNumber, String finalLevelPartitionName)
+      throws IOException {
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+        baseFileFormat);
+    java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", finalLevelPartitionName));
+    Files.createDirectories(partitionPath);
+    return simulateInserts(partitionPath.toFile(), baseFileFormat.getFileExtension(), "fileId1" + finalLevelPartitionName, numberOfFiles,
+        commitNumber);
+  }
+
   public static File simulateInserts(File partitionPath, String baseFileExtension, String fileId, int numberOfFiles,
                                      String commitNumber)
       throws IOException {
@@ -130,17 +141,28 @@ public class InputFormatTestUtil {
     jobConf.set(validateTimestampName, instantTime);
   }
 
+  public static void setupSnapshotMaxCommitTimeQueryMode(JobConf jobConf, String maxInstantTime) {
+    setUpScanMode(jobConf);
+    String validateTimestampName =
+            String.format(HoodieHiveUtils.HOODIE_CONSUME_COMMIT, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
+    jobConf.set(validateTimestampName, maxInstantTime);
+  }
+
   public static void setupSnapshotScanMode(JobConf jobConf) {
     setupSnapshotScanMode(jobConf, false);
   }
   
   private static void setupSnapshotScanMode(JobConf jobConf, boolean includePending) {
-    String modePropertyName =
-        String.format(HoodieHiveUtils.HOODIE_CONSUME_MODE_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
-    jobConf.set(modePropertyName, HoodieHiveUtils.SNAPSHOT_SCAN_MODE);
+    setUpScanMode(jobConf);
     String includePendingCommitsName =
         String.format(HoodieHiveUtils.HOODIE_CONSUME_PENDING_COMMITS, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
     jobConf.setBoolean(includePendingCommitsName, includePending);
+  }
+
+  private static void setUpScanMode(JobConf jobConf) {
+    String modePropertyName =
+        String.format(HoodieHiveUtils.HOODIE_CONSUME_MODE_PATTERN, HoodieTestUtils.RAW_TRIPS_TEST_NAME);
+    jobConf.set(modePropertyName, HoodieHiveUtils.SNAPSHOT_SCAN_MODE);
   }
 
   public static File prepareParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
@@ -150,7 +172,7 @@ public class InputFormatTestUtil {
 
   public static File prepareParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
                                          int numberOfRecords, String commitNumber, HoodieTableType tableType) throws IOException {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), tableType);
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET);
     java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", "01"));
     createData(schema, partitionPath, numberOfFiles, numberOfRecords, commitNumber);
     return partitionPath.toFile();
@@ -163,7 +185,7 @@ public class InputFormatTestUtil {
 
   public static File prepareSimpleParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
                                                int numberOfRecords, String commitNumber, HoodieTableType tableType) throws Exception {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), tableType);
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET);
     java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "05", "01"));
     createSimpleData(schema, partitionPath, numberOfFiles, numberOfRecords, commitNumber);
     return partitionPath.toFile();
@@ -176,7 +198,7 @@ public class InputFormatTestUtil {
 
   public static File prepareNonPartitionedParquetTable(java.nio.file.Path basePath, Schema schema, int numberOfFiles,
                                                        int numberOfRecords, String commitNumber, HoodieTableType tableType) throws IOException {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), tableType);
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), tableType, HoodieFileFormat.PARQUET);
     createData(schema, basePath, numberOfFiles, numberOfRecords, commitNumber);
     return basePath.toFile();
   }
@@ -185,7 +207,7 @@ public class InputFormatTestUtil {
       String commitNumber) throws IOException {
     AvroParquetWriter parquetWriter;
     for (int i = 0; i < numberOfFiles; i++) {
-      String fileId = FSUtils.makeDataFileName(commitNumber, TEST_WRITE_TOKEN, "fileid" + i);
+      String fileId = FSUtils.makeDataFileName(commitNumber, TEST_WRITE_TOKEN, "fileid" + i, HoodieFileFormat.PARQUET.getFileExtension());
       parquetWriter = new AvroParquetWriter(new Path(partitionPath.resolve(fileId).toString()), schema);
       try {
         for (GenericRecord record : generateAvroRecords(schema, numberOfRecords, commitNumber, fileId)) {
@@ -201,7 +223,7 @@ public class InputFormatTestUtil {
       String commitNumber) throws Exception {
     AvroParquetWriter parquetWriter;
     for (int i = 0; i < numberOfFiles; i++) {
-      String fileId = FSUtils.makeDataFileName(commitNumber, "1", "fileid" + i);
+      String fileId = FSUtils.makeDataFileName(commitNumber, "1", "fileid" + i, HoodieFileFormat.PARQUET.getFileExtension());
       parquetWriter = new AvroParquetWriter(new Path(partitionPath.resolve(fileId).toString()), schema);
       try {
         List<IndexedRecord> records = SchemaTestUtil.generateTestRecords(0, numberOfRecords);
@@ -232,7 +254,8 @@ public class InputFormatTestUtil {
       int totalNumberOfRecords, int numberOfRecordsToUpdate, String newCommit) throws IOException {
     File fileToUpdate = Objects.requireNonNull(directory.listFiles((dir, name) -> name.endsWith("parquet")))[0];
     String fileId = FSUtils.getFileId(fileToUpdate.getName());
-    File dataFile = new File(directory, FSUtils.makeDataFileName(newCommit, TEST_WRITE_TOKEN, fileId));
+    File dataFile = new File(directory,
+        FSUtils.makeDataFileName(newCommit, TEST_WRITE_TOKEN, fileId, HoodieFileFormat.PARQUET.getFileExtension()));
     try (AvroParquetWriter parquetWriter = new AvroParquetWriter(new Path(dataFile.getAbsolutePath()), schema)) {
       for (GenericRecord record : generateAvroRecords(schema, totalNumberOfRecords, originalCommit, fileId)) {
         if (numberOfRecordsToUpdate > 0) {
@@ -301,6 +324,33 @@ public class InputFormatTestUtil {
     HoodieCommandBlock rollbackBlock = new HoodieCommandBlock(header);
     writer.appendBlock(rollbackBlock);
     return writer;
+  }
+
+  public static void setProjectFieldsForInputFormat(JobConf jobConf,
+      Schema schema, String hiveColumnTypes) {
+    List<Schema.Field> fields = schema.getFields();
+    String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
+    String postions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
+    Configuration conf = HoodieTestUtils.getDefaultHadoopConf();
+
+    String hiveColumnNames = fields.stream().filter(field -> !field.name().equalsIgnoreCase("datestr"))
+        .map(Schema.Field::name).collect(Collectors.joining(","));
+    hiveColumnNames = hiveColumnNames + ",datestr";
+    String modifiedHiveColumnTypes = HoodieAvroUtils.addMetadataColumnTypes(hiveColumnTypes);
+    modifiedHiveColumnTypes = modifiedHiveColumnTypes + ",string";
+    jobConf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
+    jobConf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, modifiedHiveColumnTypes);
+    // skip choose hoodie meta_columns, only choose one origin column to trigger HUID-1722
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names.split(",")[5]);
+    jobConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, postions.split(",")[5]);
+    jobConf.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "datestr");
+    conf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
+    // skip choose hoodie meta_columns, only choose one origin column to trigger HUID-1722
+    conf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names.split(",")[5]);
+    conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, postions.split(",")[5]);
+    conf.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "datestr");
+    conf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, modifiedHiveColumnTypes);
+    jobConf.addResource(conf);
   }
 
   public static void setPropsForInputFormat(JobConf jobConf,

@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -274,7 +275,7 @@ public class TestHoodieCompactionStrategy {
     private final long size;
 
     public TestHoodieBaseFile(long size) {
-      super("/tmp/XYXYXYXYXYYX_11_20180918020003.parquet");
+      super("/tmp/XYXYXYXYXYYX_11_20180918020003" + HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension());
       this.size = size;
     }
 

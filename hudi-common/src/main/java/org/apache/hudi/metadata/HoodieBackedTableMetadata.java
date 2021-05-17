@@ -214,8 +214,16 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
       // Load the schema
       Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
-      logRecordScanner = new HoodieMetadataMergedLogRecordScanner(metaClient.getFs(), metadataBasePath, logFilePaths,
-          schema, latestMetaInstantTimestamp, MAX_MEMORY_SIZE_IN_BYTES, BUFFER_SIZE, spillableMapDirectory, null);
+      logRecordScanner = HoodieMetadataMergedLogRecordScanner.newBuilder()
+          .withFileSystem(metaClient.getFs())
+          .withBasePath(metadataBasePath)
+          .withLogFilePaths(logFilePaths)
+          .withReaderSchema(schema)
+          .withLatestInstantTime(latestMetaInstantTimestamp)
+          .withMaxMemorySizeInBytes(MAX_MEMORY_SIZE_IN_BYTES)
+          .withBufferSize(BUFFER_SIZE)
+          .withSpillableMapBasePath(spillableMapDirectory)
+          .build();
 
       logScannerOpenMs = timer.endTimer();
       LOG.info(String.format("Opened metadata log files from %s at instant (dataset instant=%s, metadata instant=%s) in %d ms",
