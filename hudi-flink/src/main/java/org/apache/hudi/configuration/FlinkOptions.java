@@ -423,6 +423,12 @@ public class FlinkOptions {
       .defaultValue("jdbc:hive2://localhost:10000")
       .withDescription("Jdbc URL for hive sync, default 'jdbc:hive2://localhost:10000'");
 
+  public static final ConfigOption<String> HIVE_SYNC_METASTORE_URIS = ConfigOptions
+      .key("hive_sync.metastore.uris")
+      .stringType()
+      .defaultValue("")
+      .withDescription("Metastore uris for hive sync, default ''");
+
   public static final ConfigOption<String> HIVE_SYNC_PARTITION_FIELDS = ConfigOptions
       .key("hive_sync.partition_fields")
       .stringType()

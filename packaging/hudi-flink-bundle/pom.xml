@@ -131,6 +131,8 @@
                   <include>org.apache.hive:hive-exec</include>
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
+                  <include>org.datanucleus:datanucleus-core</include>
+                  <include>org.datanucleus:datanucleus-api-jdo</include>
 
                   <include>org.apache.hbase:hbase-common</include>
                   <include>commons-codec:commons-codec</include>
@@ -160,10 +162,6 @@
                 <relocation>
                   <pattern>org.apache.hadoop.hive.metastore.</pattern>
                   <shadedPattern>${flink.bundle.hive.shade.prefix}org.apache.hadoop.hive.metastore.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.hadoop.hive.ql.</pattern>
-                  <shadedPattern>${flink.bundle.hive.shade.prefix}org.apache.hadoop.hive.ql.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hive.common.</pattern>
@@ -440,6 +438,10 @@
           <artifactId>*</artifactId>
         </exclusion>
         <exclusion>
+          <groupId>org.datanucleus</groupId>
+          <artifactId>datanucleus-core</artifactId>
+        </exclusion>
+        <exclusion>
           <groupId>javax.servlet.jsp</groupId>
           <artifactId>*</artifactId>
         </exclusion>
@@ -476,6 +478,18 @@
           <artifactId>javax.servlet</artifactId>
         </exclusion>
       </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.datanucleus</groupId>
+      <artifactId>datanucleus-core</artifactId>
+      <scope>${flink.bundle.hive.scope}</scope>
+      <version>5.0.1</version>
+    </dependency>
+    <dependency>
+      <groupId>org.datanucleus</groupId>
+      <artifactId>datanucleus-api-jdo</artifactId>
+      <scope>${flink.bundle.hive.scope}</scope>
+      <version>5.0.1</version>
     </dependency>
 
     <dependency>
