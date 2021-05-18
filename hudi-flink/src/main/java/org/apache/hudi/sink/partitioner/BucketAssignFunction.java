@@ -219,9 +219,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
         updateIndexState(recordKey, partitionPath, location);
       }
     }
-    record.unseal();
     record.setCurrentLocation(location);
-    record.seal();
     out.collect((O) record);
   }
 

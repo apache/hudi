@@ -89,7 +89,7 @@ public class FlinkOptions {
   public static final ConfigOption<Boolean> INDEX_GLOBAL_ENABLED = ConfigOptions
       .key("index.global.enabled")
       .booleanType()
-      .defaultValue(true)
+      .defaultValue(false)
       .withDescription("Whether to update index for the old partition path\n"
           + "if same key record with different partition path came in, default true");
 

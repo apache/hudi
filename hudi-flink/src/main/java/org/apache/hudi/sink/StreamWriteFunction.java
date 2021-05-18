@@ -20,7 +20,10 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.CommitUtils;
@@ -178,7 +181,7 @@ public class StreamWriteFunction<K, I, O>
 
   @Override
   public void processElement(I value, KeyedProcessFunction<K, I, O>.Context ctx, Collector<O> out) {
-    bufferRecord(value);
+    bufferRecord((HoodieRecord<?>) value);
   }
 
   @Override
@@ -211,7 +214,7 @@ public class StreamWriteFunction<K, I, O>
   public Map<String, List<HoodieRecord>> getDataBuffer() {
     Map<String, List<HoodieRecord>> ret = new HashMap<>();
     for (Map.Entry<String, DataBucket> entry : buckets.entrySet()) {
-      ret.put(entry.getKey(), entry.getValue().records);
+      ret.put(entry.getKey(), entry.getValue().writeBuffer());
     }
     return ret;
   }
@@ -255,15 +258,76 @@ public class StreamWriteFunction<K, I, O>
   }
 
   /**
+   * Represents a data item in the buffer, this is needed to reduce the
+   * memory footprint.
+   *
+   * <p>A {@link HoodieRecord} was firstly transformed into a {@link DataItem}
+   * for buffering, it then transforms back to the {@link HoodieRecord} before flushing.
+   */
+  private static class DataItem {
+    private final String key; // record key
+    private final String instant; // 'U' or 'I'
+    private final HoodieRecordPayload<?> data; // record payload
+
+    private DataItem(String key, String instant, HoodieRecordPayload<?> data) {
+      this.key = key;
+      this.instant = instant;
+      this.data = data;
+    }
+
+    public static DataItem fromHoodieRecord(HoodieRecord<?> record) {
+      return new DataItem(
+          record.getRecordKey(),
+          record.getCurrentLocation().getInstantTime(),
+          record.getData());
+    }
+
+    public HoodieRecord<?> toHoodieRecord(String partitionPath) {
+      HoodieKey hoodieKey = new HoodieKey(this.key, partitionPath);
+      HoodieRecord<?> record = new HoodieRecord<>(hoodieKey, data);
+      HoodieRecordLocation loc = new HoodieRecordLocation(instant, null);
+      record.setCurrentLocation(loc);
+      return record;
+    }
+  }
+
+  /**
    * Data bucket.
    */
   private static class DataBucket {
-    private final List<HoodieRecord> records;
+    private final List<DataItem> records;
     private final BufferSizeDetector detector;
+    private final String partitionPath;
+    private final String fileID;
 
-    private DataBucket(Double batchSize) {
+    private DataBucket(Double batchSize, HoodieRecord<?> hoodieRecord) {
       this.records = new ArrayList<>();
       this.detector = new BufferSizeDetector(batchSize);
+      this.partitionPath = hoodieRecord.getPartitionPath();
+      this.fileID = hoodieRecord.getCurrentLocation().getFileId();
+    }
+
+    /**
+     * Prepare the write data buffer:
+     *
+     * <ul>
+     *   <li>Patch up all the records with correct partition path;</li>
+     *   <li>Patch up the first record with correct partition path and fileID.</li>
+     * </ul>
+     */
+    public List<HoodieRecord> writeBuffer() {
+      // rewrite all the records with new record key
+      List<HoodieRecord> recordList = records.stream()
+          .map(record -> record.toHoodieRecord(partitionPath))
+          .collect(Collectors.toList());
+      // rewrite the first record with expected fileID
+      HoodieRecord<?> first = recordList.get(0);
+      HoodieRecord<?> record = new HoodieRecord<>(first.getKey(), first.getData());
+      HoodieRecordLocation newLoc = new HoodieRecordLocation(first.getCurrentLocation().getInstantTime(), fileID);
+      record.setCurrentLocation(newLoc);
+
+      recordList.set(0, record);
+      return recordList;
     }
 
     public void reset() {
@@ -349,8 +413,7 @@ public class StreamWriteFunction<K, I, O>
   /**
    * Returns the bucket ID with the given value {@code value}.
    */
-  private String getBucketID(I value) {
-    HoodieRecord<?> record = (HoodieRecord<?>) value;
+  private String getBucketID(HoodieRecord<?> record) {
     final String fileId = record.getCurrentLocation().getFileId();
     return StreamerUtil.generateBucketKey(record.getPartitionPath(), fileId);
   }
@@ -366,12 +429,13 @@ public class StreamWriteFunction<K, I, O>
    *
    * @param value HoodieRecord
    */
-  private void bufferRecord(I value) {
+  private void bufferRecord(HoodieRecord<?> value) {
     final String bucketID = getBucketID(value);
 
     DataBucket bucket = this.buckets.computeIfAbsent(bucketID,
-        k -> new DataBucket(this.config.getDouble(FlinkOptions.WRITE_BATCH_SIZE)));
-    boolean flushBucket = bucket.detector.detect(value);
+        k -> new DataBucket(this.config.getDouble(FlinkOptions.WRITE_BATCH_SIZE), value));
+    final DataItem item = DataItem.fromHoodieRecord(value);
+    boolean flushBucket = bucket.detector.detect(item);
     boolean flushBuffer = this.tracer.trace(bucket.detector.lastRecordSize);
     if (flushBucket) {
       flushBucket(bucket);
@@ -387,7 +451,7 @@ public class StreamWriteFunction<K, I, O>
       this.tracer.countDown(bucketToFlush.detector.totalSize);
       bucketToFlush.reset();
     }
-    bucket.records.add((HoodieRecord<?>) value);
+    bucket.records.add(item);
   }
 
   @SuppressWarnings("unchecked, rawtypes")
@@ -400,7 +464,7 @@ public class StreamWriteFunction<K, I, O>
       return;
     }
 
-    List<HoodieRecord> records = bucket.records;
+    List<HoodieRecord> records = bucket.writeBuffer();
     ValidationUtils.checkState(records.size() > 0, "Data bucket to flush has no buffering records");
     if (config.getBoolean(FlinkOptions.INSERT_DROP_DUPS)) {
       records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1);
@@ -431,12 +495,13 @@ public class StreamWriteFunction<K, I, O>
           // The records are partitioned by the bucket ID and each batch sent to
           // the writer belongs to one bucket.
           .forEach(bucket -> {
-            List<HoodieRecord> records = bucket.records;
+            List<HoodieRecord> records = bucket.writeBuffer();
             if (records.size() > 0) {
               if (config.getBoolean(FlinkOptions.INSERT_DROP_DUPS)) {
                 records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1);
               }
               writeStatus.addAll(writeFunction.apply(records, currentInstant));
+              bucket.reset();
             }
           });
     } else {
