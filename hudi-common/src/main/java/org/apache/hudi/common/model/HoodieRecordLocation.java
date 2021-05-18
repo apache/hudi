@@ -26,8 +26,8 @@ import java.util.Objects;
  */
 public class HoodieRecordLocation implements Serializable {
 
-  private String instantTime;
-  private String fileId;
+  protected String instantTime;
+  protected String fileId;
 
   public HoodieRecordLocation() {
   }

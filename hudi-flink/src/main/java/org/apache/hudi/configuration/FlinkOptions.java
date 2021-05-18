@@ -86,6 +86,13 @@ public class FlinkOptions {
       .defaultValue(1.5D)
       .withDescription("Index state ttl in days, default 1.5 day");
 
+  public static final ConfigOption<Boolean> INDEX_GLOBAL_ENABLED = ConfigOptions
+      .key("index.global.enabled")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether to update index for the old partition path\n"
+          + "if same key record with different partition path came in, default true");
+
   // ------------------------------------------------------------------------
   //  Read Options
   // ------------------------------------------------------------------------

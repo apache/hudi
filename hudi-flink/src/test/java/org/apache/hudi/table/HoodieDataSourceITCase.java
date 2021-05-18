@@ -393,6 +393,56 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   }
 
   @Test
+  void testWriteGlobalIndex() {
+    // the source generates 4 commits
+    String createSource = TestConfigurations.getFileSourceDDL(
+        "source", "test_source_4.data", 4);
+    streamTableEnv.executeSql(createSource);
+
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.INSERT_DROP_DUPS.key(), "true");
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
+    streamTableEnv.executeSql(hoodieTableDDL);
+
+    final String insertInto2 = "insert into t1 select * from source";
+
+    execInsertSql(streamTableEnv, insertInto2);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> streamTableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result, "[id1,Phoebe,52,1970-01-01T00:00:08,par4]");
+  }
+
+  @Test
+  void testWriteLocalIndex() {
+    // the source generates 4 commits
+    String createSource = TestConfigurations.getFileSourceDDL(
+        "source", "test_source_4.data", 4);
+    streamTableEnv.executeSql(createSource);
+
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.INDEX_GLOBAL_ENABLED.key(), "false");
+    options.put(FlinkOptions.INSERT_DROP_DUPS.key(), "true");
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
+    streamTableEnv.executeSql(hoodieTableDDL);
+
+    final String insertInto2 = "insert into t1 select * from source";
+
+    execInsertSql(streamTableEnv, insertInto2);
+
+    List<Row> result = CollectionUtil.iterableToList(
+        () -> streamTableEnv.sqlQuery("select * from t1").execute().collect());
+    final String expected = "["
+        + "id1,Stephen,34,1970-01-01T00:00:02,par1, "
+        + "id1,Fabian,32,1970-01-01T00:00:04,par2, "
+        + "id1,Jane,19,1970-01-01T00:00:06,par3, "
+        + "id1,Phoebe,52,1970-01-01T00:00:08,par4]";
+    assertRowsEquals(result, expected, 3);
+  }
+
+  @Test
   void testStreamReadEmptyTablePath() throws Exception {
     // create an empty table
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
