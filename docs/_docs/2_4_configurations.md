@@ -59,7 +59,11 @@ Options useful for writing tables via `write.format.option(...)`
 #### PRECOMBINE_FIELD_OPT_KEY {#PRECOMBINE_FIELD_OPT_KEY}
   Property: `hoodie.datasource.write.precombine.field`, Default: `ts` <br/>
   <span style="color:grey">Field used in preCombining before actual write. When two records have the same key value,
-we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)</span>
+  we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..). This will be 
+  used to merge records with same key within the same incoming batch and not used to merge with an existing record on 
+  disk. But when it comes to merging an incoming record with one in storage, your HoodieRecordPayload implementation 
+  will determine. To be specific, HoodieRecordPayload#combineAndGetUpdateValue() will determine how an incoming record 
+  is merged with one in storage.</span>
 
 #### PAYLOAD_CLASS_OPT_KEY {#PAYLOAD_CLASS_OPT_KEY}
   Property: `hoodie.datasource.write.payload.class`, Default: `org.apache.hudi.OverwriteWithLatestAvroPayload` <br/>
