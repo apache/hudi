@@ -401,6 +401,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
 
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.INDEX_GLOBAL_ENABLED.key(), "true");
     options.put(FlinkOptions.INSERT_DROP_DUPS.key(), "true");
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     streamTableEnv.executeSql(hoodieTableDDL);
