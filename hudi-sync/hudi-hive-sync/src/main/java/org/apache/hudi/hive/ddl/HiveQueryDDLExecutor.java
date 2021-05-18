@@ -125,6 +125,8 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
 
   @Override
   public void close() {
-    //TODO-jsbali
+    if (metaStoreClient != null) {
+      Hive.closeCurrent();
+    }
   }
 }

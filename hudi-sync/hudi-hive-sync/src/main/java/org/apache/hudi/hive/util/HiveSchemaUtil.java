@@ -168,7 +168,7 @@ public class HiveSchemaUtil {
       } else {
         result.append(convertField(parquetType, syncConfig.supportTimestamp));
       }
-      return new FieldSchema(hiveCompatibleFieldName(key, false),result.toString().toLowerCase(),"");
+      return new FieldSchema(key, result.toString().toLowerCase(),"");
     }).filter(field -> !syncConfig.partitionFields.contains(field.getName())).collect(Collectors.toList());
     return schema;
   }

@@ -136,6 +136,12 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
 
   @Override
   public void close() {
-    //TODO-jsbali
+    try {
+      if (connection != null) {
+        connection.close();
+      }
+    } catch (SQLException e) {
+      LOG.error("Could not close connection ", e);
+    }
   }
 }
