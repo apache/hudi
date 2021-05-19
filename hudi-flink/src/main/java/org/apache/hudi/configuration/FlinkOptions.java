@@ -91,7 +91,7 @@ public class FlinkOptions {
       .booleanType()
       .defaultValue(false)
       .withDescription("Whether to update index for the old partition path\n"
-          + "if same key record with different partition path came in, default true");
+          + "if same key record with different partition path came in, default false");
 
   // ------------------------------------------------------------------------
   //  Read Options
