@@ -308,26 +308,28 @@ public class StreamWriteFunction<K, I, O>
     }
 
     /**
-     * Prepare the write data buffer:
-     *
-     * <ul>
-     *   <li>Patch up all the records with correct partition path;</li>
-     *   <li>Patch up the first record with correct partition path and fileID.</li>
-     * </ul>
+     * Prepare the write data buffer: patch up all the records with correct partition path.
      */
     public List<HoodieRecord> writeBuffer() {
       // rewrite all the records with new record key
-      List<HoodieRecord> recordList = records.stream()
+      return records.stream()
           .map(record -> record.toHoodieRecord(partitionPath))
           .collect(Collectors.toList());
+    }
+
+    /**
+     * Sets up before flush: patch up the first record with correct partition path and fileID.
+     *
+     * <p>Note: the method may modify the given records {@code records}.
+     */
+    public void preWrite(List<HoodieRecord> records) {
       // rewrite the first record with expected fileID
-      HoodieRecord<?> first = recordList.get(0);
+      HoodieRecord<?> first = records.get(0);
       HoodieRecord<?> record = new HoodieRecord<>(first.getKey(), first.getData());
       HoodieRecordLocation newLoc = new HoodieRecordLocation(first.getCurrentLocation().getInstantTime(), fileID);
       record.setCurrentLocation(newLoc);
 
-      recordList.set(0, record);
-      return recordList;
+      records.set(0, record);
     }
 
     public void reset() {
@@ -469,6 +471,7 @@ public class StreamWriteFunction<K, I, O>
     if (config.getBoolean(FlinkOptions.INSERT_DROP_DUPS)) {
       records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1);
     }
+    bucket.preWrite(records);
     final List<WriteStatus> writeStatus = new ArrayList<>(writeFunction.apply(records, instant));
     final BatchWriteSuccessEvent event = BatchWriteSuccessEvent.builder()
         .taskID(taskID)
@@ -500,6 +503,7 @@ public class StreamWriteFunction<K, I, O>
               if (config.getBoolean(FlinkOptions.INSERT_DROP_DUPS)) {
                 records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1);
               }
+              bucket.preWrite(records);
               writeStatus.addAll(writeFunction.apply(records, currentInstant));
               bucket.reset();
             }
