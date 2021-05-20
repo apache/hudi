@@ -147,4 +147,12 @@ public abstract class AbstractRealtimeRecordReader {
   public Schema getHiveSchema() {
     return hiveSchema;
   }
+
+  public RealtimeSplit getSplit() {
+    return split;
+  }
+
+  public JobConf getJobConf() {
+    return jobConf;
+  }
 }

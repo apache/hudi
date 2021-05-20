@@ -203,6 +203,18 @@ public class InputFormatTestUtil {
     return basePath.toFile();
   }
 
+  public static List<File> prepareMultiPartitionedParquetTable(java.nio.file.Path basePath, Schema schema,
+      int numberPartitions, int numberOfRecordsPerPartition, String commitNumber) throws IOException {
+    List<File> result = new ArrayList<>();
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString());
+    for (int i = 0; i < numberPartitions; i++) {
+      java.nio.file.Path partitionPath = basePath.resolve(Paths.get(2016 + i + "", "05", "01"));
+      createData(schema, partitionPath, 1, numberOfRecordsPerPartition, commitNumber);
+      result.add(partitionPath.toFile());
+    }
+    return result;
+  }
+
   private static void createData(Schema schema, java.nio.file.Path partitionPath, int numberOfFiles, int numberOfRecords,
       String commitNumber) throws IOException {
     AvroParquetWriter parquetWriter;
