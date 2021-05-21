@@ -22,15 +22,21 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.SparkSession;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -43,26 +49,42 @@ import static org.apache.hudi.utilities.sources.helpers.DFSPathSelector.Config.R
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestDFSPathSelector {
+public class TestDFSPathSelectorCommonMethods {
 
-  DFSPathSelector selector;
+  static SparkSession spark;
+  Configuration conf;
+  TypedProperties props;
   FileSystem fs;
   String basePath;
   Path inputPath;
 
+  @BeforeAll
+  static void setUpAll() {
+    spark = SparkSession.builder()
+        .master("local[2]")
+        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+        .getOrCreate();
+  }
+
+  @AfterAll
+  static void tearDownAll() {
+    spark.close();
+  }
+
   @BeforeEach
   void setUp(@TempDir java.nio.file.Path tempDir) throws IOException {
     basePath = tempDir.toString();
-    Configuration conf = HoodieTestUtils.getDefaultHadoopConf();
-    TypedProperties props = new TypedProperties();
+    conf = HoodieTestUtils.getDefaultHadoopConf();
+    props = new TypedProperties();
     props.setProperty(ROOT_INPUT_PATH_PROP, basePath);
-    selector = new DFSPathSelector(props, conf);
     fs = FileSystem.get(conf);
     inputPath = new Path(basePath);
   }
 
-  @Test
-  public void listEligibleFilesShouldIgnoreCertainPrefixes() throws Exception {
+  @ParameterizedTest
+  @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
+  public void listEligibleFilesShouldIgnoreCertainPrefixes(Class<?> clazz) throws Exception {
+    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, conf);
     createBaseFile(basePath, "p1", "000", "foo1", 1);
     createBaseFile(basePath, "p1", "000", ".foo2", 1);
     createBaseFile(basePath, "p1", "000", "_foo3", 1);
@@ -72,8 +94,10 @@ public class TestDFSPathSelector {
     assertTrue(eligibleFiles.get(0).getPath().getName().startsWith("foo1"));
   }
 
-  @Test
-  public void listEligibleFilesShouldIgnore0LengthFiles() throws Exception {
+  @ParameterizedTest
+  @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
+  public void listEligibleFilesShouldIgnore0LengthFiles(Class<?> clazz) throws Exception {
+    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, conf);
     createBaseFile(basePath, "p1", "000", "foo1", 1);
     createBaseFile(basePath, "p1", "000", "foo2", 0);
     createBaseFile(basePath, "p1", "000", "foo3", 0);
@@ -83,8 +107,10 @@ public class TestDFSPathSelector {
     assertTrue(eligibleFiles.get(0).getPath().getName().startsWith("foo1"));
   }
 
-  @Test
-  public void listEligibleFilesShouldIgnoreFilesEarlierThanCheckpointTime() throws Exception {
+  @ParameterizedTest
+  @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
+  public void listEligibleFilesShouldIgnoreFilesEarlierThanCheckpointTime(Class<?> clazz) throws Exception {
+    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, conf);
     createBaseFile(basePath, "p1", "000", "foo1", 1);
     createBaseFile(basePath, "p1", "000", "foo2", 1);
     createBaseFile(basePath, "p1", "000", "foo3", 1);
@@ -93,15 +119,18 @@ public class TestDFSPathSelector {
     assertEquals(0, eligibleFiles.size());
   }
 
-  @Test
-  public void getNextFilePathsAndMaxModificationTimeShouldRespectSourceLimit() throws Exception {
+  @ParameterizedTest
+  @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
+  public void getNextFilePathsAndMaxModificationTimeShouldRespectSourceLimit(Class<?> clazz) throws Exception {
+    JavaSparkContext jsc = new JavaSparkContext(spark.sparkContext());
+    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, conf);
     createBaseFile(basePath, "p1", "000", "foo1", 10, 1000);
     createBaseFile(basePath, "p1", "000", "foo2", 10, 2000);
     createBaseFile(basePath, "p1", "000", "foo3", 10, 3000);
     createBaseFile(basePath, "p1", "000", "foo4", 10, 4000);
     createBaseFile(basePath, "p1", "000", "foo5", 10, 5000);
     Pair<Option<String>, String> nextFilePathsAndCheckpoint = selector
-        .getNextFilePathsAndMaxModificationTime(null, Option.empty(), 30);
+        .getNextFilePathsAndMaxModificationTime(jsc, Option.empty(), 30);
     List<String> fileNames = Arrays
         .stream(nextFilePathsAndCheckpoint.getLeft().get().split(","))
         .map(p -> Paths.get(p).toFile().getName())
@@ -113,15 +142,18 @@ public class TestDFSPathSelector {
     assertEquals(2000L, Long.parseLong(checkpointStr1stRead), "should read up to foo2 (inclusive)");
   }
 
-  @Test
-  public void getNextFilePathsAndMaxModificationTimeShouldIgnoreSourceLimitIfSameModTimeFilesPresent() throws Exception {
+  @ParameterizedTest
+  @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
+  public void getNextFilePathsAndMaxModificationTimeShouldIgnoreSourceLimitIfSameModTimeFilesPresent(Class<?> clazz) throws Exception {
+    JavaSparkContext jsc = new JavaSparkContext(spark.sparkContext());
+    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, conf);
     createBaseFile(basePath, "p1", "000", "foo1", 10, 1000);
     createBaseFile(basePath, "p1", "000", "foo2", 10, 1000);
     createBaseFile(basePath, "p1", "000", "foo3", 10, 1000);
     createBaseFile(basePath, "p1", "000", "foo4", 10, 2000);
     createBaseFile(basePath, "p1", "000", "foo5", 10, 2000);
     Pair<Option<String>, String> nextFilePathsAndCheckpoint = selector
-        .getNextFilePathsAndMaxModificationTime(null, Option.empty(), 20);
+        .getNextFilePathsAndMaxModificationTime(jsc, Option.empty(), 20);
     List<String> fileNames1stRead = Arrays
         .stream(nextFilePathsAndCheckpoint.getLeft().get().split(","))
         .map(p -> Paths.get(p).toFile().getName())
@@ -134,7 +166,7 @@ public class TestDFSPathSelector {
     assertEquals(1000L, Long.parseLong(checkpointStr1stRead), "should read up to foo3 (inclusive)");
 
     nextFilePathsAndCheckpoint = selector
-        .getNextFilePathsAndMaxModificationTime(null, Option.of(checkpointStr1stRead), 20);
+        .getNextFilePathsAndMaxModificationTime(jsc, Option.of(checkpointStr1stRead), 20);
     List<String> fileNames2ndRead = Arrays
         .stream(nextFilePathsAndCheckpoint.getLeft().get().split(","))
         .map(p -> Paths.get(p).toFile().getName())
