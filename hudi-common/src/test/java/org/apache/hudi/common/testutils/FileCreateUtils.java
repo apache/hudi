@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -158,12 +159,20 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION, metadata.toJsonString().getBytes(StandardCharsets.UTF_8));
   }
 
-  public static void createRequestedReplaceCommit(String basePath, String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION, serializeRequestedReplaceMetadata(requestedReplaceMetadata).get());
+  public static void createRequestedReplaceCommit(String basePath, String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata) throws IOException {
+    if (requestedReplaceMetadata.isPresent()) {
+      createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION, serializeRequestedReplaceMetadata(requestedReplaceMetadata.get()).get());
+    } else {
+      createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION);
+    }
   }
 
-  public static void createInflightReplaceCommit(String basePath, String instantTime) throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION);
+  public static void createInflightReplaceCommit(String basePath, String instantTime, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws IOException {
+    if (inflightReplaceMetadata.isPresent()) {
+      createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION, inflightReplaceMetadata.get().toJsonString().getBytes(StandardCharsets.UTF_8));
+    } else {
+      createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION);
+    }
   }
 
   public static void createCleanFile(String basePath, String instantTime, HoodieCleanMetadata metadata) throws IOException {
@@ -197,10 +206,6 @@ public class FileCreateUtils {
 
   public static void createRequestedCompaction(String basePath, String instantTime) throws IOException {
     createAuxiliaryMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION);
-  }
-
-  public static void createInflightCompaction(String basePath, String instantTime) throws IOException {
-    createAuxiliaryMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_COMPACTION_EXTENSION);
   }
 
   public static void createPartitionMetaFile(String basePath, String partitionPath) throws IOException {
