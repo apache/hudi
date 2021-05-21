@@ -32,22 +32,39 @@ import scala.Function1;
 
 public class KeyGeneratorTestUtilities {
 
-  public static String exampleSchema = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
+  public static final String NESTED_COL_SCHEMA = "{\"type\":\"record\", \"name\":\"nested_col\",\"fields\": ["
+      + "{\"name\": \"prop1\",\"type\": \"string\"},{\"name\": \"prop2\", \"type\": \"long\"}]}";
+  public static final String EXAMPLE_SCHEMA = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
       + "{\"name\": \"timestamp\",\"type\": \"long\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
       + "{\"name\": \"ts_ms\", \"type\": \"string\"},"
-      + "{\"name\": \"pii_col\", \"type\": \"string\"}]}";
+      + "{\"name\": \"pii_col\", \"type\": \"string\"},"
+      + "{\"name\": \"nested_col\",\"type\": "
+      + NESTED_COL_SCHEMA + "}"
+      + "]}";
 
   public static final String TEST_STRUCTNAME = "test_struct_name";
   public static final String TEST_RECORD_NAMESPACE = "test_record_namespace";
-  public static Schema schema = new Schema.Parser().parse(exampleSchema);
+  public static Schema schema = new Schema.Parser().parse(EXAMPLE_SCHEMA);
   public static StructType structType = AvroConversionUtils.convertAvroSchemaToStructType(schema);
 
-  public GenericRecord getRecord() {
-    GenericRecord record = new GenericData.Record(new Schema.Parser().parse(exampleSchema));
+  public static GenericRecord getRecord() {
+    return getRecord(getNestedColRecord("val1", 10L));
+  }
+
+  public static GenericRecord getNestedColRecord(String prop1Value, Long prop2Value) {
+    GenericRecord nestedColRecord = new GenericData.Record(new Schema.Parser().parse(NESTED_COL_SCHEMA));
+    nestedColRecord.put("prop1", prop1Value);
+    nestedColRecord.put("prop2", prop2Value);
+    return nestedColRecord;
+  }
+
+  public static GenericRecord getRecord(GenericRecord nestedColRecord) {
+    GenericRecord record = new GenericData.Record(new Schema.Parser().parse(EXAMPLE_SCHEMA));
     record.put("timestamp", 4357686);
     record.put("_row_key", "key1");
     record.put("ts_ms", "2020-03-21");
     record.put("pii_col", "pi");
+    record.put("nested_col", nestedColRecord);
     return record;
   }
 
