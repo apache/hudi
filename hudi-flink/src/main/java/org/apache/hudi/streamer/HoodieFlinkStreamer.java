@@ -88,8 +88,8 @@ public class HoodieFlinkStreamer {
         .name("kafka_source")
         .uid("uid_kafka_source")
         .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class))
-        // Key-by partition path, to avoid multiple subtasks write to a partition at the same time
-        .keyBy(HoodieRecord::getPartitionPath)
+        // Key-by record key, to avoid multiple subtasks write to a partition at the same time
+        .keyBy(HoodieRecord::getRecordKey)
         .transform(
             "bucket_assigner",
             TypeInformation.of(HoodieRecord.class),
