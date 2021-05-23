@@ -122,8 +122,6 @@ public class HiveTestUtil {
     hiveSyncConfig.partitionFields = Collections.singletonList("datestr");
 
     dtfOut = DateTimeFormat.forPattern("yyyy/MM/dd");
-
-    clear();
   }
 
   public static void clear() throws IOException {
