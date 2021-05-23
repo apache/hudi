@@ -68,7 +68,12 @@ public class TestHiveSyncTool {
 
   @BeforeEach
   public void setUp() throws IOException, InterruptedException {
-    HiveTestUtil.setUp();
+    try {
+      HiveTestUtil.setUp();
+    } catch (Exception e) {
+      e.printStackTrace();
+      throw e;
+    }
   }
 
   @AfterEach
