@@ -82,17 +82,17 @@ public class TestHoodieAvroUtils {
       + "{\"name\": \"nullable_field\",\"type\": [\"null\" ,\"string\"],\"default\": null},"
       + "{\"name\": \"non_nullable_field_with_default\",\"type\": \"string\", \"default\": \"dummy\"}]}";
 
-  private static String SCHEMA_WITH_LOGICAL_TYPES = "{\n" +
-          "  \"namespace\": \"example.avro\",\n" +
-          "  \"type\": \"record\",\n" +
-          "  \"name\": \"User\",\n" +
-          "  \"fields\": [\n" +
-          "    {\"name\": \"field1\", \"type\": [\"null\", \"string\"], \"default\": null},\n" +
-          "    {\"name\": \"createTime\", \"type\": [\"null\", \"long\"], \"default\": null},\n" +
-          "    {\"name\": \"dob\", \"type\": {\"type\": \"int\" ,\"logicalType\": \"date\"}},\n" +
-          "    {\"name\": \"updatedAt\", \"type\": {\"type\": \"long\", \"logicalType\": \"timestamp-millis\"}}\n" +
-          "  ]\n" +
-          "}";
+  private static String SCHEMA_WITH_LOGICAL_TYPES = "{\n"
+      + "  \"namespace\": \"example.avro\",\n"
+      + "  \"type\": \"record\",\n"
+      + "  \"name\": \"User\",\n"
+      + "  \"fields\": [\n"
+      + "    {\"name\": \"field1\", \"type\": [\"null\", \"string\"], \"default\": null},\n"
+      + "    {\"name\": \"createTime\", \"type\": [\"null\", \"long\"], \"default\": null},\n"
+      + "    {\"name\": \"dob\", \"type\": {\"type\": \"int\" ,\"logicalType\": \"date\"}},\n"
+      + "    {\"name\": \"updatedAt\", \"type\": {\"type\": \"long\", \"logicalType\": \"timestamp-millis\"}}\n"
+      + "  ]\n"
+      + "}";
 
   @Test
   public void testPropsPresent() {
