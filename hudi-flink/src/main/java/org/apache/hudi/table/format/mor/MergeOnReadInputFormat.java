@@ -536,6 +536,9 @@ public class MergeOnReadInputFormat
     private final GenericRecordBuilder recordBuilder;
 
     private final RowDataProjection projection;
+
+    private final InstantRange instantRange;
+
     // add the flag because the flink ParquetColumnarRowSplitReader is buggy:
     // method #reachedEnd() returns false after it returns true.
     // refactor it out once FLINK-22370 is resolved.
@@ -564,12 +567,20 @@ public class MergeOnReadInputFormat
       this.rowDataToAvroConverter = RowDataToAvroConverters.createConverter(tableRowType);
       this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(requiredRowType);
       this.projection = RowDataProjection.instance(requiredRowType, requiredPos);
+      this.instantRange = split.getInstantRange().orElse(null);
     }
 
     @Override
     public boolean reachedEnd() throws IOException {
       if (!readLogs && !this.reader.reachedEnd()) {
         currentRecord = this.reader.nextRecord();
+        if (instantRange != null) {
+          boolean isInRange = instantRange.isInRange(currentRecord.getString(HOODIE_COMMIT_TIME_COL_POS).toString());
+          if (!isInRange) {
+            // filter base file by instant range
+            return reachedEnd();
+          }
+        }
         final String curKey = currentRecord.getString(HOODIE_RECORD_KEY_COL_POS).toString();
         if (logRecords.containsKey(curKey)) {
           keyToSkip.add(curKey);

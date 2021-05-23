@@ -170,7 +170,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
         if (job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "").isEmpty()) {
           List<String> partitions = new ArrayList<>(part.getPartSpec().keySet());
           if (!partitions.isEmpty()) {
-            String partitionStr = String.join(",", partitions);
+            String partitionStr = String.join("/", partitions);
             LOG.info("Setting Partitions in jobConf - Partition Keys for Path : " + path + " is :" + partitionStr);
             job.set(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, partitionStr);
           } else {

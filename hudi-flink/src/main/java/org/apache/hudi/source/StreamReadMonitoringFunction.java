@@ -112,8 +112,6 @@ public class StreamReadMonitoringFunction
 
   private final long maxCompactionMemoryInBytes;
 
-  private final boolean isDelta;
-
   public StreamReadMonitoringFunction(
       Configuration conf,
       Path path,
@@ -124,7 +122,6 @@ public class StreamReadMonitoringFunction
     this.metaClient = metaClient;
     this.interval = conf.getInteger(FlinkOptions.READ_STREAMING_CHECK_INTERVAL);
     this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
-    this.isDelta = conf.getString(FlinkOptions.TABLE_TYPE).equalsIgnoreCase(FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
   }
 
   @Override
@@ -189,15 +186,12 @@ public class StreamReadMonitoringFunction
   @VisibleForTesting
   public void monitorDirAndForwardSplits(SourceContext<MergeOnReadInputSplit> context) {
     metaClient.reloadActiveTimeline();
-    HoodieTimeline commitTimeline = isDelta
-        // if is delta, exclude the parquet files from compaction
-        ? metaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants()
-        : metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    HoodieTimeline commitTimeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
     if (commitTimeline.empty()) {
       LOG.warn("No splits found for the table under path " + path);
       return;
     }
-    List<HoodieInstant> instants = getUncompactedInstants(commitTimeline, this.issuedInstant);
+    List<HoodieInstant> instants = filterInstantsWithStart(commitTimeline, this.issuedInstant);
     // get the latest instant that satisfies condition
     final HoodieInstant instantToIssue = instants.size() == 0 ? null : instants.get(instants.size() - 1);
     final InstantRange instantRange;
@@ -303,29 +297,26 @@ public class StreamReadMonitoringFunction
   }
 
   /**
-   * Returns the uncompacted instants with a given issuedInstant to start from.
+   * Returns the instants with a given issuedInstant to start from.
    *
    * @param commitTimeline The completed commits timeline
    * @param issuedInstant  The last issued instant that has already been delivered to downstream
    * @return the filtered hoodie instants
    */
-  private List<HoodieInstant> getUncompactedInstants(
+  private List<HoodieInstant> filterInstantsWithStart(
       HoodieTimeline commitTimeline,
       final String issuedInstant) {
     if (issuedInstant != null) {
       return commitTimeline.getInstants()
-          .filter(s -> !s.getAction().equals(HoodieTimeline.COMPACTION_ACTION))
           .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN, issuedInstant))
           .collect(Collectors.toList());
     } else if (this.conf.getOptional(FlinkOptions.READ_STREAMING_START_COMMIT).isPresent()) {
       String definedStartCommit = this.conf.get(FlinkOptions.READ_STREAMING_START_COMMIT);
       return commitTimeline.getInstants()
-          .filter(s -> !s.getAction().equals(HoodieTimeline.COMPACTION_ACTION))
           .filter(s -> HoodieTimeline.compareTimestamps(s.getTimestamp(), GREATER_THAN_OR_EQUALS, definedStartCommit))
           .collect(Collectors.toList());
     } else {
       return commitTimeline.getInstants()
-          .filter(s -> !s.getAction().equals(HoodieTimeline.COMPACTION_ACTION))
           .collect(Collectors.toList());
     }
   }
@@ -357,14 +348,26 @@ public class StreamReadMonitoringFunction
 
   private List<FileStatus> getWritePathsOfInstant(HoodieCommitMetadata metadata, FileSystem fs) {
     return metadata.getFileIdAndFullPaths(path.toString()).values().stream()
-        .map(path -> {
+        .map(org.apache.hadoop.fs.Path::new)
+        // filter out the file paths that does not exist, some files may be cleaned by
+        // the cleaner.
+        .filter(path -> {
           try {
-            return fs.getFileStatus(new org.apache.hadoop.fs.Path(path));
+            return fs.exists(path);
+          } catch (IOException e) {
+            LOG.error("Checking exists of path: {} error", path);
+            throw new HoodieException(e);
+          }
+        }).map(path -> {
+          try {
+            return fs.getFileStatus(path);
           } catch (IOException e) {
             LOG.error("Get write status of path: {} error", path);
             throw new HoodieException(e);
           }
         })
+        // filter out crushed files
+        .filter(fileStatus -> fileStatus.getLen() > 0)
         .collect(Collectors.toList());
   }
 
