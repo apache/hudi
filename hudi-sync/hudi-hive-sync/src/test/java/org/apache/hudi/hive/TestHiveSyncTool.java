@@ -38,7 +38,9 @@ import org.joda.time.DateTime;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -68,8 +70,14 @@ public class TestHiveSyncTool {
 
   @BeforeAll
   public static void setUp() throws IOException, InterruptedException {
+    HiveTestUtil.setUp();
+  }
+
+  @BeforeEach
+  public void initTables(@TempDir java.nio.file.Path tempDir) throws IOException {
     try {
-      HiveTestUtil.setUp();
+      HiveTestUtil.hiveSyncConfig.basePath = tempDir.toString();
+      HiveTestUtil.clear();
     } catch (Exception e) {
       e.printStackTrace();
       throw e;
