@@ -58,8 +58,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
@@ -196,6 +194,7 @@ public class StreamerUtil {
             .withCompactionConfig(
                 HoodieCompactionConfig.newBuilder()
                     .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS))
+                    .withTargetIOPerCompactionInMB(conf.getLong(FlinkOptions.COMPACTION_TARGET_IO))
                     .withInlineCompactionTriggerStrategy(
                         CompactionTriggerStrategy.valueOf(conf.getString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY).toUpperCase(Locale.ROOT)))
                     .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_COMMITS))
@@ -333,12 +332,5 @@ public class StreamerUtil {
   public static String instantTimePlus(String oldInstant, long milliseconds) {
     long oldTime = Long.parseLong(oldInstant);
     return String.valueOf(oldTime + milliseconds);
-  }
-
-  /**
-   * Copied from Objects#equal.
-   */
-  public static boolean equal(@Nullable Object a, @Nullable Object b) {
-    return a == b || (a != null && a.equals(b));
   }
 }
