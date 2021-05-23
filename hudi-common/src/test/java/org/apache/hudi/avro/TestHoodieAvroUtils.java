@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
@@ -236,4 +237,81 @@ public class TestHoodieAvroUtils {
     }
   }
 
+  @Test
+  public void testRewriteToEvolvedNestedRecord() throws Exception {
+    // schema definition for inner record
+    Schema nestedSchema = SchemaBuilder.record("inner_rec").fields().requiredDouble("color_id").endRecord();
+    Schema evolvedNestedSchema = SchemaBuilder.record("inner_rec").fields().requiredDouble("color_id")
+        .optionalString("color_name").endRecord();
+
+    // schema definition for outer record
+    Schema recordSchema = SchemaBuilder.record("outer_rec").fields().requiredDouble("timestamp")
+        .requiredString("_row_key").requiredString("non_pii_col").name("color_rec").type(nestedSchema)
+        .noDefault().requiredString("pii_col").endRecord();
+    Schema evolvedRecordSchema = SchemaBuilder.record("outer_rec").fields().requiredDouble("timestamp")
+        .requiredString("_row_key").requiredString("non_pii_col").name("color_rec").type(evolvedNestedSchema)
+        .noDefault().requiredString("pii_col").endRecord();
+
+    // populate inner record, with fewer fields
+    GenericRecord nestedRec = new GenericData.Record(nestedSchema);
+    nestedRec.put("color_id", 55.5);
+
+    // populate outer record
+    GenericRecord rec = new GenericData.Record(recordSchema);
+    rec.put("timestamp", 3.5);
+    rec.put("_row_key", "key1");
+    rec.put("non_pii_col", "val1");
+    rec.put("color_rec", nestedRec);
+    rec.put("pii_col", "val2");
+
+    // rewrite record with less number of fields into an evolved record (with optional fields added).
+    try {
+      GenericRecord newRecord = HoodieAvroUtils.rewriteRecord(rec, evolvedRecordSchema);
+      assertEquals("val2", newRecord.get("pii_col"));
+      assertEquals(null, ((GenericRecord)newRecord.get("color_rec")).get("color_name"));
+    } catch (Exception e) {
+      e.printStackTrace();
+      assertTrue(false, "Failed to rewrite Record");
+    }
+
+  }
+
+  @Test
+  public void testRewriteToShorterRecord() throws Exception {
+    // schema definition for inner record
+    Schema nestedSchema = SchemaBuilder.record("inner_rec").fields().requiredDouble("color_id").endRecord();
+    Schema largerNestedSchema = SchemaBuilder.record("inner_rec").fields().requiredDouble("color_id")
+        .requiredString("color_name").endRecord();
+
+    // schema definition for outer record
+    Schema recordSchema = SchemaBuilder.record("outer_rec").fields().requiredDouble("timestamp")
+        .requiredString("_row_key").requiredString("non_pii_col").name("color_rec").type(nestedSchema)
+        .noDefault().requiredString("pii_col").endRecord();
+    Schema largerRecordSchema = SchemaBuilder.record("outer_rec").fields().requiredDouble("timestamp")
+        .requiredString("_row_key").requiredString("non_pii_col").name("color_rec").type(largerNestedSchema)
+        .noDefault().requiredString("pii_col").endRecord();
+
+    // populate larger inner record
+    GenericRecord nestedRec = new GenericData.Record(largerNestedSchema);
+    nestedRec.put("color_id", 55.5);
+    nestedRec.put("color_name", "blue");
+
+    // populate outer record, with larger inner record
+    GenericRecord largerRec = new GenericData.Record(largerRecordSchema);
+    largerRec.put("timestamp", 3.5);
+    largerRec.put("_row_key", "key1");
+    largerRec.put("non_pii_col", "val1");
+    largerRec.put("color_rec", nestedRec);
+    largerRec.put("pii_col", "val2");
+
+    // rewrite record with larger inner record to record with shorter inner record.
+    try {
+      GenericRecord shorterRec = HoodieAvroUtils.rewriteRecord(largerRec, recordSchema);
+      assertEquals("val2", shorterRec.get("pii_col"));
+      assertEquals(null, ((GenericRecord)shorterRec.get("color_rec")).get("color_name"));
+    } catch (Exception e) {
+      e.printStackTrace();
+      assertTrue(false, "Failed to rewrite Record");
+    }
+  }
 }
