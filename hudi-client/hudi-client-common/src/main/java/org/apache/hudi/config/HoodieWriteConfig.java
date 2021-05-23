@@ -829,8 +829,9 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
-   * Fraction of the global share of QPS that should be allocated to this job. Let's say there are 3 jobs which have input size in terms of number of rows required for HbaseIndexing as x, 2x, 3x
-   * respectively. Then this fraction for the jobs would be (0.17) 1/6, 0.33 (2/6) and 0.5 (3/6) respectively.
+   * Fraction of the global share of QPS that should be allocated to this job. Let's say there are 3 jobs which have
+   * input size in terms of number of rows required for HbaseIndexing as x, 2x, 3x respectively. Then this fraction for
+   * the jobs would be (0.17) 1/6, 0.33 (2/6) and 0.5 (3/6) respectively.
    */
   public float getHbaseIndexQPSFraction() {
     return getFloat(HoodieHBaseIndexConfig.HBASE_QPS_FRACTION_PROP);
@@ -845,7 +846,8 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
-   * This should be same across various jobs. This is intended to limit the aggregate QPS generated across various Hoodie jobs to an Hbase Region Server
+   * This should be same across various jobs. This is intended to limit the aggregate QPS generated across various
+   * Hoodie jobs to an Hbase Region Server
    */
   public int getHbaseIndexMaxQPSPerRegionServer() {
     return getInt(HoodieHBaseIndexConfig.HBASE_MAX_QPS_PER_REGION_SERVER_PROP);

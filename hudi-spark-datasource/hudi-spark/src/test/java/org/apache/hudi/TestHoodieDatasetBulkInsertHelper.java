@@ -93,7 +93,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-        "testNamespace", new NonSortPartitionerWithRows(), Option.of(new TestPreCombineRow()));
+        "testNamespace", new NonSortPartitionerWithRows(), Option.of(new TestPreCombineRow()), false);
     StructType resultSchema = result.schema();
 
     assertEquals(result.count(), 10);
@@ -137,7 +137,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     //  "testNamespace", Option.of(new TestPreCombineRow()));
     Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
         "testNamespace", new NonSortPartitionerWithRows(), enablePreCombine ? (useDefaultPreCombine ? Option.of(new DefaultPreCombineRow("ts")) :
-            Option.of(new TestUserDefinedPreCombineRow())) : Option.empty());
+            Option.of(new TestUserDefinedPreCombineRow())) : Option.empty(), false);
     StructType resultSchema = result.schema();
 
     assertEquals(result.count(), enablePreCombine ? 10 : 15);
@@ -196,7 +196,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     try {
       Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-          "testNamespace", new NonSortPartitionerWithRows(), Option.of(new DefaultPreCombineRow("ts1")));
+          "testNamespace", new NonSortPartitionerWithRows(), Option.of(new DefaultPreCombineRow("ts1")), false);
       result.count();
       Assertions.fail("non existant preCombine field should have thrown exception");
     } catch (Exception e) {
@@ -245,7 +245,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     try {
       HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-          "testNamespace", new NonSortPartitionerWithRows(), Option.empty());
+          "testNamespace", new NonSortPartitionerWithRows(), Option.empty(), false);
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore
@@ -256,7 +256,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
       HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-          "testNamespace", new NonSortPartitionerWithRows(), Option.empty());
+          "testNamespace", new NonSortPartitionerWithRows(), Option.empty(), false);
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore
@@ -267,7 +267,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
       HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-          "testNamespace", new NonSortPartitionerWithRows(), Option.empty());
+          "testNamespace", new NonSortPartitionerWithRows(), Option.empty(), false);
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore
@@ -278,7 +278,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
       HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-          "testNamespace", new NonSortPartitionerWithRows(), Option.empty());
+          "testNamespace", new NonSortPartitionerWithRows(), Option.empty(), false);
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore

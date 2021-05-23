@@ -67,7 +67,8 @@ public class HoodieDatasetBulkInsertHelper {
    */
   public static Dataset<Row> prepareHoodieDatasetForBulkInsert(SQLContext sqlContext,
       HoodieWriteConfig config, Dataset<Row> rows, String structName, String recordNamespace,
-                                                               BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows, Option<PreCombineRow> preCombineRowOpt) {
+                                                               BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows, Option<PreCombineRow> preCombineRowOpt,
+                                                               boolean isGlobalIndex) {
     List<Column> originalFields =
         Arrays.stream(rows.schema().fields()).map(f -> new Column(f.name())).collect(Collectors.toList());
 
@@ -101,7 +102,7 @@ public class HoodieDatasetBulkInsertHelper {
 
     Dataset<Row> dedupedDf = rowDatasetWithHoodieColumns;
     if (config.shouldCombineBeforeBulkInsert() && preCombineRowOpt.isPresent()) {
-      dedupedDf = SparkRowWriteHelper.newInstance().deduplicateRows(rowDatasetWithHoodieColumns, preCombineRowOpt.get());
+      dedupedDf = SparkRowWriteHelper.newInstance().deduplicateRows(rowDatasetWithHoodieColumns, preCombineRowOpt.get(), isGlobalIndex);
     } else if (config.shouldCombineBeforeBulkInsert()) {
       throw new IllegalStateException("No PrecombineRow class set for BulkInsert but dedup config is set");
     }

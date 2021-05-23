@@ -287,7 +287,6 @@ public class SparkHoodieBloomIndex<T extends HoodieRecordPayload> extends SparkH
         recordRDD.mapToPair(record -> new Tuple2<>(record.getKey(), record));
     // Here as the recordRDD might have more data than rowKeyRDD (some rowKeys' fileId is null),
     // so we do left outer join.
-
     return keyRecordPairRDD.leftOuterJoin(keyFilenamePairRDD).values()
         .map(v1 -> HoodieIndexUtils.getTaggedRecord(v1._1, Option.ofNullable(v1._2.orNull())));
   }
