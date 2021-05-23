@@ -27,6 +27,9 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -78,6 +81,18 @@ public class TestHoodieAvroUtils {
       + "{\"name\": \"pii_col\", \"type\": \"string\", \"column_category\": \"user_profile\"},"
       + "{\"name\": \"nullable_field\",\"type\": [\"null\" ,\"string\"],\"default\": null},"
       + "{\"name\": \"non_nullable_field_with_default\",\"type\": \"string\", \"default\": \"dummy\"}]}";
+
+  private static String SCHEMA_WITH_LOGICAL_TYPES = "{\n" +
+          "  \"namespace\": \"example.avro\",\n" +
+          "  \"type\": \"record\",\n" +
+          "  \"name\": \"User\",\n" +
+          "  \"fields\": [\n" +
+          "    {\"name\": \"field1\", \"type\": [\"null\", \"string\"], \"default\": null},\n" +
+          "    {\"name\": \"createTime\", \"type\": [\"null\", \"long\"], \"default\": null},\n" +
+          "    {\"name\": \"dob\", \"type\": {\"type\": \"int\" ,\"logicalType\": \"date\"}},\n" +
+          "    {\"name\": \"updatedAt\", \"type\": {\"type\": \"long\", \"logicalType\": \"timestamp-millis\"}}\n" +
+          "  ]\n" +
+          "}";
 
   @Test
   public void testPropsPresent() {
@@ -234,6 +249,24 @@ public class TestHoodieAvroUtils {
     } catch (Exception e) {
       assertEquals("The value of timestamp can not be null", e.getMessage());
     }
+  }
+
+  @Test
+  public void testGetNestedFieldValForLogicalTypes() {
+    LocalDate today = LocalDate.now();
+    LocalDateTime now = LocalDateTime.now();
+
+    GenericRecord rec = new GenericData.Record(new Schema.Parser().parse(SCHEMA_WITH_LOGICAL_TYPES));
+    rec.put("dob", (int) today.toEpochDay());
+    rec.put("updatedAt", now.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+
+    Object dob = HoodieAvroUtils.getNestedFieldVal(rec, "dob", true);
+    assertTrue(dob instanceof LocalDate);
+    assertEquals(dob, today);
+
+    Object updatedAt = HoodieAvroUtils.getNestedFieldVal(rec, "updatedAt", true);
+    assertTrue(updatedAt instanceof LocalDateTime);
+    assertEquals(updatedAt, now);
   }
 
 }
