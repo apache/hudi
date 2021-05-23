@@ -67,6 +67,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -115,7 +116,7 @@ public class HiveTestUtil {
     hiveSyncConfig.hivePass = "";
     hiveSyncConfig.databaseName = "testdb";
     hiveSyncConfig.tableName = "test1";
-    hiveSyncConfig.basePath = "/tmp/hdfs/TestHiveSyncTool/";
+    hiveSyncConfig.basePath = Paths.get(System.getProperty("java.io.tmpdir"), "hdfs", "TestHiveSyncTool").toString();
     hiveSyncConfig.assumeDatePartitioning = true;
     hiveSyncConfig.usePreApacheInputFormat = false;
     hiveSyncConfig.partitionFields = Collections.singletonList("datestr");
