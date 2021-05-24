@@ -30,6 +30,8 @@ import org.apache.flink.table.types.logical.LogicalType;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Arrays;
 
 /**
@@ -85,7 +87,8 @@ public class StringToRowDataConverter {
         // see HoodieAvroUtils#convertValueForAvroLogicalTypes
         return field -> (int) LocalDate.parse(field).toEpochDay();
       case TIMESTAMP_WITHOUT_TIME_ZONE:
-        return field -> TimestampData.fromEpochMillis(Long.parseLong(field));
+        // see HoodieAvroUtils#convertValueForAvroLogicalTypes
+        return field -> TimestampData.fromEpochMillis(LocalDateTime.parse(field).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
       case CHAR:
       case VARCHAR:
         return StringData::fromString;

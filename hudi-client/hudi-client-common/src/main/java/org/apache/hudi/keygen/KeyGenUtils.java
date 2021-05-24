@@ -62,7 +62,7 @@ public class KeyGenUtils {
         } else if (kvArray[1].equals(EMPTY_RECORDKEY_PLACEHOLDER)) {
           return "";
         } else {
-          return kvArray[1];
+          return String.join(":", Arrays.copyOfRange(kvArray, 1, kvArray.length));
         }
       }).toArray(String[]::new);
     }
