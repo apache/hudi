@@ -34,9 +34,8 @@ import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
+import java.time.*;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoField;
 
 import static org.hamcrest.CoreMatchers.is;
@@ -49,7 +48,9 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 public class TestStringToRowDataConverter {
   @Test
   void testConvert() {
-    String[] fields = new String[] {"1.1", "3.4", "2021-03-30", "56669000", "1617119069000", "12345.67"};
+    Instant inst = Instant.parse("2021-03-30T15:44:29Z");
+    ZonedDateTime timestamp = inst.atZone(ZoneId.systemDefault());
+    String[] fields = new String[] {"1.1", "3.4", "2021-03-30", "56669000", timestamp.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME), "12345.67"};
     LogicalType[] fieldTypes = new LogicalType[] {
         DataTypes.FLOAT().getLogicalType(),
         DataTypes.DOUBLE().getLogicalType(),
@@ -63,7 +64,7 @@ public class TestStringToRowDataConverter {
     Object[] expected = new Object[] {
         1.1f, 3.4D, (int) LocalDate.parse("2021-03-30").toEpochDay(),
         LocalTime.parse("15:44:29").get(ChronoField.MILLI_OF_DAY),
-        TimestampData.fromEpochMillis(Instant.parse("2021-03-30T15:44:29Z").toEpochMilli()),
+        TimestampData.fromEpochMillis(inst.toEpochMilli()),
         DecimalData.fromBigDecimal(new BigDecimal("12345.67"), 7, 2)
     };
     assertArrayEquals(expected, converted);
