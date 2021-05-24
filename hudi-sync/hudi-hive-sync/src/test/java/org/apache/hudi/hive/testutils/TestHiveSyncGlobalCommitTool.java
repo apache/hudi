@@ -70,11 +70,9 @@ public class TestHiveSyncGlobalCommitTool {
   }
 
   private void compareEqualLastReplicatedTimeStamp(HiveSyncGlobalCommitConfig config) throws Exception {
-    assertEquals(localCluster.getHMSClient()
-        .getTable(config.databaseName, config.tableName).getParameters()
-        .get(GLOBALLY_CONSISTENT_READ_TIMESTAMP), remoteCluster.getHMSClient()
-        .getTable(config.databaseName, config.tableName).getParameters()
-        .get(GLOBALLY_CONSISTENT_READ_TIMESTAMP), "compare replicated timestamps");
+    assertEquals(localCluster.getHMSClient().getTable(config.databaseName, config.tableName).getParameters().get(GLOBALLY_CONSISTENT_READ_TIMESTAMP),
+        remoteCluster.getHMSClient().getTable(config.databaseName, config.tableName).getParameters().get(GLOBALLY_CONSISTENT_READ_TIMESTAMP),
+        "compare replicated timestamps");
   }
 
   @BeforeEach

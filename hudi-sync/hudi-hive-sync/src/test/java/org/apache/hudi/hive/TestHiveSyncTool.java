@@ -692,7 +692,7 @@ public class TestHiveSyncTool {
 
     HiveSyncConfig syncToolConfig = HiveSyncConfig.copy(HiveTestUtil.hiveSyncConfig);
     syncToolConfig.ignoreExceptions = true;
-    syncToolConfig.jdbcUrl = HiveTestUtil.hiveSyncConfig.jdbcUrl.replace("9999","9031");
+    syncToolConfig.jdbcUrl = HiveTestUtil.hiveSyncConfig.jdbcUrl.replaceAll(":\\d+$",":9031");
     HiveSyncTool tool = new HiveSyncTool(syncToolConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     tool.syncHoodieTable();
 
@@ -712,12 +712,13 @@ public class TestHiveSyncTool {
     // make sure correct schema is picked
     Schema schema = SchemaTestUtil.getSimpleSchema();
     for (Field field : schema.getFields()) {
-      assertEquals(String.format("Hive Schema Field %s was added", field), field.schema().getType().getName(),
-          hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName).get(field.name()).toLowerCase());
+      assertEquals(field.schema().getType().getName(),
+          hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName).get(field.name()).toLowerCase(),
+          String.format("Hive Schema Field %s was added", field));
     }
-    assertEquals("Hive Schema Field datestr was added", "string",
-        hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName).get("datestr").toLowerCase());
-    assertEquals(schema.getFields().size() + 1,
+    assertEquals("string",
+        hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName).get("datestr").toLowerCase(), "Hive Schema Field datestr was added");
+    assertEquals(schema.getFields().size() + 1 + HoodieRecord.HOODIE_META_COLUMNS.size(),
         hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName).size(),"Hive Schema fields size");
   }
 
@@ -730,7 +731,7 @@ public class TestHiveSyncTool {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     // create empty commit
     final String emptyCommitTime = "200";
-    HiveTestUtil.createCommitFile(commitMetadata, emptyCommitTime);
+    HiveTestUtil.createCommitFileWithSchema(commitMetadata, emptyCommitTime, true);
     HoodieHiveClient hiveClient =
         new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     assertFalse(hiveClient.doesTableExist(HiveTestUtil.hiveSyncConfig.tableName),"Table " + HiveTestUtil.hiveSyncConfig.tableName + " should not exist initially");
@@ -792,7 +793,8 @@ public class TestHiveSyncTool {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     // create empty commit
     final String emptyCommitTime = "200";
-    HiveTestUtil.createCommitFile(commitMetadata, emptyCommitTime);
+    HiveTestUtil.createCommitFileWithSchema(commitMetadata, emptyCommitTime, true);
+    //HiveTestUtil.createCommitFile(commitMetadata, emptyCommitTime);
     HoodieHiveClient hiveClient =
         new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     assertFalse(
@@ -807,7 +809,8 @@ public class TestHiveSyncTool {
     DateTime dateTime = DateTime.now().plusDays(6);
     String commitTime2 = "301";
     HiveTestUtil.addCOWPartitions(1, false, true, dateTime, commitTime2);
-    HiveTestUtil.createCommitFile(commitMetadata, "400"); // create another empty commit
+    //HiveTestUtil.createCommitFileWithSchema(commitMetadata, "400", false); // create another empty commit
+    //HiveTestUtil.createCommitFile(commitMetadata, "400"); // create another empty commit
 
     tool = new HiveSyncTool(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     HoodieHiveClient hiveClientLatest = new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
@@ -817,7 +820,6 @@ public class TestHiveSyncTool {
             .filter(inst -> inst.getTimestamp().equals(commitTime2))
             .findFirst().get().getFileName());
     assertTrue(HiveTestUtil.fileSystem.delete(fullPath, false));
-
     try {
       tool.syncHoodieTable();
     } catch (RuntimeException e) {

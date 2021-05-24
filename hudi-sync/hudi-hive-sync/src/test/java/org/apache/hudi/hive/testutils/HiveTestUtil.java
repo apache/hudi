@@ -390,6 +390,11 @@ public class HiveTestUtil {
     fsout.close();
   }
 
+  public static void createCommitFileWithSchema(HoodieCommitMetadata commitMetadata, String instantTime, boolean isSimpleSchema) throws IOException {
+    addSchemaToCommitMetadata(commitMetadata, isSimpleSchema, true);
+    createCommitFile(commitMetadata, instantTime);
+  }
+
   private static void createCompactionCommitFile(HoodieCommitMetadata commitMetadata, String instantTime)
       throws IOException {
     byte[] bytes = commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8);

@@ -18,8 +18,6 @@
 
 package org.apache.hudi.hadoop;
 
-//import org.junit.Test;
-
 import org.junit.jupiter.api.Test;
 
 public class TestHoodieParquetInputFormatWithGlobalConsistentTimeStamp {
@@ -41,6 +39,7 @@ public class TestHoodieParquetInputFormatWithGlobalConsistentTimeStamp
   public TestHoodieParquetInputFormatWithGlobalConsistentTimeStamp(String timeStampAndSession) {
     this.timeStampAndSession = timeStampAndSession;
   }
+<<<<<<< Updated upstream
 <<<<<<< HEAD
 */
   @Test

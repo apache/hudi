@@ -421,7 +421,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
         closeQuietly(null, stmt);
       }
     } else {
-      updateHiveSQLUsingHiveDriver(s);
+      //updateHiveSQLUsingHiveDriver(s);
       CommandProcessorResponse response = updateHiveSQLUsingHiveDriver(s);
       if (response == null) {
         throw new HoodieHiveSyncException("Failed in executing SQL null response" + s);
