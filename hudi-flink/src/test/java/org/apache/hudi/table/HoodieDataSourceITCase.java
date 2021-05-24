@@ -568,7 +568,7 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     tableResult.getJobClient().ifPresent(JobClient::cancel);
     tEnv.executeSql("DROP TABLE IF EXISTS sink");
     return CollectSinkTableFactory.RESULT.values().stream()
-            .flatMap(Collection::stream)
-            .collect(Collectors.toList());
+        .flatMap(Collection::stream)
+        .collect(Collectors.toList());
   }
 }
