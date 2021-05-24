@@ -135,7 +135,6 @@ private[hudi] object HoodieSparkSqlWriter {
       // scalastyle:off
       if (parameters(ENABLE_ROW_WRITER_OPT_KEY).toBoolean &&
         operation == WriteOperationType.BULK_INSERT) {
-        log.info("Using BULK_INSERT")
         val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, parameters, df, tblName,
                                                                                 basePath, path, instantTime)
         return (success, commitTime, common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
@@ -144,7 +143,6 @@ private[hudi] object HoodieSparkSqlWriter {
 
       val (writeResult, writeClient: SparkRDDWriteClient[HoodieRecordPayload[Nothing]]) =
         if (operation != WriteOperationType.DELETE) {
-
           // register classes & schemas
           val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tblName)
           sparkContext.getConf.registerKryoClasses(
