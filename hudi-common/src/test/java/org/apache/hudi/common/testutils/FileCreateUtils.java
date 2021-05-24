@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -54,9 +55,10 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serial
 public class FileCreateUtils {
 
   private static final String WRITE_TOKEN = "1-0-1";
+  private static final String BASE_FILE_EXTENSION = HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension();
 
   public static String baseFileName(String instantTime, String fileId) {
-    return baseFileName(instantTime, fileId, HoodieFileFormat.PARQUET.getFileExtension());
+    return baseFileName(instantTime, fileId, BASE_FILE_EXTENSION);
   }
 
   public static String baseFileName(String instantTime, String fileId, String fileExtension) {
@@ -72,7 +74,7 @@ public class FileCreateUtils {
   }
 
   public static String markerFileName(String instantTime, String fileId, IOType ioType) {
-    return markerFileName(instantTime, fileId, ioType, HoodieFileFormat.PARQUET.getFileExtension());
+    return markerFileName(instantTime, fileId, ioType, BASE_FILE_EXTENSION);
   }
 
   public static String markerFileName(String instantTime, String fileId, IOType ioType, String fileExtension) {

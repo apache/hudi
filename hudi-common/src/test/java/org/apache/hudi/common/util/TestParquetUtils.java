@@ -58,6 +58,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestParquetUtils extends HoodieCommonTestHarness {
 
+  private ParquetUtils parquetUtils = new ParquetUtils();
+
   public static List<Arguments> bloomFilterTypeCodes() {
     return Arrays.asList(
         Arguments.of(BloomFilterTypeCode.SIMPLE.name()),
@@ -83,13 +85,13 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
     // Read and verify
     List<String> rowKeysInFile = new ArrayList<>(
-        ParquetUtils.readRowKeysFromParquet(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath)));
+        parquetUtils.readRowKeys(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath)));
     Collections.sort(rowKeysInFile);
     Collections.sort(rowKeys);
 
     assertEquals(rowKeys, rowKeysInFile, "Did not read back the expected list of keys");
     BloomFilter filterInFile =
-        ParquetUtils.readBloomFilterFromParquetMetadata(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath));
+        parquetUtils.readBloomFilterFromMetadata(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath));
     for (String rowKey : rowKeys) {
       assertTrue(filterInFile.mightContain(rowKey), "key should be found in bloom filter");
     }
@@ -113,7 +115,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
     // Read and verify
     Set<String> filtered =
-        ParquetUtils.filterParquetRowKeys(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath), filter);
+        parquetUtils.filterRowKeys(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath), filter);
 
     assertEquals(filter.size(), filtered.size(), "Filtered count does not match");
 
@@ -140,7 +142,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
     // Read and verify
     List<HoodieKey> fetchedRows =
-        ParquetUtils.fetchRecordKeyPartitionPathFromParquet(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath));
+        parquetUtils.fetchRecordKeyPartitionPath(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath));
     assertEquals(rowKeys.size(), fetchedRows.size(), "Total count does not match");
 
     for (HoodieKey entry : fetchedRows) {
@@ -157,7 +159,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     }
     writeParquetFile(BloomFilterTypeCode.SIMPLE.name(), filePath, rowKeys);
 
-    assertEquals(123, ParquetUtils.getRowCount(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath)));
+    assertEquals(123, parquetUtils.getRowCount(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath)));
   }
 
   private void writeParquetFile(String typeCode, String filePath, List<String> rowKeys) throws Exception {

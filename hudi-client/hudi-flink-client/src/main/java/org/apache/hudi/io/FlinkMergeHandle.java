@@ -23,12 +23,10 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.MarkerFiles;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -40,7 +38,7 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * A {@link HoodieMergeHandle} that supports merge write incrementally(small data buffers).
+ * A {@link HoodieMergeHandle} that supports MERGE write incrementally(small data buffers).
  *
  * <p>For a new data buffer, it initialize and set up the next file path to write,
  * and closes the file path when the data buffer write finish. When next data buffer
@@ -48,10 +46,7 @@ import java.util.List;
  * for a checkpoint round, it renames the last new file path as the desired file name
  * (name with the expected file ID).
  *
- * @param <T> Payload type
- * @param <I> Input type
- * @param <K> Key type
- * @param <O> Output type
+ * @see FlinkMergeAndReplaceHandle
  */
 public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
     extends HoodieMergeHandle<T, I, K, O>
@@ -59,15 +54,7 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
 
   private static final Logger LOG = LogManager.getLogger(FlinkMergeHandle.class);
 
-  /**
-   * Records the current file handles number that rolls over.
-   */
-  private int rollNumber = 0;
-
-  /**
-   * Whether the handle should roll over to new, E.G. the handle has written some intermediate files already.
-   */
-  private volatile boolean shouldRollover = false;
+  private boolean isClosed = false;
 
   /**
    * Records the rolled over file paths.
@@ -130,6 +117,7 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
     super.makeOldAndNewFilePaths(partitionPath, oldFileName, newFileName);
     rolloverPaths = new ArrayList<>();
     try {
+      int rollNumber = 0;
       while (fs.exists(newFilePath)) {
         oldFilePath = newFilePath; // override the old file name
         rolloverPaths.add(oldFilePath);
@@ -151,15 +139,15 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
         this.fileId, hoodieTable.getBaseFileExtension());
   }
 
-  public boolean shouldRollover() {
-    return shouldRollover;
-  }
-
   @Override
   public List<WriteStatus> close() {
-    List<WriteStatus> writeStatus = super.close();
-    this.shouldRollover = true;
-    return writeStatus;
+    try {
+      List<WriteStatus> writeStatus = super.close();
+      finalizeWrite();
+      return writeStatus;
+    } finally {
+      this.isClosed = true;
+    }
   }
 
   boolean needsUpdateLocation() {
@@ -168,53 +156,7 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
     return false;
   }
 
-  /**
-   *
-   * Rolls over the write handle to prepare for the next batch write.
-   *
-   * <p>It tweaks the handle state as following:
-   *
-   * <ul>
-   *   <li>Increment the {@code rollNumber}</li>
-   *   <li>Book-keep the last file path, these files (except the last one) are temporary that need to be cleaned</li>
-   *   <li>Make the last new file path as old</li>
-   *   <li>Initialize the new file path and file writer</li>
-   * </ul>
-   *
-   * @param newRecordsItr The records iterator to update
-   */
-  public void rollOver(Iterator<HoodieRecord<T>> newRecordsItr) {
-    init(this.fileId, newRecordsItr);
-    this.recordsWritten = 0;
-    this.recordsDeleted = 0;
-    this.updatedRecordsWritten = 0;
-    this.insertRecordsWritten = 0;
-    this.writeStatus.setTotalErrorRecords(0);
-    this.timer = new HoodieTimer().startTimer();
-
-    rollNumber += 1;
-
-    rolloverPaths.add(newFilePath);
-    oldFilePath = newFilePath;
-    final String newFileName = newFileNameWithRollover(rollNumber);
-    newFilePath = makeNewFilePath(partitionPath, newFileName);
-
-    // create the marker file so that the intermediate roll over files
-    // of the retry task can be cleaned.
-    MarkerFiles markerFiles = new MarkerFiles(hoodieTable, instantTime);
-    markerFiles.createIfNotExists(partitionPath, newFileName, getIOType());
-
-    try {
-      fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config, writerSchemaWithMetafields, taskContextSupplier);
-    } catch (IOException e) {
-      throw new HoodieIOException("Error when creating file writer for path " + newFilePath, e);
-    }
-
-    LOG.info(String.format("Merging new data into oldPath %s, as newPath %s", oldFilePath.toString(),
-        newFilePath.toString()));
-  }
-
-  public void finishWrite() {
+  public void finalizeWrite() {
     // The file visibility should be kept by the configured ConsistencyGuard instance.
     rolloverPaths.add(newFilePath);
     if (rolloverPaths.size() == 1) {
@@ -237,5 +179,29 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
     } catch (IOException e) {
       throw new HoodieIOException("Error when rename the temporary roll file: " + lastPath + " to: " + desiredPath, e);
     }
+  }
+
+  @Override
+  public void closeGracefully() {
+    if (isClosed) {
+      return;
+    }
+    try {
+      close();
+    } catch (Throwable throwable) {
+      LOG.warn("Error while trying to dispose the MERGE handle", throwable);
+      try {
+        fs.delete(newFilePath, false);
+        LOG.info("Deleting the intermediate MERGE data file: " + newFilePath + " success!");
+      } catch (IOException e) {
+        // logging a warning and ignore the exception.
+        LOG.warn("Deleting the intermediate MERGE data file: " + newFilePath + " failed", e);
+      }
+    }
+  }
+
+  @Override
+  public Path getWritePath() {
+    return newFilePath;
   }
 }

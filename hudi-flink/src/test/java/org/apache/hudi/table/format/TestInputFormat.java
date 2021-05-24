@@ -116,7 +116,7 @@ public class TestInputFormat {
   void testReadBaseAndLogFiles() throws Exception {
     beforeEach(HoodieTableType.MERGE_ON_READ);
 
-    // write parquet first with compaction
+    // write base first with compaction
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);

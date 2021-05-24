@@ -249,7 +249,7 @@ public class StreamWriteOperatorCoordinator
               "The coordinator can only handle BatchWriteSuccessEvent");
           BatchWriteSuccessEvent event = (BatchWriteSuccessEvent) operatorEvent;
           // the write task does not block after checkpointing(and before it receives a checkpoint success event),
-          // if it it checkpoints succeed then flushes the data buffer again before this coordinator receives a checkpoint
+          // if it checkpoints succeed then flushes the data buffer again before this coordinator receives a checkpoint
           // success event, the data buffer would flush with an older instant time.
           ValidationUtils.checkState(
               HoodieTimeline.compareTimestamps(instant, HoodieTimeline.GREATER_THAN_OR_EQUALS, event.getInstantTime()),

@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.OptimisticConsistencyGuard;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 
@@ -43,6 +44,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * Unit tests {@link ConsistencyGuard}s.
  */
 public class TestConsistencyGuard extends HoodieClientTestHarness {
+
+  private static final String BASE_FILE_EXTENSION = HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension();
 
   // multiple parameters, uses Collection<Object[]>
   public static List<Arguments> consistencyGuardType() {
@@ -73,17 +76,19 @@ public class TestConsistencyGuard extends HoodieClientTestHarness {
     ConsistencyGuardConfig config = getConsistencyGuardConfig(1, 1000, 1000);
     ConsistencyGuard passing = consistencyGuardType.equals(FailSafeConsistencyGuard.class.getName())
         ? new FailSafeConsistencyGuard(fs, config) : new OptimisticConsistencyGuard(fs, config);
-    passing.waitTillFileAppears(new Path(basePath + "/partition/path/f1_1-0-1_000.parquet"));
-    passing.waitTillFileAppears(new Path(basePath + "/partition/path/f2_1-0-1_000.parquet"));
+    passing.waitTillFileAppears(new Path(basePath + "/partition/path/f1_1-0-1_000" + BASE_FILE_EXTENSION));
+    passing.waitTillFileAppears(new Path(basePath + "/partition/path/f2_1-0-1_000" + BASE_FILE_EXTENSION));
     passing.waitTillAllFilesAppear(basePath + "/partition/path", Arrays
-        .asList(basePath + "/partition/path/f1_1-0-1_000.parquet", basePath + "/partition/path/f2_1-0-1_000.parquet"));
+        .asList(basePath + "/partition/path/f1_1-0-1_000" + BASE_FILE_EXTENSION,
+            basePath + "/partition/path/f2_1-0-1_000" + BASE_FILE_EXTENSION));
 
-    fs.delete(new Path(basePath + "/partition/path/f1_1-0-1_000.parquet"), false);
-    fs.delete(new Path(basePath + "/partition/path/f2_1-0-1_000.parquet"), false);
-    passing.waitTillFileDisappears(new Path(basePath + "/partition/path/f1_1-0-1_000.parquet"));
-    passing.waitTillFileDisappears(new Path(basePath + "/partition/path/f2_1-0-1_000.parquet"));
+    fs.delete(new Path(basePath + "/partition/path/f1_1-0-1_000" + BASE_FILE_EXTENSION), false);
+    fs.delete(new Path(basePath + "/partition/path/f2_1-0-1_000" + BASE_FILE_EXTENSION), false);
+    passing.waitTillFileDisappears(new Path(basePath + "/partition/path/f1_1-0-1_000" + BASE_FILE_EXTENSION));
+    passing.waitTillFileDisappears(new Path(basePath + "/partition/path/f2_1-0-1_000" + BASE_FILE_EXTENSION));
     passing.waitTillAllFilesDisappear(basePath + "/partition/path", Arrays
-        .asList(basePath + "/partition/path/f1_1-0-1_000.parquet", basePath + "/partition/path/f2_1-0-1_000.parquet"));
+        .asList(basePath + "/partition/path/f1_1-0-1_000" + BASE_FILE_EXTENSION,
+            basePath + "/partition/path/f2_1-0-1_000" + BASE_FILE_EXTENSION));
   }
 
   @Test
@@ -92,7 +97,8 @@ public class TestConsistencyGuard extends HoodieClientTestHarness {
     ConsistencyGuard passing = new FailSafeConsistencyGuard(fs, getConsistencyGuardConfig());
     assertThrows(TimeoutException.class, () -> {
       passing.waitTillAllFilesAppear(basePath + "/partition/path", Arrays
-          .asList(basePath + "/partition/path/f1_1-0-2_000.parquet", basePath + "/partition/path/f2_1-0-2_000.parquet"));
+          .asList(basePath + "/partition/path/f1_1-0-2_000" + BASE_FILE_EXTENSION,
+              basePath + "/partition/path/f2_1-0-2_000" + BASE_FILE_EXTENSION));
     });
   }
 
@@ -101,7 +107,8 @@ public class TestConsistencyGuard extends HoodieClientTestHarness {
     FileCreateUtils.createBaseFile(basePath, "partition/path", "000", "f1");
     ConsistencyGuard passing = new OptimisticConsistencyGuard(fs, getConsistencyGuardConfig());
     passing.waitTillAllFilesAppear(basePath + "/partition/path", Arrays
-          .asList(basePath + "/partition/path/f1_1-0-2_000.parquet", basePath + "/partition/path/f2_1-0-2_000.parquet"));
+          .asList(basePath + "/partition/path/f1_1-0-2_000" + BASE_FILE_EXTENSION,
+              basePath + "/partition/path/f2_1-0-2_000" + BASE_FILE_EXTENSION));
   }
 
   @Test
@@ -109,7 +116,7 @@ public class TestConsistencyGuard extends HoodieClientTestHarness {
     FileCreateUtils.createBaseFile(basePath, "partition/path", "000", "f1");
     ConsistencyGuard passing = new FailSafeConsistencyGuard(fs, getConsistencyGuardConfig());
     assertThrows(TimeoutException.class, () -> {
-      passing.waitTillFileAppears(new Path(basePath + "/partition/path/f1_1-0-2_000.parquet"));
+      passing.waitTillFileAppears(new Path(basePath + "/partition/path/f1_1-0-2_000" + BASE_FILE_EXTENSION));
     });
   }
 
@@ -117,7 +124,7 @@ public class TestConsistencyGuard extends HoodieClientTestHarness {
   public void testCheckFailingAppearsTimedWait() throws Exception {
     FileCreateUtils.createBaseFile(basePath, "partition/path", "000", "f1");
     ConsistencyGuard passing = new OptimisticConsistencyGuard(fs, getConsistencyGuardConfig());
-    passing.waitTillFileAppears(new Path(basePath + "/partition/path/f1_1-0-2_000.parquet"));
+    passing.waitTillFileAppears(new Path(basePath + "/partition/path/f1_1-0-2_000" + BASE_FILE_EXTENSION));
   }
 
   @Test
@@ -126,7 +133,8 @@ public class TestConsistencyGuard extends HoodieClientTestHarness {
     ConsistencyGuard passing = new FailSafeConsistencyGuard(fs, getConsistencyGuardConfig());
     assertThrows(TimeoutException.class, () -> {
       passing.waitTillAllFilesDisappear(basePath + "/partition/path", Arrays
-          .asList(basePath + "/partition/path/f1_1-0-1_000.parquet", basePath + "/partition/path/f2_1-0-2_000.parquet"));
+          .asList(basePath + "/partition/path/f1_1-0-1_000" + BASE_FILE_EXTENSION,
+              basePath + "/partition/path/f2_1-0-2_000" + BASE_FILE_EXTENSION));
     });
   }
 
@@ -135,7 +143,8 @@ public class TestConsistencyGuard extends HoodieClientTestHarness {
     FileCreateUtils.createBaseFile(basePath, "partition/path", "000", "f1");
     ConsistencyGuard passing = new OptimisticConsistencyGuard(fs, getConsistencyGuardConfig());
     passing.waitTillAllFilesDisappear(basePath + "/partition/path", Arrays
-          .asList(basePath + "/partition/path/f1_1-0-1_000.parquet", basePath + "/partition/path/f2_1-0-2_000.parquet"));
+          .asList(basePath + "/partition/path/f1_1-0-1_000" + BASE_FILE_EXTENSION,
+              basePath + "/partition/path/f2_1-0-2_000" + BASE_FILE_EXTENSION));
   }
 
   @Test
@@ -144,7 +153,7 @@ public class TestConsistencyGuard extends HoodieClientTestHarness {
     FileCreateUtils.createBaseFile(basePath, "partition/path", "000", "f1");
     ConsistencyGuard passing = new FailSafeConsistencyGuard(fs, getConsistencyGuardConfig());
     assertThrows(TimeoutException.class, () -> {
-      passing.waitTillFileDisappears(new Path(basePath + "/partition/path/f1_1-0-1_000.parquet"));
+      passing.waitTillFileDisappears(new Path(basePath + "/partition/path/f1_1-0-1_000" + BASE_FILE_EXTENSION));
     });
   }
 
@@ -153,7 +162,7 @@ public class TestConsistencyGuard extends HoodieClientTestHarness {
     FileCreateUtils.createBaseFile(basePath, "partition/path", "000", "f1");
     FileCreateUtils.createBaseFile(basePath, "partition/path", "000", "f1");
     ConsistencyGuard passing = new OptimisticConsistencyGuard(fs, getConsistencyGuardConfig());
-    passing.waitTillFileDisappears(new Path(basePath + "/partition/path/f1_1-0-1_000.parquet"));
+    passing.waitTillFileDisappears(new Path(basePath + "/partition/path/f1_1-0-1_000" + BASE_FILE_EXTENSION));
   }
 
   private ConsistencyGuardConfig getConsistencyGuardConfig() {
