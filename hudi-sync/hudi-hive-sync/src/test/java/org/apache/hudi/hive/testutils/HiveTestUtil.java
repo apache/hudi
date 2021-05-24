@@ -125,6 +125,9 @@ public class HiveTestUtil {
   }
 
   public static void clear() throws IOException {
+    Path p = new Path(hiveSyncConfig.basePath);
+    System.out.println(fileSystem.getFileStatus(p));
+    System.out.println(fileSystem.getConf());
     fileSystem.delete(new Path(hiveSyncConfig.basePath), true);
     HoodieTableMetaClient.withPropertyBuilder()
       .setTableType(HoodieTableType.COPY_ON_WRITE)
