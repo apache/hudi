@@ -54,7 +54,7 @@ public class HdfsTestService {
   private MiniDFSCluster miniDfsCluster;
 
   public HdfsTestService() throws IOException {
-    workDir = Files.createTempDirectory("temp").toAbsolutePath().toString();
+    workDir = Files.createTempDirectory("temp").toAbsolutePath().toUri().toString();
   }
 
   public Configuration getHadoopConf() {
