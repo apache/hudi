@@ -86,6 +86,13 @@ public class FlinkOptions {
       .defaultValue(1.5D)
       .withDescription("Index state ttl in days, default 1.5 day");
 
+  public static final ConfigOption<Boolean> INDEX_GLOBAL_ENABLED = ConfigOptions
+      .key("index.global.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to update index for the old partition path\n"
+          + "if same key record with different partition path came in, default false");
+
   // ------------------------------------------------------------------------
   //  Read Options
   // ------------------------------------------------------------------------
@@ -267,17 +274,18 @@ public class FlinkOptions {
       .defaultValue(4)
       .withDescription("Parallelism of tasks that do actual write, default is 4");
 
+  public static final ConfigOption<Double> WRITE_TASK_MAX_SIZE = ConfigOptions
+      .key("write.task.max.size")
+      .doubleType()
+      .defaultValue(1024D) // 1GB
+      .withDescription("Maximum memory in MB for a write task, when the threshold hits,\n"
+          + "it flushes the max size data bucket to avoid OOM, default 1GB");
+
   public static final ConfigOption<Double> WRITE_BATCH_SIZE = ConfigOptions
       .key("write.batch.size")
       .doubleType()
       .defaultValue(64D) // 64MB
       .withDescription("Batch buffer size in MB to flush data into the underneath filesystem, default 64MB");
-
-  public static final ConfigOption<Long> WRITE_RATE_LIMIT = ConfigOptions
-      .key("write.rate.limit")
-      .longType()
-      .defaultValue(-1L) // default no limit
-      .withDescription("Write records rate limit per second to reduce risk of OOM, default -1 (no limit)");
 
   public static final ConfigOption<Integer> WRITE_LOG_BLOCK_SIZE = ConfigOptions
       .key("write.log_block.size")
@@ -414,6 +422,12 @@ public class FlinkOptions {
       .stringType()
       .defaultValue("jdbc:hive2://localhost:10000")
       .withDescription("Jdbc URL for hive sync, default 'jdbc:hive2://localhost:10000'");
+
+  public static final ConfigOption<String> HIVE_SYNC_METASTORE_URIS = ConfigOptions
+      .key("hive_sync.metastore.uris")
+      .stringType()
+      .defaultValue("")
+      .withDescription("Metastore uris for hive sync, default ''");
 
   public static final ConfigOption<String> HIVE_SYNC_PARTITION_FIELDS = ConfigOptions
       .key("hive_sync.partition_fields")

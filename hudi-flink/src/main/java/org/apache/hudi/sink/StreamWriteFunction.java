@@ -20,7 +20,10 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.CommitUtils;
@@ -33,6 +36,7 @@ import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
@@ -52,6 +56,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 /**
  * Sink function to write the data to the underneath filesystem.
@@ -59,7 +64,8 @@ import java.util.function.BiFunction;
  * <p><h2>Work Flow</h2>
  *
  * <p>The function firstly buffers the data as a batch of {@link HoodieRecord}s,
- * It flushes(write) the records batch when a batch exceeds the configured size {@link FlinkOptions#WRITE_BATCH_SIZE}
+ * It flushes(write) the records batch when the batch size exceeds the configured size {@link FlinkOptions#WRITE_BATCH_SIZE}
+ * or the total buffer size exceeds the configured size {@link FlinkOptions#WRITE_TASK_MAX_SIZE}
  * or a Flink checkpoint starts. After a batch has been written successfully,
  * the function notifies its operator coordinator {@link StreamWriteOperatorCoordinator} to mark a successful write.
  *
@@ -91,7 +97,7 @@ import java.util.function.BiFunction;
  */
 public class StreamWriteFunction<K, I, O>
     extends KeyedProcessFunction<K, I, O>
-    implements CheckpointedFunction {
+    implements CheckpointedFunction, CheckpointListener {
 
   private static final long serialVersionUID = 1L;
 
@@ -135,6 +141,11 @@ public class StreamWriteFunction<K, I, O>
   private transient String actionType;
 
   /**
+   * Total size tracer.
+   */
+  private transient TotalSizeTracer tracer;
+
+  /**
    * Constructs a StreamingSinkFunction.
    *
    * @param config The config options
@@ -150,6 +161,7 @@ public class StreamWriteFunction<K, I, O>
     this.actionType = CommitUtils.getCommitActionType(
         WriteOperationType.fromValue(config.getString(FlinkOptions.OPERATION)),
         HoodieTableType.valueOf(config.getString(FlinkOptions.TABLE_TYPE)));
+    this.tracer = new TotalSizeTracer(this.config);
     initBuffer();
     initWriteFunction();
   }
@@ -168,16 +180,21 @@ public class StreamWriteFunction<K, I, O>
   }
 
   @Override
-  public void processElement(I value, KeyedProcessFunction<K, I, O>.Context ctx, Collector<O> out) throws Exception {
-    bufferRecord(value);
+  public void processElement(I value, KeyedProcessFunction<K, I, O>.Context ctx, Collector<O> out) {
+    bufferRecord((HoodieRecord<?>) value);
   }
 
   @Override
   public void close() {
     if (this.writeClient != null) {
-      this.writeClient.cleanHandles();
+      this.writeClient.cleanHandlesGracefully();
       this.writeClient.close();
     }
+  }
+
+  @Override
+  public void notifyCheckpointComplete(long checkpointId) {
+    this.writeClient.cleanHandles();
   }
 
   /**
@@ -197,7 +214,7 @@ public class StreamWriteFunction<K, I, O>
   public Map<String, List<HoodieRecord>> getDataBuffer() {
     Map<String, List<HoodieRecord>> ret = new HashMap<>();
     for (Map.Entry<String, DataBucket> entry : buckets.entrySet()) {
-      ret.put(entry.getKey(), entry.getValue().records);
+      ret.put(entry.getKey(), entry.getValue().writeBuffer());
     }
     return ret;
   }
@@ -241,15 +258,78 @@ public class StreamWriteFunction<K, I, O>
   }
 
   /**
+   * Represents a data item in the buffer, this is needed to reduce the
+   * memory footprint.
+   *
+   * <p>A {@link HoodieRecord} was firstly transformed into a {@link DataItem}
+   * for buffering, it then transforms back to the {@link HoodieRecord} before flushing.
+   */
+  private static class DataItem {
+    private final String key; // record key
+    private final String instant; // 'U' or 'I'
+    private final HoodieRecordPayload<?> data; // record payload
+
+    private DataItem(String key, String instant, HoodieRecordPayload<?> data) {
+      this.key = key;
+      this.instant = instant;
+      this.data = data;
+    }
+
+    public static DataItem fromHoodieRecord(HoodieRecord<?> record) {
+      return new DataItem(
+          record.getRecordKey(),
+          record.getCurrentLocation().getInstantTime(),
+          record.getData());
+    }
+
+    public HoodieRecord<?> toHoodieRecord(String partitionPath) {
+      HoodieKey hoodieKey = new HoodieKey(this.key, partitionPath);
+      HoodieRecord<?> record = new HoodieRecord<>(hoodieKey, data);
+      HoodieRecordLocation loc = new HoodieRecordLocation(instant, null);
+      record.setCurrentLocation(loc);
+      return record;
+    }
+  }
+
+  /**
    * Data bucket.
    */
   private static class DataBucket {
-    private final List<HoodieRecord> records;
+    private final List<DataItem> records;
     private final BufferSizeDetector detector;
+    private final String partitionPath;
+    private final String fileID;
 
-    private DataBucket(Double batchSize) {
+    private DataBucket(Double batchSize, HoodieRecord<?> hoodieRecord) {
       this.records = new ArrayList<>();
       this.detector = new BufferSizeDetector(batchSize);
+      this.partitionPath = hoodieRecord.getPartitionPath();
+      this.fileID = hoodieRecord.getCurrentLocation().getFileId();
+    }
+
+    /**
+     * Prepare the write data buffer: patch up all the records with correct partition path.
+     */
+    public List<HoodieRecord> writeBuffer() {
+      // rewrite all the records with new record key
+      return records.stream()
+          .map(record -> record.toHoodieRecord(partitionPath))
+          .collect(Collectors.toList());
+    }
+
+    /**
+     * Sets up before flush: patch up the first record with correct partition path and fileID.
+     *
+     * <p>Note: the method may modify the given records {@code records}.
+     */
+    public void preWrite(List<HoodieRecord> records) {
+      // rewrite the first record with expected fileID
+      HoodieRecord<?> first = records.get(0);
+      HoodieRecord<?> record = new HoodieRecord<>(first.getKey(), first.getData());
+      HoodieRecordLocation newLoc = new HoodieRecordLocation(first.getCurrentLocation().getInstantTime(), fileID);
+      record.setCurrentLocation(newLoc);
+
+      records.set(0, record);
     }
 
     public void reset() {
@@ -295,10 +375,47 @@ public class StreamWriteFunction<K, I, O>
   }
 
   /**
+   * Tool to trace the total buffer size. It computes the maximum buffer size,
+   * if current buffer size is greater than the maximum buffer size, the data bucket
+   * flush triggers.
+   */
+  private static class TotalSizeTracer {
+    private long bufferSize = 0L;
+    private final double maxBufferSize;
+
+    TotalSizeTracer(Configuration conf) {
+      long mergeReaderMem = 100; // constant 100MB
+      long mergeMapMaxMem = conf.getInteger(FlinkOptions.WRITE_MERGE_MAX_MEMORY);
+      this.maxBufferSize = (conf.getDouble(FlinkOptions.WRITE_TASK_MAX_SIZE) - mergeReaderMem - mergeMapMaxMem) * 1024 * 1024;
+      final String errMsg = String.format("'%s' should be at least greater than '%s' plus merge reader memory(constant 100MB now)",
+          FlinkOptions.WRITE_TASK_MAX_SIZE.key(), FlinkOptions.WRITE_MERGE_MAX_MEMORY.key());
+      ValidationUtils.checkState(this.maxBufferSize > 0, errMsg);
+    }
+
+    /**
+     * Trace the given record size {@code recordSize}.
+     *
+     * @param recordSize The record size
+     * @return true if the buffer size exceeds the maximum buffer size
+     */
+    boolean trace(long recordSize) {
+      this.bufferSize += recordSize;
+      return this.bufferSize > this.maxBufferSize;
+    }
+
+    void countDown(long size) {
+      this.bufferSize -= size;
+    }
+
+    public void reset() {
+      this.bufferSize = 0;
+    }
+  }
+
+  /**
    * Returns the bucket ID with the given value {@code value}.
    */
-  private String getBucketID(I value) {
-    HoodieRecord<?> record = (HoodieRecord<?>) value;
+  private String getBucketID(HoodieRecord<?> record) {
     final String fileId = record.getCurrentLocation().getFileId();
     return StreamerUtil.generateBucketKey(record.getPartitionPath(), fileId);
   }
@@ -309,38 +426,56 @@ public class StreamWriteFunction<K, I, O>
    * <p>Flush the data bucket first if the bucket records size is greater than
    * the configured value {@link FlinkOptions#WRITE_BATCH_SIZE}.
    *
+   * <p>Flush the max size data bucket if the total buffer size exceeds the configured
+   * threshold {@link FlinkOptions#WRITE_TASK_MAX_SIZE}.
+   *
    * @param value HoodieRecord
    */
-  private void bufferRecord(I value) {
+  private void bufferRecord(HoodieRecord<?> value) {
     final String bucketID = getBucketID(value);
 
     DataBucket bucket = this.buckets.computeIfAbsent(bucketID,
-        k -> new DataBucket(this.config.getDouble(FlinkOptions.WRITE_BATCH_SIZE)));
-    boolean needFlush = bucket.detector.detect(value);
-    if (needFlush) {
+        k -> new DataBucket(this.config.getDouble(FlinkOptions.WRITE_BATCH_SIZE), value));
+    final DataItem item = DataItem.fromHoodieRecord(value);
+    boolean flushBucket = bucket.detector.detect(item);
+    boolean flushBuffer = this.tracer.trace(bucket.detector.lastRecordSize);
+    if (flushBucket) {
       flushBucket(bucket);
+      this.tracer.countDown(bucket.detector.totalSize);
       bucket.reset();
+    } else if (flushBuffer) {
+      // find the max size bucket and flush it out
+      List<DataBucket> sortedBuckets = this.buckets.values().stream()
+          .sorted((b1, b2) -> Long.compare(b2.detector.totalSize, b1.detector.totalSize))
+          .collect(Collectors.toList());
+      final DataBucket bucketToFlush = sortedBuckets.get(0);
+      flushBucket(bucketToFlush);
+      this.tracer.countDown(bucketToFlush.detector.totalSize);
+      bucketToFlush.reset();
     }
-    bucket.records.add((HoodieRecord<?>) value);
+    bucket.records.add(item);
   }
 
   @SuppressWarnings("unchecked, rawtypes")
   private void flushBucket(DataBucket bucket) {
-    this.currentInstant = this.writeClient.getLastPendingInstant(this.actionType);
-    if (this.currentInstant == null) {
+    final String instant = this.writeClient.getLastPendingInstant(this.actionType);
+
+    if (instant == null) {
       // in case there are empty checkpoints that has no input data
       LOG.info("No inflight instant when flushing data, cancel.");
       return;
     }
-    List<HoodieRecord> records = bucket.records;
+
+    List<HoodieRecord> records = bucket.writeBuffer();
     ValidationUtils.checkState(records.size() > 0, "Data bucket to flush has no buffering records");
     if (config.getBoolean(FlinkOptions.INSERT_DROP_DUPS)) {
       records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1);
     }
-    final List<WriteStatus> writeStatus = new ArrayList<>(writeFunction.apply(records, currentInstant));
+    bucket.preWrite(records);
+    final List<WriteStatus> writeStatus = new ArrayList<>(writeFunction.apply(records, instant));
     final BatchWriteSuccessEvent event = BatchWriteSuccessEvent.builder()
         .taskID(taskID)
-        .instantTime(currentInstant)
+        .instantTime(instant) // the write instant may shift but the event still use the currentInstant.
         .writeStatus(writeStatus)
         .isLastBatch(false)
         .isEndInput(false)
@@ -363,12 +498,14 @@ public class StreamWriteFunction<K, I, O>
           // The records are partitioned by the bucket ID and each batch sent to
           // the writer belongs to one bucket.
           .forEach(bucket -> {
-            List<HoodieRecord> records = bucket.records;
+            List<HoodieRecord> records = bucket.writeBuffer();
             if (records.size() > 0) {
               if (config.getBoolean(FlinkOptions.INSERT_DROP_DUPS)) {
                 records = FlinkWriteHelper.newInstance().deduplicateRecords(records, (HoodieIndex) null, -1);
               }
+              bucket.preWrite(records);
               writeStatus.addAll(writeFunction.apply(records, currentInstant));
+              bucket.reset();
             }
           });
     } else {
@@ -384,7 +521,6 @@ public class StreamWriteFunction<K, I, O>
         .build();
     this.eventGateway.sendEventToCoordinator(event);
     this.buckets.clear();
-    this.writeClient.cleanHandles();
-    this.currentInstant = "";
+    this.tracer.reset();
   }
 }

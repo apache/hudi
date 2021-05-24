@@ -135,7 +135,7 @@ public class RollbackUtils {
               !activeTimeline.getDeltaCommitTimeline().filterCompletedInstants().findInstantsAfter(commit, 1).empty();
           if (higherDeltaCommits) {
             // Rollback of a compaction action with no higher deltacommit means that the compaction is scheduled
-            // and has not yet finished. In this scenario we should delete only the newly created parquet files
+            // and has not yet finished. In this scenario we should delete only the newly created base files
             // and not corresponding base commit log files created with this as baseCommit since updates would
             // have been written to the log files.
             LOG.info("Rolling back compaction. There are higher delta commits. So only deleting data files");
@@ -168,13 +168,13 @@ public class RollbackUtils {
           // ---------------------------------------------------------------------------------------------------
           // (B) The following cases are possible if !index.canIndexLogFiles and/or !index.isGlobal
           // ---------------------------------------------------------------------------------------------------
-          // (B.1) Failed first commit - Inserts were written to parquet files and HoodieWriteStat has no entries.
-          // In this scenario, we delete all the parquet files written for the failed commit.
-          // (B.2) Failed recurring commits - Inserts were written to parquet files and updates to log files. In
+          // (B.1) Failed first commit - Inserts were written to base files and HoodieWriteStat has no entries.
+          // In this scenario, we delete all the base files written for the failed commit.
+          // (B.2) Failed recurring commits - Inserts were written to base files and updates to log files. In
           // this scenario, perform (A.1) and for updates written to log files, write rollback blocks.
           // (B.3) Rollback triggered for first commit - Same as (B.1)
           // (B.4) Rollback triggered for recurring commits - Same as (B.2) plus we need to delete the log files
-          // as well if the base parquet file gets deleted.
+          // as well if the base base file gets deleted.
           try {
             HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
                 table.getMetaClient().getCommitTimeline()
@@ -183,7 +183,7 @@ public class RollbackUtils {
                 HoodieCommitMetadata.class);
 
             // In case all data was inserts and the commit failed, delete the file belonging to that commit
-            // We do not know fileIds for inserts (first inserts are either log files or parquet files),
+            // We do not know fileIds for inserts (first inserts are either log files or base files),
             // delete all files for the corresponding failed commit, if present (same as COW)
             partitionRollbackRequests.add(
                 ListingBasedRollbackRequest.createRollbackRequestWithDeleteDataAndLogFilesAction(partitionPath));
@@ -211,7 +211,7 @@ public class RollbackUtils {
     // wStat.getPrevCommit() might not give the right commit time in the following
     // scenario : If a compaction was scheduled, the new commitTime associated with the requested compaction will be
     // used to write the new log files. In this case, the commit time for the log file is the compaction requested time.
-    // But the index (global) might store the baseCommit of the parquet and not the requested, hence get the
+    // But the index (global) might store the baseCommit of the base and not the requested, hence get the
     // baseCommit always by listing the file slice
     Map<String, String> fileIdToBaseCommitTimeForLogMap = table.getSliceView().getLatestFileSlices(partitionPath)
         .collect(Collectors.toMap(FileSlice::getFileId, FileSlice::getBaseInstantTime));

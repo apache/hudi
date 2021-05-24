@@ -35,7 +35,7 @@ import java.util.UUID;
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
 import static org.apache.hudi.common.util.CollectionUtils.createImmutableList;
 
-public class HoodieTestReplaceCommitMetadatGenerator extends HoodieTestCommitMetadataGenerator {
+public class HoodieTestReplaceCommitMetadataGenerator extends HoodieTestCommitMetadataGenerator {
   public static void createReplaceCommitFileWithMetadata(String basePath, String commitTime, Option<Integer> writes, Option<Integer> updates,
                                                          HoodieTableMetaClient metaclient) throws Exception {
 
@@ -43,7 +43,7 @@ public class HoodieTestReplaceCommitMetadatGenerator extends HoodieTestCommitMet
         UUID.randomUUID().toString(), writes, updates);
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = getHoodieRequestedReplaceMetadata();
 
-    HoodieTestTable.of(metaclient).addReplaceCommit(commitTime, requestedReplaceMetadata, replaceMetadata);
+    HoodieTestTable.of(metaclient).addReplaceCommit(commitTime, Option.ofNullable(requestedReplaceMetadata), Option.empty(), replaceMetadata);
   }
 
   private static HoodieRequestedReplaceMetadata getHoodieRequestedReplaceMetadata() {

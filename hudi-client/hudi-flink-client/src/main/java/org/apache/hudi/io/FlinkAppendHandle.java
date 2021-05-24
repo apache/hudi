@@ -23,35 +23,32 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.MarkerFiles;
 
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
 /**
- * A {@link HoodieAppendHandle} that supports append write incrementally(mini-batches).
+ * A {@link HoodieAppendHandle} that supports APPEND write incrementally(mini-batches).
  *
- * <p>For the first mini-batch, it initialize and set up the next file path to write,
- * but does not close the file writer until all the mini-batches write finish. Each mini-batch
- * data are appended to this handle, the back-up writer may rollover on condition.
+ * <p>For the first mini-batch, it initializes and sets up the next file path to write,
+ * then closes the file writer. The subsequent mini-batches are appended to the same file
+ * through a different append handle with same write file name.
  *
- * @param <T> Payload type
- * @param <I> Input type
- * @param <K> Key type
- * @param <O> Output type
+ * <p>The back-up writer may rollover on condition(for e.g, the filesystem does not support append
+ * or the file size hits the configured threshold).
  */
-public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieAppendHandle<T, I, K, O> implements MiniBatchHandle {
+public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
+    extends HoodieAppendHandle<T, I, K, O> implements MiniBatchHandle {
 
   private static final Logger LOG = LoggerFactory.getLogger(FlinkAppendHandle.class);
-  private boolean needBootStrap = true;
-  // Total number of bytes written to file
-  private long sizeInBytes = 0;
+
+  private boolean isClosed = false;
 
   public FlinkAppendHandle(
       HoodieWriteConfig config,
@@ -65,6 +62,17 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O> extends H
   }
 
   @Override
+  protected void createMarkerFile(String partitionPath, String dataFileName) {
+    // In some rare cases, the task was pulled up again with same write file name,
+    // for e.g, reuse the small log files from last commit instant.
+
+    // Just skip the marker file creation if it already exists, the new data would append to
+    // the file directly.
+    MarkerFiles markerFiles = new MarkerFiles(hoodieTable, instantTime);
+    markerFiles.createIfNotExists(partitionPath, dataFileName, getIOType());
+  }
+
+  @Override
   protected boolean needsUpdateLocation() {
     return false;
   }
@@ -75,42 +83,42 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O> extends H
         && hoodieRecord.getCurrentLocation().getInstantTime().equals("U");
   }
 
-  /**
-   * Returns whether there is need to bootstrap this file handle.
-   * E.G. the first time that the handle is created.
-   */
-  public boolean isNeedBootStrap() {
-    return this.needBootStrap;
-  }
-
-  /**
-   * Appends new records into this append handle.
-   * @param recordItr The new records iterator
-   */
-  public void appendNewRecords(Iterator<HoodieRecord<T>> recordItr) {
-    this.recordItr = recordItr;
+  @Override
+  public boolean canWrite(HoodieRecord record) {
+    return true;
   }
 
   @Override
   public List<WriteStatus> close() {
-    needBootStrap = false;
-    // flush any remaining records to disk
-    appendDataAndDeleteBlocks(header);
-    // need to fix that the incremental write size in bytes may be lost
-    List<WriteStatus> ret = new ArrayList<>(statuses);
-    statuses.clear();
-    return ret;
+    try {
+      return super.close();
+    } finally {
+      this.isClosed = true;
+    }
   }
 
   @Override
-  public void finishWrite() {
-    LOG.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
-    try {
-      if (writer != null) {
-        writer.close();
-      }
-    } catch (IOException e) {
-      throw new HoodieUpsertException("Failed to close append handle", e);
+  public void closeGracefully() {
+    if (isClosed) {
+      return;
     }
+    try {
+      close();
+    } catch (Throwable throwable) {
+      // The intermediate log file can still append based on the incremental MERGE semantics,
+      // there is no need to delete the file.
+      LOG.warn("Error while trying to dispose the APPEND handle", throwable);
+    }
+  }
+
+  @Override
+  public Path getWritePath() {
+    return writer.getLogFile().getPath();
+  }
+
+  @Override
+  public boolean shouldReplace() {
+    // log files can append new data buffer directly
+    return false;
   }
 }

@@ -18,16 +18,12 @@
 
 package org.apache.hudi.sink.transform;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.sink.utils.PayloadCreation;
 import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -39,13 +35,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.RowKind;
 
-import javax.annotation.Nullable;
-
 import java.io.IOException;
-import java.io.Serializable;
-import java.lang.reflect.Constructor;
-import java.util.Random;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Function that transforms RowData to HoodieRecord.
@@ -82,12 +72,6 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord<?
    */
   private final Configuration config;
 
-  /**
-   * Rate limit per second for this task.
-   * The task sleep a little while when the consuming rate exceeds the threshold.
-   */
-  private transient RateLimiter rateLimiter;
-
   public RowDataToHoodieFunction(RowType rowType, Configuration config) {
     this.rowType = rowType;
     this.config = config;
@@ -100,30 +84,12 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord<?
     this.converter = RowDataToAvroConverters.createConverter(this.rowType);
     this.keyGenerator = StreamerUtil.createKeyGenerator(FlinkOptions.flatOptions(this.config));
     this.payloadCreation = PayloadCreation.instance(config);
-    long totalLimit = this.config.getLong(FlinkOptions.WRITE_RATE_LIMIT);
-    if (totalLimit > 0) {
-      this.rateLimiter = new RateLimiter(totalLimit / getRuntimeContext().getNumberOfParallelSubtasks());
-    }
   }
 
   @SuppressWarnings("unchecked")
   @Override
   public O map(I i) throws Exception {
-    if (rateLimiter != null) {
-      final O hoodieRecord;
-      if (rateLimiter.sampling()) {
-        long startTime = System.currentTimeMillis();
-        hoodieRecord = (O) toHoodieRecord(i);
-        long endTime = System.currentTimeMillis();
-        rateLimiter.processTime(endTime - startTime);
-      } else {
-        hoodieRecord = (O) toHoodieRecord(i);
-      }
-      rateLimiter.sleepIfNeeded();
-      return hoodieRecord;
-    } else {
-      return (O) toHoodieRecord(i);
-    }
+    return (O) toHoodieRecord(i);
   }
 
   /**
@@ -141,93 +107,5 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord<?
     final boolean isDelete = record.getRowKind() == RowKind.DELETE;
     HoodieRecordPayload payload = payloadCreation.createPayload(gr, isDelete);
     return new HoodieRecord<>(hoodieKey, payload);
-  }
-
-  /**
-   * Util to create hoodie pay load instance.
-   */
-  private static class PayloadCreation implements Serializable {
-    private static final long serialVersionUID = 1L;
-
-    private final boolean shouldCombine;
-    private final Constructor<?> constructor;
-    private final String preCombineField;
-
-    private PayloadCreation(
-        boolean shouldCombine,
-        Constructor<?> constructor,
-        @Nullable String preCombineField) {
-      this.shouldCombine = shouldCombine;
-      this.constructor = constructor;
-      this.preCombineField = preCombineField;
-    }
-
-    public static PayloadCreation instance(Configuration conf) throws Exception {
-      boolean shouldCombine = conf.getBoolean(FlinkOptions.INSERT_DROP_DUPS)
-          || WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)) == WriteOperationType.UPSERT;
-      String preCombineField = null;
-      final Class<?>[] argTypes;
-      final Constructor<?> constructor;
-      if (shouldCombine) {
-        preCombineField = conf.getString(FlinkOptions.PRECOMBINE_FIELD);
-        argTypes = new Class<?>[] {GenericRecord.class, Comparable.class};
-      } else {
-        argTypes = new Class<?>[] {Option.class};
-      }
-      final String clazz = conf.getString(FlinkOptions.PAYLOAD_CLASS);
-      constructor = ReflectionUtils.getClass(clazz).getConstructor(argTypes);
-      return new PayloadCreation(shouldCombine, constructor, preCombineField);
-    }
-
-    public HoodieRecordPayload<?> createPayload(GenericRecord record, boolean isDelete) throws Exception {
-      if (shouldCombine) {
-        ValidationUtils.checkState(preCombineField != null);
-        Comparable<?> orderingVal = (Comparable<?>) HoodieAvroUtils.getNestedFieldVal(record,
-            preCombineField, false);
-        return (HoodieRecordPayload<?>) constructor.newInstance(
-            isDelete ? null : record, orderingVal);
-      } else {
-        return (HoodieRecordPayload<?>) this.constructor.newInstance(Option.of(record));
-      }
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  //  Inner Class
-  // -------------------------------------------------------------------------
-
-  /**
-   * Tool to decide whether the limit the processing rate.
-   * Sampling the record to compute the process time with 0.01 percentage.
-   */
-  private static class RateLimiter {
-    private final Random random = new Random(47);
-    private static final int DENOMINATOR = 100;
-
-    private final long maxProcessTime;
-
-    private long processTime = -1L;
-    private long timeToSleep = -1;
-
-    RateLimiter(long rate) {
-      ValidationUtils.checkArgument(rate > 0, "rate should be positive");
-      this.maxProcessTime = 1000 / rate;
-    }
-
-    void processTime(long processTime) {
-      this.processTime = processTime;
-      this.timeToSleep = maxProcessTime - processTime;
-    }
-
-    boolean sampling() {
-      // 0.01 sampling percentage
-      return processTime == -1 || random.nextInt(DENOMINATOR) == 1;
-    }
-
-    void sleepIfNeeded() throws Exception {
-      if (timeToSleep > 0) {
-        TimeUnit.MILLISECONDS.sleep(timeToSleep);
-      }
-    }
   }
 }

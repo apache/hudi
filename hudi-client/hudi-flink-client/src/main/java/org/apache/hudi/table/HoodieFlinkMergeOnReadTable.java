@@ -19,11 +19,13 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -34,6 +36,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.delta.FlinkUpsertDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.compact.BaseScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.compact.FlinkScheduleCompactionActionExecutor;
+import org.apache.hudi.table.action.rollback.FlinkMergeOnReadRollbackActionExecutor;
 
 import java.util.List;
 import java.util.Map;
@@ -86,6 +89,11 @@ public class HoodieFlinkMergeOnReadTable<T extends HoodieRecordPayload>
   public HoodieWriteMetadata<List<WriteStatus>> compact(HoodieEngineContext context, String compactionInstantTime) {
     throw new HoodieNotSupportedException("Compaction is supported as a separate pipeline, "
         + "should not invoke directly through HoodieFlinkMergeOnReadTable");
+  }
+
+  @Override
+  public HoodieRollbackMetadata rollback(HoodieEngineContext context, String rollbackInstantTime, HoodieInstant commitInstant, boolean deleteInstants) {
+    return new FlinkMergeOnReadRollbackActionExecutor(context, config, this, rollbackInstantTime, commitInstant, deleteInstants).execute();
   }
 }
 

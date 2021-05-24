@@ -121,6 +121,13 @@ public class TestData {
             TimestampData.fromEpochMillis(1), StringData.fromString("par1"))));
   }
 
+  public static List<RowData> DATA_SET_INSERT_SAME_KEY = new ArrayList<>();
+  static {
+    IntStream.range(0, 5).forEach(i -> DATA_SET_INSERT_SAME_KEY.add(
+        insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+            TimestampData.fromEpochMillis(i), StringData.fromString("par1"))));
+  }
+
   // data set of test_source.data
   public static List<RowData> DATA_SET_SOURCE_INSERT = Arrays.asList(
       insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
@@ -256,8 +263,20 @@ public class TestData {
    * @param expected Expected string of the sorted rows
    */
   public static void assertRowsEquals(List<Row> rows, String expected) {
+    assertRowsEquals(rows, expected, 0);
+  }
+
+  /**
+   * Sort the {@code rows} using field at index {@code orderingPos} and asserts
+   * it equals with the expected string {@code expected}.
+   *
+   * @param rows     Actual result rows
+   * @param expected Expected string of the sorted rows
+   * @param orderingPos Field position for ordering
+   */
+  public static void assertRowsEquals(List<Row> rows, String expected, int orderingPos) {
     String rowsString = rows.stream()
-        .sorted(Comparator.comparing(o -> toStringSafely(o.getField(0))))
+        .sorted(Comparator.comparing(o -> toStringSafely(o.getField(orderingPos))))
         .collect(Collectors.toList()).toString();
     assertThat(rowsString, is(expected));
   }

@@ -20,7 +20,6 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
-import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -47,6 +46,7 @@ import org.apache.hudi.index.FlinkHoodieIndex;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.FlinkAppendHandle;
 import org.apache.hudi.io.FlinkCreateHandle;
+import org.apache.hudi.io.FlinkMergeAndReplaceHandle;
 import org.apache.hudi.io.FlinkMergeHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.MiniBatchHandle;
@@ -242,15 +242,9 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   @Override
   protected void preWrite(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
-    this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
-    this.txnManager.beginTransaction(Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, metaClient.getCommitActionType(), instantTime)), lastCompletedTxnAndMetadata
-        .isPresent()
-        ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
-    try {
-      syncTableMetadata();
-    } finally {
-      this.txnManager.endTransaction();
-    }
+    // Note: the code to read the commit metadata is not thread safe for JSON deserialization,
+    // remove the table metadata sync
+
     // remove the async cleaning
   }
 
@@ -376,13 +370,21 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
   }
 
   /**
-   * Clean the write handles within a checkpoint interval, this operation
-   * would close the underneath file handles.
+   * Clean the write handles within a checkpoint interval.
+   * All the handles should have been closed already.
    */
   public void cleanHandles() {
-    this.bucketToHandles.values().forEach(handle -> {
-      ((MiniBatchHandle) handle).finishWrite();
-    });
+    this.bucketToHandles.clear();
+  }
+
+  /**
+   * Clean the write handles within a checkpoint interval, this operation
+   * would close the underneath file handles, if any error happens, clean the
+   * corrupted data file.
+   */
+  public void cleanHandlesGracefully() {
+    this.bucketToHandles.values()
+        .forEach(handle -> ((MiniBatchHandle) handle).closeGracefully());
     this.bucketToHandles.clear();
   }
 
@@ -404,10 +406,18 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       Iterator<HoodieRecord<T>> recordItr) {
     final HoodieRecordLocation loc = record.getCurrentLocation();
     final String fileID = loc.getFileId();
-    if (bucketToHandles.containsKey(fileID)) {
-      return bucketToHandles.get(fileID);
-    }
     final String partitionPath = record.getPartitionPath();
+    if (bucketToHandles.containsKey(fileID)) {
+      MiniBatchHandle lastHandle = (MiniBatchHandle) bucketToHandles.get(fileID);
+      if (lastHandle.shouldReplace()) {
+        HoodieWriteHandle<?, ?, ?, ?> writeHandle = new FlinkMergeAndReplaceHandle<>(
+            config, instantTime, table, recordItr, partitionPath, fileID, table.getTaskContextSupplier(),
+            lastHandle.getWritePath());
+        this.bucketToHandles.put(fileID, writeHandle); // override with new replace handle
+        return writeHandle;
+      }
+    }
+
     final boolean isDelta = table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ);
     final HoodieWriteHandle<?, ?, ?, ?> writeHandle;
     if (isDelta) {
@@ -436,12 +446,6 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
       writeTimer = metrics.getDeltaCommitCtx();
     }
     return table;
-  }
-
-  public List<String> getInflightsAndRequestedInstants(String commitType) {
-    HoodieTimeline unCompletedTimeline = getHoodieTable().getMetaClient().getCommitsTimeline().filterInflightsAndRequested();
-    return unCompletedTimeline.getInstants().filter(x -> x.getAction().equals(commitType)).map(HoodieInstant::getTimestamp)
-        .collect(Collectors.toList());
   }
 
   public String getLastPendingInstant(HoodieTableType tableType) {

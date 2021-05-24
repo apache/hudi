@@ -20,7 +20,6 @@ package org.apache.hudi.functional
 import java.time.Instant
 import java.util
 import java.util.{Collections, Date, UUID}
-
 import org.apache.commons.io.FileUtils
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
@@ -43,7 +42,7 @@ import org.mockito.Mockito.{spy, times, verify}
 import org.scalatest.{FunSuite, Matchers}
 
 import scala.collection.JavaConversions._
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
 
@@ -411,7 +410,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
         initSparkContext("test_schema_evolution")
         val path = java.nio.file.Files.createTempDirectory("hoodie_test_path")
         try {
-          val hoodieFooTableName = "hoodie_foo_tbl"
+          val hoodieFooTableName = "hoodie_foo_tbl_" + tableType
           //create a new table
           val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
             HoodieWriteConfig.TABLE_NAME -> hoodieFooTableName,
@@ -503,7 +502,8 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     val params = Map(
       "path" -> basePath,
       DataSourceWriteOptions.TABLE_NAME_OPT_KEY -> "test_hoodie",
-      DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY -> "partition"
+      DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY -> "partition",
+      DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX -> "true"
     )
     val parameters = HoodieWriterUtils.parametersWithWriteDefaults(params)
     val newParams = addSqlTablePropertiesMethod.invoke(HoodieSparkSqlWriter,
@@ -518,6 +518,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     val hiveSyncConfig = buildSyncConfigMethod.invoke(HoodieSparkSqlWriter,
       new Path(basePath), newParams).asInstanceOf[HiveSyncConfig]
 
+    assertTrue(hiveSyncConfig.skipROSuffix)
     assertResult("spark.sql.sources.provider=hudi\n" +
       "spark.sql.sources.schema.partCol.0=partition\n" +
       "spark.sql.sources.schema.numParts=1\n" +
@@ -528,6 +529,37 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
       "{\"name\":\"partition\",\"type\":\"string\",\"nullable\":false,\"metadata\":{}}]}")(hiveSyncConfig.tableProperties)
 
     assertResult("path=/tmp/hoodie_test")(hiveSyncConfig.serdeProperties)
+  }
+
+  test("Test build sync config for skip Ro Suffix vals") {
+    initSparkContext("test build sync config for skip Ro suffix vals")
+    val addSqlTablePropertiesMethod =
+      HoodieSparkSqlWriter.getClass.getDeclaredMethod("addSqlTableProperties",
+        classOf[SQLConf], classOf[StructType], classOf[Map[_, _]])
+    addSqlTablePropertiesMethod.setAccessible(true)
+
+    val schema = DataSourceTestUtils.getStructTypeExampleSchema
+    val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+    val basePath = "/tmp/hoodie_test"
+    val params = Map(
+      "path" -> basePath,
+      DataSourceWriteOptions.TABLE_NAME_OPT_KEY -> "test_hoodie",
+      DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY -> "partition"
+    )
+    val parameters = HoodieWriterUtils.parametersWithWriteDefaults(params)
+    val newParams = addSqlTablePropertiesMethod.invoke(HoodieSparkSqlWriter,
+      spark.sessionState.conf, structType, parameters)
+      .asInstanceOf[Map[String, String]]
+
+    val buildSyncConfigMethod =
+      HoodieSparkSqlWriter.getClass.getDeclaredMethod("buildSyncConfig", classOf[Path],
+        classOf[Map[_, _]])
+    buildSyncConfigMethod.setAccessible(true)
+
+    val hiveSyncConfig = buildSyncConfigMethod.invoke(HoodieSparkSqlWriter,
+      new Path(basePath), newParams).asInstanceOf[HiveSyncConfig]
+
+    assertFalse(hiveSyncConfig.skipROSuffix)
   }
 
   case class Test(uuid: String, ts: Long)
