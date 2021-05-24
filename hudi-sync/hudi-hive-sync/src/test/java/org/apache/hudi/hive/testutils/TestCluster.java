@@ -53,6 +53,11 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
+import org.junit.jupiter.api.extension.AfterAllCallback;
+import org.junit.jupiter.api.extension.AfterEachCallback;
+import org.junit.jupiter.api.extension.BeforeAllCallback;
+import org.junit.jupiter.api.extension.BeforeEachCallback;
+import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.runners.model.InitializationError;
 
 import java.io.File;
@@ -68,7 +73,8 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.fail;
 
-public class TestCluster {
+public class TestCluster implements BeforeAllCallback, AfterAllCallback,
+        BeforeEachCallback, AfterEachCallback {
   private HdfsTestService hdfsTestService;
   public HiveTestService hiveTestService;
   private Configuration conf;
@@ -78,6 +84,24 @@ public class TestCluster {
   DateTimeFormatter dtfOut;
   public File hiveSiteXml;
   private IMetaStoreClient client;
+
+  @Override
+  public void beforeAll(ExtensionContext context) throws Exception {
+    setup();
+  }
+
+  @Override
+  public void afterAll(ExtensionContext context) throws Exception {
+    shutDown();
+  }
+
+  @Override
+  public void beforeEach(ExtensionContext context) throws Exception {
+  }
+
+  @Override
+  public void afterEach(ExtensionContext context) throws Exception {
+  }
 
   public void setup() throws Exception {
     hdfsTestService = new HdfsTestService();

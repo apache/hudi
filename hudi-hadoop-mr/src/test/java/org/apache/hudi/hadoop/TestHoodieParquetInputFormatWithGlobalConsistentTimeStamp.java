@@ -18,28 +18,39 @@
 
 package org.apache.hudi.hadoop;
 
-import java.util.Arrays;
-import java.util.Collection;
-import org.apache.hudi.common.table.HoodieTableGloballyConsistentMetaClient;
+//import org.junit.Test;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+
+public class TestHoodieParquetInputFormatWithGlobalConsistentTimeStamp {
+  //extends TestHoodieParquetInputFormat {
+
+  /*// Test parquet input format using both session property and timestamp property
+=======
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
-public class TestHoodieParquetInputFormatWithGlobalConsistentTimeStamp {
-    //extends TestHoodieParquetInputFormat {
+@RunWith(Parameterized.class)
+public class TestHoodieParquetInputFormatWithGlobalConsistentTimeStamp
+    extends TestHoodieParquetInputFormat {
 
-  /*// Test parquet input format using both session property and timestamp property
+  // Test parquet input format using both session property and timestamp property
+>>>>>>> 526596f2fc97b1b89b235e140e53ecadc5e3de04
   private String timeStampAndSession;
 
   public TestHoodieParquetInputFormatWithGlobalConsistentTimeStamp(String timeStampAndSession) {
     this.timeStampAndSession = timeStampAndSession;
   }
+<<<<<<< HEAD
 */
   @Test
-  public void r() {}
+  public void rooster() {}
 
   /*@Parameterized.Parameters(name = "timeStampAndSession")
+=======
+
+  @Parameterized.Parameters(name = "timeStampAndSession")
+>>>>>>> 526596f2fc97b1b89b235e140e53ecadc5e3de04
   public static Collection<String[]> data() {
     // 00 not needed thats the parent class unit test itself
     return Arrays.asList(new String[][] {{"01"}, {"10"}, {"11"}});
@@ -68,5 +79,6 @@ public class TestHoodieParquetInputFormatWithGlobalConsistentTimeStamp {
             String.format("unexpected timestampAndSession value: %s", timeStampAndSession));
 
     }
+<<<<<<< HEAD
   }*/
 }

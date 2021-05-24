@@ -24,8 +24,12 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import com.codahale.metrics.Timer;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Random;
 import java.util.stream.Stream;
@@ -36,16 +40,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@ExtendWith(MockitoExtension.class)
 public class TestHoodieMetrics {
 
-  private HoodieMetrics metrics;
+  @Mock
+  HoodieWriteConfig config;
+  HoodieMetrics metrics;
 
   @BeforeEach
-  public void start() {
-    HoodieWriteConfig config = mock(HoodieWriteConfig.class);
+  void setUp() {
     when(config.isMetricsOn()).thenReturn(true);
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.INMEMORY);
     metrics = new HoodieMetrics(config, "raw_table");
+  }
+
+  @AfterEach
+  void shutdownMetrics() {
+    Metrics.shutdown();
   }
 
   @Test

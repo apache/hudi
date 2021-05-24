@@ -18,26 +18,26 @@
 
 package org.apache.hudi.hadoop;
 
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.HoodieTableGloballyConsistentMetaClient;
+import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
+import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
+
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.mapred.InputSplit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import org.apache.hudi.common.table.HoodieTableGloballyConsistentMetaClient;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
-import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
 public class TestGloballyConsistentTimeStampFilteringInputFormat
     extends TestHoodieParquetInputFormat {
 
-  @Override
   @BeforeEach
   public void setUp() {
     super.setUp();
@@ -45,7 +45,6 @@ public class TestGloballyConsistentTimeStampFilteringInputFormat
         String.valueOf(Long.MAX_VALUE));
   }
 
-  @Override
   @Test
   public void testInputFormatLoad() throws IOException {
     super.testInputFormatLoad();
@@ -73,7 +72,6 @@ public class TestGloballyConsistentTimeStampFilteringInputFormat
     }
   }
 
-  @Override
   @Test
   public void testInputFormatUpdates() throws IOException {
     super.testInputFormatUpdates();
