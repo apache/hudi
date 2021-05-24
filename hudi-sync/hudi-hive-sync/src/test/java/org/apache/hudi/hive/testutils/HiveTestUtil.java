@@ -111,7 +111,7 @@ public class HiveTestUtil {
     fileSystem = FileSystem.get(configuration);
 
     hiveSyncConfig = new HiveSyncConfig();
-    hiveSyncConfig.jdbcUrl = "jdbc:hive2://127.0.0.1:9999/";
+    hiveSyncConfig.jdbcUrl = "jdbc:hive2://0.0.0.0:9999/";
     hiveSyncConfig.hiveUser = "";
     hiveSyncConfig.hivePass = "";
     hiveSyncConfig.databaseName = "testdb";

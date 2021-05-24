@@ -83,7 +83,7 @@ public class HdfsTestService {
 
         // Configure and start the HDFS cluster
         // boolean format = shouldFormatDFSCluster(localDFSLocation, clean);
-        String bindIP = "127.0.0.1";
+        String bindIP = "0.0.0.0";
         configureDFSCluster(hadoopConf, localDFSLocation, bindIP, namenodeRpcPort,
             datanodePort, datanodeIpcPort, datanodeHttpPort);
         miniDfsCluster = new MiniDFSCluster.Builder(hadoopConf).numDataNodes(1).format(format).checkDataNodeAddrConfig(true)
