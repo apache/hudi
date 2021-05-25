@@ -18,12 +18,16 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.Option;
+
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -31,6 +35,7 @@ import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests {@link DefaultHoodieRecordPayload}.
@@ -50,6 +55,7 @@ public class TestDefaultHoodieRecordPayload {
     ));
     props = new Properties();
     props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP, "ts");
+    props.setProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP, "ts");
   }
 
   @Test
@@ -104,4 +110,36 @@ public class TestDefaultHoodieRecordPayload {
     assertFalse(payload2.combineAndGetUpdateValue(record1, schema, props).isPresent());
   }
 
+  @Test
+  public void testGetEmptyMetadata() {
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("id", "1");
+    record.put("partition", "partition0");
+    record.put("ts", 0L);
+    record.put("_hoodie_is_deleted", false);
+    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(Option.of(record));
+    assertFalse(payload.getMetadata().isPresent());
+  }
+
+  @ParameterizedTest
+  @ValueSource(longs = {1L, 1612542030000L})
+  public void testGetEventTimeInMetadata(long eventTime) throws IOException {
+    GenericRecord record1 = new GenericData.Record(schema);
+    record1.put("id", "1");
+    record1.put("partition", "partition0");
+    record1.put("ts", 0L);
+    record1.put("_hoodie_is_deleted", false);
+
+    GenericRecord record2 = new GenericData.Record(schema);
+    record2.put("id", "1");
+    record2.put("partition", "partition0");
+    record2.put("ts", eventTime);
+    record2.put("_hoodie_is_deleted", false);
+
+    DefaultHoodieRecordPayload payload2 = new DefaultHoodieRecordPayload(record2, eventTime);
+    payload2.combineAndGetUpdateValue(record1, schema, props);
+    assertTrue(payload2.getMetadata().isPresent());
+    assertEquals(eventTime,
+        Long.parseLong(payload2.getMetadata().get().get(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY)));
+  }
 }

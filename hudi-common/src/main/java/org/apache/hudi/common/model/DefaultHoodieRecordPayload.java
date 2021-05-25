@@ -25,6 +25,8 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro;
@@ -37,12 +39,15 @@ import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldVal;
  */
 public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
 
+  public static final String METADATA_EVENT_TIME_KEY = "metadata.event_time.key";
+  private Option<Object> eventTime = Option.empty();
+
   public DefaultHoodieRecordPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
   }
 
   public DefaultHoodieRecordPayload(Option<GenericRecord> record) {
-    this(record.isPresent() ? record.get() : null, (record1) -> 0); // natural order
+    this(record.isPresent() ? record.get() : null, 0); // natural order
   }
 
   @Override
@@ -71,6 +76,10 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
 
     /*
      * We reached a point where the value is disk is older than the incoming record.
+     */
+    eventTime = Option.ofNullable(getNestedFieldVal(incomingRecord, properties.getProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP), true));
+
+    /*
      * Now check if the incoming record is a delete record.
      */
     if (isDeleteRecord(incomingRecord)) {
@@ -78,5 +87,14 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     } else {
       return Option.of(incomingRecord);
     }
+  }
+
+  @Override
+  public Option<Map<String, String>> getMetadata() {
+    Map<String, String> metadata = new HashMap<>();
+    if (eventTime.isPresent()) {
+      metadata.put(METADATA_EVENT_TIME_KEY, String.valueOf(eventTime.get()));
+    }
+    return metadata.isEmpty() ? Option.empty() : Option.of(metadata);
   }
 }

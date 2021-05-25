@@ -35,7 +35,7 @@ import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKP
  */
 public class InitialCheckpointFromAnotherHoodieTimelineProvider extends InitialCheckPointProvider {
 
-  private HoodieTableMetaClient anotherDsHoodieMetaclient;
+  private HoodieTableMetaClient anotherDsHoodieMetaClient;
 
   public InitialCheckpointFromAnotherHoodieTimelineProvider(TypedProperties props) {
     super(props);
@@ -44,16 +44,16 @@ public class InitialCheckpointFromAnotherHoodieTimelineProvider extends InitialC
   @Override
   public void init(Configuration config) throws HoodieException {
     super.init(config);
-    this.anotherDsHoodieMetaclient = new HoodieTableMetaClient(config, path.toString());
+    this.anotherDsHoodieMetaClient = HoodieTableMetaClient.builder().setConf(config).setBasePath(path.toString()).build();
   }
 
   @Override
   public String getCheckpoint() throws HoodieException {
-    return anotherDsHoodieMetaclient.getCommitsTimeline().filterCompletedInstants().getReverseOrderedInstants()
+    return anotherDsHoodieMetaClient.getCommitsTimeline().filterCompletedInstants().getReverseOrderedInstants()
         .map(instant -> {
           try {
             HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-                .fromBytes(anotherDsHoodieMetaclient.getActiveTimeline().getInstantDetails(instant).get(),
+                .fromBytes(anotherDsHoodieMetaClient.getActiveTimeline().getInstantDetails(instant).get(),
                     HoodieCommitMetadata.class);
             return commitMetadata.getMetadata(CHECKPOINT_KEY);
           } catch (IOException e) {

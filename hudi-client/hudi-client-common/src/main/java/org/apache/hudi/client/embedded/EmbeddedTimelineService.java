@@ -48,11 +48,15 @@ public class EmbeddedTimelineService {
   private final HoodieMetadataConfig metadataConfig;
   private final String basePath;
 
+  private final int numThreads;
+  private final boolean shouldCompressOutput;
+  private final boolean useAsync;
   private transient FileSystemViewManager viewManager;
   private transient TimelineService server;
 
   public EmbeddedTimelineService(HoodieEngineContext context, String embeddedTimelineServiceHostAddr, int embeddedTimelineServerPort,
-                                 HoodieMetadataConfig metadataConfig, FileSystemViewStorageConfig config, String basePath) {
+                                 HoodieMetadataConfig metadataConfig, FileSystemViewStorageConfig config, String basePath,
+                                 int numThreads, boolean compressOutput, boolean useAsync) {
     setHostAddr(embeddedTimelineServiceHostAddr);
     this.context = context;
     this.config = config;
@@ -61,6 +65,9 @@ public class EmbeddedTimelineService {
     this.hadoopConf = context.getHadoopConf();
     this.viewManager = createViewManager();
     this.preferredPort = embeddedTimelineServerPort;
+    this.numThreads = numThreads;
+    this.shouldCompressOutput = compressOutput;
+    this.useAsync = useAsync;
   }
 
   private FileSystemViewManager createViewManager() {
@@ -77,7 +84,7 @@ public class EmbeddedTimelineService {
   }
 
   public void startServer() throws IOException {
-    server = new TimelineService(preferredPort, viewManager, hadoopConf.newCopy());
+    server = new TimelineService(preferredPort, viewManager, hadoopConf.newCopy(), numThreads, shouldCompressOutput, useAsync);
     serverPort = server.startService();
     LOG.info("Started embedded timeline server at " + hostAddr + ":" + serverPort);
   }

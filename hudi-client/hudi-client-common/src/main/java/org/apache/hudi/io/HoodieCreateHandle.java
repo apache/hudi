@@ -53,11 +53,11 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
   private static final Logger LOG = LogManager.getLogger(HoodieCreateHandle.class);
 
-  private final HoodieFileWriter<IndexedRecord> fileWriter;
-  private final Path path;
-  private long recordsWritten = 0;
-  private long insertRecordsWritten = 0;
-  private long recordsDeleted = 0;
+  protected final HoodieFileWriter<IndexedRecord> fileWriter;
+  protected final Path path;
+  protected long recordsWritten = 0;
+  protected long insertRecordsWritten = 0;
+  protected long recordsDeleted = 0;
   private Map<String, HoodieRecord<T>> recordMap;
   private boolean useWriterSchema = false;
 
@@ -179,29 +179,47 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
 
       fileWriter.close();
 
-      HoodieWriteStat stat = new HoodieWriteStat();
-      stat.setPartitionPath(writeStatus.getPartitionPath());
-      stat.setNumWrites(recordsWritten);
-      stat.setNumDeletes(recordsDeleted);
-      stat.setNumInserts(insertRecordsWritten);
-      stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
-      stat.setFileId(writeStatus.getFileId());
-      stat.setPath(new Path(config.getBasePath()), path);
-      long fileSizeInBytes = FSUtils.getFileSize(fs, path);
-      stat.setTotalWriteBytes(fileSizeInBytes);
-      stat.setFileSizeInBytes(fileSizeInBytes);
-      stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
-      RuntimeStats runtimeStats = new RuntimeStats();
-      runtimeStats.setTotalCreateTime(timer.endTimer());
-      stat.setRuntimeStats(runtimeStats);
-      writeStatus.setStat(stat);
+      setupWriteStatus();
 
-      LOG.info(String.format("CreateHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
-          stat.getFileId(), runtimeStats.getTotalCreateTime()));
+      LOG.info(String.format("CreateHandle for partitionPath %s fileID %s, took %d ms.",
+          writeStatus.getStat().getPartitionPath(), writeStatus.getStat().getFileId(),
+          writeStatus.getStat().getRuntimeStats().getTotalCreateTime()));
 
       return Collections.singletonList(writeStatus);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to close the Insert Handle for path " + path, e);
     }
   }
+
+  /**
+   * Set up the write status.
+   *
+   * @throws IOException if error occurs
+   */
+  protected void setupWriteStatus() throws IOException {
+    HoodieWriteStat stat = new HoodieWriteStat();
+    stat.setPartitionPath(writeStatus.getPartitionPath());
+    stat.setNumWrites(recordsWritten);
+    stat.setNumDeletes(recordsDeleted);
+    stat.setNumInserts(insertRecordsWritten);
+    stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
+    stat.setFileId(writeStatus.getFileId());
+    stat.setPath(new Path(config.getBasePath()), path);
+    stat.setTotalWriteBytes(computeTotalWriteBytes());
+    stat.setFileSizeInBytes(computeFileSizeInBytes());
+    stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
+    RuntimeStats runtimeStats = new RuntimeStats();
+    runtimeStats.setTotalCreateTime(timer.endTimer());
+    stat.setRuntimeStats(runtimeStats);
+    writeStatus.setStat(stat);
+  }
+
+  protected long computeTotalWriteBytes() throws IOException {
+    return FSUtils.getFileSize(fs, path);
+  }
+
+  protected long computeFileSizeInBytes() throws IOException {
+    return FSUtils.getFileSize(fs, path);
+  }
+
 }

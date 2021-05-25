@@ -19,7 +19,6 @@
 package org.apache.hudi.cli.utils;
 
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.logging.Logger;
@@ -41,13 +40,10 @@ public class InputStreamConsumer extends Thread {
     try {
       InputStreamReader isr = new InputStreamReader(is);
       BufferedReader br = new BufferedReader(isr);
-      String line;
-      while ((line = br.readLine()) != null) {
-        LOG.info(line);
-      }
-    } catch (IOException ioe) {
-      LOG.severe(ioe.toString());
-      ioe.printStackTrace();
+      br.lines().forEach(LOG::info);
+    } catch (Exception e) {
+      LOG.severe(e.toString());
+      e.printStackTrace();
     }
   }
 

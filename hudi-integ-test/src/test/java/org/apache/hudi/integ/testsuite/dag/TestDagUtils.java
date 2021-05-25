@@ -44,6 +44,40 @@ public class TestDagUtils {
   }
 
   @Test
+  public void testConvertDagToYamlHiveQuery() throws Exception {
+    WorkflowDag dag = new HiveSyncDagGenerator().build();
+    DagNode insert1 = (DagNode) dag.getNodeList().get(0);
+    DagNode hiveSync1 = (DagNode)insert1.getChildNodes().get(0);
+    DagNode hiveQuery1 = (DagNode)hiveSync1.getChildNodes().get(0);
+
+    String yaml = DagUtils.convertDagToYaml(dag);
+
+    WorkflowDag dag2 = DagUtils.convertYamlToDag(yaml);
+    DagNode insert2 = (DagNode) dag2.getNodeList().get(0);
+    DagNode hiveSync2 = (DagNode)insert2.getChildNodes().get(0);
+    DagNode hiveQuery2 = (DagNode)hiveSync2.getChildNodes().get(0);
+    assertEquals(hiveQuery1.getConfig().getHiveQueries().get(0),
+        hiveQuery2.getConfig().getHiveQueries().get(0));
+    assertEquals(hiveQuery1.getConfig().getHiveProperties().get(0),
+        hiveQuery2.getConfig().getHiveProperties().get(0));
+  }
+
+  @Test
+  public void testConvertDagToYamlAndBack() throws Exception {
+    final ComplexDagGenerator dag = new ComplexDagGenerator();
+    final WorkflowDag originalWorkflowDag = dag.build();
+    final String yaml = DagUtils.convertDagToYaml(dag.build());
+    final WorkflowDag regeneratedWorkflowDag = DagUtils.convertYamlToDag(yaml);
+
+    final List<DagNode> originalWorkflowDagNodes = originalWorkflowDag.getNodeList();
+    final List<DagNode> regeneratedWorkflowDagNodes = regeneratedWorkflowDag.getNodeList();
+
+    assertEquals(originalWorkflowDagNodes.size(), regeneratedWorkflowDagNodes.size());
+    assertEquals(originalWorkflowDagNodes.get(0).getChildNodes().size(),
+            regeneratedWorkflowDagNodes.get(0).getChildNodes().size());
+  }
+
+  @Test
   public void testConvertYamlToDag() throws Exception {
     WorkflowDag dag = DagUtils.convertYamlToDag(UtilitiesTestBase.Helpers
         .readFileFromAbsolutePath((System.getProperty("user.dir") + "/.." + COW_DAG_DOCKER_DEMO_RELATIVE_PATH)));

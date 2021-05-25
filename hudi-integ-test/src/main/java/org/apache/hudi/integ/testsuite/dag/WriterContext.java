@@ -109,4 +109,8 @@ public class WriterContext {
   public String toString() {
     return this.hoodieTestSuiteWriter.toString() + "\n" + this.deltaGenerator.toString() + "\n";
   }
+
+  public SparkSession getSparkSession() {
+    return sparkSession;
+  }
 }

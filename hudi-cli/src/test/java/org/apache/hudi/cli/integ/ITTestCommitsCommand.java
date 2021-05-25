@@ -71,7 +71,7 @@ public class ITTestCommitsCommand extends AbstractShellIntegrationTest {
    */
   @Test
   public void testRollbackCommit() throws Exception {
-    //Create some commits files and parquet files
+    //Create some commits files and base files
     Map<String, String> partitionAndFileId = new HashMap<String, String>() {
       {
         put(DEFAULT_FIRST_PARTITION_PATH, "file-1");

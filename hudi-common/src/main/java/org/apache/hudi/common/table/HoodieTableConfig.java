@@ -18,7 +18,9 @@
 
 package org.apache.hudi.common.table;
 
+import java.util.Arrays;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
+import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -56,6 +58,9 @@ public class HoodieTableConfig implements Serializable {
   public static final String HOODIE_TABLE_NAME_PROP_NAME = "hoodie.table.name";
   public static final String HOODIE_TABLE_TYPE_PROP_NAME = "hoodie.table.type";
   public static final String HOODIE_TABLE_VERSION_PROP_NAME = "hoodie.table.version";
+  public static final String HOODIE_TABLE_PRECOMBINE_FIELD = "hoodie.table.precombine.field";
+  public static final String HOODIE_TABLE_PARTITION_COLUMNS = "hoodie.table.partition.columns";
+
   @Deprecated
   public static final String HOODIE_RO_FILE_FORMAT_PROP_NAME = "hoodie.table.ro.file.format";
   @Deprecated
@@ -65,6 +70,7 @@ public class HoodieTableConfig implements Serializable {
   public static final String HOODIE_TIMELINE_LAYOUT_VERSION = "hoodie.timeline.layout.version";
   public static final String HOODIE_PAYLOAD_CLASS_PROP_NAME = "hoodie.compaction.payload.class";
   public static final String HOODIE_ARCHIVELOG_FOLDER_PROP_NAME = "hoodie.archivelog.folder";
+  public static final String HOODIE_BOOTSTRAP_INDEX_ENABLE = "hoodie.bootstrap.index.enable";
   public static final String HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME = "hoodie.bootstrap.index.class";
   public static final String HOODIE_BOOTSTRAP_BASE_PATH = "hoodie.bootstrap.base.path";
 
@@ -73,8 +79,9 @@ public class HoodieTableConfig implements Serializable {
   public static final HoodieFileFormat DEFAULT_BASE_FILE_FORMAT = HoodieFileFormat.PARQUET;
   public static final HoodieFileFormat DEFAULT_LOG_FILE_FORMAT = HoodieFileFormat.HOODIE_LOG;
   public static final String DEFAULT_PAYLOAD_CLASS = OverwriteWithLatestAvroPayload.class.getName();
+  public static final String NO_OP_BOOTSTRAP_INDEX_CLASS = NoOpBootstrapIndex.class.getName();
   public static final String DEFAULT_BOOTSTRAP_INDEX_CLASS = HFileBootstrapIndex.class.getName();
-  public static final String DEFAULT_ARCHIVELOG_FOLDER = "";
+  public static final String DEFAULT_ARCHIVELOG_FOLDER = "archived";
 
   private Properties props;
 
@@ -142,7 +149,7 @@ public class HoodieTableConfig implements Serializable {
       }
       if (properties.containsKey(HOODIE_BOOTSTRAP_BASE_PATH) && !properties.containsKey(HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME)) {
         // Use the default bootstrap index class.
-        properties.setProperty(HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME, DEFAULT_BOOTSTRAP_INDEX_CLASS);
+        properties.setProperty(HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME, getDefaultBootstrapIndexClass(properties));
       }
       properties.store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
     }
@@ -187,13 +194,33 @@ public class HoodieTableConfig implements Serializable {
         "org.apache.hudi");
   }
 
+  public String getPreCombineField() {
+    return props.getProperty(HOODIE_TABLE_PRECOMBINE_FIELD);
+  }
+
+  public Option<String[]> getPartitionColumns() {
+    if (props.containsKey(HOODIE_TABLE_PARTITION_COLUMNS)) {
+      return Option.of(Arrays.stream(props.getProperty(HOODIE_TABLE_PARTITION_COLUMNS).split(","))
+        .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[]{}));
+    }
+    return Option.empty();
+  }
+
   /**
    * Read the payload class for HoodieRecords from the table properties.
    */
   public String getBootstrapIndexClass() {
     // There could be tables written with payload class from com.uber.hoodie. Need to transparently
     // change to org.apache.hudi
-    return props.getProperty(HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME, DEFAULT_BOOTSTRAP_INDEX_CLASS);
+    return props.getProperty(HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME, getDefaultBootstrapIndexClass(props));
+  }
+
+  public static String getDefaultBootstrapIndexClass(Properties props) {
+    String defaultClass = DEFAULT_BOOTSTRAP_INDEX_CLASS;
+    if ("false".equalsIgnoreCase(props.getProperty(HOODIE_BOOTSTRAP_INDEX_ENABLE))) {
+      defaultClass = NO_OP_BOOTSTRAP_INDEX_CLASS;
+    }
+    return defaultClass;
   }
 
   public Option<String> getBootstrapBasePath() {

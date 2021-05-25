@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
@@ -66,7 +67,8 @@ public class TestPriorityBasedFileSystemView {
   public void setUp() {
     fsView = new PriorityBasedFileSystemView(primary, secondary);
     testBaseFileStream = Stream.of(new HoodieBaseFile("test"));
-    testFileSliceStream = Stream.of(new FileSlice("2020-01-01", "20:20", "file0001.parquet"));
+    testFileSliceStream = Stream.of(new FileSlice("2020-01-01", "20:20",
+        "file0001" + HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension()));
   }
 
   private void resetMocks() {
