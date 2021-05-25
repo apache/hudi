@@ -49,6 +49,8 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER;
+
 /**
  * Performs bootstrap from a non-hudi source.
  */
@@ -172,7 +174,7 @@ public class BootstrapExecutor  implements Serializable {
     HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
-        .setArchiveLogFolder("archived")
+        .setArchiveLogFolder(DEFAULT_ARCHIVELOG_FOLDER)
         .setPayloadClassName(cfg.payloadClassName)
         .setBaseFileFormat(cfg.baseFileFormat)
         .setBootstrapIndexClass(cfg.bootstrapIndexClass)

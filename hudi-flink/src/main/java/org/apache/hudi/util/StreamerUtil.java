@@ -68,11 +68,12 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Properties;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER;
+
 /**
  * Utilities for Flink stream read and write.
  */
 public class StreamerUtil {
-  private static final String DEFAULT_ARCHIVE_LOG_FOLDER = "archived";
 
   private static final Logger LOG = LoggerFactory.getLogger(StreamerUtil.class);
 
@@ -266,7 +267,7 @@ public class StreamerUtil {
           .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
           .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
           .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS))
-          .setArchiveLogFolder(DEFAULT_ARCHIVE_LOG_FOLDER)
+          .setArchiveLogFolder(DEFAULT_ARCHIVELOG_FOLDER)
           .setTimelineLayoutVersion(1)
           .initTable(hadoopConf, basePath);
       LOG.info("Table initialized under base path {}", basePath);
