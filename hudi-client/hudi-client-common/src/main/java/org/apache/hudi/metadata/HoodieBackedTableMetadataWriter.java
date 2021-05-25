@@ -67,6 +67,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 
@@ -294,7 +295,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     HoodieTableMetaClient.withPropertyBuilder()
       .setTableType(HoodieTableType.MERGE_ON_READ)
       .setTableName(tableName)
-      .setArchiveLogFolder("archived")
+      .setArchiveLogFolder(DEFAULT_ARCHIVELOG_FOLDER)
       .setPayloadClassName(HoodieMetadataPayload.class.getName())
       .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
       .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());

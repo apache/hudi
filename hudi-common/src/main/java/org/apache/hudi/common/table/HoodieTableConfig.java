@@ -81,7 +81,7 @@ public class HoodieTableConfig implements Serializable {
   public static final String DEFAULT_PAYLOAD_CLASS = OverwriteWithLatestAvroPayload.class.getName();
   public static final String NO_OP_BOOTSTRAP_INDEX_CLASS = NoOpBootstrapIndex.class.getName();
   public static final String DEFAULT_BOOTSTRAP_INDEX_CLASS = HFileBootstrapIndex.class.getName();
-  public static final String DEFAULT_ARCHIVELOG_FOLDER = "";
+  public static final String DEFAULT_ARCHIVELOG_FOLDER = "archived";
 
   private Properties props;
 

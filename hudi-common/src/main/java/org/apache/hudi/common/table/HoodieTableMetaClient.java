@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
@@ -331,7 +332,7 @@ public class HoodieTableMetaClient implements Serializable {
     // if anything other than default archive log folder is specified, create that too
     String archiveLogPropVal = props.getProperty(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME,
         HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER);
-    if (!archiveLogPropVal.equals(HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER)) {
+    if (!StringUtils.isNullOrEmpty(archiveLogPropVal)) {
       Path archiveLogDir = new Path(metaPathDir, archiveLogPropVal);
       if (!fs.exists(archiveLogDir)) {
         fs.mkdirs(archiveLogDir);
@@ -721,8 +722,10 @@ public class HoodieTableMetaClient implements Serializable {
         properties.setProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, payloadClassName);
       }
 
-      if (null != archiveLogFolder) {
+      if (!StringUtils.isNullOrEmpty(archiveLogFolder)) {
         properties.put(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, archiveLogFolder);
+      } else {
+        properties.setProperty(HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER, HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER);
       }
 
       if (null != timelineLayoutVersion) {
