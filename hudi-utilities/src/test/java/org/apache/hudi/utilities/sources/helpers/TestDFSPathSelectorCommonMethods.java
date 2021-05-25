@@ -27,6 +27,7 @@ import org.apache.hudi.testutils.HoodieClientTestHarness;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -56,6 +57,11 @@ public class TestDFSPathSelectorCommonMethods extends HoodieClientTestHarness {
     props.setProperty(ROOT_INPUT_PATH_PROP, basePath);
     props.setProperty(PARTITIONS_LIST_PARALLELISM, "1");
     inputPath = new Path(basePath);
+  }
+
+  @AfterEach
+  public void teardown() throws Exception {
+    cleanupResources();
   }
 
   @ParameterizedTest
