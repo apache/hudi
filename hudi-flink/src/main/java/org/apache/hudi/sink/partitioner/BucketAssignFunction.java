@@ -41,8 +41,8 @@ import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.state.CheckpointListener;
-import org.apache.flink.api.common.state.MapState;
-import org.apache.flink.api.common.state.MapStateDescriptor;
+import org.apache.flink.api.common.state.ValueState;
+import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.configuration.Configuration;
@@ -57,6 +57,7 @@ import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.text.SimpleDateFormat;
 import java.util.List;
 
 /**
@@ -93,7 +94,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
    *   <li>If it does not, use the {@link BucketAssigner} to generate a new bucket ID</li>
    * </ul>
    */
-  private MapState<String, HoodieRecordGlobalLocation> indexState;
+  private ValueState<HoodieRecordGlobalLocation> indexState;
 
   /**
    * Bucket assigner to assign new bucket IDs or reuse existing ones.
@@ -111,7 +112,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   /**
    * State to book-keep which partition is loaded into the index state {@code indexState}.
    */
-  private MapState<String, Integer> partitionLoadState;
+  private ValueState<Boolean> partitionLoadState;
 
   /**
    * Used to create DELETE payload.
@@ -124,12 +125,18 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
    */
   private final boolean globalIndex;
 
+  private final double ttlTime;
+
+  private final SimpleDateFormat instantDateFormat;
+
   public BucketAssignFunction(Configuration conf) {
     this.conf = conf;
     this.isChangingRecords = WriteOperationType.isChangingRecords(
         WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)));
     this.bootstrapIndex = conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED);
     this.globalIndex = conf.getBoolean(FlinkOptions.INDEX_GLOBAL_ENABLED);
+    this.ttlTime = conf.getDouble(FlinkOptions.INDEX_STATE_TTL) * 24 * 60 * 60 * 1000;
+    this.instantDateFormat = new SimpleDateFormat("yyyyMMddHHmmss");
   }
 
   @Override
@@ -157,20 +164,18 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
 
   @Override
   public void initializeState(FunctionInitializationContext context) {
-    MapStateDescriptor<String, HoodieRecordGlobalLocation> indexStateDesc =
-        new MapStateDescriptor<>(
+    ValueStateDescriptor<HoodieRecordGlobalLocation> indexStateDesc =
+        new ValueStateDescriptor<>(
             "indexState",
-            Types.STRING,
             TypeInformation.of(HoodieRecordGlobalLocation.class));
-    double ttl = conf.getDouble(FlinkOptions.INDEX_STATE_TTL) * 24 * 60 * 60 * 1000;
-    if (ttl > 0) {
-      indexStateDesc.enableTimeToLive(StateTtlConfigUtil.createTtlConfig((long) ttl));
+    if (ttlTime > 0) {
+      indexStateDesc.enableTimeToLive(StateTtlConfigUtil.createTtlConfig((long) ttlTime));
     }
-    indexState = context.getKeyedStateStore().getMapState(indexStateDesc);
+    indexState = context.getKeyedStateStore().getState(indexStateDesc);
     if (bootstrapIndex) {
-      MapStateDescriptor<String, Integer> partitionLoadStateDesc =
-          new MapStateDescriptor<>("partitionLoadState", Types.STRING, Types.INT);
-      partitionLoadState = context.getKeyedStateStore().getMapState(partitionLoadStateDesc);
+      ValueStateDescriptor<Boolean> partitionLoadStateDesc =
+          new ValueStateDescriptor<>("partitionLoadState", Types.BOOLEAN);
+      partitionLoadState = context.getKeyedStateStore().getState(partitionLoadStateDesc);
     }
   }
 
@@ -188,15 +193,17 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
 
     // The dataset may be huge, thus the processing would block for long,
     // disabled by default.
-    if (bootstrapIndex && !partitionLoadState.contains(partitionPath)) {
+    if (bootstrapIndex && !Boolean.TRUE.equals(partitionLoadState.value())) {
       // If the partition records are never loaded, load the records first.
-      loadRecords(partitionPath);
+      loadRecords(partitionPath, recordKey);
+      // Mark the partition path as loaded.
+      partitionLoadState.update(true);
     }
     // Only changing records need looking up the index for the location,
     // append only records are always recognized as INSERT.
-    if (isChangingRecords && indexState.contains(recordKey)) {
+    HoodieRecordGlobalLocation oldLoc = indexState.value();
+    if (isChangingRecords && oldLoc != null) {
       // Set up the instant time as "U" to mark the bucket as an update bucket.
-      HoodieRecordGlobalLocation oldLoc = this.indexState.get(recordKey);
       if (!StreamerUtil.equal(oldLoc.getPartitionPath(), partitionPath)) {
         if (globalIndex) {
           // if partition path changes, emit a delete record for old partition path,
@@ -208,7 +215,14 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
           out.collect((O) deleteRecord);
         }
         location = getNewRecordLocation(partitionPath);
-        updateIndexState(recordKey, partitionPath, location);
+        // unfortunately there is no common method to judge HoodieRecord is delete or not
+        // boolean isDelete = ((BaseAvroPayload)record.getData()).recordBytes.length == 0;
+        // if(isDelete){
+        //  this.indexState.update(null);
+        // }else{
+        //  this.indexState.update(HoodieRecordGlobalLocation.fromLocal(partitionPath, location))
+        // }
+        this.indexState.update(HoodieRecordGlobalLocation.fromLocal(partitionPath, location));
       } else {
         location = oldLoc.toLocal("U");
         this.bucketAssigner.addUpdate(partitionPath, location.getFileId());
@@ -216,7 +230,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     } else {
       location = getNewRecordLocation(partitionPath);
       if (isChangingRecords) {
-        updateIndexState(recordKey, partitionPath, location);
+        this.indexState.update(HoodieRecordGlobalLocation.fromLocal(partitionPath, location));
       }
     }
     record.setCurrentLocation(location);
@@ -242,13 +256,6 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     return location;
   }
 
-  private void updateIndexState(
-      String recordKey,
-      String partitionPath,
-      HoodieRecordLocation localLoc) throws Exception {
-    this.indexState.put(recordKey, HoodieRecordGlobalLocation.fromLocal(partitionPath, localLoc));
-  }
-
   @Override
   public void notifyCheckpointComplete(long l) {
     // Refresh the table state when there are new commits.
@@ -261,7 +268,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
    * @param partitionPath The partition path
    * @throws Exception when error occurs for state update
    */
-  private void loadRecords(String partitionPath) throws Exception {
+  private void loadRecords(String partitionPath, String recordKey) throws Exception {
     LOG.info("Start loading records under partition {} into the index state", partitionPath);
     HoodieTable<?, ?, ?, ?> hoodieTable = bucketAssigner.getTable();
     BaseFileUtils fileUtils = BaseFileUtils.getInstance(hoodieTable.getBaseFileFormat());
@@ -270,34 +277,39 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     final int parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
     final int maxParallelism = getRuntimeContext().getMaxNumberOfParallelSubtasks();
     final int taskID = getRuntimeContext().getIndexOfThisSubtask();
+    final long currentTimeMillis = System.currentTimeMillis();
     for (HoodieBaseFile baseFile : latestBaseFiles) {
+      String commitTime = baseFile.getCommitTime();
+      long commitTimeLong = instantDateFormat.parse(commitTime).getTime();
+      // file was expired, needn't to fetch hoodieKeys
+      if (ttlTime > 0 && (commitTimeLong + ttlTime) < currentTimeMillis) {
+        continue;
+      }
       final List<HoodieKey> hoodieKeys;
       try {
         hoodieKeys =
             fileUtils.fetchRecordKeyPartitionPath(hadoopConf, new Path(baseFile.getPath()));
       } catch (Exception e) {
         // in case there was some empty parquet file when the pipeline
-        // crushes exceptionally.
-        LOG.error("Error when loading record keys from file: {}", baseFile);
-        continue;
+        // this exception is every important may cause duplication data , exception shouldn't be swallowed
+        LOG.error("Error when loading record keys from file: {}", baseFile, e);
+        throw e;
       }
-      hoodieKeys.forEach(hoodieKey -> {
+      hoodieKeys.stream().filter(hoodieKey -> recordKey.equals(hoodieKey.getRecordKey())).forEach(hoodieKey -> {
         try {
           // Reference: org.apache.flink.streaming.api.datastream.KeyedStream,
           // the input records is shuffled by record key
           boolean shouldLoad = KeyGroupRangeAssignment.assignKeyToParallelOperator(
               hoodieKey.getRecordKey(), maxParallelism, parallelism) == taskID;
           if (shouldLoad) {
-            this.indexState.put(hoodieKey.getRecordKey(),
-                new HoodieRecordGlobalLocation(hoodieKey.getPartitionPath(), baseFile.getCommitTime(), baseFile.getFileId()));
+            this.indexState.update(
+                new HoodieRecordGlobalLocation(hoodieKey.getPartitionPath(), commitTime, baseFile.getFileId()));
           }
         } catch (Exception e) {
           LOG.error("Error when putting record keys into the state from file: {}", baseFile);
         }
       });
     }
-    // Mark the partition path as loaded.
-    partitionLoadState.put(partitionPath, 0);
     LOG.info("Finish loading records under partition {} into the index state", partitionPath);
   }
 
@@ -309,7 +321,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   @VisibleForTesting
   public boolean isKeyInState(HoodieKey hoodieKey) {
     try {
-      return this.indexState.contains(hoodieKey.getRecordKey());
+      return this.indexState.value() != null;
     } catch (Exception e) {
       throw new HoodieException(e);
     }
