@@ -127,6 +127,28 @@ public class TestConfigurations {
         + ")";
   }
 
+  public static String getCollectSinkDDL(String tableName, TableSchema tableSchema) {
+    final StringBuilder builder = new StringBuilder("create table " + tableName + "(\n");
+    String[] fieldNames = tableSchema.getFieldNames();
+    DataType[] fieldTypes = tableSchema.getFieldDataTypes();
+    for (int i = 0; i < fieldNames.length; i++) {
+      builder.append("  `")
+              .append(fieldNames[i])
+              .append("` ")
+              .append(fieldTypes[i].toString());
+      if (i != fieldNames.length - 1) {
+        builder.append(",");
+      }
+      builder.append("\n");
+    }
+    final String withProps = ""
+            + ") with (\n"
+            + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "'\n"
+            + ")";
+    builder.append(withProps);
+    return builder.toString();
+  }
+
   public static final RowDataSerializer SERIALIZER = new RowDataSerializer(ROW_TYPE);
 
   public static Configuration getDefaultConf(String tablePath) {

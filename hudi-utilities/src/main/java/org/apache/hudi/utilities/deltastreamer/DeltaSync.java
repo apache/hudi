@@ -89,6 +89,7 @@ import java.util.stream.Collectors;
 
 import scala.collection.JavaConversions;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_PROP;
@@ -241,7 +242,7 @@ public class DeltaSync implements Serializable {
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
-          .setArchiveLogFolder("archived")
+          .setArchiveLogFolder(DEFAULT_ARCHIVELOG_FOLDER)
           .setPayloadClassName(cfg.payloadClassName)
           .setBaseFileFormat(cfg.baseFileFormat)
           .setPartitionColumns(partitionColumns)
@@ -334,7 +335,7 @@ public class DeltaSync implements Serializable {
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
-          .setArchiveLogFolder("archived")
+          .setArchiveLogFolder(DEFAULT_ARCHIVELOG_FOLDER)
           .setPayloadClassName(cfg.payloadClassName)
           .setBaseFileFormat(cfg.baseFileFormat)
           .setPartitionColumns(partitionColumns)

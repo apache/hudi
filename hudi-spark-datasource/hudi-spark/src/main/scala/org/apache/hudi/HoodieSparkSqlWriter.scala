@@ -52,6 +52,7 @@ import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ListBuffer
+import org.apache.hudi.common.table.HoodieTableConfig.{DEFAULT_ARCHIVELOG_FOLDER, HOODIE_ARCHIVELOG_FOLDER_PROP_NAME}
 
 private[hudi] object HoodieSparkSqlWriter {
 
@@ -114,7 +115,7 @@ private[hudi] object HoodieSparkSqlWriter {
       // Create the table if not present
       if (!tableExists) {
         val archiveLogFolder = parameters.getOrElse(
-          HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, "archived")
+          HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, DEFAULT_ARCHIVELOG_FOLDER)
 
         val partitionColumns = HoodieWriterUtils.getPartitionColumns(keyGenerator)
 
@@ -288,7 +289,7 @@ private[hudi] object HoodieSparkSqlWriter {
 
     if (!tableExists) {
       val archiveLogFolder = parameters.getOrElse(
-        HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, "archived")
+        HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, DEFAULT_ARCHIVELOG_FOLDER)
       val partitionColumns = HoodieWriterUtils.getPartitionColumns(parameters)
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(HoodieTableType.valueOf(tableType))
