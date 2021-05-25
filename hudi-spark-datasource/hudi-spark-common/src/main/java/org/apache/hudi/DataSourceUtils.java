@@ -44,7 +44,6 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex.IndexType;
-import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -78,22 +77,6 @@ public class DataSourceUtils {
     }
 
     throw new TableNotFoundException("Unable to find a hudi table for the user provided paths.");
-  }
-
-  /**
-   * Create a key generator class via reflection, passing in any configs needed.
-   * <p>
-   * If the class name of key generator is configured through the properties file, i.e., {@code props}, use the corresponding key generator class; otherwise, use the default key generator class
-   * specified in {@code DataSourceWriteOptions}.
-   */
-  public static KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
-    String keyGeneratorClass = props.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(),
-        DataSourceWriteOptions.DEFAULT_KEYGENERATOR_CLASS_OPT_VAL());
-    try {
-      return (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);
-    } catch (Throwable e) {
-      throw new IOException("Could not load key generator class " + keyGeneratorClass, e);
-    }
   }
 
   /**

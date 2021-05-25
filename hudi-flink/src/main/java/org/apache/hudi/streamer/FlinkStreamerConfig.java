@@ -21,10 +21,10 @@ package org.apache.hudi.streamer;
 import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 
 import com.beust.jcommander.Parameter;
 import org.apache.flink.configuration.Configuration;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -87,9 +87,12 @@ public class FlinkStreamerConfig extends Configuration {
       + "the `partitionPath` component of `HoodieKey`. Actual value obtained by invoking .toString(). By default `partitionpath`.")
   public String partitionPathField = "partitionpath";
 
-  @Parameter(names = {"--keygen-class"}, description = "Key generator class, that implements will extract the key out of incoming record.\n"
-      + "By default `SimpleAvroKeyGenerator`.")
-  public String keygenClass = SimpleAvroKeyGenerator.class.getName();
+  @Parameter(names = {"--keygen-class"}, description = "Key generator class, that implements will extract the key out of incoming record.")
+  public String keygenClass;
+
+  @Parameter(names = {"--keygen-type"}, description = "Key generator type, that implements will extract the key out of incoming record \n"
+      + "By default `SIMPLE`.")
+  public String keygenType = KeyGeneratorType.SIMPLE.name();
 
   @Parameter(names = {"--source-ordering-field"}, description = "Field within source record to decide how"
       + " to break ties between records with same key in input data. Default: 'ts' holding unix timestamp of record.")

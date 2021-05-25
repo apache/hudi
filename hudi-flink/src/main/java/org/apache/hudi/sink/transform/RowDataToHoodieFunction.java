@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.sink.utils.PayloadCreation;
 import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StreamerUtil;
@@ -36,6 +37,8 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.RowKind;
 
 import java.io.IOException;
+
+import static org.apache.hudi.util.StreamerUtil.flinkConf2TypedProperties;
 
 /**
  * Function that transforms RowData to HoodieRecord.
@@ -82,7 +85,9 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord<?
     super.open(parameters);
     this.avroSchema = StreamerUtil.getSourceSchema(this.config);
     this.converter = RowDataToAvroConverters.createConverter(this.rowType);
-    this.keyGenerator = StreamerUtil.createKeyGenerator(FlinkOptions.flatOptions(this.config));
+    this.keyGenerator =
+        HoodieAvroKeyGeneratorFactory
+            .createKeyGenerator(flinkConf2TypedProperties(FlinkOptions.flatOptions(this.config)));
     this.payloadCreation = PayloadCreation.instance(config);
   }
 
