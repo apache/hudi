@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Test;
 
 import static junit.framework.TestCase.assertEquals;
 
-public class TestNonpartitionedKeyGenerator extends KeyGeneratorTestUtilities {
+public class TestNonPartitionedKeyGenerator extends KeyGeneratorTestUtilities {
 
   private TypedProperties getCommonProps(boolean getComplexRecordKey) {
     TypedProperties properties = new TypedProperties();
@@ -69,13 +69,13 @@ public class TestNonpartitionedKeyGenerator extends KeyGeneratorTestUtilities {
 
   @Test
   public void testNullRecordKeyFields() {
-    Assertions.assertThrows(IllegalArgumentException.class, () -> new NonpartitionedKeyGenerator(getPropertiesWithoutRecordKeyProp()));
+    Assertions.assertThrows(IllegalArgumentException.class, () -> new NonPartitionedKeyGenerator(getPropertiesWithoutRecordKeyProp()));
   }
 
   @Test
   public void testNonNullPartitionPathFields() {
     TypedProperties properties = getPropertiesWithPartitionPathProp();
-    NonpartitionedKeyGenerator keyGenerator = new NonpartitionedKeyGenerator(properties);
+    NonPartitionedKeyGenerator keyGenerator = new NonPartitionedKeyGenerator(properties);
     GenericRecord record = getRecord();
     Row row = KeyGeneratorTestUtilities.getRow(record);
     Assertions.assertEquals(properties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY), "timestamp,ts_ms");
@@ -85,7 +85,7 @@ public class TestNonpartitionedKeyGenerator extends KeyGeneratorTestUtilities {
   @Test
   public void testNullPartitionPathFields() {
     TypedProperties properties = getPropertiesWithoutPartitionPathProp();
-    NonpartitionedKeyGenerator keyGenerator = new NonpartitionedKeyGenerator(properties);
+    NonPartitionedKeyGenerator keyGenerator = new NonPartitionedKeyGenerator(properties);
     GenericRecord record = getRecord();
     Row row = KeyGeneratorTestUtilities.getRow(record);
     Assertions.assertEquals(keyGenerator.getPartitionPath(row), "");
@@ -93,7 +93,7 @@ public class TestNonpartitionedKeyGenerator extends KeyGeneratorTestUtilities {
 
   @Test
   public void testWrongRecordKeyField() {
-    NonpartitionedKeyGenerator keyGenerator = new NonpartitionedKeyGenerator(getWrongRecordKeyFieldProps());
+    NonPartitionedKeyGenerator keyGenerator = new NonPartitionedKeyGenerator(getWrongRecordKeyFieldProps());
     Assertions.assertThrows(HoodieKeyException.class, () -> keyGenerator.getRecordKey(getRecord()));
     Assertions.assertThrows(HoodieKeyException.class, () -> keyGenerator.buildFieldPositionMapIfNeeded(KeyGeneratorTestUtilities.structType));
   }
@@ -103,7 +103,7 @@ public class TestNonpartitionedKeyGenerator extends KeyGeneratorTestUtilities {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "timestamp");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "");
-    NonpartitionedKeyGenerator keyGenerator = new NonpartitionedKeyGenerator(properties);
+    NonPartitionedKeyGenerator keyGenerator = new NonPartitionedKeyGenerator(properties);
     assertEquals(keyGenerator.getRecordKeyFields().size(), 1);
     assertEquals(keyGenerator.getPartitionPathFields().size(), 0);
 
@@ -120,7 +120,7 @@ public class TestNonpartitionedKeyGenerator extends KeyGeneratorTestUtilities {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "timestamp,driver");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "");
-    NonpartitionedKeyGenerator keyGenerator = new NonpartitionedKeyGenerator(properties);
+    NonPartitionedKeyGenerator keyGenerator = new NonPartitionedKeyGenerator(properties);
     assertEquals(keyGenerator.getRecordKeyFields().size(), 2);
     assertEquals(keyGenerator.getPartitionPathFields().size(), 0);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();

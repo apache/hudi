@@ -20,7 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
-import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
+import org.apache.hudi.keygen.NonPartitionedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
 
 import org.apache.flink.configuration.ConfigOption;
@@ -171,9 +171,9 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     // tweak the key gen class if possible
     final String[] partitions = conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",");
     if (partitions.length == 1 && partitions[0].equals("")) {
-      conf.setString(FlinkOptions.KEYGEN_CLASS, NonpartitionedAvroKeyGenerator.class.getName());
+      conf.setString(FlinkOptions.KEYGEN_CLASS, NonPartitionedAvroKeyGenerator.class.getName());
       LOG.info("Table option [{}] is reset to {} because this is a non-partitioned table",
-          FlinkOptions.KEYGEN_CLASS.key(), NonpartitionedAvroKeyGenerator.class.getName());
+          FlinkOptions.KEYGEN_CLASS.key(), NonPartitionedAvroKeyGenerator.class.getName());
       return;
     }
     final String[] pks = conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",");

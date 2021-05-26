@@ -27,7 +27,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.NonPartitionedExtractor;
-import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
+import org.apache.hudi.keygen.NonPartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 
 import com.beust.jcommander.JCommander;
@@ -153,7 +153,7 @@ public class HoodieJavaApp {
         .option(HoodieWriteConfig.TABLE_NAME, tableName)
         // Add Key Extractor
         .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(),
-            nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
+            nonPartitionedTable ? NonPartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName())
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_OPT_KEY(), "false")
         // This will remove any existing data at path below, and create a
@@ -179,7 +179,7 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
         .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(),
-            nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
+            nonPartitionedTable ? NonPartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP, "1")
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_OPT_KEY(), "false")
@@ -206,7 +206,7 @@ public class HoodieJavaApp {
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "_row_key")
         .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(),
-            nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
+            nonPartitionedTable ? NonPartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP, "1")
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_OPT_KEY(), "false")

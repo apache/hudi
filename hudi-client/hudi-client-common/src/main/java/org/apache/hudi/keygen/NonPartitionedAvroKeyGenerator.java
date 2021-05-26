@@ -29,12 +29,12 @@ import java.util.stream.Collectors;
 /**
  * Avro simple Key generator for unpartitioned Hive Tables.
  */
-public class NonpartitionedAvroKeyGenerator extends BaseKeyGenerator {
+public class NonPartitionedAvroKeyGenerator extends BaseKeyGenerator {
 
   private static final String EMPTY_PARTITION = "";
   private static final List<String> EMPTY_PARTITION_FIELD_LIST = new ArrayList<>();
 
-  public NonpartitionedAvroKeyGenerator(TypedProperties props) {
+  public NonPartitionedAvroKeyGenerator(TypedProperties props) {
     super(props);
     this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY)
         .split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());

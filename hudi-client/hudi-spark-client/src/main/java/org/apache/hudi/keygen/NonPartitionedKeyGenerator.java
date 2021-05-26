@@ -29,38 +29,38 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Simple Key generator for unpartitioned Hive Tables.
+ * Simple Key generator for unPartitioned Hive Tables.
  */
-public class NonpartitionedKeyGenerator extends BuiltinKeyGenerator {
+public class NonPartitionedKeyGenerator extends BuiltinKeyGenerator {
 
-  private final NonpartitionedAvroKeyGenerator nonpartitionedAvroKeyGenerator;
+  private final NonPartitionedAvroKeyGenerator nonPartitionedAvroKeyGenerator;
 
-  public NonpartitionedKeyGenerator(TypedProperties props) {
+  public NonPartitionedKeyGenerator(TypedProperties props) {
     super(props);
     this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY)
         .split(",")).map(String::trim).collect(Collectors.toList());
     this.partitionPathFields = Collections.emptyList();
-    nonpartitionedAvroKeyGenerator = new NonpartitionedAvroKeyGenerator(props);
+    nonPartitionedAvroKeyGenerator = new NonPartitionedAvroKeyGenerator(props);
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return nonpartitionedAvroKeyGenerator.getRecordKey(record);
+    return nonPartitionedAvroKeyGenerator.getRecordKey(record);
   }
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    return nonpartitionedAvroKeyGenerator.getPartitionPath(record);
+    return nonPartitionedAvroKeyGenerator.getPartitionPath(record);
   }
 
   @Override
   public List<String> getPartitionPathFields() {
-    return nonpartitionedAvroKeyGenerator.getPartitionPathFields();
+    return nonPartitionedAvroKeyGenerator.getPartitionPathFields();
   }
 
   @Override
   public String getPartitionPath(Row row) {
-    return nonpartitionedAvroKeyGenerator.getEmptyPartition();
+    return nonPartitionedAvroKeyGenerator.getEmptyPartition();
   }
 
 }

@@ -25,7 +25,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.NonPartitionedExtractor;
-import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
+import org.apache.hudi.keygen.NonPartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 
 import com.beust.jcommander.JCommander;
@@ -178,7 +178,7 @@ public class HoodieJavaGenerateApp {
         .option(HoodieWriteConfig.TABLE_NAME, tableName)
         // Add Key Extractor
         .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY(),
-            nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
+            nonPartitionedTable ? NonPartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName())
         .mode(commitType);
 

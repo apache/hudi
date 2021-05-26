@@ -25,7 +25,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.keygen.NonpartitionedKeyGenerator
+import org.apache.hudi.keygen.NonPartitionedKeyGenerator
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.log4j.LogManager
 import org.apache.spark.sql._
@@ -533,7 +533,7 @@ class TestMORDataSource extends HoodieClientTestBase {
       .option(RECORDKEY_FIELD_OPT_KEY, "id")
       .option(PRECOMBINE_FIELD_OPT_KEY, "version")
       .option(PARTITIONPATH_FIELD_OPT_KEY, "")
-      .option(KEYGENERATOR_CLASS_OPT_KEY, classOf[NonpartitionedKeyGenerator].getName)
+      .option(KEYGENERATOR_CLASS_OPT_KEY, classOf[NonPartitionedKeyGenerator].getName)
       .mode(SaveMode.Append)
       .save(basePath)
   }

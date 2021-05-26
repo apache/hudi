@@ -639,7 +639,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
 
   @Test def testSparkPartitonByWithNonpartitionedKeyGenerator() {
     // Empty string column
-    var writer = getDataFrameWriter(classOf[NonpartitionedKeyGenerator].getName)
+    var writer = getDataFrameWriter(classOf[NonPartitionedKeyGenerator].getName)
     writer.partitionBy("")
       .save(basePath)
 
@@ -648,7 +648,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertTrue(recordsReadDF.filter(col("_hoodie_partition_path") =!= lit("")).count() == 0)
 
     // Non-existent column
-    writer = getDataFrameWriter(classOf[NonpartitionedKeyGenerator].getName)
+    writer = getDataFrameWriter(classOf[NonPartitionedKeyGenerator].getName)
     writer.partitionBy("abc")
       .save(basePath)
 
