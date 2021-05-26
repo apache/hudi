@@ -18,46 +18,30 @@
 
 package org.apache.hudi.hadoop;
 
-import org.junit.jupiter.api.Test;
+import org.apache.hudi.common.table.HoodieTableGloballyConsistentMetaClient;
 
-public class TestHoodieParquetInputFormatWithGlobalConsistentTimeStamp {
-  //extends TestHoodieParquetInputFormat {
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
-  /*// Test parquet input format using both session property and timestamp property
-=======
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import java.io.IOException;
+import java.util.Arrays;
 
-@RunWith(Parameterized.class)
+//TODO jsbali Add more test cases to this
 public class TestHoodieParquetInputFormatWithGlobalConsistentTimeStamp
     extends TestHoodieParquetInputFormat {
 
-  // Test parquet input format using both session property and timestamp property
->>>>>>> 526596f2fc97b1b89b235e140e53ecadc5e3de04
-  private String timeStampAndSession;
-
-  public TestHoodieParquetInputFormatWithGlobalConsistentTimeStamp(String timeStampAndSession) {
-    this.timeStampAndSession = timeStampAndSession;
-  }
-<<<<<<< Updated upstream
-<<<<<<< HEAD
-*/
-  @Test
-  public void rooster() {}
-
-  /*@Parameterized.Parameters(name = "timeStampAndSession")
-=======
-
-  @Parameterized.Parameters(name = "timeStampAndSession")
->>>>>>> 526596f2fc97b1b89b235e140e53ecadc5e3de04
-  public static Collection<String[]> data() {
+  private static Iterable<Object[]> setTimeStampAndSession() {
     // 00 not needed thats the parent class unit test itself
     return Arrays.asList(new String[][] {{"01"}, {"10"}, {"11"}});
   }
 
-  @Override
-  public void setUp() {
+  @BeforeEach
+  public void setUp(){
     super.setUp();
+  }
+
+  public void setTimeStampAndSession(String timeStampAndSession) {
     switch (timeStampAndSession) {
       case "01":
         jobConf.setBoolean(HoodieTableGloballyConsistentMetaClient.DISABLE_HOODIE_GLOBALLY_CONSISTENT_READS,
@@ -78,6 +62,12 @@ public class TestHoodieParquetInputFormatWithGlobalConsistentTimeStamp
             String.format("unexpected timestampAndSession value: %s", timeStampAndSession));
 
     }
-<<<<<<< HEAD
-  }*/
+  }
+
+  @ParameterizedTest
+  @MethodSource({"setTimeStampAndSession"})
+  public void testIncrementalWithMultipleCommits(String timeStampAndSession) throws IOException {
+    setTimeStampAndSession(timeStampAndSession);
+    super.testIncrementalWithMultipleCommits();
+  }
 }
