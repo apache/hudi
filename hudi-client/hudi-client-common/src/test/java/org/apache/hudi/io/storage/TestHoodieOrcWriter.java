@@ -210,4 +210,3 @@ public class TestHoodieOrcWriter {
     assertEquals("driver2", ((BytesColumnVector)structColumnVector.fields[0]).toString(1));
   }
 }
-
