@@ -18,10 +18,12 @@
 
 package org.apache.hudi.streamer;
 
+import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperatorFactory;
+import org.apache.hudi.sink.compact.*;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
 import org.apache.hudi.util.AvroSchemaConverter;
@@ -76,7 +78,7 @@ public class HoodieFlinkStreamer {
     StreamWriteOperatorFactory<HoodieRecord> operatorFactory =
         new StreamWriteOperatorFactory<>(conf);
 
-    env.addSource(new FlinkKafkaConsumer<>(
+    DataStream<Object> pipeline = env.addSource(new FlinkKafkaConsumer<>(
         cfg.kafkaTopic,
         new JsonRowDataDeserializationSchema(
             rowType,
@@ -99,11 +101,27 @@ public class HoodieFlinkStreamer {
         .keyBy(record -> record.getCurrentLocation().getFileId())
         .transform("hoodie_stream_write", null, operatorFactory)
         .uid("uid_hoodie_stream_write")
-        .setParallelism(numWriteTask)
-        .addSink(new CleanFunction<>(conf))
-        .setParallelism(1)
-        .name("clean_commits")
-        .uid("uid_clean_commits");
+        .setParallelism(numWriteTask);
+        if (StreamerUtil.needsScheduleCompaction(conf)) {
+           pipeline.transform("compact_plan_generate",
+                  TypeInformation.of(CompactionPlanEvent.class),
+                  new CompactionPlanOperator(conf))
+                  .uid("uid_compact_plan_generate")
+                  .setParallelism(1) // plan generate must be singleton
+                  .keyBy(event -> event.getOperation().hashCode())
+                  .transform("compact_task",
+                          TypeInformation.of(CompactionCommitEvent.class),
+                          new KeyedProcessOperator<>(new CompactFunction(conf)))
+                  .setParallelism(conf.getInteger(FlinkOptions.COMPACTION_TASKS))
+                  .addSink(new CompactionCommitSink(conf))
+                  .name("compact_commit")
+                  .setParallelism(1); // compaction commit should be singleton
+        } else {
+           pipeline.addSink(new CleanFunction<>(conf))
+                  .setParallelism(1)
+                  .name("clean_commits").uid("uid_clean_commits");
+        }
+
 
     env.execute(cfg.targetTableName);
   }
