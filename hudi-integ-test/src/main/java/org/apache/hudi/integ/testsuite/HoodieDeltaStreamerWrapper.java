@@ -65,7 +65,7 @@ public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
     return upsert(WriteOperationType.UPSERT);
   }
 
-  public Pair<Pair<SchemaProvider, JavaRDD<HoodieRecord>>, Pair<String, String>> fetchSource() throws Exception {
+  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
     DeltaSync service = deltaSyncService.get().getDeltaSync();
     service.refreshTimeline();
     return service.readFromSource(service.getCommitTimelineOpt());

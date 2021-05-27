@@ -127,7 +127,7 @@ public class HoodieTestSuiteWriter {
     return false;
   }
 
-  public Pair<Pair<SchemaProvider, JavaRDD<HoodieRecord>>, Pair<String, String>> fetchSource() throws Exception {
+  public Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> fetchSource() throws Exception {
     return this.deltaStreamerWrapper.fetchSource();
   }
 
@@ -143,9 +143,9 @@ public class HoodieTestSuiteWriter {
     if (cfg.useDeltaStreamer) {
       return deltaStreamerWrapper.upsert(WriteOperationType.UPSERT);
     } else {
-      Pair<Pair<SchemaProvider, JavaRDD<HoodieRecord>>, Pair<String, String>> nextBatch = fetchSource();
-      lastCheckpoint = Option.of(nextBatch.getRight().getLeft());
-      return writeClient.upsert(nextBatch.getLeft().getRight(), instantTime.get());
+      Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
+      lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
+      return writeClient.upsert(nextBatch.getRight().getRight(), instantTime.get());
     }
   }
 
@@ -153,9 +153,9 @@ public class HoodieTestSuiteWriter {
     if (cfg.useDeltaStreamer) {
       return deltaStreamerWrapper.insert();
     } else {
-      Pair<Pair<SchemaProvider, JavaRDD<HoodieRecord>>, Pair<String, String>> nextBatch = fetchSource();
-      lastCheckpoint = Option.of(nextBatch.getRight().getLeft());
-      return writeClient.insert(nextBatch.getLeft().getRight(), instantTime.get());
+      Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
+      lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
+      return writeClient.insert(nextBatch.getRight().getRight(), instantTime.get());
     }
   }
 
@@ -163,9 +163,9 @@ public class HoodieTestSuiteWriter {
     if (cfg.useDeltaStreamer) {
       return deltaStreamerWrapper.bulkInsert();
     } else {
-      Pair<Pair<SchemaProvider, JavaRDD<HoodieRecord>>, Pair<String, String>> nextBatch = fetchSource();
-      lastCheckpoint = Option.of(nextBatch.getRight().getLeft());
-      return writeClient.bulkInsert(nextBatch.getLeft().getRight(), instantTime.get());
+      Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
+      lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
+      return writeClient.bulkInsert(nextBatch.getRight().getRight(), instantTime.get());
     }
   }
 
