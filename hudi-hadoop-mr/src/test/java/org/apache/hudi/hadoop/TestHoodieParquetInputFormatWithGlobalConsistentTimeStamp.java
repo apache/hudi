@@ -37,7 +37,7 @@ public class TestHoodieParquetInputFormatWithGlobalConsistentTimeStamp
   }
 
   @BeforeEach
-  public void setUp(){
+  public void setUp() {
     super.setUp();
   }
 
