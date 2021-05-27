@@ -23,7 +23,11 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperatorFactory;
-import org.apache.hudi.sink.compact.*;
+import org.apache.hudi.sink.compact.CompactionPlanOperator;
+import org.apache.hudi.sink.compact.CompactionPlanEvent;
+import org.apache.hudi.sink.compact.CompactionCommitEvent;
+import org.apache.hudi.sink.compact.CompactFunction;
+import org.apache.hudi.sink.compact.CompactionCommitSink;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
 import org.apache.hudi.util.AvroSchemaConverter;
@@ -102,25 +106,25 @@ public class HoodieFlinkStreamer {
         .transform("hoodie_stream_write", null, operatorFactory)
         .uid("uid_hoodie_stream_write")
         .setParallelism(numWriteTask);
-        if (StreamerUtil.needsScheduleCompaction(conf)) {
-           pipeline.transform("compact_plan_generate",
-                  TypeInformation.of(CompactionPlanEvent.class),
-                  new CompactionPlanOperator(conf))
-                  .uid("uid_compact_plan_generate")
-                  .setParallelism(1) // plan generate must be singleton
-                  .keyBy(event -> event.getOperation().hashCode())
-                  .transform("compact_task",
-                          TypeInformation.of(CompactionCommitEvent.class),
-                          new KeyedProcessOperator<>(new CompactFunction(conf)))
-                  .setParallelism(conf.getInteger(FlinkOptions.COMPACTION_TASKS))
-                  .addSink(new CompactionCommitSink(conf))
-                  .name("compact_commit")
-                  .setParallelism(1); // compaction commit should be singleton
-        } else {
-           pipeline.addSink(new CleanFunction<>(conf))
-                  .setParallelism(1)
-                  .name("clean_commits").uid("uid_clean_commits");
-        }
+    if (StreamerUtil.needsScheduleCompaction(conf)) {
+        pipeline.transform("compact_plan_generate",
+              TypeInformation.of(CompactionPlanEvent.class),
+              new CompactionPlanOperator(conf))
+              .uid("uid_compact_plan_generate")
+              .setParallelism(1) // plan generate must be singleton
+              .keyBy(event -> event.getOperation().hashCode())
+              .transform("compact_task",
+                      TypeInformation.of(CompactionCommitEvent.class),
+                      new KeyedProcessOperator<>(new CompactFunction(conf)))
+              .setParallelism(conf.getInteger(FlinkOptions.COMPACTION_TASKS))
+              .addSink(new CompactionCommitSink(conf))
+              .name("compact_commit")
+              .setParallelism(1); // compaction commit should be singleton
+    } else {
+       pipeline.addSink(new CleanFunction<>(conf))
+               .setParallelism(1)
+              .name("clean_commits").uid("uid_clean_commits");
+    }
 
 
     env.execute(cfg.targetTableName);
