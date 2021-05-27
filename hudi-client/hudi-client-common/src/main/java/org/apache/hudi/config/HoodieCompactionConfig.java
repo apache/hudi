@@ -52,6 +52,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   public static final String INLINE_COMPACT_TRIGGER_STRATEGY_PROP = "hoodie.compact.inline.trigger.strategy";
   public static final String CLEANER_FILE_VERSIONS_RETAINED_PROP = "hoodie.cleaner.fileversions.retained";
   public static final String CLEANER_COMMITS_RETAINED_PROP = "hoodie.cleaner.commits.retained";
+  public static final String CLEANER_HOURS_RETAINED_PROP = "hoodie.cleaner.hours.retained";
   public static final String CLEANER_INCREMENTAL_MODE = "hoodie.cleaner.incremental.mode";
   public static final String MAX_COMMITS_TO_KEEP_PROP = "hoodie.keep.max.commits";
   public static final String MIN_COMMITS_TO_KEEP_PROP = "hoodie.keep.min.commits";
@@ -120,6 +121,7 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_INLINE_COMPACT_TRIGGER_STRATEGY = CompactionTriggerStrategy.NUM_COMMITS.name();
   private static final String DEFAULT_CLEANER_FILE_VERSIONS_RETAINED = "3";
   private static final String DEFAULT_CLEANER_COMMITS_RETAINED = "10";
+  private static final String DEFAULT_CLEANER_HOURS_RETAINED = "5";
   private static final String DEFAULT_MAX_COMMITS_TO_KEEP = "30";
   private static final String DEFAULT_MIN_COMMITS_TO_KEEP = "20";
   private static final String DEFAULT_COMMITS_ARCHIVAL_BATCH_SIZE = String.valueOf(10);
@@ -305,6 +307,8 @@ public class HoodieCompactionConfig extends DefaultHoodieConfig {
           CLEANER_FILE_VERSIONS_RETAINED_PROP, DEFAULT_CLEANER_FILE_VERSIONS_RETAINED);
       setDefaultOnCondition(props, !props.containsKey(CLEANER_COMMITS_RETAINED_PROP), CLEANER_COMMITS_RETAINED_PROP,
           DEFAULT_CLEANER_COMMITS_RETAINED);
+      setDefaultOnCondition(props, !props.containsKey(CLEANER_HOURS_RETAINED_PROP), CLEANER_HOURS_RETAINED_PROP,
+          DEFAULT_CLEANER_HOURS_RETAINED);
       setDefaultOnCondition(props, !props.containsKey(MAX_COMMITS_TO_KEEP_PROP), MAX_COMMITS_TO_KEEP_PROP,
           DEFAULT_MAX_COMMITS_TO_KEEP);
       setDefaultOnCondition(props, !props.containsKey(MIN_COMMITS_TO_KEEP_PROP), MIN_COMMITS_TO_KEEP_PROP,
