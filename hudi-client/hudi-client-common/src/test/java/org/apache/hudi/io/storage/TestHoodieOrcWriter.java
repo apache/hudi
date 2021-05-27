@@ -153,11 +153,12 @@ public class TestHoodieOrcWriter {
     writer.writeAvro("key1", record);
     record.put("_row_key", "key2");
     record.put("time", "1");
+    record.put("number", null);
     innerRecord.put("driver_name", "driver2");
     innerRecord.put("list", Collections.singletonList(2));
     innerRecord.put("map", Collections.singletonMap("key2", "value2"));
     record.put("driver", innerRecord);
-    writer.writeAvro("ke2", record);
+    writer.writeAvro("key2", record);
     writer.close();
 
     Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(new Configuration()));
@@ -188,7 +189,7 @@ public class TestHoodieOrcWriter {
     innerRecord.put("list", Collections.singletonList(2));
     innerRecord.put("map", Collections.singletonMap("key2", "value2"));
     record.put("driver", innerRecord);
-    writer.writeAvro("ke2", record);
+    writer.writeAvro("key2", record);
     writer.close();
 
     Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(new Configuration()));
