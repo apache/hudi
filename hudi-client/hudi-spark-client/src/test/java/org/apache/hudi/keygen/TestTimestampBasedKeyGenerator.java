@@ -23,11 +23,11 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.exception.HoodieKeyGeneratorException;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.exception.HoodieKeyGeneratorException;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
 import org.apache.spark.sql.types.StructType;
@@ -223,7 +223,7 @@ public class TestTimestampBasedKeyGenerator {
     baseRecord.put("createTime", "2020-04-01T13:01:33.428Z");
     properties = this.getBaseKeyConfig(
         "DATE_STRING",
-        "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+        "yyyy-MM-dd'T'HH:mm:ss.SSSX",
         "",
         "",
         "yyyyMMddHH",
@@ -241,7 +241,7 @@ public class TestTimestampBasedKeyGenerator {
     baseRecord.put("createTime", "2020-04-01T13:01:33.428Z");
     properties = this.getBaseKeyConfig(
         "DATE_STRING",
-        "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+        "yyyy-MM-dd'T'HH:mm:ss.SSSX",
         "",
         "",
         "yyyyMMddHH",
@@ -259,7 +259,7 @@ public class TestTimestampBasedKeyGenerator {
     baseRecord.put("createTime", "2020-04-01T13:01:33.428Z");
     properties = this.getBaseKeyConfig(
         "DATE_STRING",
-        "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+        "yyyy-MM-dd'T'HH:mm:ssX,yyyy-MM-dd'T'HH:mm:ss.SSSX",
         "",
         "",
         "yyyyMMddHH",
@@ -277,7 +277,7 @@ public class TestTimestampBasedKeyGenerator {
     baseRecord.put("createTime", "2020-04-01T13:01:33Z");
     properties = this.getBaseKeyConfig(
         "DATE_STRING",
-        "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+        "yyyy-MM-dd'T'HH:mm:ssX,yyyy-MM-dd'T'HH:mm:ss.SSSX",
         "",
         "",
         "yyyyMMddHH",
@@ -295,7 +295,7 @@ public class TestTimestampBasedKeyGenerator {
     baseRecord.put("createTime", "2020-04-01T13:01:33-05:00");
     properties = this.getBaseKeyConfig(
         "DATE_STRING",
-        "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+        "yyyy-MM-dd'T'HH:mm:ssXXX,yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
         "",
         "",
         "yyyyMMddHH",
@@ -313,7 +313,7 @@ public class TestTimestampBasedKeyGenerator {
     baseRecord.put("createTime", "2020-04-01T13:01:33.123-05:00");
     properties = this.getBaseKeyConfig(
         "DATE_STRING",
-        "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+        "yyyy-MM-dd'T'HH:mm:ssXXX,yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
         "",
         "",
         "yyyyMMddHH",
@@ -331,11 +331,11 @@ public class TestTimestampBasedKeyGenerator {
     baseRecord.put("createTime", "2020-04-01T13:01:33.123Z");
     properties = this.getBaseKeyConfig(
         "DATE_STRING",
-        "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+        "yyyy-MM-dd'T'HH:mm:ssX,yyyy-MM-dd'T'HH:mm:ss.SSSX",
         "",
         "",
         "yyyyMMddHH",
-        "EST");
+        "EST5EDT");
     BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
     HoodieKey hk1 = keyGen.getKey(baseRecord);
     Assertions.assertEquals("2020040109", hk1.getPartitionPath());
@@ -349,7 +349,7 @@ public class TestTimestampBasedKeyGenerator {
     baseRecord.put("createTime", "2020-04-01 13:01:33.123-05:00");
     properties = this.getBaseKeyConfig(
         "DATE_STRING",
-        "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+        "yyyy-MM-dd'T'HH:mm:ssXXX,yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
         "",
         "",
         "yyyyMMddHH",
@@ -366,7 +366,7 @@ public class TestTimestampBasedKeyGenerator {
     baseRecord.put("createTime", "20200401");
     properties = this.getBaseKeyConfig(
         "DATE_STRING",
-        "yyyy-MM-dd'T'HH:mm:ssZ,yyyy-MM-dd'T'HH:mm:ss.SSSZ,yyyyMMdd",
+        "yyyy-MM-dd'T'HH:mm:ssX,yyyy-MM-dd'T'HH:mm:ss.SSSX,yyyyMMdd",
         "",
         "UTC",
         "MM/dd/yyyy",
