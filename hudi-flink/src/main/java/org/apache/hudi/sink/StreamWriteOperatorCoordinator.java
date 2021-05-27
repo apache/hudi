@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.BatchWriteSuccessEvent;
+import org.apache.hudi.sink.event.ResponseEvent;
 import org.apache.hudi.sink.utils.CoordinatorExecutor;
 import org.apache.hudi.sink.utils.HiveSyncContext;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
@@ -38,6 +39,7 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.OperatorID;
+import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.jetbrains.annotations.Nullable;
@@ -206,11 +208,29 @@ public class StreamWriteOperatorCoordinator
             }
             // start new instant.
             startInstant();
+
+            sendEventToWriter(context, true);
           }
         }, "commits the instant %s", this.instant
     );
     // sync Hive if is enabled
     syncHiveIfEnabled();
+  }
+
+  @Override
+  public void notifyCheckpointAborted(long checkpointId) {
+    executor.execute(
+         () -> {
+           sendEventToWriter(context, false);
+         }, "failed to checkpoint %s", checkpointId
+    );
+  }
+
+  private void sendEventToWriter(Context context, boolean committed) throws Exception {
+    for (int i = 0; i < context.currentParallelism(); i++) {
+      CompletableFuture<Acknowledge> future = context.sendEvent(new ResponseEvent(committed), i);
+      future.get();
+    }
   }
 
   private void syncHiveIfEnabled() {
