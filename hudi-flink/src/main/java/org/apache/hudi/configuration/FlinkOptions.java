@@ -18,6 +18,7 @@
 
 package org.apache.hudi.configuration;
 
+import com.sun.org.apache.xpath.internal.operations.Bool;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -304,6 +305,24 @@ public class FlinkOptions {
       .intType()
       .defaultValue(100) // default 100 MB
       .withDescription("Max memory in MB for merge, default 100MB");
+
+  public static final ConfigOption<Boolean> DETECT_INSTANT_ENABLE = ConfigOptions
+          .key("write.detect.instant.enable")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("Whether to detect new instant from hoodie table when checkpoint not complete and memory size larger than maxBufferSize, default false");
+
+  public static final ConfigOption<Long> DETECT_INSTANT_INTERVAL_MS = ConfigOptions
+       .key("write.detect.instant.interval.ms")
+       .longType()
+       .defaultValue(100L)
+       .withDescription("Flag to indicate how long (by millisecond) to retry detect a new instant");
+
+  public static final ConfigOption<Long> DETECT_INSTANT_TIMEOUT_SECONDS = ConfigOptions
+       .key("write.detect.instant.timeout.seconds")
+       .longType()
+       .defaultValue(300L) // default 5min
+       .withDescription("Timeout for detect new instant");
 
   // ------------------------------------------------------------------------
   //  Compaction Options

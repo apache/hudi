@@ -30,6 +30,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.BatchWriteSuccessEvent;
+import org.apache.hudi.sink.event.InitWriterEvent;
+import org.apache.hudi.sink.event.ResponseEvent;
 import org.apache.hudi.sink.utils.CoordinatorExecutor;
 import org.apache.hudi.sink.utils.HiveSyncContext;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
@@ -38,6 +40,7 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.OperatorID;
+import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.jetbrains.annotations.Nullable;
@@ -100,6 +103,11 @@ public class StreamWriteOperatorCoordinator
   private transient BatchWriteSuccessEvent[] eventBuffer;
 
   /**
+   * Event buffer for init. When all the elements are non-null then we can commit it and start new instant.
+   */
+  private transient InitWriterEvent[] initEventBuffer;
+
+  /**
    * Task number of the operator.
    */
   private final int parallelism;
@@ -152,8 +160,6 @@ public class StreamWriteOperatorCoordinator
     this.tableState = TableState.create(conf);
     // init table, create it if not exists.
     initTableIfNotExists(this.conf);
-    // start a new instant
-    startInstant();
     // start the executor
     this.executor = new CoordinatorExecutor(this.context, LOG);
     // start the executor if required
@@ -206,11 +212,60 @@ public class StreamWriteOperatorCoordinator
             }
             // start new instant.
             startInstant();
+
+            sendEventToWriter(context, true);
           }
         }, "commits the instant %s", this.instant
     );
     // sync Hive if is enabled
     syncHiveIfEnabled();
+  }
+
+  @Override
+  public void notifyCheckpointAborted(long checkpointId) {
+    executor.execute(
+         () -> {
+           sendEventToWriter(context, false);
+         }, "failed to checkpoint %s", checkpointId
+    );
+  }
+
+  private void startInit() {
+    executor.execute(() -> {
+      String actionType = CommitUtils.getCommitActionType(
+              WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)),
+              HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)));
+      String pendingInstant = writeClient.getLastPendingInstant(actionType);
+
+      if (pendingInstant == null) {
+        startInstant();
+        sendEventToWriter(context, false);
+        return;
+      }
+
+      List<WriteStatus> writeResults = Arrays.stream(initEventBuffer)
+          .filter(Objects::nonNull)
+          .filter(initEvent -> initEvent.getInstant() != null && Objects.equals(initEvent.getInstant(), pendingInstant))
+          .map(InitWriterEvent::getWriteStatuses)
+          .flatMap(Collection::stream)
+          .collect(Collectors.toList());
+
+      if (writeResults.size() > 0) {
+          doCommit(writeResults);
+      }
+
+      initEventBuffer = new InitWriterEvent[parallelism];
+
+      startInstant();
+      sendEventToWriter(context, true);
+    }, "init success.");
+  }
+
+  private void sendEventToWriter(Context context, boolean committed) throws Exception {
+    for (int i = 0; i < context.currentParallelism(); i++) {
+      CompletableFuture<Acknowledge> future = context.sendEvent(new ResponseEvent(committed), i);
+      future.get();
+    }
   }
 
   private void syncHiveIfEnabled() {
@@ -244,27 +299,18 @@ public class StreamWriteOperatorCoordinator
   public void handleEventFromOperator(int i, OperatorEvent operatorEvent) {
     executor.execute(
         () -> {
+          if (operatorEvent instanceof BatchWriteSuccessEvent) {
+            handleBatchWriteSuccessEvent((BatchWriteSuccessEvent) operatorEvent);
+            return;
+          }
+
+          if (operatorEvent instanceof InitWriterEvent) {
+            handleInitWriterEvent((InitWriterEvent) operatorEvent);
+            return;
+          }
+
           // no event to handle
-          ValidationUtils.checkState(operatorEvent instanceof BatchWriteSuccessEvent,
-              "The coordinator can only handle BatchWriteSuccessEvent");
-          BatchWriteSuccessEvent event = (BatchWriteSuccessEvent) operatorEvent;
-          // the write task does not block after checkpointing(and before it receives a checkpoint success event),
-          // if it checkpoints succeed then flushes the data buffer again before this coordinator receives a checkpoint
-          // success event, the data buffer would flush with an older instant time.
-          ValidationUtils.checkState(
-              HoodieTimeline.compareTimestamps(instant, HoodieTimeline.GREATER_THAN_OR_EQUALS, event.getInstantTime()),
-              String.format("Receive an unexpected event for instant %s from task %d",
-                  event.getInstantTime(), event.getTaskID()));
-          if (this.eventBuffer[event.getTaskID()] != null) {
-            this.eventBuffer[event.getTaskID()].mergeWith(event);
-          } else {
-            this.eventBuffer[event.getTaskID()] = event;
-          }
-          if (event.isEndInput() && allEventsReceived()) {
-            // start to commit the instant.
-            commitInstant();
-            // no compaction scheduling for batch mode
-          }
+          throw new IllegalStateException("The coordinator can only handle BatchWriteSuccessEvent and InitWriterEvent.");
         }, "handle write success event for instant %s", this.instant
     );
   }
@@ -296,6 +342,45 @@ public class StreamWriteOperatorCoordinator
   private boolean allEventsReceived() {
     return Arrays.stream(eventBuffer)
         .allMatch(event -> event != null && event.isReady(this.instant));
+  }
+
+  /** Checks the init event all received. */
+  private boolean allInitEventsReceived() {
+    return Arrays.stream(initEventBuffer)
+            .allMatch(Objects::nonNull);
+  }
+
+  private void handleBatchWriteSuccessEvent(BatchWriteSuccessEvent event) {
+    // the write task does not block after checkpointing(and before it receives a checkpoint success event),
+    // if it checkpoints succeed then flushes the data buffer again before this coordinator receives a checkpoint
+    // success event, the data buffer would flush with an older instant time.
+    ValidationUtils.checkState(
+            HoodieTimeline.compareTimestamps(instant, HoodieTimeline.GREATER_THAN_OR_EQUALS, event.getInstantTime()),
+            String.format("Receive an unexpected event for instant %s from task %d",
+                    event.getInstantTime(), event.getTaskID()));
+
+    if (this.eventBuffer[event.getTaskID()] != null) {
+      this.eventBuffer[event.getTaskID()].mergeWith(event);
+    } else {
+      this.eventBuffer[event.getTaskID()] = event;
+    }
+    if (event.isEndInput() && allEventsReceived()) {
+      // start to commit the instant.
+      commitInstant();
+      // no compaction scheduling for batch mode
+    }
+  }
+
+  private void handleInitWriterEvent(InitWriterEvent event) {
+    if (this.initEventBuffer == null) {
+      initEventBuffer = new InitWriterEvent[this.parallelism];
+    }
+
+    this.initEventBuffer[event.getTaskID()] = event;
+
+    if (allInitEventsReceived()) {
+      startInit();
+    }
   }
 
   /**

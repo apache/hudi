@@ -43,7 +43,7 @@ public class StreamWriteOperator<I>
 
   @Override
   public void handleOperatorEvent(OperatorEvent operatorEvent) {
-    // do nothing
+    sinkFunction.handleOperatorEvent(operatorEvent);
   }
 
   void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
