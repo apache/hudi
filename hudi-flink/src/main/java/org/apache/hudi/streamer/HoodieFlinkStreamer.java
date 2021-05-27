@@ -107,7 +107,7 @@ public class HoodieFlinkStreamer {
         .uid("uid_hoodie_stream_write")
         .setParallelism(numWriteTask);
     if (StreamerUtil.needsScheduleCompaction(conf)) {
-        pipeline.transform("compact_plan_generate",
+      pipeline.transform("compact_plan_generate",
               TypeInformation.of(CompactionPlanEvent.class),
               new CompactionPlanOperator(conf))
               .uid("uid_compact_plan_generate")
@@ -121,11 +121,10 @@ public class HoodieFlinkStreamer {
               .name("compact_commit")
               .setParallelism(1); // compaction commit should be singleton
     } else {
-       pipeline.addSink(new CleanFunction<>(conf))
-               .setParallelism(1)
+      pipeline.addSink(new CleanFunction<>(conf))
+              .setParallelism(1)
               .name("clean_commits").uid("uid_clean_commits");
     }
-
 
     env.execute(cfg.targetTableName);
   }
