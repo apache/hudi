@@ -23,6 +23,7 @@ import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelect
 import org.apache.hudi.client.bootstrap.translator.IdentityBootstrapPartitionPathTranslator;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.DefaultHoodieConfig;
+import org.apache.hudi.common.table.HoodieTableConfig;
 
 import java.io.File;
 import java.io.FileReader;
@@ -135,7 +136,7 @@ public class HoodieBootstrapConfig extends DefaultHoodieConfig {
           BOOTSTRAP_MODE_SELECTOR_REGEX_MODE, DEFAULT_BOOTSTRAP_MODE_SELECTOR_REGEX_MODE);
       BootstrapMode.valueOf(props.getProperty(BOOTSTRAP_MODE_SELECTOR_REGEX_MODE));
       setDefaultOnCondition(props, !props.containsKey(BOOTSTRAP_INDEX_CLASS_PROP), BOOTSTRAP_INDEX_CLASS_PROP,
-          DEFAULT_BOOTSTRAP_INDEX_CLASS);
+          HoodieTableConfig.getDefaultBootstrapIndexClass(props));
       setDefaultOnCondition(props, !props.containsKey(FULL_BOOTSTRAP_INPUT_PROVIDER), FULL_BOOTSTRAP_INPUT_PROVIDER,
           DEFAULT_FULL_BOOTSTRAP_INPUT_PROVIDER);
       return config;

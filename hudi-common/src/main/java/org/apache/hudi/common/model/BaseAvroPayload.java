@@ -37,7 +37,7 @@ public abstract class BaseAvroPayload implements Serializable {
   /**
    * For purposes of preCombining.
    */
-  protected final Comparable orderingVal;
+  public final Comparable orderingVal;
 
   /**
    * Instantiate {@link BaseAvroPayload}.

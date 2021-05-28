@@ -166,10 +166,12 @@ public class MarkerFiles implements Serializable {
 
   public List<String> allMarkerFilePaths() throws IOException {
     List<String> markerFiles = new ArrayList<>();
-    FSUtils.processFiles(fs, markerDirPath.toString(), fileStatus -> {
-      markerFiles.add(stripMarkerFolderPrefix(fileStatus.getPath().toString()));
-      return true;
-    }, false);
+    if (doesMarkerDirExist()) {
+      FSUtils.processFiles(fs, markerDirPath.toString(), fileStatus -> {
+        markerFiles.add(stripMarkerFolderPrefix(fileStatus.getPath().toString()));
+        return true;
+      }, false);
+    }
     return markerFiles;
   }
 
@@ -187,6 +189,46 @@ public class MarkerFiles implements Serializable {
    * The marker path will be <base-path>/.hoodie/.temp/<instant_ts>/2019/04/25/filename.marker.writeIOType.
    */
   public Path create(String partitionPath, String dataFileName, IOType type) {
+    Path markerPath = getMarkerPath(partitionPath, dataFileName, type);
+    try {
+      LOG.info("Creating Marker Path=" + markerPath);
+      fs.create(markerPath, false).close();
+    } catch (IOException e) {
+      throw new HoodieException("Failed to create marker file " + markerPath, e);
+    }
+    return markerPath;
+  }
+
+  /**
+   * The marker path will be <base-path>/.hoodie/.temp/<instant_ts>/2019/04/25/filename.marker.writeIOType.
+   *
+   * @return true if the marker file creates successfully,
+   * false if it already exists
+   */
+  public boolean createIfNotExists(String partitionPath, String dataFileName, IOType type) {
+    Path markerPath = getMarkerPath(partitionPath, dataFileName, type);
+    try {
+      if (fs.exists(markerPath)) {
+        LOG.warn("Marker Path=" + markerPath + " already exists, cancel creation");
+        return false;
+      }
+      LOG.info("Creating Marker Path=" + markerPath);
+      fs.create(markerPath, false).close();
+    } catch (IOException e) {
+      throw new HoodieException("Failed to create marker file " + markerPath, e);
+    }
+    return true;
+  }
+
+  /**
+   * Returns the marker path. Would create the partition path first if not exists.
+   *
+   * @param partitionPath The partition path
+   * @param dataFileName  The data file name
+   * @param type          The IO type
+   * @return path of the marker file
+   */
+  private Path getMarkerPath(String partitionPath, String dataFileName, IOType type) {
     Path path = FSUtils.getPartitionPath(markerDirPath, partitionPath);
     try {
       if (!fs.exists(path)) {
@@ -196,14 +238,7 @@ public class MarkerFiles implements Serializable {
       throw new HoodieIOException("Failed to make dir " + path, e);
     }
     String markerFileName = String.format("%s%s.%s", dataFileName, HoodieTableMetaClient.MARKER_EXTN, type.name());
-    Path markerPath = new Path(path, markerFileName);
-    try {
-      LOG.info("Creating Marker Path=" + markerPath);
-      fs.create(markerPath, false).close();
-    } catch (IOException e) {
-      throw new HoodieException("Failed to create marker file " + markerPath, e);
-    }
-    return markerPath;
+    return new Path(path, markerFileName);
   }
 
 }

@@ -106,9 +106,16 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                            TaskContextSupplier taskContextSupplier) {
+    this(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier,
+        hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).get());
+  }
+
+  public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                           Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                           TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
     init(fileId, recordItr);
-    init(fileId, partitionPath, hoodieTable.getBaseFileOnlyView().getLatestBaseFile(partitionPath, fileId).get());
+    init(fileId, partitionPath, baseFile);
   }
 
   /**
@@ -133,13 +140,6 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   }
 
   /**
-   * Returns the data file name.
-   */
-  protected String generatesDataFileName() {
-    return FSUtils.makeDataFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension());
-  }
-
-  /**
    * Extract old file path, initialize StorageWriter and WriteStatus.
    */
   private void init(String fileId, String partitionPath, HoodieBaseFile baseFileToMerge) {
@@ -155,11 +155,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
           new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
       partitionMetadata.trySave(getPartitionId());
 
-      oldFilePath = new Path(config.getBasePath() + "/" + partitionPath + "/" + latestValidFilePath);
-      String newFileName = generatesDataFileName();
-      String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
-          + newFileName).toString();
-      newFilePath = new Path(config.getBasePath(), relativePath);
+      String newFileName = FSUtils.makeDataFileName(instantTime, writeToken, fileId, hoodieTable.getBaseFileExtension());
+      makeOldAndNewFilePaths(partitionPath, latestValidFilePath, newFileName);
 
       LOG.info(String.format("Merging new data into oldPath %s, as newPath %s", oldFilePath.toString(),
           newFilePath.toString()));
@@ -183,6 +180,15 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     }
   }
 
+  protected void setWriteStatusPath() {
+    writeStatus.getStat().setPath(new Path(config.getBasePath()), newFilePath);
+  }
+
+  protected void makeOldAndNewFilePaths(String partitionPath, String oldFileName, String newFileName) {
+    oldFilePath = makeNewFilePath(partitionPath, oldFileName);
+    newFilePath = makeNewFilePath(partitionPath, newFileName);
+  }
+
   /**
    * Initialize a spillable map for incoming records.
    */
@@ -199,6 +205,13 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   }
 
   /**
+   * Whether there is need to update the record location.
+   */
+  boolean needsUpdateLocation() {
+    return true;
+  }
+
+  /**
    * Load the new incoming records in a map and return partitionPath.
    */
   protected void init(String fileId, Iterator<HoodieRecord<T>> newRecordsItr) {
@@ -206,9 +219,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     while (newRecordsItr.hasNext()) {
       HoodieRecord<T> record = newRecordsItr.next();
       // update the new location of the record, so we know where to find it next
-      record.unseal();
-      record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
-      record.seal();
+      if (needsUpdateLocation()) {
+        record.unseal();
+        record.setNewLocation(new HoodieRecordLocation(instantTime, fileId));
+        record.seal();
+      }
       // NOTE: Once Records are added to map (spillable-map), DO NOT change it as they won't persist
       keyToNewRecords.put(record.getRecordKey(), record);
     }

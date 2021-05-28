@@ -44,8 +44,11 @@ class TestStreamingSource extends StreamTest {
   test("test cow stream source") {
     withTempDir { inputDir =>
       val tablePath = s"${inputDir.getCanonicalPath}/test_cow_stream"
-      HoodieTableMetaClient.initTableType(spark.sessionState.newHadoopConf(), tablePath,
-        COPY_ON_WRITE, getTableName(tablePath), DataSourceWriteOptions.DEFAULT_PAYLOAD_OPT_VAL)
+      HoodieTableMetaClient.withPropertyBuilder()
+          .setTableType(COPY_ON_WRITE)
+          .setTableName(getTableName(tablePath))
+          .setPayloadClassName(DataSourceWriteOptions.DEFAULT_PAYLOAD_OPT_VAL)
+          .initTable(spark.sessionState.newHadoopConf(), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
       val df = spark.readStream
@@ -91,8 +94,11 @@ class TestStreamingSource extends StreamTest {
   test("test mor stream source") {
     withTempDir { inputDir =>
       val tablePath = s"${inputDir.getCanonicalPath}/test_mor_stream"
-      HoodieTableMetaClient.initTableType(spark.sessionState.newHadoopConf(), tablePath,
-        MERGE_ON_READ, getTableName(tablePath), DataSourceWriteOptions.DEFAULT_PAYLOAD_OPT_VAL)
+      HoodieTableMetaClient.withPropertyBuilder()
+        .setTableType(MERGE_ON_READ)
+        .setTableName(getTableName(tablePath))
+        .setPayloadClassName(DataSourceWriteOptions.DEFAULT_PAYLOAD_OPT_VAL)
+        .initTable(spark.sessionState.newHadoopConf(), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
       val df = spark.readStream

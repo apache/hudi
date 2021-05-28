@@ -23,7 +23,6 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
@@ -49,6 +48,8 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
+
+import static org.apache.hudi.common.table.HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER;
 
 /**
  * Performs bootstrap from a non-hudi source.
@@ -138,7 +139,7 @@ public class BootstrapExecutor  implements Serializable {
    */
   public void execute() throws IOException {
     initializeTable();
-    SparkRDDWriteClient bootstrapClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jssc), bootstrapConfig, true);
+    SparkRDDWriteClient bootstrapClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jssc), bootstrapConfig);
 
     try {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
@@ -170,10 +171,15 @@ public class BootstrapExecutor  implements Serializable {
       throw new HoodieException("target base path already exists at " + cfg.targetBasePath
           + ". Cannot bootstrap data on top of an existing table");
     }
-
-    HoodieTableMetaClient.initTableTypeWithBootstrap(new Configuration(jssc.hadoopConfiguration()),
-        cfg.targetBasePath, HoodieTableType.valueOf(cfg.tableType), cfg.targetTableName, "archived", cfg.payloadClassName,
-        cfg.baseFileFormat, cfg.bootstrapIndexClass, bootstrapBasePath);
+    HoodieTableMetaClient.withPropertyBuilder()
+        .setTableType(cfg.tableType)
+        .setTableName(cfg.targetTableName)
+        .setArchiveLogFolder(DEFAULT_ARCHIVELOG_FOLDER)
+        .setPayloadClassName(cfg.payloadClassName)
+        .setBaseFileFormat(cfg.baseFileFormat)
+        .setBootstrapIndexClass(cfg.bootstrapIndexClass)
+        .setBootstrapBasePath(bootstrapBasePath)
+        .initTable(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath);
   }
 
   public HoodieWriteConfig getBootstrapConfig() {

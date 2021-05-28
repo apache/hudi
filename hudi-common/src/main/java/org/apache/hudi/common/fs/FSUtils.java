@@ -19,7 +19,6 @@
 package org.apache.hudi.common.fs;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -33,6 +32,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -80,9 +80,6 @@ public class FSUtils {
   private static final PathFilter ALLOW_ALL_FILTER = file -> true;
 
   public static Configuration prepareHadoopConf(Configuration conf) {
-    conf.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
-    conf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
-
     // look for all properties, prefixed to be picked up
     for (Entry<String, String> prop : System.getenv().entrySet()) {
       if (prop.getKey().startsWith(HOODIE_ENV_PROPS_PREFIX)) {
@@ -134,7 +131,8 @@ public class FSUtils {
 
   // TODO: this should be removed
   public static String makeDataFileName(String instantTime, String writeToken, String fileId) {
-    return String.format("%s_%s_%s%s", fileId, writeToken, instantTime, HoodieFileFormat.PARQUET.getFileExtension());
+    return String.format("%s_%s_%s%s", fileId, writeToken, instantTime,
+        HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension());
   }
 
   public static String makeDataFileName(String instantTime, String writeToken, String fileId, String fileExtension) {
@@ -146,7 +144,7 @@ public class FSUtils {
   }
 
   public static String maskWithoutFileId(String instantTime, int taskPartitionId) {
-    return String.format("*_%s_%s%s", taskPartitionId, instantTime, HoodieFileFormat.PARQUET.getFileExtension());
+    return String.format("*_%s_%s%s", taskPartitionId, instantTime, HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension());
   }
 
   public static String getCommitFromCommitFile(String commitFileName) {
@@ -280,6 +278,16 @@ public class FSUtils {
     }
   }
 
+  public static FileStatus[] getFilesInPartition(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
+                                                 String basePathStr, Path partitionPath) {
+    try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext,
+        metadataConfig, basePathStr, FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR)) {
+      return tableMetadata.getAllFilesInPartition(partitionPath);
+    } catch (Exception e) {
+      throw new HoodieException("Error get files in partition: " + partitionPath, e);
+    }
+  }
+
   public static String getFileExtension(String fullName) {
     Objects.requireNonNull(fullName);
     String fileName = new File(fullName).getName();
@@ -323,7 +331,7 @@ public class FSUtils {
   }
 
   /**
-   * Check if the file is a parquet file of a log file. Then get the fileId appropriately.
+   * Check if the file is a base file of a log file. Then get the fileId appropriately.
    */
   public static String getFileIdFromFilePath(Path filePath) {
     if (FSUtils.isLogFile(filePath)) {
@@ -508,30 +516,6 @@ public class FSUtils {
     return recovered;
   }
 
-  public static void deleteOlderCleanMetaFiles(FileSystem fs, String metaPath, Stream<HoodieInstant> instants) {
-    // TODO - this should be archived when archival is made general for all meta-data
-    // skip MIN_CLEAN_TO_KEEP and delete rest
-    instants.skip(MIN_CLEAN_TO_KEEP).forEach(s -> {
-      try {
-        fs.delete(new Path(metaPath, s.getFileName()), false);
-      } catch (IOException e) {
-        throw new HoodieIOException("Could not delete clean meta files" + s.getFileName(), e);
-      }
-    });
-  }
-
-  public static void deleteOlderRollbackMetaFiles(FileSystem fs, String metaPath, Stream<HoodieInstant> instants) {
-    // TODO - this should be archived when archival is made general for all meta-data
-    // skip MIN_ROLLBACK_TO_KEEP and delete rest
-    instants.skip(MIN_ROLLBACK_TO_KEEP).forEach(s -> {
-      try {
-        fs.delete(new Path(metaPath, s.getFileName()), false);
-      } catch (IOException e) {
-        throw new HoodieIOException("Could not delete rollback meta files " + s.getFileName(), e);
-      }
-    });
-  }
-
   public static void deleteInstantFile(FileSystem fs, String metaPath, HoodieInstant instant) {
     try {
       LOG.warn("try to delete instant file: " + instant);
@@ -569,14 +553,12 @@ public class FSUtils {
 
   /**
    * This is due to HUDI-140 GCS has a different behavior for detecting EOF during seek().
-   * 
-   * @param inputStream FSDataInputStream
+   *
+   * @param fs fileSystem instance.
    * @return true if the inputstream or the wrapped one is of type GoogleHadoopFSInputStream
    */
-  public static boolean isGCSInputStream(FSDataInputStream inputStream) {
-    return inputStream.getClass().getCanonicalName().equals("com.google.cloud.hadoop.fs.gcs.GoogleHadoopFSInputStream")
-        || inputStream.getWrappedStream().getClass().getCanonicalName()
-            .equals("com.google.cloud.hadoop.fs.gcs.GoogleHadoopFSInputStream");
+  public static boolean isGCSFileSystem(FileSystem fs) {
+    return fs.getScheme().equals(StorageSchemes.GCS.getScheme());
   }
 
   public static Configuration registerFileSystem(Path file, Configuration conf) {
@@ -607,8 +589,8 @@ public class FSUtils {
    * Helper to filter out paths under metadata folder when running fs.globStatus.
    * @param fs  File System
    * @param globPath Glob Path
-   * @return
-   * @throws IOException
+   * @return the file status list of globPath exclude the meta folder
+   * @throws IOException when having trouble listing the path
    */
   public static List<FileStatus> getGlobStatusExcludingMetaFolder(FileSystem fs, Path globPath) throws IOException {
     FileStatus[] statuses = fs.globStatus(globPath);

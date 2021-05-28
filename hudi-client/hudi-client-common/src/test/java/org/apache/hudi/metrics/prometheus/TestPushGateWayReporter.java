@@ -22,16 +22,28 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
+
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.apache.hudi.metrics.Metrics.registerGauge;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@ExtendWith(MockitoExtension.class)
 public class TestPushGateWayReporter {
 
-  HoodieWriteConfig config = mock(HoodieWriteConfig.class);
+  @Mock
+  HoodieWriteConfig config;
+
+  @AfterEach
+  void shutdownMetrics() {
+    Metrics.shutdown();
+  }
 
   @Test
   public void testRegisterGauge() {
@@ -39,7 +51,15 @@ public class TestPushGateWayReporter {
     when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS_PUSHGATEWAY);
     when(config.getPushGatewayHost()).thenReturn("localhost");
     when(config.getPushGatewayPort()).thenReturn(9091);
-    new HoodieMetrics(config, "raw_table");
+    when(config.getPushGatewayReportPeriodSeconds()).thenReturn(30);
+    when(config.getPushGatewayDeleteOnShutdown()).thenReturn(true);
+    when(config.getPushGatewayJobName()).thenReturn("foo");
+    when(config.getPushGatewayRandomJobNameSuffix()).thenReturn(false);
+
+    assertDoesNotThrow(() -> {
+      new HoodieMetrics(config, "raw_table");
+    });
+
     registerGauge("pushGateWayReporter_metric", 123L);
     assertEquals("123", Metrics.getInstance().getRegistry().getGauges()
         .get("pushGateWayReporter_metric").getValue().toString());

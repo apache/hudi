@@ -79,9 +79,12 @@ public class TestHoodieSnapshotExporter extends FunctionalTestHarness {
     sourcePath = dfsBasePath() + "/source/";
     targetPath = dfsBasePath() + "/target/";
     dfs().mkdirs(new Path(sourcePath));
-    HoodieTableMetaClient
-        .initTableType(jsc().hadoopConfiguration(), sourcePath, HoodieTableType.COPY_ON_WRITE, TABLE_NAME,
-            HoodieAvroPayload.class.getName());
+
+    HoodieTableMetaClient.withPropertyBuilder()
+      .setTableType(HoodieTableType.COPY_ON_WRITE)
+      .setTableName(TABLE_NAME)
+      .setPayloadClass(HoodieAvroPayload.class)
+      .initTable(jsc().hadoopConfiguration(), sourcePath);
 
     // Prepare data as source Hudi dataset
     HoodieWriteConfig cfg = getHoodieWriteConfig(sourcePath);

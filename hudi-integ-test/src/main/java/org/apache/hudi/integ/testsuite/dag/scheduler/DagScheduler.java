@@ -129,7 +129,7 @@ public class DagScheduler {
    *
    * @param node The node to be executed
    */
-  private void executeNode(DagNode node, int curRound) {
+  protected void executeNode(DagNode node, int curRound) {
     if (node.isCompleted()) {
       throw new RuntimeException("DagNode already completed! Cannot re-execute");
     }

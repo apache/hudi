@@ -60,7 +60,7 @@ public class TestUpgradeDowngradeCommand extends AbstractShellIntegrationTest {
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
         "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
-    //Create some commits files and parquet files
+    //Create some commits files and base files
     HoodieTestTable.of(metaClient)
         .withPartitionMetaFiles(DEFAULT_PARTITION_PATHS)
         .addCommit("100")

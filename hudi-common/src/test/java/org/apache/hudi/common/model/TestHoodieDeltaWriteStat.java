@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -33,7 +34,7 @@ public class TestHoodieDeltaWriteStat {
   @Test
   public void testBaseFileAndLogFiles() {
     HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
-    String baseFile = "file1.parquet";
+    String baseFile = "file1" + HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension();
     String logFile1 = ".log1.log";
     String logFile2 = ".log2.log";
 

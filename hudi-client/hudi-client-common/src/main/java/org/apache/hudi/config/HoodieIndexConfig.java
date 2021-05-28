@@ -301,6 +301,7 @@ public class HoodieIndexConfig extends DefaultHoodieConfig {
         case SPARK:
           return HoodieIndex.IndexType.BLOOM.name();
         case FLINK:
+        case JAVA:
           return HoodieIndex.IndexType.INMEMORY.name();
         default:
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);

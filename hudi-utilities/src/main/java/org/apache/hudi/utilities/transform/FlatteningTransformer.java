@@ -37,7 +37,7 @@ import java.util.UUID;
 public class FlatteningTransformer implements Transformer {
 
   private static final String TMP_TABLE = "HUDI_SRC_TMP_TABLE_";
-  private static final Logger LOG = LogManager.getLogger(SqlQueryBasedTransformer.class);
+  private static final Logger LOG = LogManager.getLogger(FlatteningTransformer.class);
 
   /**
    * Configs supported.

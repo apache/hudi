@@ -18,24 +18,22 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
-import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
-import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder}
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.common.model.HoodiePayloadProps
-import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskContext}
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
+import org.apache.hudi.config.HoodiePayloadConfig
+import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.avro.{AvroDeserializer, AvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.vectorized.ColumnarBatch
-
-import java.util.Properties
+import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskContext}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -53,9 +51,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
   private val confBroadcast = sc.broadcast(new SerializableWritable(config))
   private val preCombineField = tableState.preCombineField
   private val payloadProps = if (preCombineField.isDefined) {
-    val properties = new Properties()
-    properties.put(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP, preCombineField.get)
-    Some(properties)
+    Some(HoodiePayloadConfig.newBuilder.withPayloadOrderingField(preCombineField.get).build.getProps)
   } else {
     None
   }
@@ -285,7 +281,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         tableState.requiredStructSchema.foreach(
           f => {
             val curPos = posIterator.next()
-            val curField = row.get(curPos, f.dataType)
+            val curField = if (row.isNullAt(curPos)) null else row.get(curPos, f.dataType)
             rowToReturn.update(curIndex, curField)
             curIndex = curIndex + 1
           }

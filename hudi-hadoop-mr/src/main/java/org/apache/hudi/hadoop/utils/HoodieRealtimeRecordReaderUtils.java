@@ -33,6 +33,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.io.DoubleWritable;
+import org.apache.hadoop.hive.serde2.io.DateWritable;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
 import org.apache.hadoop.hive.serde2.typeinfo.DecimalTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.HiveDecimalUtils;
@@ -166,6 +167,9 @@ public class HoodieRealtimeRecordReaderUtils {
       case BYTES:
         return new BytesWritable(((ByteBuffer)value).array());
       case INT:
+        if (schema.getLogicalType() != null && schema.getLogicalType().getName().equals("date")) {
+          return new DateWritable((Integer) value);
+        }
         return new IntWritable((Integer) value);
       case LONG:
         return new LongWritable((Long) value);
