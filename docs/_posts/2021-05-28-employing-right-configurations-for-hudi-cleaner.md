@@ -32,10 +32,14 @@ Hudi cleaner currently supports below cleaning policies:
 
 ### Examples
 
-![Initial timeline](/assets/images/blog/hoodie-cleaner/Initial_timeline.png)
-_Figure: Incoming records getting ingested into a hudi dataset every 30 minutes_
+Suppose a user is ingesting data into a hudi dataset of type COPY_ON_WRITE every 30 minutes as shown below:
 
-Suppose a user uses the below configs for cleaning:
+![Initial timeline](/assets/images/blog/hoodie-cleaner/Initial_timeline.png)
+_Figure1: Incoming records getting ingested into a hudi dataset every 30 minutes_
+
+The figure shows a particular partition on DFS where commits and corresponding file versions are color coded. 4 different file groups are created in this partition as depicted by fileId1, fileId2, fileId3 and fileId4. File group corresponding to fileId2 has records ingested from all the 5 commits, while the group corresponding to fileId4 has records from the latest 2 commits only.
+
+Suppose the user uses the below configs for cleaning:
 
 ```java
 hoodie.cleaner.policy=KEEP_LATEST_COMMITS
@@ -45,13 +49,13 @@ hoodie.cleaner.commits.retained=2
 Cleaner selects the versions of files to be cleaned by taking care of the following:
 
  - Latest version of a file should not be cleaned.
- - The commit times of the last 2 (configured) + 1 commits are determined. In the figure above, `commit 10:30` and `commit 10:00` correspond to the latest 2 commits in the timeline. One extra commit is included because the time window for retaining commits is essentially equal to the longest query run time. So if the longest query takes 1 hour to finish, and ingestion happens every 30 minutes, you need to retain last 2 commits since 2*30 = 60 (1 hour). At this point of time, the longest query can still be using files written in 3rd commit in reverse order. Essentially this means if a query started executing after `commit 9:30`, it will still be running when clean action is triggered right after `commit 10:30` as in the figure below. 
+ - The commit times of the last 2 (configured) + 1 commits are determined. In Figure1, `commit 10:30` and `commit 10:00` correspond to the latest 2 commits in the timeline. One extra commit is included because the time window for retaining commits is essentially equal to the longest query run time. So if the longest query takes 1 hour to finish, and ingestion happens every 30 minutes, you need to retain last 2 commits since 2*30 = 60 (1 hour). At this point of time, the longest query can still be using files written in 3rd commit in reverse order. Essentially this means if a query started executing after `commit 9:30`, it will still be running when clean action is triggered right after `commit 10:30` as in Figure2. 
  -  Now for any file group, only those file slices are scheduled for cleaning which are not savepointed (another Hudi table service) and whose commit time is less than the 3rd commit (`commit 9:30` in figure below) in reverse order.
 
 ![Retain latest commits](/assets/images/blog/hoodie-cleaner/Retain_latest_commits.png)
-_Figure: Files corresponding to latest 3 commits are retained_
+_Figure2: Files corresponding to latest 3 commits are retained_
 
-Suppose a user uses the below configs for cleaning:
+Now, suppose he uses the below configs for cleaning:
 
 ```java
 hoodie.cleaner.policy=KEEP_LATEST_FILE_VERSIONS
@@ -60,10 +64,10 @@ hoodie.cleaner.fileversions.retained=1
 
 Cleaner does the following:
 
- - For any file group, latest version (including any for pending compaction) of file slices are kept and the rest are scheduled for cleaning. Clearly in the figure below, if clean action is triggered right after `commit 10:30`, the cleaner will simply leave the latest version in every file group and delete the rest.
+ - For any file group, latest version (including any for pending compaction) of file slices are kept and the rest are scheduled for cleaning. Clearly as shown in Figure3, if clean action is triggered right after `commit 10:30`, the cleaner will simply leave the latest version in every file group and delete the rest.
 
 ![Retain latest versions](/assets/images/blog/hoodie-cleaner/Retain_latest_versions.png)
-_Figure: Latest file version in every file group is retained_
+_Figure3: Latest file version in every file group is retained_
 
 ### Configurations
 
@@ -79,6 +83,21 @@ Hudi's cleaner table service can be run as a separate process or along with your
   --target-base-path s3:///temp/hudi \
   --spark-master yarn-cluster
 ```
+
+In case you wish to run the cleaner service asynchronously with writing, please configure the below:
+
+```java
+hoodie.clean.automatic=true
+hoodie.clean.async=true
+```
+
+Further you can use [Hudi CLI](https://hudi.apache.org/docs/deployment.html#cli) for managing your Hudi dataset. CLI provides the below commands for cleaner service:
+
+ - `cleans show`
+ - `clean showpartitions`
+ - `cleans run`
+
+You can find more details and the relevant code for these commands in [`org.apache.hudi.cli.commands.CleansCommand` class](https://github.com/apache/hudi/blob/master/hudi-cli/src/main/java/org/apache/hudi/cli/commands/CleansCommand.java). 
 
 ### Future Scope
 
