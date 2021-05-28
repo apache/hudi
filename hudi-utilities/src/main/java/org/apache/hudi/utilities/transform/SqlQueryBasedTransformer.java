@@ -31,7 +31,7 @@ import java.util.UUID;
 
 /**
  * A transformer that allows a sql-query template be used to transform the source before writing to Hudi data-set.
- *
+ * <p>
  * The query should reference the source as a table named "\<SRC\>"
  */
 public class SqlQueryBasedTransformer implements Transformer {
@@ -47,6 +47,25 @@ public class SqlQueryBasedTransformer implements Transformer {
   static class Config {
 
     private static final String TRANSFORMER_SQL = "hoodie.deltastreamer.transformer.sql";
+
+    /**
+     * This is a flag indicating whether to replace the wildcard in SQL with all the column names.
+     * <p>
+     * This is very useful when the user wants to derive one or more columns from the existing columns, and the
+     * existing columns are all needed, to avoid writing all the column names into SQL. it would be very useful when
+     * we have dozens or hundreds of columns in our SQL.
+     * <p>
+     * For example:
+     * let's say we have already "id","name","age","ts" these four columns in our Dataset, the "ts" is in millisecond
+     * long format, we want to add a new column named dt in yyyyMMdd format as our partition column.
+     * That means use
+     * "select *, ROM_UNIXTIME(ts / 1000, 'yyyyMMdd') as dt from <SRC>"
+     * to represent
+     * "select id, name, age, ts, FROM_UNIXTIME(ts / 1000, 'yyyyMMdd') as dt from <SRC>"
+     * <p>
+     * Note: when using this feature, the wildcard to place should be put in the first place following "select".
+     */
+    private static final String TRANSFORMER_SQL_REPLACE_WILDCARD = "hoodie.deltastreamer.transformer.sql.replace.wildcard";
   }
 
   @Override
@@ -62,7 +81,24 @@ public class SqlQueryBasedTransformer implements Transformer {
     LOG.info("Registering tmp table : " + tmpTable);
     rowDataset.registerTempTable(tmpTable);
     String sqlStr = transformerSQL.replaceAll(SRC_PATTERN, tmpTable);
+
+    // replace wildcard if needed
+    boolean replaceWildcard = properties.getBoolean(Config.TRANSFORMER_SQL_REPLACE_WILDCARD, false);
+    if (replaceWildcard) {
+      String columns = getColumns(rowDataset);
+      sqlStr = sqlStr.replace("*", columns);
+    }
+
     LOG.debug("SQL Query for transformation : (" + sqlStr + ")");
     return sparkSession.sql(sqlStr);
+  }
+
+  private String getColumns(Dataset<Row> rowDataset) {
+    StringBuilder sb = new StringBuilder();
+    for (String column : rowDataset.columns()) {
+      sb.append(column).append(", ");
+    }
+    sb.delete(sb.length() - 1, sb.length());
+    return sb.toString();
   }
 }
