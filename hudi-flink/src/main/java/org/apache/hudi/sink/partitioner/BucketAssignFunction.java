@@ -58,6 +58,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * The function to build the write profile incrementally for records within a checkpoint,
@@ -197,7 +198,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     if (isChangingRecords && indexState.contains(recordKey)) {
       // Set up the instant time as "U" to mark the bucket as an update bucket.
       HoodieRecordGlobalLocation oldLoc = this.indexState.get(recordKey);
-      if (!StreamerUtil.equal(oldLoc.getPartitionPath(), partitionPath)) {
+      if (!Objects.equals(oldLoc.getPartitionPath(), partitionPath)) {
         if (globalIndex) {
           // if partition path changes, emit a delete record for old partition path,
           // then update the index state using location with new partition path.
