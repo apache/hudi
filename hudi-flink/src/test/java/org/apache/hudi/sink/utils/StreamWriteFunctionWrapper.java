@@ -197,4 +197,8 @@ public class StreamWriteFunctionWrapper<I> {
   public boolean isKeyInState(HoodieKey hoodieKey) {
     return this.bucketAssignerFunction.isKeyInState(hoodieKey);
   }
+
+  public boolean isConforming() {
+    return this.writeFunction.isConfirming();
+  }
 }
