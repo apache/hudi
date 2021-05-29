@@ -99,7 +99,7 @@
       <artifactId>hadoop-hdfs</artifactId>
       <classifier>tests</classifier>
     </dependency>
-
+    <!-- https://mvnrepository.com/artifact/org.pentaho/pentaho-aggdesigner-algorithm -->
     <!-- Hive -->
     <dependency>
       <groupId>${hive.groupid}</groupId>
