@@ -44,8 +44,8 @@ import java.util.stream.Collectors;
  */
 public class SparkUpsertDeltaCommitPartitioner<T extends HoodieRecordPayload<T>> extends UpsertPartitioner<T> {
 
-  SparkUpsertDeltaCommitPartitioner(WorkloadProfile profile, HoodieSparkEngineContext context, HoodieTable table,
-                                    HoodieWriteConfig config) {
+  public SparkUpsertDeltaCommitPartitioner(WorkloadProfile profile, HoodieSparkEngineContext context, HoodieTable table,
+                                           HoodieWriteConfig config) {
     super(profile, context, table, config);
   }
 
@@ -79,10 +79,10 @@ public class SparkUpsertDeltaCommitPartitioner<T extends HoodieRecordPayload<T>>
           allSmallFileSlices.add(smallFileSlice.get());
         }
       } else {
-        // If we can index log files, we can add more inserts to log files for fileIds including those under
-        // pending compaction.
+        // If we can index log files, we can add more inserts to log files for fileIds NOT including those under
+        // pending compaction
         List<FileSlice> allFileSlices =
-            table.getSliceView().getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), true)
+            table.getSliceView().getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), false)
                 .collect(Collectors.toList());
         for (FileSlice fileSlice : allFileSlices) {
           if (isSmallFile(fileSlice)) {
