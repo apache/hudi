@@ -380,7 +380,7 @@ public class TestWriteCopyOnWrite {
   @Test
   public void testInsertWithMiniBatches() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0006); // 630 bytes batch size
+    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.00075); // 786 bytes batch size
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // open the function and ingest data
@@ -441,7 +441,7 @@ public class TestWriteCopyOnWrite {
   @Test
   public void testInsertWithDeduplication() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0006); // 630 bytes batch size
+    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.00075); // 786 bytes batch size
     conf.setBoolean(FlinkOptions.INSERT_DROP_DUPS, true);
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
@@ -505,7 +505,7 @@ public class TestWriteCopyOnWrite {
   @Test
   public void testInsertWithSmallBufferSize() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0006); // 630 bytes buffer size
+    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.00075); // 786 bytes buffer size
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // open the function and ingest data
