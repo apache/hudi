@@ -385,7 +385,7 @@ public class TestWriteCopyOnWrite {
 
     // open the function and ingest data
     funcWrapper.openFunction();
-    // Each record is 208 bytes. so 4 records expect to trigger a mini-batch write
+    // Each record is 256 bytes. so 4 records expect to trigger a mini-batch write
     for (RowData rowData : TestData.DATA_SET_INSERT_DUPLICATES) {
       funcWrapper.invoke(rowData);
     }
@@ -447,7 +447,7 @@ public class TestWriteCopyOnWrite {
 
     // open the function and ingest data
     funcWrapper.openFunction();
-    // Each record is 208 bytes. so 4 records expect to trigger a mini-batch write
+    // Each record is 256 bytes. so 4 records expect to trigger a mini-batch write
     for (RowData rowData : TestData.DATA_SET_INSERT_SAME_KEY) {
       funcWrapper.invoke(rowData);
     }
@@ -510,7 +510,7 @@ public class TestWriteCopyOnWrite {
 
     // open the function and ingest data
     funcWrapper.openFunction();
-    // each record is 208 bytes. so 4 records expect to trigger buffer flush:
+    // each record is 256 bytes. so 4 records expect to trigger buffer flush:
     // flush the max size bucket once at a time.
     for (RowData rowData : TestData.DATA_SET_INSERT_DUPLICATES) {
       funcWrapper.invoke(rowData);
