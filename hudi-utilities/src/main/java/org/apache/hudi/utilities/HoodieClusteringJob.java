@@ -137,7 +137,7 @@ public class HoodieClusteringJob {
   }
 
   private String getSchemaFromLatestInstant() throws Exception {
-    HoodieTableMetaClient metaClient =  new HoodieTableMetaClient(jsc.hadoopConfiguration(), cfg.basePath, true);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(cfg.basePath).setLoadActiveTimelineOnLoad(true).build();
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
     if (metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
       throw new HoodieException("Cannot run clustering without any completed commits");
@@ -164,7 +164,10 @@ public class HoodieClusteringJob {
     String schemaStr = getSchemaFromLatestInstant();
     SparkRDDWriteClient client =
         UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props);
+    if (cfg.clusteringInstantTime != null) {
+      client.scheduleClusteringAtInstant(cfg.clusteringInstantTime, Option.empty());
+      return Option.of(cfg.clusteringInstantTime);
+    }
     return client.scheduleClustering(Option.empty());
   }
-
 }

@@ -50,8 +50,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import scala.Tuple2;
-
 import static java.util.Arrays.asList;
 import static java.util.UUID.randomUUID;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
@@ -130,7 +128,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
         new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
     List<String> partitions = asList("2016/01/21", "2016/04/01", "2015/03/12");
-    List<Tuple2<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, context, hoodieTable);
+    List<Pair<String, BloomIndexFileInfo>> filesList = index.loadInvolvedFiles(partitions, context, hoodieTable);
     // Still 0, as no valid commit
     assertEquals(0, filesList.size());
 
@@ -145,20 +143,20 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
 
     if (rangePruning) {
       // these files will not have the key ranges
-      assertNull(filesList.get(0)._2().getMaxRecordKey());
-      assertNull(filesList.get(0)._2().getMinRecordKey());
-      assertFalse(filesList.get(1)._2().hasKeyRanges());
-      assertNotNull(filesList.get(2)._2().getMaxRecordKey());
-      assertNotNull(filesList.get(2)._2().getMinRecordKey());
-      assertTrue(filesList.get(3)._2().hasKeyRanges());
+      assertNull(filesList.get(0).getRight().getMaxRecordKey());
+      assertNull(filesList.get(0).getRight().getMinRecordKey());
+      assertFalse(filesList.get(1).getRight().hasKeyRanges());
+      assertNotNull(filesList.get(2).getRight().getMaxRecordKey());
+      assertNotNull(filesList.get(2).getRight().getMinRecordKey());
+      assertTrue(filesList.get(3).getRight().hasKeyRanges());
 
       // no longer sorted, but should have same files.
 
-      List<Tuple2<String, BloomIndexFileInfo>> expected =
-          asList(new Tuple2<>("2016/04/01", new BloomIndexFileInfo("2")),
-              new Tuple2<>("2015/03/12", new BloomIndexFileInfo("1")),
-              new Tuple2<>("2015/03/12", new BloomIndexFileInfo("3", "000", "000")),
-              new Tuple2<>("2015/03/12", new BloomIndexFileInfo("4", "001", "003")));
+      List<Pair<String, BloomIndexFileInfo>> expected =
+          asList(Pair.of("2016/04/01", new BloomIndexFileInfo("2")),
+              Pair.of("2015/03/12", new BloomIndexFileInfo("1")),
+              Pair.of("2015/03/12", new BloomIndexFileInfo("3", "000", "000")),
+              Pair.of("2015/03/12", new BloomIndexFileInfo("4", "001", "003")));
       assertEquals(expected, filesList);
     }
   }
@@ -176,20 +174,20 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
             new BloomIndexFileInfo("f5", "009", "010")));
 
     Map<String, List<String>> partitionRecordKeyMap = new HashMap<>();
-    asList(new Tuple2<>("2017/10/22", "003"), new Tuple2<>("2017/10/22", "002"),
-            new Tuple2<>("2017/10/22", "005"), new Tuple2<>("2017/10/22", "004"))
+    asList(Pair.of("2017/10/22", "003"), Pair.of("2017/10/22", "002"),
+        Pair.of("2017/10/22", "005"), Pair.of("2017/10/22", "004"))
             .forEach(t -> {
-              List<String> recordKeyList = partitionRecordKeyMap.getOrDefault(t._1, new ArrayList<>());
-              recordKeyList.add(t._2);
-              partitionRecordKeyMap.put(t._1, recordKeyList);
+              List<String> recordKeyList = partitionRecordKeyMap.getOrDefault(t.getLeft(), new ArrayList<>());
+              recordKeyList.add(t.getRight());
+              partitionRecordKeyMap.put(t.getLeft(), recordKeyList);
             });
 
-    List<scala.Tuple2<String, HoodieKey>> comparisonKeyList =
+    List<Pair<String, HoodieKey>> comparisonKeyList =
         index.explodeRecordsWithFileComparisons(partitionToFileIndexInfo, partitionRecordKeyMap);
 
     assertEquals(10, comparisonKeyList.size());
     java.util.Map<String, List<String>> recordKeyToFileComps = comparisonKeyList.stream()
-        .collect(java.util.stream.Collectors.groupingBy(t -> t._2.getRecordKey(), java.util.stream.Collectors.mapping(t -> t._1, java.util.stream.Collectors.toList())));
+        .collect(java.util.stream.Collectors.groupingBy(t -> t.getRight().getRecordKey(), java.util.stream.Collectors.mapping(t -> t.getLeft(), java.util.stream.Collectors.toList())));
 
     assertEquals(4, recordKeyToFileComps.size());
     assertEquals(new java.util.HashSet<>(asList("f1", "f3", "f4")), new java.util.HashSet<>(recordKeyToFileComps.get("002")));
@@ -223,7 +221,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     HoodieRecord record4 =
         new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
-    // We write record1, record2 to a parquet file, but the bloom filter contains (record1,
+    // We write record1, record2 to a base file, but the bloom filter contains (record1,
     // record2, record3).
     BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
     filter.add(record3.getRecordKey());
@@ -313,7 +311,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
       assertFalse(record.isCurrentLocationKnown());
     }
 
-    // We create three parquet file, each having one record. (two different partitions)
+    // We create three base file, each having one record. (two different partitions)
     String fileId1 = testTable.addCommit("001").getFileIdWithInserts("2016/01/31", record1);
     String fileId2 = testTable.addCommit("002").getFileIdWithInserts("2016/01/31", record2);
     String fileId3 = testTable.addCommit("003").getFileIdWithInserts("2015/01/31", record4);
@@ -387,7 +385,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
       assertTrue(!record.isPresent());
     }
 
-    // We create three parquet file, each having one record. (two different partitions)
+    // We create three base file, each having one record. (two different partitions)
     String fileId1 = testTable.addCommit("001").getFileIdWithInserts("2016/01/31", record1);
     String fileId2 = testTable.addCommit("002").getFileIdWithInserts("2016/01/31", record2);
     String fileId3 = testTable.addCommit("003").getFileIdWithInserts("2015/01/31", record4);
@@ -435,7 +433,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     String recordStr2 = "{\"_row_key\":\"2eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
         + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
 
-    // We write record1 to a parquet file, using a bloom filter having both records
+    // We write record1 to a base file, using a bloom filter having both records
     RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
     HoodieRecord record1 = new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
     RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);

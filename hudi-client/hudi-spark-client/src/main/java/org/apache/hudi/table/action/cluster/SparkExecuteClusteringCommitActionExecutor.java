@@ -66,6 +66,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseSparkCommitActionExecutor<T> {
@@ -90,22 +91,53 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
 
     JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(context);
     // execute clustering for each group async and collect WriteStatus
-    JavaRDD<WriteStatus> writeStatusRDD = clusteringPlan.getInputGroups().stream()
+    Stream<JavaRDD<WriteStatus>> writeStatusRDDStream = clusteringPlan.getInputGroups().stream()
         .map(inputGroup -> runClusteringForGroupAsync(inputGroup, clusteringPlan.getStrategy().getStrategyParams()))
-        .map(CompletableFuture::join)
-        .reduce((rdd1, rdd2) -> rdd1.union(rdd2)).orElse(engineContext.emptyRDD());
-    if (writeStatusRDD.isEmpty()) {
-      throw new HoodieClusteringException("Clustering plan produced 0 WriteStatus for " + instantTime + " #groups: " + clusteringPlan.getInputGroups().size());
-    }
+        .map(CompletableFuture::join);
 
+    JavaRDD<WriteStatus>[] writeStatuses = convertStreamToArray(writeStatusRDDStream);
+    JavaRDD<WriteStatus> writeStatusRDD = engineContext.union(writeStatuses);
+    
     HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = buildWriteMetadata(writeStatusRDD);
-    updateIndexAndCommitIfNeeded(writeStatusRDD, writeMetadata);
+    JavaRDD<WriteStatus> statuses = updateIndex(writeStatusRDD, writeMetadata);
+    writeMetadata.setWriteStats(statuses.map(WriteStatus::getStat).collect());
+    // validate clustering action before committing result
+    validateWriteResult(writeMetadata);
+    commitOnAutoCommit(writeMetadata);
     if (!writeMetadata.getCommitMetadata().isPresent()) {
       HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(writeStatusRDD.map(WriteStatus::getStat).collect(), writeMetadata.getPartitionToReplaceFileIds(),
           extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());
       writeMetadata.setCommitMetadata(Option.of(commitMetadata));
     }
     return writeMetadata;
+  }
+
+  /**
+   * Stream to array conversion with generic type is not straightforward.
+   * Implement a utility method to abstract high level logic. This needs to be improved in future
+   */
+  private JavaRDD<WriteStatus>[] convertStreamToArray(Stream<JavaRDD<WriteStatus>> writeStatusRDDStream) {
+    Object[] writeStatusObjects = writeStatusRDDStream.toArray(Object[]::new);
+    JavaRDD<WriteStatus>[] writeStatusRDDArray = new JavaRDD[writeStatusObjects.length];
+    for (int i = 0; i < writeStatusObjects.length; i++) {
+      writeStatusRDDArray[i] = (JavaRDD<WriteStatus>) writeStatusObjects[i];
+    }
+    return writeStatusRDDArray;
+  }
+
+  /**
+   * Validate actions taken by clustering. In the first implementation, we validate at least one new file is written.
+   * But we can extend this to add more validation. E.g. number of records read = number of records written etc.
+   * 
+   * We can also make these validations in BaseCommitActionExecutor to reuse pre-commit hooks for multiple actions.
+   */
+  private void validateWriteResult(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata) {
+    if (writeMetadata.getWriteStatuses().isEmpty()) {
+      throw new HoodieClusteringException("Clustering plan produced 0 WriteStatus for " + instantTime
+          + " #groups: " + clusteringPlan.getInputGroups().size() + " expected at least "
+          + clusteringPlan.getInputGroups().stream().mapToInt(HoodieClusteringGroup::getNumOutputFileGroups).sum()
+          + " write statuses");
+    }
   }
 
   /**
@@ -163,11 +195,18 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
         try {
           Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
           HoodieFileReader<? extends IndexedRecord> baseFileReader = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
-          HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(table.getMetaClient().getFs(),
-              table.getMetaClient().getBasePath(), clusteringOp.getDeltaFilePaths(), readerSchema, instantTime,
-              maxMemoryPerCompaction, config.getCompactionLazyBlockReadEnabled(),
-              config.getCompactionReverseLogReadEnabled(), config.getMaxDFSStreamBufferSize(),
-              config.getSpillableMapBasePath());
+          HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
+              .withFileSystem(table.getMetaClient().getFs())
+              .withBasePath(table.getMetaClient().getBasePath())
+              .withLogFilePaths(clusteringOp.getDeltaFilePaths())
+              .withReaderSchema(readerSchema)
+              .withLatestInstantTime(instantTime)
+              .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
+              .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
+              .withReverseReader(config.getCompactionReverseLogReadEnabled())
+              .withBufferSize(config.getMaxDFSStreamBufferSize())
+              .withSpillableMapBasePath(config.getSpillableMapBasePath())
+              .build();
 
           recordIterators.add(HoodieFileSliceReader.getFileSliceReader(baseFileReader, scanner, readerSchema,
               table.getMetaClient().getTableConfig().getPayloadClass()));
@@ -222,7 +261,6 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
     HoodieWriteMetadata<JavaRDD<WriteStatus>> result = new HoodieWriteMetadata<>();
     result.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(writeStatusJavaRDD));
     result.setWriteStatuses(writeStatusJavaRDD);
-    result.setWriteStats(writeStatusJavaRDD.map(WriteStatus::getStat).collect());
     result.setCommitMetadata(Option.empty());
     result.setCommitted(false);
     return result;

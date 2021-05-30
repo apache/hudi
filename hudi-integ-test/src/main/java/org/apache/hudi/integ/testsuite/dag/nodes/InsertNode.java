@@ -39,7 +39,7 @@ public class InsertNode extends DagNode<JavaRDD<WriteStatus>> {
   }
 
   @Override
-  public void execute(ExecutionContext executionContext) throws Exception {
+  public void execute(ExecutionContext executionContext, int curItrCount) throws Exception {
     // if the insert node has schema override set, reinitialize the table with new schema.
     if (this.config.getReinitContext()) {
       log.info(String.format("Reinitializing table with %s", this.config.getOtherConfigs().toString()));

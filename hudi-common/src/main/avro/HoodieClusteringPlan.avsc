@@ -30,7 +30,7 @@
     },
     {
        "name":"strategy",
-       "type":["HoodieClusteringStrategy", "null"],
+       "type":["null", "HoodieClusteringStrategy"],
        "default": null
     },
     {

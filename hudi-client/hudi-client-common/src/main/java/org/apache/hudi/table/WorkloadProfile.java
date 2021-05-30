@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.Serializable;
@@ -41,9 +42,19 @@ public class WorkloadProfile implements Serializable {
    */
   protected final WorkloadStat globalStat;
 
+  /**
+   * Write operation type.
+   */
+  private WriteOperationType operationType;
+
   public WorkloadProfile(Pair<HashMap<String, WorkloadStat>, WorkloadStat> profile) {
     this.partitionPathStatMap = profile.getLeft();
     this.globalStat = profile.getRight();
+  }
+
+  public WorkloadProfile(Pair<HashMap<String, WorkloadStat>, WorkloadStat> profile, WriteOperationType operationType) {
+    this(profile);
+    this.operationType = operationType;
   }
 
   public WorkloadStat getGlobalStat() {
@@ -62,11 +73,16 @@ public class WorkloadProfile implements Serializable {
     return partitionPathStatMap.get(partitionPath);
   }
 
+  public WriteOperationType getOperationType() {
+    return operationType;
+  }
+
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("WorkloadProfile {");
     sb.append("globalStat=").append(globalStat).append(", ");
-    sb.append("partitionStat=").append(partitionPathStatMap);
+    sb.append("partitionStat=").append(partitionPathStatMap).append(", ");
+    sb.append("operationType=").append(operationType);
     sb.append('}');
     return sb.toString();
   }

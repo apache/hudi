@@ -21,14 +21,17 @@ package org.apache.hudi
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hudi.client.utils.SparkRowDeserializer
+import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.encoders.{ExpressionEncoder, RowEncoder}
-import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFileIndex}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, Literal}
+import org.apache.spark.sql.execution.datasources.{FileStatusCache, InMemoryFileIndex, Spark2ParsePartitionUtil, Spark3ParsePartitionUtil, SparkParsePartitionUtil}
+import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.sources.{And, EqualNullSafe, EqualTo, Filter, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Not, Or, StringContains, StringEndsWith, StringStartsWith}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 
 import scala.collection.JavaConverters._
@@ -99,7 +102,7 @@ object HoodieSparkUtils {
     // Use the Avro schema to derive the StructType which has the correct nullability information
     val dataType = SchemaConverters.toSqlType(avroSchema).dataType.asInstanceOf[StructType]
     val encoder = RowEncoder.apply(dataType).resolveAndBind()
-    val deserializer = HoodieSparkUtils.createDeserializer(encoder)
+    val deserializer = HoodieSparkUtils.createRowSerDe(encoder)
     df.queryExecution.toRdd.map(row => deserializer.deserializeRow(row))
       .mapPartitions { records =>
         if (records.isEmpty) Iterator.empty
@@ -110,12 +113,115 @@ object HoodieSparkUtils {
       }
   }
 
-  def createDeserializer(encoder: ExpressionEncoder[Row]): SparkRowDeserializer = {
-    // TODO remove Spark2RowDeserializer if Spark 2.x support is dropped
+  def createRowSerDe(encoder: ExpressionEncoder[Row]): SparkRowSerDe = {
+    // TODO remove Spark2RowSerDe if Spark 2.x support is dropped
     if (SPARK_VERSION.startsWith("2.")) {
-      new Spark2RowDeserializer(encoder)
+      new Spark2RowSerDe(encoder)
     } else {
-      new Spark3RowDeserializer(encoder)
+      new Spark3RowSerDe(encoder)
     }
+  }
+
+  def createSparkParsePartitionUtil(conf: SQLConf): SparkParsePartitionUtil = {
+    // TODO remove Spark2RowSerDe if Spark 2.x support is dropped
+    if (SPARK_VERSION.startsWith("2.")) {
+      new Spark2ParsePartitionUtil
+    } else {
+      new Spark3ParsePartitionUtil(conf)
+    }
+  }
+
+  /**
+   * Convert Filters to Catalyst Expressions and joined by And. If convert success return an
+   * Non-Empty Option[Expression],or else return None.
+   */
+  def convertToCatalystExpressions(filters: Array[Filter],
+                                   tableSchema: StructType): Option[Expression] = {
+    val expressions = filters.map(convertToCatalystExpression(_, tableSchema))
+    if (expressions.forall(p => p.isDefined)) {
+      if (expressions.isEmpty) {
+        None
+      } else if (expressions.length == 1) {
+        expressions(0)
+      } else {
+        Some(expressions.map(_.get).reduce(org.apache.spark.sql.catalyst.expressions.And))
+      }
+    } else {
+      None
+    }
+  }
+
+  /**
+   * Convert Filter to Catalyst Expression. If convert success return an Non-Empty
+   * Option[Expression],or else return None.
+   */
+  def convertToCatalystExpression(filter: Filter, tableSchema: StructType): Option[Expression] = {
+    Option(
+      filter match {
+        case EqualTo(attribute, value) =>
+          org.apache.spark.sql.catalyst.expressions.EqualTo(toAttribute(attribute, tableSchema), Literal.create(value))
+        case EqualNullSafe(attribute, value) =>
+          org.apache.spark.sql.catalyst.expressions.EqualNullSafe(toAttribute(attribute, tableSchema), Literal.create(value))
+        case GreaterThan(attribute, value) =>
+          org.apache.spark.sql.catalyst.expressions.GreaterThan(toAttribute(attribute, tableSchema), Literal.create(value))
+        case GreaterThanOrEqual(attribute, value) =>
+          org.apache.spark.sql.catalyst.expressions.GreaterThanOrEqual(toAttribute(attribute, tableSchema), Literal.create(value))
+        case LessThan(attribute, value) =>
+          org.apache.spark.sql.catalyst.expressions.LessThan(toAttribute(attribute, tableSchema), Literal.create(value))
+        case LessThanOrEqual(attribute, value) =>
+          org.apache.spark.sql.catalyst.expressions.LessThanOrEqual(toAttribute(attribute, tableSchema), Literal.create(value))
+        case In(attribute, values) =>
+          val attrExp = toAttribute(attribute, tableSchema)
+          val valuesExp = values.map(v => Literal.create(v))
+          org.apache.spark.sql.catalyst.expressions.In(attrExp, valuesExp)
+        case IsNull(attribute) =>
+          org.apache.spark.sql.catalyst.expressions.IsNull(toAttribute(attribute, tableSchema))
+        case IsNotNull(attribute) =>
+          org.apache.spark.sql.catalyst.expressions.IsNotNull(toAttribute(attribute, tableSchema))
+        case And(left, right) =>
+          val leftExp = convertToCatalystExpression(left, tableSchema)
+          val rightExp = convertToCatalystExpression(right, tableSchema)
+          if (leftExp.isEmpty || rightExp.isEmpty) {
+            null
+          } else {
+            org.apache.spark.sql.catalyst.expressions.And(leftExp.get, rightExp.get)
+          }
+        case Or(left, right) =>
+          val leftExp = convertToCatalystExpression(left, tableSchema)
+          val rightExp = convertToCatalystExpression(right, tableSchema)
+          if (leftExp.isEmpty || rightExp.isEmpty) {
+            null
+          } else {
+            org.apache.spark.sql.catalyst.expressions.Or(leftExp.get, rightExp.get)
+          }
+        case Not(child) =>
+          val childExp = convertToCatalystExpression(child, tableSchema)
+          if (childExp.isEmpty) {
+            null
+          } else {
+            org.apache.spark.sql.catalyst.expressions.Not(childExp.get)
+          }
+        case StringStartsWith(attribute, value) =>
+          val leftExp = toAttribute(attribute, tableSchema)
+          val rightExp = Literal.create(s"$value%")
+          org.apache.spark.sql.catalyst.expressions.Like(leftExp, rightExp)
+        case StringEndsWith(attribute, value) =>
+          val leftExp = toAttribute(attribute, tableSchema)
+          val rightExp = Literal.create(s"%$value")
+          org.apache.spark.sql.catalyst.expressions.Like(leftExp, rightExp)
+        case StringContains(attribute, value) =>
+          val leftExp = toAttribute(attribute, tableSchema)
+          val rightExp = Literal.create(s"%$value%")
+          org.apache.spark.sql.catalyst.expressions.Like(leftExp, rightExp)
+        case _=> null
+      }
+    )
+  }
+
+  private def toAttribute(columnName: String, tableSchema: StructType): AttributeReference = {
+    val field = tableSchema.find(p => p.name == columnName)
+    assert(field.isDefined, s"Cannot find column: $columnName, Table Columns are: " +
+      s"${tableSchema.fieldNames.mkString(",")}")
+    AttributeReference(columnName, field.get.dataType, field.get.nullable)()
   }
 }

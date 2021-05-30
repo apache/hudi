@@ -108,13 +108,24 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   public Path makeNewPath(String partitionPath) {
     Path path = FSUtils.getPartitionPath(config.getBasePath(), partitionPath);
     try {
-      fs.mkdirs(path); // create a new partition as needed.
+      if (!fs.exists(path)) {
+        fs.mkdirs(path); // create a new partition as needed.
+      }
     } catch (IOException e) {
       throw new HoodieIOException("Failed to make dir " + path, e);
     }
 
     return new Path(path.toString(), FSUtils.makeDataFileName(instantTime, writeToken, fileId,
         hoodieTable.getMetaClient().getTableConfig().getBaseFileFormat().getFileExtension()));
+  }
+
+  /**
+   * Make new file path with given file name.
+   */
+  protected Path makeNewFilePath(String partitionPath, String fileName) {
+    String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/")
+        + fileName).toString();
+    return new Path(config.getBasePath(), relativePath);
   }
 
   /**

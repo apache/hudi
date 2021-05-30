@@ -19,8 +19,12 @@
 package org.apache.hudi.hadoop.utils;
 
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.JobContext;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -40,6 +44,8 @@ public class HoodieHiveUtils {
   public static final String HOODIE_CONSUME_MODE_PATTERN = "hoodie.%s.consume.mode";
   public static final String HOODIE_START_COMMIT_PATTERN = "hoodie.%s.consume.start.timestamp";
   public static final String HOODIE_MAX_COMMIT_PATTERN = "hoodie.%s.consume.max.commits";
+  public static final String HOODIE_CONSUME_PENDING_COMMITS = "hoodie.%s.consume.pending.commits";
+  public static final String HOODIE_CONSUME_COMMIT = "hoodie.%s.consume.commit";
   public static final Set<String> VIRTUAL_COLUMN_NAMES = CollectionUtils.createImmutableSet(
       "INPUT__FILE__NAME", "BLOCK__OFFSET__INSIDE__FILE", "ROW__OFFSET__INSIDE__BLOCK", "RAW__DATA__SIZE",
       "ROW__ID", "GROUPING__ID");
@@ -91,6 +97,13 @@ public class HoodieHiveUtils {
     return job.getConfiguration().get(startCommitTimestampName);
   }
 
+  /**
+   * Gets the n'th parent for the Path. Assumes the path has at-least n components
+   *
+   * @param path
+   * @param n
+   * @return
+   */
   public static Path getNthParent(Path path, int n) {
     Path parent = path;
     for (int i = 0; i < n; i++) {
@@ -99,6 +112,12 @@ public class HoodieHiveUtils {
     return parent;
   }
 
+  /**
+   * Returns a list of tableNames for which hoodie.<tableName>.consume.mode is set to incremental else returns empty List
+   *
+   * @param job
+   * @return
+   */
   public static List<String> getIncrementalTableNames(JobContext job) {
     Map<String, String> tablesModeMap = job.getConfiguration()
         .getValByRegex(HOODIE_CONSUME_MODE_PATTERN_STRING.pattern());
@@ -114,5 +133,44 @@ public class HoodieHiveUtils {
       result = new ArrayList<>();
     }
     return result;
+  }
+
+  /**
+   * Depending on the configs hoodie.%s.consume.pending.commits and hoodie.%s.consume.commit of job
+   *
+   * (hoodie.<tableName>.consume.pending.commits, hoodie.<tableName>.consume.commit) ->
+   *      (true, validCommit)       -> returns activeTimeline filtered until validCommit
+   *      (true, InValidCommit)     -> Raises HoodieIOException
+   *      (true, notSet)            -> Raises HoodieIOException
+   *      (false, validCommit)      -> returns completedTimeline filtered until validCommit
+   *      (false, InValidCommit)    -> Raises HoodieIOException
+   *      (false or notSet, notSet) -> returns completedTimeline unfiltered
+   *
+   *      validCommit is one which exists in the timeline being checked and vice versa
+   *
+   * @param tableName
+   * @param job
+   * @param metaClient
+   * @return
+   */
+  public static HoodieTimeline getTableTimeline(final String tableName, final JobConf job, final HoodieTableMetaClient metaClient) {
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline();
+
+    boolean includePendingCommits = job.getBoolean(String.format(HOODIE_CONSUME_PENDING_COMMITS, tableName), false);
+    String maxCommit = job.get(String.format(HOODIE_CONSUME_COMMIT, tableName));
+
+    if (!includePendingCommits && maxCommit == null) {
+      return timeline.filterCompletedInstants();
+    }
+
+    return filterIfInstantExists(tableName, includePendingCommits ? timeline : timeline.filterCompletedInstants(), maxCommit);
+  }
+
+  private static HoodieTimeline filterIfInstantExists(String tableName, HoodieTimeline timeline, String maxCommit) {
+    if (maxCommit == null || !timeline.containsInstant(maxCommit)) {
+      LOG.info("Timestamp " + maxCommit + " doesn't exist in the commits timeline:" + timeline + " table: " + tableName);
+      throw new HoodieIOException("Valid timestamp is required for " + HOODIE_CONSUME_COMMIT + " in snapshot mode");
+    }
+    return timeline.findInstantsBeforeOrEquals(maxCommit);
   }
 }

@@ -17,18 +17,23 @@
 
 package org.apache.hudi.functional
 
+import scala.collection.JavaConverters._
+import org.apache.hudi.DataSourceWriteOptions.{KEYGENERATOR_CLASS_OPT_KEY, PARTITIONPATH_FIELD_OPT_KEY, PAYLOAD_CLASS_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.log4j.LogManager
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import scala.collection.JavaConversions._
 
@@ -502,6 +507,44 @@ class TestMORDataSource extends HoodieClientTestBase {
     hudiSnapshotDF2.show(1)
   }
 
+  @Test
+  def testPreCombineFiledForReadMOR(): Unit = {
+    writeData((1, "a0",10, 100))
+    checkAnswer((1, "a0",10, 100))
+
+    writeData((1, "a0", 12, 99))
+    // The value has not update, because the version 99 < 100
+    checkAnswer((1, "a0",10, 100))
+
+    writeData((1, "a0", 12, 101))
+    // The value has update
+    checkAnswer((1, "a0", 12, 101))
+  }
+
+  private def writeData(data: (Int, String, Int, Int)): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+    val df = Seq(data).toDF("id", "name", "value", "version")
+    df.write.format("org.apache.hudi")
+      .options(commonOpts)
+      // use DefaultHoodieRecordPayload here
+      .option(PAYLOAD_CLASS_OPT_KEY, classOf[DefaultHoodieRecordPayload].getCanonicalName)
+      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .option(RECORDKEY_FIELD_OPT_KEY, "id")
+      .option(PRECOMBINE_FIELD_OPT_KEY, "version")
+      .option(PARTITIONPATH_FIELD_OPT_KEY, "")
+      .option(KEYGENERATOR_CLASS_OPT_KEY, classOf[NonpartitionedKeyGenerator].getName)
+      .mode(SaveMode.Append)
+      .save(basePath)
+  }
+
+  private def checkAnswer(expect: (Int, String, Int, Int)): Unit = {
+    val readDf = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*")
+    val row1 = readDf.select("id", "name", "value", "version").take(1)(0)
+    assertEquals(Row(expect.productIterator.toSeq: _*), row1)
+  }
+
   def verifySchemaAndTypes(df: DataFrame): Unit = {
     assertEquals("amount,currency,tip_history,_hoodie_commit_seqno",
       df.select("fare.amount", "fare.currency", "tip_history", "_hoodie_commit_seqno")
@@ -521,5 +564,117 @@ class TestMORDataSource extends HoodieClientTestBase {
   def verifyShow(df: DataFrame): Unit = {
     df.show(1)
     df.select("_hoodie_commit_seqno", "fare.amount", "fare.currency", "tip_history").show(1)
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testQueryMORWithBasePathAndFileIndex(partitionEncode: Boolean): Unit = {
+    val N = 20
+    // Test query with partition prune if URL_ENCODE_PARTITIONING_OPT_KEY has enable
+    val records1 = dataGen.generateInsertsContainsAllPartitions("000", N)
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
+    inputDF1.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY, partitionEncode)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
+
+    val countIn20160315 = records1.asScala.count(record => record.getPartitionPath == "2016/03/15")
+    // query the partition by filter
+    val count1 = spark.read.format("hudi")
+      .load(basePath)
+      .filter("partition = '2016/03/15'")
+      .count()
+    assertEquals(countIn20160315, count1)
+
+    // query the partition by path
+    val partitionPath = if (partitionEncode) "2016%2F03%2F15" else "2016/03/15"
+    val count2 = spark.read.format("hudi")
+      .load(basePath + s"/$partitionPath")
+      .count()
+    assertEquals(countIn20160315, count2)
+
+    // Second write with Append mode
+    val records2 = dataGen.generateInsertsContainsAllPartitions("000", N + 1)
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records2), 2))
+    inputDF2.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY, partitionEncode)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    // Incremental query without "*" in path
+    val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, commitInstantTime1)
+      .load(basePath)
+    assertEquals(N + 1, hoodieIncViewDF1.count())
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array("true, false", "false, true", "false, false", "true, true"))
+  def testMORPartitionPrune(partitionEncode: Boolean, hiveStylePartition: Boolean): Unit = {
+    val partitions = Array("2021/03/01", "2021/03/02", "2021/03/03", "2021/03/04", "2021/03/05")
+    val newDataGen =  new HoodieTestDataGenerator(partitions)
+    val records1 = newDataGen.generateInsertsContainsAllPartitions("000", 100)
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
+
+    val partitionCounts = partitions.map(p => p -> records1.count(r => r.getPartitionPath == p)).toMap
+
+    inputDF1.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY, partitionEncode)
+      .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY, hiveStylePartition)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val count1 = spark.read.format("hudi")
+      .load(basePath)
+      .filter("partition = '2021/03/01'")
+      .count()
+    assertEquals(partitionCounts("2021/03/01"), count1)
+
+    val count2 = spark.read.format("hudi")
+      .load(basePath)
+      .filter("partition > '2021/03/01' and partition < '2021/03/03'")
+      .count()
+    assertEquals(partitionCounts("2021/03/02"), count2)
+
+    val count3 = spark.read.format("hudi")
+      .load(basePath)
+      .filter("partition != '2021/03/01'")
+      .count()
+    assertEquals(records1.size() - partitionCounts("2021/03/01"), count3)
+
+    val count4 = spark.read.format("hudi")
+      .load(basePath)
+      .filter("partition like '2021/03/03%'")
+      .count()
+    assertEquals(partitionCounts("2021/03/03"), count4)
+
+    val count5 = spark.read.format("hudi")
+      .load(basePath)
+      .filter("partition like '%2021/03/%'")
+      .count()
+    assertEquals(records1.size(), count5)
+
+    val count6 = spark.read.format("hudi")
+      .load(basePath)
+      .filter("partition = '2021/03/01' or partition = '2021/03/05'")
+      .count()
+    assertEquals(partitionCounts("2021/03/01") + partitionCounts("2021/03/05"), count6)
+
+    val count7 = spark.read.format("hudi")
+      .load(basePath)
+      .filter("substr(partition, 9, 10) = '03'")
+      .count()
+
+    assertEquals(partitionCounts("2021/03/03"), count7)
   }
 }

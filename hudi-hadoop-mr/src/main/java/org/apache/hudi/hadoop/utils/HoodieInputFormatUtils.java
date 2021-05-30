@@ -178,7 +178,7 @@ public class HoodieInputFormatUtils {
    * @return
    */
   public static HoodieDefaultTimeline filterInstantsTimeline(HoodieDefaultTimeline timeline) {
-    HoodieDefaultTimeline commitsAndCompactionTimeline = timeline.getCommitsAndCompactionTimeline();
+    HoodieDefaultTimeline commitsAndCompactionTimeline = timeline.getWriteTimeline();
     Option<HoodieInstant> pendingCompactionInstant = commitsAndCompactionTimeline
         .filterPendingCompactionTimeline().firstInstant();
     if (pendingCompactionInstant.isPresent()) {
@@ -239,7 +239,7 @@ public class HoodieInputFormatUtils {
            * those partitions.
            */
           for (Path path : inputPaths) {
-            if (path.toString().contains(s)) {
+            if (path.toString().endsWith(s)) {
               return true;
             }
           }
@@ -324,7 +324,7 @@ public class HoodieInputFormatUtils {
     }
     Path baseDir = HoodieHiveUtils.getNthParent(dataPath, levels);
     LOG.info("Reading hoodie metadata from path " + baseDir.toString());
-    return new HoodieTableMetaClient(fs.getConf(), baseDir.toString());
+    return HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(baseDir.toString()).build();
   }
 
   public static FileStatus getFileStatus(HoodieBaseFile baseFile) throws IOException {
@@ -439,8 +439,9 @@ public class HoodieInputFormatUtils {
           LOG.debug("Hoodie Metadata initialized with completed commit instant as :" + metaClient);
         }
 
+        HoodieTimeline timeline = HoodieHiveUtils.getTableTimeline(metaClient.getTableConfig().getTableName(), job, metaClient);
         HoodieTableFileSystemView fsView = fsViewCache.computeIfAbsent(metaClient, tableMetaClient ->
-            FileSystemViewManager.createInMemoryFileSystemView(engineContext, tableMetaClient, buildMetadataConfig(job)));
+            FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext, tableMetaClient, buildMetadataConfig(job), timeline));
         List<HoodieBaseFile> filteredBaseFiles = new ArrayList<>();
         for (Path p : entry.getValue()) {
           String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath()), p);

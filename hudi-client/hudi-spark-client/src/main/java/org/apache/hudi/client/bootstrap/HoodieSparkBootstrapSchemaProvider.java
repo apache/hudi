@@ -20,6 +20,7 @@ package org.apache.hudi.client.bootstrap;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.common.bootstrap.FileStatusUtils;
@@ -29,7 +30,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.parquet.schema.MessageType;
-import org.apache.spark.sql.avro.SchemaConverters;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetToSparkSchemaConverter;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.types.StructType;
@@ -47,7 +47,7 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
     MessageType parquetSchema = partitions.stream().flatMap(p -> p.getValue().stream()).map(fs -> {
       try {
         Path filePath = FileStatusUtils.toPath(fs.getPath());
-        return ParquetUtils.readSchema(context.getHadoopConf().get(), filePath);
+        return new ParquetUtils().readSchema(context.getHadoopConf().get(), filePath);
       } catch (Exception ex) {
         return null;
       }
@@ -63,6 +63,6 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
     String structName = tableName + "_record";
     String recordNamespace = "hoodie." + tableName;
 
-    return SchemaConverters.toAvroType(sparkSchema, false, structName, recordNamespace);
+    return AvroConversionUtils.convertStructTypeToAvroSchema(sparkSchema, structName, recordNamespace);
   }
 }

@@ -35,6 +35,7 @@ import org.joda.time.format.DateTimeFormatter;
 import java.io.IOException;
 import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
+import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.TimeZone;
@@ -192,6 +193,10 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
       timeMs = convertLongTimeToMillis(((Float) partitionVal).longValue());
     } else if (partitionVal instanceof Long) {
       timeMs = convertLongTimeToMillis((Long) partitionVal);
+    } else if (partitionVal instanceof Integer) {
+      timeMs = convertLongTimeToMillis(((Integer) partitionVal).longValue());
+    } else if (partitionVal instanceof BigDecimal) {
+      timeMs = convertLongTimeToMillis(((BigDecimal) partitionVal).longValue());
     } else if (partitionVal instanceof CharSequence) {
       if (!inputFormatter.isPresent()) {
         throw new HoodieException("Missing inputformatter. Ensure " + Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP + " config is set when timestampType is DATE_STRING or MIXED!");

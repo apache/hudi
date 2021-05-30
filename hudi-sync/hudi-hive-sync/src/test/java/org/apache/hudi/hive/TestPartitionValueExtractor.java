@@ -35,4 +35,15 @@ public class TestPartitionValueExtractor {
     assertThrows(IllegalArgumentException.class, () -> hourPartition.extractPartitionValuesInPath("2020/12/20"));
     assertEquals(hourPartition.extractPartitionValuesInPath("update_time=2020/12/20/01"), list);
   }
+
+  @Test
+  public void testHiveStylePartition() {
+    HiveStylePartitionValueExtractor hiveStylePartition = new HiveStylePartitionValueExtractor();
+    List<String> list = new ArrayList<>();
+    list.add("2021-04-02");
+    assertEquals(hiveStylePartition.extractPartitionValuesInPath("datestr=2021-04-02"), list);
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> hiveStylePartition.extractPartitionValuesInPath("2021/04/02"));
+  }
 }

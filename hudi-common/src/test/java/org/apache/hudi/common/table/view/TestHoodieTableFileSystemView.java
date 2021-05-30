@@ -306,7 +306,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     String partitionPath = "2016/05/01";
     new File(basePath + "/" + partitionPath).mkdirs();
     String fileId = UUID.randomUUID().toString();
-    String srcName = "part_0000.parquet";
+    String srcName = "part_0000" + metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
     HoodieFileStatus srcFileStatus = HoodieFileStatus.newBuilder()
         .setPath(HoodiePath.newBuilder().setUri(BOOTSTRAP_SOURCE_PATH + partitionPath + "/" + srcName).build())
         .setLength(256 * 1024 * 1024L)

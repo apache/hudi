@@ -19,15 +19,16 @@
 package org.apache.hudi.table.action.rollback;
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -37,7 +38,6 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.BaseActionExecutor;
-
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -130,23 +130,37 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
   }
 
   private void validateRollbackCommitSequence() {
-    final String instantTimeToRollback = instantToRollback.getTimestamp();
-    HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
-    HoodieTimeline inflightAndRequestedCommitTimeline = table.getPendingCommitTimeline();
-    // Make sure only the last n commits are being rolled back
-    // If there is a commit in-between or after that is not rolled back, then abort
-    if ((instantTimeToRollback != null) && !commitTimeline.empty()
-        && !commitTimeline.findInstantsAfter(instantTimeToRollback, Integer.MAX_VALUE).empty()) {
-      throw new HoodieRollbackException(
-          "Found commits after time :" + instantTimeToRollback + ", please rollback greater commits first");
-    }
+    // Continue to provide the same behavior if policy is EAGER (similar to pendingRollback logic). This is required
+    // since with LAZY rollback we support parallel writing which can allow a new inflight while rollback is ongoing
+    // Remove this once we support LAZY rollback of failed writes by default as parallel writing becomes the default
+    // writer mode.
+    if (config.getFailedWritesCleanPolicy().isEager()) {
+      final String instantTimeToRollback = instantToRollback.getTimestamp();
+      HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
+      HoodieTimeline inflightAndRequestedCommitTimeline = table.getPendingCommitTimeline();
+      // Make sure only the last n commits are being rolled back
+      // If there is a commit in-between or after that is not rolled back, then abort
+      if ((instantTimeToRollback != null) && !commitTimeline.empty()
+          && !commitTimeline.findInstantsAfter(instantTimeToRollback, Integer.MAX_VALUE).empty()) {
+        // check if remnants are from a previous LAZY rollback config, if yes, let out of order rollback continue
+        try {
+          if (!HoodieHeartbeatClient.heartbeatExists(table.getMetaClient().getFs(),
+              config.getBasePath(), instantTimeToRollback)) {
+            throw new HoodieRollbackException(
+                "Found commits after time :" + instantTimeToRollback + ", please rollback greater commits first");
+          }
+        } catch (IOException io) {
+          throw new HoodieRollbackException("Unable to rollback commits ", io);
+        }
+      }
 
-    List<String> inflights = inflightAndRequestedCommitTimeline.getInstants().map(HoodieInstant::getTimestamp)
-        .collect(Collectors.toList());
-    if ((instantTimeToRollback != null) && !inflights.isEmpty()
-        && (inflights.indexOf(instantTimeToRollback) != inflights.size() - 1)) {
-      throw new HoodieRollbackException(
-          "Found in-flight commits after time :" + instantTimeToRollback + ", please rollback greater commits first");
+      List<String> inflights = inflightAndRequestedCommitTimeline.getInstants().map(HoodieInstant::getTimestamp)
+          .collect(Collectors.toList());
+      if ((instantTimeToRollback != null) && !inflights.isEmpty()
+          && (inflights.indexOf(instantTimeToRollback) != inflights.size() - 1)) {
+        throw new HoodieRollbackException(
+            "Found in-flight commits after time :" + instantTimeToRollback + ", please rollback greater commits first");
+      }
     }
   }
 
@@ -161,8 +175,11 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
     final String instantTimeToRollback = instantToRollback.getTimestamp();
     final boolean isPendingCompaction = Objects.equals(HoodieTimeline.COMPACTION_ACTION, instantToRollback.getAction())
         && !instantToRollback.isCompleted();
+
+    final boolean isPendingClustering = Objects.equals(HoodieTimeline.REPLACE_COMMIT_ACTION, instantToRollback.getAction())
+        && !instantToRollback.isCompleted() && ClusteringUtils.getClusteringPlan(table.getMetaClient(), instantToRollback).isPresent();
     validateSavepointRollbacks();
-    if (!isPendingCompaction) {
+    if (!isPendingCompaction && !isPendingClustering) {
       validateRollbackCommitSequence();
     }
 
@@ -186,12 +203,6 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
           new HoodieInstant(true, HoodieTimeline.ROLLBACK_ACTION, instantTime),
           TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
       LOG.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");
-      if (!table.getActiveTimeline().getCleanerTimeline().empty()) {
-        LOG.info("Cleaning up older rollback meta files");
-        FSUtils.deleteOlderRollbackMetaFiles(table.getMetaClient().getFs(),
-            table.getMetaClient().getMetaPath(),
-            table.getActiveTimeline().getRollbackTimeline().getInstants());
-      }
     } catch (IOException e) {
       throw new HoodieIOException("Error executing rollback at instant " + instantTime, e);
     }

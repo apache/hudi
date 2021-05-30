@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
@@ -45,8 +46,9 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.SparkBootstrapCommitActionExecutor;
 import org.apache.hudi.table.action.clean.SparkCleanActionExecutor;
-import org.apache.hudi.table.action.cluster.SparkExecuteClusteringCommitActionExecutor;
+import org.apache.hudi.table.action.clean.SparkCleanPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.SparkClusteringPlanActionExecutor;
+import org.apache.hudi.table.action.cluster.SparkExecuteClusteringCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkBulkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkBulkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkDeleteCommitActionExecutor;
@@ -174,6 +176,11 @@ public class HoodieSparkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
   @Override
   public void rollbackBootstrap(HoodieEngineContext context, String instantTime) {
     new SparkCopyOnWriteRestoreActionExecutor((HoodieSparkEngineContext) context, config, this, instantTime, HoodieTimeline.INIT_INSTANT_TS).execute();
+  }
+
+  @Override
+  public Option<HoodieCleanerPlan> scheduleCleaning(HoodieEngineContext context, String instantTime, Option<Map<String, String>> extraMetadata) {
+    return new SparkCleanPlanActionExecutor<>(context, config,this, instantTime, extraMetadata).execute();
   }
 
   public Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath, String fileId,

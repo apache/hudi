@@ -19,6 +19,7 @@
 package org.apache.hudi.dla;
 
 import com.beust.jcommander.JCommander;
+import java.util.HashMap;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
@@ -102,7 +103,7 @@ public class DLASyncTool extends AbstractSyncTool {
           throw new InvalidTableException(hoodieDLAClient.getBasePath());
       }
     } catch (RuntimeException re) {
-      LOG.error("Got runtime exception when dla syncing", re);
+      throw new HoodieException("Got runtime exception when dla syncing " + cfg.tableName, re);
     } finally {
       hoodieDLAClient.close();
     }
@@ -149,14 +150,14 @@ public class DLASyncTool extends AbstractSyncTool {
       if (!useRealTimeInputFormat) {
         String inputFormatClassName = HoodieParquetInputFormat.class.getName();
         hoodieDLAClient.createTable(tableName, schema, inputFormatClassName, MapredParquetOutputFormat.class.getName(),
-            ParquetHiveSerDe.class.getName());
+            ParquetHiveSerDe.class.getName(), new HashMap<>(), new HashMap<>());
       } else {
         // Custom serde will not work with ALTER TABLE REPLACE COLUMNS
         // https://github.com/apache/hive/blob/release-1.1.0/ql/src/java/org/apache/hadoop/hive
         // /ql/exec/DDLTask.java#L3488
         String inputFormatClassName = HoodieParquetRealtimeInputFormat.class.getName();
         hoodieDLAClient.createTable(tableName, schema, inputFormatClassName, MapredParquetOutputFormat.class.getName(),
-            ParquetHiveSerDe.class.getName());
+            ParquetHiveSerDe.class.getName(), new HashMap<>(), new HashMap<>());
       }
     } else {
       // Check if the table schema has evolved

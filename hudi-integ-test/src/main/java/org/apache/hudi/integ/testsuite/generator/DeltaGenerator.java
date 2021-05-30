@@ -28,7 +28,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
@@ -41,10 +40,6 @@ import org.apache.hudi.integ.testsuite.configuration.DFSDeltaConfig;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.converter.Converter;
 import org.apache.hudi.integ.testsuite.converter.DeleteConverter;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.integ.testsuite.configuration.DFSDeltaConfig;
-import org.apache.hudi.integ.testsuite.configuration.DeltaConfig;
-import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.converter.UpdateConverter;
 import org.apache.hudi.integ.testsuite.reader.DFSAvroDeltaInputReader;
 import org.apache.hudi.integ.testsuite.reader.DFSHoodieDatasetInputReader;
@@ -55,25 +50,12 @@ import org.apache.hudi.integ.testsuite.writer.DeltaWriterAdapter;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriterFactory;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.storage.StorageLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.io.Serializable;
-import java.io.UncheckedIOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.StreamSupport;
 
 import scala.Tuple2;
 
@@ -140,7 +122,7 @@ public class DeltaGenerator implements Serializable {
     JavaRDD<GenericRecord> inputBatch = jsc.parallelize(partitionIndexes, numPartitions)
         .mapPartitionsWithIndex((index, p) -> {
           return new LazyRecordGeneratorIterator(new FlexibleSchemaRecordGenerationIterator(recordsPerPartition,
-              minPayloadSize, schemaStr, partitionPathFieldNames, numPartitions));
+              minPayloadSize, schemaStr, partitionPathFieldNames, numPartitions, startPartition));
         }, true);
 
     if (deltaOutputConfig.getInputParallelism() < numPartitions) {
@@ -234,7 +216,6 @@ public class DeltaGenerator implements Serializable {
       throw new IllegalArgumentException("Other formats are not supported at the moment");
     }
   }
-
 
   public Map<Integer, Long> getPartitionToCountMap(JavaRDD<GenericRecord> records) {
     // Requires us to keep the partitioner the same

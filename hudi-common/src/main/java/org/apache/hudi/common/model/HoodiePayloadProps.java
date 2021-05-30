@@ -24,9 +24,20 @@ package org.apache.hudi.common.model;
  */
 public class HoodiePayloadProps {
 
-  // payload ordering field. This could be used to merge incoming record with that in storage. Implementations of
-  // {@link HoodieRecordPayload} can leverage if required.
+  /**
+   * Property for payload ordering field; to be used to merge incoming record with that in storage.
+   * Implementations of {@link HoodieRecordPayload} can leverage if required.
+   *
+   * @see DefaultHoodieRecordPayload
+   */
   public static final String PAYLOAD_ORDERING_FIELD_PROP = "hoodie.payload.ordering.field";
   public static String DEFAULT_PAYLOAD_ORDERING_FIELD_VAL = "ts";
 
+  /**
+   * Property for payload event time field; to be used to extract source event time info.
+   *
+   * @see DefaultHoodieRecordPayload
+   */
+  public static final String PAYLOAD_EVENT_TIME_FIELD_PROP = "hoodie.payload.event.time.field";
+  public static String DEFAULT_PAYLOAD_EVENT_TIME_FIELD_VAL = "ts";
 }
