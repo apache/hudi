@@ -683,7 +683,7 @@ The value for <code class="highlighter-rouge">hoodie.datasource.write.partitionp
   <li>Simple record key and custom timestamp based partition path (with optional hive style partitioning) - <code class="highlighter-rouge">TimestampBasedKeyGenerator.java</code></li>
   <li>Composite record keys (combination of multiple fields) and composite partition paths - <code class="highlighter-rouge">ComplexKeyGenerator.java</code></li>
   <li>Composite record keys and timestamp based partition paths (composite also supported) - You might need to move to 0.6.0 and use <code class="highlighter-rouge">CustomKeyGenerator.java</code> class</li>
-  <li>Non partitioned table - <code class="highlighter-rouge">NonPartitionedKeyGenerator.java</code>. Non-partitioned tables can currently only have a single key column, <a href="https://issues.apache.org/jira/browse/HUDI-1053">HUDI-1053</a></li>
+  <li>Non partitioned table - <code class="highlighter-rouge">NonpartitionedKeyGenerator.java</code>. Non-partitioned tables can currently only have a single key column, <a href="https://issues.apache.org/jira/browse/HUDI-1053">HUDI-1053</a></li>
 </ul>
 
 <h2 id="syncing-to-hive">Syncing to Hive</h2>
