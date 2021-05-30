@@ -175,7 +175,20 @@ For more details, refer to the detailed [migration guide](/docs/migration_guide.
 
 ## CLI
 
-Once hudi has been built, the shell can be fired by via  `cd hudi-cli && ./hudi-cli.sh`. A hudi table resides on DFS, in a location referred to as the `basePath` and 
+Hudi CLI tool helps in managing Hudi tables. If you are looking to manage a local table, you can just invoke `hudi-cli.sh` from hudi-cli/ directory. No other additional steps are required. However if you are looking to access a dataset in HDFS or EMR etc, you need to do the following:
+
+ - Tar hudi-cli/*
+ - Import the tar to dfs
+ - Untar
+ - Set below env variables
+
+   `HADOOP_CONF_DIR // represents your hadoop conf dir. In EMR value = /etc/hadoop/conf`
+   
+   `SPARK_CONF_DIR // represents your spark conf dir. In EMR value = /etc/spark/conf`
+
+ - Launch `hudi-cli.sh` from hudi-cli directory.
+
+A hudi table resides on DFS, in a location referred to as the `basePath` and 
 we would need this location in order to connect to a Hudi table. Hudi library effectively manages this table internally, using `.hoodie` subfolder to track all metadata.
 
 To initialize a hudi table, use the following command.
@@ -225,40 +238,127 @@ hudi:trips->connect --path /app/uber/trips
 Metadata for table trips loaded
 ```
 
-Once connected to the table, a lot of other commands become available. The shell has contextual autocomplete help (press TAB) and below is a list of all commands, few of which are reviewed in this section
-are reviewed
+Once connected to the table, a lot of other commands become available. The shell has contextual autocomplete help (press TAB) and below is a list of all commands, few of which are reviewed in this section.
+
+ - `commits show` - Lists all commits in hudi table.
+ - `commits showarchived` - Lists all archived commits in hudi table.
+ - `commits refresh` - Refreshes the commit timeline. If there are ongoing operations after launching hudi-cli tool, this will refresh your commits to include all latest commits too.
+ - `commits compare` - Compares commits with another hudi table.
+ - `commits sync` - Syncs current hudi table with another table.
+ - `commit show_write_stats` - Lists write stats for commit of interest. A commit id need to be provided as an argument, for example
 
 ```java
-hudi:trips->help
-* ! - Allows execution of operating system (OS) commands
-* // - Inline comment markers (start of line only)
-* ; - Inline comment markers (start of line only)
-* addpartitionmeta - Add partition metadata to a table, if not present
-* clear - Clears the console
-* cls - Clears the console
-* commit rollback - Rollback a commit
-* commits compare - Compare commits with another Hoodie table
-* commit showfiles - Show file level details of a commit
-* commit showpartitions - Show partition level details of a commit
-* commits refresh - Refresh the commits
-* commits show - Show the commits
-* commits sync - Compare commits with another Hoodie table
-* connect - Connect to a hoodie table
-* date - Displays the local date and time
-* exit - Exits the shell
-* help - List all commands usage
-* quit - Exits the shell
-* records deduplicate - De-duplicate a partition path contains duplicates & produce repaired files to replace with
-* script - Parses the specified resource file and executes its commands
-* stats filesizes - File Sizes. Display summary stats on sizes of files
-* stats wa - Write Amplification. Ratio of how many records were upserted to how many records were actually written
-* sync validate - Validate the sync by counting the number of records
-* system properties - Shows the shell's properties
-* utils loadClass - Load a class
-* version - Displays shell version
-
-hudi:trips->
+commit show_write_stats --commit 20210501233331
 ```
+
+ - `commit showfiles` - Lists files for a given commit.
+ - `commit showpartitions` - Shows partition information for a given commit.
+ - `commit rollback` - Rolls back a commit.
+
+```java
+commit rollback --commit 20210501233331
+```
+
+ - `stats filesizes`: Display summary stats on sizes of files
+ - `stats wa`: Write Amplification. Ratio of how many records were upserted to how many records were actually written.
+ - `show fsview all` - Show entire file-system view.
+ - `show fsview latest` - Show latest file-system view.
+ - `show rollbacks` - Lists all rollback instants.
+ - `show rollback` - Show details of a rollback instant.
+
+```java
+show rollback --instant <Instant>
+```
+
+ - `show archived commits` - Read commits from archived files and show details.
+ - `show archived commit stats` -  Read commits from archived files and show details.
+ - `show logfile metadata` - Read commit metadata from log files.
+
+```java
+show logfile metadata --logFilePathPattern <log_file_path>
+```
+
+ - `show logfile records` - Read records from log files.
+
+```java
+show logfile records --logFilePathPattern <log_file_path>
+```
+
+ - `show env` - Show spark launcher env by key
+ - `show envs all` - Show spark launcher envs.
+ - `compactions show all` - Shows all compactions that are in active timeline.
+ - `compaction show` - Shows compaction details for a specific compaction instant.
+ - `compactions showarchived` - Shows compaction details for specified time window
+ - `compaction showarchived` - Shows compaction details for a specific compaction instant
+ - `compaction run` - Run Compaction for given instant time
+ - `compaction schedule` - Schedule Compaction
+ - `compaction unschedule` - Unschedule Compaction
+ - `compaction unscheduleFileId` - UnSchedule Compaction for a fileId
+ - `compaction validate` - Validate Compaction
+ - `compaction repair` - Renames the files to make them consistent with the timeline as dictated by Hoodie metadata. Use when compaction unschedule fails partially.
+ - `repair addpartitionmeta` - Add partition metadata to a table, if not present
+ - `repair corrupted clean files` - repair corrupted clean files
+ - `repair deduplicate` - De-duplicate a partition path contains duplicates & produce repaired files to replace with
+ - `repair overwrite-hoodie-props` - Overwrite hoodie.properties with provided file. Risky operation. Proceed with caution!
+ - `savepoints show` - Show the savepoints
+ - `savepoint create` - Savepoint a commit
+ - `savepoint delete` - Delete the savepoint
+ - `savepoint rollback` - Savepoint a commit
+ - `savepoints refresh` - Refresh table metadata
+ - `cleans show` - Show the cleans
+ - `cleans run` - run clean
+ - `clean showpartitions` - Show partition level details of a clean
+ - `cleans refresh` - Refresh table metadata
+ - `sync validate` - validate hive sync. There are lot of options with this command like --mode, --sourceDb, --targetDb, etc.
+
+```java
+sync validate --hiveUser <user> --hivePass <password> --hiveServerUrl <hive_server_url>
+```
+
+ - `metadata create` - Create the Metadata Table if it does not exist
+ - `metadata delete` - Remove the Metadata Table
+ - `metadata init` - Update the metadata table from commits since the creation
+ - `metadata list-files` - Print a list of all files in a partition from the metadata
+ - `metadata list-partitions` - Print a list of all partitions from the metadata
+ - `metadata refresh` - Refresh table metadata
+ - `metadata set` - Set options for Metadata Table
+ - `metadata stats` - Print stats about the metadata
+ - `clustering run` - Run Clustering
+ - `clustering schedule` - Schedule Clustering
+ - `bootstrap index showmapping` - Show bootstrap index mapping
+ - `bootstrap index showpartitions` - Show bootstrap indexed partitions
+ - `bootstrap run` - Run a bootstrap action for current Hudi table
+ - `temps_show` - Show all views name
+ - `temps show` - Show all views name
+ - `temp_query` - query against created temp view
+ - `temp query` - query against created temp view
+ - `temp delete` - Delete view name
+ - `temp_delete` - Delete view name
+ - `export instants` - Export Instants and their metadata from the Timeline
+ - `hdfsparquetimport` - Imports Parquet table to a hoodie table
+ - `refresh` - Refresh table metadata
+ - `!` - Allows execution of operating system (OS) commands
+ - `//` - Inline comment markers (start of line only)
+ - `;` - Inline comment markers (start of line only)
+ - `clear` - Clears the console
+ - `cls` - Clears the console
+ - `date` - Displays the local date and time
+ - `script` - Parses the specified resource file and executes its commands
+ - `set` - Set spark launcher env to cli
+ - `system properties` - Shows the shell's properties
+ - `utils loadClass` - Load a class
+ - `version` - Displays shell version
+ - `exit` - Exits the shell
+ - `quit` - Exits the shell
+ - `clear` - Clears the console
+ - `cls` - Clears the console
+ - `date` - Displays the local date and time
+ - `help` - List all commands usage
+ - `records deduplicate` - De-duplicate a partition path contains duplicates & produce repaired files to replace with
+ - `script` - Parses the specified resource file and executes its commands
+ - `system properties` - Shows the shell's properties
+ - `utils loadClass` - Load a class
+ - `version` - Displays shell version
 
 
 ### Inspecting Commits
