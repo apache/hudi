@@ -111,9 +111,10 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   private final boolean bootstrapIndex;
 
   /**
-   * State to book-keep which partition is loaded into the index state {@code indexState}.
+   * Indicate whether the index information of the current {@link HoodieKey} is loaded into state or not.
+   * If it is empty or false, hoodie will load the index from table first.
    */
-  private ValueState<Boolean> partitionLoadState;
+  private ValueState<Boolean> stateLoadFlag;
 
   /**
    * Used to create DELETE payload.
@@ -175,8 +176,8 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     indexState = context.getKeyedStateStore().getState(indexStateDesc);
     if (bootstrapIndex) {
       ValueStateDescriptor<Boolean> partitionLoadStateDesc =
-          new ValueStateDescriptor<>("partitionLoadState", Types.BOOLEAN);
-      partitionLoadState = context.getKeyedStateStore().getState(partitionLoadStateDesc);
+          new ValueStateDescriptor<>("stateLoadFlag", Types.BOOLEAN);
+      stateLoadFlag = context.getKeyedStateStore().getState(partitionLoadStateDesc);
     }
   }
 
@@ -194,11 +195,11 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
 
     // The dataset may be huge, thus the processing would block for long,
     // disabled by default.
-    if (bootstrapIndex && !Boolean.TRUE.equals(partitionLoadState.value())) {
+    if (bootstrapIndex && !Boolean.TRUE.equals(stateLoadFlag.value())) {
       // If the partition records are never loaded, load the records first.
       loadRecords(partitionPath, recordKey);
       // Mark the partition path as loaded.
-      partitionLoadState.update(true);
+      stateLoadFlag.update(true);
     }
     // Only changing records need looking up the index for the location,
     // append only records are always recognized as INSERT.
@@ -216,13 +217,6 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
           out.collect((O) deleteRecord);
         }
         location = getNewRecordLocation(partitionPath);
-        // unfortunately there is no common method to judge HoodieRecord is delete or not
-        // boolean isDelete = ((BaseAvroPayload)record.getData()).recordBytes.length == 0;
-        // if(isDelete){
-        //  this.indexState.update(null);
-        // }else{
-        //  this.indexState.update(HoodieRecordGlobalLocation.fromLocal(partitionPath, location))
-        // }
         this.indexState.update(HoodieRecordGlobalLocation.fromLocal(partitionPath, location));
       } else {
         location = oldLoc.toLocal("U");
