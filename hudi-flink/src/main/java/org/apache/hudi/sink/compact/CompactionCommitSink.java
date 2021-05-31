@@ -19,12 +19,12 @@
 package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -60,11 +60,6 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   private final Configuration conf;
 
   /**
-   * Write Client.
-   */
-  private transient HoodieFlinkWriteClient writeClient;
-
-  /**
    * Buffer to collect the event from each compact task {@code CompactFunction}.
    * The key is the instant time.
    */
@@ -78,7 +73,9 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
+    if (writeClient == null) {
+      this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
+    }
     this.commitBuffer = new HashMap<>();
   }
 
@@ -122,6 +119,13 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
     }
     // commit the compaction
     this.writeClient.commitCompaction(instant, statuses, Option.empty());
+
+    // Whether to cleanup the old log file when compaction
+    if (!conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
+      this.writeClient.startAsyncCleaning();
+      this.writeClient.waitForCleaningFinish();
+    }
+
     // reset the status
     reset(instant);
   }
