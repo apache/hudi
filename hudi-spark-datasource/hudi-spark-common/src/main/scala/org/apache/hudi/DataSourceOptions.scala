@@ -206,31 +206,31 @@ object DataSourceWriteOptions {
   def translateSqlOptions(optParams: Map[String, String]): Map[String, String] = {
     var translatedOptParams = optParams
     // translate the api partitionBy of spark DataFrameWriter to PARTITIONPATH_FIELD_OPT_KEY
-    if (optParams.contains(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)) {
-      val partitionColumns = optParams.get(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)
-        .map(SparkDataSourceUtils.decodePartitioningColumns)
-        .getOrElse(Nil)
-      val keyGeneratorClass = optParams.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY,
-        DataSourceWriteOptions.DEFAULT_KEYGENERATOR_CLASS_OPT_VAL)
-
-      val partitionPathField =
-        keyGeneratorClass match {
-          // Only CustomKeyGenerator needs special treatment, because it needs to be specified in a way
-          // such as "field1:PartitionKeyType1,field2:PartitionKeyType2".
-          // partitionBy can specify the partition like this: partitionBy("p1", "p2:SIMPLE", "p3:TIMESTAMP")
-          case c if c == classOf[CustomKeyGenerator].getName =>
-            partitionColumns.map(e => {
-              if (e.contains(":")) {
-                e
-              } else {
-                s"$e:SIMPLE"
-              }
-            }).mkString(",")
-          case _ =>
-            partitionColumns.mkString(",")
-        }
-      translatedOptParams = optParams ++ Map(PARTITIONPATH_FIELD_OPT_KEY -> partitionPathField)
-    }
+//    if (optParams.contains(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)) {
+//      val partitionColumns = optParams.get(SparkDataSourceUtils.PARTITIONING_COLUMNS_KEY)
+//        .map(SparkDataSourceUtils.decodePartitioningColumns)
+//        .getOrElse(Nil)
+//      val keyGeneratorClass = optParams.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY,
+//        DataSourceWriteOptions.DEFAULT_KEYGENERATOR_CLASS_OPT_VAL)
+//
+//      val partitionPathField =
+//        keyGeneratorClass match {
+//          // Only CustomKeyGenerator needs special treatment, because it needs to be specified in a way
+//          // such as "field1:PartitionKeyType1,field2:PartitionKeyType2".
+//          // partitionBy can specify the partition like this: partitionBy("p1", "p2:SIMPLE", "p3:TIMESTAMP")
+//          case c if c == classOf[CustomKeyGenerator].getName =>
+//            partitionColumns.map(e => {
+//              if (e.contains(":")) {
+//                e
+//              } else {
+//                s"$e:SIMPLE"
+//              }
+//            }).mkString(",")
+//          case _ =>
+//            partitionColumns.mkString(",")
+//        }
+//      translatedOptParams = optParams ++ Map(PARTITIONPATH_FIELD_OPT_KEY -> partitionPathField)
+//    }
     translatedOptParams
   }
 
