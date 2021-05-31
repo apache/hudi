@@ -262,7 +262,14 @@ case class HoodieFileIndex(
           // If the partition column size is not equal to the partition fragment size
           // and the partition column size is 1, we map the whole partition path
           // to the partition column which can benefit from the partition prune.
-          InternalRow.fromSeq(Seq(UTF8String.fromString(partitionPath)))
+          val prefix = s"${partitionSchema.fieldNames.head}="
+          val partitionValue = if (partitionPath.startsWith(prefix)) {
+            // support hive style partition path
+            partitionPath.substring(prefix.length)
+          } else {
+            partitionPath
+          }
+          InternalRow.fromSeq(Seq(UTF8String.fromString(partitionValue)))
         } else if (partitionFragments.length != partitionSchema.fields.length &&
           partitionSchema.fields.length > 1) {
           // If the partition column size is not equal to the partition fragments size

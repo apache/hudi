@@ -115,6 +115,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public static final String EMBEDDED_TIMELINE_SERVER_ENABLED = "hoodie.embed.timeline.server";
   public static final String DEFAULT_EMBEDDED_TIMELINE_SERVER_ENABLED = "true";
+  public static final String EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED = "hoodie.embed.timeline.server.reuse.enabled";
+  public static final String DEFAULT_EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED = "false";
   public static final String EMBEDDED_TIMELINE_SERVER_PORT = "hoodie.embed.timeline.server.port";
   public static final String DEFAULT_EMBEDDED_TIMELINE_SERVER_PORT = "0";
   public static final String EMBEDDED_TIMELINE_SERVER_THREADS = "hoodie.embed.timeline.server.threads";
@@ -330,6 +332,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public boolean isEmbeddedTimelineServerEnabled() {
     return Boolean.parseBoolean(props.getProperty(EMBEDDED_TIMELINE_SERVER_ENABLED));
+  }
+
+  public boolean isEmbeddedTimelineServerReuseEnabled() {
+    return Boolean.parseBoolean(props.getProperty(EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED));
   }
 
   public int getEmbeddedTimelineServerPort() {
@@ -1271,6 +1277,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withEmbeddedTimelineServerReuseEnabled(boolean enabled) {
+      props.setProperty(EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED, String.valueOf(enabled));
+      return this;
+    }
+
     public Builder withEmbeddedTimelineServerPort(int port) {
       props.setProperty(EMBEDDED_TIMELINE_SERVER_PORT, String.valueOf(port));
       return this;
@@ -1362,6 +1373,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           DEFAULT_MARKERS_DELETE_PARALLELISM);
       setDefaultOnCondition(props, !props.containsKey(EMBEDDED_TIMELINE_SERVER_ENABLED),
           EMBEDDED_TIMELINE_SERVER_ENABLED, DEFAULT_EMBEDDED_TIMELINE_SERVER_ENABLED);
+      setDefaultOnCondition(props, !props.containsKey(EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED),
+          EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED, DEFAULT_EMBEDDED_TIMELINE_SERVER_REUSE_ENABLED);
       setDefaultOnCondition(props, !props.containsKey(INITIAL_CONSISTENCY_CHECK_INTERVAL_MS_PROP),
           INITIAL_CONSISTENCY_CHECK_INTERVAL_MS_PROP, String.valueOf(DEFAULT_INITIAL_CONSISTENCY_CHECK_INTERVAL_MS));
       setDefaultOnCondition(props, !props.containsKey(MAX_CONSISTENCY_CHECK_INTERVAL_MS_PROP),
