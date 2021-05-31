@@ -203,7 +203,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
    * @throws HoodieException
    */
   public void stop() throws HoodieException {
-    instantToHeartbeatMap.values().stream().forEach(heartbeat -> stop(heartbeat.getInstantTime()));
+    instantToHeartbeatMap.values().forEach(heartbeat -> stop(heartbeat.getInstantTime()));
   }
 
   public static Long getLastHeartbeatTime(FileSystem fs, String basePath, String instantTime) throws IOException {
