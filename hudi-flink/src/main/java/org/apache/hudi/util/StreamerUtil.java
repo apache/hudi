@@ -242,9 +242,7 @@ public class StreamerUtil {
         properties.put(option.key(), option.defaultValue());
       }
     }
-    TypedProperties typeProps = new TypedProperties();
-    typeProps.putAll(properties);
-    return typeProps;
+    return new TypedProperties(properties);
   }
 
   public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
