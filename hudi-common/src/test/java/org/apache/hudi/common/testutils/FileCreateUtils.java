@@ -21,6 +21,7 @@ package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.fs.FSUtils;
@@ -45,9 +46,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.FileTime;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCompactionPlan;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCleanMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCleanerPlan;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeRequestedReplaceMetadata;
@@ -175,6 +179,10 @@ public class FileCreateUtils {
     }
   }
 
+  public static void createRequestedCompactionCommit(String basePath, String instantTime, HoodieCompactionPlan requestedCompactionPlan) throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION, serializeCompactionPlan(requestedCompactionPlan).get());
+  }
+
   public static void createCleanFile(String basePath, String instantTime, HoodieCleanMetadata metadata) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.CLEAN_EXTENSION, serializeCleanMetadata(metadata).get());
   }
@@ -224,6 +232,11 @@ public class FileCreateUtils {
 
   public static void createBaseFile(String basePath, String partitionPath, String instantTime, String fileId, long length)
       throws Exception {
+    createBaseFile(basePath, partitionPath, instantTime, fileId, length, Instant.now().toEpochMilli());
+  }
+
+  public static void createBaseFile(String basePath, String partitionPath, String instantTime, String fileId, long length, long lastModificationTimeMilli)
+      throws Exception {
     Path parentPath = Paths.get(basePath, partitionPath);
     Files.createDirectories(parentPath);
     Path baseFilePath = parentPath.resolve(baseFileName(instantTime, fileId));
@@ -231,6 +244,7 @@ public class FileCreateUtils {
       Files.createFile(baseFilePath);
     }
     new RandomAccessFile(baseFilePath.toFile(), "rw").setLength(length);
+    Files.setLastModifiedTime(baseFilePath, FileTime.fromMillis(lastModificationTimeMilli));
   }
 
   public static void createLogFile(String basePath, String partitionPath, String instantTime, String fileId, int version)

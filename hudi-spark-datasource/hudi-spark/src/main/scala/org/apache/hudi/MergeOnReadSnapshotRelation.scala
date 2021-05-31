@@ -67,7 +67,6 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
     DataSourceReadOptions.REALTIME_MERGE_OPT_KEY,
     DataSourceReadOptions.DEFAULT_REALTIME_MERGE_OPT_VAL)
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
-  private val fileIndex = buildFileIndex()
   private val preCombineField = {
     val preCombineFieldFromTableConfig = metaClient.getTableConfig.getPreCombineField
     if (preCombineFieldFromTableConfig != null) {
@@ -94,6 +93,8 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
     })
     val requiredAvroSchema = AvroConversionUtils
       .convertStructTypeToAvroSchema(requiredStructSchema, tableAvroSchema.getName, tableAvroSchema.getNamespace)
+
+    val fileIndex = buildFileIndex(filters)
     val hoodieTableState = HoodieMergeOnReadTableState(
       tableStructSchema,
       requiredStructSchema,
@@ -131,7 +132,8 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
     rdd.asInstanceOf[RDD[Row]]
   }
 
-  def buildFileIndex(): List[HoodieMergeOnReadFileSplit] = {
+  def buildFileIndex(filters: Array[Filter]): List[HoodieMergeOnReadFileSplit] = {
+
     val fileStatuses = if (globPaths.isDefined) {
       // Load files from the global paths if it has defined to be compatible with the original mode
       val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sqlContext.sparkSession, globPaths.get)
@@ -139,7 +141,19 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
     } else { // Load files by the HoodieFileIndex.
       val hoodieFileIndex = HoodieFileIndex(sqlContext.sparkSession, metaClient,
         Some(tableStructSchema), optParams, FileStatusCache.getOrCreate(sqlContext.sparkSession))
-      hoodieFileIndex.allFiles
+
+      // Get partition filter and convert to catalyst expression
+      val partitionColumns = hoodieFileIndex.partitionSchema.fieldNames.toSet
+      val partitionFilters = filters.filter(f => f.references.forall(p => partitionColumns.contains(p)))
+      val partitionFilterExpression =
+        HoodieSparkUtils.convertToCatalystExpressions(partitionFilters, tableStructSchema)
+
+      // if convert success to catalyst expression, use the partition prune
+      if (partitionFilterExpression.isDefined) {
+        hoodieFileIndex.listFiles(Seq(partitionFilterExpression.get), Seq.empty).flatMap(_.files)
+      } else {
+        hoodieFileIndex.allFiles
+      }
     }
 
     if (fileStatuses.isEmpty) { // If this an empty table, return an empty split list.
