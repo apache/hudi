@@ -168,7 +168,6 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
     ValidationUtils.checkArgument(heartbeat == null || !heartbeat.isHeartbeatStopped(), "Cannot restart a stopped heartbeat for " + instantTime);
     if (heartbeat != null && heartbeat.isHeartbeatStarted()) {
       // heartbeat already started, NO_OP
-      return;
     } else {
       Heartbeat newHeartbeat = new Heartbeat();
       newHeartbeat.setHeartbeatStarted(true);
