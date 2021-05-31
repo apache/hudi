@@ -312,7 +312,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Helper method to initialize a given path as a hoodie table with configs passed in as as Properties.
+   * Helper method to initialize a given path as a hoodie table with configs passed in as Properties.
    *
    * @return Instance of HoodieTableMetaClient
    */
