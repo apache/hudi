@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink.partitioner;
+package org.apache.hudi.sink.partitioner.profile;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -26,22 +26,18 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * BucketAssigner for INSERT OVERWRITE and INSERT OVERWRITE TABLE operations,
- * this assigner always skip the existing small files because of the 'OVERWRITE' semantics.
+ * WriteProfile for INSERT OVERWRITE and INSERT OVERWRITE TABLE operations,
+ * this WriteProfile always skip the existing small files because of the 'OVERWRITE' semantics.
  *
  * <p>Note: assumes the index can always index log files for Flink write.
  */
-public class OverwriteBucketAssigner extends BucketAssigner {
-  public OverwriteBucketAssigner(
-      int taskID,
-      int numTasks,
-      HoodieFlinkEngineContext context,
-      HoodieWriteConfig config) {
-    super(taskID, numTasks, context, config);
+public class OverwriteWriteProfile extends WriteProfile {
+  public OverwriteWriteProfile(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
+    super(config, context);
   }
 
   @Override
-  protected List<SmallFile> getSmallFiles(String partitionPath) {
+  protected List<SmallFile> smallFilesProfile(String partitionPath) {
     return Collections.emptyList();
   }
 }
