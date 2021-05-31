@@ -243,7 +243,7 @@ public class StreamerUtil {
       }
     }
     TypedProperties typeProps = new TypedProperties();
-    typeProps.putAll(typeProps);
+    typeProps.putAll(properties);
     return typeProps;
   }
 
