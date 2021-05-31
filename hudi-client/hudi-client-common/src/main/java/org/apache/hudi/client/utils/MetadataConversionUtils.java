@@ -60,12 +60,18 @@ public class MetadataConversionUtils {
         archivedMetaWrapper.setActionType(ActionType.clean.name());
         break;
       }
-      case HoodieTimeline.COMMIT_ACTION:
-      case HoodieTimeline.DELTA_COMMIT_ACTION: {
+      case HoodieTimeline.COMMIT_ACTION: {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
                 .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
         archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(commitMetadata));
         archivedMetaWrapper.setActionType(ActionType.commit.name());
+        break;
+      }
+      case HoodieTimeline.DELTA_COMMIT_ACTION: {
+        HoodieCommitMetadata deltaCommitMetadata = HoodieCommitMetadata
+                .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieCommitMetadata.class);
+        archivedMetaWrapper.setHoodieCommitMetadata(convertCommitMetadata(deltaCommitMetadata));
+        archivedMetaWrapper.setActionType(ActionType.deltacommit.name());
         break;
       }
       case HoodieTimeline.REPLACE_COMMIT_ACTION: {
