@@ -29,7 +29,7 @@ import java.io.Serializable;
  * exception.
  * </p>
  */
-public class HoodieException extends RuntimeException implements Serializable {
+public class HoodieException extends RuntimeException {
 
   public HoodieException() {
     super();
