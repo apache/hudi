@@ -36,7 +36,7 @@ public class TypedProperties extends Properties implements Serializable {
   }
 
   public TypedProperties(Properties defaults) {
-    if (Objects.nonNull(defaults)){
+    if (Objects.nonNull(defaults)) {
       putAll(defaults);
     }
   }
