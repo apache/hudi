@@ -27,6 +27,7 @@ import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.event.BatchWriteSuccessEvent;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
+import org.apache.hudi.sink.partitioner.BucketAssignOperator;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
 import org.apache.hudi.utils.TestConfigurations;
 
@@ -44,8 +45,10 @@ import org.apache.flink.streaming.api.operators.collect.utils.MockOperatorEventG
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.util.Collector;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -67,6 +70,8 @@ public class StreamWriteFunctionWrapper<I> {
   private RowDataToHoodieFunction<RowData, HoodieRecord<?>> toHoodieFunction;
   /** Function that assigns bucket ID. */
   private BucketAssignFunction<String, HoodieRecord<?>, HoodieRecord<?>> bucketAssignerFunction;
+  /** BucketAssignOperator context **/
+  private MockBucketAssignOperatorContext bucketAssignOperatorContext;
   /** Stream write function. */
   private StreamWriteFunction<Object, HoodieRecord<?>, Object> writeFunction;
 
@@ -91,6 +96,7 @@ public class StreamWriteFunctionWrapper<I> {
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
     this.functionInitializationContext = new MockFunctionInitializationContext();
     this.compactFunctionWrapper = new CompactFunctionWrapper(this.conf);
+    this.bucketAssignOperatorContext = new MockBucketAssignOperatorContext();
   }
 
   public void openFunction() throws Exception {
@@ -103,6 +109,7 @@ public class StreamWriteFunctionWrapper<I> {
     bucketAssignerFunction = new BucketAssignFunction<>(conf);
     bucketAssignerFunction.setRuntimeContext(runtimeContext);
     bucketAssignerFunction.open(conf);
+    bucketAssignerFunction.setContext(bucketAssignOperatorContext);
     bucketAssignerFunction.initializeState(this.functionInitializationContext);
 
     writeFunction = new StreamWriteFunction<>(conf);
@@ -150,7 +157,7 @@ public class StreamWriteFunctionWrapper<I> {
     return this.writeFunction.getWriteClient();
   }
 
-  public void checkpointFunction(long checkpointId) throws Exception {
+  public void checkpointFunction(long checkpointId) {
     // checkpoint the coordinator first
     this.coordinator.checkpointCoordinator(checkpointId, new CompletableFuture<>());
     bucketAssignerFunction.snapshotState(null);
@@ -192,13 +199,35 @@ public class StreamWriteFunctionWrapper<I> {
 
   public void clearIndexState() {
     this.bucketAssignerFunction.clearIndexState();
+    this.bucketAssignOperatorContext.clearIndexState();
   }
 
   public boolean isKeyInState(HoodieKey hoodieKey) {
-    return this.bucketAssignerFunction.isKeyInState(hoodieKey);
+    return this.bucketAssignOperatorContext.isKeyInState(hoodieKey.getRecordKey());
   }
 
   public boolean isConforming() {
     return this.writeFunction.isConfirming();
+  }
+
+  // -------------------------------------------------------------------------
+  //  Inner Class
+  // -------------------------------------------------------------------------
+
+  private static class MockBucketAssignOperatorContext implements BucketAssignOperator.Context {
+    private final Set<Object> updateKeys = new HashSet<>();
+
+    @Override
+    public void setCurrentKey(Object key) {
+      this.updateKeys.add(key);
+    }
+
+    public void clearIndexState() {
+      this.updateKeys.clear();
+    }
+
+    public boolean isKeyInState(String key) {
+      return this.updateKeys.contains(key);
+    }
   }
 }
