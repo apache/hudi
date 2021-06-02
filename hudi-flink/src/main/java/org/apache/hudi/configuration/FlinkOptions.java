@@ -305,6 +305,22 @@ public class FlinkOptions {
       .defaultValue(100) // default 100 MB
       .withDescription("Max memory in MB for merge, default 100MB");
 
+  public static final ConfigOption<Boolean> WRITE_EXACTLY_ONCE_ENABLED = ConfigOptions
+      .key("write.exactly_once.enabled")
+      .booleanType()
+      .defaultValue(false) // default at least once
+      .withDescription("Whether write in exactly_once semantics, if true,\n"
+          + "the write task would block flushing after it finishes a checkpoint\n"
+          + "until it receives the checkpoint success event, default false");
+
+  // this is only for internal use
+  public static final ConfigOption<Long> WRITE_COMMIT_ACK_TIMEOUT = ConfigOptions
+      .key("write.commit.ack.timeout")
+      .longType()
+      .defaultValue(-1L) // default at least once
+      .withDescription("Timeout limit for a writer task after it finishes a checkpoint and\n"
+          + "waits for the instant commit success, only for internal use");
+
   // ------------------------------------------------------------------------
   //  Compaction Options
   // ------------------------------------------------------------------------
@@ -352,6 +368,12 @@ public class FlinkOptions {
       .intType()
       .defaultValue(100) // default 100 MB
       .withDescription("Max memory in MB for compaction spillable map, default 100MB");
+
+  public static final ConfigOption<Long> COMPACTION_TARGET_IO = ConfigOptions
+      .key("compaction.target_io")
+      .longType()
+      .defaultValue(5120L) // default 5 GB
+      .withDescription("Target IO per compaction (both read and write), default 5 GB");
 
   public static final ConfigOption<Boolean> CLEAN_ASYNC_ENABLED = ConfigOptions
       .key("clean.async.enabled")

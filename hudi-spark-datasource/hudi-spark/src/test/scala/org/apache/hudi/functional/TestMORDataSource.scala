@@ -33,7 +33,7 @@ import org.apache.spark.sql.functions._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import scala.collection.JavaConversions._
 
@@ -613,5 +613,68 @@ class TestMORDataSource extends HoodieClientTestBase {
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, commitInstantTime1)
       .load(basePath)
     assertEquals(N + 1, hoodieIncViewDF1.count())
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array("true, false", "false, true", "false, false", "true, true"))
+  def testMORPartitionPrune(partitionEncode: Boolean, hiveStylePartition: Boolean): Unit = {
+    val partitions = Array("2021/03/01", "2021/03/02", "2021/03/03", "2021/03/04", "2021/03/05")
+    val newDataGen =  new HoodieTestDataGenerator(partitions)
+    val records1 = newDataGen.generateInsertsContainsAllPartitions("000", 100)
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
+
+    val partitionCounts = partitions.map(p => p -> records1.count(r => r.getPartitionPath == p)).toMap
+
+    inputDF1.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY, partitionEncode)
+      .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY, hiveStylePartition)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val count1 = spark.read.format("hudi")
+      .load(basePath)
+      .filter("partition = '2021/03/01'")
+      .count()
+    assertEquals(partitionCounts("2021/03/01"), count1)
+
+    val count2 = spark.read.format("hudi")
+      .load(basePath)
+      .filter("partition > '2021/03/01' and partition < '2021/03/03'")
+      .count()
+    assertEquals(partitionCounts("2021/03/02"), count2)
+
+    val count3 = spark.read.format("hudi")
+      .load(basePath)
+      .filter("partition != '2021/03/01'")
+      .count()
+    assertEquals(records1.size() - partitionCounts("2021/03/01"), count3)
+
+    val count4 = spark.read.format("hudi")
+      .load(basePath)
+      .filter("partition like '2021/03/03%'")
+      .count()
+    assertEquals(partitionCounts("2021/03/03"), count4)
+
+    val count5 = spark.read.format("hudi")
+      .load(basePath)
+      .filter("partition like '%2021/03/%'")
+      .count()
+    assertEquals(records1.size(), count5)
+
+    val count6 = spark.read.format("hudi")
+      .load(basePath)
+      .filter("partition = '2021/03/01' or partition = '2021/03/05'")
+      .count()
+    assertEquals(partitionCounts("2021/03/01") + partitionCounts("2021/03/05"), count6)
+
+    val count7 = spark.read.format("hudi")
+      .load(basePath)
+      .filter("substr(partition, 9, 10) = '03'")
+      .count()
+
+    assertEquals(partitionCounts("2021/03/03"), count7)
   }
 }
