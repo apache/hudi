@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink.partitioner.delta;
+package org.apache.hudi.sink.partitioner.profile;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.sink.partitioner.BucketAssigner;
 import org.apache.hudi.table.action.commit.SmallFile;
 
 import java.util.ArrayList;
@@ -34,22 +33,18 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * BucketAssigner for MERGE_ON_READ table type, this allows auto correction of small parquet files to larger ones
+ * WriteProfile for MERGE_ON_READ table type, this allows auto correction of small parquet files to larger ones
  * without the need for an index in the logFile.
  *
  * <p>Note: assumes the index can always index log files for Flink write.
  */
-public class DeltaBucketAssigner extends BucketAssigner {
-  public DeltaBucketAssigner(
-      int taskID,
-      int numTasks,
-      HoodieFlinkEngineContext context,
-      HoodieWriteConfig config) {
-    super(taskID, numTasks, context, config);
+public class DeltaWriteProfile extends WriteProfile {
+  public DeltaWriteProfile(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
+    super(config, context);
   }
 
   @Override
-  protected List<SmallFile> getSmallFiles(String partitionPath) {
+  protected List<SmallFile> smallFilesProfile(String partitionPath) {
     // smallFiles only for partitionPath
     List<SmallFile> smallFileLocations = new ArrayList<>();
 
