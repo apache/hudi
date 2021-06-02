@@ -82,7 +82,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
 
   private static final Logger LOG = LoggerFactory.getLogger(BucketAssignFunction.class);
 
-  private HoodieFlinkEngineContext context;
+  private BucketAssignOperator.Context context;
 
   /**
    * Index cache(speed-up) state for the underneath file based(BloomFilter) indices.
@@ -146,7 +146,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     super.open(parameters);
     HoodieWriteConfig writeConfig = StreamerUtil.getHoodieClientConfig(this.conf);
     this.hadoopConf = StreamerUtil.getHadoopConf();
-    this.context = new HoodieFlinkEngineContext(
+    HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
         new SerializableConfiguration(this.hadoopConf),
         new FlinkTaskContextSupplier(getRuntimeContext()));
     this.bucketAssigner = BucketAssigners.create(
@@ -252,18 +252,28 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   }
 
   @Override
-  public void notifyCheckpointComplete(long l) {
+  public void notifyCheckpointComplete(long checkpointId) {
     // Refresh the table state when there are new commits.
-    this.bucketAssigner.refreshTable();
+    this.bucketAssigner.reload(checkpointId);
+  }
+
+  @Override
+  public void close() throws Exception {
+    this.bucketAssigner.close();
+  }
+
+  public void setContext(BucketAssignOperator.Context context) {
+    this.context = context;
   }
 
   /**
    * Load all the indices of give partition path into the backup state.
    *
    * @param partitionPath The partition path
+   * @param curRecordKey  The current record key
    * @throws Exception when error occurs for state update
    */
-  private void loadRecords(String partitionPath, String recordKey) throws Exception {
+  private void loadRecords(String partitionPath, String curRecordKey) throws Exception {
     LOG.info("Start loading records under partition {} into the index state", partitionPath);
     HoodieTable<?, ?, ?, ?> hoodieTable = bucketAssigner.getTable();
     BaseFileUtils fileUtils = BaseFileUtils.getInstance(hoodieTable.getBaseFileFormat());
@@ -290,13 +300,14 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
         LOG.error("Error when loading record keys from file: {}", baseFile, e);
         throw e;
       }
-      hoodieKeys.stream().filter(hoodieKey -> recordKey.equals(hoodieKey.getRecordKey())).forEach(hoodieKey -> {
+      hoodieKeys.stream().filter(hoodieKey -> curRecordKey.equals(hoodieKey.getRecordKey())).forEach(hoodieKey -> {
         try {
           // Reference: org.apache.flink.streaming.api.datastream.KeyedStream,
           // the input records is shuffled by record key
           boolean shouldLoad = KeyGroupRangeAssignment.assignKeyToParallelOperator(
               hoodieKey.getRecordKey(), maxParallelism, parallelism) == taskID;
           if (shouldLoad) {
+            this.context.setCurrentKey(hoodieKey.getRecordKey());
             this.indexState.update(
                 new HoodieRecordGlobalLocation(hoodieKey.getPartitionPath(), commitTime, baseFile.getFileId()));
           }
@@ -305,20 +316,14 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
         }
       });
     }
+    // recover the currentKey
+    this.context.setCurrentKey(curRecordKey);
     LOG.info("Finish loading records under partition {} into the index state", partitionPath);
   }
 
   @VisibleForTesting
   public void clearIndexState() {
+    this.stateLoadFlag.clear();
     this.indexState.clear();
-  }
-
-  @VisibleForTesting
-  public boolean isKeyInState(HoodieKey hoodieKey) {
-    try {
-      return this.indexState.value() != null;
-    } catch (Exception e) {
-      throw new HoodieException(e);
-    }
   }
 }

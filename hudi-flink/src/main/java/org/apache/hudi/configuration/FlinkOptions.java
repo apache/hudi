@@ -369,6 +369,12 @@ public class FlinkOptions {
       .defaultValue(100) // default 100 MB
       .withDescription("Max memory in MB for compaction spillable map, default 100MB");
 
+  public static final ConfigOption<Long> COMPACTION_TARGET_IO = ConfigOptions
+      .key("compaction.target_io")
+      .longType()
+      .defaultValue(5120L) // default 5 GB
+      .withDescription("Target IO per compaction (both read and write), default 5 GB");
+
   public static final ConfigOption<Boolean> CLEAN_ASYNC_ENABLED = ConfigOptions
       .key("clean.async.enabled")
       .booleanType()
