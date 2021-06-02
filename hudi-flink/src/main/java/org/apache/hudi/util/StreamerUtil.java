@@ -195,6 +195,7 @@ public class StreamerUtil {
             .withCompactionConfig(
                 HoodieCompactionConfig.newBuilder()
                     .withPayloadClass(conf.getString(FlinkOptions.PAYLOAD_CLASS))
+                    .withTargetIOPerCompactionInMB(conf.getLong(FlinkOptions.COMPACTION_TARGET_IO))
                     .withInlineCompactionTriggerStrategy(
                         CompactionTriggerStrategy.valueOf(conf.getString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY).toUpperCase(Locale.ROOT)))
                     .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_COMMITS))
