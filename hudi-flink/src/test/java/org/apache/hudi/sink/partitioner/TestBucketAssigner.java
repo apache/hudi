@@ -23,6 +23,7 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.sink.partitioner.profile.WriteProfile;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.table.action.commit.SmallFile;
@@ -311,7 +312,6 @@ public class TestBucketAssigner {
    * Mock BucketAssigner that can specify small files explicitly.
    */
   static class MockBucketAssigner extends BucketAssigner {
-    private final Map<String, List<SmallFile>> smallFilesMap;
 
     MockBucketAssigner(
         HoodieFlinkEngineContext context,
@@ -332,12 +332,23 @@ public class TestBucketAssigner {
         HoodieFlinkEngineContext context,
         HoodieWriteConfig config,
         Map<String, List<SmallFile>> smallFilesMap) {
-      super(taskID, numTasks, context, config);
+      super(taskID, numTasks, new MockWriteProfile(config, context, smallFilesMap), config);
+    }
+  }
+
+  /**
+   * Mock WriteProfile that can specify small files explicitly.
+   */
+  static class MockWriteProfile extends WriteProfile {
+    private final Map<String, List<SmallFile>> smallFilesMap;
+
+    public MockWriteProfile(HoodieWriteConfig config, HoodieFlinkEngineContext context, Map<String, List<SmallFile>> smallFilesMap) {
+      super(config, context);
       this.smallFilesMap = smallFilesMap;
     }
 
     @Override
-    protected List<SmallFile> getSmallFiles(String partitionPath) {
+    protected List<SmallFile> smallFilesProfile(String partitionPath) {
       if (this.smallFilesMap.containsKey(partitionPath)) {
         return this.smallFilesMap.get(partitionPath);
       }
