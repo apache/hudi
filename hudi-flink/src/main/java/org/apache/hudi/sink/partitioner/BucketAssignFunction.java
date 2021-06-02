@@ -251,9 +251,14 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   }
 
   @Override
-  public void notifyCheckpointComplete(long l) {
+  public void notifyCheckpointComplete(long checkpointId) {
     // Refresh the table state when there are new commits.
-    this.bucketAssigner.refreshTable();
+    this.bucketAssigner.reload(checkpointId);
+  }
+
+  @Override
+  public void close() throws Exception {
+    this.bucketAssigner.close();
   }
 
   /**
