@@ -18,7 +18,6 @@
 
 package org.apache.hudi.exception;
 
-import java.io.Serializable;
 
 /**
  * <p>
