@@ -32,7 +32,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.sink.utils.PayloadCreation;
 import org.apache.hudi.table.HoodieTable;
@@ -41,6 +40,8 @@ import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.state.CheckpointListener;
+import org.apache.flink.api.common.state.MapState;
+import org.apache.flink.api.common.state.MapStateDescriptor;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -111,10 +112,9 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
   private final boolean bootstrapIndex;
 
   /**
-   * Indicate whether the index information of the current {@link HoodieKey} is loaded into state or not.
-   * If it is empty or false, hoodie will load the index from table first.
+   * State to book-keep which partition is loaded into the index state {@code indexState}.
    */
-  private ValueState<Boolean> stateLoadFlag;
+  private MapState<String, Integer> partitionLoadState;
 
   /**
    * Used to create DELETE payload.
@@ -175,9 +175,9 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     }
     indexState = context.getKeyedStateStore().getState(indexStateDesc);
     if (bootstrapIndex) {
-      ValueStateDescriptor<Boolean> partitionLoadStateDesc =
-          new ValueStateDescriptor<>("stateLoadFlag", Types.BOOLEAN);
-      stateLoadFlag = context.getKeyedStateStore().getState(partitionLoadStateDesc);
+      MapStateDescriptor<String, Integer> partitionLoadStateDesc =
+          new MapStateDescriptor<>("partitionLoadState", Types.STRING, Types.INT);
+      partitionLoadState = context.getKeyedStateStore().getMapState(partitionLoadStateDesc);
     }
   }
 
@@ -195,11 +195,9 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
 
     // The dataset may be huge, thus the processing would block for long,
     // disabled by default.
-    if (bootstrapIndex && !Boolean.TRUE.equals(stateLoadFlag.value())) {
+    if (bootstrapIndex && !partitionLoadState.contains(partitionPath)) {
       // If the partition records are never loaded, load the records first.
       loadRecords(partitionPath, recordKey);
-      // Mark the partition path as loaded.
-      stateLoadFlag.update(true);
     }
     // Only changing records need looking up the index for the location,
     // append only records are always recognized as INSERT.
@@ -318,12 +316,14 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     }
     // recover the currentKey
     this.context.setCurrentKey(curRecordKey);
+    // Mark the partition path as loaded.
+    partitionLoadState.put(partitionPath, 0);
     LOG.info("Finish loading records under partition {} into the index state", partitionPath);
   }
 
   @VisibleForTesting
   public void clearIndexState() {
-    this.stateLoadFlag.clear();
+    this.partitionLoadState.clear();
     this.indexState.clear();
   }
 }
