@@ -93,6 +93,12 @@ public class FlinkOptions {
       .withDescription("Whether to update index for the old partition path\n"
           + "if same key record with different partition path came in, default false");
 
+  public static final ConfigOption<String> INDEX_PARTITION_REGEX = ConfigOptions
+      .key("index.partition.regex")
+      .stringType()
+      .defaultValue(".*")
+      .withDescription("Whether to load partitions in state if partition path matching， default *");
+
   // ------------------------------------------------------------------------
   //  Read Options
   // ------------------------------------------------------------------------
