@@ -55,7 +55,7 @@ Cleaner selects the versions of files to be cleaned by taking care of the follow
 ![Retain latest commits](/assets/images/blog/hoodie-cleaner/Retain_latest_commits.png)
 _Figure2: Files corresponding to latest 3 commits are retained_
 
-Now, suppose he uses the below configs for cleaning:
+Now, suppose the user uses the below configs for cleaning:
 
 ```java
 hoodie.cleaner.policy=KEEP_LATEST_FILE_VERSIONS
