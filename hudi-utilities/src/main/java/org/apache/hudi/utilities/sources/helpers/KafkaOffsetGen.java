@@ -216,8 +216,7 @@ public class KafkaOffsetGen {
       partitionInfoList = consumer.partitionsFor(topicName);
       Set<TopicPartition> topicPartitions = partitionInfoList.stream()
               .map(x -> new TopicPartition(x.topic(), x.partition())).collect(Collectors.toSet());
-
-      if (Config.KAFKA_CHECKPOINT_TYPE_TIMESTAMP.equals(kafkaCheckpointType)) {
+      if (Config.KAFKA_CHECKPOINT_TYPE_TIMESTAMP.equals(kafkaCheckpointType) && lastCheckpointStr.isPresent()) {
         lastCheckpointStr = getOffsetsByTimestamp(consumer, partitionInfoList, topicName, Long.parseLong(lastCheckpointStr.get()));
       }
       // Determine the offset ranges to read from
