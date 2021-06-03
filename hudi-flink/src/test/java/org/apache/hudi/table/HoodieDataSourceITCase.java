@@ -46,13 +46,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -286,8 +286,9 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void testWriteAndReadParMiddle(boolean streaming) throws Exception {
+  @EnumSource(value = ExecMode.class)
+  void testWriteAndReadParMiddle(ExecMode execMode) throws Exception {
+    boolean streaming = execMode == ExecMode.STREAM;
     String hoodieTableDDL = "create table t1(\n"
             + "  uuid varchar(20),\n"
             + "  name varchar(10),\n"
@@ -324,13 +325,13 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
             + "id7,Bob,44,par4,1970-01-01T00:00:07, "
             + "id8,Han,56,par4,1970-01-01T00:00:08]";
 
-    List<Row> result = execSelectSql(streamTableEnv, "select * from t1", streaming);
+    List<Row> result = execSelectSql(streamTableEnv, "select * from t1", execMode);
 
     assertRowsEquals(result, expected);
 
     // insert another batch of data
     execInsertSql(streamTableEnv, insertInto);
-    List<Row> result2 = execSelectSql(streamTableEnv, "select * from t1", streaming);
+    List<Row> result2 = execSelectSql(streamTableEnv, "select * from t1", execMode);
     assertRowsEquals(result2, expected);
   }
 
@@ -516,6 +517,58 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
 
   }
 
+  @ParameterizedTest
+  @EnumSource(value = ExecMode.class)
+  void testWriteAndReadDebeziumJson(ExecMode execMode) throws Exception {
+    String sourcePath = Objects.requireNonNull(Thread.currentThread()
+        .getContextClassLoader().getResource("debezium_json.data")).toString();
+    String sourceDDL = ""
+        + "CREATE TABLE debezium_source(\n"
+        + "  id INT NOT NULL,\n"
+        + "  ts BIGINT,\n"
+        + "  name STRING,\n"
+        + "  description STRING,\n"
+        + "  weight DOUBLE\n"
+        + ") WITH (\n"
+        + "  'connector' = 'filesystem',\n"
+        + "  'path' = '" + sourcePath + "',\n"
+        + "  'format' = 'debezium-json'\n"
+        + ")";
+    streamTableEnv.executeSql(sourceDDL);
+    String hoodieTableDDL = ""
+        + "CREATE TABLE hoodie_sink(\n"
+        + "  id INT NOT NULL,\n"
+        + "  ts BIGINT,\n"
+        + "  name STRING,"
+        + "  weight DOUBLE,"
+        + "  PRIMARY KEY (id) NOT ENFORCED"
+        + ") with (\n"
+        + "  'connector' = 'hudi',\n"
+        + "  'path' = '" + tempFile.getAbsolutePath() + "',\n"
+        + "  'read.streaming.enabled' = '" + (execMode == ExecMode.STREAM) + "',\n"
+        + "  'write.insert.drop.duplicates' = 'true'"
+        + ")";
+    streamTableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into hoodie_sink select id, ts, name, weight from debezium_source";
+    execInsertSql(streamTableEnv, insertInto);
+
+    final String expected = "["
+        + "101,1000,scooter,3.140000104904175, "
+        + "102,2000,car battery,8.100000381469727, "
+        + "103,3000,12-pack drill bits,0.800000011920929, "
+        + "104,4000,hammer,0.75, "
+        + "105,5000,hammer,0.875, "
+        + "106,10000,hammer,1.0, "
+        + "107,11000,rocks,5.099999904632568, "
+        + "108,8000,jacket,0.10000000149011612, "
+        + "109,9000,spare tire,22.200000762939453, "
+        + "110,14000,jacket,0.5]";
+
+    List<Row> result = execSelectSql(streamTableEnv, "select * from hoodie_sink", execMode);
+
+    assertRowsEquals(result, expected);
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -533,15 +586,18 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
     }
   }
 
-  private List<Row> execSelectSql(TableEnvironment tEnv, String select, boolean streaming)
+  private List<Row> execSelectSql(TableEnvironment tEnv, String select, ExecMode execMode)
           throws TableNotExistException, InterruptedException {
-    if (streaming) {
-      final String[] splits = select.split(" ");
-      final String tableName = splits[splits.length - 1];
-      return execSelectSql(tEnv, select, 10, tableName);
-    } else {
-      return CollectionUtil.iterableToList(
-          () -> tEnv.sqlQuery("select * from t1").execute().collect());
+    final String[] splits = select.split(" ");
+    final String tableName = splits[splits.length - 1];
+    switch (execMode) {
+      case STREAM:
+        return execSelectSql(tEnv, select, 10, tableName);
+      case BATCH:
+        return CollectionUtil.iterableToList(
+            () -> tEnv.sqlQuery("select * from " + tableName).execute().collect());
+      default:
+        throw new AssertionError();
     }
   }
 
