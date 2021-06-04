@@ -144,6 +144,9 @@ public class FilePathUtils {
       boolean hivePartition,
       String[] partitionKeys) {
     LinkedHashMap<String, String> fullPartSpec = new LinkedHashMap<>();
+    if (partitionKeys.length == 0) {
+      return fullPartSpec;
+    }
     List<String[]> kvs = new ArrayList<>();
     int curDepth = 0;
     do {
