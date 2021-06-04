@@ -283,24 +283,17 @@ public class HoodieInputFormatUtils {
   }
 
   /**
-   * Extract HoodieTableMetaClient by base path.
-   * @param conf
-   * @param partitions
-   * @return
+   * Extract HoodieTableMetaClient by partition path.
+   * @param conf       The hadoop conf
+   * @param partitions The partitions
+   * @return partition path to table meta client mapping
    */
-  public static Map<Path, HoodieTableMetaClient> getTableMetaClientByBasePath(Configuration conf, Set<Path> partitions) {
-    Map<String, HoodieTableMetaClient> metaClientMap = new HashMap<>();
+  public static Map<Path, HoodieTableMetaClient> getTableMetaClientByPartitionPath(Configuration conf, Set<Path> partitions) {
+    Map<Path, HoodieTableMetaClient> metaClientMap = new HashMap<>();
     return partitions.stream().collect(Collectors.toMap(Function.identity(), p -> {
-      // Get meta client if this path is the base path.
-      Option<String> matchingBasePath = Option.fromJavaOptional(
-          metaClientMap.keySet().stream().filter(basePath -> p.toString().startsWith(basePath)).findFirst());
-      if (matchingBasePath.isPresent()) {
-        return metaClientMap.get(matchingBasePath.get());
-      }
-
       try {
         HoodieTableMetaClient metaClient = getTableMetaClientForBasePath(p.getFileSystem(conf), p);
-        metaClientMap.put(metaClient.getBasePath(), metaClient);
+        metaClientMap.put(p, metaClient);
         return metaClient;
       } catch (IOException e) {
         throw new HoodieIOException("Error creating hoodie meta client against : " + p, e);
