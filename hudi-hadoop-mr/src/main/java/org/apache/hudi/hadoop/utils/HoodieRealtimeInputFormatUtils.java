@@ -65,7 +65,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
     Map<Path, List<FileSplit>> partitionsToParquetSplits =
         fileSplits.collect(Collectors.groupingBy(split -> split.getPath().getParent()));
     // TODO(vc): Should we handle also non-hoodie splits here?
-    Map<Path, HoodieTableMetaClient> partitionsToMetaClient = getTableMetaClientByBasePath(conf, partitionsToParquetSplits.keySet());
+    Map<Path, HoodieTableMetaClient> partitionsToMetaClient = getTableMetaClientByPartitionPath(conf, partitionsToParquetSplits.keySet());
 
     // Create file system cache so metadata table is only instantiated once. Also can benefit normal file listing if
     // partition path is listed twice so file groups will already be loaded in file system
@@ -141,7 +141,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
     Map<Path, List<HoodieBaseFile>> partitionsToParquetSplits =
         fileStatuses.stream().collect(Collectors.groupingBy(file -> file.getFileStatus().getPath().getParent()));
     // TODO(vc): Should we handle also non-hoodie splits here?
-    Map<Path, HoodieTableMetaClient> partitionsToMetaClient = getTableMetaClientByBasePath(conf, partitionsToParquetSplits.keySet());
+    Map<Path, HoodieTableMetaClient> partitionsToMetaClient = getTableMetaClientByPartitionPath(conf, partitionsToParquetSplits.keySet());
 
     // for all unique split parents, obtain all delta files based on delta commit timeline,
     // grouped on file id
