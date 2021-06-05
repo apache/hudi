@@ -223,7 +223,7 @@ public class TestTimestampBasedKeyGenerator {
   }
 
   @Test
-  public void test_ExpectsMatch_SingleInputFormat_ISO8601WithMsZ_OutputTimezoneAsUTC() throws IOException {
+  public void testExpectsMatchSingleInputFormatISO8601WithMsZOutputTimezoneAsUTC() throws IOException {
     baseRecord.put("createTime", "2020-04-01T13:01:33.428Z");
     properties = this.getBaseKeyConfig(
         "DATE_STRING",
@@ -241,7 +241,7 @@ public class TestTimestampBasedKeyGenerator {
   }
 
   @Test
-  public void test_ExpectsMatch_SingleInputFormats_ISO8601WithMsZ_OutputTimezoneAsInputDateTimeZone() throws IOException {
+  public void testExpectsMatchSingleInputFormatsISO8601WithMsZOutputTimezoneAsInputDateTimeZone() throws IOException {
     baseRecord.put("createTime", "2020-04-01T13:01:33.428Z");
     properties = this.getBaseKeyConfig(
         "DATE_STRING",
@@ -259,7 +259,7 @@ public class TestTimestampBasedKeyGenerator {
   }
 
   @Test
-  public void test_ExpectsMatch_MultipleInputFormats_ISO8601WithMsZ_OutputTimezoneAsUTC() throws IOException {
+  public void testExpectsMatchMultipleInputFormatsISO8601WithMsZOutputTimezoneAsUTC() throws IOException {
     baseRecord.put("createTime", "2020-04-01T13:01:33.428Z");
     properties = this.getBaseKeyConfig(
         "DATE_STRING",
@@ -277,7 +277,7 @@ public class TestTimestampBasedKeyGenerator {
   }
 
   @Test
-  public void test_ExpectsMatch_MultipleInputFormats_ISO8601NoMsZ_OutputTimezoneAsUTC() throws IOException {
+  public void testExpectsMatchMultipleInputFormatsISO8601NoMsZOutputTimezoneAsUTC() throws IOException {
     baseRecord.put("createTime", "2020-04-01T13:01:33Z");
     properties = this.getBaseKeyConfig(
         "DATE_STRING",
@@ -295,7 +295,7 @@ public class TestTimestampBasedKeyGenerator {
   }
 
   @Test
-  public void test_ExpectsMatch_MultipleInputFormats_ISO8601NoMsWithOffset_OutputTimezoneAsUTC() throws IOException {
+  public void testExpectsMatchMultipleInputFormatsISO8601NoMsWithOffsetOutputTimezoneAsUTC() throws IOException {
     baseRecord.put("createTime", "2020-04-01T13:01:33-05:00");
     properties = this.getBaseKeyConfig(
         "DATE_STRING",
@@ -313,7 +313,7 @@ public class TestTimestampBasedKeyGenerator {
   }
 
   @Test
-  public void test_ExpectsMatch_MultipleInputFormats_ISO8601WithMsWithOffset_OutputTimezoneAsUTC() throws IOException {
+  public void testExpectsMatchMultipleInputFormatsISO8601WithMsWithOffsetOutputTimezoneAsUTC() throws IOException {
     baseRecord.put("createTime", "2020-04-01T13:01:33.123-05:00");
     properties = this.getBaseKeyConfig(
         "DATE_STRING",
@@ -331,7 +331,7 @@ public class TestTimestampBasedKeyGenerator {
   }
 
   @Test
-  public void test_ExpectsMatch_MultipleInputFormats_ISO8601WithMsZ_OutputTimezoneAsEST() throws IOException {
+  public void testExpectsMatchMultipleInputFormatsISO8601WithMsZOutputTimezoneAsEST() throws IOException {
     baseRecord.put("createTime", "2020-04-01T13:01:33.123Z");
     properties = this.getBaseKeyConfig(
         "DATE_STRING",
@@ -349,7 +349,7 @@ public class TestTimestampBasedKeyGenerator {
   }
 
   @Test
-  public void test_Throws_MultipleInputFormats_InputDateNotMatchingFormats() throws IOException {
+  public void testThrowsMultipleInputFormatsInputDateNotMatchingFormats() throws IOException {
     baseRecord.put("createTime", "2020-04-01 13:01:33.123-05:00");
     properties = this.getBaseKeyConfig(
         "DATE_STRING",
@@ -366,7 +366,7 @@ public class TestTimestampBasedKeyGenerator {
   }
 
   @Test
-  public void test_ExpectsMatch_MultipleInputFormats_ShortDate_OutputCustomDate() throws IOException {
+  public void testExpectsMatchMultipleInputFormatsShortDateOutputCustomDate() throws IOException {
     baseRecord.put("createTime", "20200401");
     properties = this.getBaseKeyConfig(
         "DATE_STRING",
@@ -384,7 +384,7 @@ public class TestTimestampBasedKeyGenerator {
   }
 
   @Test
-  public void test_ExpectsMatch_LogicalType_Date() throws IOException {
+  public void testExpectsMatchLogicalTypeDate() throws IOException {
     LocalDate today = LocalDate.now();
     baseRecord.put("dob", (int) today.toEpochDay());
     properties = this.getBaseKeyConfig(
@@ -405,7 +405,7 @@ public class TestTimestampBasedKeyGenerator {
   }
 
   @Test
-  public void test_ExpectsMatch_LogicalType_Timestamp() throws IOException {
+  public void testExpectsMatchLogicalTypeTimestamp() throws IOException {
     LocalDateTime now = LocalDateTime.now();
     baseRecord.put("updatedAt", now.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
     properties = this.getBaseKeyConfig(
