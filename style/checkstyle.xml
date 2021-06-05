@@ -14,6 +14,7 @@
     <module name="FileTabCharacter">
         <property name="eachLine" value="true"/>
     </module>
+
     <module name="SuppressionFilter">
         <property name="file" value="${checkstyle.suppressions.file}" default="checkstyle-suppressions.xml"/>
         <property name="optional" value="true"/>
