@@ -54,7 +54,10 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -485,6 +488,10 @@ public class HoodieAvroUtils {
         return decimalConversion.fromBytes((ByteBuffer) fieldValue, fieldSchema,
             LogicalTypes.decimal(dc.getPrecision(), dc.getScale()));
       }
+    } else if (fieldSchema.getLogicalType() == LogicalTypes.timestampMicros()) {
+      return Instant.EPOCH.plus(Long.parseLong(fieldValue.toString()), ChronoUnit.MICROS).atZone(ZoneId.systemDefault()).toLocalDateTime();
+    } else if (fieldSchema.getLogicalType() == LogicalTypes.timestampMillis()) {
+      return Instant.EPOCH.plus(Long.parseLong(fieldValue.toString()), ChronoUnit.MILLIS).atZone(ZoneId.systemDefault()).toLocalDateTime();
     }
     return fieldValue;
   }
