@@ -55,7 +55,7 @@ public class CompactFunctionWrapper {
   private final MockFunctionInitializationContext functionInitializationContext;
 
   /** Function that generates the {@link HoodieCompactionPlan}. */
-  private CompactionPlanOperator compactionPlanFunction;
+  private CompactionPlanOperator compactionPlanOperator;
   /** Function that executes the compaction task. */
   private CompactFunction compactFunction;
   /** Stream sink to handle compaction commits. */
@@ -74,8 +74,8 @@ public class CompactFunctionWrapper {
   }
 
   public void openFunction() throws Exception {
-    compactionPlanFunction = new CompactionPlanOperator(conf);
-    compactionPlanFunction.open();
+    compactionPlanOperator = new CompactionPlanOperator(conf);
+    compactionPlanOperator.open();
 
     compactFunction = new CompactFunction(conf);
     compactFunction.setRuntimeContext(runtimeContext);
@@ -118,8 +118,8 @@ public class CompactFunctionWrapper {
 
       }
     };
-    compactionPlanFunction.setOutput(output);
-    compactionPlanFunction.notifyCheckpointComplete(checkpointID);
+    compactionPlanOperator.setOutput(output);
+    compactionPlanOperator.notifyCheckpointComplete(checkpointID);
     // collect the CompactCommitEvents
     List<CompactionCommitEvent> compactCommitEvents = new ArrayList<>();
     for (CompactionPlanEvent event: events) {
