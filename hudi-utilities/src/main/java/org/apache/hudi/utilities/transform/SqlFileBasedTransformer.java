@@ -44,6 +44,13 @@ import java.util.UUID;
  *
  * <p>The SQL file is configured with this hoodie property:
  * hoodie.deltastreamer.transformer.sql.file
+ *
+ * <p>Example Spark SQL Query:
+ *
+ * <p>CACHE TABLE tmp_personal_trips AS
+ * SELECT * FROM <SRC> WHERE trip_type='personal_trips';
+ * <p>
+ * SELECT * FROM tmp_personal_trips;
  */
 public class SqlFileBasedTransformer implements Transformer {
 
@@ -54,24 +61,24 @@ public class SqlFileBasedTransformer implements Transformer {
 
   @Override
   public Dataset<Row> apply(
-          JavaSparkContext jsc,
-          SparkSession sparkSession,
-          Dataset<Row> rowDataset,
-          TypedProperties props) {
+      final JavaSparkContext jsc,
+      final SparkSession sparkSession,
+      final Dataset<Row> rowDataset,
+      final TypedProperties props) {
 
-    String sqlFile = props.getString(Config.TRANSFORMER_SQL_FILE);
+    final String sqlFile = props.getString(Config.TRANSFORMER_SQL_FILE);
     if (null == sqlFile) {
       throw new IllegalArgumentException(
-        "Missing required configuration : (" + Config.TRANSFORMER_SQL_FILE + ")");
+          "Missing required configuration : (" + Config.TRANSFORMER_SQL_FILE + ")");
     }
 
-    FileSystem fs = FSUtils.getFs(sqlFile, jsc.hadoopConfiguration(), true);
+    final FileSystem fs = FSUtils.getFs(sqlFile, jsc.hadoopConfiguration(), true);
     // tmp table name doesn't like dashes
-    String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
+    final String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
     LOG.info("Registering tmp table : " + tmpTable);
     rowDataset.registerTempTable(tmpTable);
 
-    try (Scanner scanner = new Scanner(fs.open(new Path(sqlFile)), "UTF-8")) {
+    try (final Scanner scanner = new Scanner(fs.open(new Path(sqlFile)), "UTF-8")) {
       Dataset<Row> rows = null;
       // each sql statement is separated with semicolon hence set that as delimiter.
       scanner.useDelimiter(";");
@@ -86,7 +93,7 @@ public class SqlFileBasedTransformer implements Transformer {
         }
       }
       return rows;
-    } catch (IOException ioe) {
+    } catch (final IOException ioe) {
       throw new HoodieIOException("Error reading transformer SQL file.", ioe);
     }
   }

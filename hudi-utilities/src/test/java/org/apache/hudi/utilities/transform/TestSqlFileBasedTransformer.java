@@ -27,6 +27,7 @@ import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.catalyst.parser.ParseException;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterAll;
@@ -38,8 +39,8 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
   @BeforeAll
@@ -49,6 +50,14 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
         "delta-streamer-config/sql-file-transformer.sql",
         UtilitiesTestBase.dfs,
         UtilitiesTestBase.dfsBasePath + "/sql-file-transformer.sql");
+    UtilitiesTestBase.Helpers.copyToDFS(
+        "delta-streamer-config/sql-file-transformer-invalid.sql",
+        UtilitiesTestBase.dfs,
+        UtilitiesTestBase.dfsBasePath + "/sql-file-transformer-invalid.sql");
+    UtilitiesTestBase.Helpers.copyToDFS(
+        "delta-streamer-config/sql-file-transformer-empty.sql",
+        UtilitiesTestBase.dfs,
+        UtilitiesTestBase.dfsBasePath + "/sql-file-transformer-empty.sql");
   }
 
   @AfterAll
@@ -73,6 +82,7 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
     TypedProperties props = new TypedProperties();
     SqlFileBasedTransformer sqlFileTransformer = new SqlFileBasedTransformer();
     Dataset<Row> inputDatasetRows = getInputDatasetRows();
+    Dataset<Row> emptyDatasetRow = getEmptyDatasetRow();
 
     // Test if the class throws illegal argument exception when argument not present.
     assertThrows(
@@ -87,6 +97,23 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
         HoodieIOException.class,
         () -> sqlFileTransformer.apply(jsc, sparkSession, inputDatasetRows, props));
 
+    // Test if the SQL file based transformer works as expected for the invalid SQL statements.
+    props.setProperty(
+        "hoodie.deltastreamer.transformer.sql.file",
+        UtilitiesTestBase.dfsBasePath + "/sql-file-transformer-invalid.sql");
+    assertThrows(
+        ParseException.class,
+        () -> sqlFileTransformer.apply(jsc, sparkSession, inputDatasetRows, props));
+
+    // Test if the SQL file based transformer works as expected for the empty SQL statements.
+    props.setProperty(
+        "hoodie.deltastreamer.transformer.sql.file",
+        UtilitiesTestBase.dfsBasePath + "/sql-file-transformer-empty.sql");
+    Dataset<Row> emptyRow = sqlFileTransformer.apply(jsc, sparkSession, inputDatasetRows, props);
+    String[] actualRows = emptyRow.as(Encoders.STRING()).collectAsList().toArray(new String[0]);
+    String[] expectedRows = emptyDatasetRow.collectAsList().toArray(new String[0]);
+    assertArrayEquals(expectedRows, actualRows);
+
     // Test if the SQL file based transformer works as expected for the correct input.
     props.setProperty(
         "hoodie.deltastreamer.transformer.sql.file",
@@ -96,15 +123,15 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
 
     // Called distinct() and sort() to match the transformation in this file:
     // hudi-utilities/src/test/resources/delta-streamer-config/sql-file-transformer.sql
-    String[] expected =
+    expectedRows =
         inputDatasetRows
             .distinct()
             .sort("col1")
             .as(Encoders.STRING())
             .collectAsList()
             .toArray(new String[0]);
-    String[] actual = transformedRow.as(Encoders.STRING()).collectAsList().toArray(new String[0]);
-    assertArrayEquals(expected, actual);
+    actualRows = transformedRow.as(Encoders.STRING()).collectAsList().toArray(new String[0]);
+    assertArrayEquals(expectedRows, actualRows);
   }
 
   private Dataset<Row> getInputDatasetRows() {
@@ -121,6 +148,18 @@ public class TestSqlFileBasedTransformer extends UtilitiesTestBase {
     StructType structType = DataTypes.createStructType(listOfStructField);
     SparkSession spark = sparkSession.builder().getOrCreate();
     // Create the data frame with the rows and schema.
+    return spark.createDataFrame(list, structType);
+  }
+
+  private Dataset<Row> getEmptyDatasetRow() {
+    // Create the schema struct.
+    List<org.apache.spark.sql.types.StructField> listOfStructField = new ArrayList<>();
+    listOfStructField.add(DataTypes.createStructField("col1", DataTypes.StringType, true));
+    StructType structType = DataTypes.createStructType(listOfStructField);
+    SparkSession spark = sparkSession.builder().getOrCreate();
+    // Create the data frame with the rows and schema.
+    List<Row> list = new ArrayList<>();
+    // Create empty dataframe with the schema.
     return spark.createDataFrame(list, structType);
   }
 }
