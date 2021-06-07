@@ -98,8 +98,6 @@ public class FSUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to get instance of " + FileSystem.class.getName(), e);
     }
-    LOG.info(String.format("Hadoop Configuration: fs.defaultFS: [%s], Config:[%s], FileSystem: [%s]",
-        conf.getRaw("fs.defaultFS"), conf.toString(), fs.toString()));
     return fs;
   }
 
