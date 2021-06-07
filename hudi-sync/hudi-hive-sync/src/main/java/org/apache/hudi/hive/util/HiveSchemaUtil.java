@@ -141,7 +141,27 @@ public class HiveSchemaUtil {
    * @return : Hive Table schema read from parquet file MAP[String,String]
    */
   public static Map<String, String> convertParquetSchemaToHiveSchema(MessageType messageType, boolean supportTimestamp) throws IOException {
-    Map<String, String> schema = new LinkedHashMap<>();
+    return convertMapSchemaToHiveSchema(parquetSchemaToMapSchema(messageType, supportTimestamp));
+  }
+
+  /**
+   * Returns equivalent Hive table Field schema read from a parquet file.
+   *
+   * @param messageType : Parquet Schema
+   * @return : Hive Table schema read from parquet file List[FieldSchema] without partitionField
+   */
+  public static List<FieldSchema> convertParquetSchemaToHiveFieldSchema(MessageType messageType, HiveSyncConfig syncConfig) throws IOException {
+    return convertMapSchemaToHiveFieldSchema(parquetSchemaToMapSchema(messageType, syncConfig.supportTimestamp), syncConfig);
+  }
+
+  /**
+   * Returns schema in Map<String,String> form read from a parquet file.
+   *
+   * @param messageType : Intermediate schema in the form of Map<String, String>
+   * @return : Intermediate schema in the form of Map<String, String>
+   */
+  public static LinkedHashMap<String, String> parquetSchemaToMapSchema(MessageType messageType, boolean supportTimestamp) throws IOException {
+    LinkedHashMap<String, String> schema = new LinkedHashMap<>();
     List<Type> parquetFields = messageType.getFields();
     for (Type parquetType : parquetFields) {
       StringBuilder result = new StringBuilder();
@@ -152,25 +172,24 @@ public class HiveSchemaUtil {
         result.append(convertField(parquetType, supportTimestamp));
       }
 
-      schema.put(hiveCompatibleFieldName(key, false), result.toString());
+      schema.put(key, result.toString());
     }
     return schema;
   }
 
-  public static List<FieldSchema> convertParquetSchemaToHiveFieldSchema(MessageType messageType, HiveSyncConfig syncConfig) {
-    List<Type> parquetFields = messageType.getFields();
+  public static Map<String, String> convertMapSchemaToHiveSchema(LinkedHashMap<String, String> schema) throws IOException {
+    Map<String, String> hiveSchema = new LinkedHashMap<>();
+    for (Map.Entry<String,String> entry: schema.entrySet()) {
+      hiveSchema.put(hiveCompatibleFieldName(entry.getKey(), false), entry.getValue());
+    }
+    return hiveSchema;
+  }
 
-    List<FieldSchema> schema = parquetFields.stream().map(parquetType -> {
-      StringBuilder result = new StringBuilder();
-      String key = parquetType.getName();
-      if (parquetType.isRepetition(Type.Repetition.REPEATED)) {
-        result.append(createHiveArray(parquetType, "", syncConfig.supportTimestamp));
-      } else {
-        result.append(convertField(parquetType, syncConfig.supportTimestamp));
-      }
-      return new FieldSchema(key, result.toString().toLowerCase(),"");
-    }).filter(field -> !syncConfig.partitionFields.contains(field.getName())).collect(Collectors.toList());
-    return schema;
+  public static List<FieldSchema> convertMapSchemaToHiveFieldSchema(LinkedHashMap<String, String> schema, HiveSyncConfig syncConfig) throws IOException {
+    return schema.keySet().stream()
+        .map(key -> new FieldSchema(key, schema.get(key), ""))
+        .filter(field -> !syncConfig.partitionFields.contains(field.getName()))
+        .collect(Collectors.toList());
   }
 
   /**

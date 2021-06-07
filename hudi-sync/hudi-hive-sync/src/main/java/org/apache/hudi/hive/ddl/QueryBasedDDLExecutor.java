@@ -60,7 +60,11 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     }
   }
 
-  public abstract void runSQL(String s);
+  /**
+   * All implementations of QueryBasedDDLExecutor must supply the runSQL function.
+   * @param sql is the sql query which needs to be run
+   */
+  public abstract void runSQL(String sql);
 
   @Override
   public void createDatabase(String databaseName) {

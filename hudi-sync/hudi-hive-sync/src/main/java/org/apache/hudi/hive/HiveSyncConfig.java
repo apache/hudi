@@ -70,11 +70,12 @@ public class HiveSyncConfig implements Serializable {
           + "org.apache.hudi input format.")
   public Boolean usePreApacheInputFormat = false;
 
+  @Deprecated
   @Parameter(names = {"--use-jdbc"}, description = "Hive jdbc connect url")
   public Boolean useJdbc = true;
 
-  @Parameter(names = {"--use-hms"}, description = "Use hms client for ddl commands")
-  public Boolean useHMS = false;
+  @Parameter(names = {"--sync-mode"}, description = "Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql")
+  public String syncMode;
 
   @Parameter(names = {"--auto-create-database"}, description = "Auto create hive database")
   public Boolean autoCreateDatabase = true;

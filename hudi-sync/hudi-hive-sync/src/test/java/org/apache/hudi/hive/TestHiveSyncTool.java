@@ -62,15 +62,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHiveSyncTool {
 
-  private static Iterable<Object[]> useJdbc() {
-    return Arrays.asList(new Object[][] {
-        {true, false}, //DDLexecutor will be JDBC
-        {false, false}, //DDLexecutor will be QLHiveQuery
-        {false, true}}); //DDLexecutor will be HMS
+  private static final List<Object> SYNC_MODES = Arrays.asList(
+      "hms",
+      "hiveql",
+      "jdbc");
+
+  private static Iterable<Object> syncMode() {
+    return SYNC_MODES;
   }
 
-  private static Iterable<Object[]> useJdbcAndSchemaFromCommitMetadata() {
-    return Arrays.asList(new Object[][] {{true, true, false}, {true, false, false}, {false, true, true}, {false, false, true}, {false, false, false}, {false, true, false}});
+  private static Iterable<Object[]> syncModeAndSchemaFromCommitMetadata() {
+    List<Object[]> opts = new ArrayList<>();
+    for (Object mode : SYNC_MODES) {
+      opts.add(new Object[] {true, mode});
+      opts.add(new Object[] {false, mode});
+    }
+    return opts;
   }
 
   @AfterAll
@@ -200,10 +207,9 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
-  @MethodSource({"useJdbcAndSchemaFromCommitMetadata"})
-  public void testBasicSync(boolean useJdbc, boolean useSchemaFromCommitMetadata, boolean useHMS) throws Exception {
-    hiveSyncConfig.useJdbc = useJdbc;
-    hiveSyncConfig.useHMS = useHMS;
+  @MethodSource({"syncModeAndSchemaFromCommitMetadata"})
+  public void testBasicSync(boolean useSchemaFromCommitMetadata, String syncMode) throws Exception {
+    hiveSyncConfig.syncMode = syncMode;
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
     HoodieHiveClient hiveClient =
@@ -265,8 +271,8 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
-  @MethodSource({"useJdbcAndSchemaFromCommitMetadata"})
-  public void testSyncWithProperties(boolean useJdbc, boolean useSchemaFromCommitMetadata, boolean useHMS) throws Exception {
+  @MethodSource({"syncModeAndSchemaFromCommitMetadata"})
+  public void testSyncWithProperties(boolean useSchemaFromCommitMetadata, String syncMode) throws Exception {
     HiveSyncConfig hiveSyncConfig = HiveTestUtil.hiveSyncConfig;
     Map<String, String> serdeProperties = new HashMap<String, String>() {
       {
@@ -280,8 +286,8 @@ public class TestHiveSyncTool {
         put("tp_1", "p1");
       }
     };
-    hiveSyncConfig.useJdbc = useJdbc;
-    hiveSyncConfig.useHMS = useHMS;
+
+    hiveSyncConfig.syncMode = syncMode;
     hiveSyncConfig.serdeProperties = ConfigUtils.configToString(serdeProperties);
     hiveSyncConfig.tableProperties = ConfigUtils.configToString(tableProperties);
     String instantTime = "100";
@@ -314,10 +320,10 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
-  @MethodSource("useJdbc")
-  public void testSyncIncremental(boolean useJdbc, boolean useHMS) throws Exception {
-    hiveSyncConfig.useJdbc = useJdbc;
-    hiveSyncConfig.useHMS = useHMS;
+  @MethodSource("syncMode")
+  public void testSyncIncremental(String syncMode) throws Exception {
+
+    hiveSyncConfig.syncMode = syncMode;
     String commitTime1 = "100";
     HiveTestUtil.createCOWTable(commitTime1, 5, true);
     HoodieHiveClient hiveClient =
@@ -354,10 +360,10 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
-  @MethodSource("useJdbc")
-  public void testSyncIncrementalWithSchemaEvolution(boolean useJdbc, boolean useHMS) throws Exception {
-    hiveSyncConfig.useJdbc = useJdbc;
-    hiveSyncConfig.useHMS = useHMS;
+  @MethodSource("syncMode")
+  public void testSyncIncrementalWithSchemaEvolution(String syncMode) throws Exception {
+
+    hiveSyncConfig.syncMode = syncMode;
     String commitTime1 = "100";
     HiveTestUtil.createCOWTable(commitTime1, 5, true);
     HoodieHiveClient hiveClient =
@@ -392,10 +398,9 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
-  @MethodSource("useJdbcAndSchemaFromCommitMetadata")
-  public void testSyncMergeOnRead(boolean useJdbc, boolean useSchemaFromCommitMetadata, boolean useHMS) throws Exception {
-    hiveSyncConfig.useJdbc = useJdbc;
-    hiveSyncConfig.useHMS = useHMS;
+  @MethodSource("syncModeAndSchemaFromCommitMetadata")
+  public void testSyncMergeOnRead(boolean useSchemaFromCommitMetadata, String syncMode) throws Exception {
+    hiveSyncConfig.syncMode = syncMode;
     String instantTime = "100";
     String deltaCommitTime = "101";
     HiveTestUtil.createMORTable(instantTime, deltaCommitTime, 5, true,
@@ -459,10 +464,9 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
-  @MethodSource("useJdbcAndSchemaFromCommitMetadata")
-  public void testSyncMergeOnReadRT(boolean useJdbc, boolean useSchemaFromCommitMetadata, boolean useHMS) throws Exception {
-    hiveSyncConfig.useJdbc = useJdbc;
-    hiveSyncConfig.useHMS = useHMS;
+  @MethodSource("syncModeAndSchemaFromCommitMetadata")
+  public void testSyncMergeOnReadRT(boolean useSchemaFromCommitMetadata, String syncMode) throws Exception {
+    hiveSyncConfig.syncMode = syncMode;
     String instantTime = "100";
     String deltaCommitTime = "101";
     String snapshotTableName = hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
@@ -530,10 +534,10 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
-  @MethodSource("useJdbc")
-  public void testMultiPartitionKeySync(boolean useJdbc, boolean useHMS) throws Exception {
-    hiveSyncConfig.useJdbc = useJdbc;
-    hiveSyncConfig.useHMS = useHMS;
+  @MethodSource("syncMode")
+  public void testMultiPartitionKeySync(String syncMode) throws Exception {
+
+    hiveSyncConfig.syncMode = syncMode;
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, true);
 
@@ -605,10 +609,10 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
-  @MethodSource("useJdbc")
-  public void testNonPartitionedSync(boolean useJdbc, boolean useHMS) throws Exception {
-    hiveSyncConfig.useJdbc = useJdbc;
-    hiveSyncConfig.useHMS = useHMS;
+  @MethodSource("syncMode")
+  public void testNonPartitionedSync(String syncMode) throws Exception {
+
+    hiveSyncConfig.syncMode = syncMode;
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, true);
 
@@ -635,10 +639,10 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
-  @MethodSource("useJdbc")
-  public void testReadSchemaForMOR(boolean useJdbc, boolean useHMS) throws Exception {
-    hiveSyncConfig.useJdbc = useJdbc;
-    hiveSyncConfig.useHMS = useHMS;
+  @MethodSource("syncMode")
+  public void testReadSchemaForMOR(String syncMode) throws Exception {
+
+    hiveSyncConfig.syncMode = syncMode;
     String commitTime = "100";
     String snapshotTableName = hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
     HiveTestUtil.createMORTable(commitTime, "", 5, false, true);

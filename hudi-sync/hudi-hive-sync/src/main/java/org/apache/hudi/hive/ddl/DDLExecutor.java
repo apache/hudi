@@ -24,18 +24,51 @@ import java.util.List;
 import java.util.Map;
 
 public interface DDLExecutor {
+  /**
+   * @param databaseName name of dartabase to be created
+   */
   public void createDatabase(String databaseName);
 
+  /**
+   * Creates a table with the following properties
+   * @param tableName
+   * @param storageSchema
+   * @param inputFormatClass
+   * @param outputFormatClass
+   * @param serdeClass
+   * @param serdeProperties
+   * @param tableProperties
+   */
   public void createTable(String tableName, MessageType storageSchema, String inputFormatClass,
                           String outputFormatClass, String serdeClass,
                           Map<String, String> serdeProperties, Map<String, String> tableProperties);
 
+  /**
+   * Updates the table with the newSchema
+   * @param tableName
+   * @param newSchema
+   */
   public void updateTableDefinition(String tableName, MessageType newSchema);
 
+  /**
+   * Fetches tableSchema for a table
+   * @param tableName
+   * @return
+   */
   public Map<String, String> getTableSchema(String tableName);
 
+  /**
+   * Adds partition to table
+   * @param tableName
+   * @param partitionsToAdd
+   */
   public void addPartitionsToTable(String tableName, List<String> partitionsToAdd);
 
+  /**
+   * Updates partitions for a given table
+   * @param tableName
+   * @param changedPartitions
+   */
   public void updatePartitionsToTable(String tableName, List<String> changedPartitions);
 
   public void close();

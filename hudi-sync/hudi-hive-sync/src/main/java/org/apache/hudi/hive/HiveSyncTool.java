@@ -18,8 +18,6 @@
 
 package org.apache.hudi.hive;
 
-import org.apache.hadoop.hive.metastore.api.MetaException;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.Option;
@@ -27,16 +25,16 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.util.ConfigUtils;
+import org.apache.hudi.hive.util.HiveSchemaUtil;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent.PartitionEventType;
-import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.sync.common.AbstractSyncTool;
 
 import com.beust.jcommander.JCommander;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.api.Partition;
-import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
@@ -70,7 +68,7 @@ public class HiveSyncTool extends AbstractSyncTool {
 
     try {
       this.hoodieHiveClient = new HoodieHiveClient(cfg, configuration, fs);
-    } catch (RuntimeException | HiveException | MetaException e) { //TODO-jsbali FIx this
+    } catch (RuntimeException e) {
       if (cfg.ignoreExceptions) {
         LOG.error("Got runtime exception when hive syncing, but continuing as ignoreExceptions config is set ", e);
       } else {

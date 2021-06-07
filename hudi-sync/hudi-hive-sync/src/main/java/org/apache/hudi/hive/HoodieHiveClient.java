@@ -21,6 +21,7 @@ package org.apache.hudi.hive;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.hive.ddl.DDLExecutor;
 import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
@@ -57,33 +58,37 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
 
   private static final Logger LOG = LogManager.getLogger(HoodieHiveClient.class);
   private final PartitionValueExtractor partitionValueExtractor;
+  private final HiveSyncConfig syncConfig;
+  private final HoodieTimeline activeTimeline;
   DDLExecutor ddlExecutor;
   private IMetaStoreClient client;
-  private HiveSyncConfig syncConfig;
-  private FileSystem fs;
   private Connection connection;
-  private HoodieTimeline activeTimeline;
-  private HiveConf configuration;
 
-  public HoodieHiveClient(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) throws HiveException, MetaException {
+  public HoodieHiveClient(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
     super(cfg.basePath, cfg.assumeDatePartitioning, cfg.useFileListingFromMetadata, cfg.verifyMetadataFileListing, fs);
     this.syncConfig = cfg;
-    this.fs = fs;
 
-    this.configuration = configuration;
-    // Support both JDBC and metastore based implementations for backwards compatiblity. Future users should
+    // Support JDBC, HiveQL and metastore based implementations for backwards compatiblity. Future users should
     // disable jdbc and depend on metastore client for all hive registrations
-
-    if (cfg.useHMS) {
-      ddlExecutor = new HMSDDLExecutor(configuration, cfg, fs);
-    } else {
-      if (cfg.useJdbc) {
-        ddlExecutor = new JDBCExecutor(cfg, fs);
-      } else {
-        ddlExecutor = new HiveQueryDDLExecutor(cfg, fs, configuration);
-      }
-    }
     try {
+      if (!StringUtils.isNullOrEmpty(cfg.syncMode)) {
+        switch (cfg.syncMode.toLowerCase()) {
+          case "hms":
+            ddlExecutor = new HMSDDLExecutor(configuration, cfg, fs);
+            break;
+          case "hiveql":
+            ddlExecutor = new HiveQueryDDLExecutor(cfg, fs, configuration);
+            break;
+          case "jdbc":
+            ddlExecutor = new JDBCExecutor(cfg, fs);
+            break;
+          default:
+            throw new HoodieHiveSyncException("Invalid sync mode given " + cfg.syncMode);
+        }
+      } else {
+        ddlExecutor = cfg.useJdbc ? new JDBCExecutor(cfg, fs) : new HiveQueryDDLExecutor(cfg, fs, configuration);
+      }
+
       this.client = Hive.get(configuration).getMSC();
     } catch (MetaException | HiveException e) {
       throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);

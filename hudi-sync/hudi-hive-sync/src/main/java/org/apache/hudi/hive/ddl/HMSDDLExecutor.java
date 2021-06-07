@@ -47,6 +47,7 @@ import org.apache.parquet.schema.MessageType;
 import org.apache.thrift.TException;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -86,8 +87,11 @@ public class HMSDDLExecutor implements DDLExecutor {
   public void createTable(String tableName, MessageType storageSchema, String inputFormatClass, String outputFormatClass, String serdeClass, Map<String, String> serdeProperties,
                           Map<String, String> tableProperties) {
     try {
-      List<FieldSchema> fieldSchema = HiveSchemaUtil.convertParquetSchemaToHiveFieldSchema(storageSchema, syncConfig);
-      Map<String, String> hiveSchema = HiveSchemaUtil.convertParquetSchemaToHiveSchema(storageSchema, syncConfig.supportTimestamp);
+      LinkedHashMap<String, String> mapSchema = HiveSchemaUtil.parquetSchemaToMapSchema(storageSchema, syncConfig.supportTimestamp);
+
+      List<FieldSchema> fieldSchema = HiveSchemaUtil.convertMapSchemaToHiveFieldSchema(mapSchema, syncConfig);
+      Map<String, String> hiveSchema = HiveSchemaUtil.convertMapSchemaToHiveSchema(mapSchema);
+
       List<FieldSchema> partitionSchema = syncConfig.partitionFields.stream().map(partitionKey -> {
         String partitionKeyType = HiveSchemaUtil.getPartitionKeyType(hiveSchema, partitionKey);
         return new FieldSchema(partitionKey, partitionKeyType.toLowerCase(), "");
