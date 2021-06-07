@@ -20,6 +20,7 @@ package org.apache.hudi;
 
 import org.apache.hudi.common.model.HoodieRecord;
 
+import org.apache.hudi.execution.bulkinsert.PreCombineRow;
 import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.api.java.function.ReduceFunction;
 import org.apache.spark.sql.Dataset;

@@ -22,6 +22,8 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows;
+import org.apache.hudi.execution.bulkinsert.DefaultPreCombineRow;
+import org.apache.hudi.execution.bulkinsert.PreCombineRow;
 import org.apache.hudi.testutils.DataSourceTestUtils;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
@@ -88,7 +90,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
   }
 
   @Test
-  public void testBulkInsertHelper() throws IOException {
+  public void testBulkInsertHelper() {
     HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(getPropsAllSet()).combineBulkInsertInput(false).build();
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
@@ -103,18 +105,12 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
       assertTrue(resultSchema.fieldIndex(entry.getKey()) == entry.getValue());
     }
 
-    int metadataRecordKeyIndex = resultSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD);
-    int metadataParitionPathIndex = resultSchema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
-    int metadataCommitTimeIndex = resultSchema.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
-    int metadataCommitSeqNoIndex = resultSchema.fieldIndex(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD);
-    int metadataFilenameIndex = resultSchema.fieldIndex(HoodieRecord.FILENAME_METADATA_FIELD);
-
     result.toJavaRDD().foreach(entry -> {
-      assertTrue(entry.get(metadataRecordKeyIndex).equals(entry.getAs("_row_key")));
-      assertTrue(entry.get(metadataParitionPathIndex).equals(entry.getAs("partition")));
-      assertTrue(entry.get(metadataCommitSeqNoIndex).equals(""));
-      assertTrue(entry.get(metadataCommitTimeIndex).equals(""));
-      assertTrue(entry.get(metadataFilenameIndex).equals(""));
+      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)).equals(entry.getAs("_row_key")));
+      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).equals(entry.getAs("partition")));
+      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)).equals(""));
+      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD)).equals(""));
+      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.FILENAME_METADATA_FIELD)).equals(""));
     });
 
     Dataset<Row> trimmedOutput = result.drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
@@ -133,8 +129,6 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     rows.addAll(inserts);
     rows.addAll(updates);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
-    //Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-    //  "testNamespace", Option.of(new TestPreCombineRow()));
     Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
         "testNamespace", new NonSortPartitionerWithRows(), enablePreCombine ? (useDefaultPreCombine ? Option.of(new DefaultPreCombineRow("ts")) :
             Option.of(new TestUserDefinedPreCombineRow())) : Option.empty(), false);

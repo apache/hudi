@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi;
+package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.spark.sql.Row;
 
@@ -25,7 +25,9 @@ import org.apache.spark.sql.Row;
  */
 public class DefaultPreCombineRow implements PreCombineRow {
 
-  private final String preCombineField;
+  private String preCombineField;
+
+  public DefaultPreCombineRow() {}
 
   public DefaultPreCombineRow(String preCombineField) {
     if (preCombineField == null || preCombineField.isEmpty()) {

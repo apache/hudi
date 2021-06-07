@@ -18,6 +18,7 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
@@ -1344,7 +1345,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withBulkInsertPreCombineRowClass(String className) {
-      props.setProperty(BULKINSERT_PRECOMBIME_ROW_CLASS, className);
+      props.setProperty(BULK_INSERT_PRECOMBINE_ROW_CLASS, className);
       return this;
     }
 

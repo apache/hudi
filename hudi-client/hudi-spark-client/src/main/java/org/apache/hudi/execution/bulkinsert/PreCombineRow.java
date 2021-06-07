@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi;
+package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.spark.sql.Row;
 

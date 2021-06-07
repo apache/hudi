@@ -18,11 +18,18 @@
 
 package org.apache.hudi;
 
+import static org.apache.spark.sql.functions.callUDF;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.execution.bulkinsert.PreCombineRow;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
@@ -36,15 +43,7 @@ import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
-
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
 import scala.collection.JavaConverters;
-
-import static org.apache.spark.sql.functions.callUDF;
 
 /**
  * Helper class to assist in preparing {@link Dataset<Row>}s for bulk insert with datasource implementation.
@@ -57,8 +56,11 @@ public class HoodieDatasetBulkInsertHelper {
   private static final String PARTITION_PATH_UDF_FN = "hudi_partition_gen_function";
 
   /**
-   * Prepares input hoodie spark dataset for bulk insert. It does the following steps. 1. Uses KeyGenerator to generate hoodie record keys and partition path. 2. Add hoodie columns to input spark
-   * dataset. 3. Reorders input dataset columns so that hoodie columns appear in the beginning. 4. Sorts input dataset by hoodie partition path and record key
+   * Prepares input hoodie spark dataset for bulk insert. It does the following steps.
+   *  1. Uses KeyGenerator to generate hoodie record keys and partition path.
+   *  2. Add hoodie columns to input spark dataset.
+   *  3. Reorders input dataset columns so that hoodie columns appear in the beginning.
+   *  4. Sorts input dataset by hoodie partition path and record key
    *
    * @param sqlContext SQL Context
    * @param config Hoodie Write Config
