@@ -133,10 +133,8 @@ public class DataSourceUtils {
       throws HoodieException {
     String preCombineRowClass = config.getBulkinsertPrecombimeRowClass();
     try {
-      return StringUtils.isNullOrEmpty(preCombineRowClass)
-          ? Option.of((PreCombineRow) ReflectionUtils.loadClass(DefaultPreCombineRow.class.getName(),
-          new Class<?>[] {String.class}, preCombineField)) :
-          Option.of((PreCombineRow) ReflectionUtils.loadClass(preCombineRowClass));
+      return Option.of((PreCombineRow) ReflectionUtils.loadClass(DefaultPreCombineRow.class.getName(),
+          new Class<?>[] {String.class}, preCombineField));
     } catch (Throwable e) {
       throw new HoodieException("Could not create PreCombineRow class " + preCombineRowClass, e);
     }

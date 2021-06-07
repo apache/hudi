@@ -76,6 +76,20 @@ public class DataSourceTestUtils {
     return toReturn;
   }
 
+  public static List<Row> getUniqueRows(List<Row> inserts, int count) {
+    List<Row> toReturn = new ArrayList<>();
+    int soFar = 0;
+    int curIndex = 0;
+    while (soFar < count) {
+      if (!toReturn.contains(inserts.get(curIndex))) {
+        toReturn.add(inserts.get(curIndex));
+        soFar++;
+      }
+      curIndex++;
+    }
+    return toReturn;
+  }
+
   public static List<Row> generateRandomRowsEvolvedSchema(int count) {
     Random random = new Random();
     List<Row> toReturn = new ArrayList<>();
