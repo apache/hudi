@@ -20,7 +20,6 @@ package org.apache.hudi;
 
 import org.apache.hudi.common.model.HoodieRecord;
 
-import org.apache.hudi.execution.bulkinsert.PreCombineRow;
 import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.api.java.function.ReduceFunction;
 import org.apache.spark.sql.Dataset;
@@ -44,39 +43,40 @@ import scala.collection.JavaConverters;
  */
 public class SparkRowWriteHelper {
 
-    private SparkRowWriteHelper() {
-    }
+  private SparkRowWriteHelper() {
+  }
 
-    private static class WriteHelperHolder {
+  private static class WriteHelperHolder {
 
-        private static final SparkRowWriteHelper SPARK_WRITE_HELPER = new SparkRowWriteHelper();
-    }
+    private static final SparkRowWriteHelper SPARK_WRITE_HELPER = new SparkRowWriteHelper();
+  }
 
-    public static SparkRowWriteHelper newInstance() {
-        return SparkRowWriteHelper.WriteHelperHolder.SPARK_WRITE_HELPER;
-    }
+  public static SparkRowWriteHelper newInstance() {
+    return SparkRowWriteHelper.WriteHelperHolder.SPARK_WRITE_HELPER;
+  }
 
-    public Dataset<Row> deduplicateRows(Dataset<Row> inputDf, String preCombineField, boolean isGlobalIndex) {
-        ExpressionEncoder encoder = getEncoder(inputDf.schema());
+  public Dataset<Row> deduplicateRows(Dataset<Row> inputDf, String preCombineField, boolean isGlobalIndex) {
+    ExpressionEncoder encoder = getEncoder(inputDf.schema());
 
-        return inputDf.groupByKey(
-                (MapFunction<Row, String>) value ->
-                        isGlobalIndex ? (value.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD)) :
-                                (value.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD) + "+" + value.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD)), Encoders.STRING())
-                .reduceGroups((ReduceFunction<Row>) (v1, v2) -> {
-                            if (((Comparable) v1.getAs(preCombineField)).compareTo(((Comparable) v1.getAs(preCombineField))) >= 0) {
-                                return v1;
-                            } else
-                                return v2;
-                        }
-                ).map((MapFunction<Tuple2<String, Row>, Row>) value -> value._2, encoder);
-    }
+    return inputDf.groupByKey(
+        (MapFunction<Row, String>) value ->
+            isGlobalIndex ? (value.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD)) :
+                (value.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD) + "+" + value.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD)), Encoders.STRING())
+        .reduceGroups((ReduceFunction<Row>) (v1, v2) -> {
+          if (((Comparable) v1.getAs(preCombineField)).compareTo(((Comparable) v2.getAs(preCombineField))) >= 0) {
+            return v1;
+          } else {
+            return v2;
+          }
+            }
+        ).map((MapFunction<Tuple2<String, Row>, Row>) value -> value._2, encoder);
+  }
 
-    private ExpressionEncoder getEncoder(StructType schema) {
-        List<Attribute> attributes = JavaConversions.asJavaCollection(schema.toAttributes()).stream()
-                .map(Attribute::toAttribute).collect(Collectors.toList());
-        return RowEncoder.apply(schema)
-                .resolveAndBind(JavaConverters.asScalaBufferConverter(attributes).asScala().toSeq(),
-                        SimpleAnalyzer$.MODULE$);
-    }
+  private ExpressionEncoder getEncoder(StructType schema) {
+    List<Attribute> attributes = JavaConversions.asJavaCollection(schema.toAttributes()).stream()
+        .map(Attribute::toAttribute).collect(Collectors.toList());
+    return RowEncoder.apply(schema)
+        .resolveAndBind(JavaConverters.asScalaBufferConverter(attributes).asScala().toSeq(),
+            SimpleAnalyzer$.MODULE$);
+  }
 }

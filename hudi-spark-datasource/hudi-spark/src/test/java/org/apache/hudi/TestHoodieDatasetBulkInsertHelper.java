@@ -75,9 +75,8 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
    */
   private static Stream<Arguments> providePreCombineArgs() {
     return Stream.of(
-        Arguments.of(false, false),
-        Arguments.of(true, false),
-        Arguments.of(true, true));
+        Arguments.of(false),
+        Arguments.of(true));
   }
 
   private void init() throws IOException {
@@ -117,8 +116,9 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
 
   @ParameterizedTest
   @MethodSource("providePreCombineArgs")
-  public void testBulkInsertPreCombineRow(boolean enablePreCombine) {
-    HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(getPropsAllSet()).combineBulkInsertInput(enablePreCombine).build();
+  public void testBulkInsertPreCombine(boolean enablePreCombine) {
+    HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(getPropsAllSet()).combineBulkInsertInput(enablePreCombine)
+            .withPreCombineField("ts").build();
     List<Row> inserts = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> toUpdateDataset = sqlContext.createDataFrame(inserts.subList(0, 5), structType);
     List<Row> updates = DataSourceTestUtils.updateRowsWithHigherTs(toUpdateDataset);

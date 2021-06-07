@@ -26,10 +26,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.execution.bulkinsert.PreCombineRow;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
