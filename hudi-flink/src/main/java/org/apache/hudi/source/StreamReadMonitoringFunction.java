@@ -225,7 +225,8 @@ public class StreamReadMonitoringFunction
     Set<String> writePartitions = getWritePartitionPaths(metadataList);
     FileStatus[] fileStatuses = getWritePathsOfInstants(metadataList);
     if (fileStatuses.length == 0) {
-      throw new HoodieException("No files found for reading in user provided path.");
+      LOG.warn("No files found for reading in user provided path.");
+      return;
     }
 
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, fileStatuses);
