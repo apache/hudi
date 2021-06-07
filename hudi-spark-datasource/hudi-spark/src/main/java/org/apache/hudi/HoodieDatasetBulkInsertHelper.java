@@ -25,7 +25,6 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerWithRowsFactory;
-import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.log4j.LogManager;
@@ -59,8 +58,11 @@ public class HoodieDatasetBulkInsertHelper {
   private static final String PARTITION_PATH_UDF_FN = "hudi_partition_gen_function";
 
   /**
-   * Prepares input hoodie spark dataset for bulk insert. It does the following steps. 1. Uses KeyGenerator to generate hoodie record keys and partition path. 2. Add hoodie columns to input spark
-   * dataset. 3. Reorders input dataset columns so that hoodie columns appear in the beginning. 4. Sorts input dataset by hoodie partition path and record key
+   * Prepares input hoodie spark dataset for bulk insert. It does the following steps.
+   *  1. Uses KeyGenerator to generate hoodie record keys and partition path.
+   *  2. Add hoodie columns to input spark dataset.
+   *  3. Reorders input dataset columns so that hoodie columns appear in the beginning.
+   *  4. Sorts input dataset by hoodie partition path and record key
    *
    * @param sqlContext SQL Context
    * @param config Hoodie Write Config
