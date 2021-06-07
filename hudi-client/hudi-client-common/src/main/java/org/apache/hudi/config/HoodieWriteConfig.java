@@ -453,10 +453,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(BULKINSERT_USER_DEFINED_PARTITIONER_CLASS);
   }
 
-  public String getBulkinsertPrecombimeRowClass() {
-    return props.getProperty("");
-  }
-
   public int getInsertShuffleParallelism() {
     return getInt(INSERT_PARALLELISM);
   }
@@ -1341,11 +1337,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withUserDefinedBulkInsertPartitionerClass(String className) {
       writeConfig.setValue(BULKINSERT_USER_DEFINED_PARTITIONER_CLASS, className);
-      return this;
-    }
-
-    public Builder withBulkInsertPreCombineRowClass(String className) {
-      props.setProperty(BULK_INSERT_PRECOMBINE_ROW_CLASS, className);
       return this;
     }
 

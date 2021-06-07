@@ -41,8 +41,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.hudi.execution.bulkinsert.DefaultPreCombineRow;
-import org.apache.hudi.execution.bulkinsert.PreCombineRow;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex.IndexType;
@@ -99,44 +97,6 @@ public class DataSourceUtils {
           Option.of((BulkInsertPartitioner) ReflectionUtils.loadClass(bulkInsertPartitionerClass));
     } catch (Throwable e) {
       throw new HoodieException("Could not create UserDefinedBulkInsertPartitioner class " + bulkInsertPartitionerClass, e);
-    }
-  }
-
-  /**
-   * Create a UserDefinedBulkInsertPartitionerRows class via reflection,
-   * <br>
-   * if the class name of UserDefinedBulkInsertPartitioner is configured through the HoodieWriteConfig.
-   *
-   * @see HoodieWriteConfig#getUserDefinedBulkInsertPartitionerClass()
-   */
-  public static Option<BulkInsertPartitioner<Dataset<Row>>> createUserDefinedBulkInsertPartitionerWithRows(HoodieWriteConfig config)
-      throws HoodieException {
-    String bulkInsertPartitionerClass = config.getUserDefinedBulkInsertPartitionerClass();
-    try {
-      return StringUtils.isNullOrEmpty(bulkInsertPartitionerClass)
-          ? Option.empty() :
-          Option.of((BulkInsertPartitioner) ReflectionUtils.loadClass(bulkInsertPartitionerClass));
-    } catch (Throwable e) {
-      throw new HoodieException("Could not create UserDefinedBulkInsertPartitionerRows class " + bulkInsertPartitionerClass, e);
-
-    }
-  }
-
-  /**
-   * Create a PreCombineRow class via reflection,
-   * <br>
-   * if the class name of PrecombineRow class is configured through the HoodieWriteConfig.
-   *
-   * @see HoodieWriteConfig#getBulkinsertPrecombimeRowClass() ()
-   */
-  static Option<PreCombineRow> createBulkInsertPreCombineRow(HoodieWriteConfig config, String preCombineField)
-      throws HoodieException {
-    String preCombineRowClass = config.getBulkinsertPrecombimeRowClass();
-    try {
-      return Option.of((PreCombineRow) ReflectionUtils.loadClass(DefaultPreCombineRow.class.getName(),
-          new Class<?>[] {String.class}, preCombineField));
-    } catch (Throwable e) {
-      throw new HoodieException("Could not create PreCombineRow class " + preCombineRowClass, e);
     }
   }
 
