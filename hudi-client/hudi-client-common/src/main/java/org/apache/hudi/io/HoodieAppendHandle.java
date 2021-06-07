@@ -386,10 +386,17 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         writer.close();
 
         // update final size, once for all log files
+        long totalLogFileSize = 0;
+        long cumulativeWriteTime = 0;
         for (WriteStatus status: statuses) {
           long logFileSize = FSUtils.getFileSize(fs, new Path(config.getBasePath(), status.getStat().getPath()));
           status.getStat().setFileSizeInBytes(logFileSize);
+          totalLogFileSize += logFileSize;
+          cumulativeWriteTime += status.getStat().getRuntimeStats().getTotalUpsertTime();
         }
+
+        // report write metrics
+        reportWriteMetrics(recordsWritten, cumulativeWriteTime, totalLogFileSize);
       }
       return statuses;
     } catch (IOException e) {

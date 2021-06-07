@@ -19,10 +19,13 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.DistributedMetricsReporter;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -35,6 +38,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -82,8 +86,10 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload, I, K, O> exten
         HoodieTimer timer = new HoodieTimer().startTimer();
         Set<String> fileRowKeys = createNewFileReader().filterRowKeys(new HashSet<>(candidateRecordKeys));
         foundRecordKeys.addAll(fileRowKeys);
+        long searchTime = timer.endTimer();
         LOG.info(String.format("Checked keys against file %s, in %d ms. #candidates (%d) #found (%d)", filePath,
-            timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size()));
+            searchTime, candidateRecordKeys.size(), foundRecordKeys.size()));
+        reportBloomIndexMetrics(searchTime, candidateRecordKeys.size(), fileRowKeys.size(), foundRecordKeys.size());
         if (LOG.isDebugEnabled()) {
           LOG.debug("Keys matching for file " + filePath + " => " + foundRecordKeys);
         }
@@ -124,6 +130,30 @@ public class HoodieKeyLookupHandle<T extends HoodieRecordPayload, I, K, O> exten
             candidateRecordKeys.size(), candidateRecordKeys.size() - matchingKeys.size(), matchingKeys.size()));
     return new KeyLookupResult(partitionPathFilePair.getRight(), partitionPathFilePair.getLeft(),
         dataFile.getCommitTime(), matchingKeys);
+  }
+
+  private void reportBloomIndexMetrics(long searchTimeInMSec, long candidateRecords, long fileRecords,
+                                       long matchingRecords) {
+
+    Option<Registry> registry = hoodieTable.getDistributedMetricsRegistry(
+        DistributedMetricsReporter.DISTRIBUTED_METRICS_REGISTRY_NAME);
+    if (registry.isPresent()) {
+      // instantiate reporter
+      DistributedMetricsReporter distributedMetricsReporter = new DistributedMetricsReporter(registry,
+          hoodieTable.getMetaClient().getTableConfig().getTableName(),
+          hoodieTable.getTaskContextSupplier().getPartitionIdSupplier().get(),
+          hoodieTable.getTaskContextSupplier().getStageIdSupplier().get());
+
+      // update additional properties
+      HashMap<String, Object> props = distributedMetricsReporter.getPropertiesMap();
+      props.put(DistributedMetricsReporter.BloomIndexMetrics.SEARCH_TIME_IN_USEC, searchTimeInMSec * 1000);
+      props.put(DistributedMetricsReporter.BloomIndexMetrics.CANDIDATE_RECORDS, candidateRecords);
+      props.put(DistributedMetricsReporter.BloomIndexMetrics.FILE_RECORDS, fileRecords);
+      props.put(DistributedMetricsReporter.BloomIndexMetrics.MATCHING_RECORDS, matchingRecords);
+
+      // report write metrics
+      distributedMetricsReporter.reportBloomIndexMetrics();
+    }
   }
 
   /**
