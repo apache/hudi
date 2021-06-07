@@ -32,11 +32,7 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
-<<<<<<< HEAD:hudi-spark-datasource/hudi-spark/src/main/scala/org/apache/hudi/HoodieSparkSqlWriter.scala
-import org.apache.hudi.common.util.{CommitUtils, Option, ReflectionUtils}
-=======
-import org.apache.hudi.common.util.ReflectionUtils
->>>>>>> 9b68e0eb (Rebasing and adding tests for BulkInsertPartitioners with Rows):hudi-spark/src/main/scala/org/apache/hudi/HoodieSparkSqlWriter.scala
+import org.apache.hudi.common.util.{CommitUtils, ReflectionUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BOOTSTRAP_BASE_PATH_PROP, BOOTSTRAP_INDEX_CLASS_PROP, DEFAULT_BOOTSTRAP_INDEX_CLASS}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
@@ -342,9 +338,9 @@ object HoodieSparkSqlWriter {
     }
     val params = parameters.updated(HoodieWriteConfig.AVRO_SCHEMA, schema.toString)
     val writeConfig = DataSourceUtils.createHoodieConfig(schema.toString, path.get, tblName, mapAsJavaMap(params))
-    val bulkInsertPatitionerOpt = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig)
+    val bulkInsertPartitionerOpt = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig)
     val hoodieDF = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, writeConfig, df, structName, nameSpace,
-      bulkInsertPatitionerOpt)
+      bulkInsertPartitionerOpt)
     if (SPARK_VERSION.startsWith("2.")) {
       hoodieDF.write.format("org.apache.hudi.internal")
         .option(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY, instantTime)

@@ -18,6 +18,9 @@
 
 package org.apache.hudi;
 
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.HoodieReadClient;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -42,10 +45,6 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.table.BulkInsertPartitioner;
-
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -184,11 +183,11 @@ public class DataSourceUtils {
   }
 
   public static HoodieWriteResult doWriteOperation(SparkRDDWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
-      String instantTime, WriteOperationType operation) throws HoodieException {
+                                                   String instantTime, WriteOperationType operation) throws HoodieException {
     switch (operation) {
       case BULK_INSERT:
         Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner =
-            createUserDefinedBulkInsertPartitioner(client.getConfig());
+                createUserDefinedBulkInsertPartitioner(client.getConfig());
         return new HoodieWriteResult(client.bulkInsert(hoodieRecords, instantTime, userDefinedBulkInsertPartitioner));
       case INSERT:
         return new HoodieWriteResult(client.insert(hoodieRecords, instantTime));
@@ -215,7 +214,7 @@ public class DataSourceUtils {
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord gr, HoodieKey hKey,
-      String payloadClass) throws IOException {
+                                                String payloadClass) throws IOException {
     HoodieRecordPayload payload = DataSourceUtils.createPayload(payloadClass, gr);
     return new HoodieRecord<>(hKey, payload);
   }
