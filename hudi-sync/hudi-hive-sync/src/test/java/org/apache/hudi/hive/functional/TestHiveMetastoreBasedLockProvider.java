@@ -7,32 +7,32 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
-package org.apache.hudi.hive;
+package org.apache.hudi.hive.functional;
+
+import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.hive.HiveMetastoreBasedLockProvider;
+import org.apache.hudi.hive.testutils.HiveSyncFunctionalTestHarness;
 
 import org.apache.hadoop.hive.metastore.api.DataOperationType;
 import org.apache.hadoop.hive.metastore.api.LockComponent;
 import org.apache.hadoop.hive.metastore.api.LockLevel;
 import org.apache.hadoop.hive.metastore.api.LockType;
-import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.hive.testutils.HiveTestUtil;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUIRE_NUM_RETRIES;
@@ -54,39 +54,33 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT
  * /metastore-server/src/main/java/org/apache/hadoop/hive/metastore/txn/TxnHandler.java#L2892
  * Unless this is set, we cannot use HiveMetastore server in tests for locking use-cases.
  */
-public class TestHiveMetastoreBasedLockProvider {
+@Tag("functional")
+public class TestHiveMetastoreBasedLockProvider extends HiveSyncFunctionalTestHarness {
 
-  private static Connection connection;
-  private static LockComponent lockComponent = new LockComponent(LockType.EXCLUSIVE, LockLevel.TABLE, "testdb");
-  private static LockConfiguration lockConfiguration;
+  private static final String TEST_DB_NAME = "testdb";
+  private static final String TEST_TABLE_NAME = "testtable";
+  private LockComponent lockComponent = new LockComponent(LockType.EXCLUSIVE, LockLevel.TABLE, TEST_DB_NAME);
+  private LockConfiguration lockConfiguration;
 
-  @BeforeAll
-  public static void init() throws Exception {
-    HiveTestUtil.setUp();
-    createHiveConnection();
-    connection.createStatement().execute("create database if not exists testdb");
+  @BeforeEach
+  public void init() throws Exception {
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(HIVE_DATABASE_NAME_PROP, "testdb");
-    properties.setProperty(HIVE_TABLE_NAME_PROP, "testtable");
+    properties.setProperty(HIVE_DATABASE_NAME_PROP, TEST_DB_NAME);
+    properties.setProperty(HIVE_TABLE_NAME_PROP, TEST_TABLE_NAME);
     properties.setProperty(LOCK_ACQUIRE_NUM_RETRIES_PROP, DEFAULT_LOCK_ACQUIRE_NUM_RETRIES);
     properties.setProperty(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP, DEFAULT_LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS);
-    properties.setProperty(ZK_CONNECT_URL_PROP, HiveTestUtil.getZkService().connectString());
-    properties.setProperty(ZK_PORT_PROP, HiveTestUtil.getHiveConf().get("hive.zookeeper.client.port"));
-    properties.setProperty(ZK_SESSION_TIMEOUT_MS_PROP, HiveTestUtil.getHiveConf().get("hive.zookeeper.session.timeout"));
+    properties.setProperty(ZK_CONNECT_URL_PROP, zkService().connectString());
+    properties.setProperty(ZK_PORT_PROP, hiveConf().get("hive.zookeeper.client.port"));
+    properties.setProperty(ZK_SESSION_TIMEOUT_MS_PROP, hiveConf().get("hive.zookeeper.session.timeout"));
     properties.setProperty(ZK_CONNECTION_TIMEOUT_MS_PROP, String.valueOf(DEFAULT_ZK_CONNECTION_TIMEOUT_MS));
     properties.setProperty(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP, String.valueOf(1000));
     lockConfiguration = new LockConfiguration(properties);
-    lockComponent.setTablename("testtable");
-  }
-
-  @AfterAll
-  public static void cleanUpClass() {
-    HiveTestUtil.shutdown();
+    lockComponent.setTablename(TEST_TABLE_NAME);
   }
 
   @Test
   public void testAcquireLock() throws Exception {
-    HiveMetastoreBasedLockProvider lockProvider = new HiveMetastoreBasedLockProvider(lockConfiguration, HiveTestUtil.getHiveConf());
+    HiveMetastoreBasedLockProvider lockProvider = new HiveMetastoreBasedLockProvider(lockConfiguration, hiveConf());
     lockComponent.setOperationType(DataOperationType.NO_TXN);
     Assertions.assertTrue(lockProvider.acquireLock(lockConfiguration.getConfig()
         .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP), TimeUnit.MILLISECONDS, lockComponent));
@@ -106,7 +100,7 @@ public class TestHiveMetastoreBasedLockProvider {
 
   @Test
   public void testUnlock() throws Exception {
-    HiveMetastoreBasedLockProvider lockProvider = new HiveMetastoreBasedLockProvider(lockConfiguration, HiveTestUtil.getHiveConf());
+    HiveMetastoreBasedLockProvider lockProvider = new HiveMetastoreBasedLockProvider(lockConfiguration, hiveConf());
     lockComponent.setOperationType(DataOperationType.NO_TXN);
     Assertions.assertTrue(lockProvider.acquireLock(lockConfiguration.getConfig()
         .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP), TimeUnit.MILLISECONDS, lockComponent));
@@ -119,7 +113,7 @@ public class TestHiveMetastoreBasedLockProvider {
 
   @Test
   public void testReentrantLock() throws Exception {
-    HiveMetastoreBasedLockProvider lockProvider = new HiveMetastoreBasedLockProvider(lockConfiguration, HiveTestUtil.getHiveConf());
+    HiveMetastoreBasedLockProvider lockProvider = new HiveMetastoreBasedLockProvider(lockConfiguration, hiveConf());
     lockComponent.setOperationType(DataOperationType.NO_TXN);
     Assertions.assertTrue(lockProvider.acquireLock(lockConfiguration.getConfig()
         .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP), TimeUnit.MILLISECONDS, lockComponent));
@@ -135,24 +129,9 @@ public class TestHiveMetastoreBasedLockProvider {
 
   @Test
   public void testUnlockWithoutLock() {
-    HiveMetastoreBasedLockProvider lockProvider = new HiveMetastoreBasedLockProvider(lockConfiguration, HiveTestUtil.getHiveConf());
+    HiveMetastoreBasedLockProvider lockProvider = new HiveMetastoreBasedLockProvider(lockConfiguration, hiveConf());
     lockComponent.setOperationType(DataOperationType.NO_TXN);
     lockProvider.unlock();
-  }
-
-  private static void createHiveConnection() {
-    if (connection == null) {
-      try {
-        Class.forName("org.apache.hive.jdbc.HiveDriver");
-      } catch (ClassNotFoundException e) {
-        throw new RuntimeException();
-      }
-      try {
-        connection = DriverManager.getConnection("jdbc:hive2://127.0.0.1:9999/");
-      } catch (SQLException e) {
-        throw new HoodieHiveSyncException("Cannot create hive connection ", e);
-      }
-    }
   }
 
 }
