@@ -25,12 +25,13 @@ import java.io.Serializable;
 /**
  * Class to provide schema for reading data and also writing into a Hoodie table.
  */
-public abstract class SchemaProvider implements Serializable {
+public interface SchemaProviderInterface extends Serializable {
 
-  public abstract Schema getSourceSchema();
+  Schema getSourceSchema();
 
-  public Schema getTargetSchema() {
+  default Schema getTargetSchema() {
     // by default, use source schema as target for hoodie table as well
     return getSourceSchema();
   }
+
 }
