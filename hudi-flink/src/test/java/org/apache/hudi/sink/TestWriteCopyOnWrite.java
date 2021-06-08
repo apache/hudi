@@ -576,10 +576,6 @@ public class TestWriteCopyOnWrite {
 
   @Test
   public void testIndexStateBootstrap() throws Exception {
-    // reset the config option
-    conf.setBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
-    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
-
     // open the function and ingest data
     funcWrapper.openFunction();
     for (RowData rowData : TestData.DATA_SET_INSERT) {
@@ -598,13 +594,21 @@ public class TestWriteCopyOnWrite {
 
     funcWrapper.checkpointComplete(1);
 
-    // Mark the index state as not fully loaded to trigger re-load from the filesystem.
-    funcWrapper.clearIndexState();
+    // the data is not flushed yet
+    checkWrittenData(tempFile, EXPECTED1);
+
+    // reset the config option
+    conf.setBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // upsert another data buffer
+    funcWrapper.openFunction();
     for (RowData rowData : TestData.DATA_SET_UPDATE_INSERT) {
       funcWrapper.invoke(rowData);
     }
+
+    assertTrue(funcWrapper.isAlreadyBootstrap());
+
     checkIndexLoaded(
         new HoodieKey("id1", "par1"),
         new HoodieKey("id2", "par1"),
@@ -613,11 +617,13 @@ public class TestWriteCopyOnWrite {
         new HoodieKey("id5", "par3"),
         new HoodieKey("id6", "par3"),
         new HoodieKey("id7", "par4"),
-        new HoodieKey("id8", "par4"));
-    // the data is not flushed yet
-    checkWrittenData(tempFile, EXPECTED1);
+        new HoodieKey("id8", "par4"),
+        new HoodieKey("id9", "par3"),
+        new HoodieKey("id10", "par4"),
+        new HoodieKey("id11", "par4"));
+
     // this triggers the data write and event send
-    funcWrapper.checkpointFunction(2);
+    funcWrapper.checkpointFunction(1);
 
     String instant = funcWrapper.getWriteClient()
         .getLastPendingInstant(getTableType());
@@ -631,7 +637,7 @@ public class TestWriteCopyOnWrite {
 
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.REQUESTED, instant);
 
-    funcWrapper.checkpointComplete(2);
+    funcWrapper.checkpointComplete(1);
     // the coordinator checkpoint commits the inflight instant.
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
     checkWrittenData(tempFile, EXPECTED2);
