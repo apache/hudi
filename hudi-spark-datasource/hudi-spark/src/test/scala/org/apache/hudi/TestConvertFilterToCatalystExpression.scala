@@ -67,14 +67,6 @@ class TestConvertFilterToCatalystExpression {
       "((`ts` < 10) AND (`ts` > 1))")
   }
 
-  @Test
-  def testUnSupportConvert(): Unit = {
-    checkConvertFilters(Array(unsupport()), null)
-    checkConvertFilters(Array(and(unsupport(), eq("id", 1))), null)
-    checkConvertFilters(Array(or(unsupport(), eq("id", 1))), null)
-    checkConvertFilters(Array(and(eq("id", 1), not(unsupport()))), null)
-  }
-
   private def checkConvertFilter(filter: Filter, expectExpression: String): Unit = {
     val exp = convertToCatalystExpression(filter, tableSchema)
     if (expectExpression == null) {
@@ -153,13 +145,5 @@ class TestConvertFilterToCatalystExpression {
 
   private def contains(attribute: String, value: String): Filter = {
     StringContains(attribute, value)
-  }
-
-  private def unsupport(): Filter = {
-    UnSupportFilter("")
-  }
-
-  case class UnSupportFilter(value: Any) extends Filter {
-    override def references: Array[String] = Array.empty
   }
 }

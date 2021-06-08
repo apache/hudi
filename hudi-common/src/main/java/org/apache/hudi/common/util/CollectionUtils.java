@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util;
 
+import java.util.Properties;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.Collections;
@@ -31,6 +32,9 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class CollectionUtils {
+
+  public static final Properties EMPTY_PROPERTIES = new Properties();
+
   /**
    * Determines whether two iterators contain equal elements in the same order. More specifically,
    * this method returns {@code true} if {@code iterator1} and {@code iterator2} contain the same

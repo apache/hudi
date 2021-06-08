@@ -17,14 +17,13 @@
 
 package org.apache.hudi
 
-import java.net.URLEncoder
-
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.{Config, TimestampType}
@@ -137,7 +136,8 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     val fileIndex = HoodieFileIndex(spark, metaClient, None, Map("path" -> basePath))
 
     val partitionFilter1 = EqualTo(attribute("partition"), literal("2021/03/08"))
-    val partitionName = if (partitionEncode) URLEncoder.encode("2021/03/08") else "2021/03/08"
+    val partitionName = if (partitionEncode) PartitionPathEncodeUtils.escapePathName("2021/03/08")
+    else "2021/03/08"
     val partitionAndFilesAfterPrune = fileIndex.listFiles(Seq(partitionFilter1), Seq.empty)
     assertEquals(1, partitionAndFilesAfterPrune.size)
 

@@ -21,16 +21,13 @@ package org.apache.hudi.keygen;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.keygen.parser.AbstractHoodieDateTimeParser;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
@@ -40,7 +37,7 @@ public class KeyGenUtils {
   protected static final String EMPTY_RECORDKEY_PLACEHOLDER = "__empty__";
 
   protected static final String DEFAULT_PARTITION_PATH = "default";
-  protected static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
+  public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
 
   /**
    * Extracts the record key fields in strings out of the given record key,
@@ -104,11 +101,7 @@ public class KeyGenUtils {
             : DEFAULT_PARTITION_PATH);
       } else {
         if (encodePartitionPath) {
-          try {
-            fieldVal = URLEncoder.encode(fieldVal, StandardCharsets.UTF_8.toString());
-          } catch (UnsupportedEncodingException uoe) {
-            throw new HoodieException(uoe.getMessage(), uoe);
-          }
+          fieldVal = PartitionPathEncodeUtils.escapePathName(fieldVal);
         }
         partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + fieldVal : fieldVal);
       }
@@ -133,11 +126,7 @@ public class KeyGenUtils {
       partitionPath = DEFAULT_PARTITION_PATH;
     }
     if (encodePartitionPath) {
-      try {
-        partitionPath = URLEncoder.encode(partitionPath, StandardCharsets.UTF_8.toString());
-      } catch (UnsupportedEncodingException uoe) {
-        throw new HoodieException(uoe.getMessage(), uoe);
-      }
+      partitionPath = PartitionPathEncodeUtils.escapePathName(partitionPath);
     }
     if (hiveStylePartitioning) {
       partitionPath = partitionPathField + "=" + partitionPath;

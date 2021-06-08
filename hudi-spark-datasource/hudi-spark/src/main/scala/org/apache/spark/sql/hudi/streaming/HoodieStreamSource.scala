@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets
 import java.util.Date
 
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils, IncrementalRelation, MergeOnReadIncrementalRelation}
+import org.apache.hudi.{DataSourceReadOptions, IncrementalRelation, MergeOnReadIncrementalRelation, SparkAdapterSupport}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
@@ -51,7 +51,7 @@ class HoodieStreamSource(
     metadataPath: String,
     schemaOption: Option[StructType],
     parameters: Map[String, String])
-  extends Source with Logging with Serializable {
+  extends Source with Logging with Serializable with SparkAdapterSupport {
 
   @transient private val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
   private lazy val tablePath: Path = {
@@ -160,7 +160,7 @@ class HoodieStreamSource(
 
       val rdd = tableType match {
         case HoodieTableType.COPY_ON_WRITE =>
-          val serDe = HoodieSparkUtils.createRowSerDe(RowEncoder(schema))
+          val serDe = sparkAdapter.createSparkRowSerDe(RowEncoder(schema))
           new IncrementalRelation(sqlContext, incParams, schema, metaClient)
             .buildScan()
             .map(serDe.serializeRow)

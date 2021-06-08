@@ -18,9 +18,6 @@
 
 package org.apache.hudi.hive;
 
-import java.io.UnsupportedEncodingException;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Partition;
@@ -33,6 +30,7 @@ import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
 
@@ -211,12 +209,8 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       String partitionValue = partitionValues.get(i);
       // decode the partition before sync to hive to prevent multiple escapes of HIVE
       if (syncConfig.decodePartition) {
-        try {
-          // This is a decode operator for encode in KeyGenUtils#getRecordPartitionPath
-          partitionValue = URLDecoder.decode(partitionValue, StandardCharsets.UTF_8.toString());
-        } catch (UnsupportedEncodingException e) {
-          throw new HoodieHiveSyncException("error in decode partition: " + partitionValue, e);
-        }
+        // This is a decode operator for encode in KeyGenUtils#getRecordPartitionPath
+        partitionValue = PartitionPathEncodeUtils.unescapePathName(partitionValue);
       }
       partBuilder.add("`" + syncConfig.partitionFields.get(i) + "`='" + partitionValue + "'");
     }
