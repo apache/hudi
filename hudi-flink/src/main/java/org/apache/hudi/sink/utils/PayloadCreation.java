@@ -78,7 +78,7 @@ public class PayloadCreation implements Serializable {
       ValidationUtils.checkState(preCombineField != null);
       Comparable<?> orderingVal = (Comparable<?>) HoodieAvroUtils.getNestedFieldVal(record,
           preCombineField, false);
-      if(orderingVal instanceof LocalDateTime) {
+      if (orderingVal instanceof LocalDateTime) {
         orderingVal = ((LocalDateTime) orderingVal).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
       }
       return (HoodieRecordPayload<?>) constructor.newInstance(
