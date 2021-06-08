@@ -22,43 +22,32 @@ import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.BaseAvroPayload;
-import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.index.HoodieIndexUtils;
+import org.apache.hudi.sink.bootstrap.BootstrapRecord;
 import org.apache.hudi.sink.utils.PayloadCreation;
-import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.state.CheckpointListener;
-import org.apache.flink.api.common.state.MapState;
-import org.apache.flink.api.common.state.MapStateDescriptor;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
-import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.table.runtime.util.StateTtlConfigUtil;
 import org.apache.flink.util.Collector;
-import org.apache.hadoop.fs.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.util.List;
 import java.util.Objects;
 
 /**
@@ -79,8 +68,6 @@ import java.util.Objects;
 public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     extends KeyedProcessFunction<K, I, O>
     implements CheckpointedFunction, CheckpointListener {
-
-  private static final Logger LOG = LoggerFactory.getLogger(BucketAssignFunction.class);
 
   private BucketAssignOperator.Context context;
 
@@ -108,13 +95,6 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
 
   private final boolean isChangingRecords;
 
-  private final boolean bootstrapIndex;
-
-  /**
-   * State to book-keep which partition is loaded into the index state {@code indexState}.
-   */
-  private MapState<String, Integer> partitionLoadState;
-
   /**
    * Used to create DELETE payload.
    */
@@ -130,7 +110,6 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     this.conf = conf;
     this.isChangingRecords = WriteOperationType.isChangingRecords(
         WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)));
-    this.bootstrapIndex = conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED);
     this.globalIndex = conf.getBoolean(FlinkOptions.INDEX_GLOBAL_ENABLED);
   }
 
@@ -168,31 +147,29 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
       indexStateDesc.enableTimeToLive(StateTtlConfigUtil.createTtlConfig((long) ttl));
     }
     indexState = context.getKeyedStateStore().getState(indexStateDesc);
-    if (bootstrapIndex) {
-      MapStateDescriptor<String, Integer> partitionLoadStateDesc =
-          new MapStateDescriptor<>("partitionLoadState", Types.STRING, Types.INT);
-      partitionLoadState = context.getKeyedStateStore().getMapState(partitionLoadStateDesc);
+  }
+
+  @Override
+  public void processElement(I value, Context ctx, Collector<O> out) throws Exception {
+    if (value instanceof BootstrapRecord) {
+      BootstrapRecord bootstrapRecord = (BootstrapRecord) value;
+      this.context.setCurrentKey(bootstrapRecord.getRecordKey());
+      this.indexState.update((HoodieRecordGlobalLocation) bootstrapRecord.getCurrentLocation());
+    } else {
+      processRecord((HoodieRecord<?>) value, out);
     }
   }
 
   @SuppressWarnings("unchecked")
-  @Override
-  public void processElement(I value, Context ctx, Collector<O> out) throws Exception {
+  private void processRecord(HoodieRecord<?> record, Collector<O> out) throws Exception {
     // 1. put the record into the BucketAssigner;
     // 2. look up the state for location, if the record has a location, just send it out;
     // 3. if it is an INSERT, decide the location using the BucketAssigner then send it out.
-    HoodieRecord<?> record = (HoodieRecord<?>) value;
     final HoodieKey hoodieKey = record.getKey();
     final String recordKey = hoodieKey.getRecordKey();
     final String partitionPath = hoodieKey.getPartitionPath();
     final HoodieRecordLocation location;
 
-    // The dataset may be huge, thus the processing would block for long,
-    // disabled by default.
-    if (bootstrapIndex && !partitionLoadState.contains(partitionPath)) {
-      // If the partition records are never loaded, load the records first.
-      loadRecords(partitionPath, recordKey);
-    }
     // Only changing records need looking up the index for the location,
     // append only records are always recognized as INSERT.
     HoodieRecordGlobalLocation oldLoc = indexState.value();
@@ -216,6 +193,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
       }
     } else {
       location = getNewRecordLocation(partitionPath);
+      this.context.setCurrentKey(recordKey);
       if (isChangingRecords) {
         updateIndexState(partitionPath, location);
       }
@@ -264,62 +242,8 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     this.context = context;
   }
 
-  /**
-   * Load all the indices of give partition path into the backup state.
-   *
-   * @param partitionPath The partition path
-   * @param curRecordKey  The current record key
-   * @throws Exception when error occurs for state update
-   */
-  private void loadRecords(String partitionPath, String curRecordKey) throws Exception {
-    LOG.info("Start loading records under partition {} into the index state", partitionPath);
-    HoodieTable<?, ?, ?, ?> hoodieTable = bucketAssigner.getTable();
-    BaseFileUtils fileUtils = BaseFileUtils.getInstance(hoodieTable.getBaseFileFormat());
-    List<HoodieBaseFile> latestBaseFiles =
-        HoodieIndexUtils.getLatestBaseFilesForPartition(partitionPath, hoodieTable);
-    final int parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
-    final int maxParallelism = getRuntimeContext().getMaxNumberOfParallelSubtasks();
-    final int taskID = getRuntimeContext().getIndexOfThisSubtask();
-    for (HoodieBaseFile baseFile : latestBaseFiles) {
-      final List<HoodieKey> hoodieKeys;
-      try {
-        hoodieKeys =
-            fileUtils.fetchRecordKeyPartitionPath(hadoopConf, new Path(baseFile.getPath()));
-      } catch (Exception e) {
-        // in case there was some empty parquet file when the pipeline
-        // crushes exceptionally.
-        LOG.error("Error when loading record keys from file: {}", baseFile);
-        continue;
-      }
-      hoodieKeys.forEach(hoodieKey -> {
-        try {
-          // Reference: org.apache.flink.streaming.api.datastream.KeyedStream,
-          // the input records is shuffled by record key
-          boolean shouldLoad = KeyGroupRangeAssignment.assignKeyToParallelOperator(
-              hoodieKey.getRecordKey(), maxParallelism, parallelism) == taskID;
-          if (shouldLoad) {
-            this.context.setCurrentKey(hoodieKey.getRecordKey());
-            this.indexState.update(
-                new HoodieRecordGlobalLocation(
-                    hoodieKey.getPartitionPath(),
-                    baseFile.getCommitTime(),
-                    baseFile.getFileId()));
-          }
-        } catch (Exception e) {
-          LOG.error("Error when putting record keys into the state from file: {}", baseFile);
-        }
-      });
-    }
-    // recover the currentKey
-    this.context.setCurrentKey(curRecordKey);
-    // Mark the partition path as loaded.
-    partitionLoadState.put(partitionPath, 0);
-    LOG.info("Finish loading records under partition {} into the index state", partitionPath);
-  }
-
   @VisibleForTesting
   public void clearIndexState() {
-    this.partitionLoadState.clear();
     this.indexState.clear();
   }
 }
