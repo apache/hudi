@@ -34,6 +34,8 @@ import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.lang.reflect.Constructor;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 /**
  * Util to create hoodie pay load instance.
@@ -76,6 +78,9 @@ public class PayloadCreation implements Serializable {
       ValidationUtils.checkState(preCombineField != null);
       Comparable<?> orderingVal = (Comparable<?>) HoodieAvroUtils.getNestedFieldVal(record,
           preCombineField, false);
+      if(orderingVal instanceof LocalDateTime) {
+        orderingVal = ((LocalDateTime) orderingVal).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+      }
       return (HoodieRecordPayload<?>) constructor.newInstance(
           isDelete ? null : record, orderingVal);
     } else {
