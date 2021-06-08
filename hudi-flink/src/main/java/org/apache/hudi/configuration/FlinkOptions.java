@@ -23,8 +23,8 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
-import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -271,8 +271,14 @@ public class FlinkOptions {
   public static final ConfigOption<String> KEYGEN_CLASS = ConfigOptions
       .key(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP)
       .stringType()
-      .defaultValue(SimpleAvroKeyGenerator.class.getName())
+      .defaultValue("")
       .withDescription("Key generator class, that implements will extract the key out of incoming record");
+
+  public static final ConfigOption<String> KEYGEN_TYPE = ConfigOptions
+      .key(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP)
+      .stringType()
+      .defaultValue(KeyGeneratorType.SIMPLE.name())
+      .withDescription("Key generator type, that implements will extract the key out of incoming record");
 
   public static final ConfigOption<Integer> WRITE_TASKS = ConfigOptions
       .key("write.tasks")
@@ -539,6 +545,8 @@ public class FlinkOptions {
     conf.setBoolean(FlinkOptions.IGNORE_FAILED, config.commitOnErrors);
     conf.setString(FlinkOptions.RECORD_KEY_FIELD, config.recordKeyField);
     conf.setString(FlinkOptions.PARTITION_PATH_FIELD, config.partitionPathField);
+    // keygenClass has higher priority than keygenType
+    conf.setString(FlinkOptions.KEYGEN_TYPE, config.keygenType);
     conf.setString(FlinkOptions.KEYGEN_CLASS, config.keygenClass);
     conf.setInteger(FlinkOptions.WRITE_TASKS, config.writeTaskNum);
 

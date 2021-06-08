@@ -32,6 +32,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.KeyGenerator;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.Dataset;
@@ -62,7 +63,7 @@ public class SparkParquetBootstrapDataProvider extends FullRecordBootstrapDataPr
 
     Dataset inputDataset = sparkSession.read().parquet(filePaths);
     try {
-      KeyGenerator keyGenerator = DataSourceUtils.createKeyGenerator(props);
+      KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
       String structName = tableName + "_record";
       String namespace = "hoodie." + tableName;
       RDD<GenericRecord> genericRecords = HoodieSparkUtils.createRdd(inputDataset, structName, namespace);

@@ -37,7 +37,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
@@ -72,8 +72,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static final String PRECOMBINE_FIELD_PROP = "hoodie.datasource.write.precombine.field";
   public static final String WRITE_PAYLOAD_CLASS = "hoodie.datasource.write.payload.class";
   public static final String DEFAULT_WRITE_PAYLOAD_CLASS = OverwriteWithLatestAvroPayload.class.getName();
+
   public static final String KEYGENERATOR_CLASS_PROP = "hoodie.datasource.write.keygenerator.class";
-  public static final String DEFAULT_KEYGENERATOR_CLASS = SimpleAvroKeyGenerator.class.getName();
+  public static final String KEYGENERATOR_TYPE_PROP = "hoodie.datasource.write.keygenerator.type";
+  public static final String DEFAULT_KEYGENERATOR_TYPE = KeyGeneratorType.SIMPLE.name();
+
   public static final String DEFAULT_ROLLBACK_USING_MARKERS = "false";
   public static final String ROLLBACK_USING_MARKERS = "hoodie.rollback.using.markers";
   public static final String TIMELINE_LAYOUT_VERSION = "hoodie.timeline.layout.version";
@@ -1378,8 +1381,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
       setDefaultOnCondition(props, !props.containsKey(ROLLBACK_PARALLELISM), ROLLBACK_PARALLELISM,
           DEFAULT_ROLLBACK_PARALLELISM);
-      setDefaultOnCondition(props, !props.containsKey(KEYGENERATOR_CLASS_PROP),
-          KEYGENERATOR_CLASS_PROP, DEFAULT_KEYGENERATOR_CLASS);
+      setDefaultOnCondition(props, !props.containsKey(KEYGENERATOR_TYPE_PROP),
+          KEYGENERATOR_TYPE_PROP, DEFAULT_KEYGENERATOR_TYPE);
       setDefaultOnCondition(props, !props.containsKey(WRITE_PAYLOAD_CLASS),
           WRITE_PAYLOAD_CLASS, DEFAULT_WRITE_PAYLOAD_CLASS);
       setDefaultOnCondition(props, !props.containsKey(ROLLBACK_USING_MARKERS), ROLLBACK_USING_MARKERS,
