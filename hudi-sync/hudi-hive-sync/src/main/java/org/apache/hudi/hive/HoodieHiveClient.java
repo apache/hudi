@@ -19,7 +19,6 @@
 package org.apache.hudi.hive;
 
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.metastore.api.Database;
@@ -39,7 +38,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.ql.metadata.Hive;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
@@ -100,7 +98,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       this.client = Hive.get(configuration).getMSC();
       LOG.info(String.format("Time taken to start SessionState and create Driver and client: "
               + "%s ms", (timer.endTimer())));
-    } catch (MetaException | HiveException | IOException e) {
+    } catch (Exception e) {
       if (this.sessionState != null) {
         try {
           this.sessionState.close();
