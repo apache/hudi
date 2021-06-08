@@ -125,7 +125,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
         List<GenericRecord> oldRecords = BaseFileUtils.getInstance(updateTable.getBaseFileFormat())
             .readAvroRecords(updateTable.getHadoopConf(),
                 new Path(updateTable.getConfig().getBasePath() + "/" + insertResult.getStat().getPath()),
-                mergeHandle.getWriterSchemaWithMetafields());
+                mergeHandle.getWriterSchemaWithMetaFields());
         for (GenericRecord rec : oldRecords) {
           mergeHandle.write(rec);
         }

@@ -30,4 +30,5 @@
   <suppress checks="IllegalImport" files="DefaultSource.java" />
   <suppress checks="IllegalImport" files="HoodieTableSource.java" />
   <suppress checks="IllegalTokenText" files="FilePathUtils.java"/>
+  <suppress checks="IllegalTokenText" files="PartitionPathEncodeUtils.java"/>
 </suppressions>

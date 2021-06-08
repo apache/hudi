@@ -71,7 +71,7 @@ case class HoodieFileIndex(
      schemaSpec: Option[StructType],
      options: Map[String, String],
      @transient fileStatusCache: FileStatusCache = NoopCache)
-  extends FileIndex with Logging {
+  extends FileIndex with Logging with SparkAdapterSupport {
 
   private val basePath = metaClient.getBasePath
 
@@ -247,7 +247,7 @@ case class HoodieFileIndex(
       .get(DateTimeUtils.TIMEZONE_OPTION)
       .getOrElse(SQLConf.get.sessionLocalTimeZone)
 
-    val sparkParsePartitionUtil = HoodieSparkUtils.createSparkParsePartitionUtil(spark
+    val sparkParsePartitionUtil = sparkAdapter.createSparkParsePartitionUtil(spark
       .sessionState.conf)
     // Convert partition path to PartitionRowPath
     val partitionRowPaths = partitionPaths.map { partitionPath =>
@@ -323,17 +323,20 @@ case class HoodieFileIndex(
     }
     // Fetch the rest from the file system.
     val fetchedPartition2Files =
-      spark.sparkContext.parallelize(pathToFetch, Math.min(pathToFetch.size, maxListParallelism))
-        .map { partitionRowPath =>
-          // Here we use a LocalEngineContext to get the files in the partition.
-          // We can do this because the TableMetadata.getAllFilesInPartition only rely on the
-          // hadoopConf of the EngineContext.
-          val engineContext = new HoodieLocalEngineContext(serializableConf.get())
-          val filesInPartition =  FSUtils.getFilesInPartition(engineContext, metadataConfig,
+      if (pathToFetch.nonEmpty) {
+        spark.sparkContext.parallelize(pathToFetch, Math.min(pathToFetch.size, maxListParallelism))
+          .map { partitionRowPath =>
+            // Here we use a LocalEngineContext to get the files in the partition.
+            // We can do this because the TableMetadata.getAllFilesInPartition only rely on the
+            // hadoopConf of the EngineContext.
+            val engineContext = new HoodieLocalEngineContext(serializableConf.get())
+            val filesInPartition = FSUtils.getFilesInPartition(engineContext, metadataConfig,
               basePath, partitionRowPath.fullPartitionPath(basePath))
-          (partitionRowPath, filesInPartition)
-        }.collect().map(f => f._1 -> f._2).toMap
-
+            (partitionRowPath, filesInPartition)
+          }.collect().map(f => f._1 -> f._2).toMap
+      } else {
+        Map.empty[PartitionRowPath, Array[FileStatus]]
+      }
     // Update the fileStatusCache
     fetchedPartition2Files.foreach {
       case (partitionRowPath, filesInPartition) =>

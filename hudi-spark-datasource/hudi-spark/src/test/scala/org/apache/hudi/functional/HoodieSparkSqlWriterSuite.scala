@@ -528,7 +528,13 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
       "spark.sql.sources.schema.numParts=1\n" +
       "spark.sql.sources.schema.numPartCols=1\n" +
       "spark.sql.sources.schema.part.0=" +
-      "{\"type\":\"struct\",\"fields\":[{\"name\":\"_row_key\",\"type\":\"string\",\"nullable\":false,\"metadata\":{}}," +
+      "{\"type\":\"struct\",\"fields\":[{\"name\":\"_hoodie_commit_time\"," +
+      "\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":" +
+      "\"_hoodie_commit_seqno\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}," +
+      "{\"name\":\"_hoodie_record_key\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}," +
+      "{\"name\":\"_hoodie_partition_path\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}," +
+      "{\"name\":\"_hoodie_file_name\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}," +
+      "{\"name\":\"_row_key\",\"type\":\"string\",\"nullable\":false,\"metadata\":{}}," +
       "{\"name\":\"ts\",\"type\":\"long\",\"nullable\":true,\"metadata\":{}}," +
       "{\"name\":\"partition\",\"type\":\"string\",\"nullable\":false,\"metadata\":{}}]}")(hiveSyncConfig.tableProperties)
 
