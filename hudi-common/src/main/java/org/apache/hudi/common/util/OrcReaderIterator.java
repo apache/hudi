@@ -108,7 +108,6 @@ public class OrcReaderIterator<T> implements Iterator<T> {
 
     GenericData.Record record = new Record(avroSchema);
     int numFields = orcFieldTypes.size();
-    System.out.println(batch.toString());
     for (int i = 0; i < numFields; i++) {
       Object data = AvroOrcUtils.readFromVector(orcFieldTypes.get(i), batch.cols[i], avroFieldSchemas[i], rowInBatch);
       record.put(fieldNames.get(i), data);

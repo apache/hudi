@@ -39,6 +39,8 @@ import org.mockito.Mockito;
 import java.io.File;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY;
 import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER;
@@ -174,8 +176,9 @@ public class TestHoodieOrcReaderWriter {
       assertEquals(index, record.get("number"));
       GenericRecord innerRecord = (GenericRecord) record.get("driver");
       assertEquals("driver" + index, innerRecord.get("driver_name").toString());
-      assertEquals(Collections.singletonList(index), innerRecord.get("list"));
-      assertEquals(Collections.singletonMap("key" + index, "value" + index), innerRecord.get("map"));
+      assertEquals(1, ((List<?>)innerRecord.get("list")).size());
+      assertEquals(index, ((List<?>)innerRecord.get("list")).get(0));
+      assertEquals("value" + index, ((Map<?,?>)innerRecord.get("map")).get("key" + index).toString());
       index++;
     }
   }
