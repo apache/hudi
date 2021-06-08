@@ -112,21 +112,14 @@ public class OrcUtils {
    * NOTE: This literally reads the entire file contents, thus should be used with caution.
    */
   public List<GenericRecord> readAvroRecords(Configuration configuration, Path filePath) {
-    List<GenericRecord> records = new ArrayList<>();
+    Schema avroSchema;
     try {
       Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(configuration));
-      TypeDescription orcSchema = reader.getSchema();
-      Schema avroSchema = AvroOrcUtils.createAvroSchema(orcSchema);
-      RecordReader recordReader = reader.rows(new Options(configuration).schema(orcSchema));
-      OrcReaderIterator<GenericRecord> iterator = new OrcReaderIterator<>(recordReader, avroSchema, orcSchema);
-      while (iterator.hasNext()) {
-        GenericRecord record = iterator.next();
-        records.add(record);
-      }
+      avroSchema = AvroOrcUtils.createAvroSchema(reader.getSchema());
     } catch (IOException io) {
       throw new HoodieIOException("Unable to read Avro records from an ORC file.", io);
     }
-    return records;
+    return readAvroRecords(configuration, filePath, avroSchema);
   }
 
   /**
@@ -135,8 +128,8 @@ public class OrcUtils {
   public List<GenericRecord> readAvroRecords(Configuration configuration, Path filePath, Schema avroSchema) {
     List<GenericRecord> records = new ArrayList<>();
     try {
-      TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(avroSchema);
       Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(configuration));
+      TypeDescription orcSchema = reader.getSchema();
       RecordReader recordReader = reader.rows(new Options(configuration).schema(orcSchema));
       OrcReaderIterator<GenericRecord> iterator = new OrcReaderIterator<>(recordReader, avroSchema, orcSchema);
       while (iterator.hasNext()) {

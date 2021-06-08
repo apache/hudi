@@ -22,7 +22,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.io.storage.TestHoodieOrcReader;
 import org.apache.orc.CompressionKind;
 import org.apache.orc.OrcFile;
 import org.apache.orc.Reader;
@@ -42,6 +41,7 @@ import java.util.Iterator;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+
 public class TestOrcReaderIterator {
   private final Path filePath = new Path(System.getProperty("java.io.tmpdir") + "/f1_1-0-1_000.orc");
 
@@ -57,7 +57,7 @@ public class TestOrcReaderIterator {
   @Test
   public void testOrcIteratorReadData() throws Exception {
     final Configuration conf = new Configuration();
-    Schema avroSchema = getSchemaFromResource(TestHoodieOrcReader.class, "/simple-test.avsc");
+    Schema avroSchema = getSchemaFromResource(TestOrcReaderIterator.class, "/simple-test.avsc");
     TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(avroSchema);
     OrcFile.WriterOptions options = OrcFile.writerOptions(conf).setSchema(orcSchema).compress(CompressionKind.ZLIB);
     Writer writer = OrcFile.createWriter(filePath, options);
