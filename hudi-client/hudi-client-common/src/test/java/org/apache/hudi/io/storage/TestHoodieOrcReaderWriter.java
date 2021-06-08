@@ -46,6 +46,7 @@ import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.io.storage.HoodieOrcConfig.AVRO_SCHEMA_METADATA_KEY;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -129,7 +130,7 @@ public class TestHoodieOrcReaderWriter {
     HoodieFileReader<GenericRecord> hoodieReader = HoodieFileReaderFactory.getFileReader(conf, filePath);
     Iterator<GenericRecord> iter = hoodieReader.getRecordIterator();
     int index = 0;
-    while(iter.hasNext()) {
+    while (iter.hasNext()) {
       GenericRecord record = iter.next();
       assertEquals("key" + index, record.get("_row_key").toString());
       assertEquals(Integer.toString(index), record.get("time").toString());
@@ -158,7 +159,7 @@ public class TestHoodieOrcReaderWriter {
     writer.close();
 
     Configuration conf = new Configuration();
-    Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(new Configuration()));
+    Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(conf));
     assertEquals("struct<_row_key:string,time:string,number:int,driver:struct<driver_name:string,list:array<int>,map:map<string,string>>>",
         reader.getSchema().toString());
     assertEquals(3, reader.getNumberOfRows());
@@ -166,7 +167,7 @@ public class TestHoodieOrcReaderWriter {
     HoodieFileReader<GenericRecord> hoodieReader = HoodieFileReaderFactory.getFileReader(conf, filePath);
     Iterator<GenericRecord> iter = hoodieReader.getRecordIterator();
     int index = 0;
-    while(iter.hasNext()) {
+    while (iter.hasNext()) {
       GenericRecord record = iter.next();
       assertEquals("key" + index, record.get("_row_key").toString());
       assertEquals(Integer.toString(index), record.get("time").toString());
@@ -177,6 +178,81 @@ public class TestHoodieOrcReaderWriter {
       assertEquals(Collections.singletonMap("key" + index, "value" + index), innerRecord.get("map"));
       index++;
     }
+  }
 
+  @Test
+  public void testWriteReadWithEvolvedSchema() throws Exception {
+    Schema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchema.avsc");
+    HoodieOrcWriter writer = createOrcWriter(avroSchema);
+    for (int i = 0; i < 3; i++) {
+      GenericRecord record = new GenericData.Record(avroSchema);
+      record.put("_row_key", "key" + i);
+      record.put("time", Integer.toString(i));
+      record.put("number", i);
+      writer.writeAvro("key" + i, record);
+    }
+    writer.close();
+
+    Configuration conf = new Configuration();
+    HoodieFileReader<GenericRecord> hoodieReader = HoodieFileReaderFactory.getFileReader(conf, filePath);
+    Schema evolvedSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleEvolvedSchema.avsc");
+    Iterator<GenericRecord> iter = hoodieReader.getRecordIterator(evolvedSchema);
+    int index = 0;
+    while (iter.hasNext()) {
+      GenericRecord record = iter.next();
+      assertEquals("key" + index, record.get("_row_key").toString());
+      assertEquals(Integer.toString(index), record.get("time").toString());
+      assertEquals(index, record.get("number"));
+      assertNull(record.get("added_field"));
+      index++;
+    }
+
+    evolvedSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleEvolvedSchemaChangeOrder.avsc");
+    iter = hoodieReader.getRecordIterator(evolvedSchema);
+    index = 0;
+    while (iter.hasNext()) {
+      GenericRecord record = iter.next();
+      assertEquals("key" + index, record.get("_row_key").toString());
+      assertEquals(Integer.toString(index), record.get("time").toString());
+      assertEquals(index, record.get("number"));
+      assertNull(record.get("added_field"));
+      index++;
+    }
+
+    evolvedSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleEvolvedSchemaColumnRequire.avsc");
+    iter = hoodieReader.getRecordIterator(evolvedSchema);
+    index = 0;
+    while (iter.hasNext()) {
+      GenericRecord record = iter.next();
+      assertEquals("key" + index, record.get("_row_key").toString());
+      assertEquals(Integer.toString(index), record.get("time").toString());
+      assertEquals(index, record.get("number"));
+      assertNull(record.get("added_field"));
+      index++;
+    }
+
+    evolvedSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleEvolvedSchemaColumnType.avsc");
+    iter = hoodieReader.getRecordIterator(evolvedSchema);
+    index = 0;
+    while (iter.hasNext()) {
+      GenericRecord record = iter.next();
+      assertEquals("key" + index, record.get("_row_key").toString());
+      assertEquals(Integer.toString(index), record.get("time").toString());
+      assertEquals(Integer.toString(index), record.get("number").toString());
+      assertNull(record.get("added_field"));
+      index++;
+    }
+
+    evolvedSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleEvolvedSchemaDeleteColumn.avsc");
+    iter = hoodieReader.getRecordIterator(evolvedSchema);
+    index = 0;
+    while (iter.hasNext()) {
+      GenericRecord record = iter.next();
+      assertEquals("key" + index, record.get("_row_key").toString());
+      assertEquals(Integer.toString(index), record.get("time").toString());
+      assertNull(record.get("number"));
+      assertNull(record.get("added_field"));
+      index++;
+    }
   }
 }

@@ -471,11 +471,12 @@ public class AvroOrcUtils {
    */
   public static Object readFromVector(TypeDescription type, ColumnVector colVector, Schema avroSchema, int vectorPos) {
 
-    if (colVector.isNull[vectorPos]) {
-      return null;
-    }
     if (colVector.isRepeating) {
       vectorPos = 0;
+    }
+
+    if (colVector.isNull[vectorPos]) {
+      return null;
     }
 
     if (avroSchema.getType().equals(Schema.Type.UNION)) {
