@@ -1429,6 +1429,16 @@ var store = [{
         "tags": [],
         "url": "https://hudi.apache.org/docs/ibm_cos_hoodie.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "BOS Filesystem",
+        "excerpt":"这个页面描述了如何让你的Hudi任务使用Baidu BOS存储。 Baidu BOS 部署 为了让Hudi使用BOS，需要增加两部分的配置: 为Hudi增加Baidu BOS的相关配置 增加Jar包到classpath Baidu BOS 相关的配置 新增下面的配置到你的Hudi能访问的core-site.xml文件。使用你的BOS bucket name替换掉fs.defaultFS，使用BOS endpoint地址替换fs.bos.endpoint，使用BOS的key和secret分别替换fs.bos.access.key和fs.bos.secret.access.key，这样Hudi就能读写相应的bucket。 &lt;property&gt; &lt;name&gt;fs.defaultFS&lt;/name&gt; &lt;value&gt;bos://bucketname/&lt;/value&gt; &lt;/property&gt; &lt;property&gt; &lt;name&gt;fs.bos.endpoint&lt;/name&gt; &lt;value&gt;bos-endpoint-address&lt;/value&gt; &lt;description&gt;Baidu bos endpoint to connect to,for example : http://bj.bcebos.com&lt;/description&gt; &lt;/property&gt; &lt;property&gt; &lt;name&gt;fs.bos.access.key&lt;/name&gt; &lt;value&gt;bos-key&lt;/value&gt; &lt;description&gt;Baidu access key&lt;/description&gt; &lt;/property&gt; &lt;property&gt; &lt;name&gt;fs.bos.secret.access.key&lt;/name&gt; &lt;value&gt;bos-secret-key&lt;/value&gt; &lt;description&gt;Baidu secret key.&lt;/description&gt; &lt;/property&gt; &lt;property&gt; &lt;name&gt;fs.bos.impl&lt;/name&gt; &lt;value&gt;org.apache.hadoop.fs.bos.BaiduBosFileSystem&lt;/value&gt;...","categories": [],
+        "tags": [],
+        "url": "https://hudi.apache.org/docs/bos_hoodie.html",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "BOS Filesystem",
+        "excerpt":"In this page, we explain how to get your Hudi job to store into Baidu BOS. Baidu BOS configs There are two configurations required for Hudi-BOS compatibility: Adding Baidu BOS Credentials for Hudi Adding required Jars to classpath Baidu BOS Credentials Add the required configs in your core-site.xml from where...","categories": [],
+        "tags": [],
+        "url": "https://hudi.apache.org/docs/bos_hoodie.html",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
         "title": "Quick-Start Guide",
         "excerpt":"本指南通过使用spark-shell简要介绍了Hudi功能。使用Spark数据源，我们将通过代码段展示如何插入和更新Hudi的默认存储类型数据集： 写时复制。每次写操作之后，我们还将展示如何读取快照和增量数据。 设置spark-shell Hudi适用于Spark-2.4.3+ &amp; Spark 3.x 版本。您可以按照此处的说明设置spark。 在提取的目录中，使用spark-shell运行Hudi： // spark-shell for spark 3 spark-shell \\ --packages org.apache.hudi:hudi-spark3-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \\ --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' // spark-shell for spark 2 with scala 2.12 spark-shell \\ --packages org.apache.hudi:hudi-spark-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:2.4.4 \\ --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' // spark-shell for spark 2 with scala 2.11 spark-shell \\ --packages org.apache.hudi:hudi-spark-bundle_2.11:0.8.0,org.apache.spark:spark-avro_2.11:2.4.4 \\ --conf...","categories": [],
         "tags": [],
@@ -1540,7 +1550,7 @@ var store = [{
         "url": "https://hudi.apache.org/docs/deployment.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
         "title": "云储存",
-        "excerpt":"与云存储连接   无论使用RDD/WriteClient API还是数据源，以下信息都有助于配置对云存储的访问。      AWS S3   S3和Hudi协同工作所需的配置。   Google Cloud Storage   GCS和Hudi协同工作所需的配置。   Alibaba Cloud OSS   阿里云和Hudi协同工作所需的配置。   Microsoft Azure   Azure和Hudi协同工作所需的配置。   Tencent Cloud Object Storage   COS和Hudi协同工作所需的配置。   IBM Cloud Object Storage   IBM Cloud Object Storage和Hudi协同工作所需的配置。  ","categories": [],
+        "excerpt":"与云存储连接   无论使用RDD/WriteClient API还是数据源，以下信息都有助于配置对云存储的访问。      AWS S3   S3和Hudi协同工作所需的配置。   Google Cloud Storage   GCS和Hudi协同工作所需的配置。   Alibaba Cloud OSS   阿里云和Hudi协同工作所需的配置。   Microsoft Azure   Azure和Hudi协同工作所需的配置。   Tencent Cloud Object Storage   COS和Hudi协同工作所需的配置。   IBM Cloud Object Storage   IBM Cloud Object Storage和Hudi协同工作所需的配置。   Baidu Cloud Object Storage    百度BOS和Hudi协同工作所需的配置。   ","categories": [],
         "tags": [],
         "url": "https://hudi.apache.org/cn/docs/cloud.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{

@@ -3,23 +3,23 @@
   <head>
     <meta charset="utf-8">
 
-<!-- begin _includes/seo.html --><title>Cloud Storage - Apache Hudi</title>
-<meta name="description" content="Talking to Cloud Storage">
+<!-- begin _includes/seo.html --><title>BOS Filesystem - Apache Hudi</title>
+<meta name="description" content="In this page, we explain how to get your Hudi job to store into Baidu BOS.">
 
 <meta property="og:type" content="article">
 <meta property="og:locale" content="en_US">
 <meta property="og:site_name" content="">
-<meta property="og:title" content="Cloud Storage">
-<meta property="og:url" content="https://hudi.apache.org/docs/cloud.html">
+<meta property="og:title" content="BOS Filesystem">
+<meta property="og:url" content="https://hudi.apache.org/docs/bos_hoodie.html">
 
 
-  <meta property="og:description" content="Talking to Cloud Storage">
+  <meta property="og:description" content="In this page, we explain how to get your Hudi job to store into Baidu BOS.">
 
 
 
 
 
-  <meta property="article:modified_time" content="2019-06-16T21:59:57-04:00">
+  <meta property="article:modified_time" content="2021-06-09T17:38:24-04:00">
 
 
 
@@ -288,7 +288,7 @@
             
 
             
-              <li><a href="/docs/cloud.html" class="active">Storage Configuration</a></li>
+              <li><a href="/docs/cloud.html" class="">Storage Configuration</a></li>
             
 
           
@@ -345,7 +345,7 @@
     <div class="page__inner-wrap">
       
         <header>
-          <h1 id="page-title" class="page__title" itemprop="headline">Cloud Storage
+          <h1 id="page-title" class="page__title" itemprop="headline">BOS Filesystem
 </h1>
           <!-- Output author details if some exist. -->
           
@@ -354,36 +354,66 @@
 
       <section class="page__content" itemprop="text">
         
-        <aside class="sidebar__right sticky">
-          <nav class="toc">
-            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
-            <ul class="toc__menu">
-  <li><a href="#talking-to-cloud-storage">Talking to Cloud Storage</a></li>
-</ul>
-          </nav>
-        </aside>
+          <style>
+            .page {
+              padding-right: 0 !important;
+            }
+          </style>
         
-        <h2 id="talking-to-cloud-storage">Talking to Cloud Storage</h2>
+        <p>In this page, we explain how to get your Hudi job to store into Baidu BOS.</p>
 
-<p>Immaterial of whether RDD/WriteClient APIs or Datasource is used, the following information helps configure access
-to cloud stores.</p>
+<h2 id="baidu-bos-configs">Baidu BOS configs</h2>
+
+<p>There are two configurations required for Hudi-BOS compatibility:</p>
 
 <ul>
-  <li><a href="/docs/s3_hoodie">AWS S3</a> <br />
-Configurations required for S3 and Hudi co-operability.</li>
-  <li><a href="/docs/gcs_hoodie">Google Cloud Storage</a> <br />
-Configurations required for GCS and Hudi co-operability.</li>
-  <li><a href="/docs/oss_hoodie.html">Alibaba Cloud OSS</a> <br />
-Configurations required for OSS and Hudi co-operability.</li>
-  <li><a href="/docs/azure_hoodie.html">Microsoft Azure</a> <br />
-Configurations required for Azure and Hudi co-operability.</li>
-  <li><a href="/docs/cos_hoodie.html">Tencent Cloud Object Storage</a> <br />
- Configurations required for COS and Hudi co-operability.</li>
-  <li><a href="/docs/ibm_cos_hoodie.html">IBM Cloud Object Storage</a> <br />
- Configurations required for IBM Cloud Object Storage and Hudi co-operability.</li>
-  <li><a href="/docs/bos_hoodie.html">Baidu Cloud Object Storage</a> <br />
- Configurations required for BOS and Hudi co-operability.</li>
+  <li>Adding Baidu BOS Credentials for Hudi</li>
+  <li>Adding required Jars to classpath</li>
 </ul>
+
+<h3 id="baidu-bos-credentials">Baidu BOS Credentials</h3>
+
+<p>Add the required configs in your core-site.xml from where Hudi can fetch them. Replace the <code class="highlighter-rouge">fs.defaultFS</code> with your BOS bucket name, replace <code class="highlighter-rouge">fs.bos.endpoint</code> with your bos endpoint, replace <code class="highlighter-rouge">fs.bos.access.key</code> with your bos key, replace <code class="highlighter-rouge">fs.bos.secret.access.key</code> with your bos secret key. Hudi should be able to read/write from the bucket.</p>
+
+<div class="language-xml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nt">&lt;property&gt;</span>
+  <span class="nt">&lt;name&gt;</span>fs.defaultFS<span class="nt">&lt;/name&gt;</span>
+  <span class="nt">&lt;value&gt;</span>bos://bucketname/<span class="nt">&lt;/value&gt;</span>
+<span class="nt">&lt;/property&gt;</span>
+
+<span class="nt">&lt;property&gt;</span>
+  <span class="nt">&lt;name&gt;</span>fs.bos.endpoint<span class="nt">&lt;/name&gt;</span>
+  <span class="nt">&lt;value&gt;</span>bos-endpoint-address<span class="nt">&lt;/value&gt;</span>
+  <span class="nt">&lt;description&gt;</span>Baidu bos endpoint to connect to,for example : http://bj.bcebos.com<span class="nt">&lt;/description&gt;</span>
+<span class="nt">&lt;/property&gt;</span>
+
+<span class="nt">&lt;property&gt;</span>
+  <span class="nt">&lt;name&gt;</span>fs.bos.access.key<span class="nt">&lt;/name&gt;</span>
+  <span class="nt">&lt;value&gt;</span>bos-key<span class="nt">&lt;/value&gt;</span>
+  <span class="nt">&lt;description&gt;</span>Baidu access key<span class="nt">&lt;/description&gt;</span>
+<span class="nt">&lt;/property&gt;</span>
+
+<span class="nt">&lt;property&gt;</span>
+  <span class="nt">&lt;name&gt;</span>fs.bos.secret.access.key<span class="nt">&lt;/name&gt;</span>
+  <span class="nt">&lt;value&gt;</span>bos-secret-key<span class="nt">&lt;/value&gt;</span>
+  <span class="nt">&lt;description&gt;</span>Baidu secret key.<span class="nt">&lt;/description&gt;</span>
+<span class="nt">&lt;/property&gt;</span>
+
+<span class="nt">&lt;property&gt;</span>
+  <span class="nt">&lt;name&gt;</span>fs.bos.impl<span class="nt">&lt;/name&gt;</span>
+  <span class="nt">&lt;value&gt;</span>org.apache.hadoop.fs.bos.BaiduBosFileSystem<span class="nt">&lt;/value&gt;</span>
+<span class="nt">&lt;/property&gt;</span>
+</code></pre></div></div>
+
+<h3 id="baidu-bos-libs">Baidu bos Libs</h3>
+
+<p>Baidu hadoop libraries jars to add to our classpath</p>
+
+<ul>
+  <li>com.baidubce:bce-java-sdk:0.10.165</li>
+  <li>bos-hdfs-sdk-1.0.2-community.jar</li>
+</ul>
+
+<p>You can  download the bos-hdfs-sdk jar from <a href="https://sdk.bce.baidu.com/console-sdk/bos-hdfs-sdk-1.0.2-community.jar.zip">here</a> , and then unzip it.</p>
 
       </section>
 
