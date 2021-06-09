@@ -30,6 +30,7 @@ import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.SqlSource;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.AnalysisException;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterAll;
@@ -37,9 +38,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Test against {@link SqlSource}.
@@ -50,7 +53,9 @@ public class TestSqlSource extends UtilitiesTestBase {
   protected FilebasedSchemaProvider schemaProvider;
   protected HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
   private String dfsRoot;
-  private String fileSuffix;
+  private TypedProperties props;
+  private SqlSource sqlSource;
+  private SourceFormatAdapter sourceFormatAdapter;
 
   @BeforeAll
   public static void initClass() throws Exception {
@@ -64,9 +69,13 @@ public class TestSqlSource extends UtilitiesTestBase {
 
   @BeforeEach
   public void setup() throws Exception {
-    dfsRoot = dfsBasePath + "/parquetFiles";
+    dfsRoot = UtilitiesTestBase.dfsBasePath + "/parquetFiles";
+    UtilitiesTestBase.dfs.mkdirs(new Path(dfsRoot));
+    props = new TypedProperties();
     super.setup();
     schemaProvider = new FilebasedSchemaProvider(Helpers.setupSchemaOnDFS(), jsc);
+    // Produce new data, extract new data
+    generateTestTable("1", "001", 10000);
   }
 
   @AfterEach
@@ -82,26 +91,21 @@ public class TestSqlSource extends UtilitiesTestBase {
    * @param n           The number of records to generate.
    */
   private void generateTestTable(String filename, String instantTime, int n) throws IOException {
-    Path path = new Path(dfsRoot, filename + fileSuffix);
+    Path path = new Path(dfsRoot, filename);
     Helpers.saveParquetToDFS(Helpers.toGenericRecords(dataGenerator.generateInserts(instantTime, n, useFlattenedSchema)), path);
     sparkSession.read().parquet(dfsRoot).createOrReplaceTempView("test_sql_table");
   }
 
   /**
-   * Runs the test scenario of reading data from the source.
+   * Runs the test scenario of reading data from the source in avro format.
    *
    * @throws IOException
    */
   @Test
-  public void testSqlSource() throws IOException {
-    UtilitiesTestBase.dfs.mkdirs(new Path(dfsRoot));
-    TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.deltastreamer.source.sql", "select * from test_sql_table");
-    SqlSource sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
-    SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
-
-    // Produce new data, extract new data
-    generateTestTable("1", "001", 10000);
+  public void testSqlSourceAvroFormat() throws IOException {
+    props.setProperty("hoodie.deltastreamer.source.sql.sql.query", "select * from test_sql_table");
+    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
+    sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
 
     // Test fetching Avro format
     InputBatch<JavaRDD<GenericRecord>> fetch1 =
@@ -112,10 +116,74 @@ public class TestSqlSource extends UtilitiesTestBase {
         .createDataFrame(JavaRDD.toRDD(fetch1.getBatch().get()),
             schemaProvider.getSourceSchema().toString(), sparkSession);
     assertEquals(10000, fetch1Rows.count());
+  }
+
+  /**
+   * Runs the test scenario of reading data from the source in row format.
+   * Source has less records than source limit.
+   *
+   * @throws IOException
+   */
+  @Test
+  public void testSqlSourceRowFormat() throws IOException {
+    props.setProperty("hoodie.deltastreamer.source.sql.sql.query", "select * from test_sql_table");
+    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
+    sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
 
     // Test fetching Row format
     InputBatch<Dataset<Row>> fetch1AsRows =
         sourceFormatAdapter.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE);
     assertEquals(10000, fetch1AsRows.getBatch().get().count());
+  }
+
+  /**
+   * Runs the test scenario of reading data from the source in row format.
+   * Source has more records than source limit.
+   *
+   * @throws IOException
+   */
+  @Test
+  public void testSqlSourceMoreRecordsThanSourceLimit() throws IOException {
+    props.setProperty("hoodie.deltastreamer.source.sql.sql.query", "select * from test_sql_table");
+    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
+    sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
+
+    InputBatch<Dataset<Row>> fetch1AsRows =
+        sourceFormatAdapter.fetchNewDataInRowFormat(Option.empty(), 1000);
+    assertEquals(10000, fetch1AsRows.getBatch().get().count());
+  }
+
+  /**
+   * Runs the test scenario of reading data from the source in row format.
+   * Source has no records.
+   *
+   * @throws IOException
+   */
+  @Test
+  public void testSqlSourceZeroRecord() throws IOException {
+    props.setProperty("hoodie.deltastreamer.source.sql.sql.query", "select * from test_sql_table where 1=0");
+    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
+    sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
+
+    InputBatch<Dataset<Row>> fetch1AsRows =
+        sourceFormatAdapter.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE);
+    assertEquals(0, fetch1AsRows.getBatch().get().count());
+  }
+
+  /**
+   * Runs the test scenario of reading data from the source in row format.
+   * Source table doesn't exists.
+   *
+   * @throws IOException
+   */
+  @Test
+  public void testSqlSourceInvalidTable() throws IOException {
+    props.setProperty("hoodie.deltastreamer.source.sql.sql.query", "select * from not_exist_sql_table");
+    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
+    sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
+
+    assertThrows(
+        AnalysisException.class,
+        () -> sourceFormatAdapter.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE));
   }
 }

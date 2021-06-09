@@ -31,10 +31,23 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
+import java.util.Arrays;
 import java.util.Collections;
 
 /**
  * SQL Source that reads from any table, used mainly for backfill jobs which will process specific partition dates.
+ *
+ * <p>Spark SQL should be configured using this hoodie config:
+ *
+ * <p>hoodie.deltastreamer.source.sql.sql.query = 'select * from source_table'
+ *
+ * <p>SQL Source is used for one time backfill scenarios, this won't update the deltastreamer.checkpoint.key to the
+ * processed commit, instead it will fetch the latest successful checkpoint key and set that value as this backfill
+ * commits checkpoint so that it won't interrupt the regular incremental processing.
+ *
+ * <p>To fetch and use the latest incremental checkpoint, you need to also set this hoodie_conf for deltastremer jobs:
+ *
+ * <p>hoodie.write.meta.key.prefixes = 'deltastreamer.checkpoint.key'
  */
 public class SqlSource extends RowSource {
   private static final long serialVersionUID = 1L;
@@ -57,16 +70,18 @@ public class SqlSource extends RowSource {
   @Override
   protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(
       Option<String> lastCkptStr, long sourceLimit) {
-    LOG.warn(sourceSql);
+    LOG.debug(sourceSql);
     Dataset<Row> source = spark.sql(sourceSql);
-    LOG.warn(source.showString(10, 0, true));
+    LOG.debug(source.showString(10, 0, true));
     // Remove Hoodie meta columns except partition path from input source.
-    Dataset<Row> src =
+    if (Arrays.asList(source.columns()).contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD)) {
+      source =
         source.drop(
             HoodieRecord.HOODIE_META_COLUMNS.stream()
                 .filter(x -> !x.equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD))
                 .toArray(String[]::new));
-    return Pair.of(Option.of(src), null);
+    }
+    return Pair.of(Option.of(source), null);
   }
 
   /**
@@ -74,6 +89,6 @@ public class SqlSource extends RowSource {
    */
   private static class Config {
 
-    private static final String SOURCE_SQL = "hoodie.deltastreamer.source.sql";
+    private static final String SOURCE_SQL = "hoodie.deltastreamer.source.sql.sql.query";
   }
 }
