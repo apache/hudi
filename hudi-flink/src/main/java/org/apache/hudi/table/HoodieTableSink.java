@@ -24,7 +24,6 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperatorFactory;
 import org.apache.hudi.sink.bootstrap.BootstrapFunction;
-import org.apache.hudi.sink.bootstrap.BootstrapRecord;
 import org.apache.hudi.sink.compact.CompactFunction;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionCommitSink;
@@ -88,11 +87,8 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       }
 
       DataStream<Object> pipeline = hoodieDataStream
-           .transform("index_bootstrap",
-                  TypeInformation.of(BootstrapRecord.class),
-                  new ProcessOperator<>(new BootstrapFunction<>(conf)))
           // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
-          .keyBy(BootstrapRecord::getRecordKey)
+          .keyBy(HoodieRecord::getRecordKey)
           .transform(
               "bucket_assigner",
               TypeInformation.of(HoodieRecord.class),

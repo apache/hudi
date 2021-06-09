@@ -22,12 +22,12 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 
 /**
- * An record to mark HoodieRecord or IndexRecord.
+ * The index record.
  */
-public class BootstrapRecord<T extends HoodieRecordPayload> extends HoodieRecord<T> {
+public class IndexRecord<T extends HoodieRecordPayload> extends HoodieRecord<T> {
   private static final long serialVersionUID = 1L;
 
-  public BootstrapRecord(HoodieRecord<T> record) {
+  public IndexRecord(HoodieRecord<T> record) {
     super(record);
   }
 }

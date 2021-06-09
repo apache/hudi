@@ -30,7 +30,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.sink.bootstrap.BootstrapRecord;
+import org.apache.hudi.sink.bootstrap.IndexRecord;
 import org.apache.hudi.sink.utils.PayloadCreation;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.util.StreamerUtil;
@@ -151,10 +151,10 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
 
   @Override
   public void processElement(I value, Context ctx, Collector<O> out) throws Exception {
-    if (value instanceof BootstrapRecord) {
-      BootstrapRecord bootstrapRecord = (BootstrapRecord) value;
-      this.context.setCurrentKey(bootstrapRecord.getRecordKey());
-      this.indexState.update((HoodieRecordGlobalLocation) bootstrapRecord.getCurrentLocation());
+    if (value instanceof IndexRecord) {
+      IndexRecord<?> indexRecord = (IndexRecord<?>) value;
+      this.context.setCurrentKey(indexRecord.getRecordKey());
+      this.indexState.update((HoodieRecordGlobalLocation) indexRecord.getCurrentLocation());
     } else {
       processRecord((HoodieRecord<?>) value, out);
     }
