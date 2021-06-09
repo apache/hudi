@@ -24,3 +24,6 @@ language: cn
    COS和Hudi协同工作所需的配置。
  * [IBM Cloud Object Storage](/cn/docs/ibm_cos_hoodie.html) <br/>
    IBM Cloud Object Storage和Hudi协同工作所需的配置。
+* [Baidu Cloud Object Storage](/docs/bos_hoodie.html) <br/>
+   百度BOS和Hudi协同工作所需的配置。
+
