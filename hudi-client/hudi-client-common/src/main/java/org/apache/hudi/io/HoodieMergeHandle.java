@@ -344,6 +344,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
         }
       }
 
+      keyToNewRecords.clear();
       ((ExternalSpillableMap) keyToNewRecords).close();
       writtenRecordKeys.clear();
 
