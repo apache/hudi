@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.bootstrap.BootstrapFunction;
-import org.apache.hudi.sink.bootstrap.BootstrapRecord;
+import org.apache.hudi.sink.bootstrap.IndexRecord;
 import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.event.BatchWriteSuccessEvent;
@@ -157,7 +157,7 @@ public class StreamWriteFunctionWrapper<I> {
       Collector<HoodieRecord<?>> bootstrapCollector = new Collector<HoodieRecord<?>>() {
         @Override
         public void collect(HoodieRecord<?> record) {
-          if (record instanceof BootstrapRecord) {
+          if (record instanceof IndexRecord) {
             bootstrapRecords.add(record);
           }
         }

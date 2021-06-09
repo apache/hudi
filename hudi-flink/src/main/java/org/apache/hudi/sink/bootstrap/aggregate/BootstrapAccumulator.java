@@ -23,7 +23,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Aggregate accumulator.
+ * Bootstrap ready task id accumulator.
  */
 public class BootstrapAccumulator implements Serializable {
   private static final long serialVersionUID = 1L;
