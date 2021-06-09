@@ -273,7 +273,7 @@ public class MergeOnReadInputFormat
     LinkedHashMap<String, String> partSpec = FilePathUtils.extractPartitionKeyValues(
         new org.apache.hadoop.fs.Path(path).getParent(),
         this.conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITION),
-        extractPartitionKeys());
+        FilePathUtils.extractPartitionKeys(this.conf));
     LinkedHashMap<String, Object> partObjects = new LinkedHashMap<>();
     partSpec.forEach((k, v) -> partObjects.put(k, restorePartValueFromType(
         defaultPartName.equals(v) ? null : v,
@@ -291,13 +291,6 @@ public class MergeOnReadInputFormat
         new org.apache.flink.core.fs.Path(path),
         0,
         Long.MAX_VALUE); // read the whole file
-  }
-
-  private String[] extractPartitionKeys() {
-    if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.PARTITION_PATH_FIELD)) {
-      return new String[0];
-    }
-    return this.conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",");
   }
 
   private Iterator<RowData> getLogFileIterator(MergeOnReadInputSplit split) {
