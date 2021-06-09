@@ -57,7 +57,9 @@ public enum StorageSchemes {
   // IBM Cloud Object Storage
   COS("cos", false),
   // Huawei Cloud Object Storage
-  OBS("obs", false);
+  OBS("obs", false),
+  // Baidu Object Storage
+  BOS("bos", false);
 
   private String scheme;
   private boolean supportsAppend;
