@@ -391,4 +391,17 @@ public class FilePathUtils {
   public static org.apache.flink.core.fs.Path toFlinkPath(Path path) {
     return new org.apache.flink.core.fs.Path(path.toUri());
   }
+
+  /**
+   * Extracts the partition keys with given configuration.
+   *
+   * @param conf The flink configuration
+   * @return array of the partition fields
+   */
+  public static String[] extractPartitionKeys(org.apache.flink.configuration.Configuration conf) {
+    if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.PARTITION_PATH_FIELD)) {
+      return new String[0];
+    }
+    return conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",");
+  }
 }
