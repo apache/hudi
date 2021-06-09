@@ -50,6 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class TestSqlSource extends UtilitiesTestBase {
 
   private final boolean useFlattenedSchema = false;
+  private final String sqlSourceConfig = "hoodie.deltastreamer.source.sql.sql.query";
   protected FilebasedSchemaProvider schemaProvider;
   protected HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
   private String dfsRoot;
@@ -103,7 +104,7 @@ public class TestSqlSource extends UtilitiesTestBase {
    */
   @Test
   public void testSqlSourceAvroFormat() throws IOException {
-    props.setProperty("hoodie.deltastreamer.source.sql.sql.query", "select * from test_sql_table");
+    props.setProperty(sqlSourceConfig, "select * from test_sql_table");
     sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
     sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
 
@@ -126,7 +127,7 @@ public class TestSqlSource extends UtilitiesTestBase {
    */
   @Test
   public void testSqlSourceRowFormat() throws IOException {
-    props.setProperty("hoodie.deltastreamer.source.sql.sql.query", "select * from test_sql_table");
+    props.setProperty(sqlSourceConfig, "select * from test_sql_table");
     sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
     sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
 
@@ -144,7 +145,7 @@ public class TestSqlSource extends UtilitiesTestBase {
    */
   @Test
   public void testSqlSourceMoreRecordsThanSourceLimit() throws IOException {
-    props.setProperty("hoodie.deltastreamer.source.sql.sql.query", "select * from test_sql_table");
+    props.setProperty(sqlSourceConfig, "select * from test_sql_table");
     sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
     sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
 
@@ -161,7 +162,7 @@ public class TestSqlSource extends UtilitiesTestBase {
    */
   @Test
   public void testSqlSourceZeroRecord() throws IOException {
-    props.setProperty("hoodie.deltastreamer.source.sql.sql.query", "select * from test_sql_table where 1=0");
+    props.setProperty(sqlSourceConfig, "select * from test_sql_table where 1=0");
     sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
     sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
 
@@ -178,7 +179,7 @@ public class TestSqlSource extends UtilitiesTestBase {
    */
   @Test
   public void testSqlSourceInvalidTable() throws IOException {
-    props.setProperty("hoodie.deltastreamer.source.sql.sql.query", "select * from not_exist_sql_table");
+    props.setProperty(sqlSourceConfig, "select * from not_exist_sql_table");
     sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
     sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
 
