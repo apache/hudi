@@ -532,6 +532,7 @@ public class StreamWriteFunction<K, I, O>
     }
     bucket.preWrite(records);
     final List<WriteStatus> writeStatus = new ArrayList<>(writeFunction.apply(records, instant));
+    records.clear();
     final BatchWriteSuccessEvent event = BatchWriteSuccessEvent.builder()
         .taskID(taskID)
         .instantTime(instant) // the write instant may shift but the event still use the currentInstant.
@@ -564,6 +565,7 @@ public class StreamWriteFunction<K, I, O>
               }
               bucket.preWrite(records);
               writeStatus.addAll(writeFunction.apply(records, currentInstant));
+              records.clear();
               bucket.reset();
             }
           });
