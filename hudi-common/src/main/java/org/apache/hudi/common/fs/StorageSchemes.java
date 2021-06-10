@@ -52,6 +52,8 @@ public enum StorageSchemes {
   ALLUXIO("alluxio", false),
   // Tencent Cloud Object Storage
   COSN("cosn", false),
+  // Tencent Cloud HDFS
+  CHDFS("ofs", true),
   // Databricks file system
   DBFS("dbfs", false),
   // IBM Cloud Object Storage
