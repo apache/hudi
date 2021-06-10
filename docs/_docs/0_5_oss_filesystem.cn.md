@@ -12,12 +12,12 @@ language: cn
 
 为了让Hudi使用OSS，需要增加两部分的配置:
 
-- 为Hidi增加Aliyun OSS的相关配置
+- 为Hudi增加Aliyun OSS的相关配置
 - 增加Jar包的MVN依赖
 
 ### Aliyun OSS 相关的配置
 
-新增下面的配置到你的Hudi能访问的core-site.xml文件。使用你的OSS bucket name替换掉`fs.defaultFS`，使用OSS endpoint地址替换`fs.oss.endpoint`，使用OSS的key和secret分别替换`fs.oss.accessKeyId`和`fs.oss.accessKeySecret`。主要Hudi就能读写相应的bucket。
+新增下面的配置到你的Hudi能访问的core-site.xml文件。使用你的OSS bucket name替换掉`fs.defaultFS`，使用OSS endpoint地址替换`fs.oss.endpoint`，使用OSS的key和secret分别替换`fs.oss.accessKeyId`和`fs.oss.accessKeySecret`。这样Hudi就能读写相应的bucket。
 
 ```xml
     <property>
