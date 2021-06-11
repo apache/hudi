@@ -171,7 +171,7 @@ public abstract class BaseFileUtils {
   public abstract List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath);
 
   /**
-   * Read the Avro schema of the data file
+   * Read the Avro schema of the data file.
    * @param configuration Configuration
    * @param filePath The data file path
    * @return The Avro schema of the data file
