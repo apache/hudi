@@ -26,9 +26,10 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.AvroOrcUtils;
+import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.OrcReaderIterator;
-import org.apache.hudi.common.util.OrcUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.orc.OrcFile;
 import org.apache.orc.Reader;
@@ -39,25 +40,27 @@ import org.apache.orc.TypeDescription;
 public class HoodieOrcReader<R extends IndexedRecord> implements HoodieFileReader {
   private Path path;
   private Configuration conf;
+  private final BaseFileUtils orcUtils;
 
   public HoodieOrcReader(Configuration configuration, Path path) {
     this.conf = configuration;
     this.path = path;
+    this.orcUtils = BaseFileUtils.getInstance(HoodieFileFormat.ORC);
   }
 
   @Override
   public String[] readMinMaxRecordKeys() {
-    return OrcUtils.readMinMaxRecordKeys(conf, path);
+    return orcUtils.readMinMaxRecordKeys(conf, path);
   }
 
   @Override
   public BloomFilter readBloomFilter() {
-    return OrcUtils.readBloomFilterFromOrcMetadata(conf, path);
+    return orcUtils.readBloomFilterFromMetadata(conf, path);
   }
 
   @Override
   public Set<String> filterRowKeys(Set candidateRowKeys) {
-    return OrcUtils.filterOrcRowKeys(conf, path, candidateRowKeys);
+    return orcUtils.filterRowKeys(conf, path, candidateRowKeys);
   }
 
   @Override
@@ -74,7 +77,7 @@ public class HoodieOrcReader<R extends IndexedRecord> implements HoodieFileReade
 
   @Override
   public Schema getSchema() {
-    return OrcUtils.getAvroSchema(conf, path);
+    return orcUtils.readAvroSchema(conf, path);
   }
 
   @Override
@@ -83,6 +86,6 @@ public class HoodieOrcReader<R extends IndexedRecord> implements HoodieFileReade
 
   @Override
   public long getTotalRecords() {
-    return OrcUtils.getRowCount(conf, path);
+    return orcUtils.getRowCount(conf, path);
   }
 }

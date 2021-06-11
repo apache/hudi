@@ -35,10 +35,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.orc.storage.ql.exec.vector.BytesColumnVector;
 import org.apache.orc.storage.ql.exec.vector.VectorizedRowBatch;
-import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.bloom.BloomFilterFactory;
-import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -53,7 +49,7 @@ import org.apache.orc.TypeDescription;
 /**
  * Utility functions for ORC files.
  */
-public class OrcUtils {
+public class OrcUtils extends BaseFileUtils {
 
   /**
    * Fetch {@link HoodieKey}s from the given ORC file.
@@ -62,7 +58,8 @@ public class OrcUtils {
    * @param configuration configuration to build fs object
    * @return {@link List} of {@link HoodieKey}s fetched from the ORC file
    */
-  public List<HoodieKey> fetchRecordKeyPartitionPathFromOrc(Configuration configuration, Path filePath) {
+  @Override
+  public List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath) {
     List<HoodieKey> hoodieKeys = new ArrayList<>();
     try {
       if (!filePath.getFileSystem(configuration).exists(filePath)) {
@@ -111,6 +108,7 @@ public class OrcUtils {
   /**
    * NOTE: This literally reads the entire file contents, thus should be used with caution.
    */
+  @Override
   public List<GenericRecord> readAvroRecords(Configuration configuration, Path filePath) {
     Schema avroSchema;
     try {
@@ -125,6 +123,7 @@ public class OrcUtils {
   /**
    * NOTE: This literally reads the entire file contents, thus should be used with caution.
    */
+  @Override
   public List<GenericRecord> readAvroRecords(Configuration configuration, Path filePath, Schema avroSchema) {
     List<GenericRecord> records = new ArrayList<>();
     try {
@@ -143,17 +142,6 @@ public class OrcUtils {
   }
 
   /**
-   * Read the rowKey list from the given ORC file.
-   *
-   * @param filePath      The ORC file path.
-   * @param configuration configuration to build fs object
-   * @return Set Set of row keys
-   */
-  public Set<String> readRowKeysFromOrc(Configuration configuration, Path filePath) {
-    return filterOrcRowKeys(configuration, filePath, new HashSet<>());
-  }
-
-  /**
    * Read the rowKey list matching the given filter, from the given ORC file. If the filter is empty, then this will
    * return all the rowkeys.
    *
@@ -162,8 +150,9 @@ public class OrcUtils {
    * @param filter        record keys filter
    * @return Set Set of row keys matching candidateRecordKeys
    */
-  public static Set<String> filterOrcRowKeys(Configuration conf,
-      Path filePath, Set<String> filter) throws HoodieIOException {
+  @Override
+  public Set<String> filterRowKeys(Configuration conf, Path filePath, Set<String> filter)
+      throws HoodieIOException {
     try {
       Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(conf));
       Set<String> filteredRowKeys = new HashSet<>();
@@ -198,41 +187,9 @@ public class OrcUtils {
     }
   }
 
-  /**
-   * Read out the bloom filter from the ORC file meta data.
-   */
-  public static BloomFilter readBloomFilterFromOrcMetadata(Configuration conf, Path orcFilePath) {
-    Map<String, String> footerVals =
-        readOrcFooter(conf, orcFilePath, false,
-            HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY,
-            HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE);
-    String footerVal = footerVals.get(HoodieAvroWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
-    BloomFilter toReturn = null;
-    if (footerVal != null) {
-      if (footerVals.containsKey(HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE)) {
-        toReturn = BloomFilterFactory.fromString(footerVal,
-            footerVals.get(HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE));
-      } else {
-        toReturn = BloomFilterFactory.fromString(footerVal, BloomFilterTypeCode.SIMPLE.name());
-      }
-    }
-    return toReturn;
-  }
-
-  public static String[] readMinMaxRecordKeys(Configuration conf, Path orcFilePath) {
-    Map<String, String> minMaxKeys = readOrcFooter(conf, orcFilePath, true,
-        HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER, HoodieAvroWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER);
-    if (minMaxKeys.size() != 2) {
-      throw new HoodieException(
-          String.format("Could not read min/max record key out of footer correctly from %s. read) : %s",
-              orcFilePath, minMaxKeys));
-    }
-    return new String[] {minMaxKeys.get(HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER),
-        minMaxKeys.get(HoodieAvroWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER)};
-  }
-
-  private static Map<String, String> readOrcFooter(Configuration conf, Path orcFilePath,
-                                                   boolean required, String... footerNames) {
+  @Override
+  public Map<String, String> readFooter(Configuration conf, boolean required,
+                                        Path orcFilePath, String... footerNames) {
     try {
       Reader reader = OrcFile.createReader(orcFilePath, OrcFile.readerOptions(conf));
       Map<String, String> footerVals = new HashMap<>();
@@ -255,7 +212,8 @@ public class OrcUtils {
     }
   }
 
-  public static Schema getAvroSchema(Configuration conf, Path orcFilePath) {
+  @Override
+  public Schema readAvroSchema(Configuration conf, Path orcFilePath) {
     try {
       Reader reader = OrcFile.createReader(orcFilePath, OrcFile.readerOptions(conf));
       TypeDescription orcSchema = reader.getSchema();
@@ -265,7 +223,8 @@ public class OrcUtils {
     }
   }
 
-  public static long getRowCount(Configuration conf, Path orcFilePath) {
+  @Override
+  public long getRowCount(Configuration conf, Path orcFilePath) {
     try {
       Reader reader = OrcFile.createReader(orcFilePath, OrcFile.readerOptions(conf));
       return reader.getNumberOfRows();
