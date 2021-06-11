@@ -100,7 +100,7 @@ public class OrcUtils extends BaseFileUtils {
         }
       }
     } catch (IOException e) {
-      throw new HoodieIOException("Failed to read from ORC file " + filePath, e);
+      throw new HoodieIOException("Failed to read from ORC file:" + filePath, e);
     }
     return hoodieKeys;
   }
@@ -115,7 +115,7 @@ public class OrcUtils extends BaseFileUtils {
       Reader reader = OrcFile.createReader(filePath, OrcFile.readerOptions(configuration));
       avroSchema = AvroOrcUtils.createAvroSchema(reader.getSchema());
     } catch (IOException io) {
-      throw new HoodieIOException("Unable to read Avro records from an ORC file.", io);
+      throw new HoodieIOException("Unable to read Avro records from an ORC file:" + filePath, io);
     }
     return readAvroRecords(configuration, filePath, avroSchema);
   }
@@ -136,7 +136,7 @@ public class OrcUtils extends BaseFileUtils {
         records.add(record);
       }
     } catch (IOException io) {
-      throw new HoodieIOException("Unable to create an ORC reader.", io);
+      throw new HoodieIOException("Unable to create an ORC reader for ORC file:" + filePath, io);
     }
     return records;
   }
@@ -183,7 +183,7 @@ public class OrcUtils extends BaseFileUtils {
       }
       return filteredRowKeys;
     } catch (IOException io) {
-      throw new HoodieIOException("Unable to read row keys for ORC file" + filePath.getName(), io);
+      throw new HoodieIOException("Unable to read row keys for ORC file:" + filePath, io);
     }
   }
 
@@ -208,7 +208,7 @@ public class OrcUtils extends BaseFileUtils {
       }
       return footerVals;
     } catch (IOException io) {
-      throw new HoodieIOException("Unable to read footer for ORC file" + orcFilePath.getName(), io);
+      throw new HoodieIOException("Unable to read footer for ORC file:" + orcFilePath, io);
     }
   }
 
@@ -219,7 +219,7 @@ public class OrcUtils extends BaseFileUtils {
       TypeDescription orcSchema = reader.getSchema();
       return AvroOrcUtils.createAvroSchema(orcSchema);
     } catch (IOException io) {
-      throw new HoodieIOException("Unable to get Avro schema for ORC file" + orcFilePath.getName(), io);
+      throw new HoodieIOException("Unable to get Avro schema for ORC file:" + orcFilePath, io);
     }
   }
 
@@ -229,7 +229,7 @@ public class OrcUtils extends BaseFileUtils {
       Reader reader = OrcFile.createReader(orcFilePath, OrcFile.readerOptions(conf));
       return reader.getNumberOfRows();
     } catch (IOException io) {
-      throw new HoodieIOException("Unable to get row count for ORC file" + orcFilePath.getName(), io);
+      throw new HoodieIOException("Unable to get row count for ORC file:" + orcFilePath, io);
     }
   }
 }
