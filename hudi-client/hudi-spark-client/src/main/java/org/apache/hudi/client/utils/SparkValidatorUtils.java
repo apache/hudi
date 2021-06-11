@@ -107,7 +107,7 @@ public class SparkValidatorUtils {
         LOG.info("validation complete for " + validator.getClass().getName());
         return true;
       } catch (HoodieValidationException e) {
-        LOG.error("validation failed for " + validator.getClass().getName());
+        LOG.error("validation failed for " + validator.getClass().getName(), e);
         return false;
       }
     });

@@ -22,9 +22,13 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -47,11 +51,13 @@ public abstract class SparkPreCommitValidator<T, I, K, O extends HoodieData<Writ
   private HoodieSparkTable<T> table;
   private HoodieEngineContext engineContext;
   private HoodieWriteConfig writeConfig;
+  private HoodieMetrics metrics;
 
   protected SparkPreCommitValidator(HoodieSparkTable<T> table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
     this.table = table;
     this.engineContext = engineContext;
     this.writeConfig = writeConfig;
+    this.metrics = new HoodieMetrics(writeConfig);
   }
   
   protected Set<String> getPartitionsModified(HoodieWriteMetadata<O> writeResult) {
@@ -73,7 +79,23 @@ public abstract class SparkPreCommitValidator<T, I, K, O extends HoodieData<Writ
     try {
       validateRecordsBeforeAndAfter(before, after, getPartitionsModified(writeResult));
     } finally {
-      LOG.info(getClass() + " validator took " + timer.endTimer() + " ms");
+      long duration = timer.endTimer();
+      LOG.info(getClass() + " validator took " + duration + " ms" + ", metrics on? " + getWriteConfig().isMetricsOn());
+      publishRunStats(instantTime, duration);
+    }
+  }
+
+  /**
+   * Publish pre-commit validator run stats for a given commit action.
+   */
+  protected void publishRunStats(String instantTime, long duration) {
+    // Record validator duration metrics.
+    if (getWriteConfig().isMetricsOn()) {
+      HoodieTableMetaClient metaClient = getHoodieTable().getMetaClient();
+      Option<HoodieInstant> currentInstant = metaClient.getActiveTimeline()
+          .findInstantsAfterOrEquals(instantTime, 1)
+          .firstInstant();
+      metrics.publishMetrics(currentInstant.get().getAction(), getClass().getSimpleName(), duration);
     }
   }
 
