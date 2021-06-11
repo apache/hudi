@@ -37,7 +37,7 @@ Suppose a user is ingesting data into a hudi dataset of type COPY_ON_WRITE every
 ![Initial timeline](/assets/images/blog/hoodie-cleaner/Initial_timeline.png)
 _Figure1: Incoming records getting ingested into a hudi dataset every 30 minutes_
 
-The figure shows a particular partition on DFS where commits and corresponding file versions are color coded. 4 different file groups are created in this partition as depicted by fileId1, fileId2, fileId3 and fileId4. File group corresponding to fileId2 has records ingested from all the 5 commits, while the group corresponding to fileId4 has records from the latest 2 commits only.
+The figure shows a particular partition on DFS where commits and corresponding file versions are color coded. 4 different file groups are created in this partition as depicted by fileGroup1, fileGroup2, fileGroup3 and fileGroup4. File group corresponding to fileGroup2 has records ingested from all the 5 commits, while the group corresponding to fileGroup4 has records from the latest 2 commits only.
 
 Suppose the user uses the below configs for cleaning:
 
