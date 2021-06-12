@@ -141,7 +141,7 @@ This is useful to store checkpointing information, in a consistent way with the 
 
 #### HIVE_AUTO_CREATE_DATABASE_OPT_KEY {#HIVE_AUTO_CREATE_DATABASE_OPT_KEY}
 Property: `hoodie.datasource.hive_sync.auto_create_database` Default: `true` <br/>
-<span style="color:grey"> Auto create hive database if does not exists </span>
+<span style="color:grey"> Auto create hive database if does not exists. <b>Note</b>: for versions 0.7 and 0.8 you will have to explicitly set this to true </span>
 
 #### HIVE_SKIP_RO_SUFFIX {#HIVE_SKIP_RO_SUFFIX}
 Property: `hoodie.datasource.hive_sync.skip_ro_suffix` Default: `false` <br/>
