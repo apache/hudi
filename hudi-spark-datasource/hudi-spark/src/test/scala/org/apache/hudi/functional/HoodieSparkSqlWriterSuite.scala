@@ -173,11 +173,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     })
 
   test("test drop duplicates row writing for bulk_insert") {
-    val session = SparkSession.builder()
-      .appName("test_insert_without_precombine")
-      .master("local[2]")
-      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .getOrCreate()
+    initSparkContext("test_append_mode")
     val path = java.nio.file.Files.createTempDirectory("hoodie_test_path")
     try {
 
@@ -201,14 +197,14 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
       val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
       val records = DataSourceTestUtils.generateRandomRows(100)
       val recordsSeq = convertRowListToSeq(records)
-      val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
+      val df = spark.createDataFrame(spark.sparkContext.parallelize(recordsSeq), structType)
       // write to Hudi
       HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, df)
       fail("Drop duplicates with bulk insert in row writing should have thrown exception")
     } catch {
-      case e: HoodieException => println("Dropping duplicates with bulk_insert in row writer path is not supported yet")
+      case e: HoodieException => assertTrue(e.getMessage.contains("Dropping duplicates with bulk_insert in row writer path is not supported yet"))
     } finally {
-      session.stop()
+      spark.stop()
       FileUtils.deleteDirectory(path.toFile)
     }
   }
