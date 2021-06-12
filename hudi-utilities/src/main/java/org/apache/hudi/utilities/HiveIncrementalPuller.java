@@ -180,13 +180,13 @@ public class HiveIncrementalPuller {
     incrementalPullSQLtemplate.add("storedAsClause", storedAsClause);
     String incrementalSQL = new Scanner(new File(config.incrementalSQLFile)).useDelimiter("\\Z").next();
     if (!incrementalSQL.contains(config.sourceDb + "." + config.sourceTable)) {
-      LOG.info("Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable
+      LOG.error("Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable
           + ", which means its pulling from a different table. Fencing this from happening.");
       throw new HoodieIncrementalPullSQLException(
           "Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable);
     }
     if (!incrementalSQL.contains("`_hoodie_commit_time` > '%targetBasePath'")) {
-      LOG.info("Incremental SQL : " + incrementalSQL
+      LOG.error("Incremental SQL : " + incrementalSQL
           + " does not contain `_hoodie_commit_time` > '%targetBasePath'. Please add "
           + "this clause for incremental to work properly.");
       throw new HoodieIncrementalPullSQLException(
