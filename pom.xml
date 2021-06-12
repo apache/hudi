@@ -86,7 +86,7 @@
 
     <java.version>1.8</java.version>
     <fasterxml.version>2.6.7</fasterxml.version>
-    <fasterxml.jackson.databind.version>2.6.7.3</fasterxml.jackson.databind.version>
+    <fasterxml.jackson.databind.version>2.9.10.8</fasterxml.jackson.databind.version>
     <fasterxml.jackson.module.scala.version>2.6.7.1</fasterxml.jackson.module.scala.version>
     <fasterxml.jackson.dataformat.yaml.version>2.7.4</fasterxml.jackson.dataformat.yaml.version>
     <fasterxml.spark3.version>2.10.0</fasterxml.spark3.version>
@@ -105,7 +105,7 @@
     <joda.version>2.9.9</joda.version>
     <hadoop.version>2.10.1</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
-    <hive.version>2.3.1</hive.version>
+    <hive.version>2.3.9</hive.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
     <orc.version>1.6.0</orc.version>
