@@ -28,7 +28,7 @@ import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,10 +38,10 @@ import java.util.List;
 
 /**
  * Function to execute the actual compaction task assigned by the compaction plan task.
- * In order to execute scalable, the input should shuffle by the compact event {@link CompactionPlanEvent}.
+ * The input compact event {@link CompactionPlanEvent}s were distributed evenly to this function.
  */
-public class CompactFunction extends KeyedProcessFunction<Long, CompactionPlanEvent, CompactionCommitEvent> {
-  private static final Logger LOG = LoggerFactory.getLogger(CompactFunction.class);
+public class NonKeyedCompactFunction extends ProcessFunction<CompactionPlanEvent, CompactionCommitEvent> {
+  private static final Logger LOG = LoggerFactory.getLogger(NonKeyedCompactFunction.class);
 
   /**
    * Config options.
@@ -63,7 +63,7 @@ public class CompactFunction extends KeyedProcessFunction<Long, CompactionPlanEv
    */
   private transient NonThrownExecutor executor;
 
-  public CompactFunction(Configuration conf) {
+  public NonKeyedCompactFunction(Configuration conf) {
     this.conf = conf;
   }
 
@@ -75,13 +75,10 @@ public class CompactFunction extends KeyedProcessFunction<Long, CompactionPlanEv
   }
 
   @Override
-  public void processElement(CompactionPlanEvent event, Context context, Collector<CompactionCommitEvent> collector) throws Exception {
+  public void processElement(CompactionPlanEvent event, Context ctx, Collector<CompactionCommitEvent> collector) throws Exception {
     final String instantTime = event.getCompactionInstantTime();
     final CompactionOperation compactionOperation = event.getOperation();
-    // executes the compaction task asynchronously to not block the checkpoint barrier propagate.
-    executor.execute(
-        () -> doCompaction(instantTime, compactionOperation, collector), "Execute compaction for instant %s from task %d", instantTime, taskID
-    );
+    doCompaction(instantTime, compactionOperation, collector);
   }
 
   private void doCompaction(String instantTime, CompactionOperation compactionOperation, Collector<CompactionCommitEvent> collector) throws IOException {
