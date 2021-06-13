@@ -1698,4 +1698,9 @@ var store = [{
         "excerpt":"Apache Hudi is a data lake platform technology that provides several functionalities needed to build and manage data lakes. One such key feature that hudi provides is self-managing file sizing so that users don’t need to worry about manual table maintenance. Having a lot of small files will make it...","categories": ["blog"],
         "tags": [],
         "url": "https://hudi.apache.org/blog/hudi-file-sizing/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Employing correct configurations for Hudi's cleaner table service",
+        "excerpt":"Apache Hudi provides snapshot isolation between writers and readers. This is made possible by Hudi’s MVCC concurrency model. In this blog, we will explain how to employ the right configurations to manage multiple file versions. Furthermore, we will discuss mechanisms available to users on how to maintain just the required...","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/employing-right-configurations-for-hudi-cleaner/",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},]
