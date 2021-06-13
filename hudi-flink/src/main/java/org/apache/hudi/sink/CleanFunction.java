@@ -46,7 +46,7 @@ public class CleanFunction<T> extends AbstractRichFunction
 
   private final Configuration conf;
 
-  private HoodieFlinkWriteClient writeClient;
+  protected HoodieFlinkWriteClient writeClient;
   private NonThrownExecutor executor;
 
   private volatile boolean isCleaning;
