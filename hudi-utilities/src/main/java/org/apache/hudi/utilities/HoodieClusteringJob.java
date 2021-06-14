@@ -146,6 +146,7 @@ public class HoodieClusteringJob {
     return schema.toString();
   }
 
+  @SuppressWarnings("unchecked")
   private int doCluster(JavaSparkContext jsc) throws Exception {
     String schemaStr = getSchemaFromLatestInstant();
     SparkRDDWriteClient client =
@@ -160,6 +161,7 @@ public class HoodieClusteringJob {
     return this.doSchedule(jsc);
   }
 
+  @SuppressWarnings("unchecked")
   private Option<String> doSchedule(JavaSparkContext jsc) throws Exception {
     String schemaStr = getSchemaFromLatestInstant();
     SparkRDDWriteClient client =

@@ -128,6 +128,7 @@ public class HoodieCompactor {
     return ret;
   }
 
+  @SuppressWarnings("unchecked")
   private int doCompact(JavaSparkContext jsc) throws Exception {
     // Get schema.
     String schemaStr = UtilHelpers.parseSchema(fs, cfg.schemaFile);
