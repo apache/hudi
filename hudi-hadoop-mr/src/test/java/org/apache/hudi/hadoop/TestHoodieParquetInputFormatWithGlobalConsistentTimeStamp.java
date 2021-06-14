@@ -18,7 +18,7 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hudi.common.table.HoodieTableGloballyConsistentMetaClient;
+import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -44,23 +44,24 @@ public class TestHoodieParquetInputFormatWithGlobalConsistentTimeStamp
   public void setTimeStampAndSession(String timeStampAndSession) {
     switch (timeStampAndSession) {
       case "01":
-        jobConf.setBoolean(HoodieTableGloballyConsistentMetaClient.DISABLE_HOODIE_GLOBALLY_CONSISTENT_READS,
+        jobConf.setBoolean(HoodieHiveUtils.DISABLE_HOODIE_GLOBALLY_CONSISTENT_READS,
             true);
         break;
       case "10":
-        jobConf.set(HoodieTableGloballyConsistentMetaClient.GLOBALLY_CONSISTENT_READ_TIMESTAMP,
+        jobConf.setBoolean(HoodieHiveUtils.DISABLE_HOODIE_GLOBALLY_CONSISTENT_READS,
+            false);
+        jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP,
             String.valueOf(Long.MAX_VALUE));
         break;
       case "11":
         // set to 0 attempting to hide everything but this won't work due to session property
-        jobConf.set(HoodieTableGloballyConsistentMetaClient.GLOBALLY_CONSISTENT_READ_TIMESTAMP, "0");
-        jobConf.setBoolean(HoodieTableGloballyConsistentMetaClient.DISABLE_HOODIE_GLOBALLY_CONSISTENT_READS,
+        jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP, "0");
+        jobConf.setBoolean(HoodieHiveUtils.DISABLE_HOODIE_GLOBALLY_CONSISTENT_READS,
             true);
         break;
       default:
         throw new RuntimeException(
             String.format("unexpected timestampAndSession value: %s", timeStampAndSession));
-
     }
   }
 

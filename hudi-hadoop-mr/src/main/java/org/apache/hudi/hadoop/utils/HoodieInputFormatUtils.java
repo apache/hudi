@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.table.HoodieTableGloballyConsistentMetaClient;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -300,7 +299,7 @@ public class HoodieInputFormatUtils {
       }
 
       try {
-        HoodieTableMetaClient metaClient = getTableMetaClientForBasePath(p.getFileSystem(conf), p, new JobConf(conf));
+        HoodieTableMetaClient metaClient = getTableMetaClientForBasePath(p.getFileSystem(conf), p);
         metaClientMap.put(metaClient.getBasePath(), metaClient);
         return metaClient;
       } catch (IOException e) {
@@ -316,7 +315,7 @@ public class HoodieInputFormatUtils {
    * @return
    * @throws IOException
    */
-  public static HoodieTableMetaClient getTableMetaClientForBasePath(FileSystem fs, Path dataPath, JobConf jobConf) throws IOException {
+  public static HoodieTableMetaClient getTableMetaClientForBasePath(FileSystem fs, Path dataPath) throws IOException {
     int levels = HoodieHiveUtils.DEFAULT_LEVELS_TO_BASEPATH;
     if (HoodiePartitionMetadata.hasPartitionMetadata(fs, dataPath)) {
       HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(fs, dataPath);
@@ -325,8 +324,7 @@ public class HoodieInputFormatUtils {
     }
     Path baseDir = HoodieHiveUtils.getNthParent(dataPath, levels);
     LOG.info("Reading hoodie metadata from path " + baseDir.toString());
-    return HoodieTableGloballyConsistentMetaClient.mkMetaClient(
-        fs.getConf(), baseDir.toString(), jobConf);
+    return HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(baseDir.toString()).build();
   }
 
   public static FileStatus getFileStatus(HoodieBaseFile baseFile) throws IOException {
@@ -442,6 +440,7 @@ public class HoodieInputFormatUtils {
         }
 
         HoodieTimeline timeline = HoodieHiveUtils.getTableTimeline(metaClient.getTableConfig().getTableName(), job, metaClient);
+
         HoodieTableFileSystemView fsView = fsViewCache.computeIfAbsent(metaClient, tableMetaClient ->
             FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext, tableMetaClient, buildMetadataConfig(job), timeline));
         List<HoodieBaseFile> filteredBaseFiles = new ArrayList<>();

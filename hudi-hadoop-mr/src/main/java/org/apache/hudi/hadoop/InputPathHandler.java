@@ -24,7 +24,6 @@ import org.apache.hudi.exception.TableNotFoundException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapred.JobConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -59,22 +58,19 @@ public class InputPathHandler {
   private final Map<HoodieTableMetaClient, List<Path>> groupedIncrementalPaths;
   private final List<Path> snapshotPaths;
   private final List<Path> nonHoodieInputPaths;
-  private final JobConf jobConf;
 
-  public InputPathHandler(Configuration conf, Path[] inputPaths, List<String> incrementalTables, JobConf jobConf) throws IOException {
+  public InputPathHandler(Configuration conf, Path[] inputPaths, List<String> incrementalTables) throws IOException {
     this.conf = conf;
     tableMetaClientMap = new HashMap<>();
     snapshotPaths = new ArrayList<>();
     nonHoodieInputPaths = new ArrayList<>();
     groupedIncrementalPaths = new HashMap<>();
-    this.jobConf = jobConf;
     parseInputPaths(inputPaths, incrementalTables);
   }
 
   /**
    * Takes in the original InputPaths and classifies each of them into incremental, snapshot and
    * non-hoodie InputPaths. The logic is as follows:
-   *TestGloballyConsistentTimeStampFilteringInputFormat.java
    * 1. Check if an inputPath starts with the same basepath as any of the metadata basepaths we know
    *    1a. If yes, this belongs to a Hoodie table that we already know about. Simply classify this
    *        as incremental or snapshot - We can get the table name of this inputPath from the
@@ -108,7 +104,7 @@ public class InputPathHandler {
         // This path is for a table that we dont know about yet.
         HoodieTableMetaClient metaClient;
         try {
-          metaClient = getTableMetaClientForBasePath(inputPath.getFileSystem(conf), inputPath, jobConf);
+          metaClient = getTableMetaClientForBasePath(inputPath.getFileSystem(conf), inputPath);
           String tableName = metaClient.getTableConfig().getTableName();
           tableMetaClientMap.put(tableName, metaClient);
           tagAsIncrementalOrSnapshot(inputPath, tableName, metaClient, incrementalTables);

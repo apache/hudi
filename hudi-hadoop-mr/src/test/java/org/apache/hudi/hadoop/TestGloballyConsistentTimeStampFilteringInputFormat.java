@@ -19,7 +19,6 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.table.HoodieTableGloballyConsistentMetaClient;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
@@ -41,8 +40,8 @@ public class TestGloballyConsistentTimeStampFilteringInputFormat
   @BeforeEach
   public void setUp() {
     super.setUp();
-    jobConf.set(HoodieTableGloballyConsistentMetaClient.GLOBALLY_CONSISTENT_READ_TIMESTAMP,
-        String.valueOf(Long.MAX_VALUE));
+    jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP, String.valueOf(Long.MAX_VALUE));
+    jobConf.set(HoodieHiveUtils.DISABLE_HOODIE_GLOBALLY_CONSISTENT_READS, "false");
   }
 
   @Test
@@ -50,20 +49,19 @@ public class TestGloballyConsistentTimeStampFilteringInputFormat
     super.testInputFormatLoad();
 
     // set filtering timestamp to 0 now the timeline wont have any commits.
-    jobConf.set(HoodieTableGloballyConsistentMetaClient.GLOBALLY_CONSISTENT_READ_TIMESTAMP, "0");
+    jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP, "0");
 
     InputSplit[] inputSplits = inputFormat.getSplits(jobConf, 10);
     assertEquals(0, inputSplits.length);
-
     FileStatus[] files = inputFormat.listStatus(jobConf);
     assertEquals(0, files.length);
 
     for (String disableVal : Arrays.asList("", null)) {
       if (disableVal != null) {
-        jobConf.set(HoodieTableGloballyConsistentMetaClient.GLOBALLY_CONSISTENT_READ_TIMESTAMP,
+        jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP,
             disableVal);
       } else {
-        jobConf.unset(HoodieTableGloballyConsistentMetaClient.GLOBALLY_CONSISTENT_READ_TIMESTAMP);
+        jobConf.unset(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP);
       }
 
       assertEquals(10, inputFormat.getSplits(jobConf, 10).length);
@@ -77,7 +75,7 @@ public class TestGloballyConsistentTimeStampFilteringInputFormat
     super.testInputFormatUpdates();
 
     // set the globally replicated timestamp to 199 so only 100 is read and update is ignored.
-    jobConf.set(HoodieTableGloballyConsistentMetaClient.GLOBALLY_CONSISTENT_READ_TIMESTAMP, "199");
+    jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP, "199");
 
     FileStatus[] files = inputFormat.listStatus(jobConf);
     assertEquals(10, files.length);
@@ -91,7 +89,7 @@ public class TestGloballyConsistentTimeStampFilteringInputFormat
   public void testIncrementalSimple() throws IOException {
     // setting filtering timestamp to zero should not in any way alter the result of the test which
     // pulls in zero files due to incremental ts being the actual commit time
-    jobConf.set(HoodieTableGloballyConsistentMetaClient.GLOBALLY_CONSISTENT_READ_TIMESTAMP, "0");
+    jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP, "0");
     super.testIncrementalSimple();
   }
 
@@ -100,7 +98,7 @@ public class TestGloballyConsistentTimeStampFilteringInputFormat
     super.testIncrementalWithMultipleCommits();
 
     // set globally replicated timestamp to 400 so commits from 500, 600 does not show up
-    jobConf.set(HoodieTableGloballyConsistentMetaClient.GLOBALLY_CONSISTENT_READ_TIMESTAMP, "400");
+    jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP, "400");
     InputFormatTestUtil.setupIncremental(jobConf, "100", HoodieHiveUtils.MAX_COMMIT_ALL);
 
     FileStatus[] files = inputFormat.listStatus(jobConf);
@@ -119,7 +117,7 @@ public class TestGloballyConsistentTimeStampFilteringInputFormat
     for (int idx = 0; idx < commits.size(); ++idx) {
       for (int jdx = 0; jdx < commits.size(); ++jdx) {
         InputFormatTestUtil.setupIncremental(jobConf, commits.get(idx), HoodieHiveUtils.MAX_COMMIT_ALL);
-        jobConf.set(HoodieTableGloballyConsistentMetaClient.GLOBALLY_CONSISTENT_READ_TIMESTAMP,
+        jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP,
             commits.get(jdx));
 
         files = inputFormat.listStatus(jobConf);
