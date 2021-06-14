@@ -67,6 +67,6 @@ public class DefaultSource extends BaseDefaultSource implements DataSourceV2,
         options.get(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED).isPresent()
             ? options.get(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED).get() : null);
     return Optional.of(new HoodieDataSourceInternalWriter(instantTime, config, schema, getSparkSession(),
-            getConfiguration(), arePartitionRecordsSorted));
+            getConfiguration(), options, arePartitionRecordsSorted ));
   }
 }
