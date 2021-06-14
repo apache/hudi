@@ -25,12 +25,13 @@ import java.util.Map;
 
 public interface DDLExecutor {
   /**
-   * @param databaseName name of dartabase to be created
+   * @param databaseName name of database to be created.
    */
   public void createDatabase(String databaseName);
 
   /**
-   * Creates a table with the following properties
+   * Creates a table with the following properties.
+   *
    * @param tableName
    * @param storageSchema
    * @param inputFormatClass
@@ -44,28 +45,32 @@ public interface DDLExecutor {
                           Map<String, String> serdeProperties, Map<String, String> tableProperties);
 
   /**
-   * Updates the table with the newSchema
+   * Updates the table with the newSchema.
+   *
    * @param tableName
    * @param newSchema
    */
   public void updateTableDefinition(String tableName, MessageType newSchema);
 
   /**
-   * Fetches tableSchema for a table
+   * Fetches tableSchema for a table.
+   *
    * @param tableName
    * @return
    */
   public Map<String, String> getTableSchema(String tableName);
 
   /**
-   * Adds partition to table
+   * Adds partition to table.
+   *
    * @param tableName
    * @param partitionsToAdd
    */
   public void addPartitionsToTable(String tableName, List<String> partitionsToAdd);
 
   /**
-   * Updates partitions for a given table
+   * Updates partitions for a given table.
+   *
    * @param tableName
    * @param changedPartitions
    */
