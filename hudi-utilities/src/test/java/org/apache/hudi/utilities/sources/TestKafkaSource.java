@@ -25,25 +25,21 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
-import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
-import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.HashMap;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -279,67 +275,5 @@ public class TestKafkaSource extends UtilitiesTestBase {
     InputBatch<JavaRDD<GenericRecord>> fetch6 =
         kafkaSource.fetchNewDataInAvroFormat(Option.of(fetch4.getCheckpointForNextBatch()), Long.MAX_VALUE);
     assertEquals(Option.empty(), fetch6.getBatch());
-  }
-
-  private static HashMap<TopicPartition, Long> makeOffsetMap(int[] partitions, long[] offsets) {
-    HashMap<TopicPartition, Long> map = new HashMap<>();
-    for (int i = 0; i < partitions.length; i++) {
-      map.put(new TopicPartition(TEST_TOPIC_NAME, partitions[i]), offsets[i]);
-    }
-    return map;
-  }
-
-  @Test
-  public void testComputeOffsetRanges() {
-    // test totalNewMessages()
-    long totalMsgs = CheckpointUtils.totalNewMessages(new OffsetRange[] {OffsetRange.apply(TEST_TOPIC_NAME, 0, 0, 100),
-        OffsetRange.apply(TEST_TOPIC_NAME, 0, 100, 200)});
-    assertEquals(200, totalMsgs);
-
-    // should consume all the full data
-    OffsetRange[] ranges =
-        CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {200000, 250000}),
-            makeOffsetMap(new int[] {0, 1}, new long[] {300000, 350000}), 1000000L);
-    assertEquals(200000, CheckpointUtils.totalNewMessages(ranges));
-
-    // should only consume upto limit
-    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {200000, 250000}),
-        makeOffsetMap(new int[] {0, 1}, new long[] {300000, 350000}), 10000);
-    assertEquals(10000, CheckpointUtils.totalNewMessages(ranges));
-    assertEquals(200000, ranges[0].fromOffset());
-    assertEquals(205000, ranges[0].untilOffset());
-    assertEquals(250000, ranges[1].fromOffset());
-    assertEquals(255000, ranges[1].untilOffset());
-
-    // should also consume from new partitions.
-    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {200000, 250000}),
-        makeOffsetMap(new int[] {0, 1, 2}, new long[] {300000, 350000, 100000}), 1000000L);
-    assertEquals(300000, CheckpointUtils.totalNewMessages(ranges));
-    assertEquals(3, ranges.length);
-
-    // for skewed offsets, does not starve any partition & can catch up
-    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {200000, 250000}),
-        makeOffsetMap(new int[] {0, 1, 2}, new long[] {200010, 350000, 10000}), 100000);
-    assertEquals(100000, CheckpointUtils.totalNewMessages(ranges));
-    assertEquals(10, ranges[0].count());
-    assertEquals(89990, ranges[1].count());
-    assertEquals(10000, ranges[2].count());
-
-    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1}, new long[] {200000, 250000}),
-        makeOffsetMap(new int[] {0, 1, 2}, new long[] {200010, 350000, 10000}), 1000000);
-    assertEquals(110010, CheckpointUtils.totalNewMessages(ranges));
-    assertEquals(10, ranges[0].count());
-    assertEquals(100000, ranges[1].count());
-    assertEquals(10000, ranges[2].count());
-
-    // not all partitions consume same entries.
-    ranges = CheckpointUtils.computeOffsetRanges(makeOffsetMap(new int[] {0, 1, 2, 3, 4}, new long[] {0, 0, 0, 0, 0}),
-        makeOffsetMap(new int[] {0, 1, 2, 3, 4}, new long[] {100, 1000, 1000, 1000, 1000}), 1001);
-    assertEquals(1001, CheckpointUtils.totalNewMessages(ranges));
-    assertEquals(100, ranges[0].count());
-    assertEquals(226, ranges[1].count());
-    assertEquals(226, ranges[2].count());
-    assertEquals(226, ranges[3].count());
-    assertEquals(223, ranges[4].count());
   }
 }

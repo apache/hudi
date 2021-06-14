@@ -63,8 +63,8 @@ public class KafkaOffsetGen {
     /**
      * Reconstruct checkpoint from timeline.
      */
-    public static HashMap<TopicPartition, Long> strToOffsets(String checkpointStr) {
-      HashMap<TopicPartition, Long> offsetMap = new HashMap<>();
+    public static Map<TopicPartition, Long> strToOffsets(String checkpointStr) {
+      Map<TopicPartition, Long> offsetMap = new HashMap<>();
       String[] splits = checkpointStr.split(",");
       String topic = splits[0];
       for (int i = 1; i < splits.length; i++) {
