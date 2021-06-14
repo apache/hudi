@@ -19,11 +19,12 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.mapred.InputSplit;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -40,8 +41,8 @@ public class TestGloballyConsistentTimeStampFilteringInputFormat
   @BeforeEach
   public void setUp() {
     super.setUp();
-    jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP, String.valueOf(Long.MAX_VALUE));
-    jobConf.set(HoodieHiveUtils.DISABLE_HOODIE_GLOBALLY_CONSISTENT_READS, "false");
+    //jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP, String.valueOf(Long.MAX_VALUE));
+    //jobConf.set(HoodieHiveUtils.DISABLE_HOODIE_GLOBALLY_CONSISTENT_READS, "false");
   }
 
   @Test
@@ -49,25 +50,10 @@ public class TestGloballyConsistentTimeStampFilteringInputFormat
     super.testInputFormatLoad();
 
     // set filtering timestamp to 0 now the timeline wont have any commits.
-    jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP, "0");
+    InputFormatTestUtil.setupSnapshotMaxCommitTimeQueryMode(jobConf, "0");
 
-    InputSplit[] inputSplits = inputFormat.getSplits(jobConf, 10);
-    assertEquals(0, inputSplits.length);
-    FileStatus[] files = inputFormat.listStatus(jobConf);
-    assertEquals(0, files.length);
-
-    for (String disableVal : Arrays.asList("", null)) {
-      if (disableVal != null) {
-        jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP,
-            disableVal);
-      } else {
-        jobConf.unset(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP);
-      }
-
-      assertEquals(10, inputFormat.getSplits(jobConf, 10).length);
-
-      assertEquals(10, inputFormat.listStatus(jobConf).length);
-    }
+    Assertions.assertThrows(HoodieIOException.class, () -> inputFormat.getSplits(jobConf, 10));
+    Assertions.assertThrows(HoodieIOException.class, () -> inputFormat.listStatus(jobConf));
   }
 
   @Test
@@ -75,7 +61,7 @@ public class TestGloballyConsistentTimeStampFilteringInputFormat
     super.testInputFormatUpdates();
 
     // set the globally replicated timestamp to 199 so only 100 is read and update is ignored.
-    jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP, "199");
+    InputFormatTestUtil.setupSnapshotMaxCommitTimeQueryMode(jobConf, "100");
 
     FileStatus[] files = inputFormat.listStatus(jobConf);
     assertEquals(10, files.length);
@@ -98,7 +84,8 @@ public class TestGloballyConsistentTimeStampFilteringInputFormat
     super.testIncrementalWithMultipleCommits();
 
     // set globally replicated timestamp to 400 so commits from 500, 600 does not show up
-    jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP, "400");
+    InputFormatTestUtil.setupSnapshotMaxCommitTimeQueryMode(jobConf, "400");
+    //jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP, "400");
     InputFormatTestUtil.setupIncremental(jobConf, "100", HoodieHiveUtils.MAX_COMMIT_ALL);
 
     FileStatus[] files = inputFormat.listStatus(jobConf);
@@ -117,8 +104,10 @@ public class TestGloballyConsistentTimeStampFilteringInputFormat
     for (int idx = 0; idx < commits.size(); ++idx) {
       for (int jdx = 0; jdx < commits.size(); ++jdx) {
         InputFormatTestUtil.setupIncremental(jobConf, commits.get(idx), HoodieHiveUtils.MAX_COMMIT_ALL);
-        jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP,
-            commits.get(jdx));
+        InputFormatTestUtil.setupSnapshotMaxCommitTimeQueryMode(jobConf, commits.get(jdx));
+
+        //jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP,
+        //    commits.get(jdx));
 
         files = inputFormat.listStatus(jobConf);
 

@@ -21,7 +21,6 @@ package org.apache.hudi.hadoop.utils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.fs.Path;
@@ -76,8 +75,6 @@ public class HoodieHiveUtils {
   public static final int DEFAULT_LEVELS_TO_BASEPATH = 3;
   public static final Pattern HOODIE_CONSUME_MODE_PATTERN_STRING = Pattern.compile("hoodie\\.(.*)\\.consume\\.mode");
   public static final String GLOBALLY_CONSISTENT_READ_TIMESTAMP = "last_replication_timestamp";
-  public static final String DISABLE_HOODIE_GLOBALLY_CONSISTENT_READS = "hoodie_disable_globally_consistent_reads";
-  public static final boolean DEFAULT_DISABLE_HOODIE_GLOBALLY_CONSISTENT_READS = true;
 
   public static boolean stopAtCompaction(JobContext job, String tableName) {
     String compactionPropName = String.format(HOODIE_STOP_AT_COMPACTION_PATTERN, tableName);
@@ -140,14 +137,6 @@ public class HoodieHiveUtils {
     return result;
   }
 
-  public static HoodieTimeline getTableTimeline(final String tableName, final JobConf job, final HoodieTableMetaClient metaClient) {
-    HoodieTimeline timeline = filterTimelineifConsumeCommitIsSet(tableName,
-        job,
-        metaClient.getActiveTimeline().getCommitsTimeline());
-
-    return trimTimelineIfGlobalConsistencyIsEnabled(job, timeline);
-  }
-
   /**
    * Depending on the configs hoodie.%s.consume.pending.commits and hoodie.%s.consume.commit of job
    *
@@ -163,10 +152,12 @@ public class HoodieHiveUtils {
    *
    * @param tableName
    * @param job
-   * @param timeline
+   * @param metaClient
    * @return
    */
-  private static HoodieTimeline filterTimelineifConsumeCommitIsSet(String tableName, JobConf job, HoodieTimeline timeline) {
+  public static HoodieTimeline getTableTimeline(final String tableName, final JobConf job, final HoodieTableMetaClient metaClient) {
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline();
+
     boolean includePendingCommits = job.getBoolean(String.format(HOODIE_CONSUME_PENDING_COMMITS, tableName), false);
     String maxCommit = job.get(String.format(HOODIE_CONSUME_COMMIT, tableName));
 
@@ -183,19 +174,5 @@ public class HoodieHiveUtils {
       throw new HoodieIOException("Valid timestamp is required for " + HOODIE_CONSUME_COMMIT + " in snapshot mode");
     }
     return timeline.findInstantsBeforeOrEquals(maxCommit);
-  }
-
-  /**
-   * @param job
-   * @param timeline
-   * @return trimmed timeline equal or less than to last_replication_time if global consistency is set
-   */
-  private static HoodieTimeline trimTimelineIfGlobalConsistencyIsEnabled(JobConf job, HoodieTimeline timeline) {
-    final String timeStamp = job.get(GLOBALLY_CONSISTENT_READ_TIMESTAMP);
-    final boolean disableGloballyConsistentRead = job.getBoolean(DISABLE_HOODIE_GLOBALLY_CONSISTENT_READS, DEFAULT_DISABLE_HOODIE_GLOBALLY_CONSISTENT_READS);
-    if (!disableGloballyConsistentRead && !StringUtils.isNullOrEmpty(timeStamp)) {
-      return timeline.findInstantsBeforeOrEquals(timeStamp);
-    }
-    return timeline;
   }
 }
