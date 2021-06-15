@@ -34,16 +34,8 @@ stages:
     jobs:
       - job: unit_tests_spark_client
         steps:
-          - task: Maven@3
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'clean install'
-              options: -DskipTests
-              publishJUnitResults: false
-              javaHomeOption: 'JDKVersion'
-              jdkVersionOption: '1.8'
-              jdkArchitectureOption: 'x64'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+          - script: |
+              mvn $(MAVEN_OPTS) clean install -DskipTests
           - task: Cache@2
             inputs:
               key: 'maven | "$(Agent.OS)" | **/pom.xml'
@@ -66,16 +58,8 @@ stages:
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: unit_tests_utilities
         steps:
-          - task: Maven@3
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'clean install'
-              options: -DskipTests
-              publishJUnitResults: false
-              javaHomeOption: 'JDKVersion'
-              jdkVersionOption: '1.8'
-              jdkArchitectureOption: 'x64'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+          - script: |
+              mvn $(MAVEN_OPTS) clean install -DskipTests
           - task: Cache@2
             inputs:
               key: 'maven | "$(Agent.OS)" | **/pom.xml'
@@ -98,16 +82,8 @@ stages:
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: unit_tests_other_modules
         steps:
-          - task: Maven@3
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'clean install'
-              options: -DskipTests
-              publishJUnitResults: false
-              javaHomeOption: 'JDKVersion'
-              jdkVersionOption: '1.8'
-              jdkArchitectureOption: 'x64'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+          - script: |
+              mvn $(MAVEN_OPTS) clean install -DskipTests
           - task: Cache@2
             inputs:
               key: 'maven | "$(Agent.OS)" | **/pom.xml'
@@ -130,18 +106,8 @@ stages:
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: functional_tests
         steps:
-          - task: Maven@3
-            inputs:
-              mavenPomFile: 'pom.xml'
-              goals: 'test'
-              options: -Pfunctional-tests
-              publishJUnitResults: false
-              testResultsFiles: '**/surefire-reports/TEST-*.xml'
-              testRunTitle: 'functional tests'
-              javaHomeOption: 'JDKVersion'
-              jdkVersionOption: '1.8'
-              jdkArchitectureOption: 'x64'
-              mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
+          - script: |
+              mvn $(MAVEN_OPTS) -Pfunctional-tests test
       - job: integration_tests
         steps:
           - script: |
