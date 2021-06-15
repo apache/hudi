@@ -92,7 +92,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   private void initIfNeeded() {
-    if (enabled && this.metaClient == null) {
+    if (!enabled) {
+      LOG.info("Metadata table is disabled for " + datasetBasePath);
+    } else if (this.metaClient == null) {
       this.metadataBasePath = HoodieTableMetadata.getMetadataTableBasePath(datasetBasePath);
       try {
         this.metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(metadataBasePath).build();
@@ -107,8 +109,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         this.enabled = false;
         this.metaClient = null;
       }
-    } else {
-      LOG.info("Metadata table is disabled.");
     }
   }
 
