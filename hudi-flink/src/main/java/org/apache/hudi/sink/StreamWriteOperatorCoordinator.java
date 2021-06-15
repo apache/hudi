@@ -206,11 +206,11 @@ public class StreamWriteOperatorCoordinator
             }
             // start new instant.
             startInstant();
+            // sync Hive if is enabled
+            syncHiveIfEnabled();
           }
         }, "commits the instant %s", this.instant
     );
-    // sync Hive if is enabled
-    syncHiveIfEnabled();
   }
 
   private void syncHiveIfEnabled() {
