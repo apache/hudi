@@ -24,7 +24,8 @@ package org.apache.hudi.common.model;
 public enum HoodieFileFormat {
   PARQUET(".parquet"),
   HOODIE_LOG(".log"),
-  HFILE(".hfile");
+  HFILE(".hfile"),
+  ORC(".orc");
 
   private final String extension;
 

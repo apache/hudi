@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION_OPT_KEY}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
@@ -28,6 +28,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.{DataSource, FileStatusCache, HadoopFsRelation}
+import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.streaming.HoodieStreamSource
@@ -186,6 +187,10 @@ class DefaultSource extends RelationProvider
                                   extraReadPaths: Seq[String],
                                   metaClient: HoodieTableMetaClient): BaseRelation = {
     log.info("Loading Base File Only View  with options :" + optParams)
+    val (tableFileFormat, formatClassName) = metaClient.getTableConfig.getBaseFileFormat match {
+      case HoodieFileFormat.PARQUET => (new ParquetFileFormat, "parquet")
+      case HoodieFileFormat.ORC => (new OrcFileFormat, "orc")
+    }
 
     if (useHoodieFileIndex) {
 
@@ -198,7 +203,7 @@ class DefaultSource extends RelationProvider
         fileIndex.partitionSchema,
         fileIndex.dataSchema,
         bucketSpec = None,
-        fileFormat = new ParquetFileFormat,
+        fileFormat = tableFileFormat,
         optParams)(sqlContext.sparkSession)
     } else {
       // this is just effectively RO view only, where `path` can contain a mix of
@@ -208,12 +213,12 @@ class DefaultSource extends RelationProvider
         classOf[HoodieROTablePathFilter],
         classOf[org.apache.hadoop.fs.PathFilter])
 
-      // simply return as a regular parquet relation
+      // simply return as a regular relation
       DataSource.apply(
         sparkSession = sqlContext.sparkSession,
         paths = extraReadPaths,
         userSpecifiedSchema = Option(schema),
-        className = "parquet",
+        className = formatClassName,
         options = optParams)
         .resolveRelation()
     }

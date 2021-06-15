@@ -99,13 +99,9 @@ public class HoodieHFileWriter<T extends HoodieRecordPayload, R extends IndexedR
 
   @Override
   public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
-    String seqId =
-        HoodieRecord.generateSequenceId(instantTime, taskContextSupplier.getPartitionIdSupplier().get(), recordIndex.getAndIncrement());
-    HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord, record.getRecordKey(), record.getPartitionPath(),
-        file.getName());
-    HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord, instantTime, seqId);
-
-    writeAvro(record.getRecordKey(), (IndexedRecord)avroRecord);
+    prepRecordWithMetadata(avroRecord, record, instantTime,
+        taskContextSupplier.getPartitionIdSupplier().get(), recordIndex, file.getName());
+    writeAvro(record.getRecordKey(), (IndexedRecord) avroRecord);
   }
 
   @Override
