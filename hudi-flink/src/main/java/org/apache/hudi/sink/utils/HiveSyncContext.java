@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
@@ -29,7 +30,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.conf.HiveConf;
 
 import java.util.Arrays;
-import java.util.stream.Collectors;
 
 /**
  * Hive synchronization context.
@@ -57,7 +57,10 @@ public class HiveSyncContext {
     String path = conf.getString(FlinkOptions.PATH);
     FileSystem fs = FSUtils.getFs(path, hadoopConf);
     HiveConf hiveConf = new HiveConf();
-    hiveConf.addResource(fs.getConf());
+    if (!FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.HIVE_SYNC_METASTORE_URIS)) {
+      hadoopConf.set(HiveConf.ConfVars.METASTOREURIS.varname, conf.getString(FlinkOptions.HIVE_SYNC_METASTORE_URIS));
+    }
+    hiveConf.addResource(hadoopConf);
     return new HiveSyncContext(syncConfig, hiveConf, fs);
   }
 
@@ -71,8 +74,7 @@ public class HiveSyncContext {
     hiveSyncConfig.hiveUser = conf.getString(FlinkOptions.HIVE_SYNC_USERNAME);
     hiveSyncConfig.hivePass = conf.getString(FlinkOptions.HIVE_SYNC_PASSWORD);
     hiveSyncConfig.jdbcUrl = conf.getString(FlinkOptions.HIVE_SYNC_JDBC_URL);
-    hiveSyncConfig.partitionFields = Arrays.stream(conf.getString(FlinkOptions.HIVE_SYNC_PARTITION_FIELDS)
-        .split(",")).map(String::trim).collect(Collectors.toList());
+    hiveSyncConfig.partitionFields = Arrays.asList(FilePathUtils.extractPartitionKeys(conf));
     hiveSyncConfig.partitionValueExtractorClass = conf.getString(FlinkOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS);
     hiveSyncConfig.useJdbc = conf.getBoolean(FlinkOptions.HIVE_SYNC_USE_JDBC);
     // needs to support metadata table for flink

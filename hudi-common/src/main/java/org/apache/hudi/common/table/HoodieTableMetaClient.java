@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
@@ -311,7 +312,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Helper method to initialize a given path as a hoodie table with configs passed in as as Properties.
+   * Helper method to initialize a given path as a hoodie table with configs passed in as Properties.
    *
    * @return Instance of HoodieTableMetaClient
    */
@@ -331,7 +332,7 @@ public class HoodieTableMetaClient implements Serializable {
     // if anything other than default archive log folder is specified, create that too
     String archiveLogPropVal = props.getProperty(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME,
         HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER);
-    if (!archiveLogPropVal.equals(HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER)) {
+    if (!StringUtils.isNullOrEmpty(archiveLogPropVal)) {
       Path archiveLogDir = new Path(metaPathDir, archiveLogPropVal);
       if (!fs.exists(archiveLogDir)) {
         fs.mkdirs(archiveLogDir);
@@ -591,6 +592,8 @@ public class HoodieTableMetaClient implements Serializable {
 
     private HoodieTableType tableType;
     private String tableName;
+    private String tableCreateSchema;
+    private String recordKeyFields;
     private String archiveLogFolder;
     private String payloadClassName;
     private Integer timelineLayoutVersion;
@@ -615,6 +618,16 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setTableName(String tableName) {
       this.tableName = tableName;
+      return this;
+    }
+
+    public PropertyBuilder setTableCreateSchema(String tableCreateSchema) {
+      this.tableCreateSchema = tableCreateSchema;
+      return this;
+    }
+
+    public PropertyBuilder setRecordKeyFields(String recordKeyFields) {
+      this.recordKeyFields = recordKeyFields;
       return this;
     }
 
@@ -703,7 +716,14 @@ public class HoodieTableMetaClient implements Serializable {
         setPreCombineField(properties.getProperty(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD));
       }
       if (properties.containsKey(HoodieTableConfig.HOODIE_TABLE_PARTITION_COLUMNS)) {
-        setPartitionColumns(properties.getProperty(HoodieTableConfig.HOODIE_TABLE_PARTITION_COLUMNS));
+        setPartitionColumns(
+            properties.getProperty(HoodieTableConfig.HOODIE_TABLE_PARTITION_COLUMNS));
+      }
+      if (properties.containsKey(HoodieTableConfig.HOODIE_TABLE_RECORDKEY_FIELDS)) {
+        setRecordKeyFields(properties.getProperty(HoodieTableConfig.HOODIE_TABLE_RECORDKEY_FIELDS));
+      }
+      if (properties.containsKey(HoodieTableConfig.HOODIE_TABLE_CREATE_SCHEMA)) {
+        setTableCreateSchema(properties.getProperty(HoodieTableConfig.HOODIE_TABLE_CREATE_SCHEMA));
       }
       return this;
     }
@@ -721,8 +741,14 @@ public class HoodieTableMetaClient implements Serializable {
         properties.setProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, payloadClassName);
       }
 
-      if (null != archiveLogFolder) {
+      if (null != tableCreateSchema) {
+        properties.put(HoodieTableConfig.HOODIE_TABLE_CREATE_SCHEMA, tableCreateSchema);
+      }
+
+      if (!StringUtils.isNullOrEmpty(archiveLogFolder)) {
         properties.put(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, archiveLogFolder);
+      } else {
+        properties.setProperty(HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER, HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER);
       }
 
       if (null != timelineLayoutVersion) {
@@ -750,6 +776,9 @@ public class HoodieTableMetaClient implements Serializable {
 
       if (null != partitionColumns) {
         properties.put(HoodieTableConfig.HOODIE_TABLE_PARTITION_COLUMNS, partitionColumns);
+      }
+      if (null != recordKeyFields) {
+        properties.put(HoodieTableConfig.HOODIE_TABLE_RECORDKEY_FIELDS, recordKeyFields);
       }
       return properties;
     }

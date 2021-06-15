@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table;
 
 import java.util.Arrays;
+import org.apache.avro.Schema;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -60,6 +61,8 @@ public class HoodieTableConfig implements Serializable {
   public static final String HOODIE_TABLE_VERSION_PROP_NAME = "hoodie.table.version";
   public static final String HOODIE_TABLE_PRECOMBINE_FIELD = "hoodie.table.precombine.field";
   public static final String HOODIE_TABLE_PARTITION_COLUMNS = "hoodie.table.partition.columns";
+  public static final String HOODIE_TABLE_RECORDKEY_FIELDS = "hoodie.table.recordkey.fields";
+  public static final String HOODIE_TABLE_CREATE_SCHEMA = "hoodie.table.create.schema";
 
   @Deprecated
   public static final String HOODIE_RO_FILE_FORMAT_PROP_NAME = "hoodie.table.ro.file.format";
@@ -81,7 +84,7 @@ public class HoodieTableConfig implements Serializable {
   public static final String DEFAULT_PAYLOAD_CLASS = OverwriteWithLatestAvroPayload.class.getName();
   public static final String NO_OP_BOOTSTRAP_INDEX_CLASS = NoOpBootstrapIndex.class.getName();
   public static final String DEFAULT_BOOTSTRAP_INDEX_CLASS = HFileBootstrapIndex.class.getName();
-  public static final String DEFAULT_ARCHIVELOG_FOLDER = "";
+  public static final String DEFAULT_ARCHIVELOG_FOLDER = "archived";
 
   private Properties props;
 
@@ -225,6 +228,14 @@ public class HoodieTableConfig implements Serializable {
 
   public Option<String> getBootstrapBasePath() {
     return Option.ofNullable(props.getProperty(HOODIE_BOOTSTRAP_BASE_PATH));
+  }
+
+  public Option<Schema> getTableCreateSchema() {
+    if (props.containsKey(HOODIE_TABLE_CREATE_SCHEMA)) {
+      return Option.of(new Schema.Parser().parse(props.getProperty(HOODIE_TABLE_CREATE_SCHEMA)));
+    } else {
+      return Option.empty();
+    }
   }
 
   /**

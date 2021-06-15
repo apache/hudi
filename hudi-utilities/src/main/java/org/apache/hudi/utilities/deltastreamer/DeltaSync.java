@@ -47,6 +47,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.keygen.KeyGenerator;
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.exception.HoodieDeltaStreamerException;
@@ -89,6 +90,7 @@ import java.util.stream.Collectors;
 
 import scala.collection.JavaConversions;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_PROP;
@@ -207,7 +209,7 @@ public class DeltaSync implements Serializable {
     registerAvroSchemas(schemaProvider);
 
     this.transformer = UtilHelpers.createTransformer(cfg.transformerClassNames);
-    this.keyGenerator = DataSourceUtils.createKeyGenerator(props);
+    this.keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 
     this.metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(this.schemaProvider));
 
@@ -241,7 +243,7 @@ public class DeltaSync implements Serializable {
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
-          .setArchiveLogFolder("archived")
+          .setArchiveLogFolder(DEFAULT_ARCHIVELOG_FOLDER)
           .setPayloadClassName(cfg.payloadClassName)
           .setBaseFileFormat(cfg.baseFileFormat)
           .setPartitionColumns(partitionColumns)
@@ -334,7 +336,7 @@ public class DeltaSync implements Serializable {
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
-          .setArchiveLogFolder("archived")
+          .setArchiveLogFolder(DEFAULT_ARCHIVELOG_FOLDER)
           .setPayloadClassName(cfg.payloadClassName)
           .setBaseFileFormat(cfg.baseFileFormat)
           .setPartitionColumns(partitionColumns)

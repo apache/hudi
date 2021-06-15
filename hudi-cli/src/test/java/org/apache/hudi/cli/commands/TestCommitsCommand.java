@@ -24,7 +24,7 @@ import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
-import org.apache.hudi.cli.testutils.HoodieTestReplaceCommitMetadatGenerator;
+import org.apache.hudi.cli.testutils.HoodieTestReplaceCommitMetadataGenerator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -122,7 +122,7 @@ public class TestCommitsCommand extends AbstractShellIntegrationTest {
     for (Map.Entry<HoodieInstant, Integer[]> entry : replaceCommitData.entrySet()) {
       String key = entry.getKey().getTimestamp();
       Integer[] value = entry.getValue();
-      HoodieTestReplaceCommitMetadatGenerator.createReplaceCommitFileWithMetadata(tablePath, key,
+      HoodieTestReplaceCommitMetadataGenerator.createReplaceCommitFileWithMetadata(tablePath, key,
               Option.of(value[0]), Option.of(value[1]), metaClient);
     }
 

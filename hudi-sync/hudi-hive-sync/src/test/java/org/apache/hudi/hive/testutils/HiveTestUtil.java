@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hive.testutils;
 
-import org.apache.hive.service.server.HiveServer2;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -52,6 +51,7 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hive.service.server.HiveServer2;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -84,11 +84,12 @@ public class HiveTestUtil {
   public static FileSystem fileSystem;
   private static ZooKeeperServer zkServer;
   private static HiveServer2 hiveServer;
-  private static HiveTestService hiveTestService;
+  public static HiveTestService hiveTestService;
   private static ZookeeperTestService zkService;
   private static Configuration configuration;
   private static DateTimeFormatter dtfOut;
   private static Set<String> createdTablesSet = new HashSet<>();
+
   private static TestCluster cluster;
 
   public static void setUp() throws Exception {
@@ -98,14 +99,14 @@ public class HiveTestUtil {
       configuration = cluster.getConf();
       fileSystem = cluster.dfsCluster.getFileSystem();
     }
+    //configuration = new Configuration();
     if (zkServer == null) {
       zkService = new ZookeeperTestService(configuration);
       zkServer = zkService.start();
     }
-
     hiveSyncConfig = new HiveSyncConfig();
-    hiveSyncConfig.jdbcUrl = cluster.getHiveJdBcUrl();
     hiveSyncConfig.hiveUser = System.getProperty("user.name");
+    hiveSyncConfig.jdbcUrl = cluster.getHiveJdBcUrl();
     hiveSyncConfig.hivePass = "";
     hiveSyncConfig.databaseName = "testdb";
     hiveSyncConfig.tableName = "test1";
@@ -137,18 +138,6 @@ public class HiveTestUtil {
 
   public static HiveConf getHiveConf() {
     return cluster.getHiveConf();
-  }
-
-  public static HiveServer2 getHiveServer() {
-    return hiveServer;
-  }
-
-  public static ZooKeeperServer getZkServer() {
-    return zkServer;
-  }
-
-  public static ZookeeperTestService getZkService() {
-    return zkService;
   }
 
   public static void shutdown() {

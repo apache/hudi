@@ -296,7 +296,6 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
 
   public void archive(HoodieEngineContext context, List<HoodieInstant> instants) throws HoodieCommitException {
     try {
-      HoodieTimeline commitTimeline = metaClient.getActiveTimeline().getAllCommitsTimeline().filterCompletedInstants();
       Schema wrapperSchema = HoodieArchivedMetaEntry.getClassSchema();
       LOG.info("Wrapper schema " + wrapperSchema.toString());
       List<IndexedRecord> records = new ArrayList<>();
@@ -308,7 +307,7 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
         }
         try {
           deleteAnyLeftOverMarkerFiles(context, hoodieInstant);
-          records.add(convertToAvroRecord(commitTimeline, hoodieInstant));
+          records.add(convertToAvroRecord(hoodieInstant));
           if (records.size() >= this.config.getCommitArchivalBatchSize()) {
             writeToFile(wrapperSchema, records);
           }
@@ -365,8 +364,8 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     }
   }
 
-  private IndexedRecord convertToAvroRecord(HoodieTimeline commitTimeline, HoodieInstant hoodieInstant)
-          throws IOException {
+  private IndexedRecord convertToAvroRecord(HoodieInstant hoodieInstant)
+      throws IOException {
     return MetadataConversionUtils.createMetaWrapper(hoodieInstant, metaClient);
   }
 }

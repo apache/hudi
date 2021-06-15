@@ -189,8 +189,12 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   private Option<IndexedRecord> getIndexedRecord(HoodieRecord<T> hoodieRecord) {
     Option<Map<String, String>> recordMetadata = hoodieRecord.getData().getMetadata();
     try {
-      Option<IndexedRecord> avroRecord = hoodieRecord.getData().getInsertValue(writerSchema);
+      Option<IndexedRecord> avroRecord = hoodieRecord.getData().getInsertValue(tableSchema,
+          config.getProps());
       if (avroRecord.isPresent()) {
+        if (avroRecord.get().equals(IGNORE_RECORD)) {
+          return avroRecord;
+        }
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
         avroRecord = Option.of(rewriteRecord((GenericRecord) avroRecord.get()));
         String seqId =
@@ -336,7 +340,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   protected void appendDataAndDeleteBlocks(Map<HeaderMetadataType, String> header) {
     try {
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
-      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writerSchemaWithMetafields.toString());
+      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchemaWithMetaFields.toString());
       List<HoodieLogBlock> blocks = new ArrayList<>(2);
       if (recordList.size() > 0) {
         blocks.add(HoodieDataBlock.getBlock(hoodieTable.getLogDataBlockFormat(), recordList, header));
@@ -382,6 +386,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     try {
       // flush any remaining records to disk
       appendDataAndDeleteBlocks(header);
+      recordItr = null;
       if (writer != null) {
         writer.close();
 
@@ -444,7 +449,10 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     }
     Option<IndexedRecord> indexedRecord = getIndexedRecord(record);
     if (indexedRecord.isPresent()) {
-      recordList.add(indexedRecord.get());
+      // Skip the Ignore Record.
+      if (!indexedRecord.get().equals(IGNORE_RECORD)) {
+        recordList.add(indexedRecord.get());
+      }
     } else {
       keysToDelete.add(record.getKey());
     }

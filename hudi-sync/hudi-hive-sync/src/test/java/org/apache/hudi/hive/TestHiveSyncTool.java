@@ -18,26 +18,24 @@
 
 package org.apache.hudi.hive;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import org.apache.hadoop.hive.ql.Driver;
-import org.apache.hadoop.hive.ql.session.SessionState;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.NetworkTestUtils;
+import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hive.testutils.HiveTestUtil;
+import org.apache.hudi.hive.util.ConfigUtils;
+import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
+import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent.PartitionEventType;
+
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.testutils.SchemaTestUtil;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hive.util.ConfigUtils;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent.PartitionEventType;
-import org.apache.hudi.hive.testutils.HiveTestUtil;
-import org.apache.hudi.hive.util.HiveSchemaUtil;
-
 import org.apache.hadoop.hive.metastore.api.Partition;
+import org.apache.hadoop.hive.ql.Driver;
+import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
@@ -52,9 +50,12 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -692,7 +693,8 @@ public class TestHiveSyncTool {
 
     HiveSyncConfig syncToolConfig = HiveSyncConfig.copy(HiveTestUtil.hiveSyncConfig);
     syncToolConfig.ignoreExceptions = true;
-    syncToolConfig.jdbcUrl = HiveTestUtil.hiveSyncConfig.jdbcUrl.replaceAll(":\\d+$",":9031");
+
+    syncToolConfig.jdbcUrl = HiveTestUtil.hiveSyncConfig.jdbcUrl.replaceAll(":\\d+$", String.valueOf(NetworkTestUtils.nextFreePort()));
     HiveSyncTool tool = new HiveSyncTool(syncToolConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     tool.syncHoodieTable();
 

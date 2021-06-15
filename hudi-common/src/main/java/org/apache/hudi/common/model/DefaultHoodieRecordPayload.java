@@ -56,21 +56,10 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
       return Option.empty();
     }
     GenericRecord incomingRecord = bytesToAvro(recordBytes, schema);
-    /*
-     * Combining strategy here returns currentValue on disk if incoming record is older.
-     * The incoming record can be either a delete (sent as an upsert with _hoodie_is_deleted set to true)
-     * or an insert/update record. In any case, if it is older than the record in disk, the currentValue
-     * in disk is returned (to be rewritten with new commit time).
-     *
-     * NOTE: Deletes sent via EmptyHoodieRecordPayload and/or Delete operation type do not hit this code path
-     * and need to be dealt with separately.
-     */
-    Object persistedOrderingVal = getNestedFieldVal((GenericRecord) currentValue, properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP), true);
-    Comparable incomingOrderingVal = (Comparable) getNestedFieldVal(incomingRecord, properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP), false);
 
     // Null check is needed here to support schema evolution. The record in storage may be from old schema where
     // the new ordering column might not be present and hence returns null.
-    if (persistedOrderingVal != null && ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) > 0) {
+    if (!needUpdatingPersistedRecord(currentValue, incomingRecord, properties)) {
       return Option.of(currentValue);
     }
 
@@ -96,5 +85,23 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
       metadata.put(METADATA_EVENT_TIME_KEY, String.valueOf(eventTime.get()));
     }
     return metadata.isEmpty() ? Option.empty() : Option.of(metadata);
+  }
+
+  protected boolean needUpdatingPersistedRecord(IndexedRecord currentValue,
+                                                IndexedRecord incomingRecord, Properties properties) {
+    /*
+     * Combining strategy here returns currentValue on disk if incoming record is older.
+     * The incoming record can be either a delete (sent as an upsert with _hoodie_is_deleted set to true)
+     * or an insert/update record. In any case, if it is older than the record in disk, the currentValue
+     * in disk is returned (to be rewritten with new commit time).
+     *
+     * NOTE: Deletes sent via EmptyHoodieRecordPayload and/or Delete operation type do not hit this code path
+     * and need to be dealt with separately.
+     */
+    Object persistedOrderingVal = getNestedFieldVal((GenericRecord) currentValue,
+        properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP), true);
+    Comparable incomingOrderingVal = (Comparable) getNestedFieldVal((GenericRecord) incomingRecord,
+        properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP), false);
+    return persistedOrderingVal == null || ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) <= 0;
   }
 }

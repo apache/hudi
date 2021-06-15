@@ -23,12 +23,14 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperatorFactory;
+import org.apache.hudi.sink.bootstrap.BootstrapFunction;
 import org.apache.hudi.sink.compact.CompactFunction;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionCommitSink;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
+import org.apache.hudi.sink.partitioner.BucketAssignOperator;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -37,6 +39,7 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
+import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.sink.DataStreamSinkProvider;
@@ -68,16 +71,28 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       // Read from kafka source
       RowType rowType = (RowType) schema.toRowDataType().notNull().getLogicalType();
       int numWriteTasks = conf.getInteger(FlinkOptions.WRITE_TASKS);
+      long ckpTimeout = dataStream.getExecutionEnvironment()
+          .getCheckpointConfig().getCheckpointTimeout();
+      conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
       StreamWriteOperatorFactory<HoodieRecord> operatorFactory = new StreamWriteOperatorFactory<>(conf);
 
-      DataStream<Object> pipeline = dataStream
-          .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class))
+      DataStream<HoodieRecord> hoodieDataStream = dataStream
+          .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class));
+
+      // TODO: This is a very time-consuming operation, will optimization
+      if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
+        hoodieDataStream = hoodieDataStream.transform("index_bootstrap",
+            TypeInformation.of(HoodieRecord.class),
+            new ProcessOperator<>(new BootstrapFunction<>(conf)));
+      }
+
+      DataStream<Object> pipeline = hoodieDataStream
           // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
           .keyBy(HoodieRecord::getRecordKey)
           .transform(
               "bucket_assigner",
               TypeInformation.of(HoodieRecord.class),
-              new KeyedProcessOperator<>(new BucketAssignFunction<>(conf)))
+              new BucketAssignOperator<>(new BucketAssignFunction<>(conf)))
           .uid("uid_bucket_assigner")
           // shuffle by fileId(bucket id)
           .keyBy(record -> record.getCurrentLocation().getFileId())

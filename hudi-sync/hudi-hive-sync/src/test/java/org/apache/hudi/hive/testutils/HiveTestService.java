@@ -81,9 +81,9 @@ public class HiveTestService {
   private HiveServer2 hiveServer;
   private HiveConf serverConf;
 
-  public HiveTestService(Configuration configuration) throws IOException {
+  public HiveTestService(Configuration hadoopConf) throws IOException {
     this.workDir = Files.createTempDirectory(System.currentTimeMillis() + "-").toFile().getAbsolutePath();
-    this.hadoopConf = configuration;
+    this.hadoopConf = hadoopConf;
   }
 
   public Configuration getHadoopConf() {
@@ -161,6 +161,14 @@ public class HiveTestService {
 
   public HiveServer2 getHiveServer() {
     return hiveServer;
+  }
+
+  public int getHiveServerPort() {
+    return serverPort;
+  }
+
+  public String getJdbcHive2Url() {
+    return String.format("jdbc:hive2://%s:%s/default", bindIP, serverPort);
   }
 
   public HiveConf configureHive(Configuration conf, String localHiveLocation) throws IOException {

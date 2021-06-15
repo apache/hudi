@@ -23,6 +23,7 @@ import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
@@ -33,13 +34,11 @@ import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.metadata.Hive;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -49,9 +48,6 @@ import org.apache.parquet.schema.MessageType;
 import org.apache.thrift.TException;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
@@ -105,7 +101,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       this.client = Hive.get(configuration).getMSC();
       LOG.info(String.format("Time taken to start SessionState and create Driver and client: "
               + "%s ms", (timer.endTimer())));
-    } catch (MetaException | HiveException | IOException e) {
+    } catch (Exception e) {
       if (this.sessionState != null) {
         try {
           this.sessionState.close();
@@ -214,12 +210,8 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       String partitionValue = partitionValues.get(i);
       // decode the partition before sync to hive to prevent multiple escapes of HIVE
       if (syncConfig.decodePartition) {
-        try {
-          // This is a decode operator for encode in KeyGenUtils#getRecordPartitionPath
-          partitionValue = URLDecoder.decode(partitionValue, StandardCharsets.UTF_8.toString());
-        } catch (UnsupportedEncodingException e) {
-          throw new HoodieHiveSyncException("error in decode partition: " + partitionValue, e);
-        }
+        // This is a decode operator for encode in KeyGenUtils#getRecordPartitionPath
+        partitionValue = PartitionPathEncodeUtils.unescapePathName(partitionValue);
       }
       partBuilder.add("`" + syncConfig.partitionFields.get(i) + "`='" + partitionValue + "'");
     }

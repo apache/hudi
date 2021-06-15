@@ -241,6 +241,10 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 3).build())
         .build();
 
+    // when using insert_overwrite or insert_overwrite_table
+    // first commit may without replaceFileIds
+    createReplaceMetadataWithoutReplaceFileId("000");
+
     int numCommits = 4;
     int commitInstant = 100;
     for (int i = 0; i < numCommits; i++) {
@@ -251,7 +255,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
-    assertEquals(4, timeline.countInstants(), "Loaded 4 commits and the count should match");
+    assertEquals(5, timeline.countInstants(), "Loaded 5 commits and the count should match");
     HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
     boolean result = archiveLog.archiveIfRequired(context);
     assertTrue(result);
@@ -513,13 +517,7 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     HoodieCommitMetadata hoodieCommitMetadata = new HoodieCommitMetadata();
     hoodieCommitMetadata.setOperationType(WriteOperationType.INSERT);
 
-    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder().withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2).forTable("test-commitMetadata-converter")
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().retainCommits(1).archiveCommitsWith(2, 5).build())
-        .build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
-    HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(cfg, table);
 
     org.apache.hudi.avro.model.HoodieCommitMetadata expectedCommitMetadata = MetadataConversionUtils
         .convertCommitMetadata(hoodieCommitMetadata);
@@ -681,6 +679,22 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
     assertEquals(notArchivedInstants, Arrays.asList(notArchivedInstant1, notArchivedInstant2, notArchivedInstant3), "");
   }
 
+  private void createReplaceMetadataWithoutReplaceFileId(String instantTime) throws Exception {
+
+    // create replace instant without a previous replace commit
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
+        .setOperationType(WriteOperationType.INSERT_OVERWRITE_TABLE.toString())
+        .setVersion(1)
+        .setExtraMetadata(Collections.emptyMap())
+        .build();
+    HoodieReplaceCommitMetadata completeReplaceMetadata = new HoodieReplaceCommitMetadata();
+    HoodieCommitMetadata inflightReplaceMetadata = new HoodieCommitMetadata();
+    completeReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE_TABLE);
+    inflightReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE_TABLE);
+    HoodieTestTable.of(metaClient)
+        .addReplaceCommit(instantTime, Option.of(requestedReplaceMetadata), Option.of(inflightReplaceMetadata), completeReplaceMetadata);
+  }
+
   private void createReplaceMetadata(String instantTime) throws Exception {
     String fileId1 = "file-" + instantTime + "-1";
     String fileId2 = "file-" + instantTime + "-2";
@@ -691,11 +705,13 @@ public class TestHoodieTimelineArchiveLog extends HoodieClientTestHarness {
         .setVersion(1)
         .setExtraMetadata(Collections.emptyMap())
         .build();
-    HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
-    replaceMetadata.addReplaceFileId(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1);
-    replaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
+    HoodieReplaceCommitMetadata completeReplaceMetadata = new HoodieReplaceCommitMetadata();
+    HoodieCommitMetadata inflightReplaceMetadata = new HoodieCommitMetadata();
+    completeReplaceMetadata.addReplaceFileId(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1);
+    completeReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
+    inflightReplaceMetadata.setOperationType(WriteOperationType.INSERT_OVERWRITE);
     HoodieTestTable.of(metaClient)
-        .addReplaceCommit(instantTime, requestedReplaceMetadata, replaceMetadata)
+        .addReplaceCommit(instantTime, Option.of(requestedReplaceMetadata), Option.of(inflightReplaceMetadata), completeReplaceMetadata)
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 

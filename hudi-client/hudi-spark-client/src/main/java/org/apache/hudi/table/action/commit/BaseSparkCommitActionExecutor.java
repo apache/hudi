@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.SparkMemoryUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -334,13 +333,6 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     } else {
       return new HoodieMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier);
     }
-  }
-
-  protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId,
-                                              Map<String, HoodieRecord<T>> keyToNewRecords,
-                                              HoodieBaseFile dataFileToBeMerged) {
-    return new HoodieMergeHandle<>(config, instantTime, table, keyToNewRecords,
-        partitionPath, fileId, dataFileToBeMerged, taskContextSupplier);
   }
 
   @Override
