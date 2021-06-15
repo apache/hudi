@@ -171,6 +171,9 @@ public class StreamWriteOperatorCoordinator
     if (executor != null) {
       executor.close();
     }
+    // sync Hive if is enabled in batch mode.
+    syncHiveIfEnabled();
+
     this.eventBuffer = null;
   }
 
