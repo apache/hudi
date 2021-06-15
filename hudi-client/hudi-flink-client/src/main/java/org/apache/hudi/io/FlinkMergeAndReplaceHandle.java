@@ -55,6 +55,11 @@ public class FlinkMergeAndReplaceHandle<T extends HoodieRecordPayload, I, K, O>
 
   private boolean isClosed = false;
 
+  /**
+   * Flag saying whether we should replace the old file with new.
+   */
+  private boolean shouldReplace = true;
+
   public FlinkMergeAndReplaceHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                     Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                                     TaskContextSupplier taskContextSupplier, Path basePath) {
@@ -103,11 +108,12 @@ public class FlinkMergeAndReplaceHandle<T extends HoodieRecordPayload, I, K, O>
   @Override
   protected void makeOldAndNewFilePaths(String partitionPath, String oldFileName, String newFileName) {
     // old and new file name expects to be the same.
-    if (!oldFileName.equals(newFileName)) {
+    if (!FSUtils.getCommitTime(oldFileName).equals(instantTime)) {
       LOG.warn("MERGE and REPLACE handle expect the same name for old and new files,\n"
           + "while got new file: " + newFileName + " with old file: " + oldFileName + ",\n"
           + "this rarely happens when the checkpoint success event was not received yet\n"
           + "but the write task flush with new instant time, which does not break the UPSERT semantics");
+      shouldReplace = false;
     }
     super.makeOldAndNewFilePaths(partitionPath, oldFileName, newFileName);
     try {
@@ -146,6 +152,10 @@ public class FlinkMergeAndReplaceHandle<T extends HoodieRecordPayload, I, K, O>
   }
 
   public void finalizeWrite() {
+    // Behaves like the normal merge handle if the write instant time changes.
+    if (!shouldReplace) {
+      return;
+    }
     // The file visibility should be kept by the configured ConsistencyGuard instance.
     try {
       fs.delete(oldFilePath, false);
