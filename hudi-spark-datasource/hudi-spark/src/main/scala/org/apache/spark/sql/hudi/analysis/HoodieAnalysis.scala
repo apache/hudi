@@ -29,11 +29,11 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, Expression, Literal, Na
 import org.apache.spark.sql.catalyst.plans.Inner
 import org.apache.spark.sql.catalyst.plans.logical.{Assignment, DeleteAction, DeleteFromTable, InsertAction, LogicalPlan, MergeIntoTable, Project, UpdateAction, UpdateTable}
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.execution.command.CreateDataSourceTableCommand
+import org.apache.spark.sql.execution.command.{AlterTableAddColumnsCommand, AlterTableChangeColumnCommand, AlterTableRenameCommand, CreateDataSourceTableCommand}
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlUtils
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
-import org.apache.spark.sql.hudi.command.{CreateHoodieTableAsSelectCommand, CreateHoodieTableCommand, DeleteHoodieTableCommand, InsertIntoHoodieTableCommand, MergeIntoHoodieTableCommand, UpdateHoodieTableCommand}
+import org.apache.spark.sql.hudi.command.{AlterHoodieTableAddColumnsCommand, AlterHoodieTableChangeColumnCommand, AlterHoodieTableRenameCommand, CreateHoodieTableAsSelectCommand, CreateHoodieTableCommand, DeleteHoodieTableCommand, InsertIntoHoodieTableCommand, MergeIntoHoodieTableCommand, UpdateHoodieTableCommand}
 import org.apache.spark.sql.types.StringType
 
 object HoodieAnalysis {
@@ -86,6 +86,7 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
       case CreateTable(table, mode, Some(query))
         if query.resolved && isHoodieTable(table) =>
           CreateHoodieTableAsSelectCommand(table, mode, query)
+
       case _=> plan
     }
   }
@@ -307,6 +308,18 @@ case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[Logic
       case CreateDataSourceTableCommand(table, ignoreIfExists)
         if isHoodieTable(table) =>
         CreateHoodieTableCommand(table, ignoreIfExists)
+      // Rewrite the AlterTableAddColumnsCommand to AlterHoodieTableAddColumnsCommand
+      case AlterTableAddColumnsCommand(tableId, colsToAdd)
+        if isHoodieTable(tableId, sparkSession) =>
+        AlterHoodieTableAddColumnsCommand(tableId, colsToAdd)
+      // Rewrite the AlterTableRenameCommand to AlterHoodieTableRenameCommand
+      case AlterTableRenameCommand(oldName, newName, isView)
+        if !isView && isHoodieTable(oldName, sparkSession) =>
+        new AlterHoodieTableRenameCommand(oldName, newName, isView)
+      // Rewrite the AlterTableChangeColumnCommand to AlterHoodieTableChangeColumnCommand
+      case AlterTableChangeColumnCommand(tableName, columnName, newColumn)
+        if isHoodieTable(tableName, sparkSession) =>
+        AlterHoodieTableChangeColumnCommand(tableName, columnName, newColumn)
       case _ => plan
     }
   }
