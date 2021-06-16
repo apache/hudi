@@ -21,13 +21,17 @@ package org.apache.hudi.streamer;
 import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.Parameter;
 import org.apache.flink.configuration.Configuration;
-import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Configurations for Hoodie Flink streamer.
@@ -124,4 +128,35 @@ public class FlinkStreamerConfig extends Configuration {
 
   @Parameter(names = {"--write-task-num"}, description = "Parallelism of tasks that do actual write, default is 4.")
   public Integer writeTaskNum = 4;
+
+  /**
+   * Transforms a {@code HoodieFlinkStreamer.Config} into {@code Configuration}.
+   * The latter is more suitable for the table APIs. It reads all the properties
+   * in the properties file (set by `--props` option) and cmd line options
+   * (set by `--hoodie-conf` option).
+   */
+  @SuppressWarnings("unchecked, rawtypes")
+  public static org.apache.flink.configuration.Configuration toFlinkConfig(FlinkStreamerConfig config) {
+    Map<String, String> propsMap = new HashMap<String, String>((Map) StreamerUtil.getProps(config));
+    org.apache.flink.configuration.Configuration conf = fromMap(propsMap);
+
+    conf.setString(FlinkOptions.PATH, config.targetBasePath);
+    conf.setString(FlinkOptions.READ_AVRO_SCHEMA_PATH, config.readSchemaFilePath);
+    conf.setString(FlinkOptions.TABLE_NAME, config.targetTableName);
+    // copy_on_write works same as COPY_ON_WRITE
+    conf.setString(FlinkOptions.TABLE_TYPE, config.tableType.toUpperCase());
+    conf.setString(FlinkOptions.OPERATION, config.operation.value());
+    conf.setString(FlinkOptions.PRECOMBINE_FIELD, config.sourceOrderingField);
+    conf.setString(FlinkOptions.PAYLOAD_CLASS, config.payloadClassName);
+    conf.setBoolean(FlinkOptions.INSERT_DROP_DUPS, config.filterDupes);
+    conf.setInteger(FlinkOptions.RETRY_TIMES, Integer.parseInt(config.instantRetryTimes));
+    conf.setLong(FlinkOptions.RETRY_INTERVAL_MS, Long.parseLong(config.instantRetryInterval));
+    conf.setBoolean(FlinkOptions.IGNORE_FAILED, config.commitOnErrors);
+    conf.setString(FlinkOptions.RECORD_KEY_FIELD, config.recordKeyField);
+    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, config.partitionPathField);
+    conf.setString(FlinkOptions.KEYGEN_CLASS, config.keygenClass);
+    conf.setInteger(FlinkOptions.WRITE_TASKS, config.writeTaskNum);
+
+    return conf;
+  }
 }

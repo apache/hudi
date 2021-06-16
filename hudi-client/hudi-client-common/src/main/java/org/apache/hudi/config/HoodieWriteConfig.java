@@ -42,6 +42,7 @@ import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
+import org.apache.orc.CompressionKind;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import javax.annotation.concurrent.Immutable;
@@ -782,6 +783,22 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public Compression.Algorithm getHFileCompressionAlgorithm() {
     return Compression.Algorithm.valueOf(props.getProperty(HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM));
+  }
+
+  public long getOrcMaxFileSize() {
+    return Long.parseLong(props.getProperty(HoodieStorageConfig.ORC_FILE_MAX_BYTES));
+  }
+
+  public int getOrcStripeSize() {
+    return Integer.parseInt(props.getProperty(HoodieStorageConfig.ORC_STRIPE_SIZE));
+  }
+
+  public int getOrcBlockSize() {
+    return Integer.parseInt(props.getProperty(HoodieStorageConfig.ORC_BLOCK_SIZE));
+  }
+
+  public CompressionKind getOrcCompressionCodec() {
+    return CompressionKind.valueOf(props.getProperty(HoodieStorageConfig.ORC_COMPRESSION_CODEC));
   }
 
   /**

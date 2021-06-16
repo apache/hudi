@@ -54,12 +54,13 @@ public class DeltaWriteProfile extends WriteProfile {
     // Find out all eligible small file slices
     if (!commitTimeline.empty()) {
       HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
+      // initialize the filesystem view based on the commit metadata
+      initFSViewIfNecessary(commitTimeline);
       // find smallest file in partition and append to it
       List<FileSlice> allSmallFileSlices = new ArrayList<>();
       // If we can index log files, we can add more inserts to log files for fileIds including those under
       // pending compaction.
-      List<FileSlice> allFileSlices =
-          table.getSliceView().getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), true)
+      List<FileSlice> allFileSlices = fsView.getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.getTimestamp(), true)
               .collect(Collectors.toList());
       for (FileSlice fileSlice : allFileSlices) {
         if (isSmallFile(fileSlice)) {

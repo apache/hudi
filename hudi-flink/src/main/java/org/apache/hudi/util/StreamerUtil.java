@@ -90,7 +90,7 @@ public class StreamerUtil {
   }
 
   public static Schema getSourceSchema(FlinkStreamerConfig cfg) {
-    return new FilebasedSchemaProvider(FlinkOptions.fromStreamerConfig(cfg)).getSourceSchema();
+    return new FilebasedSchemaProvider(FlinkStreamerConfig.toFlinkConfig(cfg)).getSourceSchema();
   }
 
   public static Schema getSourceSchema(org.apache.flink.configuration.Configuration conf) {
@@ -150,7 +150,7 @@ public class StreamerUtil {
   }
 
   public static HoodieWriteConfig getHoodieClientConfig(FlinkStreamerConfig conf) {
-    return getHoodieClientConfig(FlinkOptions.fromStreamerConfig(conf));
+    return getHoodieClientConfig(FlinkStreamerConfig.toFlinkConfig(conf));
   }
 
   public static HoodieWriteConfig getHoodieClientConfig(Configuration conf) {
@@ -301,5 +301,13 @@ public class StreamerUtil {
   public static String instantTimePlus(String oldInstant, long milliseconds) {
     long oldTime = Long.parseLong(oldInstant);
     return String.valueOf(oldTime + milliseconds);
+  }
+
+  /**
+   * Subtract the old instant time with given milliseconds and returns.
+   * */
+  public static String instantTimeSubtract(String oldInstant, long milliseconds) {
+    long oldTime = Long.parseLong(oldInstant);
+    return String.valueOf(oldTime - milliseconds);
   }
 }
