@@ -139,6 +139,10 @@ public class BoundedInMemoryExecutor<I, O, E> {
       Future<E> future = startConsumer();
       // Wait for consumer to be done
       return future.get();
+    } catch (InterruptedException ie) {
+      shutdownNow();
+      Thread.currentThread().interrupt();
+      throw new HoodieException(ie);
     } catch (Exception e) {
       throw new HoodieException(e);
     }
