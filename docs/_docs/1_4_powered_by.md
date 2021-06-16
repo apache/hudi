@@ -19,6 +19,7 @@ power_items:
   - img_path: /assets/images/powers/lingyue.png
   - img_path: /assets/images/powers/37.PNG
   - img_path: /assets/images/powers/H3C.JPG
+  - img_path: /assets/images/powers/moveworks.png
 ---
 
 ## Adoption
