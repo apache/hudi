@@ -133,6 +133,30 @@ public class TestHoodieCompactor extends HoodieClientTestHarness {
   }
 
   @Test
+  public void testScheduleCompactionWithInflightInstant() {
+    HoodieWriteConfig config = getConfig();
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config)) {
+      // insert 100 records.
+      String newCommitTime = "100";
+      writeClient.startCommitWithTime(newCommitTime);
+
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 100);
+      JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
+      writeClient.insert(recordsRDD, newCommitTime).collect();
+
+      // create one inflight instance.
+      newCommitTime = "102";
+      writeClient.startCommitWithTime(newCommitTime);
+      metaClient.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(State.REQUESTED,
+              HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
+
+      // create one compaction instance before exist inflight instance.
+      String compactionTime = "101";
+      writeClient.scheduleCompactionAtInstant(compactionTime, Option.empty());
+    }
+  }
+
+  @Test
   public void testWriteStatusContentsAfterCompaction() throws Exception {
     // insert 100 records
     HoodieWriteConfig config = getConfig();
