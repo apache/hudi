@@ -68,6 +68,15 @@ public class StringUtils {
     return sb.toString();
   }
 
+  public static byte[] fromHexString(String hexStr) {
+    byte[] bytes = new byte[hexStr.length() / 2];
+    for (int i = 0; i < bytes.length; i++) {
+      int offset = i * 2;
+      bytes[i] = (byte) Integer.parseInt(hexStr.substring(offset, offset + 2), 16);
+    }
+    return bytes;
+  }
+  
   public static boolean isNullOrEmpty(String str) {
     return str == null || str.length() == 0;
   }
