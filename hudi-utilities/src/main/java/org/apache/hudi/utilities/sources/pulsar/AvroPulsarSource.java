@@ -125,7 +125,7 @@ public class AvroPulsarSource extends AvroSource {
 
       // In parallel, fetch from each topic partition upto the end offsets.
       JavaRDD<GenericRecord> avroRDD = sparkContext.parallelize(lastMessageIdsByTopicPartition, lastMessageIdsByTopicPartition.size())
-          .mapPartitions(itr -> new Iterator<GenericRecord>() {
+          .<GenericRecord>mapPartitions(itr -> new Iterator<GenericRecord>() {
             private PulsarClient client;
             private Reader reader;
             private SchemaInfo info = schemaInfo.get();
@@ -180,11 +180,9 @@ public class AvroPulsarSource extends AvroSource {
               }
             }
           });
-
-
-      // TODO: need to return a schema provider that can hand the source Pulsar schema.
+      
       Map<String, MessageId> endOffsets = lastMessageIdsByTopicPartition.stream().collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-      return new InputBatch<>(Option.of(avroRDD), PulsarUtils.offsetsToStr(endOffsets));
+      return new InputBatch<>(Option.of(avroRDD), PulsarUtils.offsetsToStr(endOffsets), new PulsarSchemaProvider(props, sparkContext, schemaInfo));
     } catch (Exception e) {
       throw new HoodieDeltaStreamerException("Unable to fetch new pulsar data from checkpoint " + lastCkptStr, e);
     }
