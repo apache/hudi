@@ -25,12 +25,15 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
@@ -341,5 +344,30 @@ public class TestKafkaSource extends UtilitiesTestBase {
     assertEquals(226, ranges[2].count());
     assertEquals(226, ranges[3].count());
     assertEquals(223, ranges[4].count());
+  }
+
+  @Test
+  public void testCommitOffsetToKafka() {
+    // topic setup.
+    testUtils.createTopic(TEST_TOPIC_NAME, 1);
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    TypedProperties props = createPropsForJsonSource(null, "earliest");
+
+    Source jsonSource = new JsonKafkaSource(props, jsc, sparkSession, schemaProvider, metrics);
+    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
+
+    // 1. Extract without any checkpoint => get all the data, respecting sourceLimit
+    assertEquals(Option.empty(), kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
+    testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+
+    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 600);
+    System.out.println(fetch1.getCheckpointForNextBatch());
+    // create commit to kafka after first batch
+    KafkaOffsetGen.commitOffsetToKafka(fetch1.getCheckpointForNextBatch(),props);
+
+    try (KafkaConsumer consumer = new KafkaConsumer(props)) {
+      OffsetAndMetadata offsetAndMetadata = consumer.committed(new TopicPartition(TEST_TOPIC_NAME, 1));
+      System.out.println(offsetAndMetadata);
+    }
   }
 }

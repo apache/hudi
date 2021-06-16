@@ -58,6 +58,7 @@ import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaSet;
 import org.apache.hudi.utilities.sources.InputBatch;
+import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import com.codahale.metrics.Timer;
@@ -67,6 +68,10 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -79,6 +84,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -473,7 +479,9 @@ public class DeltaSync implements Serializable {
       boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata));
       if (success) {
         LOG.info("Commit " + instantTime + " successful!");
-
+        if (this.props.getBoolean(KafkaOffsetGen.Config.ENABLE_KAFKA_COMMIT_OFFSET,KafkaOffsetGen.Config.DEFAULT_ENABLE_KAFKA_COMMIT_OFFSET)) {
+          KafkaOffsetGen.commitOffsetToKafka(checkpointStr, this.props);
+        }
         // Schedule compaction if needed
         if (cfg.isAsyncCompactionEnabled()) {
           scheduledCompactionInstant = writeClient.scheduleCompaction(Option.empty());
@@ -505,6 +513,8 @@ public class DeltaSync implements Serializable {
     metrics.updateDeltaStreamerMetrics(overallTimeMs);
     return Pair.of(scheduledCompactionInstant, writeStatusRDD);
   }
+
+
 
   /**
    * Try to start a new commit.

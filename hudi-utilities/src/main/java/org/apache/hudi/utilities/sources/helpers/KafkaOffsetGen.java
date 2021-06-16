@@ -26,7 +26,10 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.log4j.LogManager;
@@ -157,11 +160,13 @@ public class KafkaOffsetGen {
 
     private static final String KAFKA_TOPIC_NAME = "hoodie.deltastreamer.source.kafka.topic";
     private static final String MAX_EVENTS_FROM_KAFKA_SOURCE_PROP = "hoodie.deltastreamer.kafka.source.maxEvents";
+    public static final String ENABLE_KAFKA_COMMIT_OFFSET = "hoodie.deltastreamer.source.enable.kafka.commit.offset";
     // "auto.offset.reset" is kafka native config param. Do not change the config param name.
     public static final String KAFKA_AUTO_OFFSET_RESET = "auto.offset.reset";
     private static final KafkaResetOffsetStrategies DEFAULT_KAFKA_AUTO_OFFSET_RESET = KafkaResetOffsetStrategies.LATEST;
     public static final long DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE = 5000000;
     public static long maxEventsFromKafkaSource = DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE;
+    public static final Boolean DEFAULT_ENABLE_KAFKA_COMMIT_OFFSET = false;
   }
 
   private final HashMap<String, Object> kafkaParams;
@@ -193,6 +198,9 @@ public class KafkaOffsetGen {
     }
     if (!found) {
       throw new HoodieDeltaStreamerException(Config.KAFKA_AUTO_OFFSET_RESET + " config set to unknown value " + kafkaAutoResetOffsetsStr);
+    }
+    if (props.getBoolean(Config.ENABLE_KAFKA_COMMIT_OFFSET,Config.DEFAULT_ENABLE_KAFKA_COMMIT_OFFSET)) {
+      DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(ConsumerConfig.GROUP_ID_CONFIG));
     }
   }
 
@@ -299,5 +307,33 @@ public class KafkaOffsetGen {
 
   public HashMap<String, Object> getKafkaParams() {
     return kafkaParams;
+  }
+
+  /**
+   * Commit offsets to Kafka only after hoodie commit is successful
+   * @param checkpointStr offsets for each partition
+   */
+  public static void commitOffsetToKafka(String checkpointStr, TypedProperties props) {
+    Map<TopicPartition, Long> offsetMap = KafkaOffsetGen.CheckpointUtils.strToOffsets(checkpointStr);
+    Map<String, Object> kafkaParams = new HashMap<>();
+    props.keySet().stream().filter(prop -> {
+      return !prop.toString().startsWith("hoodie.");
+    }).forEach(prop -> {
+      kafkaParams.put(prop.toString(), props.get(prop.toString()));
+    });
+    Map<TopicPartition, OffsetAndMetadata> offsetAndMetadataMap = new HashMap<>(offsetMap.size());
+    offsetMap.forEach((key, value) -> offsetAndMetadataMap.put(key, new OffsetAndMetadata(value)));
+    try (KafkaConsumer consumer = new KafkaConsumer(kafkaParams)) {
+      consumer.commitAsync(offsetAndMetadataMap, new OffsetCommitCallback() {
+        @Override
+        public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+          if (exception != null) {
+            LOG.error("Kafka Commit failed for offsets " + offsets.toString(), exception);
+          } else {
+            LOG.info("Offsets committed to Kafka successfully " + offsets.toString());
+          }
+        }
+      });
+    }
   }
 }
