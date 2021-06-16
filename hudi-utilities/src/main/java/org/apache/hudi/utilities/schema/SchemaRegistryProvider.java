@@ -18,6 +18,8 @@
 
 package org.apache.hudi.utilities.schema;
 
+import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieIOException;
@@ -28,8 +30,13 @@ import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Obtains latest schema from the Confluent/Kafka schema-registry.
@@ -48,11 +55,26 @@ public class SchemaRegistryProvider extends SchemaProvider {
         "hoodie.deltastreamer.schemaprovider.registry.targetUrl";
   }
 
-  private static String fetchSchemaFromRegistry(String registryUrl) throws IOException {
+  public String fetchSchemaFromRegistry(String registryUrl) throws IOException {
     URL registry = new URL(registryUrl);
+    HttpURLConnection connection = (HttpURLConnection) registry.openConnection();
+    Matcher matcher = Pattern.compile("://(.*?)@").matcher(registryUrl);
+    if (matcher.find()) {
+      setAuthorizationHeader(matcher.group(1), connection);
+    }
     ObjectMapper mapper = new ObjectMapper();
-    JsonNode node = mapper.readTree(registry.openStream());
+    InputStream is = getStream(connection);
+    JsonNode node = mapper.readTree(is);
     return node.get("schema").asText();
+  }
+
+  public void setAuthorizationHeader(String creds, HttpURLConnection connection) {
+    byte[] encodedAuth = Base64.encodeBase64(creds.getBytes(StandardCharsets.UTF_8));
+    connection.setRequestProperty("Authorization", "Basic " + new String(encodedAuth));
+  }
+
+  public InputStream getStream(HttpURLConnection connection) throws IOException {
+    return connection.getInputStream();
   }
 
   public SchemaRegistryProvider(TypedProperties props, JavaSparkContext jssc) {
@@ -60,7 +82,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SRC_SCHEMA_REGISTRY_URL_PROP));
   }
 
-  private static Schema getSchema(String registryUrl) throws IOException {
+  private Schema getSchema(String registryUrl) throws IOException {
     return new Schema.Parser().parse(fetchSchemaFromRegistry(registryUrl));
   }
 
