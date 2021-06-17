@@ -160,7 +160,8 @@ public class FlinkStreamerConfig extends Configuration {
       conf.setString(FlinkOptions.KEYGEN_CLASS, config.keygenClass);
     } else {
       conf.setString(FlinkOptions.KEYGEN_TYPE, config.keygenType);
-    }    conf.setInteger(FlinkOptions.WRITE_TASKS, config.writeTaskNum);
+    }
+    conf.setInteger(FlinkOptions.WRITE_TASKS, config.writeTaskNum);
 
     return conf;
   }
