@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
@@ -216,8 +215,9 @@ public class KafkaOffsetGen {
       partitionInfoList = consumer.partitionsFor(topicName);
       Set<TopicPartition> topicPartitions = partitionInfoList.stream()
               .map(x -> new TopicPartition(x.topic(), x.partition())).collect(Collectors.toSet());
-      if (Config.KAFKA_CHECKPOINT_TYPE_TIMESTAMP.equals(kafkaCheckpointType) && lastCheckpointStr.isPresent()) {
-        lastCheckpointStr = getOffsetsByTimestamp(consumer, partitionInfoList, topicName, Long.parseLong(lastCheckpointStr.get()));
+
+      if (Config.KAFKA_CHECKPOINT_TYPE_TIMESTAMP.equals(kafkaCheckpointType) && checkLastCheckpointType(lastCheckpointStr)) {
+        lastCheckpointStr = getOffsetsByTimestamp(consumer, partitionInfoList, topicPartitions, topicName, Long.parseLong(lastCheckpointStr.get()));
       }
       // Determine the offset ranges to read from
       if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty() && checkTopicCheckpoint(lastCheckpointStr)) {
@@ -275,6 +275,15 @@ public class KafkaOffsetGen {
     return checkpointOffsetReseter ? earliestOffsets : checkpointOffsets;
   }
 
+  private Boolean checkLastCheckpointType(Option<String> lastCheckpointStr) {
+    if (!lastCheckpointStr.isPresent()) {
+      return false;
+    }
+    Pattern pattern = Pattern.compile("[-+]?[0-9]+(\\.[0-9]+)?");
+    Matcher isNum = pattern.matcher(lastCheckpointStr.get());
+    return isNum.matches() && (lastCheckpointStr.get().length() == 13 || lastCheckpointStr.get().length() == 10);
+  }
+
   private Long delayOffsetCalculation(Option<String> lastCheckpointStr, Set<TopicPartition> topicPartitions, KafkaConsumer consumer) {
     Long delayCount = 0L;
     Map<TopicPartition, Long> checkpointOffsets = CheckpointUtils.strToOffsets(lastCheckpointStr.get());
@@ -294,19 +303,23 @@ public class KafkaOffsetGen {
    * @param timestamp
    * @return
    */
-  private Option<String> getOffsetsByTimestamp(KafkaConsumer consumer, List<PartitionInfo> partitionInfoList, String topicName, Long timestamp) {
+  private Option<String> getOffsetsByTimestamp(KafkaConsumer consumer, List<PartitionInfo> partitionInfoList, Set<TopicPartition> topicPartitions,
+                                               String topicName, Long timestamp) {
 
-    Map<TopicPartition, Long> topicPartitions = partitionInfoList.stream()
+    Map<TopicPartition, Long> topicPartitionsTimestamp = partitionInfoList.stream()
                                                     .map(x -> new TopicPartition(x.topic(), x.partition()))
                                                     .collect(Collectors.toMap(Function.identity(), x -> timestamp));
 
-    Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestamp = consumer.offsetsForTimes(topicPartitions);
+    Map<TopicPartition, Long> earliestOffsets = consumer.beginningOffsets(topicPartitions);
+    Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestamp = consumer.offsetsForTimes(topicPartitionsTimestamp);
 
     StringBuilder sb = new StringBuilder();
     sb.append(topicName + ",");
     for (Map.Entry<TopicPartition, OffsetAndTimestamp> map : offsetAndTimestamp.entrySet()) {
       if (map.getValue() != null) {
         sb.append(map.getKey().partition()).append(":").append(map.getValue().offset()).append(",");
+      } else {
+        sb.append(map.getKey().partition()).append(":").append(earliestOffsets.get(map.getKey())).append(",");
       }
     }
     return Option.of(sb.deleteCharAt(sb.length() - 1).toString());

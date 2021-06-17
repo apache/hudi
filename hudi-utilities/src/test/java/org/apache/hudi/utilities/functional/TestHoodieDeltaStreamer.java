@@ -1437,16 +1437,10 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
             TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
                     Collections.EMPTY_LIST, PROPS_FILENAME_TEST_JSON_KAFKA, false,
-                    true, 100000, false, null, null, "timestamp", null), jsc);
+                    true, 100000, false, null,
+                    null, "timestamp", String.valueOf(System.currentTimeMillis())), jsc);
     deltaStreamer.sync();
     TestHelpers.assertRecordCount(JSON_KAFKA_NUM_RECORDS, tableBasePath + "/*/*.parquet", sqlContext);
-
-
-    HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(dfs.getConf()).setBasePath(tableBasePath).build();
-    HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-            .fromBytes(timeline.getInstantDetails(timeline.firstInstant().get()).get(), HoodieCommitMetadata.class);
-    commitMetadata.getMetadata(CHECKPOINT_KEY);
 
     prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, false, topicName);
     deltaStreamer = new HoodieDeltaStreamer(
@@ -1454,11 +1448,11 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
                     Collections.EMPTY_LIST, PROPS_FILENAME_TEST_JSON_KAFKA, false,
                     true, 100000, false, null, null,
                     "timestamp", String.valueOf(System.currentTimeMillis())), jsc);
-
     deltaStreamer.sync();
+    TestHelpers.assertRecordCount(JSON_KAFKA_NUM_RECORDS * 2, tableBasePath + "/*/*.parquet", sqlContext);
+
 
   }
-
 
   @Test
   public void testParquetSourceToKafkaSourceEarliestAutoResetValue() throws Exception {
