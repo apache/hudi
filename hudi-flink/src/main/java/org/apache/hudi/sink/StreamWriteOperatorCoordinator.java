@@ -105,11 +105,6 @@ public class StreamWriteOperatorCoordinator
   private final int parallelism;
 
   /**
-   * Whether needs to schedule compaction task on finished checkpoints.
-   */
-  private final boolean needsScheduleCompaction;
-
-  /**
    * A single-thread executor to handle all the asynchronous jobs of the coordinator.
    */
   private CoordinatorExecutor executor;
@@ -141,7 +136,6 @@ public class StreamWriteOperatorCoordinator
     this.conf = conf;
     this.context = context;
     this.parallelism = context.currentParallelism();
-    this.needsScheduleCompaction = StreamerUtil.needsScheduleCompaction(conf);
   }
 
   @Override
@@ -203,10 +197,6 @@ public class StreamWriteOperatorCoordinator
           // so a successful checkpoint subsumes the old one(follows the checkpoint subsuming contract)
           final boolean committed = commitInstant();
           if (committed) {
-            // if async compaction is on, schedule the compaction
-            if (needsScheduleCompaction) {
-              writeClient.scheduleCompaction(Option.empty());
-            }
             // start new instant.
             startInstant();
             // sync Hive if is enabled

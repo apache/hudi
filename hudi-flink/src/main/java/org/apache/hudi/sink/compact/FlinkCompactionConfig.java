@@ -101,6 +101,8 @@ public class FlinkCompactionConfig extends Configuration {
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_SECONDS, config.compactionDeltaSeconds);
     conf.setInteger(FlinkOptions.COMPACTION_MAX_MEMORY, config.compactionMaxMemory);
     conf.setBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnable);
+    // use synchronous compaction always
+    conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
 
     return conf;
   }
