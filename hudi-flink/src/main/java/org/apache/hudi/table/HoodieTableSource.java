@@ -181,17 +181,13 @@ public class HoodieTableSource implements
           OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) inputFormat);
           SingleOutputStreamOperator<RowData> source = execEnv.addSource(monitoringFunction, "streaming_source")
               .setParallelism(1)
-              .uid("uid_streaming_source")
               .transform("split_reader", typeInfo, factory)
-              .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS))
-              .uid("uid_split_reader");
+              .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
           return new DataStreamSource<>(source);
         } else {
           InputFormatSourceFunction<RowData> func = new InputFormatSourceFunction<>(getInputFormat(), typeInfo);
           DataStreamSource<RowData> source = execEnv.addSource(func, asSummaryString(), typeInfo);
-          return source.name("bounded_source")
-              .setParallelism(conf.getInteger(FlinkOptions.READ_TASKS))
-              .uid("uid_bounded_source");
+          return source.name("bounded_source").setParallelism(conf.getInteger(FlinkOptions.READ_TASKS));
         }
       }
     };
