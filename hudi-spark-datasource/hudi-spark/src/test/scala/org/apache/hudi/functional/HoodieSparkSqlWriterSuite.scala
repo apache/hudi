@@ -570,8 +570,10 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
       "{\"name\":\"_row_key\",\"type\":\"string\",\"nullable\":false,\"metadata\":{}}," +
       "{\"name\":\"ts\",\"type\":\"long\",\"nullable\":true,\"metadata\":{}}," +
       "{\"name\":\"partition\",\"type\":\"string\",\"nullable\":false,\"metadata\":{}}]}")(hiveSyncConfig.tableProperties)
-
-    assertResult("path=/tmp/hoodie_test")(hiveSyncConfig.serdeProperties)
+    assertResult("path=/tmp/hoodie_test\n" +
+      "spark.query.type.key=hoodie.datasource.query.type\n" +
+      "spark.query.as.rt.key=snapshot\n" +
+      "spark.query.as.ro.key=read_optimized")(hiveSyncConfig.serdeProperties)
   }
 
   test("Test build sync config for skip Ro Suffix vals") {

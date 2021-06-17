@@ -188,7 +188,8 @@ public class HiveTestUtil {
     DateTime dateTime = DateTime.now();
     HoodieCommitMetadata commitMetadata = createPartitions(numberOfPartitions, true,
         useSchemaFromCommitMetadata, dateTime, commitTime);
-    createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName);
+    createdTablesSet
+      .add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_READ_OPTIMIZED_TABLE);
     createdTablesSet
         .add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE);
     HoodieCommitMetadata compactionMetadata = new HoodieCommitMetadata();
