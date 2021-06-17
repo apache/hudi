@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.event.BatchWriteSuccessEvent;
 import org.apache.hudi.table.action.commit.FlinkWriteHelper;
@@ -54,7 +55,9 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
@@ -146,6 +149,27 @@ public class StreamWriteFunction<K, I, O>
   private transient TotalSizeTracer tracer;
 
   /**
+   * Whether write in exactly-once semantics.
+   */
+  private boolean exactlyOnce;
+
+  /**
+   * Flag saying whether the write task is waiting for the checkpoint success notification
+   * after it finished a checkpoint.
+   *
+   * <p>The flag is needed because the write task does not block during the waiting time interval,
+   * some data buckets still flush out with old instant time. There are two cases that the flush may produce
+   * corrupted files if the old instant is committed successfully:
+   * 1) the write handle was writing data but interrupted, left a corrupted parquet file;
+   * 2) the write handle finished the write but was not closed, left an empty parquet file.
+   *
+   * <p>To solve, when this flag was set to true, we block the data flushing thus the #processElement method,
+   * the flag was reset to false if the task receives the checkpoint success event or the latest inflight instant
+   * time changed(the last instant committed successfully).
+   */
+  private volatile boolean confirming = false;
+
+  /**
    * Constructs a StreamingSinkFunction.
    *
    * @param config The config options
@@ -162,6 +186,7 @@ public class StreamWriteFunction<K, I, O>
         WriteOperationType.fromValue(config.getString(FlinkOptions.OPERATION)),
         HoodieTableType.valueOf(config.getString(FlinkOptions.TABLE_TYPE)));
     this.tracer = new TotalSizeTracer(this.config);
+    this.exactlyOnce = config.getBoolean(FlinkOptions.WRITE_EXACTLY_ONCE_ENABLED);
     initBuffer();
     initWriteFunction();
   }
@@ -223,6 +248,11 @@ public class StreamWriteFunction<K, I, O>
   @SuppressWarnings("rawtypes")
   public HoodieFlinkWriteClient getWriteClient() {
     return writeClient;
+  }
+
+  @VisibleForTesting
+  public boolean isConfirming() {
+    return this.confirming;
   }
 
   public void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
@@ -440,30 +470,59 @@ public class StreamWriteFunction<K, I, O>
     boolean flushBucket = bucket.detector.detect(item);
     boolean flushBuffer = this.tracer.trace(bucket.detector.lastRecordSize);
     if (flushBucket) {
-      flushBucket(bucket);
-      this.tracer.countDown(bucket.detector.totalSize);
-      bucket.reset();
+      if (flushBucket(bucket)) {
+        this.tracer.countDown(bucket.detector.totalSize);
+        bucket.reset();
+      }
     } else if (flushBuffer) {
       // find the max size bucket and flush it out
       List<DataBucket> sortedBuckets = this.buckets.values().stream()
           .sorted((b1, b2) -> Long.compare(b2.detector.totalSize, b1.detector.totalSize))
           .collect(Collectors.toList());
       final DataBucket bucketToFlush = sortedBuckets.get(0);
-      flushBucket(bucketToFlush);
-      this.tracer.countDown(bucketToFlush.detector.totalSize);
-      bucketToFlush.reset();
+      if (flushBucket(bucketToFlush)) {
+        this.tracer.countDown(bucketToFlush.detector.totalSize);
+        bucketToFlush.reset();
+      } else {
+        LOG.warn("The buffer size hits the threshold {}, but still flush the max size data bucket failed!", this.tracer.maxBufferSize);
+      }
     }
     bucket.records.add(item);
   }
 
   @SuppressWarnings("unchecked, rawtypes")
-  private void flushBucket(DataBucket bucket) {
-    final String instant = this.writeClient.getLastPendingInstant(this.actionType);
+  private boolean flushBucket(DataBucket bucket) {
+    String instant = this.writeClient.getLastPendingInstant(this.actionType);
 
     if (instant == null) {
       // in case there are empty checkpoints that has no input data
-      LOG.info("No inflight instant when flushing data, cancel.");
-      return;
+      LOG.info("No inflight instant when flushing data, skip.");
+      return false;
+    }
+
+    // if exactly-once semantics turns on,
+    // waits for the checkpoint notification until the checkpoint timeout threshold hits.
+    if (exactlyOnce && confirming) {
+      long waitingTime = 0L;
+      long ckpTimeout = config.getLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT);
+      long interval = 500L;
+      while (Objects.equals(instant, this.currentInstant)) {
+        // sleep for a while
+        try {
+          if (waitingTime > ckpTimeout) {
+            throw new HoodieException("Timeout(" + waitingTime + "ms) while waiting for instant " + instant + " to commit");
+          }
+          TimeUnit.MILLISECONDS.sleep(interval);
+          waitingTime += interval;
+        } catch (InterruptedException e) {
+          throw new HoodieException("Error while waiting for instant " + instant + " to commit", e);
+        }
+        // refresh the inflight instant
+        instant = this.writeClient.getLastPendingInstant(this.actionType);
+      }
+      // the inflight instant changed, which means the last instant was committed
+      // successfully.
+      confirming = false;
     }
 
     List<HoodieRecord> records = bucket.writeBuffer();
@@ -473,6 +532,7 @@ public class StreamWriteFunction<K, I, O>
     }
     bucket.preWrite(records);
     final List<WriteStatus> writeStatus = new ArrayList<>(writeFunction.apply(records, instant));
+    records.clear();
     final BatchWriteSuccessEvent event = BatchWriteSuccessEvent.builder()
         .taskID(taskID)
         .instantTime(instant) // the write instant may shift but the event still use the currentInstant.
@@ -481,6 +541,7 @@ public class StreamWriteFunction<K, I, O>
         .isEndInput(false)
         .build();
     this.eventGateway.sendEventToCoordinator(event);
+    return true;
   }
 
   @SuppressWarnings("unchecked, rawtypes")
@@ -488,8 +549,7 @@ public class StreamWriteFunction<K, I, O>
     this.currentInstant = this.writeClient.getLastPendingInstant(this.actionType);
     if (this.currentInstant == null) {
       // in case there are empty checkpoints that has no input data
-      LOG.info("No inflight instant when flushing data, cancel.");
-      return;
+      throw new HoodieException("No inflight instant when flushing data!");
     }
     final List<WriteStatus> writeStatus;
     if (buckets.size() > 0) {
@@ -505,6 +565,7 @@ public class StreamWriteFunction<K, I, O>
               }
               bucket.preWrite(records);
               writeStatus.addAll(writeFunction.apply(records, currentInstant));
+              records.clear();
               bucket.reset();
             }
           });
@@ -522,5 +583,6 @@ public class StreamWriteFunction<K, I, O>
     this.eventGateway.sendEventToCoordinator(event);
     this.buckets.clear();
     this.tracer.reset();
+    this.confirming = true;
   }
 }

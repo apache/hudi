@@ -184,18 +184,13 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
       this.lock = executor.submit(() -> hiveClient.lock(lockRequestFinal))
           .get(time, unit);
     } catch (InterruptedException | TimeoutException e) {
-      if (this.lock != null && this.lock.getState() == LockState.ACQUIRED) {
-        return;
-      } else if (lockRequest != null) {
+      if (this.lock == null || this.lock.getState() != LockState.ACQUIRED) {
         LockResponse lockResponse = this.hiveClient.checkLock(lockRequest.getTxnid());
         if (lockResponse.getState() == LockState.ACQUIRED) {
           this.lock = lockResponse;
-          return;
         } else {
           throw e;
         }
-      } else {
-        throw e;
       }
     }
   }

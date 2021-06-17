@@ -103,6 +103,8 @@
     <hive.version>2.3.1</hive.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
+    <orc.version>1.6.0</orc.version>
+    <airlift.version>0.16</airlift.version>
     <prometheus.version>0.8.0</prometheus.version>
     <http.version>4.4.1</http.version>
     <spark.version>${spark2.version}</spark.version>
@@ -112,6 +114,7 @@
     <spark3.version>3.0.0</spark3.version>
     <spark2bundle.version></spark2bundle.version>
     <spark3bundle.version>3</spark3bundle.version>
+    <hudi.spark.module>hudi-spark2</hudi.spark.module>
     <avro.version>1.8.2</avro.version>
     <scala11.version>2.11.12</scala11.version>
     <scala12.version>2.12.10</scala12.version>
@@ -394,6 +397,7 @@
               <exclude>**/target/**</exclude>
               <exclude>**/generated-sources/**</exclude>
               <exclude>.github/**</exclude>
+              <exclude>**/*.sql</exclude>
             </excludes>
           </configuration>
           <executions>
@@ -530,6 +534,12 @@
       <dependency>
         <groupId>org.apache.spark</groupId>
         <artifactId>spark-sql_${scala.binary.version}</artifactId>
+        <version>${spark.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-hive_${scala.binary.version}</artifactId>
         <version>${spark.version}</version>
         <scope>provided</scope>
       </dependency>
@@ -797,6 +807,10 @@
             <groupId>org.eclipse.jetty.aggregate</groupId>
             <artifactId>*</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.pentaho</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -815,6 +829,10 @@
           </exclusion>
           <exclusion>
             <groupId>org.eclipse.jetty.aggregate</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.pentaho</groupId>
             <artifactId>*</artifactId>
           </exclusion>
         </exclusions>
@@ -900,6 +918,10 @@
           </exclusion>
           <exclusion>
             <groupId>org.eclipse.jetty.aggregate</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.pentaho</groupId>
             <artifactId>*</artifactId>
           </exclusion>
         </exclusions>
@@ -1030,6 +1052,10 @@
     <repository>
       <id>confluent</id>
       <url>https://packages.confluent.io/maven/</url>
+    </repository>
+    <repository>
+      <id>pentaho.org</id>
+      <url>https://public.nexus.pentaho.org/repository/proxy-public-3rd-party-release/</url>
     </repository>
   </repositories>
 
@@ -1434,6 +1460,7 @@
         <sparkbundle.version>${spark3bundle.version}</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
+        <hudi.spark.module>hudi-spark3</hudi.spark.module>
         <kafka.version>2.4.1</kafka.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>

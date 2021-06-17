@@ -33,6 +33,7 @@ import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -79,20 +80,22 @@ public class CompactFunction extends KeyedProcessFunction<Long, CompactionPlanEv
     final CompactionOperation compactionOperation = event.getOperation();
     // executes the compaction task asynchronously to not block the checkpoint barrier propagate.
     executor.execute(
-        () -> {
-          HoodieFlinkMergeOnReadTableCompactor compactor = new HoodieFlinkMergeOnReadTableCompactor();
-          List<WriteStatus> writeStatuses = compactor.compact(
-              new HoodieFlinkCopyOnWriteTable<>(
-                  this.writeClient.getConfig(),
-                  this.writeClient.getEngineContext(),
-                  this.writeClient.getHoodieTable().getMetaClient()),
-              this.writeClient.getHoodieTable().getMetaClient(),
-              this.writeClient.getConfig(),
-              compactionOperation,
-              instantTime);
-          collector.collect(new CompactionCommitEvent(instantTime, writeStatuses, taskID));
-        }, "Execute compaction for instant %s from task %d", instantTime, taskID
+        () -> doCompaction(instantTime, compactionOperation, collector), "Execute compaction for instant %s from task %d", instantTime, taskID
     );
+  }
+
+  private void doCompaction(String instantTime, CompactionOperation compactionOperation, Collector<CompactionCommitEvent> collector) throws IOException {
+    HoodieFlinkMergeOnReadTableCompactor compactor = new HoodieFlinkMergeOnReadTableCompactor();
+    List<WriteStatus> writeStatuses = compactor.compact(
+        new HoodieFlinkCopyOnWriteTable<>(
+            this.writeClient.getConfig(),
+            this.writeClient.getEngineContext(),
+            this.writeClient.getHoodieTable().getMetaClient()),
+        this.writeClient.getHoodieTable().getMetaClient(),
+        this.writeClient.getConfig(),
+        compactionOperation,
+        instantTime);
+    collector.collect(new CompactionCommitEvent(instantTime, writeStatuses, taskID));
   }
 
   @VisibleForTesting

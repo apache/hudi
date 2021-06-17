@@ -22,12 +22,16 @@ import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.sink.partitioner.profile.WriteProfile;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.table.action.commit.SmallFile;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
+import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,6 +48,10 @@ import java.util.Map;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for {@link BucketAssigner}.
@@ -51,6 +59,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public class TestBucketAssigner {
   private HoodieWriteConfig writeConfig;
   private HoodieFlinkEngineContext context;
+  private Configuration conf;
 
   @TempDir
   File tempFile;
@@ -58,7 +67,7 @@ public class TestBucketAssigner {
   @BeforeEach
   public void before() throws IOException {
     final String basePath = tempFile.getAbsolutePath();
-    final Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf = TestConfigurations.getDefaultConf(basePath);
 
     writeConfig = StreamerUtil.getHoodieClientConfig(conf);
     context = new HoodieFlinkEngineContext(
@@ -290,6 +299,44 @@ public class TestBucketAssigner {
     assertBucketEquals(bucketInfo2, "par1", BucketType.UPDATE, "f1");
   }
 
+  @Test
+  public void testWriteProfileReload() throws Exception {
+    WriteProfile writeProfile = new WriteProfile(writeConfig, context);
+    List<SmallFile> smallFiles1 = writeProfile.getSmallFiles("par1");
+    assertTrue(smallFiles1.isEmpty(), "Should have no small files");
+
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    Option<String> instantOption = getLastCompleteInstant(writeProfile);
+    assertFalse(instantOption.isPresent());
+
+    writeProfile.reload(1);
+    String instant1 = getLastCompleteInstant(writeProfile).orElse(null);
+    assertNotNull(instant1);
+    List<SmallFile> smallFiles2 = writeProfile.getSmallFiles("par1");
+    assertThat("Should have 1 small file", smallFiles2.size(), is(1));
+    assertThat("Small file should have same timestamp as last complete instant",
+        smallFiles2.get(0).location.getInstantTime(), is(instant1));
+
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    List<SmallFile> smallFiles3 = writeProfile.getSmallFiles("par1");
+    assertThat("Should have 1 small file", smallFiles3.size(), is(1));
+    assertThat("Non-reloaded write profile has the same base file view as before",
+        smallFiles3.get(0).location.getInstantTime(), is(instant1));
+
+    writeProfile.reload(2);
+    String instant2 = getLastCompleteInstant(writeProfile).orElse(null);
+    assertNotEquals(instant2, instant1, "Should have new complete instant");
+    List<SmallFile> smallFiles4 = writeProfile.getSmallFiles("par1");
+    assertThat("Should have 1 small file", smallFiles4.size(), is(1));
+    assertThat("Small file should have same timestamp as last complete instant",
+        smallFiles4.get(0).location.getInstantTime(), is(instant2));
+  }
+
+  private static Option<String> getLastCompleteInstant(WriteProfile profile) {
+    return profile.getTable().getMetaClient().getCommitsTimeline()
+        .filterCompletedInstants().lastInstant().map(HoodieInstant::getTimestamp);
+  }
+
   private void assertBucketEquals(
       BucketInfo bucketInfo,
       String partition,
@@ -311,7 +358,6 @@ public class TestBucketAssigner {
    * Mock BucketAssigner that can specify small files explicitly.
    */
   static class MockBucketAssigner extends BucketAssigner {
-    private final Map<String, List<SmallFile>> smallFilesMap;
 
     MockBucketAssigner(
         HoodieFlinkEngineContext context,
@@ -332,12 +378,23 @@ public class TestBucketAssigner {
         HoodieFlinkEngineContext context,
         HoodieWriteConfig config,
         Map<String, List<SmallFile>> smallFilesMap) {
-      super(taskID, numTasks, context, config);
+      super(taskID, numTasks, new MockWriteProfile(config, context, smallFilesMap), config);
+    }
+  }
+
+  /**
+   * Mock WriteProfile that can specify small files explicitly.
+   */
+  static class MockWriteProfile extends WriteProfile {
+    private final Map<String, List<SmallFile>> smallFilesMap;
+
+    public MockWriteProfile(HoodieWriteConfig config, HoodieFlinkEngineContext context, Map<String, List<SmallFile>> smallFilesMap) {
+      super(config, context);
       this.smallFilesMap = smallFilesMap;
     }
 
     @Override
-    protected List<SmallFile> getSmallFiles(String partitionPath) {
+    protected List<SmallFile> smallFilesProfile(String partitionPath) {
       if (this.smallFilesMap.containsKey(partitionPath)) {
         return this.smallFilesMap.get(partitionPath);
       }

@@ -273,7 +273,7 @@ public class MergeOnReadInputFormat
     LinkedHashMap<String, String> partSpec = FilePathUtils.extractPartitionKeyValues(
         new org.apache.hadoop.fs.Path(path).getParent(),
         this.conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITION),
-        this.conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(","));
+        FilePathUtils.extractPartitionKeys(this.conf));
     LinkedHashMap<String, Object> partObjects = new LinkedHashMap<>();
     partSpec.forEach((k, v) -> partObjects.put(k, restorePartValueFromType(
         defaultPartName.equals(v) ? null : v,

@@ -57,6 +57,7 @@ import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.table.action.bootstrap.BootstrapUtils;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -82,8 +83,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -568,8 +567,8 @@ public class TestBootstrap extends HoodieClientTestBase {
     });
     if (isPartitioned) {
       sqlContext.udf().register("partgen",
-          (UDF1<String, String>) (val) -> URLEncoder.encode(partitionPaths.get(
-              Integer.parseInt(val.split("_")[1]) % partitionPaths.size()), StandardCharsets.UTF_8.toString()),
+          (UDF1<String, String>) (val) -> PartitionPathEncodeUtils.escapePathName(partitionPaths.get(
+              Integer.parseInt(val.split("_")[1]) % partitionPaths.size())),
           DataTypes.StringType);
     }
     JavaRDD rdd = jsc.parallelize(records);

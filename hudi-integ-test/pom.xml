@@ -102,7 +102,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark-common</artifactId>
+      <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
       <exclusions>
         <exclusion>
@@ -243,7 +243,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark-common</artifactId>
+      <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
       <type>test-jar</type>
     </dependency>

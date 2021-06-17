@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABL
 import org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE
 import org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_ENABLE_PROP
 import org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_VALIDATE_PROP
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
 
 /**
@@ -91,7 +92,7 @@ object HoodieWriterUtils {
   def getPartitionColumns(parameters: Map[String, String]): String = {
     val props = new TypedProperties()
     props.putAll(parameters.asJava)
-    val keyGen = DataSourceUtils.createKeyGenerator(props)
+    val keyGen = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
     getPartitionColumns(keyGen)
   }
 

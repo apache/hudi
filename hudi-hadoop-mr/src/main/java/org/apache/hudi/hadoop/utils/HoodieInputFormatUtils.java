@@ -18,6 +18,9 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hadoop.hive.ql.io.orc.OrcInputFormat;
+import org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat;
+import org.apache.hadoop.hive.ql.io.orc.OrcSerde;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -123,6 +126,8 @@ public class HoodieInputFormatUtils {
         } else {
           return HoodieHFileInputFormat.class.getName();
         }
+      case ORC:
+        return OrcInputFormat.class.getName();
       default:
         throw new HoodieIOException("Hoodie InputFormat not implemented for base file format " + baseFileFormat);
     }
@@ -134,6 +139,8 @@ public class HoodieInputFormatUtils {
         return MapredParquetOutputFormat.class.getName();
       case HFILE:
         return MapredParquetOutputFormat.class.getName();
+      case ORC:
+        return OrcOutputFormat.class.getName();
       default:
         throw new HoodieIOException("No OutputFormat for base file format " + baseFileFormat);
     }
@@ -145,6 +152,8 @@ public class HoodieInputFormatUtils {
         return ParquetHiveSerDe.class.getName();
       case HFILE:
         return ParquetHiveSerDe.class.getName();
+      case ORC:
+        return OrcSerde.class.getName();
       default:
         throw new HoodieIOException("No SerDe for base file format " + baseFileFormat);
     }
@@ -283,24 +292,17 @@ public class HoodieInputFormatUtils {
   }
 
   /**
-   * Extract HoodieTableMetaClient by base path.
-   * @param conf
-   * @param partitions
-   * @return
+   * Extract HoodieTableMetaClient by partition path.
+   * @param conf       The hadoop conf
+   * @param partitions The partitions
+   * @return partition path to table meta client mapping
    */
-  public static Map<Path, HoodieTableMetaClient> getTableMetaClientByBasePath(Configuration conf, Set<Path> partitions) {
-    Map<String, HoodieTableMetaClient> metaClientMap = new HashMap<>();
+  public static Map<Path, HoodieTableMetaClient> getTableMetaClientByPartitionPath(Configuration conf, Set<Path> partitions) {
+    Map<Path, HoodieTableMetaClient> metaClientMap = new HashMap<>();
     return partitions.stream().collect(Collectors.toMap(Function.identity(), p -> {
-      // Get meta client if this path is the base path.
-      Option<String> matchingBasePath = Option.fromJavaOptional(
-          metaClientMap.keySet().stream().filter(basePath -> p.toString().startsWith(basePath)).findFirst());
-      if (matchingBasePath.isPresent()) {
-        return metaClientMap.get(matchingBasePath.get());
-      }
-
       try {
         HoodieTableMetaClient metaClient = getTableMetaClientForBasePath(p.getFileSystem(conf), p);
-        metaClientMap.put(metaClient.getBasePath(), metaClient);
+        metaClientMap.put(p, metaClient);
         return metaClient;
       } catch (IOException e) {
         throw new HoodieIOException("Error creating hoodie meta client against : " + p, e);

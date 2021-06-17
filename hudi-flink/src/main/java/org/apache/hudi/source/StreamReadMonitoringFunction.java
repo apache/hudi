@@ -18,7 +18,6 @@
 
 package org.apache.hudi.source;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -30,7 +29,7 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -46,11 +45,9 @@ import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.source.RichSourceFunction;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -220,12 +217,14 @@ public class StreamReadMonitoringFunction
     // 3. filter the full file paths
     // 4. use the file paths from #step 3 as the back-up of the filesystem view
 
+    String tableName = conf.getString(FlinkOptions.TABLE_NAME);
     List<HoodieCommitMetadata> metadataList = instants.stream()
-        .map(instant -> getCommitMetadata(instant, commitTimeline)).collect(Collectors.toList());
+        .map(instant -> WriteProfiles.getCommitMetadata(tableName, path, instant, commitTimeline)).collect(Collectors.toList());
     Set<String> writePartitions = getWritePartitionPaths(metadataList);
-    FileStatus[] fileStatuses = getWritePathsOfInstants(metadataList);
+    FileStatus[] fileStatuses = WriteProfiles.getWritePathsOfInstants(path, hadoopConf, metadataList);
     if (fileStatuses.length == 0) {
-      throw new HoodieException("No files found for reading in user provided path.");
+      LOG.warn("No files found for reading in user provided path.");
+      return;
     }
 
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, commitTimeline, fileStatuses);
@@ -332,53 +331,5 @@ public class StreamReadMonitoringFunction
         .map(HoodieCommitMetadata::getWritePartitionPaths)
         .flatMap(Collection::stream)
         .collect(Collectors.toSet());
-  }
-
-  /**
-   * Returns all the incremental write file path statuses with the given commits metadata.
-   *
-   * @param metadataList The commits metadata
-   * @return the file statuses array
-   */
-  private FileStatus[] getWritePathsOfInstants(List<HoodieCommitMetadata> metadataList) {
-    FileSystem fs = FSUtils.getFs(path.toString(), hadoopConf);
-    return metadataList.stream().map(metadata -> getWritePathsOfInstant(metadata, fs))
-        .flatMap(Collection::stream).toArray(FileStatus[]::new);
-  }
-
-  private List<FileStatus> getWritePathsOfInstant(HoodieCommitMetadata metadata, FileSystem fs) {
-    return metadata.getFileIdAndFullPaths(path.toString()).values().stream()
-        .map(org.apache.hadoop.fs.Path::new)
-        // filter out the file paths that does not exist, some files may be cleaned by
-        // the cleaner.
-        .filter(path -> {
-          try {
-            return fs.exists(path);
-          } catch (IOException e) {
-            LOG.error("Checking exists of path: {} error", path);
-            throw new HoodieException(e);
-          }
-        }).map(path -> {
-          try {
-            return fs.getFileStatus(path);
-          } catch (IOException e) {
-            LOG.error("Get write status of path: {} error", path);
-            throw new HoodieException(e);
-          }
-        })
-        // filter out crushed files
-        .filter(fileStatus -> fileStatus.getLen() > 0)
-        .collect(Collectors.toList());
-  }
-
-  private HoodieCommitMetadata getCommitMetadata(HoodieInstant instant, HoodieTimeline timeline) {
-    byte[] data = timeline.getInstantDetails(instant).get();
-    try {
-      return HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
-    } catch (IOException e) {
-      LOG.error("Get write metadata for table {} with instant {} and path: {} error",
-          conf.getString(FlinkOptions.TABLE_NAME), instant.getTimestamp(), path);
-      throw new HoodieException(e);
-    }
   }
 }
