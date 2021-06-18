@@ -21,6 +21,8 @@ package org.apache.hudi.execution.bulkinsert;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.api.java.function.MapPartitionsFunction;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -44,8 +46,11 @@ import scala.collection.JavaConverters;
  */
 public class RDDPartitionSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
+  private static final Logger LOG = LogManager.getLogger(RDDPartitionSortPartitionerWithRows.class);
+
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
+    LOG.warn("TEST_LOG. RDDPartitionSortPartitionerWithRows");
     ExpressionEncoder encoder = getEncoder(rows.schema());
     return rows.coalesce(outputSparkPartitions).mapPartitions((MapPartitionsFunction<Row, Row>) input -> {
       // Sort locally in partition

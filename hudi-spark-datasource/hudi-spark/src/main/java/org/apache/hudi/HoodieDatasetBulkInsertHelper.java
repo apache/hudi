@@ -110,6 +110,8 @@ public class HoodieDatasetBulkInsertHelper {
     BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows =
         userDefinedBulkInsertPartitionerOpt.isPresent() ? userDefinedBulkInsertPartitionerOpt.get() :
             BulkInsertInternalPartitionerWithRowsFactory.get(config.getBulkInsertSortMode());
+    LOG.warn("TEST_LOG: Sort mode :: " + config.getBulkInsertSortMode());
+
     return bulkInsertPartitionerRows.repartitionRecords(colOrderedDataset, config.getBulkInsertShuffleParallelism());
   }
 }

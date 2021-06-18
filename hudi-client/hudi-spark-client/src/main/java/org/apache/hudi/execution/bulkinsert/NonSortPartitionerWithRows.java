@@ -20,6 +20,8 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.table.BulkInsertPartitioner;
 
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
@@ -30,8 +32,11 @@ import org.apache.spark.sql.Row;
  */
 public class NonSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
+  private static final Logger LOG = LogManager.getLogger(NonSortPartitionerWithRows.class);
+
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
+    LOG.warn("TEST_LOG. NonSortPartitionerWithRows");
     return rows.coalesce(outputSparkPartitions);
   }
 

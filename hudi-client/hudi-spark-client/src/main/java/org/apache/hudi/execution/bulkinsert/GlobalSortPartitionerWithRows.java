@@ -21,6 +21,8 @@ package org.apache.hudi.execution.bulkinsert;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.functions;
@@ -30,8 +32,11 @@ import org.apache.spark.sql.functions;
  */
 public class GlobalSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
+  private static final Logger LOG = LogManager.getLogger(GlobalSortPartitionerWithRows.class);
+
   @Override
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
+    LOG.warn("TEST_LOG. GlobalSortPartitionerWithRows");
     // Now, sort the records and line them up nicely for loading.
     // Let's use "partitionPath + key" as the sort key.
     return rows.sort(functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD), functions.col(HoodieRecord.RECORD_KEY_METADATA_FIELD))
