@@ -1431,7 +1431,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   }
 
   @Test
-  public void testKafka() throws Exception {
+  public void testKafkaTimestampType() throws Exception {
     topicName = "topic" + testNum;
     kafkaCheckpointType = "timestamp";
     prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, true, topicName);
@@ -1453,8 +1453,6 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
                     "timestamp", String.valueOf(System.currentTimeMillis())), jsc);
     deltaStreamer.sync();
     TestHelpers.assertRecordCount(JSON_KAFKA_NUM_RECORDS * 2, tableBasePath + "/*/*.parquet", sqlContext);
-
-
   }
 
   @Test
