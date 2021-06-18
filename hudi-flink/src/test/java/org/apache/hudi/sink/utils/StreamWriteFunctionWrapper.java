@@ -31,6 +31,7 @@ import org.apache.hudi.sink.event.BatchWriteSuccessEvent;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.partitioner.BucketAssignOperator;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.configuration.Configuration;
@@ -53,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A wrapper class to manipulate the {@link StreamWriteFunction} instance for testing.
@@ -82,6 +84,8 @@ public class StreamWriteFunctionWrapper<I> {
 
   private CompactFunctionWrapper compactFunctionWrapper;
 
+  private final boolean asyncCompaction;
+
   public StreamWriteFunctionWrapper(String tablePath) throws Exception {
     this(tablePath, TestConfigurations.getDefaultConf(tablePath));
   }
@@ -103,6 +107,7 @@ public class StreamWriteFunctionWrapper<I> {
     this.bucketAssignOperatorContext = new MockBucketAssignOperatorContext();
     this.functionInitializationContext = new MockFunctionInitializationContext();
     this.compactFunctionWrapper = new CompactFunctionWrapper(this.conf);
+    this.asyncCompaction = StreamerUtil.needsAsyncCompaction(conf);
     this.bucketAssignOperatorContext = new MockBucketAssignOperatorContext();
   }
 
@@ -131,7 +136,7 @@ public class StreamWriteFunctionWrapper<I> {
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.open(conf);
 
-    if (conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED)) {
+    if (asyncCompaction) {
       compactFunctionWrapper.openFunction();
     }
   }
@@ -208,10 +213,19 @@ public class StreamWriteFunctionWrapper<I> {
 
   public void checkpointComplete(long checkpointId) {
     functionInitializationContext.getOperatorStateStore().checkpointSuccess(checkpointId);
+    if (asyncCompaction) {
+      // sleep for a while to give a change for scheduling compaction,
+      // see HoodieActiveTimeline#createNewInstantTime for details.
+      try {
+        TimeUnit.SECONDS.sleep(2);
+      } catch (InterruptedException e) {
+        throw new HoodieException("Waiting for checkpoint success exception", e);
+      }
+    }
     coordinator.notifyCheckpointComplete(checkpointId);
     this.bucketAssignerFunction.notifyCheckpointComplete(checkpointId);
     this.writeFunction.notifyCheckpointComplete(checkpointId);
-    if (conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED)) {
+    if (asyncCompaction) {
       try {
         compactFunctionWrapper.compact(checkpointId);
       } catch (Exception e) {

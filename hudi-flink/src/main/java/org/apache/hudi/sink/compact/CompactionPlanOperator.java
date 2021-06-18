@@ -26,8 +26,8 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieFlinkTable;
+import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -36,7 +36,6 @@ import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.util.List;
@@ -84,21 +83,34 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
 
   @Override
   public void notifyCheckpointComplete(long checkpointId) throws IOException {
-    HoodieFlinkTable<?> table = writeClient.getHoodieTable();
-    // the last instant takes the highest priority.
-    Option<HoodieInstant> compactionInstant = table.getActiveTimeline().filterPendingCompactionTimeline().lastInstant();
-    String compactionInstantTime = compactionInstant.isPresent() ? compactionInstant.get().getTimestamp() : null;
-    if (compactionInstantTime == null) {
+    try {
+      scheduleCompaction(checkpointId);
+    } catch (Throwable throwable) {
+      // make it fail safe
+      LOG.error("Error while scheduling compaction at instant: " + compactionInstantTime, throwable);
+    }
+  }
+
+  private void scheduleCompaction(long checkpointId) throws IOException {
+    // if async compaction is on, schedule the compaction
+    HoodieTableMetaClient metaClient = CompactionUtil.createMetaClient(conf);
+    final String compactionInstantTime = CompactionUtil.getCompactionInstantTime(metaClient);
+
+    boolean scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
+    if (!scheduled) {
       // do nothing.
       LOG.info("No compaction plan for checkpoint " + checkpointId);
       return;
     }
+
     if (this.compactionInstantTime != null
         && Objects.equals(this.compactionInstantTime, compactionInstantTime)) {
       // do nothing
       LOG.info("Duplicate scheduling for compaction instant: " + compactionInstantTime + ", ignore");
       return;
     }
+
+    HoodieFlinkTable<?> table = writeClient.getHoodieTable();
     // generate compaction plan
     // should support configurable commit metadata
     HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
@@ -121,7 +133,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
 
         LOG.warn("The compaction plan was fetched through the auxiliary path(.tmp) but not the meta path(.hoodie).\n"
             + "Clean the compaction plan in auxiliary path and cancels the compaction");
-        cleanInstant(table.getMetaClient(), instant);
+        CompactionUtil.cleanInstant(table.getMetaClient(), instant);
         return;
       }
 
@@ -135,22 +147,6 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
       for (CompactionOperation operation : operations) {
         output.collect(new StreamRecord<>(new CompactionPlanEvent(compactionInstantTime, operation)));
       }
-    }
-  }
-
-  private void cleanInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {
-    Path commitFilePath = new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName());
-    try {
-      if (metaClient.getFs().exists(commitFilePath)) {
-        boolean deleted = metaClient.getFs().delete(commitFilePath, false);
-        if (deleted) {
-          LOG.info("Removed instant " + instant);
-        } else {
-          throw new HoodieIOException("Could not delete instant " + instant);
-        }
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Could not remove requested commit " + commitFilePath, e);
     }
   }
 

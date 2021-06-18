@@ -28,14 +28,11 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCompactionException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.log4j.LogManager;
@@ -155,42 +152,5 @@ public class FlinkScheduleCompactionActionExecutor<T extends HoodieRecordPayload
       throw new HoodieCompactionException(e.getMessage(), e);
     }
     return timestamp;
-  }
-
-  @Override
-  public Option<HoodieCompactionPlan> execute() {
-    if (!config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()
-            && !config.getFailedWritesCleanPolicy().isLazy()) {
-      // if there are inflight writes, their instantTime must not be less than that of compaction instant time
-      table.getActiveTimeline().getCommitsTimeline().filterPendingExcludingCompaction().firstInstant()
-              .ifPresent(earliestInflight -> ValidationUtils.checkArgument(
-                      HoodieTimeline.compareTimestamps(earliestInflight.getTimestamp(), HoodieTimeline.GREATER_THAN, instantTime),
-                      "Earliest write inflight instant time must be later than compaction time. Earliest :" + earliestInflight
-                              + ", Compaction scheduled at " + instantTime));
-      // Committed and pending compaction instants should have strictly lower timestamps
-      List<HoodieInstant> conflictingInstants = table.getActiveTimeline()
-              .getWriteTimeline().filterCompletedAndCompactionInstants().getInstants()
-              .filter(instant -> HoodieTimeline.compareTimestamps(
-                      instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, instantTime))
-              .collect(Collectors.toList());
-      ValidationUtils.checkArgument(conflictingInstants.isEmpty(),
-              "Following instants have timestamps >= compactionInstant (" + instantTime + ") Instants :"
-                      + conflictingInstants);
-    }
-
-    HoodieCompactionPlan plan = scheduleCompaction();
-    if (plan != null && (plan.getOperations() != null) && (!plan.getOperations().isEmpty())) {
-      extraMetadata.ifPresent(plan::setExtraMetadata);
-      HoodieInstant compactionInstant =
-              new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, instantTime);
-      try {
-        table.getActiveTimeline().saveToCompactionRequested(compactionInstant,
-                TimelineMetadataUtils.serializeCompactionPlan(plan));
-      } catch (IOException ioe) {
-        throw new HoodieIOException("Exception scheduling compaction", ioe);
-      }
-      return Option.of(plan);
-    }
-    return Option.empty();
   }
 }
