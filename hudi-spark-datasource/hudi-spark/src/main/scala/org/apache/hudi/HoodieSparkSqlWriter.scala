@@ -62,6 +62,7 @@ object HoodieSparkSqlWriter {
   private val log = LogManager.getLogger(getClass)
   private var tableExists: Boolean = false
   private var asyncCompactionTriggerFnDefined: Boolean = false
+  private var asyncClusteringTriggerFnDefined: Boolean = false
 
   def write(sqlContext: SQLContext,
             mode: SaveMode,
@@ -69,9 +70,10 @@ object HoodieSparkSqlWriter {
             df: DataFrame,
             hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty,
             hoodieWriteClient: Option[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]] = Option.empty,
-            asyncCompactionTriggerFn: Option[Function1[SparkRDDWriteClient[HoodieRecordPayload[Nothing]], Unit]] = Option.empty
+            asyncCompactionTriggerFn: Option[Function1[SparkRDDWriteClient[HoodieRecordPayload[Nothing]], Unit]] = Option.empty,
+            asyncClusteringTriggerFn: Option[Function1[SparkRDDWriteClient[HoodieRecordPayload[Nothing]], Unit]] = Option.empty
            )
-  : (Boolean, common.util.Option[String], common.util.Option[String],
+  : (Boolean, common.util.Option[String], common.util.Option[String], common.util.Option[String],
     SparkRDDWriteClient[HoodieRecordPayload[Nothing]], HoodieTableConfig) = {
 
     val sparkContext = sqlContext.sparkContext
@@ -79,6 +81,7 @@ object HoodieSparkSqlWriter {
     val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(parameters)
     val tblNameOp = hoodieConfig.getStringOrThrow(HoodieWriteConfig.TABLE_NAME, s"'${HoodieWriteConfig.TABLE_NAME.key}' must be set.")
     asyncCompactionTriggerFnDefined = asyncCompactionTriggerFn.isDefined
+    asyncClusteringTriggerFnDefined = asyncClusteringTriggerFn.isDefined
     if (path.isEmpty) {
       throw new HoodieException(s"'path' must be set.")
     }
@@ -112,7 +115,7 @@ object HoodieSparkSqlWriter {
 
     if (mode == SaveMode.Ignore && tableExists) {
       log.warn(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
-      (false, common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
+      (false, common.util.Option.empty(), common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
     } else {
       // Handle various save modes
       handleSaveModes(mode, basePath, tableConfig, tblName, operation, fs)
@@ -140,7 +143,7 @@ object HoodieSparkSqlWriter {
         operation == WriteOperationType.BULK_INSERT) {
         val (success, commitTime: common.util.Option[String]) = bulkInsertAsRow(sqlContext, parameters, df, tblName,
                                                                                 basePath, path, instantTime)
-        return (success, commitTime, common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
+        return (success, commitTime, common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
       }
       // scalastyle:on
 
@@ -178,6 +181,10 @@ object HoodieSparkSqlWriter {
 
           if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
             asyncCompactionTriggerFn.get.apply(client)
+          }
+
+          if (isAsyncClusteringEnabled(client, parameters)) {
+            asyncClusteringTriggerFn.get.apply(client)
           }
 
           val hoodieRecords =
@@ -219,6 +226,10 @@ object HoodieSparkSqlWriter {
             asyncCompactionTriggerFn.get.apply(client)
           }
 
+          if (isAsyncClusteringEnabled(client, parameters)) {
+            asyncClusteringTriggerFn.get.apply(client)
+          }
+
           // Issue deletes
           client.startCommitWithTime(instantTime, commitActionType)
           val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysToDelete, instantTime)
@@ -226,7 +237,7 @@ object HoodieSparkSqlWriter {
         }
 
       // Check for errors and commit the write.
-      val (writeSuccessful, compactionInstant) =
+      val (writeSuccessful, compactionInstant, clusteringInstant) =
         commitAndPerformPostOperations(sqlContext.sparkSession, df.schema,
           writeResult, parameters, writeClient, tableConfig, jsc,
           TableInstantInfo(basePath, instantTime, commitActionType, operation))
@@ -247,7 +258,7 @@ object HoodieSparkSqlWriter {
       // it's safe to unpersist cached rdds here
       unpersistRdd(writeResult.getWriteStatuses.rdd)
 
-      (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, writeClient, tableConfig)
+      (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
     }
   }
 
@@ -565,7 +576,7 @@ object HoodieSparkSqlWriter {
                                              tableConfig: HoodieTableConfig,
                                              jsc: JavaSparkContext,
                                              tableInstantInfo: TableInstantInfo
-                                             ): (Boolean, common.util.Option[java.lang.String]) = {
+                                             ): (Boolean, common.util.Option[java.lang.String], common.util.Option[java.lang.String]) = {
     if(writeResult.getWriteStatuses.rdd.filter(ws => ws.hasErrors).isEmpty()) {
       log.info("Proceeding to commit the write.")
       val metaMap = parameters.filter(kv =>
@@ -593,14 +604,24 @@ object HoodieSparkSqlWriter {
 
       log.info(s"Compaction Scheduled is $compactionInstant")
 
+      val asyncClusteringEnabled = isAsyncClusteringEnabled(client, parameters)
+      val clusteringInstant: common.util.Option[java.lang.String] =
+        if (asyncClusteringEnabled) {
+          client.scheduleClustering(common.util.Option.of(new util.HashMap[String, String](mapAsJavaMap(metaMap))))
+        } else {
+          common.util.Option.empty()
+        }
+
+      log.info(s"Clustering Scheduled is $clusteringInstant")
+
       val metaSyncSuccess = metaSync(spark, HoodieWriterUtils.convertMapToHoodieConfig(parameters),
         tableInstantInfo.basePath, schema)
 
       log.info(s"Is Async Compaction Enabled ? $asyncCompactionEnabled")
-      if (!asyncCompactionEnabled) {
+      if (!asyncCompactionEnabled && !asyncClusteringEnabled) {
         client.close()
       }
-      (commitSuccess && metaSyncSuccess, compactionInstant)
+      (commitSuccess && metaSyncSuccess, compactionInstant, clusteringInstant)
     } else {
       log.error(s"${tableInstantInfo.operation} failed with errors")
       if (log.isTraceEnabled) {
@@ -615,7 +636,7 @@ object HoodieSparkSqlWriter {
             }
           })
       }
-      (false, common.util.Option.empty())
+      (false, common.util.Option.empty(), common.util.Option.empty())
     }
   }
 
@@ -629,6 +650,13 @@ object HoodieSparkSqlWriter {
     } else {
       false
     }
+  }
+
+  private def isAsyncClusteringEnabled(client: SparkRDDWriteClient[HoodieRecordPayload[Nothing]],
+                                       parameters: Map[String, String]) : Boolean = {
+    log.info(s"Config.asyncClusteringEnabled ? ${client.getConfig.isAsyncClusteringEnabled}")
+    asyncClusteringTriggerFnDefined && client.getConfig.isAsyncClusteringEnabled &&
+      parameters.get(ASYNC_CLUSTERING_ENABLE_OPT_KEY.key).exists(r => r.toBoolean)
   }
 
   private def getHoodieTableConfig(sparkContext: SparkContext,
