@@ -651,7 +651,6 @@ public class TestWriteCopyOnWrite {
   @Test
   public void testWriteExactlyOnce() throws Exception {
     // reset the config option
-    conf.setBoolean(FlinkOptions.WRITE_EXACTLY_ONCE_ENABLED, true);
     conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 3);
     conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0006); // 630 bytes buffer size
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
