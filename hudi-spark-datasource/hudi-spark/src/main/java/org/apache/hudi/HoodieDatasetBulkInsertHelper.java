@@ -20,11 +20,9 @@ package org.apache.hudi;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
-import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerWithRowsFactory;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.log4j.LogManager;
@@ -71,7 +69,7 @@ public class HoodieDatasetBulkInsertHelper {
    */
   public static Dataset<Row> prepareHoodieDatasetForBulkInsert(SQLContext sqlContext,
       HoodieWriteConfig config, Dataset<Row> rows, String structName, String recordNamespace,
-      Option<BulkInsertPartitioner<Dataset<Row>>> userDefinedBulkInsertPartitionerOpt) {
+                                                               BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows) {
     List<Column> originalFields =
         Arrays.stream(rows.schema().fields()).map(f -> new Column(f.name())).collect(Collectors.toList());
 
@@ -107,9 +105,6 @@ public class HoodieDatasetBulkInsertHelper {
     Dataset<Row> colOrderedDataset = rowDatasetWithHoodieColumns.select(
         JavaConverters.collectionAsScalaIterableConverter(orderedFields).asScala().toSeq());
 
-    BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows =
-        userDefinedBulkInsertPartitionerOpt.isPresent() ? userDefinedBulkInsertPartitionerOpt.get() :
-            BulkInsertInternalPartitionerWithRowsFactory.get(config.getBulkInsertSortMode());
     return bulkInsertPartitionerRows.repartitionRecords(colOrderedDataset, config.getBulkInsertShuffleParallelism());
   }
 }

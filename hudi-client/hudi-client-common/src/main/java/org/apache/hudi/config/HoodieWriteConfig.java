@@ -311,6 +311,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Comma separated metadata key prefixes to override from latest commit "
           + "during overlapping commits via multi writing");
 
+  public static final ConfigProperty<Boolean> BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED = ConfigProperty
+      .key("hoodie.bulkinsert.are.partitioner.records.sorted")
+      .defaultValue(false)
+      .withDocumentation("Wether partitioner records are sorted or not");
+
   /**
    * The specified write schema. In most case, we do not need set this parameter,
    * but for the case the write schema is not equal to the specified table schema, we can
@@ -450,6 +455,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getUserDefinedBulkInsertPartitionerClass() {
     return getString(BULKINSERT_USER_DEFINED_PARTITIONER_CLASS);
+  }
+
+  public Boolean getBulkInsertIsPartitionRecordsSorted() {
+    return getBoolean(BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED);
   }
 
   public int getInsertShuffleParallelism() {
@@ -1540,6 +1549,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withBulkInsertArePartitionerRecordsSorted(String arePartitionerRecordsSorted) {
+      writeConfig.setValue(BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED, arePartitionerRecordsSorted);
+      return this;
+    }
+
     public Builder withProperties(Properties properties) {
       this.writeConfig.getProps().putAll(properties);
       return this;
@@ -1578,7 +1592,6 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
 
       writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
-
     }
 
     private void validate() {

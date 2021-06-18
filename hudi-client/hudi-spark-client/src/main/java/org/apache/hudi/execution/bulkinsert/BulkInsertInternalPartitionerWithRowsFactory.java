@@ -21,13 +21,16 @@ package org.apache.hudi.execution.bulkinsert;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+
 /**
  * A factory to generate built-in partitioner to repartition input Rows into at least
  * expected number of output spark partitions for bulk insert operation.
  */
 public abstract class BulkInsertInternalPartitionerWithRowsFactory {
 
-  public static BulkInsertPartitioner get(BulkInsertSortMode sortMode) {
+  public static BulkInsertPartitioner<Dataset<Row>> get(BulkInsertSortMode sortMode) {
     switch (sortMode) {
       case NONE:
         return new NonSortPartitionerWithRows();

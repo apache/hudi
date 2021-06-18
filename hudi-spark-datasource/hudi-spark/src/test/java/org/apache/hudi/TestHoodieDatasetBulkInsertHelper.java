@@ -19,8 +19,8 @@ package org.apache.hudi;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.FileIOUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows;
 import org.apache.hudi.testutils.DataSourceTestUtils;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
@@ -64,7 +64,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName", "testNamespace",
-        Option.empty());
+        new NonSortPartitionerWithRows());
     StructType resultSchema = result.schema();
 
     assertEquals(result.count(), 10);
@@ -120,7 +120,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     try {
       HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-          "testNamespace", Option.empty());
+          "testNamespace", new NonSortPartitionerWithRows());
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore
@@ -131,7 +131,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
       HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-          "testNamespace", Option.empty());
+          "testNamespace", new NonSortPartitionerWithRows());
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore
@@ -142,7 +142,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
       HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-          "testNamespace", Option.empty());
+          "testNamespace", new NonSortPartitionerWithRows());
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore
@@ -153,7 +153,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
       HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
-          "testNamespace", Option.empty());
+          "testNamespace", new NonSortPartitionerWithRows());
       fail("Should have thrown exception");
     } catch (Exception e) {
       // ignore
