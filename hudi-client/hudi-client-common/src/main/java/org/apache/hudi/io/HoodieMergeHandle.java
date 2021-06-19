@@ -199,7 +199,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       long memoryForMerge = IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config);
       LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
       this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
-          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(tableSchema));
+          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(tableSchema),
+          config.getSpillableDiskMapType());
     } catch (IOException io) {
       throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
     }

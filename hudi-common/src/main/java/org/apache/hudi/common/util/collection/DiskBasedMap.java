@@ -53,7 +53,7 @@ import java.util.stream.Stream;
  * without any rollover support. It uses the following : 1) An in-memory map that tracks the key-> latest ValueMetadata.
  * 2) Current position in the file NOTE : Only String.class type supported for Key
  */
-public final class DiskBasedMap<T extends Serializable, R extends Serializable> implements Map<T, R>, Iterable<R> {
+public final class DiskBasedMap<T extends Serializable, R extends Serializable> implements SpillableDiskMap<T, R> {
 
   public static final int BUFFER_SIZE = 128 * 1024;  // 128 KB
   private static final Logger LOG = LogManager.getLogger(DiskBasedMap.class);
@@ -151,6 +151,7 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
   /**
    * Number of bytes spilled to disk.
    */
+  @Override
   public long sizeOfFileOnDiskInBytes() {
     return filePosition.get();
   }
@@ -287,6 +288,7 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
     throw new HoodieException("Unsupported Operation Exception");
   }
 
+  @Override
   public Stream<R> valueStream() {
     final BufferedRandomAccessFile file = getRandomAccessFile();
     return valueMetadataMap.values().stream().sorted().sequential().map(valueMetaData -> (R) get(valueMetaData, file));
