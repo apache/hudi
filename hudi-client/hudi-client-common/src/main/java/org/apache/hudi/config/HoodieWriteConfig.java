@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -152,6 +153,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   // Allow duplicates with inserts while merging with existing records
   private static final String MERGE_ALLOW_DUPLICATE_ON_INSERTS = "hoodie.merge.allow.duplicate.on.inserts";
   private static final String DEFAULT_MERGE_ALLOW_DUPLICATE_ON_INSERTS = "false";
+
+  // Enable usage of RocksDb for External Spillable Map
+  public static final String DEFAULT_SPILLABLE_DISK_MAP_TYPE = ExternalSpillableMap.DiskMapType.ROCK_DB.name();
+  public static final String SPILLABLE_DISK_MAP_TYPE = "hoodie.spillable.diskmap.type";
 
   public static final String CLIENT_HEARTBEAT_INTERVAL_IN_MS_PROP = "hoodie.client.heartbeat.interval_in_ms";
   public static final Integer DEFAULT_CLIENT_HEARTBEAT_INTERVAL_IN_MS = 60 * 1000;
@@ -408,6 +413,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public boolean allowDuplicateInserts() {
     return Boolean.parseBoolean(props.getProperty(MERGE_ALLOW_DUPLICATE_ON_INSERTS));
+  }
+
+  public ExternalSpillableMap.DiskMapType getSpillableDiskMapType() {
+    return ExternalSpillableMap.DiskMapType.valueOf(props.getProperty(SPILLABLE_DISK_MAP_TYPE));
   }
 
   public EngineType getEngineType() {
@@ -1355,6 +1364,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withSpillableDiskMapType(ExternalSpillableMap.DiskMapType diskMapType) {
+      props.setProperty(SPILLABLE_DISK_MAP_TYPE, diskMapType.value());
+      return this;
+    }
+
     public Builder withHeartbeatIntervalInMs(Integer heartbeatIntervalInMs) {
       props.setProperty(CLIENT_HEARTBEAT_INTERVAL_IN_MS_PROP, String.valueOf(heartbeatIntervalInMs));
       return this;
@@ -1433,6 +1447,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           MERGE_DATA_VALIDATION_CHECK_ENABLED, DEFAULT_MERGE_DATA_VALIDATION_CHECK_ENABLED);
       setDefaultOnCondition(props, !props.containsKey(MERGE_ALLOW_DUPLICATE_ON_INSERTS),
           MERGE_ALLOW_DUPLICATE_ON_INSERTS, DEFAULT_MERGE_ALLOW_DUPLICATE_ON_INSERTS);
+      setDefaultOnCondition(props, !props.containsKey(SPILLABLE_DISK_MAP_TYPE),
+          SPILLABLE_DISK_MAP_TYPE, DEFAULT_SPILLABLE_DISK_MAP_TYPE);
       setDefaultOnCondition(props, !props.containsKey(CLIENT_HEARTBEAT_INTERVAL_IN_MS_PROP),
           CLIENT_HEARTBEAT_INTERVAL_IN_MS_PROP, String.valueOf(DEFAULT_CLIENT_HEARTBEAT_INTERVAL_IN_MS));
       setDefaultOnCondition(props, !props.containsKey(CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES_PROP),
