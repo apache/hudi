@@ -39,7 +39,11 @@ import org.junit.jupiter.api.MethodOrderer.Alphanumeric;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.params.ParameterizedTest;
+<<<<<<< HEAD
 import org.junit.jupiter.params.provider.EnumSource;
+=======
+import org.junit.jupiter.params.provider.ValueSource;
+>>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -68,14 +72,23 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   }
 
   @ParameterizedTest
+<<<<<<< HEAD
   @EnumSource(ExternalSpillableMap.DiskMapType.class)
   public void simpleInsertTest(ExternalSpillableMap.DiskMapType diskMapType) throws IOException, URISyntaxException {
+=======
+  @ValueSource(strings = {"disk_map", "rock_db"})
+  public void simpleInsertTest(String diskMapType) throws IOException, URISyntaxException {
+>>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
     String payloadClazz = HoodieAvroPayload.class.getName();
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
+<<<<<<< HEAD
             new HoodieRecordSizeEstimator(schema), diskMapType); // 16B
 
+=======
+            new HoodieRecordSizeEstimator(schema), ExternalSpillableMap.DiskMapType.fromValue(diskMapType)); // 16B
+>>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
     assert (recordKeys.size() == 100);
@@ -89,14 +102,23 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   }
 
   @ParameterizedTest
+<<<<<<< HEAD
   @EnumSource(ExternalSpillableMap.DiskMapType.class)
   public void testSimpleUpsert(ExternalSpillableMap.DiskMapType diskMapType) throws IOException, URISyntaxException {
 
+=======
+  @ValueSource(strings = {"disk_map", "rock_db"})
+  public void testSimpleUpsert(String diskMapType) throws IOException, URISyntaxException {
+>>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
+<<<<<<< HEAD
             new HoodieRecordSizeEstimator(schema), diskMapType); // 16B
+=======
+            new HoodieRecordSizeEstimator(schema), ExternalSpillableMap.DiskMapType.fromValue(diskMapType));// 16B
+>>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
@@ -127,15 +149,24 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   }
 
   @ParameterizedTest
+<<<<<<< HEAD
   @EnumSource(ExternalSpillableMap.DiskMapType.class)
   public void testAllMapOperations(ExternalSpillableMap.DiskMapType diskMapType) throws IOException, URISyntaxException {
+=======
+  @ValueSource(strings = {"disk_map", "rock_db"})
+  public void testAllMapOperations(String diskMapType) throws IOException, URISyntaxException {
+>>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
 
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
     String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
+<<<<<<< HEAD
             new HoodieRecordSizeEstimator(schema), diskMapType); // 16B
+=======
+            new HoodieRecordSizeEstimator(schema), ExternalSpillableMap.DiskMapType.fromValue(diskMapType));
+>>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     // insert a bunch of records so that values spill to disk too
@@ -185,13 +216,22 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   }
 
   @ParameterizedTest
+<<<<<<< HEAD
   @EnumSource(ExternalSpillableMap.DiskMapType.class)
   public void simpleTestWithException(ExternalSpillableMap.DiskMapType diskMapType) throws IOException, URISyntaxException {
+=======
+  @ValueSource(strings = {"disk_map", "rock_db"})
+  public void simpleTestWithException(String diskMapType) throws IOException, URISyntaxException {
+>>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records = new ExternalSpillableMap<>(16L,
         failureOutputPath, new DefaultSizeEstimator(),
+<<<<<<< HEAD
         new HoodieRecordSizeEstimator(schema), diskMapType); // 16B
+=======
+        new HoodieRecordSizeEstimator(schema), ExternalSpillableMap.DiskMapType.fromValue(diskMapType)); // 16B
+>>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
@@ -205,14 +245,23 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   }
 
   @ParameterizedTest
+<<<<<<< HEAD
   @EnumSource(ExternalSpillableMap.DiskMapType.class)
   public void testDataCorrectnessWithUpsertsToDataInMapAndOnDisk(ExternalSpillableMap.DiskMapType diskMapType) throws IOException, URISyntaxException {
+=======
+  @ValueSource(strings = {"disk_map", "rock_db"})
+  public void testDataCorrectnessWithUpsertsToDataInMapAndOnDisk(String diskMapType) throws IOException, URISyntaxException {
+>>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
 
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
+<<<<<<< HEAD
             new HoodieRecordSizeEstimator(schema), diskMapType); // 16B
+=======
+            new HoodieRecordSizeEstimator(schema), ExternalSpillableMap.DiskMapType.fromValue(diskMapType)); // 16B
+>>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
 
     List<String> recordKeys = new ArrayList<>();
     // Ensure we spill to disk
@@ -258,14 +307,23 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   }
 
   @ParameterizedTest
+<<<<<<< HEAD
   @EnumSource(ExternalSpillableMap.DiskMapType.class)
   public void testDataCorrectnessWithoutHoodieMetadata(ExternalSpillableMap.DiskMapType diskMapType) throws IOException, URISyntaxException {
+=======
+  @ValueSource(strings = {"disk_map", "rock_db"})
+  public void testDataCorrectnessWithoutHoodieMetadata(String diskMapType) throws IOException, URISyntaxException {
+>>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
 
     Schema schema = SchemaTestUtil.getSimpleSchema();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
+<<<<<<< HEAD
             new HoodieRecordSizeEstimator(schema), diskMapType); // 16B
+=======
+            new HoodieRecordSizeEstimator(schema), ExternalSpillableMap.DiskMapType.fromValue(diskMapType));
+>>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
 
     List<String> recordKeys = new ArrayList<>();
     // Ensure we spill to disk

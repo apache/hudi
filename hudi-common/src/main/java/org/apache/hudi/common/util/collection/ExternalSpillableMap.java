@@ -20,6 +20,7 @@ package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.log4j.LogManager;
@@ -33,6 +34,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -62,7 +64,11 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   // Map to store key-values in memory until it hits maxInMemorySizeInBytes
   private final Map<T, R> inMemoryMap;
   // Map to store key-values on disk or db after it spilled over the memory
+<<<<<<< HEAD
   private transient volatile DiskMap<T, R> diskBasedMap;
+=======
+  private transient volatile SpillableDiskMap<T, R> diskBasedMap;
+>>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
   // TODO(na) : a dynamic sizing factor to ensure we have space for other objects in memory and
   // incorrect payload estimation
   private final Double sizingFactorForInMemoryMap = 0.8;
@@ -84,7 +90,11 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
                               SizeEstimator<R> valueSizeEstimator) throws IOException {
     this(maxInMemorySizeInBytes, baseFilePath, keySizeEstimator,
+<<<<<<< HEAD
         valueSizeEstimator, DiskMapType.BITCASK);
+=======
+        valueSizeEstimator, DiskMapType.DISK_MAP);
+>>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
   }
 
   public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
@@ -98,18 +108,31 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
     this.diskMapType = diskMapType;
   }
 
+<<<<<<< HEAD
   private DiskMap<T, R> getDiskBasedMap() {
+=======
+  private SpillableDiskMap<T, R> getDiskBasedMap() {
+>>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
     if (null == diskBasedMap) {
       synchronized (this) {
         if (null == diskBasedMap) {
           try {
             switch (diskMapType) {
+<<<<<<< HEAD
               case ROCKS_DB:
                 diskBasedMap = new RocksDbDiskMap<>(baseFilePath);
                 break;
               case BITCASK:
               default:
                 diskBasedMap = new BitCaskDiskMap<>(baseFilePath);
+=======
+              case ROCK_DB:
+                diskBasedMap = new SpillableRocksDBBasedMap<>(baseFilePath);
+                break;
+              case DISK_MAP:
+              default:
+                diskBasedMap = new DiskBasedMap<>(baseFilePath);
+>>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
             }
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);
@@ -280,6 +303,40 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
     entrySet.addAll(inMemoryMap.entrySet());
     entrySet.addAll(getDiskBasedMap().entrySet());
     return entrySet;
+  }
+
+  public enum DiskMapType {
+    DISK_MAP("disk_map"),
+    ROCK_DB("rock_db"),
+    UNKNOWN("unknown");
+
+    private final String value;
+
+    DiskMapType(String value) {
+      this.value = value;
+    }
+
+    /**
+     * Getter for spillable disk map type.
+     * @return
+     */
+    public String value() {
+      return value;
+    }
+
+    /**
+     * Convert string value to {@link DiskMapType}.
+     */
+    public static DiskMapType fromValue(String value) {
+      switch (value.toLowerCase(Locale.ROOT)) {
+        case "disk_map":
+          return DISK_MAP;
+        case "rock_db":
+          return ROCK_DB;
+        default:
+          throw new HoodieException("Invalid value of Type.");
+      }
+    }
   }
 
   /**

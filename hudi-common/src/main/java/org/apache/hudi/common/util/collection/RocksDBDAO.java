@@ -360,6 +360,34 @@ public class RocksDBDAO {
   }
 
   /**
+   * Return Iterator of key-value pairs from RocksIterator.
+   *
+   * @param columnFamilyName Column Family Name
+   * @param <T>              Type of value stored
+   */
+  public <T extends Serializable> Iterator<T> iterator(String columnFamilyName) {
+    ValidationUtils.checkArgument(!closed);
+    final HoodieTimer timer = new HoodieTimer();
+    timer.startTimer();
+    long timeTakenMicro = 0;
+    List<Pair<String, T>> results = new LinkedList<>();
+    try (final RocksIterator it = getRocksDB().newIterator(managedHandlesMap.get(columnFamilyName))) {
+      it.seekToFirst();
+      while (it.isValid()) {
+        long beginTs = System.nanoTime();
+        T val = SerializationUtils.deserialize(it.value());
+        timeTakenMicro += ((System.nanoTime() - beginTs) / 1000);
+        results.add(Pair.of(new String(it.key()), val));
+        it.next();
+      }
+    }
+
+    LOG.info("Iterator for " + columnFamilyName + ". Total Time Taken (msec)="
+        + timer.endTimer() + ". Serialization Time taken(micro)=" + timeTakenMicro + ", num entries=" + results.size());
+    return results.stream().map(Pair::getValue).iterator();
+  }
+
+  /**
    * Perform a prefix delete and return stream of key-value pairs retrieved.
    *
    * @param columnFamilyName Column Family Name

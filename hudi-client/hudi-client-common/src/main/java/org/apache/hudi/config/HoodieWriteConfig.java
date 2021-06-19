@@ -1520,6 +1520,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withSpillableDiskMapType(ExternalSpillableMap.DiskMapType diskMapType) {
+      props.setProperty(SPILLABLE_DISK_MAP_TYPE, diskMapType.value());
+      return this;
+    }
+
     public Builder withHeartbeatIntervalInMs(Integer heartbeatIntervalInMs) {
       writeConfig.setValue(CLIENT_HEARTBEAT_INTERVAL_IN_MS_PROP, String.valueOf(heartbeatIntervalInMs));
       return this;

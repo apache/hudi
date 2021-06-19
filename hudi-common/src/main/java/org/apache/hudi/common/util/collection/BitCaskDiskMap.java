@@ -55,7 +55,11 @@ import java.util.stream.Stream;
  *
  * Inspired by https://github.com/basho/bitcask
  */
+<<<<<<< HEAD:hudi-common/src/main/java/org/apache/hudi/common/util/collection/BitCaskDiskMap.java
 public final class BitCaskDiskMap<T extends Serializable, R extends Serializable> implements DiskMap<T, R> {
+=======
+public final class DiskBasedMap<T extends Serializable, R extends Serializable> implements SpillableDiskMap<T, R> {
+>>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap):hudi-common/src/main/java/org/apache/hudi/common/util/collection/DiskBasedMap.java
 
   public static final int BUFFER_SIZE = 128 * 1024;  // 128 KB
   private static final Logger LOG = LogManager.getLogger(BitCaskDiskMap.class);
