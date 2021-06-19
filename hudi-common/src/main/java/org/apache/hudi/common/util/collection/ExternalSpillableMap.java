@@ -93,7 +93,6 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
                               SizeEstimator<R> valueSizeEstimator, DiskMapType diskMapType) throws IOException {
     this.inMemoryMap = new HashMap<>();
     this.baseFilePath = baseFilePath;
-    this.diskBasedMap = new DiskBasedMap<>(baseFilePath);
     this.maxInMemorySizeInBytes = (long) Math.floor(maxInMemorySizeInBytes * sizingFactorForInMemoryMap);
     this.currentInMemoryMapSize = 0L;
     this.keySizeEstimator = keySizeEstimator;
