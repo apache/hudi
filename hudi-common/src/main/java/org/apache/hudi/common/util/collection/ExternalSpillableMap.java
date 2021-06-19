@@ -20,6 +20,7 @@ package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.SizeEstimator;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.log4j.LogManager;
@@ -33,6 +34,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -61,8 +63,8 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   private final long maxInMemorySizeInBytes;
   // Map to store key-values in memory until it hits maxInMemorySizeInBytes
   private final Map<T, R> inMemoryMap;
-  // Map to store key-valuemetadata important to find the values spilled to disk
-  private transient volatile DiskBasedMap<T, R> diskBasedMap;
+  // Map to store key-values on disk or db after it spilled over the memory
+  private transient volatile SpillableDiskMap<T, R> diskBasedMap;
   // TODO(na) : a dynamic sizing factor to ensure we have space for other objects in memory and
   // incorrect payload estimation
   private final Double sizingFactorForInMemoryMap = 0.8;
@@ -70,6 +72,8 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   private final SizeEstimator<T> keySizeEstimator;
   // Size Estimator for key types
   private final SizeEstimator<R> valueSizeEstimator;
+  // Type of the disk map
+  private final DiskMapType diskMapType;
   // current space occupied by this map in-memory
   private Long currentInMemoryMapSize;
   // An estimate of the size of each payload written to this map
@@ -80,22 +84,35 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   private final String baseFilePath;
 
   public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
-      SizeEstimator<R> valueSizeEstimator) throws IOException {
+                              SizeEstimator<R> valueSizeEstimator) throws IOException {
+    this(maxInMemorySizeInBytes, baseFilePath, keySizeEstimator,
+        valueSizeEstimator, DiskMapType.DISK_MAP);
+  }
+
+  public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
+                              SizeEstimator<R> valueSizeEstimator, DiskMapType diskMapType) throws IOException {
     this.inMemoryMap = new HashMap<>();
     this.baseFilePath = baseFilePath;
-    this.diskBasedMap = new DiskBasedMap<>(baseFilePath);
     this.maxInMemorySizeInBytes = (long) Math.floor(maxInMemorySizeInBytes * sizingFactorForInMemoryMap);
     this.currentInMemoryMapSize = 0L;
     this.keySizeEstimator = keySizeEstimator;
     this.valueSizeEstimator = valueSizeEstimator;
+    this.diskMapType = diskMapType;
   }
 
-  private DiskBasedMap<T, R> getDiskBasedMap() {
+  private SpillableDiskMap<T, R> getDiskBasedMap() {
     if (null == diskBasedMap) {
       synchronized (this) {
         if (null == diskBasedMap) {
           try {
-            diskBasedMap = new DiskBasedMap<>(baseFilePath);
+            switch (diskMapType) {
+              case ROCK_DB:
+                diskBasedMap = new SpillableRocksDBBasedMap<>(baseFilePath);
+                break;
+              case DISK_MAP:
+              default:
+                diskBasedMap = new DiskBasedMap<>(baseFilePath);
+            }
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);
           }
@@ -158,6 +175,14 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   @Override
   public boolean containsValue(Object value) {
     return inMemoryMap.containsValue(value) || getDiskBasedMap().containsValue(value);
+  }
+
+  public boolean inMemoryContainsKey(Object key) {
+    return inMemoryMap.containsKey(key);
+  }
+
+  public boolean inDiskContainsKey(Object key) {
+    return getDiskBasedMap().containsKey(key);
   }
 
   @Override
@@ -257,6 +282,40 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
     entrySet.addAll(inMemoryMap.entrySet());
     entrySet.addAll(getDiskBasedMap().entrySet());
     return entrySet;
+  }
+
+  public enum DiskMapType {
+    DISK_MAP("disk_map"),
+    ROCK_DB("rock_db"),
+    UNKNOWN("unknown");
+
+    private final String value;
+
+    DiskMapType(String value) {
+      this.value = value;
+    }
+
+    /**
+     * Getter for spillable disk map type.
+     * @return
+     */
+    public String value() {
+      return value;
+    }
+
+    /**
+     * Convert string value to {@link DiskMapType}.
+     */
+    public static DiskMapType fromValue(String value) {
+      switch (value.toLowerCase(Locale.ROOT)) {
+        case "disk_map":
+          return DISK_MAP;
+        case "rock_db":
+          return ROCK_DB;
+        default:
+          throw new HoodieException("Invalid value of Type.");
+      }
+    }
   }
 
   /**

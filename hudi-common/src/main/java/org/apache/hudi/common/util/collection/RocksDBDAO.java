@@ -45,6 +45,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
@@ -64,11 +65,13 @@ public class RocksDBDAO {
   private transient RocksDB rocksDB;
   private boolean closed = false;
   private final String rocksDBBasePath;
+  private long totalBytesWritten;
 
   public RocksDBDAO(String basePath, String rocksDBBasePath) {
     this.rocksDBBasePath =
         String.format("%s/%s/%s", rocksDBBasePath, basePath.replace("/", "_"), UUID.randomUUID().toString());
     init();
+    totalBytesWritten = 0L;
   }
 
   /**
@@ -169,7 +172,7 @@ public class RocksDBDAO {
    */
   public <T extends Serializable> void putInBatch(WriteBatch batch, String columnFamilyName, String key, T value) {
     try {
-      byte[] payload = SerializationUtils.serialize(value);
+      byte[] payload = serializePayload(value);
       batch.put(managedHandlesMap.get(columnFamilyName), key.getBytes(), payload);
     } catch (Exception e) {
       throw new HoodieException(e);
@@ -189,7 +192,7 @@ public class RocksDBDAO {
       K key, T value) {
     try {
       byte[] keyBytes = SerializationUtils.serialize(key);
-      byte[] payload = SerializationUtils.serialize(value);
+      byte[] payload = serializePayload(value);
       batch.put(managedHandlesMap.get(columnFamilyName), keyBytes, payload);
     } catch (Exception e) {
       throw new HoodieException(e);
@@ -206,7 +209,7 @@ public class RocksDBDAO {
    */
   public <T extends Serializable> void put(String columnFamilyName, String key, T value) {
     try {
-      byte[] payload = SerializationUtils.serialize(value);
+      byte[] payload = serializePayload(value);
       getRocksDB().put(managedHandlesMap.get(columnFamilyName), key.getBytes(), payload);
     } catch (Exception e) {
       throw new HoodieException(e);
@@ -223,7 +226,7 @@ public class RocksDBDAO {
    */
   public <K extends Serializable, T extends Serializable> void put(String columnFamilyName, K key, T value) {
     try {
-      byte[] payload = SerializationUtils.serialize(value);
+      byte[] payload = serializePayload(value);
       getRocksDB().put(managedHandlesMap.get(columnFamilyName), SerializationUtils.serialize(key), payload);
     } catch (Exception e) {
       throw new HoodieException(e);
@@ -352,6 +355,34 @@ public class RocksDBDAO {
   }
 
   /**
+   * Return Iterator of key-value pairs from RocksIterator.
+   *
+   * @param columnFamilyName Column Family Name
+   * @param <T>              Type of value stored
+   */
+  public <T extends Serializable> Iterator<T> iterator(String columnFamilyName) {
+    ValidationUtils.checkArgument(!closed);
+    final HoodieTimer timer = new HoodieTimer();
+    timer.startTimer();
+    long timeTakenMicro = 0;
+    List<Pair<String, T>> results = new LinkedList<>();
+    try (final RocksIterator it = getRocksDB().newIterator(managedHandlesMap.get(columnFamilyName))) {
+      it.seekToFirst();
+      while (it.isValid()) {
+        long beginTs = System.nanoTime();
+        T val = SerializationUtils.deserialize(it.value());
+        timeTakenMicro += ((System.nanoTime() - beginTs) / 1000);
+        results.add(Pair.of(new String(it.key()), val));
+        it.next();
+      }
+    }
+
+    LOG.info("Iterator for " + columnFamilyName + ". Total Time Taken (msec)="
+        + timer.endTimer() + ". Serialization Time taken(micro)=" + timeTakenMicro + ", num entries=" + results.size());
+    return results.stream().map(Pair::getValue).iterator();
+  }
+
+  /**
    * Perform a prefix delete and return stream of key-value pairs retrieved.
    *
    * @param columnFamilyName Column Family Name
@@ -446,6 +477,16 @@ public class RocksDBDAO {
         throw new HoodieIOException(e.getMessage(), e);
       }
     }
+  }
+
+  public long getTotalBytesWritten() {
+    return totalBytesWritten;
+  }
+
+  private <T extends Serializable> byte[] serializePayload(T value) throws IOException {
+    byte[] payload = SerializationUtils.serialize(value);
+    totalBytesWritten += payload.length;
+    return payload;
   }
 
   String getRocksDBBasePath() {
