@@ -18,6 +18,8 @@
 
 package org.apache.hudi.utilities.functional;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
 import java.util.ConcurrentModificationException;
 import java.util.concurrent.ExecutorService;
 import org.apache.hudi.DataSourceWriteOptions;
@@ -50,10 +52,12 @@ import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.CsvDFSSource;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 import org.apache.hudi.utilities.sources.InputBatch;
+import org.apache.hudi.utilities.sources.JdbcSource;
 import org.apache.hudi.utilities.sources.JsonKafkaSource;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config;
+import org.apache.hudi.utilities.testutils.JdbcTestUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.hudi.utilities.testutils.sources.DistributedTestDataSource;
 import org.apache.hudi.utilities.testutils.sources.config.SourceConfigs;
@@ -109,6 +113,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Basic tests against {@link HoodieDeltaStreamer}, by issuing bulk_inserts, upserts, inserts. Check counts at the end.
@@ -1592,6 +1597,45 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     // File schema provider is used, transformer is applied
     // In this case, the source and target schema come from the Avro schema files
     testCsvDFSSource(false, '\t', true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
+  }
+
+  @Test
+  public void testJdbcSourceIncrementalFetchInContinuousMode() {
+    try (Connection connection = DriverManager.getConnection("jdbc:h2:mem:test_mem", "test", "jdbc")) {
+      TypedProperties props = new TypedProperties();
+      props.setProperty("hoodie.deltastreamer.jdbc.url", "jdbc:h2:mem:test_mem");
+      props.setProperty("hoodie.deltastreamer.jdbc.driver.class", "org.h2.Driver");
+      props.setProperty("hoodie.deltastreamer.jdbc.user", "test");
+      props.setProperty("hoodie.deltastreamer.jdbc.password", "jdbc");
+      props.setProperty("hoodie.deltastreamer.jdbc.table.name", "triprec");
+      props.setProperty("hoodie.deltastreamer.jdbc.incr.pull", "true");
+      props.setProperty("hoodie.deltastreamer.jdbc.table.incr.column.name", "id");
+
+      props.setProperty("hoodie.datasource.write.keygenerator.class", SimpleKeyGenerator.class.getName());
+      props.setProperty("hoodie.datasource.write.recordkey.field", "ID");
+      props.setProperty("hoodie.datasource.write.partitionpath.field", "not_there");
+
+      UtilitiesTestBase.Helpers.savePropsToDFS(props, dfs, dfsBasePath + "/test-jdbc-source.properties");
+
+      int numRecords = 1000;
+      int sourceLimit = 100;
+      String tableBasePath = dfsBasePath + "/triprec";
+      HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT, JdbcSource.class.getName(),
+          null, "test-jdbc-source.properties", false,
+          false, sourceLimit, false, null, null, "timestamp");
+      cfg.continuousMode = true;
+      // Add 1000 records
+      JdbcTestUtils.clearAndInsert("000", numRecords, connection, new HoodieTestDataGenerator(), props);
+
+      HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
+      deltaStreamerTestRunner(deltaStreamer, cfg, (r) -> {
+        TestHelpers.assertAtleastNCompactionCommits(numRecords / sourceLimit + ((numRecords % sourceLimit == 0) ? 0 : 1), tableBasePath, dfs);
+        TestHelpers.assertRecordCount(numRecords, tableBasePath + "/*/*.parquet", sqlContext);
+        return true;
+      });
+    } catch (Exception e) {
+      fail(e.getMessage());
+    }
   }
 
   /**
