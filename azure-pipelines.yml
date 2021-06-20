@@ -34,8 +34,6 @@ stages:
     jobs:
       - job: unit_tests_spark_client
         steps:
-          - script: |
-              mvn $(MAVEN_OPTS) clean install -DskipTests
           - task: Cache@2
             inputs:
               key: 'maven | "$(Agent.OS)" | **/pom.xml'
@@ -44,6 +42,8 @@ stages:
                 maven
               path: $(MAVEN_CACHE_FOLDER)
             displayName: Cache Maven local repo
+          - script: |
+              mvn $(MAVEN_OPTS) clean install -DskipTests
           - task: Maven@3
             inputs:
               mavenPomFile: 'pom.xml'
@@ -58,8 +58,6 @@ stages:
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: unit_tests_utilities
         steps:
-          - script: |
-              mvn $(MAVEN_OPTS) clean install -DskipTests
           - task: Cache@2
             inputs:
               key: 'maven | "$(Agent.OS)" | **/pom.xml'
@@ -68,6 +66,8 @@ stages:
                 maven
               path: $(MAVEN_CACHE_FOLDER)
             displayName: Cache Maven local repo
+          - script: |
+              mvn $(MAVEN_OPTS) clean install -DskipTests
           - task: Maven@3
             inputs:
               mavenPomFile: 'pom.xml'
@@ -82,8 +82,6 @@ stages:
               mavenOptions: '-Xmx2g $(MAVEN_OPTS)'
       - job: unit_tests_other_modules
         steps:
-          - script: |
-              mvn $(MAVEN_OPTS) clean install -DskipTests
           - task: Cache@2
             inputs:
               key: 'maven | "$(Agent.OS)" | **/pom.xml'
@@ -92,6 +90,8 @@ stages:
                 maven
               path: $(MAVEN_CACHE_FOLDER)
             displayName: Cache Maven local repo
+          - script: |
+              mvn $(MAVEN_OPTS) clean install -DskipTests
           - task: Maven@3
             inputs:
               mavenPomFile: 'pom.xml'
