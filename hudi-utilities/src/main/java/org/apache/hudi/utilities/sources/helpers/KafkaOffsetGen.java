@@ -29,7 +29,6 @@ import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.log4j.LogManager;
@@ -169,22 +168,14 @@ public class KafkaOffsetGen {
     public static final Boolean DEFAULT_ENABLE_KAFKA_COMMIT_OFFSET = false;
   }
 
-  private final HashMap<String, Object> kafkaParams;
+  private final Map<String, Object> kafkaParams;
   private final TypedProperties props;
   protected final String topicName;
   private KafkaResetOffsetStrategies autoResetValue;
 
   public KafkaOffsetGen(TypedProperties props) {
     this.props = props;
-
-    kafkaParams = new HashMap<>();
-    props.keySet().stream().filter(prop -> {
-      // In order to prevent printing unnecessary warn logs, here filter out the hoodie
-      // configuration items before passing to kafkaParams
-      return !prop.toString().startsWith("hoodie.");
-    }).forEach(prop -> {
-      kafkaParams.put(prop.toString(), props.get(prop.toString()));
-    });
+    kafkaParams = KafkaOffsetGen.excludeHoodieConfigs(props);
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.KAFKA_TOPIC_NAME));
     topicName = props.getString(Config.KAFKA_TOPIC_NAME);
     String kafkaAutoResetOffsetsStr = props.getString(Config.KAFKA_AUTO_OFFSET_RESET, Config.DEFAULT_KAFKA_AUTO_OFFSET_RESET.name().toLowerCase());
@@ -198,9 +189,6 @@ public class KafkaOffsetGen {
     }
     if (!found) {
       throw new HoodieDeltaStreamerException(Config.KAFKA_AUTO_OFFSET_RESET + " config set to unknown value " + kafkaAutoResetOffsetsStr);
-    }
-    if (props.getBoolean(Config.ENABLE_KAFKA_COMMIT_OFFSET,Config.DEFAULT_ENABLE_KAFKA_COMMIT_OFFSET)) {
-      DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(ConsumerConfig.GROUP_ID_CONFIG));
     }
   }
 
@@ -305,35 +293,35 @@ public class KafkaOffsetGen {
     return topicName;
   }
 
-  public HashMap<String, Object> getKafkaParams() {
+  public Map<String, Object> getKafkaParams() {
     return kafkaParams;
   }
 
-  /**
-   * Commit offsets to Kafka only after hoodie commit is successful
-   * @param checkpointStr offsets for each partition
-   */
-  public static void commitOffsetToKafka(String checkpointStr, TypedProperties props) {
-    Map<TopicPartition, Long> offsetMap = KafkaOffsetGen.CheckpointUtils.strToOffsets(checkpointStr);
+  private static Map<String, Object> excludeHoodieConfigs(TypedProperties props) {
     Map<String, Object> kafkaParams = new HashMap<>();
     props.keySet().stream().filter(prop -> {
+      // In order to prevent printing unnecessary warn logs, here filter out the hoodie
+      // configuration items before passing to kafkaParams
       return !prop.toString().startsWith("hoodie.");
     }).forEach(prop -> {
       kafkaParams.put(prop.toString(), props.get(prop.toString()));
     });
+    return kafkaParams;
+  }
+
+  /**
+   * Commit offsets to Kafka only after hoodie commit is successful.
+   * @param checkpointStr checkpoint string containing offsets.
+   * @param props properties for Kafka consumer.
+   */
+  public static void commitOffsetToKafka(String checkpointStr, TypedProperties props) {
+    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(ConsumerConfig.GROUP_ID_CONFIG));
+    Map<TopicPartition, Long> offsetMap = KafkaOffsetGen.CheckpointUtils.strToOffsets(checkpointStr);
+    Map<String, Object> kafkaParams = KafkaOffsetGen.excludeHoodieConfigs(props);
     Map<TopicPartition, OffsetAndMetadata> offsetAndMetadataMap = new HashMap<>(offsetMap.size());
-    offsetMap.forEach((key, value) -> offsetAndMetadataMap.put(key, new OffsetAndMetadata(value)));
     try (KafkaConsumer consumer = new KafkaConsumer(kafkaParams)) {
-      consumer.commitAsync(offsetAndMetadataMap, new OffsetCommitCallback() {
-        @Override
-        public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-          if (exception != null) {
-            LOG.error("Kafka Commit failed for offsets " + offsets.toString(), exception);
-          } else {
-            LOG.info("Offsets committed to Kafka successfully " + offsets.toString());
-          }
-        }
-      });
+      offsetMap.forEach((topicPartition, offset) -> offsetAndMetadataMap.put(topicPartition, new OffsetAndMetadata(offset)));
+      consumer.commitSync(offsetAndMetadataMap);
     }
   }
 }

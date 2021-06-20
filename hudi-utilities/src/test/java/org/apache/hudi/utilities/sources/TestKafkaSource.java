@@ -22,6 +22,7 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
@@ -44,9 +45,13 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 
 /**
@@ -62,7 +67,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
 
   @BeforeAll
   public static void initClass() throws Exception {
-    UtilitiesTestBase.initClass();
+    UtilitiesTestBase.initClass(false);
   }
 
   @AfterAll
@@ -89,6 +94,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
     props.setProperty("hoodie.deltastreamer.source.kafka.topic", TEST_TOPIC_NAME);
     props.setProperty("bootstrap.servers", testUtils.brokerAddress());
     props.setProperty(Config.KAFKA_AUTO_OFFSET_RESET, resetStrategy);
+    props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
     props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents",
         maxEventsToReadFromKafkaSource != null ? String.valueOf(maxEventsToReadFromKafkaSource) :
             String.valueOf(Config.maxEventsFromKafkaSource));
@@ -281,11 +287,16 @@ public class TestKafkaSource extends UtilitiesTestBase {
     assertEquals(Option.empty(), fetch6.getBatch());
   }
 
-
   @Test
   public void testCommitOffsetToKafka() {
     // topic setup.
-    testUtils.createTopic(TEST_TOPIC_NAME, 1);
+    testUtils.createTopic(TEST_TOPIC_NAME, 2);
+    List<TopicPartition> topicPartitions = new ArrayList<>();
+    TopicPartition topicPartition0 = new TopicPartition(TEST_TOPIC_NAME, 0);
+    topicPartitions.add(topicPartition0);
+    TopicPartition topicPartition1 = new TopicPartition(TEST_TOPIC_NAME, 1);
+    topicPartitions.add(topicPartition1);
+
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     TypedProperties props = createPropsForJsonSource(null, "earliest");
 
@@ -296,14 +307,40 @@ public class TestKafkaSource extends UtilitiesTestBase {
     assertEquals(Option.empty(), kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch());
     testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
 
-    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 600);
-    System.out.println(fetch1.getCheckpointForNextBatch());
-    // create commit to kafka after first batch
-    KafkaOffsetGen.commitOffsetToKafka(fetch1.getCheckpointForNextBatch(),props);
+    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 599);
+    // commit to kafka after first batch
+    KafkaOffsetGen.commitOffsetToKafka(fetch1.getCheckpointForNextBatch(), props);
 
     try (KafkaConsumer consumer = new KafkaConsumer(props)) {
-      OffsetAndMetadata offsetAndMetadata = consumer.committed(new TopicPartition(TEST_TOPIC_NAME, 1));
-      System.out.println(offsetAndMetadata);
+      consumer.assign(topicPartitions);
+
+      OffsetAndMetadata offsetAndMetadata = consumer.committed(topicPartition0);
+      assertEquals(300,offsetAndMetadata.offset());
+      offsetAndMetadata = consumer.committed(topicPartition1);
+      assertEquals(299,offsetAndMetadata.offset());
+      // end offsets will point to 500 for each partition because we consumed less messages from first batch
+      Map endOffsets = consumer.endOffsets(topicPartitions);
+      assertEquals(500L,endOffsets.get(topicPartition0));
+      assertEquals(500L,endOffsets.get(topicPartition1));
+
+      testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("001", 500)));
+      InputBatch<Dataset<Row>> fetch2 =
+              kafkaSource.fetchNewDataInRowFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
+
+      // commit to Kafka after second batch is processed completely
+      KafkaOffsetGen.commitOffsetToKafka(fetch2.getCheckpointForNextBatch(), props);
+
+      offsetAndMetadata = consumer.committed(topicPartition0);
+      assertEquals(750,offsetAndMetadata.offset());
+      offsetAndMetadata = consumer.committed(topicPartition1);
+      assertEquals(750,offsetAndMetadata.offset());
+
+      endOffsets = consumer.endOffsets(topicPartitions);
+      assertEquals(750L,endOffsets.get(topicPartition0));
+      assertEquals(750L,endOffsets.get(topicPartition1));
     }
+    // check failure case
+    props.remove(ConsumerConfig.GROUP_ID_CONFIG);
+    assertThrows(HoodieNotSupportedException.class,() -> KafkaOffsetGen.commitOffsetToKafka("",props));
   }
 }
