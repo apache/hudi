@@ -26,11 +26,13 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.streaming.kafka010.OffsetRange;
@@ -322,6 +324,8 @@ public class KafkaOffsetGen {
     try (KafkaConsumer consumer = new KafkaConsumer(kafkaParams)) {
       offsetMap.forEach((topicPartition, offset) -> offsetAndMetadataMap.put(topicPartition, new OffsetAndMetadata(offset)));
       consumer.commitSync(offsetAndMetadataMap);
+    } catch (CommitFailedException | TimeoutException e) {
+      LOG.warn("Committing offsets to Kafka failed, this does not impact processing of records", e);
     }
   }
 }

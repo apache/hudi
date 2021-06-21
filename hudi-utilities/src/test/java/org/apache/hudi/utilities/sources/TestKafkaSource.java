@@ -51,6 +51,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 
@@ -310,13 +311,14 @@ public class TestKafkaSource extends UtilitiesTestBase {
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 599);
     // commit to kafka after first batch
     KafkaOffsetGen.commitOffsetToKafka(fetch1.getCheckpointForNextBatch(), props);
-
     try (KafkaConsumer consumer = new KafkaConsumer(props)) {
       consumer.assign(topicPartitions);
 
       OffsetAndMetadata offsetAndMetadata = consumer.committed(topicPartition0);
+      assertNotNull(offsetAndMetadata);
       assertEquals(300,offsetAndMetadata.offset());
       offsetAndMetadata = consumer.committed(topicPartition1);
+      assertNotNull(offsetAndMetadata);
       assertEquals(299,offsetAndMetadata.offset());
       // end offsets will point to 500 for each partition because we consumed less messages from first batch
       Map endOffsets = consumer.endOffsets(topicPartitions);
@@ -331,8 +333,10 @@ public class TestKafkaSource extends UtilitiesTestBase {
       KafkaOffsetGen.commitOffsetToKafka(fetch2.getCheckpointForNextBatch(), props);
 
       offsetAndMetadata = consumer.committed(topicPartition0);
+      assertNotNull(offsetAndMetadata);
       assertEquals(750,offsetAndMetadata.offset());
       offsetAndMetadata = consumer.committed(topicPartition1);
+      assertNotNull(offsetAndMetadata);
       assertEquals(750,offsetAndMetadata.offset());
 
       endOffsets = consumer.endOffsets(topicPartitions);
