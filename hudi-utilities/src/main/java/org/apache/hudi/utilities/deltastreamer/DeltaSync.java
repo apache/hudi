@@ -509,8 +509,6 @@ public class DeltaSync implements Serializable {
     return Pair.of(scheduledCompactionInstant, writeStatusRDD);
   }
 
-
-
   /**
    * Try to start a new commit.
    * <p>
