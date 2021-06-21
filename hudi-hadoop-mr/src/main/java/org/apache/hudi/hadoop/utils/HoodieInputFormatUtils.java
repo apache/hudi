@@ -18,6 +18,9 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hadoop.hive.ql.io.orc.OrcInputFormat;
+import org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat;
+import org.apache.hadoop.hive.ql.io.orc.OrcSerde;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -123,6 +126,8 @@ public class HoodieInputFormatUtils {
         } else {
           return HoodieHFileInputFormat.class.getName();
         }
+      case ORC:
+        return OrcInputFormat.class.getName();
       default:
         throw new HoodieIOException("Hoodie InputFormat not implemented for base file format " + baseFileFormat);
     }
@@ -134,6 +139,8 @@ public class HoodieInputFormatUtils {
         return MapredParquetOutputFormat.class.getName();
       case HFILE:
         return MapredParquetOutputFormat.class.getName();
+      case ORC:
+        return OrcOutputFormat.class.getName();
       default:
         throw new HoodieIOException("No OutputFormat for base file format " + baseFileFormat);
     }
@@ -145,6 +152,8 @@ public class HoodieInputFormatUtils {
         return ParquetHiveSerDe.class.getName();
       case HFILE:
         return ParquetHiveSerDe.class.getName();
+      case ORC:
+        return OrcSerde.class.getName();
       default:
         throw new HoodieIOException("No SerDe for base file format " + baseFileFormat);
     }

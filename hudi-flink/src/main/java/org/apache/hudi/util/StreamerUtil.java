@@ -276,7 +276,7 @@ public class StreamerUtil {
    * Returns whether needs to schedule the async compaction.
    * @param conf The flink configuration.
    */
-  public static boolean needsScheduleCompaction(Configuration conf) {
+  public static boolean needsAsyncCompaction(Configuration conf) {
     return conf.getString(FlinkOptions.TABLE_TYPE)
         .toUpperCase(Locale.ROOT)
         .equals(FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
@@ -304,10 +304,19 @@ public class StreamerUtil {
   }
 
   /**
-   * Subtract the old instant time with given milliseconds and returns.
-   * */
-  public static String instantTimeSubtract(String oldInstant, long milliseconds) {
-    long oldTime = Long.parseLong(oldInstant);
-    return String.valueOf(oldTime - milliseconds);
+   * Return the median instant time between the given two instant time.
+   */
+  public static String medianInstantTime(String highVal, String lowVal) {
+    long high = Long.parseLong(highVal);
+    long low = Long.parseLong(lowVal);
+    long median = low + (high - low) / 2;
+    return String.valueOf(median);
+  }
+
+  /**
+   * Returns the time interval in seconds between the given instant time.
+   */
+  public static long instantTimeDiff(String newInstantTime, String oldInstantTime) {
+    return Long.parseLong(newInstantTime) - Long.parseLong(oldInstantTime);
   }
 }

@@ -28,11 +28,13 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.avro.Schema;
+import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -60,6 +62,11 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
     context = new HoodieFlinkEngineContext(
         new SerializableConfiguration(StreamerUtil.getHadoopConf()),
         new FlinkTaskContextSupplier(null));
+  }
+
+  @Override
+  protected void setUp(Configuration conf) {
+    conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
   }
 
   @Override

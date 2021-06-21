@@ -45,13 +45,13 @@ public class GlobalHiveSyncTool extends HiveSyncTool {
   public void syncHoodieTable() {
     switch (hoodieHiveClient.getTableType()) {
       case COPY_ON_WRITE:
-        syncHoodieTable(snapshotTableName, false);
+        syncHoodieTable(snapshotTableName, false, false);
         break;
       case MERGE_ON_READ:
         // sync a RO table for MOR
-        syncHoodieTable(roTableName.get(), false);
+        syncHoodieTable(roTableName.get(), false, true);
         // sync a RT table for MOR
-        syncHoodieTable(snapshotTableName, true);
+        syncHoodieTable(snapshotTableName, true, false);
         break;
       default:
         LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
@@ -60,8 +60,8 @@ public class GlobalHiveSyncTool extends HiveSyncTool {
   }
 
   @Override
-  protected void syncHoodieTable(String tableName, boolean useRealtimeInputFormat) {
-    super.syncHoodieTable(tableName, useRealtimeInputFormat);
+  protected void syncHoodieTable(String tableName, boolean useRealtimeInputFormat, boolean readAsOptimized) {
+    super.syncHoodieTable(tableName, useRealtimeInputFormat, readAsOptimized);
     if (((GlobalHiveSyncConfig)cfg).globallyReplicatedTimeStamp != null) {
       hoodieHiveClient.updateLastReplicatedTimeStamp(tableName,
           ((GlobalHiveSyncConfig) cfg).globallyReplicatedTimeStamp);

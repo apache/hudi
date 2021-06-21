@@ -105,9 +105,9 @@ public class StreamWriteOperatorCoordinator
   private final int parallelism;
 
   /**
-   * Whether needs to schedule compaction task on finished checkpoints.
+   * Whether to schedule asynchronous compaction task on finished checkpoints.
    */
-  private final boolean needsScheduleCompaction;
+  private final boolean asyncCompaction;
 
   /**
    * A single-thread executor to handle all the asynchronous jobs of the coordinator.
@@ -141,7 +141,7 @@ public class StreamWriteOperatorCoordinator
     this.conf = conf;
     this.context = context;
     this.parallelism = context.currentParallelism();
-    this.needsScheduleCompaction = StreamerUtil.needsScheduleCompaction(conf);
+    this.asyncCompaction = StreamerUtil.needsAsyncCompaction(conf);
   }
 
   @Override
@@ -171,6 +171,9 @@ public class StreamWriteOperatorCoordinator
     if (executor != null) {
       executor.close();
     }
+    // sync Hive if is enabled in batch mode.
+    syncHiveIfEnabled();
+
     this.eventBuffer = null;
   }
 
@@ -201,16 +204,16 @@ public class StreamWriteOperatorCoordinator
           final boolean committed = commitInstant();
           if (committed) {
             // if async compaction is on, schedule the compaction
-            if (needsScheduleCompaction) {
+            if (asyncCompaction) {
               writeClient.scheduleCompaction(Option.empty());
             }
             // start new instant.
             startInstant();
+            // sync Hive if is enabled
+            syncHiveIfEnabled();
           }
         }, "commits the instant %s", this.instant
     );
-    // sync Hive if is enabled
-    syncHiveIfEnabled();
   }
 
   private void syncHiveIfEnabled() {

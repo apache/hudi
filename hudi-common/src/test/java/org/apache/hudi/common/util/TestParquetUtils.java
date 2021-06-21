@@ -58,7 +58,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestParquetUtils extends HoodieCommonTestHarness {
 
-  private ParquetUtils parquetUtils = new ParquetUtils();
+  private ParquetUtils parquetUtils;
 
   public static List<Arguments> bloomFilterTypeCodes() {
     return Arrays.asList(
@@ -70,6 +70,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
   @BeforeEach
   public void setup() {
     initPath();
+    parquetUtils = new ParquetUtils();
   }
 
   @ParameterizedTest
@@ -80,7 +81,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
       rowKeys.add(UUID.randomUUID().toString());
     }
 
-    String filePath = Paths.get(basePath, "test.parquet").toString();
+    String filePath = Paths.get(basePath, "test.parquet").toUri().toString();
     writeParquetFile(typeCode, filePath, rowKeys);
 
     // Read and verify
@@ -110,7 +111,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
       }
     }
 
-    String filePath = Paths.get(basePath, "test.parquet").toString();
+    String filePath = Paths.get(basePath, "test.parquet").toUri().toString();
     writeParquetFile(typeCode, filePath, rowKeys);
 
     // Read and verify
@@ -136,7 +137,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
       expected.add(new HoodieKey(rowKey, partitionPath));
     }
 
-    String filePath = basePath + "/test.parquet";
+    String filePath = Paths.get(basePath, "test.parquet").toUri().toString();
     Schema schema = HoodieAvroUtils.getRecordKeyPartitionPathSchema();
     writeParquetFile(typeCode, filePath, rowKeys, schema, true, partitionPath);
 
@@ -152,7 +153,7 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
   @Test
   public void testReadCounts() throws Exception {
-    String filePath = basePath + "/test.parquet";
+    String filePath = Paths.get(basePath, "test.parquet").toUri().toString();
     List<String> rowKeys = new ArrayList<>();
     for (int i = 0; i < 123; i++) {
       rowKeys.add(UUID.randomUUID().toString());

@@ -21,12 +21,12 @@ package org.apache.hudi.sink.compact;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.StreamerUtil;
@@ -36,11 +36,8 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
 
 /**
  * Flink hudi compaction program that can be executed manually.
@@ -49,6 +46,7 @@ public class HoodieFlinkCompactor {
 
   protected static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkCompactor.class);
 
+  @SuppressWarnings("unchecked, rawtypes")
   public static void main(String[] args) throws Exception {
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
@@ -70,17 +68,28 @@ public class HoodieFlinkCompactor {
     // set table schema
     CompactionUtil.setAvroSchema(conf, metaClient);
 
+    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf, null);
+    HoodieFlinkTable<?> table = writeClient.getHoodieTable();
+
+    // rolls back inflight compaction first
+    // condition: the schedule compaction is in INFLIGHT state for max delta seconds.
+    String curInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    int deltaSeconds = conf.getInteger(FlinkOptions.COMPACTION_DELTA_SECONDS);
+    HoodieTimeline inflightCompactionTimeline = metaClient.getActiveTimeline()
+        .filterPendingCompactionTimeline()
+        .filter(instant ->
+            instant.getState() == HoodieInstant.State.INFLIGHT
+                && StreamerUtil.instantTimeDiff(curInstantTime, instant.getTimestamp()) >= deltaSeconds);
+    inflightCompactionTimeline.getInstants().forEach(inflightInstant -> {
+      writeClient.rollbackInflightCompaction(inflightInstant, table);
+      table.getMetaClient().reloadActiveTimeline();
+    });
+
     // judge whether have operation
     // to compute the compaction instant time and do compaction.
-    String instantTime = CompactionUtil.getCompactionInstantTime(metaClient);
-    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf, null);
-    writeClient.scheduleCompactionAtInstant(instantTime, Option.empty());
-
-    HoodieFlinkTable<?> table = writeClient.getHoodieTable();
-    // the last instant takes the highest priority.
-    Option<HoodieInstant> compactionInstant = table.getActiveTimeline().filterPendingCompactionTimeline().lastInstant();
-    String compactionInstantTime = compactionInstant.isPresent() ? compactionInstant.get().getTimestamp() : null;
-    if (compactionInstantTime == null) {
+    String compactionInstantTime = CompactionUtil.getCompactionInstantTime(metaClient);
+    boolean scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
+    if (!scheduled) {
       // do nothing.
       LOG.info("No compaction plan for this job ");
       return;
@@ -108,7 +117,7 @@ public class HoodieFlinkCompactor {
 
       LOG.warn("The compaction plan was fetched through the auxiliary path(.tmp) but not the meta path(.hoodie).\n"
           + "Clean the compaction plan in auxiliary path and cancels the compaction");
-      cleanInstant(table.getMetaClient(), instant);
+      CompactionUtil.cleanInstant(table.getMetaClient(), instant);
       return;
     }
 
@@ -118,7 +127,7 @@ public class HoodieFlinkCompactor {
         .rebalance()
         .transform("compact_task",
             TypeInformation.of(CompactionCommitEvent.class),
-            new ProcessOperator<>(new NonKeyedCompactFunction(conf)))
+            new ProcessOperator<>(new CompactFunction(conf)))
         .setParallelism(compactionPlan.getOperations().size())
         .addSink(new CompactionCommitSink(conf))
         .name("clean_commits")
@@ -126,21 +135,5 @@ public class HoodieFlinkCompactor {
         .setParallelism(1);
 
     env.execute("flink_hudi_compaction");
-  }
-
-  private static void cleanInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {
-    Path commitFilePath = new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName());
-    try {
-      if (metaClient.getFs().exists(commitFilePath)) {
-        boolean deleted = metaClient.getFs().delete(commitFilePath, false);
-        if (deleted) {
-          LOG.info("Removed instant " + instant);
-        } else {
-          throw new HoodieIOException("Could not delete instant " + instant);
-        }
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Could not remove requested commit " + commitFilePath, e);
-    }
   }
 }

@@ -19,7 +19,6 @@
 package org.apache.hudi.table.action.rollback;
 
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -88,7 +87,7 @@ public class RollbackUtils {
 
   /**
    * Generate all rollback requests that needs rolling back this action without actually performing rollback for COW table type.
-   * @param fs instance of {@link FileSystem} to use.
+   * @param engineContext instance of {@link HoodieEngineContext} to use.
    * @param basePath base path of interest.
    * @param config instance of {@link HoodieWriteConfig} to use.
    * @return {@link List} of {@link ListingBasedRollbackRequest}s thus collected.

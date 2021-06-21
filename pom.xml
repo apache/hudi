@@ -103,6 +103,8 @@
     <hive.version>2.3.1</hive.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
+    <orc.version>1.6.0</orc.version>
+    <airlift.version>0.16</airlift.version>
     <prometheus.version>0.8.0</prometheus.version>
     <http.version>4.4.1</http.version>
     <spark.version>${spark2.version}</spark.version>
@@ -1050,6 +1052,10 @@
     <repository>
       <id>confluent</id>
       <url>https://packages.confluent.io/maven/</url>
+    </repository>
+    <repository>
+      <id>pentaho.org</id>
+      <url>https://public.nexus.pentaho.org/repository/proxy-public-3rd-party-release/</url>
     </repository>
   </repositories>
 

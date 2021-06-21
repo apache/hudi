@@ -24,6 +24,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -274,8 +275,8 @@ public class UtilHelpers {
    * @param schemaStr   Schema
    * @param parallelism Parallelism
    */
-  public static SparkRDDWriteClient createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
-                                                             int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
+  public static SparkRDDWriteClient<HoodieRecordPayload> createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
+                                                                            int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
     HoodieCompactionConfig compactionConfig = compactionStrategyClass
         .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
             .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())
@@ -288,7 +289,7 @@ public class UtilHelpers {
             .withSchema(schemaStr).combineInput(true, true).withCompactionConfig(compactionConfig)
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
             .withProps(properties).build();
-    return new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), config);
+    return new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jsc), config);
   }
 
   public static int handleErrors(JavaSparkContext jsc, String instantTime, JavaRDD<WriteStatus> writeResponse) {
