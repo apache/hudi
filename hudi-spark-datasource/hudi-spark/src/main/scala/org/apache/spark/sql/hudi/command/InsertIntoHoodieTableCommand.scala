@@ -32,7 +32,7 @@ import org.apache.hudi.{HoodieSparkSqlWriter, HoodieWriterUtils}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
 import org.apache.spark.sql.{Column, DataFrame, Dataset, Row, SaveMode, SparkSession}
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlUtils}
@@ -86,11 +86,16 @@ object InsertIntoHoodieTableCommand {
       SaveMode.Append
     }
     val parameters = HoodieWriterUtils.parametersWithWriteDefaults(config)
-    val queryData = Dataset.ofRows(sparkSession, query)
     val conf = sparkSession.sessionState.conf
-    val alignedQuery = alignOutputFields(queryData, table, insertPartitions, conf)
+    val alignedQuery = alignOutputFields(query, table, insertPartitions, conf)
+    // If we create dataframe using the Dataset.ofRows(sparkSession, alignedQuery),
+    // The nullable attribute of fields will lost.
+    // In order to pass the nullable attribute to the inputDF, we specify the schema
+    // of the rdd.
+    val inputDF = sparkSession.createDataFrame(
+      Dataset.ofRows(sparkSession, alignedQuery).rdd, alignedQuery.schema)
     val success =
-      HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, parameters, alignedQuery)._1
+      HoodieSparkSqlWriter.write(sparkSession.sqlContext, mode, parameters, inputDF)._1
     if (success) {
       if (refreshTable) {
         sparkSession.catalog.refreshTable(table.identifier.unquotedString)
@@ -110,10 +115,10 @@ object InsertIntoHoodieTableCommand {
    * @return
    */
   private def alignOutputFields(
-    query: DataFrame,
+    query: LogicalPlan,
     table: CatalogTable,
     insertPartitions: Map[String, Option[String]],
-    conf: SQLConf): DataFrame = {
+    conf: SQLConf): LogicalPlan = {
 
     val targetPartitionSchema = table.partitionSchema
 
@@ -124,17 +129,17 @@ object InsertIntoHoodieTableCommand {
         s"is: ${staticPartitionValues.mkString("," + "")}")
 
     val queryDataFields = if (staticPartitionValues.isEmpty) { // insert dynamic partition
-      query.logicalPlan.output.dropRight(targetPartitionSchema.fields.length)
+      query.output.dropRight(targetPartitionSchema.fields.length)
     } else { // insert static partition
-      query.logicalPlan.output
+      query.output
     }
     val targetDataSchema = table.dataSchema
     // Align for the data fields of the query
     val dataProjects = queryDataFields.zip(targetDataSchema.fields).map {
       case (dataAttr, targetField) =>
-        val castAttr = castIfNeeded(dataAttr,
+        val castAttr = castIfNeeded(dataAttr.withNullability(targetField.nullable),
           targetField.dataType, conf)
-        new Column(Alias(castAttr, targetField.name)())
+        Alias(castAttr, targetField.name)()
     }
 
     val partitionProjects = if (staticPartitionValues.isEmpty) { // insert dynamic partitions
@@ -142,23 +147,23 @@ object InsertIntoHoodieTableCommand {
       // So we init the partitionAttrPosition with the data schema size.
       var partitionAttrPosition = targetDataSchema.size
       targetPartitionSchema.fields.map(f => {
-        val partitionAttr = query.logicalPlan.output(partitionAttrPosition)
+        val partitionAttr = query.output(partitionAttrPosition)
         partitionAttrPosition = partitionAttrPosition + 1
-        val castAttr = castIfNeeded(partitionAttr, f.dataType, conf)
-        new Column(Alias(castAttr, f.name)())
+        val castAttr = castIfNeeded(partitionAttr.withNullability(f.nullable), f.dataType, conf)
+        Alias(castAttr, f.name)()
       })
     } else { // insert static partitions
       targetPartitionSchema.fields.map(f => {
         val staticPartitionValue = staticPartitionValues.getOrElse(f.name,
         s"Missing static partition value for: ${f.name}")
         val castAttr = Literal.create(staticPartitionValue, f.dataType)
-        new Column(Alias(castAttr, f.name)())
+        Alias(castAttr, f.name)()
       })
     }
     // Remove the hoodie meta fileds from the projects as we do not need these to write
-    val withoutMetaFieldDataProjects = dataProjects.filter(c => !HoodieSqlUtils.isMetaField(c.named.name))
+    val withoutMetaFieldDataProjects = dataProjects.filter(c => !HoodieSqlUtils.isMetaField(c.name))
     val alignedProjects = withoutMetaFieldDataProjects ++ partitionProjects
-    query.select(alignedProjects: _*)
+    Project(alignedProjects, query)
   }
 
   /**
