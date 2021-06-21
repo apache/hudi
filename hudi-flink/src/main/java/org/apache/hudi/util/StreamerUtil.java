@@ -312,4 +312,11 @@ public class StreamerUtil {
     long median = low + (high - low) / 2;
     return String.valueOf(median);
   }
+
+  /**
+   * Returns the time interval in seconds between the given instant time.
+   */
+  public static long instantTimeDiff(String newInstantTime, String oldInstantTime) {
+    return Long.parseLong(newInstantTime) - Long.parseLong(oldInstantTime);
+  }
 }
