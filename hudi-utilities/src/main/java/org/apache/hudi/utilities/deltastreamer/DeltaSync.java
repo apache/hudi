@@ -58,7 +58,6 @@ import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaSet;
 import org.apache.hudi.utilities.sources.InputBatch;
-import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import com.codahale.metrics.Timer;
@@ -100,6 +99,9 @@ import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT_PRO
 import static org.apache.hudi.config.HoodieWriteConfig.HOODIE_AUTO_COMMIT_PROP;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
+import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.commitOffsetToKafka;
+import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config.ENABLE_KAFKA_COMMIT_OFFSET;
+import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config.DEFAULT_ENABLE_KAFKA_COMMIT_OFFSET;
 
 /**
  * Sync's one batch of data to hoodie table.
@@ -474,8 +476,8 @@ public class DeltaSync implements Serializable {
       boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata));
       if (success) {
         LOG.info("Commit " + instantTime + " successful!");
-        if (this.props.getBoolean(KafkaOffsetGen.Config.ENABLE_KAFKA_COMMIT_OFFSET,KafkaOffsetGen.Config.DEFAULT_ENABLE_KAFKA_COMMIT_OFFSET)) {
-          KafkaOffsetGen.commitOffsetToKafka(checkpointStr, this.props);
+        if (this.props.getBoolean(ENABLE_KAFKA_COMMIT_OFFSET, DEFAULT_ENABLE_KAFKA_COMMIT_OFFSET)) {
+          commitOffsetToKafka(checkpointStr, this.props);
         }
         // Schedule compaction if needed
         if (cfg.isAsyncCompactionEnabled()) {
