@@ -41,8 +41,6 @@ public class TestGloballyConsistentTimeStampFilteringInputFormat
   @BeforeEach
   public void setUp() {
     super.setUp();
-    //jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP, String.valueOf(Long.MAX_VALUE));
-    //jobConf.set(HoodieHiveUtils.DISABLE_HOODIE_GLOBALLY_CONSISTENT_READS, "false");
   }
 
   @Test
@@ -85,7 +83,6 @@ public class TestGloballyConsistentTimeStampFilteringInputFormat
 
     // set globally replicated timestamp to 400 so commits from 500, 600 does not show up
     InputFormatTestUtil.setupSnapshotMaxCommitTimeQueryMode(jobConf, "400");
-    //jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP, "400");
     InputFormatTestUtil.setupIncremental(jobConf, "100", HoodieHiveUtils.MAX_COMMIT_ALL);
 
     FileStatus[] files = inputFormat.listStatus(jobConf);
@@ -105,9 +102,6 @@ public class TestGloballyConsistentTimeStampFilteringInputFormat
       for (int jdx = 0; jdx < commits.size(); ++jdx) {
         InputFormatTestUtil.setupIncremental(jobConf, commits.get(idx), HoodieHiveUtils.MAX_COMMIT_ALL);
         InputFormatTestUtil.setupSnapshotMaxCommitTimeQueryMode(jobConf, commits.get(jdx));
-
-        //jobConf.set(HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP,
-        //    commits.get(jdx));
 
         files = inputFormat.listStatus(jobConf);
 

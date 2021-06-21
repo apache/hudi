@@ -693,8 +693,8 @@ public class TestHiveSyncTool {
 
     HiveSyncConfig syncToolConfig = HiveSyncConfig.copy(HiveTestUtil.hiveSyncConfig);
     syncToolConfig.ignoreExceptions = true;
-
-    syncToolConfig.jdbcUrl = HiveTestUtil.hiveSyncConfig.jdbcUrl.replaceAll(":\\d+$", String.valueOf(NetworkTestUtils.nextFreePort()));
+    syncToolConfig.jdbcUrl = HiveTestUtil.hiveSyncConfig.jdbcUrl
+        .replace(String.valueOf(HiveTestUtil.hiveTestService.getHiveServerPort()), String.valueOf(NetworkTestUtils.nextFreePort()));
     HiveSyncTool tool = new HiveSyncTool(syncToolConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     tool.syncHoodieTable();
 
