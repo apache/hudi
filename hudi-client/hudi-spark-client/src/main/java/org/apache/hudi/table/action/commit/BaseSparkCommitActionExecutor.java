@@ -23,6 +23,7 @@ import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrateg
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.SparkPartitionUtils;
+import org.apache.hudi.client.utils.SparkUtils;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
@@ -331,7 +332,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     result.setWriteStats(writeStats);
     result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(writeStats,
         result.getPartitionToReplaceFileIds(),
-        extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType())));
+        SparkUtils.addExtraMetadataProperties(extraMetadata, context), operationType, getSchemaToStoreInCommit(), getCommitActionType())));
   }
 
   @Override
