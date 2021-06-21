@@ -31,8 +31,10 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
+import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
@@ -482,6 +484,67 @@ public class TestHoodieRealtimeRecordReader {
     ArrayWritable value = recordReader.createValue();
     while (recordReader.next(key, value)) {
       // keep reading
+    }
+  }
+
+  @Test
+  public void testPureLogsReader() throws Exception {
+    // initial commit
+    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
+    HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
+    String baseInstant = "100";
+    File partitionDir = InputFormatTestUtil.prepareNonPartitionedParquetTable(basePath, schema, 1, 100, baseInstant,
+        HoodieTableType.MERGE_ON_READ);
+    FileCreateUtils.createDeltaCommit(basePath.toString(), baseInstant);
+    // Add the paths
+    FileInputFormat.setInputPaths(baseJobConf, partitionDir.getPath());
+
+    FileSlice fileSlice = new FileSlice("default", baseInstant, "fileid1");
+    try {
+      // update files or generate new log file
+      int logVersion = 1;
+      int baseInstantTs = Integer.parseInt(baseInstant);
+      String instantTime = String.valueOf(baseInstantTs + logVersion);
+
+      HoodieLogFormat.Writer writer = InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid1", baseInstant,
+          instantTime, 100, 0, logVersion);
+      long size = writer.getCurrentSize();
+      writer.close();
+      assertTrue(size > 0, "block - size should be > 0");
+      FileCreateUtils.createDeltaCommit(basePath.toString(), instantTime);
+
+      // create a split with new log file(s)
+      fileSlice.addLogFile(writer.getLogFile());
+      HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
+          HoodieRealtimeInputFormatUtils.DummyInputSplit.INSTANCE,
+          basePath.toUri().toString(), fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
+          .map(h -> h.getPath().toString()).collect(Collectors.toList()),
+          instantTime);
+
+      // create a dummy RecordReader to be used by HoodieRealtimeRecordReader
+      RecordReader<NullWritable, ArrayWritable> reader = HoodieParquetInputFormat.DummyRecordReader.INSTANCE;
+      JobConf jobConf = new JobConf(baseJobConf);
+      List<Schema.Field> fields = schema.getFields();
+      setHiveColumnNameProps(fields, jobConf, false);
+
+      // validate record reader compaction
+      HoodieRealtimeRecordReader recordReader = new HoodieRealtimeRecordReader(split, jobConf, reader);
+
+      // use reader to read log file.
+      NullWritable key = recordReader.createKey();
+      ArrayWritable value = recordReader.createValue();
+      while (recordReader.next(key, value)) {
+        Writable[] values = value.get();
+        // check if the record written is with latest commit, here "101"
+        assertEquals(instantTime, values[0].toString());
+        key = recordReader.createKey();
+        value = recordReader.createValue();
+      }
+      recordReader.getPos();
+      assertEquals(1.0, recordReader.getProgress(), 0.05);
+      recordReader.close();
+    } catch (Exception ioe) {
+      throw new HoodieException(ioe.getMessage(), ioe);
     }
   }
 }

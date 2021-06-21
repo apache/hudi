@@ -19,6 +19,7 @@
 package org.apache.hudi.hadoop.utils;
 
 import org.apache.hadoop.mapred.JobConf;
+
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -44,7 +45,9 @@ import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.SplitLocationInfo;
+
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -102,28 +105,37 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
             HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION))
             .filterCompletedInstants().lastInstant().get().getTimestamp();
         latestFileSlices.forEach(fileSlice -> {
+          List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
+              .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList());
           List<FileSplit> dataFileSplits = groupedInputSplits.get(fileSlice.getFileId());
-          dataFileSplits.forEach(split -> {
-            try {
-              List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
-                  .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList());
-              if (split instanceof BootstrapBaseFileSplit) {
-                BootstrapBaseFileSplit eSplit = (BootstrapBaseFileSplit) split;
-                String[] hosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
-                    .filter(x -> !x.isInMemory()).toArray(String[]::new) : new String[0];
-                String[] inMemoryHosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
-                    .filter(SplitLocationInfo::isInMemory).toArray(String[]::new) : new String[0];
-                FileSplit baseSplit = new FileSplit(eSplit.getPath(), eSplit.getStart(), eSplit.getLength(),
-                    hosts, inMemoryHosts);
-                rtSplits.add(new RealtimeBootstrapBaseFileSplit(baseSplit, metaClient.getBasePath(),
-                    logFilePaths, maxCommitTime, eSplit.getBootstrapFileSplit()));
-              } else {
-                rtSplits.add(new HoodieRealtimeFileSplit(split, metaClient.getBasePath(), logFilePaths, maxCommitTime));
+          if (dataFileSplits != null) {
+            dataFileSplits.forEach(split -> {
+              try {
+                if (split instanceof BootstrapBaseFileSplit) {
+                  BootstrapBaseFileSplit eSplit = (BootstrapBaseFileSplit) split;
+                  String[] hosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
+                      .filter(x -> !x.isInMemory()).toArray(String[]::new) : new String[0];
+                  String[] inMemoryHosts = split.getLocationInfo() != null ? Arrays.stream(split.getLocationInfo())
+                      .filter(SplitLocationInfo::isInMemory).toArray(String[]::new) : new String[0];
+                  FileSplit baseSplit = new FileSplit(eSplit.getPath(), eSplit.getStart(), eSplit.getLength(),
+                      hosts, inMemoryHosts);
+                  rtSplits.add(new RealtimeBootstrapBaseFileSplit(baseSplit, metaClient.getBasePath(),
+                      logFilePaths, maxCommitTime, eSplit.getBootstrapFileSplit()));
+                } else {
+                  rtSplits.add(new HoodieRealtimeFileSplit(split, metaClient.getBasePath(), logFilePaths, maxCommitTime));
+                }
+              } catch (IOException e) {
+                throw new HoodieIOException("Error creating hoodie real time split ", e);
               }
+            });
+          } else {
+            // the file group has only logs (say the index is global).
+            try {
+              rtSplits.add(new HoodieRealtimeFileSplit(DummyInputSplit.INSTANCE, metaClient.getBasePath(), logFilePaths, maxCommitTime));
             } catch (IOException e) {
               throw new HoodieIOException("Error creating hoodie real time split ", e);
             }
-          });
+          }
         });
       });
     } catch (Exception e) {
@@ -165,16 +177,20 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
         Map<String, List<HoodieBaseFile>> groupedInputSplits = partitionsToParquetSplits.get(partitionPath).stream()
             .collect(Collectors.groupingBy(file -> FSUtils.getFileId(file.getFileStatus().getPath().getName())));
         latestFileSlices.forEach(fileSlice -> {
-          List<HoodieBaseFile> dataFileSplits = groupedInputSplits.get(fileSlice.getFileId());
-          dataFileSplits.forEach(split -> {
-            try {
-              List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
-                  .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList());
-              resultMap.put(split, logFilePaths);
-            } catch (Exception e) {
-              throw new HoodieException("Error creating hoodie real time split ", e);
-            }
-          });
+          final String fileId = fileSlice.getFileId();
+          // filter out the file group that has only logs (say the index is global).
+          if (groupedInputSplits.containsKey(fileId)) {
+            List<HoodieBaseFile> dataFileSplits = groupedInputSplits.get(fileId);
+            dataFileSplits.forEach(split -> {
+              try {
+                List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
+                    .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList());
+                resultMap.put(split, logFilePaths);
+              } catch (Exception e) {
+                throw new HoodieException("Error creating hoodie real time split ", e);
+              }
+            });
+          }
         });
       } catch (Exception e) {
         throw new HoodieException("Error obtaining data file/log file grouping: " + partitionPath, e);
@@ -229,7 +245,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
 
   public static boolean canAddProjectionToJobConf(final RealtimeSplit realtimeSplit, final JobConf jobConf) {
     return jobConf.get(HoodieInputFormatUtils.HOODIE_READ_COLUMNS_PROP) == null
-            || (!realtimeSplit.getDeltaLogPaths().isEmpty() && !HoodieRealtimeInputFormatUtils.requiredProjectionFieldsExistInConf(jobConf));
+        || (!realtimeSplit.getDeltaLogPaths().isEmpty() && !HoodieRealtimeInputFormatUtils.requiredProjectionFieldsExistInConf(jobConf));
   }
 
   /**
@@ -245,6 +261,14 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
       if (LOG.isDebugEnabled()) {
         LOG.debug("The projection Ids: {" + columnIds + "} start with ','. First comma is removed");
       }
+    }
+  }
+
+  public static class DummyInputSplit extends FileSplit {
+    public static final DummyInputSplit INSTANCE = new DummyInputSplit();
+
+    public DummyInputSplit() {
+      super(new Path("dummy"), 0, 0, (String[])null);
     }
   }
 }

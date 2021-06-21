@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 
@@ -209,6 +210,12 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
             colNamesWithTypesForExternal.size(),
             true);
       }
+    } else if (split instanceof RealtimeSplit) {
+      // The real time split has only log files.
+      RealtimeSplit realtimeSplit = (RealtimeSplit) split;
+      if (realtimeSplit.getLength() <= 0) {
+        return DummyRecordReader.INSTANCE;
+      }
     }
     if (LOG.isDebugEnabled()) {
       LOG.debug("EMPLOYING DEFAULT RECORD READER - " + split);
@@ -251,6 +258,36 @@ public class HoodieParquetInputFormat extends MapredParquetInputFormat implement
       return new BootstrapBaseFileSplit(split, externalFileSplit);
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Dummy record reader that outputs nothing.
+   */
+  public static class DummyRecordReader implements RecordReader<NullWritable, ArrayWritable> {
+    public static DummyRecordReader INSTANCE = new DummyRecordReader();
+
+    public boolean next(NullWritable key, ArrayWritable value) {
+      return false;
+    }
+
+    public NullWritable createKey() {
+      return null;
+    }
+
+    public ArrayWritable createValue() {
+      return null;
+    }
+
+    public long getPos() {
+      return 0L;
+    }
+
+    public void close() {
+    }
+
+    public float getProgress() {
+      return 1.0F;
     }
   }
 }
