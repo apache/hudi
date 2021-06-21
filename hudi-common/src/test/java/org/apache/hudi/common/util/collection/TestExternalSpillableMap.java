@@ -38,8 +38,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer.Alphanumeric;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -67,14 +65,13 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     failureOutputPath = basePath + "/test_fail";
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"disk_map", "rock_db"})
-  public void simpleInsertTest(String diskMapType) throws IOException, URISyntaxException {
+  @Test
+  public void simpleInsertTest() throws IOException, URISyntaxException {
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
     String payloadClazz = HoodieAvroPayload.class.getName();
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
-            new HoodieRecordSizeEstimator(schema), ExternalSpillableMap.DiskMapType.fromValue(diskMapType)); // 16B
+        new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); // 16B
+
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
     assert (recordKeys.size() == 100);
@@ -87,14 +84,13 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"disk_map", "rock_db"})
-  public void testSimpleUpsert(String diskMapType) throws IOException, URISyntaxException {
+  @Test
+  public void testSimpleUpsert() throws IOException, URISyntaxException {
+
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
-            new HoodieRecordSizeEstimator(schema), ExternalSpillableMap.DiskMapType.fromValue(diskMapType));// 16B
+        new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); // 16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
@@ -124,16 +120,14 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     });
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"disk_map", "rock_db"})
-  public void testAllMapOperations(String diskMapType) throws IOException, URISyntaxException {
+  @Test
+  public void testAllMapOperations() throws IOException, URISyntaxException {
 
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
     String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
-            new HoodieRecordSizeEstimator(schema), ExternalSpillableMap.DiskMapType.fromValue(diskMapType));
+        new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); // 16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     // insert a bunch of records so that values spill to disk too
@@ -182,14 +176,12 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     assertTrue(records.size() == 0);
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"disk_map", "rock_db"})
-  public void simpleTestWithException(String diskMapType) throws IOException, URISyntaxException {
+  @Test
+  public void simpleTestWithException() throws IOException, URISyntaxException {
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records = new ExternalSpillableMap<>(16L,
-        failureOutputPath, new DefaultSizeEstimator(),
-        new HoodieRecordSizeEstimator(schema), ExternalSpillableMap.DiskMapType.fromValue(diskMapType)); // 16B
+        failureOutputPath, new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); // 16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
@@ -202,15 +194,13 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     });
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"disk_map", "rock_db"})
-  public void testDataCorrectnessWithUpsertsToDataInMapAndOnDisk(String diskMapType) throws IOException, URISyntaxException {
+  @Test
+  public void testDataCorrectnessWithUpsertsToDataInMapAndOnDisk() throws IOException, URISyntaxException {
 
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
-            new HoodieRecordSizeEstimator(schema), ExternalSpillableMap.DiskMapType.fromValue(diskMapType)); // 16B
+        new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); // 16B
 
     List<String> recordKeys = new ArrayList<>();
     // Ensure we spill to disk
@@ -255,15 +245,13 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     assert newCommitTime.contentEquals(gRecord.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString());
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"disk_map", "rock_db"})
-  public void testDataCorrectnessWithoutHoodieMetadata(String diskMapType) throws IOException, URISyntaxException {
+  @Test
+  public void testDataCorrectnessWithoutHoodieMetadata() throws IOException, URISyntaxException {
 
     Schema schema = SchemaTestUtil.getSimpleSchema();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
-            new HoodieRecordSizeEstimator(schema), ExternalSpillableMap.DiskMapType.fromValue(diskMapType));
+        new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); // 16B
 
     List<String> recordKeys = new ArrayList<>();
     // Ensure we spill to disk

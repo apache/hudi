@@ -50,6 +50,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -354,32 +355,8 @@ public class RocksDBDAO {
     return results.stream();
   }
 
-  /**
-   * Return Iterator of key-value pairs from RocksIterator.
-   *
-   * @param columnFamilyName Column Family Name
-   * @param <T>              Type of value stored
-   */
   public <T extends Serializable> Iterator<T> iterator(String columnFamilyName) {
-    ValidationUtils.checkArgument(!closed);
-    final HoodieTimer timer = new HoodieTimer();
-    timer.startTimer();
-    long timeTakenMicro = 0;
-    List<Pair<String, T>> results = new LinkedList<>();
-    try (final RocksIterator it = getRocksDB().newIterator(managedHandlesMap.get(columnFamilyName))) {
-      it.seekToFirst();
-      while (it.isValid()) {
-        long beginTs = System.nanoTime();
-        T val = SerializationUtils.deserialize(it.value());
-        timeTakenMicro += ((System.nanoTime() - beginTs) / 1000);
-        results.add(Pair.of(new String(it.key()), val));
-        it.next();
-      }
-    }
-
-    LOG.info("Iterator for " + columnFamilyName + ". Total Time Taken (msec)="
-        + timer.endTimer() + ". Serialization Time taken(micro)=" + timeTakenMicro + ", num entries=" + results.size());
-    return results.stream().map(Pair::getValue).iterator();
+    return new IteratorWrapper<>(getRocksDB().newIterator(managedHandlesMap.get(columnFamilyName)));
   }
 
   /**
@@ -491,6 +468,39 @@ public class RocksDBDAO {
 
   String getRocksDBBasePath() {
     return rocksDBBasePath;
+  }
+
+  /**
+   * {@link Iterator} wrapper for RocksDb Iterator {@link RocksIterator}
+   */
+  private static class IteratorWrapper<R> implements Iterator<R> {
+
+    private final RocksIterator iterator;
+
+    public IteratorWrapper(final RocksIterator iterator) {
+      this.iterator = iterator;
+      iterator.seekToFirst();
+    }
+
+    @Override
+    public boolean hasNext() {
+      return iterator.isValid();
+    }
+
+    @Override
+    public R next() {
+      if (!hasNext()) {
+        throw new IllegalStateException("next() called on rocksDB with no more valid entries");
+      }
+      R val = SerializationUtils.deserialize(iterator.value());
+      iterator.next();
+      return val;
+    }
+
+    @Override
+    public void forEachRemaining(Consumer<? super R> action) {
+      action.accept(next());
+    }
   }
 
   /**
