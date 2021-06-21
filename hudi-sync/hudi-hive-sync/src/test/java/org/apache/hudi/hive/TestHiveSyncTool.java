@@ -43,7 +43,6 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
@@ -69,6 +68,11 @@ public class TestHiveSyncTool {
   }
 
   private static Iterable<Object[]> useJdbcAndSchemaFromCommitMetadataAndManagedTable() {
+    return Arrays.asList(new Object[][] {{true, true, true}, {true, false, false}, {false, true, true}, {false, false, false}});
+  }
+
+  // (useJdbc, useSchemaFromCommitMetadata, syncAsDataSource)
+  private static Iterable<Object[]> syncDataSourceTableParams() {
     return Arrays.asList(new Object[][] {{true, true, true}, {true, false, false}, {false, true, true}, {false, false, false}});
   }
 
@@ -159,17 +163,15 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
-  @MethodSource({"useJdbcAndSchemaFromCommitMetadata"})
+  @MethodSource({"syncDataSourceTableParams"})
   public void testSyncCOWTableWithProperties(boolean useJdbc,
-                                             boolean useSchemaFromCommitMetadata) throws Exception {
+                                             boolean useSchemaFromCommitMetadata,
+                                             boolean syncAsDataSourceTable) throws Exception {
     HiveSyncConfig hiveSyncConfig = HiveTestUtil.hiveSyncConfig;
     HiveTestUtil.hiveSyncConfig.batchSyncNum = 3;
     Map<String, String> serdeProperties = new HashMap<String, String>() {
       {
         put("path", hiveSyncConfig.basePath);
-        put(ConfigUtils.SPARK_QUERY_TYPE_KEY, "hoodie.datasource.query.type");
-        put(ConfigUtils.SPARK_QUERY_AS_RO_KEY, "read_optimized");
-        put(ConfigUtils.SPARK_QUERY_AS_RT_KEY, "snapshot");
       }
     };
 
@@ -179,6 +181,7 @@ public class TestHiveSyncTool {
         put("tp_1", "p1");
       }
     };
+    hiveSyncConfig.syncAsSparkDataSourceTable = syncAsDataSourceTable;
     hiveSyncConfig.useJdbc = useJdbc;
     hiveSyncConfig.serdeProperties = ConfigUtils.configToString(serdeProperties);
     hiveSyncConfig.tableProperties = ConfigUtils.configToString(tableProperties);
@@ -197,9 +200,12 @@ public class TestHiveSyncTool {
 
     String tblPropertiesWithoutDdlTime = String.join("\n",
         results.subList(0, results.size() - 1));
+
+    String sparkTableProperties = getSparkTableProperties(syncAsDataSourceTable, useSchemaFromCommitMetadata);
     assertEquals(
         "EXTERNAL\tTRUE\n"
         + "last_commit_time_sync\t100\n"
+        + sparkTableProperties
         + "tp_0\tp0\n"
         + "tp_1\tp1", tblPropertiesWithoutDdlTime);
     assertTrue(results.get(results.size() - 1).startsWith("transient_lastDdlTime"));
@@ -210,21 +216,54 @@ public class TestHiveSyncTool {
     hiveDriver.getResults(results);
     String ddl = String.join("\n", results);
     assertTrue(ddl.contains("'path'='" + hiveSyncConfig.basePath + "'"));
-    assertTrue(ddl.contains("'hoodie.datasource.query.type'='snapshot'"));
+    if (syncAsDataSourceTable) {
+      assertTrue(ddl.contains("'" + ConfigUtils.IS_QUERY_AS_RO_TABLE + "'='false'"));
+    }
+  }
+
+  private String getSparkTableProperties(boolean syncAsDataSourceTable, boolean useSchemaFromCommitMetadata) {
+    if (syncAsDataSourceTable) {
+      if (useSchemaFromCommitMetadata) {
+        return  "spark.sql.sources.provider\thudi\n"
+                + "spark.sql.sources.schema.numPartCols\t1\n"
+                + "spark.sql.sources.schema.numParts\t1\n"
+                + "spark.sql.sources.schema.part.0\t{\"type\":\"struct\",\"fields\":"
+                + "[{\"name\":\"_hoodie_commit_time\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},"
+                + "{\"name\":\"_hoodie_commit_seqno\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},"
+                + "{\"name\":\"_hoodie_record_key\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},"
+                + "{\"name\":\"_hoodie_partition_path\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},"
+                + "{\"name\":\"_hoodie_file_name\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},"
+                + "{\"name\":\"name\",\"type\":\"string\",\"nullable\":false,\"metadata\":{}},"
+                + "{\"name\":\"favorite_number\",\"type\":\"integer\",\"nullable\":false,\"metadata\":{}},"
+                + "{\"name\":\"favorite_color\",\"type\":\"string\",\"nullable\":false,\"metadata\":{}},"
+                + "{\"name\":\"datestr\",\"type\":\"string\",\"nullable\":false,\"metadata\":{}}]}\n"
+                + "spark.sql.sources.schema.partCol.0\tdatestr\n";
+      } else {
+        return "spark.sql.sources.provider\thudi\n"
+                + "spark.sql.sources.schema.numPartCols\t1\n"
+                + "spark.sql.sources.schema.numParts\t1\n"
+                + "spark.sql.sources.schema.part.0\t{\"type\":\"struct\",\"fields\":[{\"name\":\"name\",\"type\":"
+                + "\"string\",\"nullable\":false,\"metadata\":{}},{\"name\":\"favorite_number\",\"type\":\"integer\","
+                + "\"nullable\":false,\"metadata\":{}},{\"name\":\"favorite_color\",\"type\":\"string\",\"nullable\":false,"
+                + "\"metadata\":{}}]}\n"
+                + "{\"name\":\"datestr\",\"type\":\"string\",\"nullable\":false,\"metadata\":{}}]}\n"
+                + "spark.sql.sources.schema.partCol.0\tdatestr\n";
+      }
+    } else {
+      return  "";
+    }
   }
 
   @ParameterizedTest
-  @MethodSource({"useJdbcAndSchemaFromCommitMetadata"})
+  @MethodSource({"syncDataSourceTableParams"})
   public void testSyncMORTableWithProperties(boolean useJdbc,
-                                             boolean useSchemaFromCommitMetadata) throws Exception {
+                                             boolean useSchemaFromCommitMetadata,
+                                             boolean syncAsDataSourceTable) throws Exception {
     HiveSyncConfig hiveSyncConfig = HiveTestUtil.hiveSyncConfig;
     HiveTestUtil.hiveSyncConfig.batchSyncNum = 3;
     Map<String, String> serdeProperties = new HashMap<String, String>() {
       {
         put("path", hiveSyncConfig.basePath);
-        put(ConfigUtils.SPARK_QUERY_TYPE_KEY, "hoodie.datasource.query.type");
-        put(ConfigUtils.SPARK_QUERY_AS_RO_KEY, "read_optimized");
-        put(ConfigUtils.SPARK_QUERY_AS_RT_KEY, "snapshot");
       }
     };
 
@@ -234,6 +273,7 @@ public class TestHiveSyncTool {
         put("tp_1", "p1");
       }
     };
+    hiveSyncConfig.syncAsSparkDataSourceTable = syncAsDataSourceTable;
     hiveSyncConfig.useJdbc = useJdbc;
     hiveSyncConfig.serdeProperties = ConfigUtils.configToString(serdeProperties);
     hiveSyncConfig.tableProperties = ConfigUtils.configToString(tableProperties);
@@ -249,14 +289,15 @@ public class TestHiveSyncTool {
     String rtTableName = hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
 
     String[] tableNames = new String[] {roTableName, rtTableName};
-    String[] expectQueryTypes = new String[] {"read_optimized", "snapshot"};
+    String[] readAsOptimizedResults = new String[] {"true", "false"};
 
     SessionState.start(HiveTestUtil.getHiveConf());
     Driver hiveDriver = new org.apache.hadoop.hive.ql.Driver(HiveTestUtil.getHiveConf());
 
+    String sparkTableProperties = getSparkTableProperties(syncAsDataSourceTable, useSchemaFromCommitMetadata);
     for (int i = 0;i < 2; i++) {
       String dbTableName = hiveSyncConfig.databaseName + "." + tableNames[i];
-      String expectQueryType = expectQueryTypes[i];
+      String readAsOptimized = readAsOptimizedResults[i];
 
       hiveDriver.run("SHOW TBLPROPERTIES " + dbTableName);
       List<String> results = new ArrayList<>();
@@ -267,6 +308,7 @@ public class TestHiveSyncTool {
       assertEquals(
           "EXTERNAL\tTRUE\n"
           + "last_commit_time_sync\t101\n"
+          + sparkTableProperties
           + "tp_0\tp0\n"
           + "tp_1\tp1", tblPropertiesWithoutDdlTime);
       assertTrue(results.get(results.size() - 1).startsWith("transient_lastDdlTime"));
@@ -277,8 +319,10 @@ public class TestHiveSyncTool {
       hiveDriver.getResults(results);
       String ddl = String.join("\n", results);
       assertTrue(ddl.contains("'path'='" + hiveSyncConfig.basePath + "'"));
-      assertTrue(ddl.contains("'hoodie.datasource.query.type'='" + expectQueryType + "'"));
       assertTrue(ddl.toLowerCase().contains("create external table"));
+      if (syncAsDataSourceTable) {
+        assertTrue(ddl.contains("'" + ConfigUtils.IS_QUERY_AS_RO_TABLE + "'='" + readAsOptimized + "'"));
+      }
     }
   }
 
