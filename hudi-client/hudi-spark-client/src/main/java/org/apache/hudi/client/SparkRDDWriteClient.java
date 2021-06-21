@@ -22,6 +22,7 @@ import org.apache.hudi.callback.common.WriteStatusValidator;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.SparkReleaseResources;
+import org.apache.hudi.client.utils.SparkUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
@@ -145,7 +146,8 @@ public class SparkRDDWriteClient<T> extends
       // when streaming writes are enabled, writeStatuses is a mix of data table write status and mdt write status
       List<HoodieWriteStat> dataTableHoodieWriteStats = slimWriteStatsList.stream().filter(entry -> !entry.isMetadataTable()).map(SlimWriteStats::getWriteStat).collect(Collectors.toList());
       List<HoodieWriteStat> partialMetadataTableWriteStats = slimWriteStatsList.stream().filter(entry -> entry.isMetadataTable).map(SlimWriteStats::getWriteStat).collect(Collectors.toList());
-      return commitStats(instantTime, new TableWriteStats(dataTableHoodieWriteStats, partialMetadataTableWriteStats), extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc,
+      return commitStats(instantTime, new TableWriteStats(dataTableHoodieWriteStats, partialMetadataTableWriteStats),
+          SparkUtils.addExtraMetadataProperties(extraMetadata, context), commitActionType, partitionToReplacedFileIds, extraPreCommitFunc,
           false, Option.of(table));
     } else {
       log.error("Exiting early due to errors with write operation ");
