@@ -34,11 +34,13 @@ import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -119,12 +121,16 @@ public class WriteProfiles {
         }).map(path -> {
           try {
             return fs.getFileStatus(path);
+          } catch (FileNotFoundException fe) {
+            LOG.warn("File {} was deleted by the cleaner, ignore", path);
+            return null;
           } catch (IOException e) {
             LOG.error("Get write status of path: {} error", path);
             throw new HoodieException(e);
           }
         })
         // filter out crushed files
+        .filter(Objects::nonNull)
         .filter(fileStatus -> fileStatus.getLen() > 0)
         .collect(Collectors.toList());
   }
