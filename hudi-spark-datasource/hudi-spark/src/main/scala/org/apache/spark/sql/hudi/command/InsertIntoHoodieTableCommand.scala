@@ -128,6 +128,11 @@ object InsertIntoHoodieTableCommand {
       s"Required partition columns is: ${targetPartitionSchema.json}, Current static partitions " +
         s"is: ${staticPartitionValues.mkString("," + "")}")
 
+    assert(staticPartitionValues.size + query.output.size == table.schema.size,
+      s"Required select columns count: ${removeMetaFields(table.schema).size}, " +
+        s"Current select columns(including static partition column) count: " +
+        s"${staticPartitionValues.size + removeMetaFields(query.output).size}，columns: " +
+        s"(${(removeMetaFields(query.output).map(_.name) ++ staticPartitionValues.keys).mkString(",")})")
     val queryDataFields = if (staticPartitionValues.isEmpty) { // insert dynamic partition
       query.output.dropRight(targetPartitionSchema.fields.length)
     } else { // insert static partition
@@ -156,7 +161,7 @@ object InsertIntoHoodieTableCommand {
       targetPartitionSchema.fields.map(f => {
         val staticPartitionValue = staticPartitionValues.getOrElse(f.name,
         s"Missing static partition value for: ${f.name}")
-        val castAttr = Literal.create(staticPartitionValue, f.dataType)
+        val castAttr = castIfNeeded(Literal.create(staticPartitionValue), f.dataType, conf)
         Alias(castAttr, f.name)()
       })
     }
