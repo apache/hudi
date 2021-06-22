@@ -96,13 +96,11 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
           // shuffle by fileId(bucket id)
           .keyBy(record -> record.getCurrentLocation().getFileId())
           .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
-          .name("uid_hoodie_stream_write")
           .setParallelism(numWriteTasks);
       if (StreamerUtil.needsAsyncCompaction(conf)) {
         return pipeline.transform("compact_plan_generate",
             TypeInformation.of(CompactionPlanEvent.class),
             new CompactionPlanOperator(conf))
-            .name("uid_compact_plan_generate")
             .setParallelism(1) // plan generate must be singleton
             .rebalance()
             .transform("compact_task",
