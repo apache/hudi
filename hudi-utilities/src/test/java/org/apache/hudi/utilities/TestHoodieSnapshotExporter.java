@@ -19,8 +19,9 @@
 
 package org.apache.hudi.utilities;
 
-import com.beust.jcommander.ParameterException;
 import org.apache.hudi.utilities.HoodieSnapshotExporter.OutputFormatValidator;
+
+import com.beust.jcommander.ParameterException;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -53,5 +54,4 @@ public class TestHoodieSnapshotExporter {
       new OutputFormatValidator().validate(null, format);
     });
   }
-
 }
