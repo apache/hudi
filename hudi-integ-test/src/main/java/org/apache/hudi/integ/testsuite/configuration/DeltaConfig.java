@@ -190,7 +190,7 @@ public class DeltaConfig implements Serializable {
       return Boolean.valueOf(configsMap.getOrDefault(VALIDATE_CLEAN, false).toString());
     }
 
-    public boolean doEnableRowWriting() {
+    public boolean enableRowWriting() {
       return Boolean.valueOf(configsMap.getOrDefault(ENABLE_ROW_WRITING, false).toString());
     }
 

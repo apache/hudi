@@ -396,6 +396,13 @@
       <scope>test</scope>
     </dependency>
 
+    <dependency>
+      <groupId>org.scalatest</groupId>
+      <artifactId>scalatest_${scala.binary.version}</artifactId>
+      <version>${scalatest.version}</version>
+      <scope>test</scope>
+    </dependency>
+
   </dependencies>
 
   <properties>
@@ -425,6 +432,8 @@
         </plugin>
       </plugins>
     </pluginManagement>
+
+
     <plugins>
       <plugin>
         <groupId>net.alchim31.maven</groupId>
@@ -447,6 +456,7 @@
           </execution>
         </executions>
       </plugin>
+
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
