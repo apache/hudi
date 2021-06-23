@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.HoodieFlinkTable;
+import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -80,18 +81,18 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   }
 
   @Override
-  public void notifyCheckpointComplete(long checkpointId) throws IOException {
+  public void notifyCheckpointComplete(long checkpointId) {
     try {
-      scheduleCompaction(checkpointId);
+      HoodieFlinkTable hoodieTable = writeClient.getHoodieTable();
+      CompactionUtil.rollbackCompaction(hoodieTable, conf);
+      scheduleCompaction(hoodieTable, checkpointId);
     } catch (Throwable throwable) {
       // make it fail safe
       LOG.error("Error while scheduling compaction at instant: " + compactionInstantTime, throwable);
     }
   }
 
-  private void scheduleCompaction(long checkpointId) throws IOException {
-    HoodieFlinkTable<?> table = writeClient.getHoodieTable();
-
+  private void scheduleCompaction(HoodieFlinkTable<?> table, long checkpointId) throws IOException {
     // the last instant takes the highest priority.
     Option<HoodieInstant> lastRequested = table.getActiveTimeline().filterPendingCompactionTimeline()
         .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED).lastInstant();

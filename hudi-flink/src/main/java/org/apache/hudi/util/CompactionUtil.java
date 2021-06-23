@@ -22,6 +22,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
@@ -29,6 +30,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.avro.Schema;
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.table.HoodieFlinkTable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -95,5 +97,20 @@ public class CompactionUtil {
     } catch (IOException e) {
       throw new HoodieIOException("Could not remove requested commit " + commitFilePath, e);
     }
+  }
+
+  public static void rollbackCompaction(HoodieFlinkTable<?> table, Configuration conf) {
+    String curInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    int deltaSeconds = conf.getInteger(FlinkOptions.COMPACTION_DELTA_SECONDS);
+    HoodieTimeline inflightCompactionTimeline = table.getActiveTimeline()
+        .filterPendingCompactionTimeline()
+        .filter(instant ->
+            instant.getState() == HoodieInstant.State.INFLIGHT
+                && StreamerUtil.instantTimeDiff(curInstantTime, instant.getTimestamp()) >= deltaSeconds);
+    inflightCompactionTimeline.getInstants().forEach(inflightInstant -> {
+      LOG.info("Rollback the pending compaction instant: " + inflightInstant);
+      table.rollback(table.getContext(), HoodieActiveTimeline.createNewInstantTime(), inflightInstant, true);
+      table.getMetaClient().reloadActiveTimeline();
+    });
   }
 }
