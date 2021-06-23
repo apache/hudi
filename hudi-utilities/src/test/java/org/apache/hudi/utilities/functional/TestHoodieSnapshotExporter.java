@@ -213,7 +213,7 @@ public class TestHoodieSnapshotExporter extends FunctionalTestHarness {
   public class TestHoodieSnapshotExporterForNonHudi {
 
     @ParameterizedTest
-    @ValueSource(strings = {"json", "parquet"})
+    @ValueSource(strings = {"json", "parquet", "orc"})
     public void testExportAsNonHudi(String format) throws IOException {
       HoodieSnapshotExporter.Config cfg = new Config();
       cfg.sourceBasePath = sourcePath;
