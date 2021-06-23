@@ -38,16 +38,14 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestHoodieMultiTableDeltaStreamer extends TestHoodieDeltaStreamer {
+public class TestHoodieMultiTableDeltaStreamer extends TestHoodieDeltaStreamerBase {
 
   private static volatile Logger log = LogManager.getLogger(TestHoodieMultiTableDeltaStreamer.class);
-  private static final Random RANDOM = new Random();
 
   static class TestHelpers {
 
