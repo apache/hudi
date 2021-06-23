@@ -439,8 +439,8 @@ object HoodieSparkSqlWriter {
       serdeProp.put(ConfigUtils.SPARK_QUERY_AS_RT_KEY, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
 
       hiveSyncConfig.serdeProperties = ConfigUtils.configToString(serdeProp)
-
     }
+    hiveSyncConfig.createManagedTable = hoodieConfig.getBoolean(HIVE_CREATE_MANAGED_TABLE)
     hiveSyncConfig
   }
 
