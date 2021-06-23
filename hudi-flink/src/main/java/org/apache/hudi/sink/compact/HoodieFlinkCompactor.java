@@ -21,7 +21,6 @@ package org.apache.hudi.sink.compact;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
@@ -46,7 +45,6 @@ public class HoodieFlinkCompactor {
 
   protected static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkCompactor.class);
 
-  @SuppressWarnings("unchecked, rawtypes")
   public static void main(String[] args) throws Exception {
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
@@ -73,17 +71,7 @@ public class HoodieFlinkCompactor {
 
     // rolls back inflight compaction first
     // condition: the schedule compaction is in INFLIGHT state for max delta seconds.
-    String curInstantTime = HoodieActiveTimeline.createNewInstantTime();
-    int deltaSeconds = conf.getInteger(FlinkOptions.COMPACTION_DELTA_SECONDS);
-    HoodieTimeline inflightCompactionTimeline = metaClient.getActiveTimeline()
-        .filterPendingCompactionTimeline()
-        .filter(instant ->
-            instant.getState() == HoodieInstant.State.INFLIGHT
-                && StreamerUtil.instantTimeDiff(curInstantTime, instant.getTimestamp()) >= deltaSeconds);
-    inflightCompactionTimeline.getInstants().forEach(inflightInstant -> {
-      writeClient.rollbackInflightCompaction(inflightInstant, table);
-      table.getMetaClient().reloadActiveTimeline();
-    });
+    CompactionUtil.rollbackCompaction(table, conf);
 
     // judge whether have operation
     // to compute the compaction instant time and do compaction.
@@ -94,6 +82,8 @@ public class HoodieFlinkCompactor {
       LOG.info("No compaction plan for this job ");
       return;
     }
+
+    table.getMetaClient().reloadActiveTimeline();
     // generate compaction plan
     // should support configurable commit metadata
     HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
