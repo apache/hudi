@@ -326,16 +326,6 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--checkpoint"}, description = "Resume Delta Streamer from this checkpoint.")
     public String checkpoint = null;
 
-    /**
-     * 1. string: topicName,partition number 0:offset value,partition number 1:offset value
-     * 2. timestamp: kafka offset timestamp
-     * example
-     * 1. hudi_topic,0:100,1:101,2:201
-     * 2. 1621947081
-     */
-    @Parameter(names = {"--checkpoint-type"}, description = "Checkpoint type, divided into timestamp or string offset")
-    public String checkpointType = "string";
-
     @Parameter(names = {"--initial-checkpoint-provider"}, description = "subclass of "
         + "org.apache.hudi.utilities.checkpointing.InitialCheckpointProvider. Generate check point for delta streamer "
         + "for the first run. This field will override the checkpoint of last commit using the checkpoint field. "
