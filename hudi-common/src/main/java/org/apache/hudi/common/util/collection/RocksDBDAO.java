@@ -471,7 +471,7 @@ public class RocksDBDAO {
   }
 
   /**
-   * {@link Iterator} wrapper for RocksDb Iterator {@link RocksIterator}
+   * {@link Iterator} wrapper for RocksDb Iterator {@link RocksIterator}.
    */
   private static class IteratorWrapper<R> implements Iterator<R> {
 
