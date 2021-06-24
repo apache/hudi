@@ -18,8 +18,6 @@
 
 package org.apache.hudi.utilities.schema;
 
-import org.apache.commons.codec.binary.Base64;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieIOException;
@@ -34,6 +32,7 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -69,8 +68,8 @@ public class SchemaRegistryProvider extends SchemaProvider {
   }
 
   public void setAuthorizationHeader(String creds, HttpURLConnection connection) {
-    byte[] encodedAuth = Base64.encodeBase64(creds.getBytes(StandardCharsets.UTF_8));
-    connection.setRequestProperty("Authorization", "Basic " + new String(encodedAuth));
+    String encodedAuth = Base64.getEncoder().encodeToString(creds.getBytes(StandardCharsets.UTF_8));
+    connection.setRequestProperty("Authorization", "Basic " + encodedAuth);
   }
 
   public InputStream getStream(HttpURLConnection connection) throws IOException {
