@@ -465,7 +465,7 @@ public class DeltaSync implements Serializable {
     if (!hasErrors || cfg.commitOnErrors) {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
       checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
-      if (cfg.checkpoint != null && !"timestamp".equals(props.getString("hoodie.deltastreamer.source.kafka.checkpoint.type"))) {
+      if (cfg.checkpoint != null) {
         checkpointCommitMetadata.put(CHECKPOINT_RESET_KEY, cfg.checkpoint);
       }
 
