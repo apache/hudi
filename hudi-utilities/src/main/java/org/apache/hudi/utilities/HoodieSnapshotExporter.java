@@ -85,7 +85,7 @@ public class HoodieSnapshotExporter {
   public static class OutputFormatValidator implements IValueValidator<String> {
 
     public static final String HUDI = "hudi";
-    public static final List<String> FORMATS = CollectionUtils.createImmutableList("json", "parquet", HUDI);
+    public static final List<String> FORMATS = CollectionUtils.createImmutableList("json", "parquet", "orc", HUDI);
 
     @Override
     public void validate(String name, String value) {
@@ -104,7 +104,7 @@ public class HoodieSnapshotExporter {
     @Parameter(names = {"--target-output-path"}, description = "Base path for the target output files (snapshots)", required = true)
     public String targetOutputPath;
 
-    @Parameter(names = {"--output-format"}, description = "Output format for the exported dataset; accept these values: json|parquet|hudi", required = true,
+    @Parameter(names = {"--output-format"}, description = "Output format for the exported dataset; accept these values: json|parquet|orc|hudi", required = true,
         validateValueWith = OutputFormatValidator.class)
     public String outputFormat;
 

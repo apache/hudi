@@ -67,10 +67,6 @@ public final class HoodieMetadataConfig extends DefaultHoodieConfig {
   public static final String CLEANER_COMMITS_RETAINED_PROP = METADATA_PREFIX + ".cleaner.commits.retained";
   public static final int DEFAULT_CLEANER_COMMITS_RETAINED = 3;
 
-  // Controls whether or not, upon failure to fetch from metadata table, should fallback to listing.
-  public static final String ENABLE_FALLBACK_PROP = METADATA_PREFIX + ".fallback.enable";
-  public static final String DEFAULT_ENABLE_FALLBACK = "true";
-
   // Regex to filter out matching directories during bootstrap
   public static final String DIRECTORY_FILTER_REGEX = METADATA_PREFIX + ".dir.filter.regex";
   public static final String DEFAULT_DIRECTORY_FILTER_REGEX = "";
@@ -99,10 +95,6 @@ public final class HoodieMetadataConfig extends DefaultHoodieConfig {
 
   public boolean useFileListingMetadata() {
     return Boolean.parseBoolean(props.getProperty(METADATA_ENABLE_PROP));
-  }
-
-  public boolean enableFallback() {
-    return Boolean.parseBoolean(props.getProperty(ENABLE_FALLBACK_PROP));
   }
 
   public boolean validateFileListingMetadata() {
@@ -140,11 +132,6 @@ public final class HoodieMetadataConfig extends DefaultHoodieConfig {
 
     public Builder enableMetrics(boolean enableMetrics) {
       props.setProperty(METADATA_METRICS_ENABLE_PROP, String.valueOf(enableMetrics));
-      return this;
-    }
-
-    public Builder enableFallback(boolean fallback) {
-      props.setProperty(ENABLE_FALLBACK_PROP, String.valueOf(fallback));
       return this;
     }
 
@@ -218,8 +205,6 @@ public final class HoodieMetadataConfig extends DefaultHoodieConfig {
           String.valueOf(DEFAULT_FILE_LISTING_PARALLELISM));
       setDefaultOnCondition(props, !props.containsKey(HOODIE_ASSUME_DATE_PARTITIONING_PROP),
           HOODIE_ASSUME_DATE_PARTITIONING_PROP, DEFAULT_ASSUME_DATE_PARTITIONING);
-      setDefaultOnCondition(props, !props.containsKey(ENABLE_FALLBACK_PROP), ENABLE_FALLBACK_PROP,
-          DEFAULT_ENABLE_FALLBACK);
       setDefaultOnCondition(props, !props.containsKey(DIRECTORY_FILTER_REGEX), DIRECTORY_FILTER_REGEX,
           DEFAULT_DIRECTORY_FILTER_REGEX);
       return config;

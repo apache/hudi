@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class TestHoodieSnapshotExporter {
 
   @ParameterizedTest
-  @ValueSource(strings = {"json", "parquet", "hudi"})
+  @ValueSource(strings = {"json", "parquet", "orc", "hudi"})
   public void testValidateOutputFormatWithValidFormat(String format) {
     assertDoesNotThrow(() -> {
       new OutputFormatValidator().validate(null, format);
