@@ -55,11 +55,18 @@ public class SchemaRegistryProvider extends SchemaProvider {
   }
 
   public String fetchSchemaFromRegistry(String registryUrl) throws IOException {
-    URL registry = new URL(registryUrl);
-    HttpURLConnection connection = (HttpURLConnection) registry.openConnection();
+    URL registry;
+    HttpURLConnection connection;
     Matcher matcher = Pattern.compile("://(.*?)@").matcher(registryUrl);
     if (matcher.find()) {
+      String creds = matcher.group(1);
+      String urlWithoutCreds = registryUrl.replace(creds + "@", "");
+      registry = new URL(urlWithoutCreds);
+      connection = (HttpURLConnection) registry.openConnection();
       setAuthorizationHeader(matcher.group(1), connection);
+    } else {
+      registry = new URL(registryUrl);
+      connection = (HttpURLConnection) registry.openConnection();
     }
     ObjectMapper mapper = new ObjectMapper();
     InputStream is = getStream(connection);
