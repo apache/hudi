@@ -532,4 +532,65 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
       }
     }
   }
+
+  test("Test Different Type of PreCombineField") {
+    withTempDir { tmp =>
+      val typeAndValue = Seq(
+        ("string", "'1000'"),
+        ("int", 1000),
+        ("bigint", 10000),
+        ("timestamp", "'2021-05-20 00:00:00'"),
+        ("date", "'2021-05-20'")
+      )
+      typeAndValue.foreach { case (dataType, dataValue) =>
+        val tableName = generateTableName
+        // Create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  c $dataType
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | options (
+             |  primaryKey ='id',
+             |  preCombineField = 'c'
+             | )
+       """.stripMargin)
+
+        // First merge with a extra input field 'flag' (insert a new record)
+        spark.sql(
+          s"""
+             | merge into $tableName
+             | using (
+             |  select 1 as id, 'a1' as name, 10 as price, $dataValue as c0, '1' as flag
+             | ) s0
+             | on s0.id = $tableName.id
+             | when matched and flag = '1' then update set
+             | id = s0.id, name = s0.name, price = s0.price, c = s0.c0
+             | when not matched and flag = '1' then insert *
+       """.stripMargin)
+        checkAnswer(s"select id, name, price from $tableName")(
+          Seq(1, "a1", 10.0)
+        )
+
+        spark.sql(
+          s"""
+             | merge into $tableName
+             | using (
+             |  select 1 as id, 'a1' as name, 10 as price, $dataValue as c
+             | ) s0
+             | on s0.id = $tableName.id
+             | when matched then update set
+             | id = s0.id, name = s0.name, price = s0.price + $tableName.price, c = s0.c
+             | when not matched then insert *
+       """.stripMargin)
+        checkAnswer(s"select id, name, price from $tableName")(
+          Seq(1, "a1", 20.0)
+        )
+      }
+    }
+  }
 }

@@ -117,16 +117,16 @@ public class HoodieFlinkStreamer {
         .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
         .uid("uid_hoodie_stream_write")
         .setParallelism(numWriteTask);
-    if (StreamerUtil.needsScheduleCompaction(conf)) {
+    if (StreamerUtil.needsAsyncCompaction(conf)) {
       pipeline.transform("compact_plan_generate",
               TypeInformation.of(CompactionPlanEvent.class),
               new CompactionPlanOperator(conf))
               .uid("uid_compact_plan_generate")
               .setParallelism(1) // plan generate must be singleton
-              .keyBy(event -> event.getOperation().hashCode())
+              .rebalance()
               .transform("compact_task",
                       TypeInformation.of(CompactionCommitEvent.class),
-                      new KeyedProcessOperator<>(new CompactFunction(conf)))
+                      new ProcessOperator<>(new CompactFunction(conf)))
               .setParallelism(conf.getInteger(FlinkOptions.COMPACTION_TASKS))
               .addSink(new CompactionCommitSink(conf))
               .name("compact_commit")

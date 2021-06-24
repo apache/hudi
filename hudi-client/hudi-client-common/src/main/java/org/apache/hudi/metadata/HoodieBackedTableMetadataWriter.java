@@ -400,7 +400,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // (re) init the metadata for reading.
     initTableMetadata();
     try {
-      List<HoodieInstant> instantsToSync = metadata.findInstantsToSync();
+      List<HoodieInstant> instantsToSync = metadata.findInstantsToSyncForWriter();
       if (instantsToSync.isEmpty()) {
         return;
       }
@@ -411,7 +411,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       for (HoodieInstant instant : instantsToSync) {
         LOG.info("Syncing instant " + instant + " to metadata table");
 
-        Option<List<HoodieRecord>> records = HoodieTableMetadataUtil.convertInstantToMetaRecords(datasetMetaClient, instant, metadata.getSyncedInstantTime());
+        Option<List<HoodieRecord>> records = HoodieTableMetadataUtil.convertInstantToMetaRecords(datasetMetaClient, instant, getLatestSyncedInstantTime());
         if (records.isPresent()) {
           commit(records.get(), MetadataPartitionType.FILES.partitionPath(), instant.getTimestamp());
         }

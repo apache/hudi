@@ -230,6 +230,20 @@ select id, name, price, ts, dt from h1_p order by id;
 | 6 _insert 10.0 1000 2021-05-08 |
 +--------------------------------+
 
+# ALTER TABLE
+alter table h1_p rename to h2_p;
++----------+
+| ok       |
++----------+
+alter table h2_p add columns(ext0 int);
++----------+
+| ok       |
++----------+
+alter table h2_p change column ext0 ext0 bigint;
++----------+
+| ok       |
++----------+
+
 # DROP TABLE
 drop table h0;
 +----------+
@@ -246,7 +260,7 @@ drop table h1;
 | ok       |
 +----------+
 
-drop table h1_p;
+drop table h2_p;
 +----------+
 | ok       |
 +----------+

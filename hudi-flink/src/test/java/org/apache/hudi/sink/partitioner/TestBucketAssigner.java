@@ -23,6 +23,7 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.sink.partitioner.profile.WriteProfile;
@@ -330,6 +331,30 @@ public class TestBucketAssigner {
     assertThat("Should have 1 small file", smallFiles4.size(), is(1));
     assertThat("Small file should have same timestamp as last complete instant",
         smallFiles4.get(0).location.getInstantTime(), is(instant2));
+  }
+
+  @Test
+  public void testWriteProfileMetadataCache() throws Exception {
+    WriteProfile writeProfile = new WriteProfile(writeConfig, context);
+    assertTrue(writeProfile.getMetadataCache().isEmpty(), "Empty table should no have any instant metadata");
+
+    HoodieTimeline emptyTimeline = writeProfile.getTable().getActiveTimeline();
+
+    // write 3 instants of data
+    for (int i = 0; i < 3; i++) {
+      TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    }
+    writeProfile.reload(1);
+    assertThat("Metadata cache should have same number entries as timeline instants",
+        writeProfile.getMetadataCache().size(), is(3));
+
+    writeProfile.getSmallFiles("par1");
+    assertThat("The metadata should be reused",
+        writeProfile.getMetadataCache().size(), is(3));
+
+    writeProfile.reload(2);
+    writeProfile.initFSViewIfNecessary(emptyTimeline);
+    assertTrue(writeProfile.getMetadataCache().isEmpty(), "Metadata cache should be all cleaned");
   }
 
   private static Option<String> getLastCompleteInstant(WriteProfile profile) {

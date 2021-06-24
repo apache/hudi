@@ -37,7 +37,6 @@ import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
@@ -55,7 +54,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -100,7 +98,7 @@ import java.util.stream.Collectors;
  */
 public class StreamWriteFunction<K, I, O>
     extends KeyedProcessFunction<K, I, O>
-    implements CheckpointedFunction, CheckpointListener {
+    implements CheckpointedFunction {
 
   private static final long serialVersionUID = 1L;
 
@@ -149,11 +147,6 @@ public class StreamWriteFunction<K, I, O>
   private transient TotalSizeTracer tracer;
 
   /**
-   * Whether write in exactly-once semantics.
-   */
-  private boolean exactlyOnce;
-
-  /**
    * Flag saying whether the write task is waiting for the checkpoint success notification
    * after it finished a checkpoint.
    *
@@ -186,7 +179,6 @@ public class StreamWriteFunction<K, I, O>
         WriteOperationType.fromValue(config.getString(FlinkOptions.OPERATION)),
         HoodieTableType.valueOf(config.getString(FlinkOptions.TABLE_TYPE)));
     this.tracer = new TotalSizeTracer(this.config);
-    this.exactlyOnce = config.getBoolean(FlinkOptions.WRITE_EXACTLY_ONCE_ENABLED);
     initBuffer();
     initWriteFunction();
   }
@@ -215,11 +207,6 @@ public class StreamWriteFunction<K, I, O>
       this.writeClient.cleanHandlesGracefully();
       this.writeClient.close();
     }
-  }
-
-  @Override
-  public void notifyCheckpointComplete(long checkpointId) {
-    this.writeClient.cleanHandles();
   }
 
   /**
@@ -502,11 +489,11 @@ public class StreamWriteFunction<K, I, O>
 
     // if exactly-once semantics turns on,
     // waits for the checkpoint notification until the checkpoint timeout threshold hits.
-    if (exactlyOnce && confirming) {
+    if (confirming) {
       long waitingTime = 0L;
       long ckpTimeout = config.getLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT);
       long interval = 500L;
-      while (Objects.equals(instant, this.currentInstant)) {
+      while (instant == null || instant.equals(this.currentInstant)) {
         // sleep for a while
         try {
           if (waitingTime > ckpTimeout) {
@@ -583,6 +570,7 @@ public class StreamWriteFunction<K, I, O>
     this.eventGateway.sendEventToCoordinator(event);
     this.buckets.clear();
     this.tracer.reset();
+    this.writeClient.cleanHandles();
     this.confirming = true;
   }
 }
