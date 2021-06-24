@@ -176,7 +176,9 @@ public class KafkaOffsetGen {
     props.keySet().stream().filter(prop -> {
       // In order to prevent printing unnecessary warn logs, here filter out the hoodie
       // configuration items before passing to kafkaParams
-      return !prop.toString().startsWith("hoodie.");
+      return !prop.toString().startsWith("hoodie.")
+              // We need to pass some properties to kafka client so that KafkaAvroSchemaDeserializer can use it
+              || prop.toString().startsWith("hoodie.deltastreamer.source.kafka.value.deserializer.");
     }).forEach(prop -> {
       kafkaParams.put(prop.toString(), props.get(prop.toString()));
     });
