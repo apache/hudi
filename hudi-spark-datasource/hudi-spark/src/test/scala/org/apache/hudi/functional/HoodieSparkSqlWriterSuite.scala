@@ -441,9 +441,10 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
       }
     })
 
+  // HUDI-2066
   List(DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
     .foreach(tableType => {
-      test("test schema evolution for " + tableType) {
+      ignore("test schema evolution for " + tableType) {
         initSparkContext("test_schema_evolution")
         val path = java.nio.file.Files.createTempDirectory("hoodie_test_path")
         try {

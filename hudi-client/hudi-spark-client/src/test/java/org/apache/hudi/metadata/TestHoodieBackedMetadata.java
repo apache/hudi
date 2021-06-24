@@ -166,6 +166,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   /**
    * Only valid partition directories are added to the metadata.
    */
+  @Disabled("HUDI-2065")
   @Test
   public void testOnlyValidPartitionsAdded() throws Exception {
     // This test requires local file system
