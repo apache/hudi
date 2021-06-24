@@ -69,8 +69,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
       connection = (HttpURLConnection) registry.openConnection();
     }
     ObjectMapper mapper = new ObjectMapper();
-    InputStream is = getStream(connection);
-    JsonNode node = mapper.readTree(is);
+    JsonNode node = mapper.readTree(getStream(connection));
     return node.get("schema").asText();
   }
 

@@ -115,7 +115,7 @@
     <spark2bundle.version></spark2bundle.version>
     <spark3bundle.version>3</spark3bundle.version>
     <hudi.spark.module>hudi-spark2</hudi.spark.module>
-    <avro.version>1.8.2</avro.version>
+    <avro.version>1.10.0</avro.version>
     <scala11.version>2.11.12</scala11.version>
     <scala12.version>2.12.10</scala12.version>
     <scala.version>${scala11.version}</scala.version>
