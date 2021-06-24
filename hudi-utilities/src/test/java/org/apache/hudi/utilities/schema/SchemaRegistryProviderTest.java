@@ -47,11 +47,11 @@ class SchemaRegistryProviderTest {
 
   private TypedProperties getProps() {
     return new TypedProperties() {{
-      put("hoodie.deltastreamer.schemaprovider.registry.baseUrl", "http://" + basicAuth + "@localhost");
-      put("hoodie.deltastreamer.schemaprovider.registry.urlSuffix", "-value");
-      put("hoodie.deltastreamer.schemaprovider.registry.url", "http://foo:bar@localhost");
-      put("hoodie.deltastreamer.source.kafka.topic", "foo");
-    }};
+        put("hoodie.deltastreamer.schemaprovider.registry.baseUrl", "http://" + basicAuth + "@localhost");
+        put("hoodie.deltastreamer.schemaprovider.registry.urlSuffix", "-value");
+        put("hoodie.deltastreamer.schemaprovider.registry.url", "http://foo:bar@localhost");
+        put("hoodie.deltastreamer.source.kafka.topic", "foo");
+      }};
   }
 
   Schema getExpectedSchema(String response) throws IOException {
