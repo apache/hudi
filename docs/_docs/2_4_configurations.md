@@ -265,7 +265,6 @@ Controls aspects around sizing parquet and log files.
 | logFileMaxSize(logFileSize) | `hoodie.logfile.max.size` | NO | `1073741824(1GB)` | `LogFile max size. This is the maximum size allowed for a log file before it is rolled over to the next version.` |
 | logFileDataBlockMaxSize(dataBlockSize) | `hoodie.logfile.data.block.max.size` | NO | `268435456(256MB)` | `LogFile Data block max size. This is the maximum size allowed for a single data block to be appended to a log file. This helps to make sure the data appended to the log file is broken up into sizable blocks to prevent from OOM errors. This size should be greater than the JVM memory.` |
 | logFileToParquetCompressionRatio(logFileToParquetCompressionRatio) | `hoodie.logfile.to.parquet.compression.ratio` | NO | `0.35` | `Expected additional compression as records move from log files to parquet. Used for merge_on_read table to send inserts into log files & control the size of compacted parquet file.` |
-| parquetCompressionCodec(parquetCompressionCodec) | `hoodie.parquet.compression.codec` | NO | `gzip` | `Compression Codec for parquet files.` |
 
 ### Compaction configs
 Configs that control compaction (merging of log files onto a new parquet base file), cleaning (reclamation of older/unused file groups).
