@@ -323,6 +323,12 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    */
   public abstract O insertPreppedRecords(I preppedRecords, final String instantTime);
 
+  /**
+   * Removes all existing records from the partitions affected and inserts the given HoodieRecords, into the table.
+   * @param records HoodieRecords to insert
+   * @param instantTime Instant time of the commit
+   * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
+   */
   public abstract O insertOverwrite(I records, final String instantTime);
 
   /**
