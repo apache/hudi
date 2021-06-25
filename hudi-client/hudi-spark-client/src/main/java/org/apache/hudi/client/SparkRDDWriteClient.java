@@ -198,17 +198,6 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  public JavaRDD<WriteStatus> insertOverWriteTable(JavaRDD<HoodieRecord<T>> records, final String instantTime) {
-    HoodieTable table = getTableAndInitCtx(WriteOperationType.INSERT_OVERWRITE_TABLE, instantTime);
-    table.validateInsertSchema();
-    preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE_TABLE, table.getMetaClient());
-    HoodieWriteMetadata result = table.insertOverwriteTable(context, instantTime, records);
-    HoodieWriteResult writeResult = new HoodieWriteResult(postWrite(result, instantTime, table),
-            result.getPartitionToReplaceFileIds());
-    return writeResult.getWriteStatuses();
-  }
-
-  @Override
   public JavaRDD<WriteStatus> bulkInsert(JavaRDD<HoodieRecord<T>> records, String instantTime) {
     return bulkInsert(records, instantTime, Option.empty());
   }

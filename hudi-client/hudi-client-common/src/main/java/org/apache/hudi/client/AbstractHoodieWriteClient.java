@@ -287,6 +287,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
 
   /**
    * Upserts the given prepared records into the Hoodie table, at the supplied instantTime.
+   *
    * <p>
    * This implementation requires that the input records are already tagged, and de-duped if needed.
    *
@@ -298,9 +299,10 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
 
   /**
    * Inserts the given HoodieRecords, into the table. This API is intended to be used for normal writes.
+   *
    * <p>
-   * This implementation skips the index check and is able to leverage benefits such as small file handling/blocking
-   * alignment, as with upsert(), by profiling the workload
+   * This implementation skips the index check and is able to leverage benefits such as small
+   * file handling/blocking alignment, as with upsert(), by profiling the workload
    *
    * @param records HoodieRecords to insert
    * @param instantTime Instant time of the commit
@@ -321,24 +323,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
    */
   public abstract O insertPreppedRecords(I preppedRecords, final String instantTime);
 
-  /**
-   * Removes all existing records from the partitions affected and inserts the given HoodieRecords, into the table.
-
-   * @param records HoodieRecords to insert
-   * @param instantTime Instant time of the commit
-   * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
-   */
   public abstract O insertOverwrite(I records, final String instantTime);
-
-
-  /**
-   * Removes all existing records of the Hoodie table and inserts the given HoodieRecords, into the table.
-
-   * @param records HoodieRecords to insert
-   * @param instantTime Instant time of the commit
-   * @return JavaRDD[WriteStatus] - RDD of WriteStatus to inspect errors and counts
-   */
-  public abstract O insertOverWriteTable(I records, final String instantTime);
 
   /**
    * Loads the given HoodieRecords, as inserts into the table. This is suitable for doing big bulk loads into a Hoodie
