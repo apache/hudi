@@ -556,8 +556,8 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(newCommitTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
       records = dataGen.generateInserts(newCommitTime, 5);
-      HoodieWriteResult replaceResult = client.insertOverwrite(jsc.parallelize(records, 1), newCommitTime);
-      writeStatuses = replaceResult.getWriteStatuses().collect();
+      JavaRDD<WriteStatus> writeStatusJavaRDD = client.insertOverwrite(jsc.parallelize(records, 1), newCommitTime);
+      writeStatuses = writeStatusJavaRDD.collect();
       assertNoWriteErrors(writeStatuses);
       assertTrue(metadata(client).isInSync());
     }

@@ -137,8 +137,8 @@ public class HoodieClientRollbackTestBase extends HoodieClientTestBase {
     records = dataGen.generateInsertsContainsAllPartitions(newCommitTime, 2);
     writeRecords = jsc.parallelize(records, 1);
     client.startCommitWithTime(newCommitTime, commitActionType);
-    HoodieWriteResult result = client.insertOverwrite(writeRecords, newCommitTime);
-    statuses = result.getWriteStatuses();
+    statuses = client.insertOverwrite(writeRecords, newCommitTime);
+    HoodieWriteResult result = new HoodieWriteResult(statuses);
     Assertions.assertNoWriteErrors(statuses.collect());
     if (commitSecondInsertOverwrite) {
       client.commit(newCommitTime, statuses, Option.empty(), commitActionType, result.getPartitionToReplaceFileIds());
