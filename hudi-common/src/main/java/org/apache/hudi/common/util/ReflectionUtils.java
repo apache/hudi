@@ -87,7 +87,7 @@ public class ReflectionUtils {
     try {
       return getClass(clazz).getConstructor(constructorArgTypes).newInstance(constructorArgs);
     } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
-      throw new HoodieException("Unable to instantiate class ", e);
+      throw new HoodieException("Unable to instantiate class " + clazz, e);
     }
   }
 

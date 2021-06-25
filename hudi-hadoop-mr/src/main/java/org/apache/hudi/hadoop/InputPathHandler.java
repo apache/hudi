@@ -39,6 +39,14 @@ import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getTableMetaCl
  * InputPathHandler takes in a set of input paths and incremental tables list. Then, classifies the
  * input paths to incremental, snapshot paths and non-hoodie paths. This is then accessed later to
  * mutate the JobConf before processing incremental mode queries and snapshot queries.
+ *
+ * Note: We are adding jobConf of a mapreduce or spark job. The properties in the jobConf are two
+ * type: session properties and table properties from metastore. While session property is common
+ * for all the tables in a query the table properties are unique per table so there is no need to
+ * check if it belongs to the table for which the path handler is now instantiated. The jobConf has
+ * all table properties such as name, last modification time and so on which are unique to a table.
+ * This class is written in such a way that it can handle multiple tables and properties unique to
+ * a table but for table level property such check is not required.
  */
 public class InputPathHandler {
 
@@ -63,7 +71,6 @@ public class InputPathHandler {
   /**
    * Takes in the original InputPaths and classifies each of them into incremental, snapshot and
    * non-hoodie InputPaths. The logic is as follows:
-   *
    * 1. Check if an inputPath starts with the same basepath as any of the metadata basepaths we know
    *    1a. If yes, this belongs to a Hoodie table that we already know about. Simply classify this
    *        as incremental or snapshot - We can get the table name of this inputPath from the
