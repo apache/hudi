@@ -104,6 +104,7 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--decode-partition"}, description = "Decode the partition value if the partition has encoded during writing")
   public Boolean decodePartition = false;
 
+  // enhance the similar function in child class
   public static HiveSyncConfig copy(HiveSyncConfig cfg) {
     HiveSyncConfig newConfig = new HiveSyncConfig();
     newConfig.basePath = cfg.basePath;

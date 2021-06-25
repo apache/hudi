@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.HiveMetaStore;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
 import org.apache.hadoop.hive.metastore.IHMSHandler;
@@ -78,6 +79,7 @@ public class HiveTestService {
   private ExecutorService executorService;
   private TServer tServer;
   private HiveServer2 hiveServer;
+  private HiveConf serverConf;
 
   public HiveTestService(Configuration hadoopConf) throws IOException {
     this.workDir = Files.createTempDirectory(System.currentTimeMillis() + "-").toFile().getAbsolutePath();
@@ -86,6 +88,14 @@ public class HiveTestService {
 
   public Configuration getHadoopConf() {
     return hadoopConf;
+  }
+
+  public TServer getHiveMetaStore() { 
+    return tServer;
+  }
+
+  public HiveConf getServerConf() {
+    return serverConf;
   }
 
   public HiveServer2 start() throws IOException {
@@ -102,10 +112,10 @@ public class HiveTestService {
       FileIOUtils.deleteDirectory(file);
     }
 
-    HiveConf serverConf = configureHive(hadoopConf, localHiveLocation);
+    serverConf = configureHive(hadoopConf, localHiveLocation);
 
     executorService = Executors.newSingleThreadExecutor();
-    tServer = startMetaStore(bindIP, metastorePort, serverConf);
+    tServer = startMetaStore(bindIP, serverConf);
 
     serverConf.set("hive.in.test", "true");
     hiveServer = startHiveServer(serverConf);
@@ -116,7 +126,7 @@ public class HiveTestService {
     } else {
       serverHostname = bindIP;
     }
-    if (!waitForServerUp(serverConf, serverHostname, metastorePort, CONNECTION_TIMEOUT)) {
+    if (!waitForServerUp(serverConf, serverHostname, CONNECTION_TIMEOUT)) {
       throw new IOException("Waiting for startup of standalone server");
     }
 
@@ -163,9 +173,17 @@ public class HiveTestService {
 
   public HiveConf configureHive(Configuration conf, String localHiveLocation) throws IOException {
     conf.set("hive.metastore.local", "false");
-    conf.set(HiveConf.ConfVars.METASTOREURIS.varname, "thrift://" + bindIP + ":" + metastorePort);
+    int port = metastorePort;
+    if (conf.get(HiveConf.ConfVars.METASTORE_SERVER_PORT.varname, null) == null) {
+      conf.setInt(ConfVars.METASTORE_SERVER_PORT.varname, metastorePort);
+    } else {
+      port = conf.getInt(ConfVars.METASTORE_SERVER_PORT.varname, metastorePort);
+    }
+    if (conf.get(HiveConf.ConfVars.HIVE_SERVER2_THRIFT_PORT.varname, null) == null) {
+      conf.setInt(ConfVars.HIVE_SERVER2_THRIFT_PORT.varname, serverPort);
+    }
+    conf.set(HiveConf.ConfVars.METASTOREURIS.varname, "thrift://" + bindIP + ":" + port);
     conf.set(HiveConf.ConfVars.HIVE_SERVER2_THRIFT_BIND_HOST.varname, bindIP);
-    conf.setInt(HiveConf.ConfVars.HIVE_SERVER2_THRIFT_PORT.varname, serverPort);
     // The following line to turn of SASL has no effect since HiveAuthFactory calls
     // 'new HiveConf()'. This is fixed by https://issues.apache.org/jira/browse/HIVE-6657,
     // in Hive 0.14.
@@ -191,8 +209,9 @@ public class HiveTestService {
     return new HiveConf(conf, this.getClass());
   }
 
-  private boolean waitForServerUp(HiveConf serverConf, String hostname, int port, int timeout) {
+  private boolean waitForServerUp(HiveConf serverConf, String hostname, int timeout) {
     long start = System.currentTimeMillis();
+    int port = serverConf.getIntVar(HiveConf.ConfVars.METASTORE_SERVER_PORT);
     while (true) {
       try {
         new HiveMetaStoreClient(serverConf);
@@ -288,11 +307,12 @@ public class HiveTestService {
     }
   }
 
-  public TServer startMetaStore(String forceBindIP, int port, HiveConf conf) throws IOException {
+  public TServer startMetaStore(String forceBindIP, HiveConf conf) throws IOException {
     try {
       // Server will create new threads up to max as necessary. After an idle
       // period, it will destory threads to keep the number of threads in the
       // pool to min.
+      int port = conf.getIntVar(HiveConf.ConfVars.METASTORE_SERVER_PORT);
       int minWorkerThreads = conf.getIntVar(HiveConf.ConfVars.METASTORESERVERMINTHREADS);
       int maxWorkerThreads = conf.getIntVar(HiveConf.ConfVars.METASTORESERVERMAXTHREADS);
       boolean tcpKeepAlive = conf.getBoolVar(HiveConf.ConfVars.METASTORE_TCP_KEEP_ALIVE);

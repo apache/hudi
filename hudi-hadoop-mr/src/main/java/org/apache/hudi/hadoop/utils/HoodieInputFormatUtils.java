@@ -442,6 +442,7 @@ public class HoodieInputFormatUtils {
         }
 
         HoodieTimeline timeline = HoodieHiveUtils.getTableTimeline(metaClient.getTableConfig().getTableName(), job, metaClient);
+
         HoodieTableFileSystemView fsView = fsViewCache.computeIfAbsent(metaClient, tableMetaClient ->
             FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext, tableMetaClient, buildMetadataConfig(job), timeline));
         List<HoodieBaseFile> filteredBaseFiles = new ArrayList<>();
