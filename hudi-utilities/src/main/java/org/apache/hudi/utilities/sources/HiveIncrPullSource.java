@@ -137,6 +137,6 @@ public class HiveIncrPullSource extends AvroSource {
   }
 
   @Override
-  protected void onCommit(Option<String> lastCkptStr) {
+  public void onCommit(String lastCkptStr) {
   }
 }

@@ -65,6 +65,6 @@ public class TestDataSource extends AbstractBaseTestSource {
   }
 
   @Override
-  protected void onCommit(Option<String> lastCkptStr) {
+  public void onCommit(String lastCkptStr) {
   }
 }

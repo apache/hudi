@@ -473,6 +473,7 @@ public class DeltaSync implements Serializable {
       boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata));
       if (success) {
         LOG.info("Commit " + instantTime + " successful!");
+        this.formatAdapter.getSource().onCommit(checkpointStr);
         // Schedule compaction if needed
         if (cfg.isAsyncCompactionEnabled()) {
           scheduledCompactionInstant = writeClient.scheduleCompaction(Option.empty());

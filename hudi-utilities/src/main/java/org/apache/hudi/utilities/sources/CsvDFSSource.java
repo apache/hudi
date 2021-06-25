@@ -127,6 +127,6 @@ public class CsvDFSSource extends RowSource {
   }
 
   @Override
-  protected void onCommit(Option<String> lastCkptStr) {
+  public void onCommit(String lastCkptStr) {
   }
 }

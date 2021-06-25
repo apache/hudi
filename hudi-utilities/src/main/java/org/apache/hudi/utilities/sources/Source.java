@@ -64,7 +64,7 @@ public abstract class Source<T> implements Serializable {
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   protected abstract InputBatch<T> fetchNewData(Option<String> lastCkptStr, long sourceLimit);
 
-  protected abstract void onCommit(Option<String> lastCkptStr);
+  public abstract void onCommit(String lastCkptStr);
 
   /**
    * Main API called by Hoodie Delta Streamer to fetch records.

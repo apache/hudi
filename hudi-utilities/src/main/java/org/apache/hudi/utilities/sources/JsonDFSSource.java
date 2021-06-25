@@ -55,6 +55,6 @@ public class JsonDFSSource extends JsonSource {
   }
 
   @Override
-  protected void onCommit(Option<String> lastCkptStr) {
+  public void onCommit(String lastCkptStr) {
   }
 }

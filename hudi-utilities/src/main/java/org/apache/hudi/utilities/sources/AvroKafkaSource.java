@@ -100,9 +100,9 @@ public class AvroKafkaSource extends AvroSource {
   }
 
   @Override
-  protected void onCommit(Option<String> lastCkptStr) {
+  public void onCommit(String lastCkptStr) {
     if (this.props.getBoolean(ENABLE_KAFKA_COMMIT_OFFSET, DEFAULT_ENABLE_KAFKA_COMMIT_OFFSET)) {
-      offsetGen.commitOffsetToKafka(lastCkptStr.get());
+      offsetGen.commitOffsetToKafka(lastCkptStr);
     }
   }
 }

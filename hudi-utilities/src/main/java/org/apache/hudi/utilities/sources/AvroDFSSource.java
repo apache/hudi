@@ -66,6 +66,6 @@ public class AvroDFSSource extends AvroSource {
   }
 
   @Override
-  protected void onCommit(Option<String> lastCkptStr) {
+  public void onCommit(String lastCkptStr) {
   }
 }
