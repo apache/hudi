@@ -142,57 +142,24 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--index-state-ttl"}, description = "Index state ttl in days, default 1.5 day")
   public Double indexStateTtl = 1.5D;
 
-  @Parameter(names = {"--index-global-enabled"}, description = "Whether to update index for the old partition path " +
-          "if same key record with different partition path came in, default false")
+  @Parameter(names = {"--index-global-enabled"}, description = "Whether to update index for the old partition path "
+          + "if same key record with different partition path came in, default false")
   public Boolean indexGlobalEnabled = false;
 
   @Parameter(names = {"--index-partition-regex"},
           description = "Whether to load partitions in state if partition path matching， default *")
   public String indexPartitionRegex = ".*";
 
-  @Parameter(names = {"--read-tasks-parallelism"}, description = "Parallelism of tasks that do actual read, default is 4")
-  public Integer readTasksParallelism = 4;
-
   @Parameter(names = {"--avro-schema-path"}, description = "Avro schema file path, the parsed schema is used for deserialization")
-  public String avroSchemaPath;
+  public String avroSchemaPath = "";
 
   @Parameter(names = {"--avro-schema"}, description = "Avro schema string, the parsed schema is used for deserialization")
-  public String avroSchema;
-
-  @Parameter(names = {"--source-query-type"}, description = "Decides how data files need to be read, in\n"
-          + "1) Snapshot mode (obtain latest view, based on row & columnar data);\n"
-          + "2) incremental mode (new data since an instantTime);\n"
-          + "3) Read Optimized mode (obtain latest view, based on columnar data)\n."
-          + "Default: snapshot")
-  public String sourceQueryType = FlinkOptions.QUERY_TYPE_SNAPSHOT;
-
-  @Parameter(names = {"--source-merge-type"},
-          description = "For Snapshot query on merge on read table. Use this key to define how the payloads are merged, in\n"
-          + "1) skip_merge: read the base file records plus the log file records;\n"
-          + "2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the\n"
-          + "   log file records(combines the two records with same key for base and log file records), then read the left log file records")
-  public String sourceMergeType = FlinkOptions.REALTIME_PAYLOAD_COMBINE;
-
-  @Parameter(names = {"--source-hive-style-partition"},
-          description = "Whether the partition path is with Hive style, e.g. '{partition key}={partition value}', default false")
-  public Boolean sourceHiveStylePartition = false;
+  public String avroSchema = "";
 
   @Parameter(names = {"--utc-timezone"}, description = "Use UTC timezone or local timezone to the conversion between epoch"
           + " time and LocalDateTime. Hive 0.x/1.x/2.x use local timezone. But Hive 3.x"
           + " use UTC timezone, by default true")
   public Boolean utcTimezone = true;
-
-  @Parameter(names = {"--streaming-enabled"}, description = "Whether to read as streaming source, default false")
-  public Boolean streamingEnabled = false;
-
-  @Parameter(names = {"--streaming-check-interval"},
-          description = "Check interval for streaming read of SECOND, default 1 minute")
-  public Integer streamingCheckInterval = 60;
-
-  @Parameter(names = {"--streaming-start-commit"},
-          description = "Start commit instant for streaming read, the commit time format should be 'yyyyMMddHHmmss', "
-          + "by default reading from the latest instant")
-  public String streamingStartCommit;
 
   @Parameter(names = {"--write-partition-url-encode"}, description = "Whether to encode the partition path url, default false")
   public Boolean writePartitionUrlEncode;
@@ -345,16 +312,9 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setDouble(FlinkOptions.INDEX_STATE_TTL, config.indexStateTtl);
     conf.setBoolean(FlinkOptions.INDEX_GLOBAL_ENABLED, config.indexGlobalEnabled);
     conf.setString(FlinkOptions.INDEX_PARTITION_REGEX, config.indexPartitionRegex);
-    conf.setInteger(FlinkOptions.READ_TASKS, config.readTasksParallelism);
     conf.setString(FlinkOptions.READ_AVRO_SCHEMA_PATH, config.avroSchemaPath);
     conf.setString(FlinkOptions.READ_AVRO_SCHEMA, config.avroSchema);
-    conf.setString(FlinkOptions.QUERY_TYPE, config.sourceQueryType);
-    conf.setString(FlinkOptions.MERGE_TYPE, config.sourceMergeType);
-    conf.setBoolean(FlinkOptions.HIVE_STYLE_PARTITION, config.sourceHiveStylePartition);
     conf.setBoolean(FlinkOptions.UTC_TIMEZONE, config.utcTimezone);
-    conf.setBoolean(FlinkOptions.READ_AS_STREAMING, config.streamingEnabled);
-    conf.setInteger(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, config.streamingCheckInterval);
-    conf.setString(FlinkOptions.READ_STREAMING_START_COMMIT, config.streamingStartCommit);
     conf.setBoolean(FlinkOptions.PARTITION_PATH_URL_ENCODE, config.writePartitionUrlEncode);
     conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, config.writeTaskMaxSize);
     conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, config.writeBatchSize);
