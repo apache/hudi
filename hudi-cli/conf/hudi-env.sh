@@ -20,4 +20,3 @@
 export HADOOP_CONF_DIR=${HADOOP_CONF_DIR:-"/etc/hadoop/conf"}
 export SPARK_CONF_DIR=${SPARK_CONF_DIR:-"/etc/spark/conf"}
 export CLIENT_JAR=${CLIENT_JAR}
-export SPARK_MASTER=local[*]
