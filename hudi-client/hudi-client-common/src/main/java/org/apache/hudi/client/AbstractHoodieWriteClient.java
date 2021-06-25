@@ -948,6 +948,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
         LOG.info("Scheduling cleaning at instant time :" + instantTime);
         Option<HoodieCleanerPlan> cleanerPlan = createTable(config, hadoopConf)
             .scheduleCleaning(context, instantTime, extraMetadata);
+        LOG.warn("Cleaner plan " + cleanerPlan.toString());
         return cleanerPlan.isPresent() ? Option.of(instantTime) : Option.empty();
       default:
         throw new IllegalArgumentException("Invalid TableService " + tableServiceType);

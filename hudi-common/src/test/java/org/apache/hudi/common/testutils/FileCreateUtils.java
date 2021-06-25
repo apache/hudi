@@ -239,7 +239,9 @@ public class FileCreateUtils {
       throws Exception {
     Path parentPath = Paths.get(basePath, partitionPath);
     Files.createDirectories(parentPath);
-    Path baseFilePath = parentPath.resolve(baseFileName(instantTime, fileId));
+    String baseFileName = baseFileName(instantTime, fileId);
+    Path baseFilePath = parentPath.resolve(baseFileName);
+    System.out.println("TEST_LOG. creating base file " + fileId + " instance time " + instantTime + ", filename " + baseFileName);
     if (Files.notExists(baseFilePath)) {
       Files.createFile(baseFilePath);
     }
@@ -256,7 +258,10 @@ public class FileCreateUtils {
       throws Exception {
     Path parentPath = Paths.get(basePath, partitionPath);
     Files.createDirectories(parentPath);
-    Path logFilePath = parentPath.resolve(logFileName(instantTime, fileId, version));
+    String logFileName = logFileName(instantTime, fileId, version);
+    Path logFilePath = parentPath.resolve(logFileName);
+    System.out.println("TEST_LOG. creating log file " + fileId + ", instance time " + instantTime + " version " + version
+        + ", name " + logFilePath);
     if (Files.notExists(logFilePath)) {
       Files.createFile(logFilePath);
     }

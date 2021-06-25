@@ -81,6 +81,7 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -764,7 +765,7 @@ public class TestCleaner extends HoodieClientTestBase {
   /**
    * Test HoodieTable.clean() Cleaning by commit logic for MOR table with Log files.
    */
-  @Test
+  @RepeatedTest(500)
   public void testKeepLatestCommitsMOR() throws Exception {
 
     HoodieWriteConfig config =
@@ -795,6 +796,7 @@ public class TestCleaner extends HoodieClientTestBase {
             .withLogFile(p0, file1P0, 4);
 
     List<HoodieCleanStat> hoodieCleanStats = runCleaner(config);
+    List<String> deletedFiles = getCleanStat(hoodieCleanStats, p0).getSuccessDeleteFiles();
     assertEquals(3,
             getCleanStat(hoodieCleanStats, p0).getSuccessDeleteFiles()
                     .size(), "Must clean three files, one base and 2 log files");
