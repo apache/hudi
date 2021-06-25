@@ -63,4 +63,8 @@ public class TestDataSource extends AbstractBaseTestSource {
     JavaRDD<GenericRecord> avroRDD = sparkContext.<GenericRecord>parallelize(records, 4);
     return new InputBatch<>(Option.of(avroRDD), instantTime);
   }
+
+  @Override
+  protected void onCommit(Option<String> lastCkptStr) {
+  }
 }

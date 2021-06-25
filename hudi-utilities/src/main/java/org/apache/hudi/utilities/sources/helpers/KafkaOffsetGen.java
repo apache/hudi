@@ -162,12 +162,12 @@ public class KafkaOffsetGen {
     private static final String KAFKA_TOPIC_NAME = "hoodie.deltastreamer.source.kafka.topic";
     private static final String MAX_EVENTS_FROM_KAFKA_SOURCE_PROP = "hoodie.deltastreamer.kafka.source.maxEvents";
     public static final String ENABLE_KAFKA_COMMIT_OFFSET = "hoodie.deltastreamer.source.kafka.enable.commit.offset";
+    public static final Boolean DEFAULT_ENABLE_KAFKA_COMMIT_OFFSET = false;
     // "auto.offset.reset" is kafka native config param. Do not change the config param name.
     public static final String KAFKA_AUTO_OFFSET_RESET = "auto.offset.reset";
     private static final KafkaResetOffsetStrategies DEFAULT_KAFKA_AUTO_OFFSET_RESET = KafkaResetOffsetStrategies.LATEST;
     public static final long DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE = 5000000;
     public static long maxEventsFromKafkaSource = DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE;
-    public static final Boolean DEFAULT_ENABLE_KAFKA_COMMIT_OFFSET = false;
   }
 
   private final Map<String, Object> kafkaParams;
@@ -177,7 +177,7 @@ public class KafkaOffsetGen {
 
   public KafkaOffsetGen(TypedProperties props) {
     this.props = props;
-    kafkaParams = KafkaOffsetGen.excludeHoodieConfigs(props);
+    kafkaParams = excludeHoodieConfigs(props);
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.KAFKA_TOPIC_NAME));
     topicName = props.getString(Config.KAFKA_TOPIC_NAME);
     String kafkaAutoResetOffsetsStr = props.getString(Config.KAFKA_AUTO_OFFSET_RESET, Config.DEFAULT_KAFKA_AUTO_OFFSET_RESET.name().toLowerCase());
@@ -299,7 +299,7 @@ public class KafkaOffsetGen {
     return kafkaParams;
   }
 
-  private static Map<String, Object> excludeHoodieConfigs(TypedProperties props) {
+  private Map<String, Object> excludeHoodieConfigs(TypedProperties props) {
     Map<String, Object> kafkaParams = new HashMap<>();
     props.keySet().stream().filter(prop -> {
       // In order to prevent printing unnecessary warn logs, here filter out the hoodie
@@ -314,9 +314,8 @@ public class KafkaOffsetGen {
   /**
    * Commit offsets to Kafka only after hoodie commit is successful.
    * @param checkpointStr checkpoint string containing offsets.
-   * @param props properties for Kafka consumer.
    */
-  public static void commitOffsetToKafka(String checkpointStr, TypedProperties props) {
+  public void commitOffsetToKafka(String checkpointStr) {
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(ConsumerConfig.GROUP_ID_CONFIG));
     Map<TopicPartition, Long> offsetMap = CheckpointUtils.strToOffsets(checkpointStr);
     Map<String, Object> kafkaParams = excludeHoodieConfigs(props);

@@ -81,4 +81,8 @@ public class DistributedTestDataSource extends AbstractBaseTestSource {
             }, true);
     return new InputBatch<>(Option.of(avroRDD), instantTime);
   }
+
+  @Override
+  protected void onCommit(Option<String> lastCkptStr) {
+  }
 }
