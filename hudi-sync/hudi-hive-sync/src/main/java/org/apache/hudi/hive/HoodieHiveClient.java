@@ -18,12 +18,6 @@
 
 package org.apache.hudi.hive;
 
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.metastore.api.Partition;
-import org.apache.hadoop.hive.metastore.api.Table;
-import org.apache.hadoop.hive.metastore.api.Database;
-import org.apache.hadoop.hive.ql.Driver;
-import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -32,15 +26,22 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hive.util.HiveSchemaUtil;
+import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.metastore.api.Database;
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
+import org.apache.hadoop.hive.metastore.api.Partition;
+import org.apache.hadoop.hive.metastore.api.Table;
+import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
-import org.apache.hudi.sync.common.AbstractSyncHoodieClient;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
@@ -59,6 +60,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.hadoop.utils.HoodieHiveUtils.GLOBALLY_CONSISTENT_READ_TIMESTAMP;
 
 public class HoodieHiveClient extends AbstractSyncHoodieClient {
 
@@ -402,7 +405,19 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
         closeQuietly(null, stmt);
       }
     } else {
-      updateHiveSQLUsingHiveDriver(s);
+      CommandProcessorResponse response = updateHiveSQLUsingHiveDriver(s);
+      if (response == null) {
+        throw new HoodieHiveSyncException("Failed in executing SQL null response" + s);
+      }
+      if (response.getResponseCode() != 0) {
+        LOG.error(String.format("Failure in SQL response %s", response.toString()));
+        if (response.getException() != null) {
+          throw new HoodieHiveSyncException(
+              String.format("Failed in executing SQL %s", s), response.getException());
+        } else {
+          throw new HoodieHiveSyncException(String.format("Failed in executing SQL %s", s));
+        }
+      }
     }
   }
 
@@ -476,13 +491,58 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     }
   }
 
+  public Option<String> getLastReplicatedTime(String tableName) {
+    // Get the last replicated time from the TBLproperties
+    try {
+      Table database = client.getTable(syncConfig.databaseName, tableName);
+      return Option.ofNullable(database.getParameters().getOrDefault(GLOBALLY_CONSISTENT_READ_TIMESTAMP, null));
+    } catch (NoSuchObjectException e) {
+      LOG.warn("the said table not found in hms " + syncConfig.databaseName + "." + tableName);
+      return Option.empty();
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException("Failed to get the last replicated time from the database", e);
+    }
+  }
+
+  public void updateLastReplicatedTimeStamp(String tableName, String timeStamp) {
+    if (!activeTimeline.filterCompletedInstants().getInstants()
+            .anyMatch(i -> i.getTimestamp().equals(timeStamp))) {
+      throw new HoodieHiveSyncException(
+          "Not a valid completed timestamp " + timeStamp + " for table " + tableName);
+    }
+    try {
+      Table table = client.getTable(syncConfig.databaseName, tableName);
+      table.putToParameters(GLOBALLY_CONSISTENT_READ_TIMESTAMP, timeStamp);
+      client.alter_table(syncConfig.databaseName, tableName, table);
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException(
+          "Failed to update last replicated time to " + timeStamp + " for " + tableName, e);
+    }
+  }
+
+  public void deleteLastReplicatedTimeStamp(String tableName) {
+    try {
+      Table table = client.getTable(syncConfig.databaseName, tableName);
+      String timestamp = table.getParameters().remove(GLOBALLY_CONSISTENT_READ_TIMESTAMP);
+      client.alter_table(syncConfig.databaseName, tableName, table);
+      if (timestamp != null) {
+        LOG.info("deleted last replicated timestamp " + timestamp + " for table " + tableName);
+      }
+    } catch (NoSuchObjectException e) {
+      // this is ok the table doesn't even exist.
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException(
+          "Failed to delete last replicated timestamp for " + tableName, e);
+    }
+  }
+
   public void close() {
     try {
       if (connection != null) {
         connection.close();
       }
       if (client != null) {
-        Hive.closeCurrent();
+        client.close();
         client = null;
       }
     } catch (SQLException e) {

@@ -65,8 +65,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestHoodieParquetInputFormat {
 
-  private HoodieParquetInputFormat inputFormat;
-  private JobConf jobConf;
+  protected HoodieParquetInputFormat inputFormat;
+  protected JobConf jobConf;
   private final HoodieFileFormat baseFileFormat = HoodieFileFormat.PARQUET;
   private final String baseFileExtension = baseFileFormat.getFileExtension();
 
