@@ -228,7 +228,7 @@ public class BucketAssigner implements AutoCloseable {
         return false;
       }
       SmallFileAssignState state = states[assignIdx];
-      if (!state.canAssign()) {
+      while (!state.canAssign()) {
         assignIdx += 1;
         if (assignIdx >= states.length) {
           noSpace = true;
@@ -236,7 +236,6 @@ public class BucketAssigner implements AutoCloseable {
         }
         // move to next slot if possible
         state = states[assignIdx];
-        assert state.canAssign();
       }
       state.assign();
       return true;
