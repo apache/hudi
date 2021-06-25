@@ -19,6 +19,8 @@
 package org.apache.hudi.schema;
 
 import org.apache.avro.Schema;
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIMethod;
 
 import java.io.Serializable;
 
@@ -27,8 +29,10 @@ import java.io.Serializable;
  */
 public interface SchemaProviderInterface extends Serializable {
 
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   Schema getSourceSchema();
 
+  @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   default Schema getTargetSchema() {
     // by default, use source schema as target for hoodie table as well
     return getSourceSchema();
