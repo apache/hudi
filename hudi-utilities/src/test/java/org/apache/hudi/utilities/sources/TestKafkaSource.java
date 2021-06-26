@@ -26,7 +26,6 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
-import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
@@ -50,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config.ENABLE_KAFKA_COMMIT_OFFSET;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -300,8 +300,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
 
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     TypedProperties props = createPropsForJsonSource(null, "earliest");
-
-    KafkaOffsetGen offsetGen = new KafkaOffsetGen(props);
+    props.put(ENABLE_KAFKA_COMMIT_OFFSET, "true");
     Source jsonSource = new JsonKafkaSource(props, jsc, sparkSession, schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
 
@@ -311,7 +310,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
 
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 599);
     // commit to kafka after first batch
-    offsetGen.commitOffsetToKafka(fetch1.getCheckpointForNextBatch());
+    kafkaSource.getSource().onCommit(fetch1.getCheckpointForNextBatch());
     try (KafkaConsumer consumer = new KafkaConsumer(props)) {
       consumer.assign(topicPartitions);
 
@@ -331,7 +330,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
               kafkaSource.fetchNewDataInRowFormat(Option.of(fetch1.getCheckpointForNextBatch()), Long.MAX_VALUE);
 
       // commit to Kafka after second batch is processed completely
-      offsetGen.commitOffsetToKafka(fetch2.getCheckpointForNextBatch());
+      kafkaSource.getSource().onCommit(fetch2.getCheckpointForNextBatch());
 
       offsetAndMetadata = consumer.committed(topicPartition0);
       assertNotNull(offsetAndMetadata);
@@ -346,6 +345,6 @@ public class TestKafkaSource extends UtilitiesTestBase {
     }
     // check failure case
     props.remove(ConsumerConfig.GROUP_ID_CONFIG);
-    assertThrows(HoodieNotSupportedException.class,() -> offsetGen.commitOffsetToKafka(""));
+    assertThrows(HoodieNotSupportedException.class,() -> kafkaSource.getSource().onCommit(""));
   }
 }
