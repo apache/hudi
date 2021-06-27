@@ -29,6 +29,8 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -130,6 +132,23 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         LOG.error("Could not publish metadata size metrics", e);
       }
     });
+  }
+
+  /**
+   * Return the timestamp of the latest instant synced.
+   *
+   * To sync a instant on dataset, we create a corresponding delta-commit on the metadata table. So return the latest
+   * delta-commit.
+   */
+  @Override
+  public Option<String> getLatestSyncedInstantTime() {
+    if (!enabled) {
+      return Option.empty();
+    }
+
+    HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
+    return timeline.getDeltaCommitTimeline().filterCompletedInstants()
+        .lastInstant().map(HoodieInstant::getTimestamp);
   }
 
   /**

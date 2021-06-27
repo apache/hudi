@@ -63,11 +63,11 @@ public class AvroKafkaSource extends AvroSource {
       props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, KafkaAvroDeserializer.class);
     } else {
       try {
+        props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, Class.forName(deserializerClassName));
         if (schemaProvider == null) {
           throw new HoodieIOException("SchemaProvider has to be set to use custom Deserializer");
         }
-        props.put(DataSourceWriteOptions.SCHEMA_PROVIDER_CLASS_PROP(), schemaProvider.getClass().getName());
-        props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, Class.forName(deserializerClassName));
+        props.put(DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA(), schemaProvider.getSourceSchema().toString());
       } catch (ClassNotFoundException e) {
         String error = "Could not load custom avro kafka deserializer: " + deserializerClassName;
         LOG.error(error);

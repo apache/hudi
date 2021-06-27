@@ -24,16 +24,17 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
 import org.apache.flink.configuration.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.table.HoodieFlinkTable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
-import java.util.stream.Collectors;
+import java.io.IOException;
 
 /**
  * Utilities for flink hudi compaction.
@@ -44,29 +45,24 @@ public class CompactionUtil {
 
   /**
    * Creates the metaClient.
-   * */
+   */
   public static HoodieTableMetaClient createMetaClient(Configuration conf) {
     return HoodieTableMetaClient.builder().setBasePath(conf.getString(FlinkOptions.PATH)).setConf(FlinkClientUtil.getHadoopConf()).build();
   }
 
   /**
    * Gets compaction Instant time.
-   * */
+   */
   public static String getCompactionInstantTime(HoodieTableMetaClient metaClient) {
-    Option<HoodieInstant> hoodieInstantOption = metaClient.getCommitsTimeline().filterPendingExcludingCompaction().firstInstant();
-    if (hoodieInstantOption.isPresent()) {
-      HoodieInstant firstInstant = hoodieInstantOption.get();
-      String newCommitTime = StreamerUtil.instantTimeSubtract(firstInstant.getTimestamp(), 1);
+    Option<HoodieInstant> firstPendingInstant = metaClient.getCommitsTimeline()
+        .filterPendingExcludingCompaction().firstInstant();
+    Option<HoodieInstant> lastCompleteInstant = metaClient.getActiveTimeline().getWriteTimeline()
+        .filterCompletedAndCompactionInstants().lastInstant();
+    if (firstPendingInstant.isPresent() && lastCompleteInstant.isPresent()) {
+      String firstPendingTimestamp = firstPendingInstant.get().getTimestamp();
+      String lastCompleteTimestamp = lastCompleteInstant.get().getTimestamp();
       // Committed and pending compaction instants should have strictly lower timestamps
-      List<HoodieInstant> conflictingInstants = metaClient.getActiveTimeline()
-              .getWriteTimeline().filterCompletedAndCompactionInstants().getInstants()
-              .filter(instant -> HoodieTimeline.compareTimestamps(
-                      instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS, newCommitTime))
-              .collect(Collectors.toList());
-      ValidationUtils.checkArgument(conflictingInstants.isEmpty(),
-              "Following instants have timestamps >= compactionInstant (" + newCommitTime + ") Instants :"
-                      + conflictingInstants);
-      return newCommitTime;
+      return StreamerUtil.medianInstantTime(firstPendingTimestamp, lastCompleteTimestamp);
     } else {
       return HoodieActiveTimeline.createNewInstantTime();
     }
@@ -82,5 +78,39 @@ public class CompactionUtil {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     Schema tableAvroSchema = tableSchemaResolver.getTableAvroSchema(false);
     conf.setString(FlinkOptions.READ_AVRO_SCHEMA, tableAvroSchema.toString());
+  }
+
+  /**
+   * Cleans the metadata file for given instant {@code instant}.
+   */
+  public static void cleanInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {
+    Path commitFilePath = new Path(metaClient.getMetaAuxiliaryPath(), instant.getFileName());
+    try {
+      if (metaClient.getFs().exists(commitFilePath)) {
+        boolean deleted = metaClient.getFs().delete(commitFilePath, false);
+        if (deleted) {
+          LOG.info("Removed instant " + instant);
+        } else {
+          throw new HoodieIOException("Could not delete instant " + instant);
+        }
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not remove requested commit " + commitFilePath, e);
+    }
+  }
+
+  public static void rollbackCompaction(HoodieFlinkTable<?> table, Configuration conf) {
+    String curInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    int deltaSeconds = conf.getInteger(FlinkOptions.COMPACTION_DELTA_SECONDS);
+    HoodieTimeline inflightCompactionTimeline = table.getActiveTimeline()
+        .filterPendingCompactionTimeline()
+        .filter(instant ->
+            instant.getState() == HoodieInstant.State.INFLIGHT
+                && StreamerUtil.instantTimeDiff(curInstantTime, instant.getTimestamp()) >= deltaSeconds);
+    inflightCompactionTimeline.getInstants().forEach(inflightInstant -> {
+      LOG.info("Rollback the pending compaction instant: " + inflightInstant);
+      table.rollback(table.getContext(), HoodieActiveTimeline.createNewInstantTime(), inflightInstant, true);
+      table.getMetaClient().reloadActiveTimeline();
+    });
   }
 }

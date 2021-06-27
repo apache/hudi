@@ -122,8 +122,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
 
     // Whether to cleanup the old log file when compaction
     if (!conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
-      this.writeClient.startAsyncCleaning();
-      this.writeClient.waitForCleaningFinish();
+      this.writeClient.clean();
     }
 
     // reset the status

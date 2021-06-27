@@ -33,6 +33,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.SmallFile;
 import org.apache.hudi.util.StreamerUtil;
 
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.core.fs.Path;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -44,7 +45,10 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Profiling of write statistics for {@link BucketAssigner},
@@ -101,6 +105,11 @@ public class WriteProfile {
    */
   private final Configuration hadoopConf;
 
+  /**
+   * Metadata cache to reduce IO of metadata files.
+   */
+  private final Map<String, HoodieCommitMetadata> metadataCache;
+
   public WriteProfile(HoodieWriteConfig config, HoodieFlinkEngineContext context) {
     this.config = config;
     this.basePath = new Path(config.getBasePath());
@@ -108,6 +117,7 @@ public class WriteProfile {
     this.recordsPerBucket = config.getCopyOnWriteInsertSplitSize();
     this.table = HoodieFlinkTable.create(config, context);
     this.hadoopConf = StreamerUtil.getHadoopConf();
+    this.metadataCache = new HashMap<>();
     // profile the record statistics on construction
     recordProfile();
   }
@@ -132,27 +142,28 @@ public class WriteProfile {
     long avgSize = config.getCopyOnWriteRecordSizeEstimate();
     long fileSizeThreshold = (long) (config.getRecordSizeEstimationThreshold() * config.getParquetSmallFileLimit());
     HoodieTimeline commitTimeline = table.getMetaClient().getCommitsTimeline().filterCompletedInstants();
-    try {
-      if (!commitTimeline.empty()) {
-        // Go over the reverse ordered commits to get a more recent estimate of average record size.
-        Iterator<HoodieInstant> instants = commitTimeline.getReverseOrderedInstants().iterator();
-        while (instants.hasNext()) {
-          HoodieInstant instant = instants.next();
-          HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-              .fromBytes(commitTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-          long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
-          long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();
-          if (totalBytesWritten > fileSizeThreshold && totalRecordsWritten > 0) {
-            avgSize = (long) Math.ceil((1.0 * totalBytesWritten) / totalRecordsWritten);
-            break;
-          }
+    if (!commitTimeline.empty()) {
+      // Go over the reverse ordered commits to get a more recent estimate of average record size.
+      Iterator<HoodieInstant> instants = commitTimeline.getReverseOrderedInstants().iterator();
+      while (instants.hasNext()) {
+        HoodieInstant instant = instants.next();
+        final HoodieCommitMetadata commitMetadata =
+            this.metadataCache.computeIfAbsent(
+                instant.getTimestamp(),
+                k -> WriteProfiles.getCommitMetadataSafely(config.getTableName(), basePath, instant, commitTimeline)
+                    .orElse(null));
+        if (commitMetadata == null) {
+          continue;
+        }
+        long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
+        long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();
+        if (totalBytesWritten > fileSizeThreshold && totalRecordsWritten > 0) {
+          avgSize = (long) Math.ceil((1.0 * totalBytesWritten) / totalRecordsWritten);
+          break;
         }
       }
-      LOG.info("AvgRecordSize => " + avgSize);
-    } catch (Throwable t) {
-      // make this fail safe.
-      LOG.error("Error trying to compute average bytes/record ", t);
     }
+    LOG.info("Refresh average bytes per record => " + avgSize);
     return avgSize;
   }
 
@@ -202,21 +213,37 @@ public class WriteProfile {
     return smallFileLocations;
   }
 
-  protected void initFSViewIfNecessary(HoodieTimeline commitTimeline) {
+  @VisibleForTesting
+  public void initFSViewIfNecessary(HoodieTimeline commitTimeline) {
     if (fsView == null) {
+      cleanMetadataCache(commitTimeline.getInstants());
       List<HoodieCommitMetadata> metadataList = commitTimeline.getInstants()
-          .map(instant -> WriteProfiles.getCommitMetadata(config.getTableName(), basePath, instant, commitTimeline))
+          .map(instant ->
+              this.metadataCache.computeIfAbsent(
+                  instant.getTimestamp(),
+                  k -> WriteProfiles.getCommitMetadataSafely(config.getTableName(), basePath, instant, commitTimeline)
+                      .orElse(null)))
+          .filter(Objects::nonNull)
           .collect(Collectors.toList());
       FileStatus[] commitFiles = WriteProfiles.getWritePathsOfInstants(basePath, hadoopConf, metadataList);
       fsView = new HoodieTableFileSystemView(table.getMetaClient(), commitTimeline, commitFiles);
     }
   }
 
+  /**
+   * Remove the overdue metadata from the cache
+   * whose instant does not belong to the given instants {@code instants}.
+   */
+  private void cleanMetadataCache(Stream<HoodieInstant> instants) {
+    Set<String> timestampSet = instants.map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
+    this.metadataCache.keySet().retainAll(timestampSet);
+  }
+
   private void recordProfile() {
     this.avgSize = averageBytesPerRecord();
     if (config.shouldAllowMultiWriteOnSameInstant()) {
       this.recordsPerBucket = config.getParquetMaxFileSize() / avgSize;
-      LOG.info("InsertRecordsPerBucket => " + recordsPerBucket);
+      LOG.info("Refresh insert records per bucket => " + recordsPerBucket);
     }
   }
 
@@ -233,10 +260,15 @@ public class WriteProfile {
       // already reloaded
       return;
     }
+    this.table.getMetaClient().reloadActiveTimeline();
     recordProfile();
     this.fsView = null;
     this.smallFilesMap.clear();
-    this.table.getMetaClient().reloadActiveTimeline();
     this.reloadedCheckpointId = checkpointId;
+  }
+
+  @VisibleForTesting
+  public Map<String, HoodieCommitMetadata> getMetadataCache() {
+    return this.metadataCache;
   }
 }

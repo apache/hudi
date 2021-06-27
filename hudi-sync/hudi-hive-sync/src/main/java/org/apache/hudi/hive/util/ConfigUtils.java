@@ -24,6 +24,12 @@ import org.apache.hudi.common.util.StringUtils;
 
 public class ConfigUtils {
 
+  public static final String SPARK_QUERY_TYPE_KEY = "spark.query.type.key";
+
+  public static final String SPARK_QUERY_AS_RO_KEY = "spark.query.as.ro.key";
+
+  public static final String SPARK_QUERY_AS_RT_KEY = "spark.query.as.rt.key";
+
   /**
    * Convert the key-value config to a map.The format of the config
    * is a key-value pair just like "k1=v1\nk2=v2\nk3=v3".

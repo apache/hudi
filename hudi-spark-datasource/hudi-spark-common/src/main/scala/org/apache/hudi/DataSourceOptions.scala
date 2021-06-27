@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hive.HiveSyncTool
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
-import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator.Config
 import org.apache.hudi.keygen.{CustomKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.log4j.LogManager
@@ -383,8 +382,6 @@ object DataSourceWriteOptions {
 
   // Avro Kafka Source configs
   val KAFKA_AVRO_VALUE_DESERIALIZER = "hoodie.deltastreamer.source.kafka.value.deserializer.class"
-
-  // Schema provider class to be set to be used in custom kakfa deserializer
-  val SCHEMA_PROVIDER_CLASS_PROP = "hoodie.deltastreamer.schemaprovider.class"
-
+  // Schema to be used in custom kakfa deserializer
+  val KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA = "hoodie.deltastreamer.source.kafka.value.deserializer.schema"
 }
