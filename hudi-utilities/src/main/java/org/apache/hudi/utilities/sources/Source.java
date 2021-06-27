@@ -23,6 +23,7 @@ import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.utilities.callback.SourceCommitCallback;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -34,7 +35,7 @@ import java.io.Serializable;
  * Represents a source from which we can tail data. Assumes a constructor that takes properties.
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
-public abstract class Source<T> implements Serializable {
+public abstract class Source<T> implements SourceCommitCallback, Serializable {
 
   public enum SourceType {
     JSON, AVRO, ROW
@@ -63,8 +64,6 @@ public abstract class Source<T> implements Serializable {
 
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   protected abstract InputBatch<T> fetchNewData(Option<String> lastCkptStr, long sourceLimit);
-
-  public abstract void onCommit(String lastCkptStr);
 
   /**
    * Main API called by Hoodie Delta Streamer to fetch records.

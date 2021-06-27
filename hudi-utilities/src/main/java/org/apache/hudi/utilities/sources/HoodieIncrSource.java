@@ -149,8 +149,4 @@ public class HoodieIncrSource extends RowSource {
     // log.info("Final Schema from Source is :" + src.schema());
     return Pair.of(Option.of(src), instantEndpts.getRight());
   }
-
-  @Override
-  public void onCommit(String lastCkptStr) {
-  }
 }

@@ -135,8 +135,4 @@ public class HiveIncrPullSource extends AvroSource {
       throw new HoodieIOException("Unable to read from source from checkpoint: " + lastCheckpointStr, ioe);
     }
   }
-
-  @Override
-  public void onCommit(String lastCkptStr) {
-  }
 }

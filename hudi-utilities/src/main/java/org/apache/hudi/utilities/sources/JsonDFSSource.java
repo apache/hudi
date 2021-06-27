@@ -53,8 +53,4 @@ public class JsonDFSSource extends JsonSource {
   private JavaRDD<String> fromFiles(String pathStr) {
     return sparkContext.textFile(pathStr);
   }
-
-  @Override
-  public void onCommit(String lastCkptStr) {
-  }
 }

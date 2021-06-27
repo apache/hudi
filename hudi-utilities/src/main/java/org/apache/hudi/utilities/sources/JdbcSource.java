@@ -258,11 +258,6 @@ public class JdbcSource extends RowSource {
     }
   }
 
-  @Override
-  public void onCommit(String lastCkptStr) {
-
-  }
-
   /**
    * Inner class with config keys.
    */

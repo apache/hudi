@@ -64,8 +64,4 @@ public class AvroDFSSource extends AvroSource {
         AvroKey.class, NullWritable.class, sparkContext.hadoopConfiguration());
     return avroRDD.keys().map(r -> ((GenericRecord) r.datum()));
   }
-
-  @Override
-  public void onCommit(String lastCkptStr) {
-  }
 }

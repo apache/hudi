@@ -91,8 +91,4 @@ public class SqlSource extends RowSource {
 
     private static final String SOURCE_SQL = "hoodie.deltastreamer.source.sql.sql.query";
   }
-
-  @Override
-  public void onCommit(String lastCkptStr) {
-  }
 }

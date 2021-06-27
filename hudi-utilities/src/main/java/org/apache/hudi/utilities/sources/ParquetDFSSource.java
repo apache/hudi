@@ -54,8 +54,4 @@ public class ParquetDFSSource extends RowSource {
   private Dataset<Row> fromFiles(String pathStr) {
     return sparkSession.read().parquet(pathStr.split(","));
   }
-
-  @Override
-  public void onCommit(String lastCkptStr) {
-  }
 }

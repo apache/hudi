@@ -125,8 +125,4 @@ public class CsvDFSSource extends RowSource {
       return Option.empty();
     }
   }
-
-  @Override
-  public void onCommit(String lastCkptStr) {
-  }
 }

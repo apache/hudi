@@ -45,8 +45,4 @@ public class RandomJsonSource extends JsonSource {
 
     return new InputBatch<>(Option.of(sparkContext.parallelize(inserts, 1)), commitTime);
   }
-
-  @Override
-  public void onCommit(String lastCkptStr) {
-  }
 }
