@@ -141,6 +141,31 @@
       <version>${project.version}</version>
     </dependency>
 
+    <!-- Flink -->
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-flink_${scala.binary.version}</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.flink</groupId>
+      <artifactId>flink-json</artifactId>
+      <version>${flink.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.flink</groupId>
+      <artifactId>flink-table-common</artifactId>
+      <version>${flink.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.flink</groupId>
+      <artifactId>flink-table-runtime-blink_${scala.binary.version}</artifactId>
+      <version>${flink.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
     <!-- Kafka -->
     <dependency>
       <groupId>org.apache.kafka</groupId>
