@@ -381,7 +381,6 @@ object DataSourceWriteOptions {
   val DEFAULT_ASYNC_COMPACT_ENABLE_OPT_VAL = "true"
 
   // Avro Kafka Source configs
-  val KAFKA_AVRO_VALUE_DESERIALIZER = "hoodie.deltastreamer.source.kafka.value.deserializer.class"
-  // Schema to be used in custom kakfa deserializer
-  val KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA = "hoodie.deltastreamer.source.kafka.value.deserializer.schema"
+  val KAFKA_AVRO_VALUE_DESERIALIZER_OPT_KEY = "hoodie.deltastreamer.source.kafka.value.deserializer.class"
+  val DEFAULT_KAFKA_AVRO_VALUE_DESERIALIZER_OPT_VAL = "org.apache.hudi.utilities.deser.KafkaAvroSchemaDeserializer"
 }

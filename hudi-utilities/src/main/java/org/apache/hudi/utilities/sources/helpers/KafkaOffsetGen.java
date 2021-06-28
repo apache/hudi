@@ -26,6 +26,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
+import org.apache.hudi.utilities.sources.AvroKafkaSource;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -178,7 +179,7 @@ public class KafkaOffsetGen {
       // configuration items before passing to kafkaParams
       return !prop.toString().startsWith("hoodie.")
               // We need to pass some properties to kafka client so that KafkaAvroSchemaDeserializer can use it
-              || prop.toString().startsWith("hoodie.deltastreamer.source.kafka.value.deserializer.");
+              || prop.toString().startsWith(AvroKafkaSource.KAFKA_AVRO_VALUE_DESERIALIZER_PROPERTY_PREFIX);
     }).forEach(prop -> {
       kafkaParams.put(prop.toString(), props.get(prop.toString()));
     });
