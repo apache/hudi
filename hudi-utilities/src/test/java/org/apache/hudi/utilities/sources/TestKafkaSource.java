@@ -316,14 +316,14 @@ public class TestKafkaSource extends UtilitiesTestBase {
 
       OffsetAndMetadata offsetAndMetadata = consumer.committed(topicPartition0);
       assertNotNull(offsetAndMetadata);
-      assertEquals(300,offsetAndMetadata.offset());
+      assertEquals(300, offsetAndMetadata.offset());
       offsetAndMetadata = consumer.committed(topicPartition1);
       assertNotNull(offsetAndMetadata);
-      assertEquals(299,offsetAndMetadata.offset());
+      assertEquals(299, offsetAndMetadata.offset());
       // end offsets will point to 500 for each partition because we consumed less messages from first batch
       Map endOffsets = consumer.endOffsets(topicPartitions);
-      assertEquals(500L,endOffsets.get(topicPartition0));
-      assertEquals(500L,endOffsets.get(topicPartition1));
+      assertEquals(500L, endOffsets.get(topicPartition0));
+      assertEquals(500L, endOffsets.get(topicPartition1));
 
       testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("001", 500)));
       InputBatch<Dataset<Row>> fetch2 =
@@ -334,14 +334,14 @@ public class TestKafkaSource extends UtilitiesTestBase {
 
       offsetAndMetadata = consumer.committed(topicPartition0);
       assertNotNull(offsetAndMetadata);
-      assertEquals(750,offsetAndMetadata.offset());
+      assertEquals(750, offsetAndMetadata.offset());
       offsetAndMetadata = consumer.committed(topicPartition1);
       assertNotNull(offsetAndMetadata);
-      assertEquals(750,offsetAndMetadata.offset());
+      assertEquals(750, offsetAndMetadata.offset());
 
       endOffsets = consumer.endOffsets(topicPartitions);
-      assertEquals(750L,endOffsets.get(topicPartition0));
-      assertEquals(750L,endOffsets.get(topicPartition1));
+      assertEquals(750L, endOffsets.get(topicPartition0));
+      assertEquals(750L, endOffsets.get(topicPartition1));
     }
     // check failure case
     props.remove(ConsumerConfig.GROUP_ID_CONFIG);
