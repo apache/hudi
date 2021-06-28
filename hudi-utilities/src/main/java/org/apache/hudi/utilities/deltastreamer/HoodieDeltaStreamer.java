@@ -260,8 +260,7 @@ public class HoodieDeltaStreamer implements Serializable {
     public long sourceLimit = Long.MAX_VALUE;
 
     @Parameter(names = {"--op"}, description = "Takes one of these values : UPSERT (default), INSERT (use when input "
-        + "is purely new data/inserts to gain speed) INSERT_OVERWRITE (use when input record can overwrite existing "
-        + "row in static partition table)", converter = OperationConverter.class)
+        + "is purely new data/inserts to gain speed)", converter = OperationConverter.class)
     public WriteOperationType operation = WriteOperationType.UPSERT;
 
     @Parameter(names = {"--filter-dupes"},

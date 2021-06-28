@@ -1245,8 +1245,10 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     JavaRDD<WriteStatus> writeStatusJavaRDD = client.insertOverwrite(insertAndUpdatesRDD2, commitTime2);
     statuses = writeStatusJavaRDD.collect();
     assertNoWriteErrors(statuses);
-    // todo fix
-    // assertEquals(batch1Buckets, new HashSet<>(writeResult.getPartitionToReplaceFileIds().get(testPartitionPath)));
+    Map<String, List<String>> partitionToReplaceFields = new HashMap<>();
+    partitionToReplaceFields.put(testPartitionPath, new ArrayList<>(getFileIdsFromWriteStatus(statuses)));
+    HoodieWriteResult writeResult = new HoodieWriteResult(writeStatusJavaRDD, partitionToReplaceFields);
+    assertEquals(batch1Buckets, new HashSet<>(writeResult.getPartitionToReplaceFileIds().get(testPartitionPath)));
     verifyRecordsWritten(commitTime2, inserts2, statuses);
   }
 

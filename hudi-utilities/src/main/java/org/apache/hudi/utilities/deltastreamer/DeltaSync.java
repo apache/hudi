@@ -449,6 +449,9 @@ public class DeltaSync implements Serializable {
       case BULK_INSERT:
         writeStatusRDD = writeClient.bulkInsert(records, instantTime);
         break;
+      case INSERT_OVERWRITE:
+        writeStatusRDD = writeClient.insertOverwrite(records, instantTime);
+        break;
       default:
         throw new HoodieDeltaStreamerException("Unknown operation : " + cfg.operation);
     }
@@ -456,8 +459,6 @@ public class DeltaSync implements Serializable {
     long totalErrorRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalErrorRecords).sum().longValue();
     long totalRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalRecords).sum().longValue();
     boolean hasErrors = totalErrorRecords > 0;
-    long hiveSyncTimeMs = 0;
-    long metaSyncTimeMs = 0;
     if (!hasErrors || cfg.commitOnErrors) {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
       checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);

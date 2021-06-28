@@ -141,19 +141,6 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
   }
 
   @Override
-  public List<WriteStatus> insertOverwrite(List<HoodieRecord<T>> records, String instantTime) {
-    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
-        getTableAndInitCtx(WriteOperationType.INSERT_OVERWRITE, instantTime);
-    table.validateUpsertSchema();
-    preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE, table.getMetaClient());
-    HoodieWriteMetadata<List<WriteStatus>> result = table.insertOverwrite(context, instantTime, records);
-    if (result.getIndexLookupDuration().isPresent()) {
-      metrics.updateIndexMetrics(LOOKUP_STR, result.getIndexLookupDuration().get().toMillis());
-    }
-    return postWrite(result, instantTime, table);
-  }
-
-  @Override
   public List<WriteStatus> bulkInsert(List<HoodieRecord<T>> records,
                                       String instantTime) {
     throw new HoodieNotSupportedException("BulkInsert is not supported in HoodieJavaClient");
