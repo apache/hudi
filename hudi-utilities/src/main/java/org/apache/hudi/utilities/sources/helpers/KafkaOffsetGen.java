@@ -151,7 +151,7 @@ public class KafkaOffsetGen {
    * Kafka reset offset strategies.
    */
   enum KafkaResetOffsetStrategies {
-    LATEST, EARLIEST
+    LATEST, EARLIEST, NONE
   }
 
   /**
@@ -220,8 +220,11 @@ public class KafkaOffsetGen {
           case LATEST:
             fromOffsets = consumer.endOffsets(topicPartitions);
             break;
+          case NONE:
+            fromOffsets = getGroupOffsets(consumer, topicPartitions);
+            break;
           default:
-            throw new HoodieNotSupportedException("Auto reset value must be one of 'earliest' or 'latest' ");
+            throw new HoodieNotSupportedException("Auto reset value must be one of 'earliest' or 'latest' or 'none' ");
         }
       }
 
@@ -326,5 +329,20 @@ public class KafkaOffsetGen {
     } catch (CommitFailedException | TimeoutException e) {
       LOG.warn("Committing offsets to Kafka failed, this does not impact processing of records", e);
     }
+  }
+
+  private Map<TopicPartition, Long> getGroupOffsets(KafkaConsumer consumer, Set<TopicPartition> topicPartitions) {
+    Map<TopicPartition, Long> fromOffsets = new HashMap<>();
+    for (TopicPartition topicPartition : topicPartitions) {
+      OffsetAndMetadata committedOffsetAndMetadata = consumer.committed(topicPartition);
+      if (committedOffsetAndMetadata != null) {
+        fromOffsets.put(topicPartition, committedOffsetAndMetadata.offset());
+      } else {
+        LOG.warn("There are no commits associated with this consumer group, starting to consume form latest offset");
+        fromOffsets = consumer.endOffsets(topicPartitions);
+        break;
+      }
+    }
+    return fromOffsets;
   }
 }
