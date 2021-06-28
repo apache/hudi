@@ -55,6 +55,11 @@ public class FlinkCompactionConfig extends Configuration {
       required = false)
   public String compactionTriggerStrategy = NUM_COMMITS;
 
+  @Parameter(names = {"--compaction-partition"},
+      description = "Explicit partition to compact with, by default, compact all the partitions",
+      required = false)
+  public String compactionPartition;
+
   @Parameter(names = {"--compaction-delta-commits"}, description = "Max delta commits needed to trigger compaction, default 5 commits", required = false)
   public Integer compactionDeltaCommits = 1;
 
@@ -103,6 +108,9 @@ public class FlinkCompactionConfig extends Configuration {
     conf.setBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnable);
     // use synchronous compaction always
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    if (config.compactionPartition != null) {
+      conf.setString(FlinkOptions.COMPACTION_PARTITION, config.compactionPartition);
+    }
 
     return conf;
   }

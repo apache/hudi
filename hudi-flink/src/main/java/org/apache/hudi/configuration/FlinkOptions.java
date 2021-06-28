@@ -353,6 +353,12 @@ public class FlinkOptions {
           + "'num_or_time': trigger compaction when NUM_COMMITS or TIME_ELAPSED is satisfied.\n"
           + "Default is 'num_commits'");
 
+  public static final  ConfigOption<String> COMPACTION_PARTITION = ConfigOptions
+          .key("compaction.partition")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Explicit partition to compact with, by default, compact all the partitions");
+
   public static final ConfigOption<Integer> COMPACTION_DELTA_COMMITS = ConfigOptions
       .key("compaction.delta_commits")
       .intType()

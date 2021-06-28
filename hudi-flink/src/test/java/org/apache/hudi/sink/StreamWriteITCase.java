@@ -240,6 +240,84 @@ public class StreamWriteITCase extends TestLogger {
   }
 
   @Test
+  public void testHoodieFlinkCompactorForSpecifyPartition() throws Exception {
+    // Create hoodie table and insert into data.
+    EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
+    tableEnv.getConfig().getConfiguration()
+            .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "false");
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
+    tableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 values\n"
+            + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1'),\n"
+            + "('id2','Stephen',33,TIMESTAMP '1970-01-01 00:00:02','par1'),\n"
+            + "('id3','Julian',53,TIMESTAMP '1970-01-01 00:00:03','par2'),\n"
+            + "('id4','Fabian',31,TIMESTAMP '1970-01-01 00:00:04','par2'),\n"
+            + "('id5','Sophia',18,TIMESTAMP '1970-01-01 00:00:05','par3'),\n"
+            + "('id6','Emma',20,TIMESTAMP '1970-01-01 00:00:06','par3'),\n"
+            + "('id7','Bob',44,TIMESTAMP '1970-01-01 00:00:07','par4'),\n"
+            + "('id8','Han',56,TIMESTAMP '1970-01-01 00:00:08','par4')";
+    tableEnv.executeSql(insertInto).await();
+
+    // wait for the asynchronous commit to finish
+    TimeUnit.SECONDS.sleep(3);
+
+    // Make configuration and setAvroSchema.
+    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+    FlinkCompactionConfig cfg = new FlinkCompactionConfig();
+    cfg.path = tempFile.getAbsolutePath();
+    cfg.compactionPartition = "par1";
+    Configuration conf = FlinkCompactionConfig.toFlinkConfig(cfg);
+    conf.setString(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
+
+    // create metaClient
+    HoodieTableMetaClient metaClient = CompactionUtil.createMetaClient(conf);
+
+    // set the table name
+    conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
+
+    // set table schema
+    CompactionUtil.setAvroSchema(conf, metaClient);
+
+    // judge whether have operation
+    // To compute the compaction instant time and do compaction.
+    String compactionInstantTime = CompactionUtil.getCompactionInstantTime(metaClient);
+    HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf, null);
+    writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
+
+    HoodieFlinkTable<?> table = writeClient.getHoodieTable();
+    // generate compaction plan
+    // should support configurable commit metadata
+    HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
+            table.getMetaClient(), compactionInstantTime);
+
+    HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
+
+    env.addSource(new CompactionPlanSourceFunction(table, instant, compactionPlan, compactionInstantTime))
+            .name("compaction_source")
+            .uid("uid_compaction_source")
+            .rebalance()
+            .transform("compact_task",
+                    TypeInformation.of(CompactionCommitEvent.class),
+                    new ProcessOperator<>(new CompactFunction(conf)))
+            .setParallelism(compactionPlan.getOperations().size())
+            .addSink(new CompactionCommitSink(conf))
+            .name("clean_commits")
+            .uid("uid_clean_commits")
+            .setParallelism(1);
+
+    env.execute("flink_hudi_explicit_partition_compaction");
+
+    Map<String, List<String>> expectedData = new HashMap<>();
+    expectedData.put("par1", Arrays.asList("id1,par1,id1,Danny,23,1000,par1", "id2,par1,id2,Stephen,33,2000,par1"));
+    TestData.checkWrittenFullData(tempFile, expectedData);
+  }
+
+  @Test
   public void testMergeOnReadWriteWithCompaction() throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);

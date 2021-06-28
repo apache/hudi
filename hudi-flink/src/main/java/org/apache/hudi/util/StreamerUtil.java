@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
@@ -37,6 +38,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
+import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
+import org.apache.hudi.table.action.compact.strategy.ExplicitPartitionCompactionStrategy;
 
 import org.apache.avro.Schema;
 import org.apache.flink.api.common.functions.RuntimeContext;
@@ -52,8 +55,10 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER;
@@ -140,6 +145,7 @@ public class StreamerUtil {
                     .withTargetIOPerCompactionInMB(conf.getLong(FlinkOptions.COMPACTION_TARGET_IO))
                     .withInlineCompactionTriggerStrategy(
                         CompactionTriggerStrategy.valueOf(conf.getString(FlinkOptions.COMPACTION_TRIGGER_STRATEGY).toUpperCase(Locale.ROOT)))
+                    .withCompactionStrategy(getCompactionStrategy(conf))
                     .withMaxNumDeltaCommitsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_COMMITS))
                     .withMaxDeltaSecondsBeforeCompaction(conf.getInteger(FlinkOptions.COMPACTION_DELTA_SECONDS))
                     .withAsyncClean(conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED))
@@ -165,6 +171,12 @@ public class StreamerUtil {
             .withProps(flinkConf2TypedProperties(FlinkOptions.flatOptions(conf)));
 
     builder = builder.withSchema(getSourceSchema(conf).toString());
+
+    if (conf.getString(FlinkOptions.COMPACTION_PARTITION) != null) {
+      Map<String, String> map = new HashMap<>();
+      map.put("compaction.partition", conf.getString(FlinkOptions.COMPACTION_PARTITION));
+      builder.withProps(map);
+    }
     return builder.build();
   }
 
@@ -257,6 +269,17 @@ public class StreamerUtil {
     long low = Long.parseLong(lowVal);
     long median = low + (high - low) / 2;
     return String.valueOf(median);
+  }
+
+  /**
+   * Get the compaction strategy.
+   * */
+  private static CompactionStrategy getCompactionStrategy(Configuration conf) {
+    if (conf.getString(FlinkOptions.COMPACTION_PARTITION) == null) {
+      return ReflectionUtils.loadClass(HoodieCompactionConfig.DEFAULT_COMPACTION_STRATEGY);
+    } else {
+      return new ExplicitPartitionCompactionStrategy();
+    }
   }
 
   /**
