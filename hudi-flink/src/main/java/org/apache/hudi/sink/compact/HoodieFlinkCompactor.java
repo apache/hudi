@@ -111,6 +111,9 @@ public class HoodieFlinkCompactor {
       return;
     }
 
+    // get compactionParallelism.
+    int compactionParallelism = Math.min(conf.getInteger(FlinkOptions.COMPACTION_TASKS), compactionPlan.getOperations().size());
+
     env.addSource(new CompactionPlanSourceFunction(table, instant, compactionPlan, compactionInstantTime))
         .name("compaction_source")
         .uid("uid_compaction_source")
@@ -118,7 +121,7 @@ public class HoodieFlinkCompactor {
         .transform("compact_task",
             TypeInformation.of(CompactionCommitEvent.class),
             new ProcessOperator<>(new CompactFunction(conf)))
-        .setParallelism(compactionPlan.getOperations().size())
+        .setParallelism(compactionParallelism)
         .addSink(new CompactionCommitSink(conf))
         .name("clean_commits")
         .uid("uid_clean_commits")
