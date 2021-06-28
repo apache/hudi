@@ -155,7 +155,6 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setBoolean(FlinkOptions.IGNORE_FAILED, config.commitOnErrors);
     conf.setString(FlinkOptions.RECORD_KEY_FIELD, config.recordKeyField);
     conf.setString(FlinkOptions.PARTITION_PATH_FIELD, config.partitionPathField);
-    conf.setString(FlinkOptions.KEYGEN_CLASS, config.keygenClass);
     if (!StringUtils.isNullOrEmpty(config.keygenClass)) {
       conf.setString(FlinkOptions.KEYGEN_CLASS, config.keygenClass);
     } else {
