@@ -554,7 +554,7 @@ public class StreamWriteFunction<K, I, O>
         && this.buckets.values().stream().anyMatch(bucket -> bucket.records.size() > 0);
   }
 
-  private String instantToWrite() {
+  private String instantToWrite(boolean hasData) {
     String instant = this.writeClient.getLastPendingInstant(this.actionType);
     // if exactly-once semantics turns on,
     // waits for the checkpoint notification until the checkpoint timeout threshold hits.
@@ -565,7 +565,7 @@ public class StreamWriteFunction<K, I, O>
       // wait condition:
       // 1. there is no inflight instant
       // 2. the inflight instant does not change and the checkpoint has buffering data
-      while (instant == null || (instant.equals(this.currentInstant) && hasData())) {
+      while (instant == null || (instant.equals(this.currentInstant) && hasData)) {
         // sleep for a while
         try {
           if (waitingTime > ckpTimeout) {
@@ -588,7 +588,7 @@ public class StreamWriteFunction<K, I, O>
 
   @SuppressWarnings("unchecked, rawtypes")
   private boolean flushBucket(DataBucket bucket) {
-    String instant = instantToWrite();
+    String instant = instantToWrite(true);
 
     if (instant == null) {
       // in case there are empty checkpoints that has no input data
@@ -619,7 +619,7 @@ public class StreamWriteFunction<K, I, O>
 
   @SuppressWarnings("unchecked, rawtypes")
   private void flushRemaining(boolean isEndInput) {
-    this.currentInstant = instantToWrite();
+    this.currentInstant = instantToWrite(hasData());
     if (this.currentInstant == null) {
       // in case there are empty checkpoints that has no input data
       throw new HoodieException("No inflight instant when flushing data!");

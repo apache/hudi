@@ -164,6 +164,11 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--write-partition-url-encode"}, description = "Whether to encode the partition path url, default false")
   public Boolean writePartitionUrlEncode;
 
+  @Parameter(names = {"--hive-style-partitioning"}, description = "Whether to use Hive style partitioning.\n"
+      + "If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.\n"
+      + "By default false (the names of partition folders are only partition values)")
+  public Boolean hiveStylePartitioning = false;
+
   @Parameter(names = {"--write-task-max-size"}, description = "Maximum memory in MB for a write task, when the threshold hits,\n"
           + "it flushes the max size data bucket to avoid OOM, default 1GB")
   public Double writeTaskMaxSize = 1024D;
@@ -314,7 +319,8 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setString(FlinkOptions.READ_AVRO_SCHEMA_PATH, config.avroSchemaPath);
     conf.setString(FlinkOptions.READ_AVRO_SCHEMA, config.avroSchema);
     conf.setBoolean(FlinkOptions.UTC_TIMEZONE, config.utcTimezone);
-    conf.setBoolean(FlinkOptions.PARTITION_PATH_URL_ENCODE, config.writePartitionUrlEncode);
+    conf.setBoolean(FlinkOptions.URL_ENCODE_PARTITIONING, config.writePartitionUrlEncode);
+    conf.setBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING, config.hiveStylePartitioning);
     conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, config.writeTaskMaxSize);
     conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, config.writeBatchSize);
     conf.setInteger(FlinkOptions.WRITE_LOG_BLOCK_SIZE, config.writeLogBlockSize);
