@@ -499,8 +499,15 @@ The actual datasource level configs are listed below.</p>
         <td>KEYGENERATOR_CLASS_OPT_KEY</td>
         <td>hoodie.datasource.write.keygenerator.class</td>
         <td>NO</td>
-        <td>org.apache.hudi.keygen.SimpleKeyGenerator</td>
-        <td>Key generator class, that implements will extract the key out of incoming Row object.</td>
+        <td>No default</td>
+        <td>Key generator class, that implements will extract the key out of incoming <code class="highlighter-rouge">Row</code> object. This config has higher precedence over keygen type, and it is used for user-defined KeyGenerator .</td>
+      </tr>
+      <tr>
+        <td>KEYGENERATOR_TYPE_OPT_KEY</td>
+        <td>hoodie.datasource.write.keygenerator.type</td>
+        <td>NO</td>
+        <td>SIMPLE</td>
+        <td>Key generator type, , that indicate which KeyGenerator to use. This is the recommended configuration option for key generator, and has lower priority than <code class="highlighter-rouge">KEYGENERATOR_CLASS_OPT_KEY</code> .</td>
       </tr>
       <tr>
         <td>COMMIT_METADATA_KEYPREFIX_OPT_KEY</td>
@@ -739,8 +746,14 @@ The actual datasource level configs are listed below.</p>
       <tr>
         <td><code class="highlighter-rouge">hoodie.datasource.write.keygenerator.class</code></td>
         <td>N</td>
-        <td>SimpleAvroKeyGenerator.class</td>
-        <td><span style="color:grey"> Key generator class, that implements will extract the key out of incoming record </span></td>
+        <td>No default</td>
+        <td><span style="color:grey"> Key generator class, that implements will extract the key out of incoming <code class="highlighter-rouge">Row</code> object. This config has higher precedence over keygen type, and it is used for user-defined KeyGenerator </span></td>
+      </tr>
+      <tr>
+        <td><code class="highlighter-rouge">hoodie.datasource.write.keygenerator.type</code></td>
+        <td>N</td>
+        <td>SIMPLE</td>
+        <td><span style="color:grey"> Key generator type, that indicate which KeyGenerator to use. This is the recommended configuration option for key generator, and has lower priority than <code class="highlighter-rouge">KEYGENERATOR_CLASS_OPT_KEY</code>  </span></td>
       </tr>
       <tr>
         <td><code class="highlighter-rouge">write.partition.url_encode</code></td>

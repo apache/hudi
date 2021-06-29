@@ -452,8 +452,12 @@
   <span style="color:grey">如果设置为true，则生成基于Hive格式的partition目录：<partition_column_name>=<partition_value>&lt;/span&gt;</partition_value></partition_column_name></span></p>
 
 <h4 id="KEYGENERATOR_CLASS_OPT_KEY">KEYGENERATOR_CLASS_OPT_KEY</h4>
-<p>属性：<code class="highlighter-rouge">hoodie.datasource.write.keygenerator.class</code>, 默认值：<code class="highlighter-rouge">org.apache.hudi.keygen.SimpleKeyGenerator</code> <br />
-  <span style="color:grey">键生成器类，实现从输入的<code class="highlighter-rouge">Row</code>对象中提取键</span></p>
+<p>属性：<code class="highlighter-rouge">hoodie.datasource.write.keygenerator.class</code> <br />
+  <span style="color:grey">键生成器类，实现从输入的<code class="highlighter-rouge">Row</code>对象中提取键。该配置优先级大于 <code class="highlighter-rouge">hoodie.datasource.write.keygenerator.type</code>, 用于使用用户自定义键生成器</span></p>
+
+<h4 id="KEYGENERATOR_TYPE_OPT_KEY">KEYGENERATOR_TYPE_OPT_KEY</h4>
+<p>属性: <code class="highlighter-rouge">hoodie.datasource.write.keygenerator.type</code>, 默认值: <code class="highlighter-rouge">SIMPLE</code> <br />
+<span style="color:grey">键生成器类型，默认 <code class="highlighter-rouge">SIMPLE</code> 类型，该配置优先级低于 <code class="highlighter-rouge">hoodie.datasource.write.keygenerator.class</code>, 是推荐使用的配置方式</span></p>
 
 <h4 id="COMMIT_METADATA_KEYPREFIX_OPT_KEY">COMMIT_METADATA_KEYPREFIX_OPT_KEY</h4>
 <p>属性：<code class="highlighter-rouge">hoodie.datasource.write.commitmeta.key.prefix</code>, 默认值：<code class="highlighter-rouge">_</code> <br />
