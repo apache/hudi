@@ -54,6 +54,15 @@ public class SchemaRegistryProvider extends SchemaProvider {
         "hoodie.deltastreamer.schemaprovider.registry.targetUrl";
   }
 
+  /**
+   * The method takes the provided url {@code registryUrl} and gets the schema from the schema registry using that url.
+   * If the caller provides userInfo credentials in the url (e.g "https://foo:bar@schemaregistry.org") then the credentials
+   * are extracted the url using the Matcher and the extracted credentials are set on the request as an Authorization
+   * header.
+   * @param registryUrl
+   * @return the schema in String form
+   * @throws IOException
+   */
   public String fetchSchemaFromRegistry(String registryUrl) throws IOException {
     URL registry;
     HttpURLConnection connection;
@@ -73,12 +82,12 @@ public class SchemaRegistryProvider extends SchemaProvider {
     return node.get("schema").asText();
   }
 
-  public void setAuthorizationHeader(String creds, HttpURLConnection connection) {
+  void setAuthorizationHeader(String creds, HttpURLConnection connection) {
     String encodedAuth = Base64.getEncoder().encodeToString(creds.getBytes(StandardCharsets.UTF_8));
     connection.setRequestProperty("Authorization", "Basic " + encodedAuth);
   }
 
-  public InputStream getStream(HttpURLConnection connection) throws IOException {
+  InputStream getStream(HttpURLConnection connection) throws IOException {
     return connection.getInputStream();
   }
 

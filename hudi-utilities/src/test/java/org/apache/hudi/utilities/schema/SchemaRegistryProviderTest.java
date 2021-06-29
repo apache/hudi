@@ -54,18 +54,22 @@ class SchemaRegistryProviderTest {
       }};
   }
 
-  Schema getExpectedSchema(String response) throws IOException {
+  private Schema getExpectedSchema(String response) throws IOException {
     ObjectMapper mapper = new ObjectMapper();
     JsonNode node = mapper.readTree(new ByteArrayInputStream(response.getBytes(StandardCharsets.UTF_8)));
     return (new Schema.Parser()).parse(node.get("schema").asText());
   }
 
+  private SchemaRegistryProvider getUnderTest(TypedProperties props) throws IOException {
+    InputStream is = new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8));
+    SchemaRegistryProvider spyUnderTest = Mockito.spy(new SchemaRegistryProvider(props, null));
+    Mockito.doReturn(is).when(spyUnderTest).getStream(Mockito.any());
+    return spyUnderTest;
+  }
+
   @Test
   public void testGetSourceSchemaShouldRequestSchemaWithCreds() throws IOException {
-    InputStream is = new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8));
-    SchemaRegistryProvider underTest = new SchemaRegistryProvider(getProps(), null);
-    SchemaRegistryProvider spyUnderTest = Mockito.spy(underTest);
-    Mockito.doReturn(is).when(spyUnderTest).getStream(Mockito.any());
+    SchemaRegistryProvider spyUnderTest = getUnderTest(getProps());
     Schema actual = spyUnderTest.getSourceSchema();
     assertNotNull(actual);
     assertEquals(actual, getExpectedSchema(json));
@@ -75,10 +79,7 @@ class SchemaRegistryProviderTest {
 
   @Test
   public void testGetTargetSchemaShouldRequestSchemaWithCreds() throws IOException {
-    InputStream is = new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8));
-    SchemaRegistryProvider underTest = new SchemaRegistryProvider(getProps(), null);
-    SchemaRegistryProvider spyUnderTest = Mockito.spy(underTest);
-    Mockito.doReturn(is).when(spyUnderTest).getStream(Mockito.any());
+    SchemaRegistryProvider spyUnderTest = getUnderTest(getProps());
     Schema actual = spyUnderTest.getTargetSchema();
     assertNotNull(actual);
     assertEquals(actual, getExpectedSchema(json));
@@ -90,10 +91,7 @@ class SchemaRegistryProviderTest {
   public void testGetSourceSchemaShouldRequestSchemaWithoutCreds() throws IOException {
     TypedProperties props = getProps();
     props.put("hoodie.deltastreamer.schemaprovider.registry.url", "http://localhost");
-    InputStream is = new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8));
-    SchemaRegistryProvider underTest = new SchemaRegistryProvider(props, null);
-    SchemaRegistryProvider spyUnderTest = Mockito.spy(underTest);
-    Mockito.doReturn(is).when(spyUnderTest).getStream(Mockito.any());
+    SchemaRegistryProvider spyUnderTest = getUnderTest(props);
     Schema actual = spyUnderTest.getSourceSchema();
     assertNotNull(actual);
     assertEquals(actual, getExpectedSchema(json));
@@ -104,10 +102,7 @@ class SchemaRegistryProviderTest {
   public void testGetTargetSchemaShouldRequestSchemaWithoutCreds() throws IOException {
     TypedProperties props = getProps();
     props.put("hoodie.deltastreamer.schemaprovider.registry.url", "http://localhost");
-    InputStream is = new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8));
-    SchemaRegistryProvider underTest = new SchemaRegistryProvider(props, null);
-    SchemaRegistryProvider spyUnderTest = Mockito.spy(underTest);
-    Mockito.doReturn(is).when(spyUnderTest).getStream(Mockito.any());
+    SchemaRegistryProvider spyUnderTest = getUnderTest(props);
     Schema actual = spyUnderTest.getTargetSchema();
     assertNotNull(actual);
     assertEquals(actual, getExpectedSchema(json));
