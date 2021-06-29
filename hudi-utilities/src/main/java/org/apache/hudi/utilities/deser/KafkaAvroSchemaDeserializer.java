@@ -30,6 +30,8 @@ import org.apache.kafka.common.errors.SerializationException;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import static org.apache.hudi.utilities.sources.AvroKafkaSource.KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA;
+
 /**
  * Extending {@link KafkaAvroSchemaDeserializer} as we need to be able to inject reader schema during deserialization.
  */
@@ -48,7 +50,7 @@ public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
     super.configure(configs, isKey);
     try {
       TypedProperties props = getConvertToTypedProperties(configs);
-      sourceSchema = new Schema.Parser().parse(props.getString(AvroKafkaSource.KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA));
+      sourceSchema = new Schema.Parser().parse(props.getString(KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA));
     } catch (Throwable e) {
       throw new HoodieException(e);
     }

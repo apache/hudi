@@ -40,8 +40,10 @@ import org.apache.spark.streaming.kafka010.KafkaUtils;
 import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 
-import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config.DEFAULT_ENABLE_KAFKA_COMMIT_OFFSET;
 import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config.ENABLE_KAFKA_COMMIT_OFFSET;
+import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config.DEFAULT_ENABLE_KAFKA_COMMIT_OFFSET;
+import static org.apache.hudi.DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_OPT_KEY;
+import static org.apache.hudi.DataSourceWriteOptions.DEFAULT_KAFKA_AVRO_VALUE_DESERIALIZER_OPT_VAL;
 
 /**
  * Reads avro serialized Kafka data, based on the confluent schema-registry.
@@ -64,8 +66,7 @@ public class AvroKafkaSource extends AvroSource {
     super(props, sparkContext, sparkSession, schemaProvider);
 
     props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class);
-    String deserializerClassName = props.getString(DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_OPT_KEY(),
-            DataSourceWriteOptions.DEFAULT_KAFKA_AVRO_VALUE_DESERIALIZER_OPT_VAL());
+    String deserializerClassName = props.getString(KAFKA_AVRO_VALUE_DESERIALIZER_OPT_KEY(), DEFAULT_KAFKA_AVRO_VALUE_DESERIALIZER_OPT_VAL());
 
     if (deserializerClassName.isEmpty()) {
       props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, KafkaAvroDeserializer.class);
