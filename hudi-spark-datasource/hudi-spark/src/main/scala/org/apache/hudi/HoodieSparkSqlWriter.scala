@@ -431,7 +431,7 @@ object HoodieSparkSqlWriter {
     hiveSyncConfig.autoCreateDatabase = parameters.getOrElse(HIVE_AUTO_CREATE_DATABASE_OPT_KEY,
       DEFAULT_HIVE_AUTO_CREATE_DATABASE_OPT_KEY).toBoolean
     hiveSyncConfig.decodePartition = parameters.getOrElse(URL_ENCODE_PARTITIONING_OPT_KEY,
-      DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL).toBoolean
+      DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL.toString).toBoolean
 
     val syncAsDtaSourceTable = parameters.getOrElse(DataSourceWriteOptions.HIVE_SYNC_AS_DATA_SOURCE_TABLE,
       DataSourceWriteOptions.DEFAULT_HIVE_SYNC_AS_DATA_SOURCE_TABLE).toBoolean

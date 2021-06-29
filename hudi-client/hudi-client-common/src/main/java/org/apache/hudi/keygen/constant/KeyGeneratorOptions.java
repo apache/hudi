@@ -26,9 +26,9 @@ public class KeyGeneratorOptions {
    * By default false (the names of partition folders are only partition values)
    */
   public static final String URL_ENCODE_PARTITIONING_OPT_KEY = "hoodie.datasource.write.partitionpath.urlencode";
-  public static final String DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL = "false";
+  public static final boolean DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL = false;
   public static final String HIVE_STYLE_PARTITIONING_OPT_KEY = "hoodie.datasource.write.hive_style_partitioning";
-  public static final String DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL = "false";
+  public static final boolean DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL = false;
 
   /**
    * Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value

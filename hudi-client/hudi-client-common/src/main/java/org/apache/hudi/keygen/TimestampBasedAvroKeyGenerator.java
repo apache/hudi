@@ -120,7 +120,7 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
         timeUnit = null;
     }
     this.encodePartitionPath = config.getBoolean(KeyGeneratorOptions.URL_ENCODE_PARTITIONING_OPT_KEY,
-        Boolean.parseBoolean(KeyGeneratorOptions.DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL));
+        KeyGeneratorOptions.DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL);
   }
 
   @Override
