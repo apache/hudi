@@ -80,6 +80,13 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
 
   public BitCaskDiskMap(String baseFilePath) throws IOException {
     this.valueMetadataMap = new ConcurrentHashMap<>();
+    // create uudi prefix for baseFilePath
+    if (baseFilePath.equals("/tmp/view_map")) {
+      this.writeOnlyFile = new File(baseFilePath + UUID.randomUUID().toString(), UUID.randomUUID().toString());
+    } else {
+      // this baseFilePath is manually specified by user, we should not change it
+      this.writeOnlyFile = new File(baseFilePath, UUID.randomUUID().toString());
+    }
     this.writeOnlyFile = new File(baseFilePath, UUID.randomUUID().toString());
     this.filePath = writeOnlyFile.getPath();
     initFile(writeOnlyFile);
