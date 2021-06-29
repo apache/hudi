@@ -51,7 +51,7 @@ public class StreamWriteOperator<I>
   }
 
   @Override
-  public void endInput() throws Exception {
+  public void endInput() {
     sinkFunction.endInput();
   }
 }

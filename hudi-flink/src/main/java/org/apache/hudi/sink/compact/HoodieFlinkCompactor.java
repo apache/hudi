@@ -58,7 +58,7 @@ public class HoodieFlinkCompactor {
     Configuration conf = FlinkCompactionConfig.toFlinkConfig(cfg);
 
     // create metaClient
-    HoodieTableMetaClient metaClient = CompactionUtil.createMetaClient(conf);
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
 
     // get the table name
     conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
