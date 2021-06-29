@@ -162,7 +162,7 @@ public class FlinkStreamerConfig extends Configuration {
   public Boolean utcTimezone = true;
 
   @Parameter(names = {"--write-partition-url-encode"}, description = "Whether to encode the partition path url, default false")
-  public Boolean writePartitionUrlEncode;
+  public Boolean writePartitionUrlEncode = false;
 
   @Parameter(names = {"--write-task-max-size"}, description = "Maximum memory in MB for a write task, when the threshold hits,\n"
           + "it flushes the max size data bucket to avoid OOM, default 1GB")
