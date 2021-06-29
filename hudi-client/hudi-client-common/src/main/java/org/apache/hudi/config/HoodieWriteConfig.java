@@ -53,6 +53,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -1515,7 +1516,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withSpillableDiskMapType(ExternalSpillableMap.DiskMapType diskMapType) {
-      writeConfig.setValue(SPILLABLE_DISK_MAP_TYPE, diskMapType.value());
+      writeConfig.setValue(SPILLABLE_DISK_MAP_TYPE, diskMapType.name());
       return this;
     }
 
