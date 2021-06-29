@@ -52,11 +52,13 @@ import java.util.stream.Stream;
  * This class provides a disk spillable only map implementation. All of the data is currenly written to one file,
  * without any rollover support. It uses the following : 1) An in-memory map that tracks the key-> latest ValueMetadata.
  * 2) Current position in the file NOTE : Only String.class type supported for Key
+ *
+ * Inspired by https://github.com/basho/bitcask
  */
-public final class DiskBasedMap<T extends Serializable, R extends Serializable> implements SpillableDiskMap<T, R> {
+public final class BitCaskDiskMap<T extends Serializable, R extends Serializable> implements DiskMap<T, R> {
 
   public static final int BUFFER_SIZE = 128 * 1024;  // 128 KB
-  private static final Logger LOG = LogManager.getLogger(DiskBasedMap.class);
+  private static final Logger LOG = LogManager.getLogger(BitCaskDiskMap.class);
   // Stores the key and corresponding value's latest metadata spilled to disk
   private final Map<T, ValueMetadata> valueMetadataMap;
   // Write only file
@@ -76,7 +78,7 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
 
   private transient Thread shutdownThread = null;
 
-  public DiskBasedMap(String baseFilePath) throws IOException {
+  public BitCaskDiskMap(String baseFilePath) throws IOException {
     this.valueMetadataMap = new ConcurrentHashMap<>();
     this.writeOnlyFile = new File(baseFilePath, UUID.randomUUID().toString());
     this.filePath = writeOnlyFile.getPath();
@@ -136,7 +138,7 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
     try {
       writeOnlyFileHandle.flush();
     } catch (IOException e) {
-      throw new HoodieIOException("Failed to flush to DiskBasedMap file", e);
+      throw new HoodieIOException("Failed to flush to BitCaskDiskMap file", e);
     }
   }
 
@@ -204,7 +206,7 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
       Integer valueSize = val.length;
       Long timestamp = System.currentTimeMillis();
       this.valueMetadataMap.put(key,
-          new DiskBasedMap.ValueMetadata(this.filePath, valueSize, filePosition.get(), timestamp));
+          new BitCaskDiskMap.ValueMetadata(this.filePath, valueSize, filePosition.get(), timestamp));
       byte[] serializedKey = SerializationUtils.serialize(key);
       filePosition
           .set(SpillableMapUtils.spillToDisk(writeOnlyFileHandle, new FileEntry(SpillableMapUtils.generateChecksum(val),

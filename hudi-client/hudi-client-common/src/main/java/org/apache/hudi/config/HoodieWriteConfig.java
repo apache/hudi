@@ -53,6 +53,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -155,7 +156,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String DEFAULT_MERGE_ALLOW_DUPLICATE_ON_INSERTS = "false";
 
   // Enable usage of RocksDb for External Spillable Map
-  public static final String DEFAULT_SPILLABLE_DISK_MAP_TYPE = ExternalSpillableMap.DiskMapType.ROCK_DB.name();
+  public static final String DEFAULT_SPILLABLE_DISK_MAP_TYPE = ExternalSpillableMap.DiskMapType.BITCASK.name();
   public static final String SPILLABLE_DISK_MAP_TYPE = "hoodie.spillable.diskmap.type";
 
   public static final String CLIENT_HEARTBEAT_INTERVAL_IN_MS_PROP = "hoodie.client.heartbeat.interval_in_ms";
@@ -416,7 +417,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   }
 
   public ExternalSpillableMap.DiskMapType getSpillableDiskMapType() {
-    return ExternalSpillableMap.DiskMapType.valueOf(props.getProperty(SPILLABLE_DISK_MAP_TYPE));
+    return ExternalSpillableMap.DiskMapType.valueOf(props.getProperty(SPILLABLE_DISK_MAP_TYPE).toUpperCase(Locale.ROOT));
   }
 
   public EngineType getEngineType() {

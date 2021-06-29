@@ -23,7 +23,6 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -36,9 +35,10 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 /**
- * This class provides a disk spillable only map implementation that is based on RocksDB.
+ * This class provides a disk spillable only map implementation.
+ * All of the data is stored using the RocksDB implementation.
  */
-public final class SpillableRocksDBBasedMap<T extends Serializable, R extends Serializable> implements SpillableDiskMap<T, R> {
+public final class RocksDbDiskMap<T extends Serializable, R extends Serializable> implements DiskMap<T, R> {
   // ColumnFamily allows partitioning data within RockDB, which allows
   // independent configuration and faster deletes across partitions
   // https://github.com/facebook/rocksdb/wiki/Column-Families
@@ -46,13 +46,13 @@ public final class SpillableRocksDBBasedMap<T extends Serializable, R extends Se
   //
   private static final String COLUMN_FAMILY_NAME = "spill_map";
 
-  private static final Logger LOG = LogManager.getLogger(SpillableRocksDBBasedMap.class);
+  private static final Logger LOG = LogManager.getLogger(RocksDbDiskMap.class);
   // Stores the key and corresponding value's latest metadata spilled to disk
   private final Set<T> keySet;
   private final String rocksDbStoragePath;
   private RocksDBDAO rocksDb;
 
-  public SpillableRocksDBBasedMap(String rocksDbStoragePath) throws IOException {
+  public RocksDbDiskMap(String rocksDbStoragePath) throws IOException {
     this.keySet = new HashSet<>();
     this.rocksDbStoragePath = rocksDbStoragePath;
   }
@@ -114,17 +114,17 @@ public final class SpillableRocksDBBasedMap<T extends Serializable, R extends Se
   }
 
   @Override
-  public @NotNull Set<T> keySet() {
+  public Set<T> keySet() {
     return keySet;
   }
 
   @Override
-  public @NotNull Collection<R> values() {
+  public Collection<R> values() {
     throw new HoodieException("Unsupported Operation Exception");
   }
 
   @Override
-  public @NotNull Set<Entry<T, R>> entrySet() {
+  public Set<Entry<T, R>> entrySet() {
     Set<Entry<T, R>> entrySet = new HashSet<>();
     for (T key : keySet) {
       entrySet.add(new AbstractMap.SimpleEntry<>(key, get(key)));
@@ -136,13 +136,13 @@ public final class SpillableRocksDBBasedMap<T extends Serializable, R extends Se
    * Custom iterator to iterate over values written to disk.
    */
   @Override
-  public @NotNull Iterator<R> iterator() {
+  public Iterator<R> iterator() {
     return getRocksDb().iterator(COLUMN_FAMILY_NAME);
   }
 
   @Override
   public Stream<R> valueStream() {
-    return keySet.stream().sorted().sequential().map(valueMetaData -> (R) get(valueMetaData));
+    return keySet.stream().map(key -> (R) get(key));
   }
 
   @Override
@@ -161,8 +161,12 @@ public final class SpillableRocksDBBasedMap<T extends Serializable, R extends Se
 
   private RocksDBDAO getRocksDb() {
     if (null == rocksDb) {
-      rocksDb = new RocksDBDAO(COLUMN_FAMILY_NAME, rocksDbStoragePath);
-      rocksDb.addColumnFamily(COLUMN_FAMILY_NAME);
+      synchronized (this) {
+        if (null == rocksDb) {
+          rocksDb = new RocksDBDAO(COLUMN_FAMILY_NAME, rocksDbStoragePath);
+          rocksDb.addColumnFamily(COLUMN_FAMILY_NAME);
+        }
+      }
     }
     return rocksDb;
   }

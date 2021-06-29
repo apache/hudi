@@ -64,7 +64,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   // Map to store key-values in memory until it hits maxInMemorySizeInBytes
   private final Map<T, R> inMemoryMap;
   // Map to store key-values on disk or db after it spilled over the memory
-  private transient volatile SpillableDiskMap<T, R> diskBasedMap;
+  private transient volatile DiskMap<T, R> diskBasedMap;
   // TODO(na) : a dynamic sizing factor to ensure we have space for other objects in memory and
   // incorrect payload estimation
   private final Double sizingFactorForInMemoryMap = 0.8;
@@ -86,7 +86,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
                               SizeEstimator<R> valueSizeEstimator) throws IOException {
     this(maxInMemorySizeInBytes, baseFilePath, keySizeEstimator,
-        valueSizeEstimator, DiskMapType.DISK_MAP);
+        valueSizeEstimator, DiskMapType.BITCASK);
   }
 
   public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
@@ -100,18 +100,18 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
     this.diskMapType = diskMapType;
   }
 
-  private SpillableDiskMap<T, R> getDiskBasedMap() {
+  private DiskMap<T, R> getDiskBasedMap() {
     if (null == diskBasedMap) {
       synchronized (this) {
         if (null == diskBasedMap) {
           try {
             switch (diskMapType) {
-              case ROCK_DB:
-                diskBasedMap = new SpillableRocksDBBasedMap<>(baseFilePath);
+              case ROCKS_DB:
+                diskBasedMap = new RocksDbDiskMap<>(baseFilePath);
                 break;
-              case DISK_MAP:
+              case BITCASK:
               default:
-                diskBasedMap = new DiskBasedMap<>(baseFilePath);
+                diskBasedMap = new BitCaskDiskMap<>(baseFilePath);
             }
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);
@@ -130,7 +130,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   }
 
   /**
-   * Number of entries in DiskBasedMap.
+   * Number of entries in BitCaskDiskMap.
    */
   public int getDiskBasedMapNumEntries() {
     return getDiskBasedMap().size();
@@ -284,38 +284,14 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
     return entrySet;
   }
 
+  /**
+   * The type of map to use for storing the Key, values on disk after it spills
+   * from memory in the {@link ExternalSpillableMap}
+   */
   public enum DiskMapType {
-    DISK_MAP("disk_map"),
-    ROCK_DB("rock_db"),
-    UNKNOWN("unknown");
-
-    private final String value;
-
-    DiskMapType(String value) {
-      this.value = value;
-    }
-
-    /**
-     * Getter for spillable disk map type.
-     * @return
-     */
-    public String value() {
-      return value;
-    }
-
-    /**
-     * Convert string value to {@link DiskMapType}.
-     */
-    public static DiskMapType fromValue(String value) {
-      switch (value.toLowerCase(Locale.ROOT)) {
-        case "disk_map":
-          return DISK_MAP;
-        case "rock_db":
-          return ROCK_DB;
-        default:
-          throw new HoodieException("Invalid value of Type.");
-      }
-    }
+    BITCASK,
+    ROCKS_DB,
+    UNKNOWN
   }
 
   /**
