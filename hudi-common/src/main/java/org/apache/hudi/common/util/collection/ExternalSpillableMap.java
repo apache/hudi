@@ -65,10 +65,14 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   private final Map<T, R> inMemoryMap;
   // Map to store key-values on disk or db after it spilled over the memory
 <<<<<<< HEAD
+<<<<<<< HEAD
   private transient volatile DiskMap<T, R> diskBasedMap;
 =======
   private transient volatile SpillableDiskMap<T, R> diskBasedMap;
 >>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
+=======
+  private transient volatile DiskMap<T, R> diskBasedMap;
+>>>>>>> 6d4b556a (Address reviewer comments)
   // TODO(na) : a dynamic sizing factor to ensure we have space for other objects in memory and
   // incorrect payload estimation
   private final Double sizingFactorForInMemoryMap = 0.8;
@@ -91,10 +95,14 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
                               SizeEstimator<R> valueSizeEstimator) throws IOException {
     this(maxInMemorySizeInBytes, baseFilePath, keySizeEstimator,
 <<<<<<< HEAD
+<<<<<<< HEAD
         valueSizeEstimator, DiskMapType.BITCASK);
 =======
         valueSizeEstimator, DiskMapType.DISK_MAP);
 >>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
+=======
+        valueSizeEstimator, DiskMapType.BITCASK);
+>>>>>>> 6d4b556a (Address reviewer comments)
   }
 
   public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
@@ -109,15 +117,20 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
   private DiskMap<T, R> getDiskBasedMap() {
 =======
   private SpillableDiskMap<T, R> getDiskBasedMap() {
 >>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
+=======
+  private DiskMap<T, R> getDiskBasedMap() {
+>>>>>>> 6d4b556a (Address reviewer comments)
     if (null == diskBasedMap) {
       synchronized (this) {
         if (null == diskBasedMap) {
           try {
             switch (diskMapType) {
+<<<<<<< HEAD
 <<<<<<< HEAD
               case ROCKS_DB:
                 diskBasedMap = new RocksDbDiskMap<>(baseFilePath);
@@ -128,11 +141,19 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
 =======
               case ROCK_DB:
                 diskBasedMap = new SpillableRocksDBBasedMap<>(baseFilePath);
+=======
+              case ROCKS_DB:
+                diskBasedMap = new RocksDbDiskMap<>(baseFilePath);
+>>>>>>> 6d4b556a (Address reviewer comments)
                 break;
-              case DISK_MAP:
+              case BITCASK:
               default:
+<<<<<<< HEAD
                 diskBasedMap = new DiskBasedMap<>(baseFilePath);
 >>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
+=======
+                diskBasedMap = new BitCaskDiskMap<>(baseFilePath);
+>>>>>>> 6d4b556a (Address reviewer comments)
             }
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);
@@ -305,38 +326,14 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
     return entrySet;
   }
 
+  /**
+   * The type of map to use for storing the Key, values on disk after it spills
+   * from memory in the {@link ExternalSpillableMap}
+   */
   public enum DiskMapType {
-    DISK_MAP("disk_map"),
-    ROCK_DB("rock_db"),
-    UNKNOWN("unknown");
-
-    private final String value;
-
-    DiskMapType(String value) {
-      this.value = value;
-    }
-
-    /**
-     * Getter for spillable disk map type.
-     * @return
-     */
-    public String value() {
-      return value;
-    }
-
-    /**
-     * Convert string value to {@link DiskMapType}.
-     */
-    public static DiskMapType fromValue(String value) {
-      switch (value.toLowerCase(Locale.ROOT)) {
-        case "disk_map":
-          return DISK_MAP;
-        case "rock_db":
-          return ROCK_DB;
-        default:
-          throw new HoodieException("Invalid value of Type.");
-      }
-    }
+    BITCASK,
+    ROCKS_DB,
+    UNKNOWN
   }
 
   /**
