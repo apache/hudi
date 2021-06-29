@@ -21,9 +21,11 @@ package org.apache.hudi.common.table.log;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.io.storage.HoodieFileReader;
 
 import java.io.IOException;
@@ -41,9 +43,24 @@ public class HoodieFileSliceReader implements Iterator<HoodieRecord<? extends Ho
     while (baseIterator.hasNext()) {
       GenericRecord record = (GenericRecord)  baseIterator.next();
       HoodieRecord<T> hoodieRecord = SpillableMapUtils.convertToHoodieRecordPayload(record, payloadClass);
-      scanner.processNextRecord(hoodieRecord);
+      processNextRecord(scanner, hoodieRecord);
     }
     return new HoodieFileSliceReader(scanner.iterator());
+  }
+
+  private static void processNextRecord(HoodieMergedLogRecordScanner scanner, HoodieRecord<? extends HoodieRecordPayload> hoodieRecord) {
+    String key = hoodieRecord.getRecordKey();
+    ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
+        (ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>>)scanner.getRecords();
+    if (records.containsKey(key)) {
+      // Merge and store the merged record. The HoodieRecordPayload implementation is free to decide what should be
+      // done when a delete (empty payload) is encountered before or after an insert/update.
+      HoodieRecordPayload combinedValue = records.get(key).getData().preCombine(hoodieRecord.getData());
+      records.put(key, new HoodieRecord<>(new HoodieKey(key, hoodieRecord.getPartitionPath()), combinedValue));
+    } else {
+      // Put the record as is
+      records.put(key, hoodieRecord);
+    }
   }
 
   private HoodieFileSliceReader(Iterator<HoodieRecord<? extends HoodieRecordPayload>> recordsItr) {
