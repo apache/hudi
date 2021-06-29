@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -55,8 +54,8 @@ public class AvroKafkaSource extends AvroSource {
   private static final String NATIVE_KAFKA_KEY_DESERIALIZER_PROP = "key.deserializer";
   private static final String NATIVE_KAFKA_VALUE_DESERIALIZER_PROP = "value.deserializer";
   // These are settings used to pass things to KafkaAvroDeserializer
-  public static final String KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA = "hoodie.deltastreamer.source.kafka.value.deserializer.schema";
   public static final String KAFKA_AVRO_VALUE_DESERIALIZER_PROPERTY_PREFIX = "hoodie.deltastreamer.source.kafka.value.deserializer.";
+  public static final String KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA = KAFKA_AVRO_VALUE_DESERIALIZER_PROPERTY_PREFIX + "schema";
 
   private final KafkaOffsetGen offsetGen;
   private final HoodieDeltaStreamerMetrics metrics;

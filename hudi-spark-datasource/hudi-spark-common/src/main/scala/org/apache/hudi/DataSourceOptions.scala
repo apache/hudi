@@ -382,5 +382,5 @@ object DataSourceWriteOptions {
 
   // Avro Kafka Source configs
   val KAFKA_AVRO_VALUE_DESERIALIZER_OPT_KEY = "hoodie.deltastreamer.source.kafka.value.deserializer.class"
-  val DEFAULT_KAFKA_AVRO_VALUE_DESERIALIZER_OPT_VAL = "org.apache.hudi.utilities.deser.KafkaAvroSchemaDeserializer"
+  val DEFAULT_KAFKA_AVRO_VALUE_DESERIALIZER_OPT_VAL = ""
 }

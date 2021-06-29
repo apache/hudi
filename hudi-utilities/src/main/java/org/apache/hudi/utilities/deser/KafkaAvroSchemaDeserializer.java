@@ -24,7 +24,6 @@ import org.apache.avro.Schema;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.utilities.sources.AvroKafkaSource;
 import org.apache.kafka.common.errors.SerializationException;
 
 import java.util.Map;
