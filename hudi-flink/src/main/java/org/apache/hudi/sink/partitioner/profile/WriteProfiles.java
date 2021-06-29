@@ -157,10 +157,10 @@ public class WriteProfiles {
       // make this fail safe.
       LOG.warn("Instant {} was deleted by the cleaner, ignore", instant.getTimestamp());
       return Option.empty();
-    } catch (IOException e) {
+    } catch (Throwable throwable) {
       LOG.error("Get write metadata for table {} with instant {} and path: {} error",
           tableName, instant.getTimestamp(), basePath);
-      throw new HoodieException(e);
+      return Option.empty();
     }
   }
 
