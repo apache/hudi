@@ -235,17 +235,21 @@ if $EXECUTE_TEST_SUITE ; then
   docker cp $CUR_DIR/../packaging/hudi-integ-test-bundle/target/$JAR_NAME adhoc-2:/opt/
   docker exec -it adhoc-2 /bin/bash rm -rf /opt/staging*
   docker cp demo/config/test-suite/staging/ adhoc-2:/opt/
+  docker exec -it adhoc-2 /bin/bash echo "\n============================== Executing sanity test suite ============================== "
   docker exec -it adhoc-2 /bin/bash /opt/staging/sanity_spark_command.sh
 
   if [ -f demo/config/test-suite/staging/medium_test_suite_spark_command.sh ]; then
+    docker exec -it adhoc-2 /bin/bash echo "\n\n\n============================== Executing medium test suite ============================== "
     docker exec -it adhoc-2 /bin/bash /opt/staging/medium_test_suite_spark_command.sh
   fi
 
   if [ -f demo/config/test-suite/staging/long_test_suite_spark_command.sh ]; then
+    docker exec -it adhoc-2 /bin/bash echo "\n\n\n============================== Executing long test suite ============================== "
     docker exec -it adhoc-2 /bin/bash /opt/staging/long_test_suite_spark_command.sh
   fi
 
   if [ -f demo/config/test-suite/staging/clustering_spark_command.sh ]; then
+    docker exec -it adhoc-2 /bin/bash echo "\n\n\n============================== Executing clustering test suite ============================== "
     docker exec -it adhoc-2 /bin/bash /opt/staging/clustering_spark_command.sh
   fi
 
