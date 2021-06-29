@@ -23,15 +23,23 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 /**
- * The spillable map that provides the map interface for storing records in disk/ db after they
+ * This interface provides the map interface for storing records in disk after they
  * spill over from memory. Used by {@link ExternalSpillableMap}.
- * @param <T>
- * @param <R>
+ *
+ * @param <T> The generic type of the keys
+ * @param <R> The generic type of the values
  */
-public interface SpillableDiskMap<T extends Serializable, R extends Serializable> extends Map<T, R>, Iterable<R> {
+public interface DiskMap<T extends Serializable, R extends Serializable> extends Map<T, R>, Iterable<R> {
   Stream<R> valueStream();
 
+  /**
+   * Number of bytes spilled to disk.
+   */
   long sizeOfFileOnDiskInBytes();
 
+  /**
+   * Cleanup
+   */
   void close();
+
 }

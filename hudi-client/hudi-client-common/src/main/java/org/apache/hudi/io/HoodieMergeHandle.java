@@ -232,7 +232,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     LOG.info("Number of entries in MemoryBasedMap => "
         + ((ExternalSpillableMap) keyToNewRecords).getInMemoryMapNumEntries()
         + "Total size in bytes of MemoryBasedMap => "
-        + ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize() + "Number of entries in DiskBasedMap => "
+        + ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize() + "Number of entries in BitCaskDiskMap => "
         + ((ExternalSpillableMap) keyToNewRecords).getDiskBasedMapNumEntries() + "Size of file spilled to disk => "
         + ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes());
   }
