@@ -136,7 +136,7 @@ public class TestKafkaOffsetGen {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.createTopic(TEST_TOPIC_NAME, 2);
     testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
-    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("none"));
+    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("group"));
     String lastCheckpointString = TEST_TOPIC_NAME + ",0:250,1:249";
     kafkaOffsetGen.commitOffsetToKafka(lastCheckpointString);
     // don't pass lastCheckpointString as we want to read from group committed offset
@@ -147,7 +147,7 @@ public class TestKafkaOffsetGen {
     assertEquals(399, nextOffsetRanges[1].untilOffset());
 
     // committed offsets are not present for the consumer group
-    kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("none"));
+    kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("group"));
     nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 300, metrics);
     assertEquals(500, nextOffsetRanges[0].fromOffset());
     assertEquals(500, nextOffsetRanges[0].untilOffset());

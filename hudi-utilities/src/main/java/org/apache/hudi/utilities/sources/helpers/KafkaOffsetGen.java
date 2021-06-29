@@ -151,7 +151,7 @@ public class KafkaOffsetGen {
    * Kafka reset offset strategies.
    */
   enum KafkaResetOffsetStrategies {
-    LATEST, EARLIEST, NONE
+    LATEST, EARLIEST, GROUP
   }
 
   /**
@@ -192,6 +192,9 @@ public class KafkaOffsetGen {
     if (!found) {
       throw new HoodieDeltaStreamerException(Config.KAFKA_AUTO_OFFSET_RESET + " config set to unknown value " + kafkaAutoResetOffsetsStr);
     }
+    if (autoResetValue.equals(KafkaResetOffsetStrategies.GROUP)) {
+      this.kafkaParams.put(Config.KAFKA_AUTO_OFFSET_RESET, Config.DEFAULT_KAFKA_AUTO_OFFSET_RESET.name().toLowerCase());
+    }
   }
 
   public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long sourceLimit, HoodieDeltaStreamerMetrics metrics) {
@@ -220,7 +223,7 @@ public class KafkaOffsetGen {
           case LATEST:
             fromOffsets = consumer.endOffsets(topicPartitions);
             break;
-          case NONE:
+          case GROUP:
             fromOffsets = getGroupOffsets(consumer, topicPartitions);
             break;
           default:
@@ -321,7 +324,6 @@ public class KafkaOffsetGen {
   public void commitOffsetToKafka(String checkpointStr) {
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(ConsumerConfig.GROUP_ID_CONFIG));
     Map<TopicPartition, Long> offsetMap = CheckpointUtils.strToOffsets(checkpointStr);
-    Map<String, Object> kafkaParams = excludeHoodieConfigs(props);
     Map<TopicPartition, OffsetAndMetadata> offsetAndMetadataMap = new HashMap<>(offsetMap.size());
     try (KafkaConsumer consumer = new KafkaConsumer(kafkaParams)) {
       offsetMap.forEach((topicPartition, offset) -> offsetAndMetadataMap.put(topicPartition, new OffsetAndMetadata(offset)));
