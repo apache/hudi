@@ -63,11 +63,6 @@ public class FlinkStreamerConfig extends Configuration {
       required = true)
   public String targetBasePath;
 
-  @Parameter(names = {"--read-schema-path"},
-      description = "Avro schema file path, the parsed schema is used for deserializing.",
-      required = true)
-  public String readSchemaFilePath;
-
   @Parameter(names = {"--target-table"}, description = "Name of the target table in Hive.", required = true)
   public String targetTableName;
 
@@ -150,11 +145,12 @@ public class FlinkStreamerConfig extends Configuration {
           description = "Whether to load partitions in state if partition path matching， default *")
   public String indexPartitionRegex = ".*";
 
-  @Parameter(names = {"--avro-schema-path"}, description = "Avro schema file path, the parsed schema is used for deserialization")
-  public String avroSchemaPath = "";
+  @Parameter(names = {"--avro-schema-path"}, description = "Avro schema file path, the parsed schema is used for deserialization",
+      required = true)
+  public String avroSchemaPath;
 
   @Parameter(names = {"--avro-schema"}, description = "Avro schema string, the parsed schema is used for deserialization")
-  public String avroSchema = "";
+  public String avroSchema;
 
   @Parameter(names = {"--utc-timezone"}, description = "Use UTC timezone or local timezone to the conversion between epoch"
           + " time and LocalDateTime. Hive 0.x/1.x/2.x use local timezone. But Hive 3.x"
@@ -292,7 +288,6 @@ public class FlinkStreamerConfig extends Configuration {
     org.apache.flink.configuration.Configuration conf = fromMap(propsMap);
 
     conf.setString(FlinkOptions.PATH, config.targetBasePath);
-    conf.setString(FlinkOptions.READ_AVRO_SCHEMA_PATH, config.readSchemaFilePath);
     conf.setString(FlinkOptions.TABLE_NAME, config.targetTableName);
     // copy_on_write works same as COPY_ON_WRITE
     conf.setString(FlinkOptions.TABLE_TYPE, config.tableType.toUpperCase());

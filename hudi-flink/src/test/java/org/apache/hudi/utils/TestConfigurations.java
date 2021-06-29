@@ -155,7 +155,7 @@ public class TestConfigurations {
   public static FlinkStreamerConfig getDefaultStreamerConf(String tablePath) {
     FlinkStreamerConfig streamerConf = new FlinkStreamerConfig();
     streamerConf.targetBasePath = tablePath;
-    streamerConf.readSchemaFilePath = Objects.requireNonNull(Thread.currentThread()
+    streamerConf.avroSchemaPath = Objects.requireNonNull(Thread.currentThread()
         .getContextClassLoader().getResource("test_read_schema.avsc")).toString();
     streamerConf.targetTableName = "TestHoodieTable";
     streamerConf.partitionPathField = "partition";
