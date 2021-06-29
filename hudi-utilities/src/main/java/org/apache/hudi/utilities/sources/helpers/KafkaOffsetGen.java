@@ -227,7 +227,7 @@ public class KafkaOffsetGen {
             fromOffsets = getGroupOffsets(consumer, topicPartitions);
             break;
           default:
-            throw new HoodieNotSupportedException("Auto reset value must be one of 'earliest' or 'latest' or 'none' ");
+            throw new HoodieNotSupportedException("Auto reset value must be one of 'earliest' or 'latest' or 'group' ");
         }
       }
 
@@ -340,7 +340,7 @@ public class KafkaOffsetGen {
       if (committedOffsetAndMetadata != null) {
         fromOffsets.put(topicPartition, committedOffsetAndMetadata.offset());
       } else {
-        LOG.warn("There are no commits associated with this consumer group, starting to consume form latest offset");
+        LOG.warn("There are no commits associated with this consumer group, starting to consume from latest offset");
         fromOffsets = consumer.endOffsets(topicPartitions);
         break;
       }
