@@ -36,11 +36,11 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
   // Used to access the value written at a specific position in the file
   private final String filePath;
   // Stores the key and corresponding value's latest metadata spilled to disk
-  private final Map<T, DiskBasedMap.ValueMetadata> inMemoryMetadataOfSpilledData;
+  private final Map<T, BitCaskDiskMap.ValueMetadata> inMemoryMetadataOfSpilledData;
 
   private transient Thread shutdownThread = null;
 
-  public LazyFileIterable(String filePath, Map<T, DiskBasedMap.ValueMetadata> map) {
+  public LazyFileIterable(String filePath, Map<T, BitCaskDiskMap.ValueMetadata> map) {
     this.filePath = filePath;
     this.inMemoryMetadataOfSpilledData = map;
   }
@@ -61,16 +61,16 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
 
     private final String filePath;
     private BufferedRandomAccessFile readOnlyFileHandle;
-    private final Iterator<Map.Entry<T, DiskBasedMap.ValueMetadata>> metadataIterator;
+    private final Iterator<Map.Entry<T, BitCaskDiskMap.ValueMetadata>> metadataIterator;
 
-    public LazyFileIterator(String filePath, Map<T, DiskBasedMap.ValueMetadata> map) throws IOException {
+    public LazyFileIterator(String filePath, Map<T, BitCaskDiskMap.ValueMetadata> map) throws IOException {
       this.filePath = filePath;
-      this.readOnlyFileHandle = new BufferedRandomAccessFile(filePath, "r", DiskBasedMap.BUFFER_SIZE);
+      this.readOnlyFileHandle = new BufferedRandomAccessFile(filePath, "r", BitCaskDiskMap.BUFFER_SIZE);
       readOnlyFileHandle.seek(0);
 
       // sort the map in increasing order of offset of value so disk seek is only in one(forward) direction
       this.metadataIterator = map.entrySet().stream()
-          .sorted((Map.Entry<T, DiskBasedMap.ValueMetadata> o1, Map.Entry<T, DiskBasedMap.ValueMetadata> o2) -> o1
+          .sorted((Map.Entry<T, BitCaskDiskMap.ValueMetadata> o1, Map.Entry<T, BitCaskDiskMap.ValueMetadata> o2) -> o1
               .getValue().getOffsetOfValue().compareTo(o2.getValue().getOffsetOfValue()))
           .collect(Collectors.toList()).iterator();
       this.addShutdownHook();
@@ -90,8 +90,8 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
       if (!hasNext()) {
         throw new IllegalStateException("next() called on EOF'ed stream. File :" + filePath);
       }
-      Map.Entry<T, DiskBasedMap.ValueMetadata> entry = this.metadataIterator.next();
-      return DiskBasedMap.get(entry.getValue(), readOnlyFileHandle);
+      Map.Entry<T, BitCaskDiskMap.ValueMetadata> entry = this.metadataIterator.next();
+      return BitCaskDiskMap.get(entry.getValue(), readOnlyFileHandle);
     }
 
     @Override

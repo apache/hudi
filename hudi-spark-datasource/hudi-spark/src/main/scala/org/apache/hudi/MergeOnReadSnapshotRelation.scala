@@ -18,7 +18,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.model.HoodieBaseFile
+import org.apache.avro.Schema
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils
@@ -74,8 +74,8 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
 
   private lazy val tableStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
   private val mergeType = optParams.getOrElse(
-    DataSourceReadOptions.REALTIME_MERGE_OPT_KEY,
-    DataSourceReadOptions.DEFAULT_REALTIME_MERGE_OPT_VAL)
+    DataSourceReadOptions.REALTIME_MERGE_OPT_KEY.key,
+    DataSourceReadOptions.REALTIME_MERGE_OPT_KEY.defaultValue)
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
   private val preCombineField = {
     val preCombineFieldFromTableConfig = metaClient.getTableConfig.getPreCombineField
@@ -84,7 +84,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
     } else {
       // get preCombineFiled from the options if this is a old table which have not store
       // the field to hoodie.properties
-      optParams.get(DataSourceReadOptions.READ_PRE_COMBINE_FIELD)
+      optParams.get(DataSourceReadOptions.READ_PRE_COMBINE_FIELD.key)
     }
   }
   override def schema: StructType = tableStructSchema
@@ -94,16 +94,9 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
   override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
     log.debug(s" buildScan requiredColumns = ${requiredColumns.mkString(",")}")
     log.debug(s" buildScan filters = ${filters.mkString(",")}")
-    var requiredStructSchema = StructType(Seq())
-    requiredColumns.foreach(col => {
-      val field = tableStructSchema.find(_.name == col)
-      if (field.isDefined) {
-        requiredStructSchema = requiredStructSchema.add(field.get)
-      }
-    })
-    val requiredAvroSchema = AvroConversionUtils
-      .convertStructTypeToAvroSchema(requiredStructSchema, tableAvroSchema.getName, tableAvroSchema.getNamespace)
 
+    val (requiredAvroSchema, requiredStructSchema) =
+      MergeOnReadSnapshotRelation.getRequiredSchema(tableAvroSchema, requiredColumns)
     val fileIndex = buildFileIndex(filters)
     val hoodieTableState = HoodieMergeOnReadTableState(
       tableStructSchema,
@@ -143,12 +136,15 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
   }
 
   def buildFileIndex(filters: Array[Filter]): List[HoodieMergeOnReadFileSplit] = {
-
-    val fileStatuses = if (globPaths.isDefined) {
+    // Get all partition paths
+    val partitionPaths = if (globPaths.isDefined) {
       // Load files from the global paths if it has defined to be compatible with the original mode
       val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sqlContext.sparkSession, globPaths.get)
-      inMemoryFileIndex.allFiles()
-    } else { // Load files by the HoodieFileIndex.
+      val fsView = new HoodieTableFileSystemView(metaClient,
+        metaClient.getActiveTimeline.getCommitsTimeline
+          .filterCompletedInstants, inMemoryFileIndex.allFiles().toArray)
+      fsView.getLatestBaseFiles.iterator().asScala.toList.map(_.getFileStatus.getPath.getParent)
+    } else { // Load partition path by the HoodieFileIndex.
       val hoodieFileIndex = HoodieFileIndex(sqlContext.sparkSession, metaClient,
         Some(tableStructSchema), optParams, FileStatusCache.getOrCreate(sqlContext.sparkSession))
 
@@ -158,34 +154,35 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
       val partitionFilterExpression =
         HoodieSparkUtils.convertToCatalystExpressions(partitionFilters, tableStructSchema)
 
-      // if convert success to catalyst expression, use the partition prune
-      if (partitionFilterExpression.isDefined) {
-        hoodieFileIndex.listFiles(Seq(partitionFilterExpression.get), Seq.empty).flatMap(_.files)
-      } else {
-        hoodieFileIndex.allFiles
-      }
+      val allPartitionPaths = hoodieFileIndex.getAllQueryPartitionPaths
+      // If convert success to catalyst expression, use the partition prune
+      hoodieFileIndex.prunePartition(allPartitionPaths, partitionFilterExpression.map(Seq(_)).getOrElse(Seq.empty))
+          .map(_.fullPartitionPath(metaClient.getBasePath))
     }
 
-    if (fileStatuses.isEmpty) { // If this an empty table, return an empty split list.
+    if (partitionPaths.isEmpty) { // If this an empty table, return an empty split list.
       List.empty[HoodieMergeOnReadFileSplit]
     } else {
-      val fsView = new HoodieTableFileSystemView(metaClient,
-        metaClient.getActiveTimeline.getCommitsTimeline
-          .filterCompletedInstants, fileStatuses.toArray)
-      val latestFiles: List[HoodieBaseFile] = fsView.getLatestBaseFiles.iterator().asScala.toList
-
-      if (!fsView.getLastInstant.isPresent) { // Return empty list if the table has no commit
+      val lastInstant = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants.lastInstant()
+      if (!lastInstant.isPresent) { // Return empty list if the table has no commit
         List.empty
       } else {
-        val latestCommit = fsView.getLastInstant.get().getTimestamp
-        val fileGroup = HoodieRealtimeInputFormatUtils.groupLogsByBaseFile(conf, latestFiles.asJava).asScala
-        val fileSplits = fileGroup.map(kv => {
-          val baseFile = kv._1
-          val logPaths = if (kv._2.isEmpty) Option.empty else Option(kv._2.asScala.toList)
-          val filePath = MergeOnReadSnapshotRelation.getFilePath(baseFile.getFileStatus.getPath)
+        val latestCommit = lastInstant.get().getTimestamp
+        val baseAndLogsList = HoodieRealtimeInputFormatUtils.groupLogsByBaseFile(conf, partitionPaths.asJava).asScala
+        val fileSplits = baseAndLogsList.map(kv => {
+          val baseFile = kv.getLeft
+          val logPaths = if (kv.getRight.isEmpty) Option.empty else Option(kv.getRight.asScala.toList)
 
-          val partitionedFile = PartitionedFile(InternalRow.empty, filePath, 0, baseFile.getFileLen)
-          HoodieMergeOnReadFileSplit(Option(partitionedFile), logPaths, latestCommit,
+          val baseDataPath = if (baseFile.isPresent) {
+            Some(PartitionedFile(
+              InternalRow.empty,
+              MergeOnReadSnapshotRelation.getFilePath(baseFile.get.getFileStatus.getPath),
+              0, baseFile.get.getFileLen)
+            )
+          } else {
+            None
+          }
+          HoodieMergeOnReadFileSplit(baseDataPath, logPaths, latestCommit,
             metaClient.getBasePath, maxCompactionMemoryInBytes, mergeType)
         }).toList
         fileSplits
@@ -210,5 +207,16 @@ object MergeOnReadSnapshotRelation {
     // See FileSourceScanExec#createBucketedReadRDD in spark project which do the same thing
     // when create PartitionedFile.
     path.toUri.toString
+  }
+
+  def getRequiredSchema(tableAvroSchema: Schema, requiredColumns: Array[String]): (Schema, StructType) = {
+    // First get the required avro-schema, then convert the avro-schema to spark schema.
+    val name2Fields = tableAvroSchema.getFields.asScala.map(f => f.name() -> f).toMap
+    val requiredFields = requiredColumns.map(c => name2Fields(c))
+      .map(f => new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order())).toList
+    val requiredAvroSchema = Schema.createRecord(tableAvroSchema.getName, tableAvroSchema.getDoc,
+      tableAvroSchema.getNamespace, tableAvroSchema.isError, requiredFields.asJava)
+    val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
+    (requiredAvroSchema, requiredStructSchema)
   }
 }

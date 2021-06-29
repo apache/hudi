@@ -58,10 +58,17 @@ public class SparkClusteringPlanActionExecutor<T extends HoodieRecordPayload> ex
     int commitsSinceLastClustering = table.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
         .findInstantsAfter(lastClusteringInstant.map(HoodieInstant::getTimestamp).orElse("0"), Integer.MAX_VALUE)
         .countInstants();
-    if (config.getInlineClusterMaxCommits() > commitsSinceLastClustering) {
-      LOG.info("Not scheduling clustering as only " + commitsSinceLastClustering
+    if (config.inlineClusteringEnabled() && config.getInlineClusterMaxCommits() > commitsSinceLastClustering) {
+      LOG.info("Not scheduling inline clustering as only " + commitsSinceLastClustering
           + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
           + config.getInlineClusterMaxCommits());
+      return Option.empty();
+    }
+
+    if (config.isAsyncClusteringEnabled() && config.getAsyncClusterMaxCommits() > commitsSinceLastClustering) {
+      LOG.info("Not scheduling async clustering as only " + commitsSinceLastClustering
+          + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
+          + config.getAsyncClusterMaxCommits());
       return Option.empty();
     }
 

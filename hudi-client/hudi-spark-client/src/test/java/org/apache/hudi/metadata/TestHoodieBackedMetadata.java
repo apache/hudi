@@ -109,10 +109,10 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   }
 
   /**
-   * Metadata Table should not be created unless it is enabled in config.
+   * Metadata Table bootstrap scenarios.
    */
   @Test
-  public void testDefaultNoMetadataTable() throws Exception {
+  public void testMetadataTableBootstrap() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
@@ -121,46 +121,63 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     assertThrows(TableNotFoundException.class, () -> HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build());
 
     // Metadata table is not created if disabled by config
+    String firstCommitTime = HoodieActiveTimeline.createNewInstantTime();
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, false))) {
-      client.startCommitWithTime("001");
-      client.insert(jsc.emptyRDD(), "001");
+      client.startCommitWithTime(firstCommitTime);
+      client.insert(jsc.parallelize(dataGen.generateInserts(firstCommitTime, 5)), firstCommitTime);
       assertFalse(fs.exists(new Path(metadataTableBasePath)), "Metadata table should not be created");
       assertThrows(TableNotFoundException.class, () -> HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build());
     }
 
+    // Metadata table should not be created if any non-complete instants are present
+    String secondCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(false, true), true)) {
+      client.startCommitWithTime(secondCommitTime);
+      client.insert(jsc.parallelize(dataGen.generateUpdates(secondCommitTime, 2)), secondCommitTime);
+      // AutoCommit is false so no bootstrap
+      client.syncTableMetadata();
+      assertFalse(fs.exists(new Path(metadataTableBasePath)), "Metadata table should not be created");
+      assertThrows(TableNotFoundException.class, () -> HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build());
+      // rollback this commit
+      client.rollback(secondCommitTime);
+    }
+
     // Metadata table created when enabled by config & sync is called
+    secondCommitTime = HoodieActiveTimeline.createNewInstantTime();
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true), true)) {
-      client.startCommitWithTime("002");
-      client.insert(jsc.emptyRDD(), "002");
+      client.startCommitWithTime(secondCommitTime);
+      client.insert(jsc.parallelize(dataGen.generateUpdates(secondCommitTime, 2)), secondCommitTime);
       client.syncTableMetadata();
       assertTrue(fs.exists(new Path(metadataTableBasePath)));
       validateMetadata(client);
     }
 
-    // Delete the 001  and 002 instants and introduce a 003. This should trigger a rebootstrap of the metadata
-    // table as un-synched instants have been "archived".
-    // Metadata Table should not have 001 and 002 delta-commits as it was re-bootstrapped
+    // Delete all existing instants on dataset to simulate archiving. This should trigger a re-bootstrap of the metadata
+    // table as last synched instant has been "archived".
     final String metadataTableMetaPath = metadataTableBasePath + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME;
-    assertTrue(fs.exists(new Path(metadataTableMetaPath, HoodieTimeline.makeDeltaFileName("001"))));
-    assertTrue(fs.exists(new Path(metadataTableMetaPath, HoodieTimeline.makeDeltaFileName("002"))));
-    Arrays.stream(fs.globStatus(new Path(metaClient.getMetaPath(), "{001,002}.*"))).forEach(s -> {
-      try {
-        fs.delete(s.getPath(), false);
-      } catch (IOException e) {
-        LOG.warn("Error when deleting instant " + s + ": " + e);
-      }
-    });
+    assertTrue(fs.exists(new Path(metadataTableMetaPath, HoodieTimeline.makeDeltaFileName(secondCommitTime))));
 
+    Arrays.stream(fs.listStatus(new Path(metaClient.getMetaPath()))).filter(status -> status.getPath().getName().matches("^\\d+\\..*"))
+        .forEach(status -> {
+          try {
+            fs.delete(status.getPath(), false);
+          } catch (IOException e) {
+            LOG.warn("Error when deleting instant " + status + ": " + e);
+          }
+        });
+
+    String thirdCommitTime = HoodieActiveTimeline.createNewInstantTime();
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true), true)) {
-      client.startCommitWithTime("003");
-      client.insert(jsc.emptyRDD(), "003");
+      client.startCommitWithTime(thirdCommitTime);
+      client.insert(jsc.parallelize(dataGen.generateUpdates(thirdCommitTime, 2)), thirdCommitTime);
       client.syncTableMetadata();
       assertTrue(fs.exists(new Path(metadataTableBasePath)));
       validateMetadata(client);
 
-      // Metadata Table should not have 001 and 002 delta-commits as it was re-bootstrapped
-      assertFalse(fs.exists(new Path(metadataTableMetaPath, HoodieTimeline.makeDeltaFileName("001"))));
-      assertFalse(fs.exists(new Path(metadataTableMetaPath, HoodieTimeline.makeDeltaFileName("002"))));
+      // Metadata Table should not have previous delta-commits as it was re-bootstrapped
+      assertFalse(fs.exists(new Path(metadataTableMetaPath, HoodieTimeline.makeDeltaFileName(firstCommitTime))));
+      assertFalse(fs.exists(new Path(metadataTableMetaPath, HoodieTimeline.makeDeltaFileName(secondCommitTime))));
+      assertTrue(fs.exists(new Path(metadataTableMetaPath, HoodieTimeline.makeDeltaFileName(thirdCommitTime))));
     }
   }
 
@@ -187,14 +204,14 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
     testTable.withPartitionMetaFiles("p1", "p2", filteredDirectoryOne, filteredDirectoryTwo, filteredDirectoryThree)
         .addCommit("001").withBaseFilesInPartition("p1", 10).withBaseFilesInPartition("p2", 10, 10)
-        .addCommit("002").withBaseFilesInPartition("p1", 10).withBaseFilesInPartition("p2", 10, 10, 10)
-        .addInflightCommit("003").withBaseFilesInPartition("p1", 10).withBaseFilesInPartition("p2", 10);
+        .addCommit("002").withBaseFilesInPartition("p1", 10).withBaseFilesInPartition("p2", 10, 10, 10);
 
     final HoodieWriteConfig writeConfig =
             getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.NEVER, true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withDirectoryFilterRegex(filterDirRegex).build()).build();
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
       client.startCommitWithTime("005");
+      client.insert(jsc.emptyRDD(), "005");
 
       List<String> partitions = metadataWriter(client).metadata().getAllPartitionPaths();
       assertFalse(partitions.contains(nonPartitionDirectory),
@@ -578,7 +595,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
 
       // Reader should sync to all the completed instants
       HoodieTableMetadata metadata  = HoodieTableMetadata.create(context, client.getConfig().getMetadataConfig(),
-          client.getConfig().getBasePath(), FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR);
+          client.getConfig().getBasePath(), FileSystemViewStorageConfig.FILESYSTEM_VIEW_SPILLABLE_DIR.defaultValue());
       assertEquals(metadata.getSyncedInstantTime().get(), newCommitTime);
 
       // Remove the inflight instance holding back table sync
@@ -591,7 +608,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
 
       // Reader should sync to all the completed instants
       metadata  = HoodieTableMetadata.create(context, client.getConfig().getMetadataConfig(),
-          client.getConfig().getBasePath(), FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR);
+          client.getConfig().getBasePath(), FileSystemViewStorageConfig.FILESYSTEM_VIEW_SPILLABLE_DIR.defaultValue());
       assertEquals(metadata.getSyncedInstantTime().get(), newCommitTime);
     }
 

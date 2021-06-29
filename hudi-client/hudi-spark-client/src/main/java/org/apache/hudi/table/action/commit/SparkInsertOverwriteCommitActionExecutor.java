@@ -68,7 +68,7 @@ public class SparkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayl
 
   @Override
   protected String getCommitActionType() {
-    return HoodieTimeline.REPLACE_COMMIT_ACTION;
+    return HoodieTimeline.DELTA_COMMIT_ACTION;
   }
 
   @Override

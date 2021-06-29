@@ -106,17 +106,17 @@ public class FlinkOptions {
       .defaultValue(4)
       .withDescription("Parallelism of tasks that do actual read, default is 4");
 
-  public static final ConfigOption<String> READ_AVRO_SCHEMA_PATH = ConfigOptions
-      .key("read.avro-schema.path")
+  public static final ConfigOption<String> SOURCE_AVRO_SCHEMA_PATH = ConfigOptions
+      .key("source.avro-schema.path")
       .stringType()
       .noDefaultValue()
-      .withDescription("Avro schema file path, the parsed schema is used for deserialization");
+      .withDescription("Source avro schema file path, the parsed schema is used for deserialization");
 
-  public static final ConfigOption<String> READ_AVRO_SCHEMA = ConfigOptions
-      .key("read.avro-schema")
+  public static final ConfigOption<String> SOURCE_AVRO_SCHEMA = ConfigOptions
+      .key("source.avro-schema")
       .stringType()
       .noDefaultValue()
-      .withDescription("Avro schema string, the parsed schema is used for deserialization");
+      .withDescription("Source avro schema string, the parsed schema is used for deserialization");
 
   public static final String QUERY_TYPE_SNAPSHOT = "snapshot";
   public static final String QUERY_TYPE_READ_OPTIMIZED = "read_optimized";
@@ -141,12 +141,6 @@ public class FlinkOptions {
           + "1) skip_merge: read the base file records plus the log file records;\n"
           + "2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the\n"
           + "   log file records(combines the two records with same key for base and log file records), then read the left log file records");
-
-  public static final ConfigOption<Boolean> HIVE_STYLE_PARTITION = ConfigOptions
-      .key("hoodie.datasource.hive_style_partition")
-      .booleanType()
-      .defaultValue(false)
-      .withDescription("Whether the partition path is with Hive style, e.g. '{partition key}={partition value}', default false");
 
   public static final ConfigOption<Boolean> UTC_TIMEZONE = ConfigOptions
       .key("read.utc-timezone")
@@ -179,7 +173,7 @@ public class FlinkOptions {
   //  Write Options
   // ------------------------------------------------------------------------
   public static final ConfigOption<String> TABLE_NAME = ConfigOptions
-      .key(HoodieWriteConfig.TABLE_NAME)
+      .key(HoodieWriteConfig.TABLE_NAME.key())
       .stringType()
       .noDefaultValue()
       .withDescription("Table name to register to Hive metastore");
@@ -191,6 +185,12 @@ public class FlinkOptions {
       .stringType()
       .defaultValue(TABLE_TYPE_COPY_ON_WRITE)
       .withDescription("Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ");
+
+  public static final ConfigOption<Boolean> APPEND_ONLY_ENABLE = ConfigOptions
+          .key("append_only.enable")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("Whether to write data to new baseFile without index, only support in COW, default false");
 
   public static final ConfigOption<String> OPERATION = ConfigOptions
       .key("write.operation")
@@ -246,7 +246,7 @@ public class FlinkOptions {
           + "By default true (in favor of streaming progressing over data integrity)");
 
   public static final ConfigOption<String> RECORD_KEY_FIELD = ConfigOptions
-      .key(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY)
+      .key(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key())
       .stringType()
       .defaultValue("uuid")
       .withDescription("Record key field. Value to be used as the `recordKey` component of `HoodieKey`.\n"
@@ -254,29 +254,49 @@ public class FlinkOptions {
           + "the dot notation eg: `a.b.c`");
 
   public static final ConfigOption<String> PARTITION_PATH_FIELD = ConfigOptions
-      .key(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY)
+      .key(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key())
       .stringType()
       .defaultValue("")
       .withDescription("Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`.\n"
           + "Actual value obtained by invoking .toString(), default ''");
 
-  public static final ConfigOption<Boolean> PARTITION_PATH_URL_ENCODE = ConfigOptions
-      .key("write.partition.url_encode")
+  public static final ConfigOption<Boolean> URL_ENCODE_PARTITIONING = ConfigOptions
+      .key(KeyGeneratorOptions.URL_ENCODE_PARTITIONING_OPT_KEY.key())
       .booleanType()
       .defaultValue(false)
       .withDescription("Whether to encode the partition path url, default false");
 
+  public static final ConfigOption<Boolean> HIVE_STYLE_PARTITIONING = ConfigOptions
+      .key(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY.key())
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to use Hive style partitioning.\n"
+          + "If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.\n"
+          + "By default false (the names of partition folders are only partition values)");
+
   public static final ConfigOption<String> KEYGEN_CLASS = ConfigOptions
-      .key(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP)
+      .key(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP.key())
       .stringType()
       .defaultValue("")
       .withDescription("Key generator class, that implements will extract the key out of incoming record");
 
   public static final ConfigOption<String> KEYGEN_TYPE = ConfigOptions
-      .key(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP)
+      .key(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key())
       .stringType()
       .defaultValue(KeyGeneratorType.SIMPLE.name())
       .withDescription("Key generator type, that implements will extract the key out of incoming record");
+
+  public static final ConfigOption<Integer> INDEX_BOOTSTRAP_TASKS = ConfigOptions
+      .key("write.index_bootstrap.tasks")
+      .intType()
+      .defaultValue(4)
+      .withDescription("Parallelism of tasks that do index bootstrap, default is 4");
+
+  public static final ConfigOption<Integer> BUCKET_ASSIGN_TASKS = ConfigOptions
+      .key("write.bucket_assign.tasks")
+      .intType()
+      .defaultValue(4)
+      .withDescription("Parallelism of tasks that do bucket assign, default is 4");
 
   public static final ConfigOption<Integer> WRITE_TASKS = ConfigOptions
       .key("write.tasks")
@@ -326,6 +346,12 @@ public class FlinkOptions {
   // ------------------------------------------------------------------------
   //  Compaction Options
   // ------------------------------------------------------------------------
+
+  public static final ConfigOption<Boolean> COMPACTION_SCHEDULE_ENABLED = ConfigOptions
+      .key("compaction.schedule.enabled")
+      .booleanType()
+      .defaultValue(true) // default true for MOR write
+      .withDescription("Schedule the compaction plan, enabled by default for MOR");
 
   public static final ConfigOption<Boolean> COMPACTION_ASYNC_ENABLED = ConfigOptions
       .key("compaction.async.enabled")
