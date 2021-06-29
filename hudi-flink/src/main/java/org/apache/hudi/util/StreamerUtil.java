@@ -154,7 +154,7 @@ public class StreamerUtil {
                     .withMaxMemoryMaxSize(
                         conf.getInteger(FlinkOptions.WRITE_MERGE_MAX_MEMORY) * 1024 * 1024L,
                         conf.getInteger(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024L
-                        ).build())
+                    ).build())
             .forTable(conf.getString(FlinkOptions.TABLE_NAME))
             .withStorageConfig(HoodieStorageConfig.newBuilder()
                 .logFileDataBlockMaxSize(conf.getInteger(FlinkOptions.WRITE_LOG_BLOCK_SIZE) * 1024 * 1024)
@@ -221,13 +221,16 @@ public class StreamerUtil {
     // some of the filesystems release the handles in #close method.
   }
 
-  /** Generates the bucket ID using format {partition path}_{fileID}. */
+  /**
+   * Generates the bucket ID using format {partition path}_{fileID}.
+   */
   public static String generateBucketKey(String partitionPath, String fileId) {
     return String.format("%s_%s", partitionPath, fileId);
   }
 
   /**
    * Returns whether needs to schedule the async compaction.
+   *
    * @param conf The flink configuration.
    */
   public static boolean needsAsyncCompaction(Configuration conf) {
@@ -235,6 +238,13 @@ public class StreamerUtil {
         .toUpperCase(Locale.ROOT)
         .equals(FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
         && conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED);
+  }
+
+  /**
+   * Creates the meta client.
+   */
+  public static HoodieTableMetaClient createMetaClient(Configuration conf) {
+    return HoodieTableMetaClient.builder().setBasePath(conf.getString(FlinkOptions.PATH)).setConf(FlinkClientUtil.getHadoopConf()).build();
   }
 
   /**

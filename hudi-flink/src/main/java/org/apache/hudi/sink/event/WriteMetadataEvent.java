@@ -30,13 +30,14 @@ import java.util.Objects;
 /**
  * An operator event to mark successful checkpoint batch write.
  */
-public class BatchWriteSuccessEvent implements OperatorEvent {
+public class WriteMetadataEvent implements OperatorEvent {
   private static final long serialVersionUID = 1L;
 
   private List<WriteStatus> writeStatuses;
   private final int taskID;
   private String instantTime;
   private boolean isLastBatch;
+
   /**
    * Flag saying whether the event comes from the end of input, e.g. the source
    * is bounded, there are two cases in which this flag should be set to true:
@@ -44,6 +45,11 @@ public class BatchWriteSuccessEvent implements OperatorEvent {
    * 2. bounded stream source such as VALUES
    */
   private final boolean isEndInput;
+
+  /**
+   * Flag saying whether the event comes from bootstrap of a write function.
+   */
+  private final boolean isBootstrap;
 
   /**
    * Creates an event.
@@ -55,22 +61,25 @@ public class BatchWriteSuccessEvent implements OperatorEvent {
    *                      within an checkpoint interval,
    *                      if true, the whole data set of the checkpoint
    *                      has been flushed successfully
+   * @param isBootstrap   Whether the event comes from the bootstrap
    */
-  private BatchWriteSuccessEvent(
+  private WriteMetadataEvent(
       int taskID,
       String instantTime,
       List<WriteStatus> writeStatuses,
       boolean isLastBatch,
-      boolean isEndInput) {
+      boolean isEndInput,
+      boolean isBootstrap) {
     this.taskID = taskID;
     this.instantTime = instantTime;
     this.writeStatuses = new ArrayList<>(writeStatuses);
     this.isLastBatch = isLastBatch;
     this.isEndInput = isEndInput;
+    this.isBootstrap = isBootstrap;
   }
 
   /**
-   * Returns the builder for {@link BatchWriteSuccessEvent}.
+   * Returns the builder for {@link WriteMetadataEvent}.
    */
   public static Builder builder() {
     return new Builder();
@@ -96,12 +105,16 @@ public class BatchWriteSuccessEvent implements OperatorEvent {
     return isEndInput;
   }
 
+  public boolean isBootstrap() {
+    return isBootstrap;
+  }
+
   /**
-   * Merges this event with given {@link BatchWriteSuccessEvent} {@code other}.
+   * Merges this event with given {@link WriteMetadataEvent} {@code other}.
    *
    * @param other The event to be merged
    */
-  public void mergeWith(BatchWriteSuccessEvent other) {
+  public void mergeWith(WriteMetadataEvent other) {
     ValidationUtils.checkArgument(this.taskID == other.taskID);
     // the instant time could be monotonically increasing
     this.instantTime = other.instantTime;
@@ -112,7 +125,9 @@ public class BatchWriteSuccessEvent implements OperatorEvent {
     this.writeStatuses = statusList;
   }
 
-  /** Returns whether the event is ready to commit. */
+  /**
+   * Returns whether the event is ready to commit.
+   */
   public boolean isReady(String currentInstant) {
     return isLastBatch && this.instantTime.equals(currentInstant);
   }
@@ -122,7 +137,7 @@ public class BatchWriteSuccessEvent implements OperatorEvent {
   // -------------------------------------------------------------------------
 
   /**
-   * Builder for {@link BatchWriteSuccessEvent}.
+   * Builder for {@link WriteMetadataEvent}.
    */
   public static class Builder {
     private List<WriteStatus> writeStatus;
@@ -130,12 +145,13 @@ public class BatchWriteSuccessEvent implements OperatorEvent {
     private String instantTime;
     private boolean isLastBatch = false;
     private boolean isEndInput = false;
+    private boolean isBootstrap = false;
 
-    public BatchWriteSuccessEvent build() {
+    public WriteMetadataEvent build() {
       Objects.requireNonNull(taskID);
       Objects.requireNonNull(instantTime);
       Objects.requireNonNull(writeStatus);
-      return new BatchWriteSuccessEvent(taskID, instantTime, writeStatus, isLastBatch, isEndInput);
+      return new WriteMetadataEvent(taskID, instantTime, writeStatus, isLastBatch, isEndInput, isBootstrap);
     }
 
     public Builder taskID(int taskID) {
@@ -160,6 +176,11 @@ public class BatchWriteSuccessEvent implements OperatorEvent {
 
     public Builder isEndInput(boolean isEndInput) {
       this.isEndInput = isEndInput;
+      return this;
+    }
+
+    public Builder isBootstrap(boolean isBootstrap) {
+      this.isBootstrap = isBootstrap;
       return this;
     }
   }

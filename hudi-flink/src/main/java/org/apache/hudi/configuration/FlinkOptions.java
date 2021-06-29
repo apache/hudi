@@ -142,12 +142,6 @@ public class FlinkOptions {
           + "2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the\n"
           + "   log file records(combines the two records with same key for base and log file records), then read the left log file records");
 
-  public static final ConfigOption<Boolean> HIVE_STYLE_PARTITION = ConfigOptions
-      .key("hoodie.datasource.hive_style_partition")
-      .booleanType()
-      .defaultValue(false)
-      .withDescription("Whether the partition path is with Hive style, e.g. '{partition key}={partition value}', default false");
-
   public static final ConfigOption<Boolean> UTC_TIMEZONE = ConfigOptions
       .key("read.utc-timezone")
       .booleanType()
@@ -260,11 +254,19 @@ public class FlinkOptions {
       .withDescription("Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`.\n"
           + "Actual value obtained by invoking .toString(), default ''");
 
-  public static final ConfigOption<Boolean> PARTITION_PATH_URL_ENCODE = ConfigOptions
-      .key("write.partition.url_encode")
+  public static final ConfigOption<Boolean> URL_ENCODE_PARTITIONING = ConfigOptions
+      .key(KeyGeneratorOptions.URL_ENCODE_PARTITIONING_OPT_KEY)
       .booleanType()
       .defaultValue(false)
       .withDescription("Whether to encode the partition path url, default false");
+
+  public static final ConfigOption<Boolean> HIVE_STYLE_PARTITIONING = ConfigOptions
+      .key(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY)
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to use Hive style partitioning.\n"
+          + "If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.\n"
+          + "By default false (the names of partition folders are only partition values)");
 
   public static final ConfigOption<String> KEYGEN_CLASS = ConfigOptions
       .key(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP)
