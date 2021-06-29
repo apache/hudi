@@ -82,12 +82,12 @@ public class SchemaRegistryProvider extends SchemaProvider {
     return node.get("schema").asText();
   }
 
-  void setAuthorizationHeader(String creds, HttpURLConnection connection) {
+  protected void setAuthorizationHeader(String creds, HttpURLConnection connection) {
     String encodedAuth = Base64.getEncoder().encodeToString(creds.getBytes(StandardCharsets.UTF_8));
     connection.setRequestProperty("Authorization", "Basic " + encodedAuth);
   }
 
-  InputStream getStream(HttpURLConnection connection) throws IOException {
+  protected InputStream getStream(HttpURLConnection connection) throws IOException {
     return connection.getInputStream();
   }
 
