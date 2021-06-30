@@ -108,6 +108,8 @@ object AvroConversionHelper {
                 LogicalTypes.decimal(d.precision, d.scale))
               createDecimal(bigDecimal, d.precision, d.scale)
             }
+        case (NullType, NULL) =>
+          (item: AnyRef) => null
         case (DateType, INT) =>
           (item: AnyRef) =>
             if (item == null) {
