@@ -30,12 +30,10 @@ import java.util.stream.Stream;
  * @param <R> The generic type of the values
  */
 public interface DiskMap<T extends Serializable, R extends Serializable> extends Map<T, R>, Iterable<R> {
-<<<<<<< HEAD
+
   /**
    * @returns a stream of the values stored in the disk.
    */
-=======
->>>>>>> 6d4b556a (Address reviewer comments)
   Stream<R> valueStream();
 
   /**
@@ -44,11 +42,7 @@ public interface DiskMap<T extends Serializable, R extends Serializable> extends
   long sizeOfFileOnDiskInBytes();
 
   /**
-<<<<<<< HEAD
    * Cleanup.
-=======
-   * Cleanup
->>>>>>> 6d4b556a (Address reviewer comments)
    */
   void close();
 
