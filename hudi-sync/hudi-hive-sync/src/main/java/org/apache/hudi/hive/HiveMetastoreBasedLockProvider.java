@@ -192,6 +192,11 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
           throw e;
         }
       }
+    } finally {
+      // it is better to release WAITING lock, otherwise hive lock will hang forever
+      if (this.lock != null && this.lock.getState() != LockState.ACQUIRED) {
+        hiveClient.unlock(this.lock.getLockid());
+      }
     }
   }
 
