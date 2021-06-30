@@ -39,6 +39,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
@@ -94,6 +95,18 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
       return jsc.emptyRDD();
     }
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
+    TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
+
+    // Here we firstly use the table schema as the reader schema to read
+    // log file.That is because in the case of MergeInto, the config.getSchema may not
+    // the same with the table schema.
+    try {
+      Schema readerSchema = schemaUtil.getTableAvroSchema(false);
+      config.setSchema(readerSchema.toString());
+    } catch (Exception e) {
+      // If there is no commit in the table, just ignore the exception.
+    }
+
     // Compacting is very similar to applying updates to existing file
     HoodieSparkCopyOnWriteTable table = new HoodieSparkCopyOnWriteTable(config, context, metaClient);
     List<CompactionOperation> operations = compactionPlan.getOperations().stream()
@@ -108,7 +121,6 @@ public class HoodieSparkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
   private List<WriteStatus> compact(HoodieSparkCopyOnWriteTable hoodieCopyOnWriteTable, HoodieTableMetaClient metaClient,
       HoodieWriteConfig config, CompactionOperation operation, String instantTime) throws IOException {
     FileSystem fs = metaClient.getFs();
-
     Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
     LOG.info("Compacting base " + operation.getDataFileName() + " with delta files " + operation.getDeltaFileNames()
         + " for commit " + instantTime);
