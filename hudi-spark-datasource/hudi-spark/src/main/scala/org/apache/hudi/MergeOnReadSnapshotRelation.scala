@@ -74,8 +74,8 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
 
   private lazy val tableStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
   private val mergeType = optParams.getOrElse(
-    DataSourceReadOptions.REALTIME_MERGE_OPT_KEY,
-    DataSourceReadOptions.DEFAULT_REALTIME_MERGE_OPT_VAL)
+    DataSourceReadOptions.REALTIME_MERGE_OPT_KEY.key,
+    DataSourceReadOptions.REALTIME_MERGE_OPT_KEY.defaultValue)
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
   private val preCombineField = {
     val preCombineFieldFromTableConfig = metaClient.getTableConfig.getPreCombineField
@@ -84,7 +84,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
     } else {
       // get preCombineFiled from the options if this is a old table which have not store
       // the field to hoodie.properties
-      optParams.get(DataSourceReadOptions.READ_PRE_COMBINE_FIELD)
+      optParams.get(DataSourceReadOptions.READ_PRE_COMBINE_FIELD.key)
     }
   }
   override def schema: StructType = tableStructSchema
