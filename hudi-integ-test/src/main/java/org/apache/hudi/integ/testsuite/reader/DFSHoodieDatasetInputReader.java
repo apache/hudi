@@ -87,7 +87,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
     // calls in metrics as they are not part of normal HUDI operation.
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(engineContext, metaClient.getBasePath(),
-        HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS, HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE, false);
+        HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS, HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue(), false);
     // Sort partition so we can pick last N partitions by default
     Collections.sort(partitionPaths);
     if (!partitionPaths.isEmpty()) {
@@ -276,8 +276,8 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
               HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
           .withReadBlocksLazily(true)
           .withReverseReader(false)
-          .withBufferSize(HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE)
-          .withSpillableMapBasePath(HoodieMemoryConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH)
+          .withBufferSize(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP.defaultValue())
+          .withSpillableMapBasePath(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH_PROP.defaultValue())
           .build();
       // readAvro log files
       Iterable<HoodieRecord<? extends HoodieRecordPayload>> iterable = () -> scanner.iterator();

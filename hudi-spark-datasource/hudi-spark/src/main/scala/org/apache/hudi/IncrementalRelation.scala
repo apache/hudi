@@ -58,19 +58,19 @@ class IncrementalRelation(val sqlContext: SQLContext,
   if (commitTimeline.empty()) {
     throw new HoodieException("No instants to incrementally pull")
   }
-  if (!optParams.contains(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY)) {
+  if (!optParams.contains(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key)) {
     throw new HoodieException(s"Specify the begin instant time to pull from using " +
-      s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY}")
+      s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key}")
   }
 
-  val useEndInstantSchema = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY,
-    DataSourceReadOptions.DEFAULT_INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_VAL).toBoolean
+  val useEndInstantSchema = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY.key,
+    DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY.defaultValue).toBoolean
 
   private val lastInstant = commitTimeline.lastInstant().get()
 
   private val commitsToReturn = commitTimeline.findInstantsInRange(
-    optParams(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY),
-    optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY, lastInstant.getTimestamp))
+    optParams(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key),
+    optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY.key, lastInstant.getTimestamp))
     .getInstants.iterator().toList
 
   // use schema from a file produced in the end/latest instant
@@ -87,8 +87,8 @@ class IncrementalRelation(val sqlContext: SQLContext,
     StructType(skeletonSchema.fields ++ dataSchema.fields)
   }
 
-  private val filters = optParams.getOrElse(DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS_OPT_KEY,
-    DataSourceReadOptions.DEFAULT_PUSH_DOWN_FILTERS_OPT_VAL).split(",").filter(!_.isEmpty)
+  private val filters = optParams.getOrElse(DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS_OPT_KEY.key,
+    DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS_OPT_KEY.defaultValue).split(",").filter(!_.isEmpty)
 
   override def schema: StructType = usedSchema
 
@@ -114,10 +114,10 @@ class IncrementalRelation(val sqlContext: SQLContext,
     }
 
     val pathGlobPattern = optParams.getOrElse(
-      DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY,
-      DataSourceReadOptions.DEFAULT_INCR_PATH_GLOB_OPT_VAL)
+      DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY.key,
+      DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY.defaultValue)
     val (filteredRegularFullPaths, filteredMetaBootstrapFullPaths) = {
-      if(!pathGlobPattern.equals(DataSourceReadOptions.DEFAULT_INCR_PATH_GLOB_OPT_VAL)) {
+      if(!pathGlobPattern.equals(DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY.defaultValue)) {
         val globMatcher = new GlobPattern("*" + pathGlobPattern)
         (regularFileIdToFullPath.filter(p => globMatcher.matches(p._2)).values,
           metaBootstrapFileIdToFullPath.filter(p => globMatcher.matches(p._2)).values)
@@ -140,7 +140,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
         df = sqlContext.sparkSession.read
                .format("hudi")
                .schema(usedSchema)
-               .option(DataSourceReadOptions.READ_PATHS_OPT_KEY, filteredMetaBootstrapFullPaths.mkString(","))
+               .option(DataSourceReadOptions.READ_PATHS_OPT_KEY.key, filteredMetaBootstrapFullPaths.mkString(","))
                .load()
       }
 

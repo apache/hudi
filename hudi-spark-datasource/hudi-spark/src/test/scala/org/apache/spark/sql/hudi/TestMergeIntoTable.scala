@@ -496,9 +496,9 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
         )
         // Test incremental query
         val hudiIncDF1 = spark.read.format("org.apache.hudi")
-          .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-          .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, "000")
-          .option(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY, firstCommitTime)
+          .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+          .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key, "000")
+          .option(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY.key, firstCommitTime)
           .load(targetBasePath)
         hudiIncDF1.createOrReplaceTempView("inc1")
         checkAnswer(s"select id, name, price, _ts from inc1")(
@@ -521,8 +521,8 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
         )
         // Test incremental query
         val hudiIncDF2 = spark.read.format("org.apache.hudi")
-          .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-          .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, secondCommitTime)
+          .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+          .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key, secondCommitTime)
           .load(targetBasePath)
         hudiIncDF2.createOrReplaceTempView("inc2")
         checkAnswer(s"select id, name, price, _ts from inc2 order by id")(

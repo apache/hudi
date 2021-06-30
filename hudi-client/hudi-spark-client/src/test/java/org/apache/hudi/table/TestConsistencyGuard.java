@@ -45,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 public class TestConsistencyGuard extends HoodieClientTestHarness {
 
-  private static final String BASE_FILE_EXTENSION = HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension();
+  private static final String BASE_FILE_EXTENSION = HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue().getFileExtension();
 
   // multiple parameters, uses Collection<Object[]>
   public static List<Arguments> consistencyGuardType() {
