@@ -366,6 +366,7 @@
   <li><a href="#deltastreamer">DeltaStreamer</a></li>
   <li><a href="#best-practices-when-using-optimistic-concurrency-control">Best Practices when using Optimistic Concurrency Control</a></li>
   <li><a href="#disabling-multi-writing">Disabling Multi Writing</a></li>
+  <li><a href="#caveats">Caveats</a></li>
 </ul>
           </nav>
         </aside>
@@ -510,6 +511,11 @@ hoodie.write.lock.client.num_retries
 <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hoodie.write.concurrency.mode=single_writer
 hoodie.cleaner.policy.failed.writes=EAGER
 </code></pre></div></div>
+
+<h2 id="caveats">Caveats</h2>
+
+<p>If you are using the <code class="highlighter-rouge">WriteClient</code> API, please note that multiple writes to the table need to be initiated from 2 different instances of the write client. 
+It is NOT recommended to use the same instance of the write client to perform multi writing.</p>
 
       </section>
 
