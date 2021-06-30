@@ -18,6 +18,12 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocatedFileStatus;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.FileIOUtils;
 
 import org.apache.avro.Schema;
@@ -117,5 +123,28 @@ public class DataSourceTestUtils {
       rows.add(RowFactory.create(values));
     }
     return rows;
+  }
+
+  /**
+   * Test if there is only log files exists in the table.
+   */
+  public static boolean isLogFileOnly(String basePath) throws IOException {
+    Configuration conf = new Configuration();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+            .setConf(conf).setBasePath(basePath)
+            .build();
+    String baseDataFormat = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
+    Path path = new Path(basePath);
+    FileSystem fs = path.getFileSystem(conf);
+    RemoteIterator<LocatedFileStatus> files = fs.listFiles(path, true);
+    while (files.hasNext()) {
+      LocatedFileStatus file = files.next();
+      if (file.isFile()) {
+        if (file.getPath().toString().endsWith(baseDataFormat)) {
+          return false;
+        }
+      }
+    }
+    return true;
   }
 }

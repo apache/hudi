@@ -17,20 +17,24 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hadoop.fs.Path
+
 import scala.collection.JavaConverters._
 import org.apache.hudi.DataSourceWriteOptions.{KEYGENERATOR_CLASS_OPT_KEY, PARTITIONPATH_FIELD_OPT_KEY, PAYLOAD_CLASS_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieTableType}
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
-import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkUtils}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
-import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestBase}
 import org.apache.log4j.LogManager
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
@@ -676,5 +680,24 @@ class TestMORDataSource extends HoodieClientTestBase {
       .count()
 
     assertEquals(partitionCounts("2021/03/03"), count7)
+  }
+
+  @Test
+  def testReadLogOnlyMergeOnReadTable(): Unit = {
+    initMetaClient(HoodieTableType.MERGE_ON_READ)
+    val records1 = dataGen.generateInsertsContainsAllPartitions("000", 20)
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
+    inputDF.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      // Use InMemoryIndex to generate log only mor table.
+      .option(HoodieIndexConfig.INDEX_TYPE_PROP.key, IndexType.INMEMORY.toString)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    // There should no base file in the file list.
+    assertTrue(DataSourceTestUtils.isLogFileOnly(basePath))
+    // Test read log only mor table.
+    assertEquals(20, spark.read.format("hudi").load(basePath).count())
   }
 }
