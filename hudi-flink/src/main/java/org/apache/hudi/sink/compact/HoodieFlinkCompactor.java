@@ -112,7 +112,8 @@ public class HoodieFlinkCompactor {
     }
 
     // get compactionParallelism.
-    int compactionParallelism = Math.min(conf.getInteger(FlinkOptions.COMPACTION_TASKS), compactionPlan.getOperations().size());
+    int compactionParallelism = conf.getInteger(FlinkOptions.COMPACTION_TASKS) == -1
+            ? compactionPlan.getOperations().size() : conf.getInteger(FlinkOptions.COMPACTION_TASKS);
 
     env.addSource(new CompactionPlanSourceFunction(table, instant, compactionPlan, compactionInstantTime))
         .name("compaction_source")
