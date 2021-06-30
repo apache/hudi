@@ -14,15 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# yaml to test clustering
-dag_name: NAME-clustering.yaml
-dag_rounds: clustering_num_iterations
-dag_intermittent_delay_mins: clustering_delay_in_mins
+# Long running test suite which validates entire input after every dag. Input accumulates and so validation
+# happens for entire dataset.
+dag_name: NAME-long-running-multi-partitions.yaml
+dag_rounds: medium_num_iterations
+dag_intermittent_delay_mins: delay_in_mins
 dag_content:
   first_insert:
     config:
       record_size: 1000
-      num_partitions_insert: 1
+      num_partitions_insert: 5
       repeat_count: 1
       num_records_insert: 1000
     type: InsertNode
@@ -30,7 +31,7 @@ dag_content:
   second_insert:
     config:
       record_size: 1000
-      num_partitions_insert: 1
+      num_partitions_insert: 50
       repeat_count: 1
       num_records_insert: 10000
     deps: first_insert
@@ -38,41 +39,54 @@ dag_content:
   third_insert:
     config:
       record_size: 1000
-      num_partitions_insert: 1
+      num_partitions_insert: 2
       repeat_count: 1
       num_records_insert: 300
     deps: second_insert
     type: InsertNode
-  first_delete:
-    config:
-      num_partitions_delete: 1
-      num_records_delete: 9000
-    type: DeleteNode
-    deps: third_insert
   first_hive_sync:
     config:
       queue_name: "adhoc"
       engine: "mr"
     type: HiveSyncNode
-    deps: first_delete
+    deps: third_insert
   first_validate:
     config:
       validate_hive: true
     type: ValidateDatasetNode
     deps: first_hive_sync
-  first_cluster:
+  first_upsert:
     config:
-      execute_itr_count: clustering_itr_count
-    type: ClusteringNode
+      record_size: 1000
+      num_partitions_insert: 2
+      num_records_insert: 300
+      repeat_count: 1
+      num_records_upsert: 100
+      num_partitions_upsert: 1
+    type: UpsertNode
     deps: first_validate
+  first_delete:
+    config:
+      num_partitions_delete: 50
+      num_records_delete: 8000
+    type: DeleteNode
+    deps: first_upsert
   second_hive_sync:
     config:
       queue_name: "adhoc"
       engine: "mr"
     type: HiveSyncNode
-    deps: first_cluster
+    deps: first_delete
   second_validate:
     config:
       validate_hive: true
+      delete_input_data: false
     type: ValidateDatasetNode
     deps: second_hive_sync
+  last_validate:
+    config:
+      execute_itr_count: medium_num_iterations
+      validate_clean: true
+      validate_archival: true
+    type: ValidateAsyncOperations
+    deps: second_validate
