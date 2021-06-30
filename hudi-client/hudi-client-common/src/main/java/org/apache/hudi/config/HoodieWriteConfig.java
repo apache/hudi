@@ -1366,7 +1366,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     }
 
     public Builder withSpillableDiskMapType(ExternalSpillableMap.DiskMapType diskMapType) {
-      props.setProperty(SPILLABLE_DISK_MAP_TYPE, diskMapType.value());
+      props.setProperty(SPILLABLE_DISK_MAP_TYPE, diskMapType.name());
       return this;
     }
 
