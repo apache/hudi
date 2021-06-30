@@ -143,3 +143,8 @@ Remove the following settings that were used to enable multi-writer or override 
 hoodie.write.concurrency.mode=single_writer
 hoodie.cleaner.policy.failed.writes=EAGER
 ```
+
+## Caveats
+
+If you are using the `WriteClient` API, please note that multiple writes to the table need to be initiated from 2 different instances of the write client. 
+It is NOT recommended to use the same instance of the write client to perform multi writing. 
