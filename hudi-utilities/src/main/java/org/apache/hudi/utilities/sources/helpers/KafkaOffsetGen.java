@@ -26,9 +26,13 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
+import org.apache.kafka.clients.consumer.CommitFailedException;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.streaming.kafka010.OffsetRange;
@@ -147,7 +151,7 @@ public class KafkaOffsetGen {
    * Kafka reset offset strategies.
    */
   enum KafkaResetOffsetStrategies {
-    LATEST, EARLIEST
+    LATEST, EARLIEST, GROUP
   }
 
   /**
@@ -157,6 +161,8 @@ public class KafkaOffsetGen {
 
     private static final String KAFKA_TOPIC_NAME = "hoodie.deltastreamer.source.kafka.topic";
     private static final String MAX_EVENTS_FROM_KAFKA_SOURCE_PROP = "hoodie.deltastreamer.kafka.source.maxEvents";
+    public static final String ENABLE_KAFKA_COMMIT_OFFSET = "hoodie.deltastreamer.source.kafka.enable.commit.offset";
+    public static final Boolean DEFAULT_ENABLE_KAFKA_COMMIT_OFFSET = false;
     // "auto.offset.reset" is kafka native config param. Do not change the config param name.
     public static final String KAFKA_AUTO_OFFSET_RESET = "auto.offset.reset";
     private static final KafkaResetOffsetStrategies DEFAULT_KAFKA_AUTO_OFFSET_RESET = KafkaResetOffsetStrategies.LATEST;
@@ -164,24 +170,14 @@ public class KafkaOffsetGen {
     public static long maxEventsFromKafkaSource = DEFAULT_MAX_EVENTS_FROM_KAFKA_SOURCE;
   }
 
-  private final HashMap<String, Object> kafkaParams;
+  private final Map<String, Object> kafkaParams;
   private final TypedProperties props;
   protected final String topicName;
   private KafkaResetOffsetStrategies autoResetValue;
 
   public KafkaOffsetGen(TypedProperties props) {
     this.props = props;
-
-    kafkaParams = new HashMap<>();
-    props.keySet().stream().filter(prop -> {
-      // In order to prevent printing unnecessary warn logs, here filter out the hoodie
-      // configuration items before passing to kafkaParams
-      return !prop.toString().startsWith("hoodie.")
-              // We need to pass some properties to kafka client so that KafkaAvroSchemaDeserializer can use it
-              || prop.toString().startsWith("hoodie.deltastreamer.source.kafka.value.deserializer.");
-    }).forEach(prop -> {
-      kafkaParams.put(prop.toString(), props.get(prop.toString()));
-    });
+    kafkaParams = excludeHoodieConfigs(props);
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.KAFKA_TOPIC_NAME));
     topicName = props.getString(Config.KAFKA_TOPIC_NAME);
     String kafkaAutoResetOffsetsStr = props.getString(Config.KAFKA_AUTO_OFFSET_RESET, Config.DEFAULT_KAFKA_AUTO_OFFSET_RESET.name().toLowerCase());
@@ -195,6 +191,9 @@ public class KafkaOffsetGen {
     }
     if (!found) {
       throw new HoodieDeltaStreamerException(Config.KAFKA_AUTO_OFFSET_RESET + " config set to unknown value " + kafkaAutoResetOffsetsStr);
+    }
+    if (autoResetValue.equals(KafkaResetOffsetStrategies.GROUP)) {
+      this.kafkaParams.put(Config.KAFKA_AUTO_OFFSET_RESET, Config.DEFAULT_KAFKA_AUTO_OFFSET_RESET.name().toLowerCase());
     }
   }
 
@@ -224,8 +223,11 @@ public class KafkaOffsetGen {
           case LATEST:
             fromOffsets = consumer.endOffsets(topicPartitions);
             break;
+          case GROUP:
+            fromOffsets = getGroupOffsets(consumer, topicPartitions);
+            break;
           default:
-            throw new HoodieNotSupportedException("Auto reset value must be one of 'earliest' or 'latest' ");
+            throw new HoodieNotSupportedException("Auto reset value must be one of 'earliest' or 'latest' or 'group' ");
         }
       }
 
@@ -299,7 +301,50 @@ public class KafkaOffsetGen {
     return topicName;
   }
 
-  public HashMap<String, Object> getKafkaParams() {
+  public Map<String, Object> getKafkaParams() {
     return kafkaParams;
+  }
+
+  private Map<String, Object> excludeHoodieConfigs(TypedProperties props) {
+    Map<String, Object> kafkaParams = new HashMap<>();
+    props.keySet().stream().filter(prop -> {
+      // In order to prevent printing unnecessary warn logs, here filter out the hoodie
+      // configuration items before passing to kafkaParams
+      return !prop.toString().startsWith("hoodie.");
+    }).forEach(prop -> {
+      kafkaParams.put(prop.toString(), props.get(prop.toString()));
+    });
+    return kafkaParams;
+  }
+
+  /**
+   * Commit offsets to Kafka only after hoodie commit is successful.
+   * @param checkpointStr checkpoint string containing offsets.
+   */
+  public void commitOffsetToKafka(String checkpointStr) {
+    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(ConsumerConfig.GROUP_ID_CONFIG));
+    Map<TopicPartition, Long> offsetMap = CheckpointUtils.strToOffsets(checkpointStr);
+    Map<TopicPartition, OffsetAndMetadata> offsetAndMetadataMap = new HashMap<>(offsetMap.size());
+    try (KafkaConsumer consumer = new KafkaConsumer(kafkaParams)) {
+      offsetMap.forEach((topicPartition, offset) -> offsetAndMetadataMap.put(topicPartition, new OffsetAndMetadata(offset)));
+      consumer.commitSync(offsetAndMetadataMap);
+    } catch (CommitFailedException | TimeoutException e) {
+      LOG.warn("Committing offsets to Kafka failed, this does not impact processing of records", e);
+    }
+  }
+
+  private Map<TopicPartition, Long> getGroupOffsets(KafkaConsumer consumer, Set<TopicPartition> topicPartitions) {
+    Map<TopicPartition, Long> fromOffsets = new HashMap<>();
+    for (TopicPartition topicPartition : topicPartitions) {
+      OffsetAndMetadata committedOffsetAndMetadata = consumer.committed(topicPartition);
+      if (committedOffsetAndMetadata != null) {
+        fromOffsets.put(topicPartition, committedOffsetAndMetadata.offset());
+      } else {
+        LOG.warn("There are no commits associated with this consumer group, starting to consume from latest offset");
+        fromOffsets = consumer.endOffsets(topicPartitions);
+        break;
+      }
+    }
+    return fromOffsets;
   }
 }

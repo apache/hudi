@@ -27,7 +27,7 @@ import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bootstrap.BootstrapFunction;
 import org.apache.hudi.sink.bootstrap.IndexRecord;
-import org.apache.hudi.sink.event.BatchWriteSuccessEvent;
+import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.partitioner.BucketAssignOperator;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
@@ -70,15 +70,25 @@ public class StreamWriteFunctionWrapper<I> {
   private final StreamWriteOperatorCoordinator coordinator;
   private final MockFunctionInitializationContext functionInitializationContext;
 
-  /** Function that converts row data to HoodieRecord. */
+  /**
+   * Function that converts row data to HoodieRecord.
+   */
   private RowDataToHoodieFunction<RowData, HoodieRecord<?>> toHoodieFunction;
-  /** Function that load index in state. */
+  /**
+   * Function that load index in state.
+   */
   private BootstrapFunction<HoodieRecord<?>, HoodieRecord<?>> bootstrapFunction;
-  /** Function that assigns bucket ID. */
+  /**
+   * Function that assigns bucket ID.
+   */
   private BucketAssignFunction<String, HoodieRecord<?>, HoodieRecord<?>> bucketAssignerFunction;
-  /** BucketAssignOperator context. **/
+  /**
+   * BucketAssignOperator context.
+   **/
   private MockBucketAssignOperatorContext bucketAssignOperatorContext;
-  /** Stream write function. */
+  /**
+   * Stream write function.
+   */
   private StreamWriteFunction<Object, HoodieRecord<?>, Object> writeFunction;
 
   private CompactFunctionWrapper compactFunctionWrapper;
@@ -133,7 +143,11 @@ public class StreamWriteFunctionWrapper<I> {
     writeFunction = new StreamWriteFunction<>(conf);
     writeFunction.setRuntimeContext(runtimeContext);
     writeFunction.setOperatorEventGateway(gateway);
+    writeFunction.initializeState(this.functionInitializationContext);
     writeFunction.open(conf);
+
+    // handle the bootstrap event
+    coordinator.handleEventFromOperator(0, getNextEvent());
 
     if (asyncCompaction) {
       compactFunctionWrapper.openFunction();
@@ -184,7 +198,7 @@ public class StreamWriteFunctionWrapper<I> {
     writeFunction.processElement(hoodieRecords[0], null, null);
   }
 
-  public BatchWriteSuccessEvent[] getEventBuffer() {
+  public WriteMetadataEvent[] getEventBuffer() {
     return this.coordinator.getEventBuffer();
   }
 
@@ -201,7 +215,7 @@ public class StreamWriteFunctionWrapper<I> {
     return this.writeFunction.getWriteClient();
   }
 
-  public void checkpointFunction(long checkpointId) {
+  public void checkpointFunction(long checkpointId) throws Exception {
     // checkpoint the coordinator first
     this.coordinator.checkpointCoordinator(checkpointId, new CompletableFuture<>());
     bucketAssignerFunction.snapshotState(null);
