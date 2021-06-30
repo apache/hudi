@@ -571,7 +571,7 @@ public class TestWriteCopyOnWrite {
     checkWrittenData(tempFile, expected, 1);
   }
 
-  Map<String, String> getMiniBatchExpected() {
+  protected Map<String, String> getMiniBatchExpected() {
     Map<String, String> expected = new HashMap<>();
     // the last 2 lines are merged
     expected.put("par1", "["
@@ -579,6 +579,10 @@ public class TestWriteCopyOnWrite {
         + "id1,par1,id1,Danny,23,1,par1, "
         + "id1,par1,id1,Danny,23,1,par1]");
     return expected;
+  }
+
+  protected Map<String, String> getExpectedBeforeCheckpointComplete() {
+    return EXPECTED2;
   }
 
   @Test
@@ -637,7 +641,9 @@ public class TestWriteCopyOnWrite {
 
     nextEvent = funcWrapper.getNextEvent();
     assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
-    checkWrittenData(tempFile, EXPECTED2);
+
+    Map<String, String> expected = getExpectedBeforeCheckpointComplete();
+    checkWrittenData(tempFile, expected);
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
