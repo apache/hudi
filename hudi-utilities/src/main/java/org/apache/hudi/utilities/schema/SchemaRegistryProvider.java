@@ -60,7 +60,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
    * are extracted the url using the Matcher and the extracted credentials are set on the request as an Authorization
    * header.
    * @param registryUrl
-   * @return the schema in String form
+   * @return the Schema in String form.
    * @throws IOException
    */
   public String fetchSchemaFromRegistry(String registryUrl) throws IOException {
