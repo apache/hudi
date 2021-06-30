@@ -20,7 +20,6 @@ package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.util.ObjectSizeCalculator;
 import org.apache.hudi.common.util.SizeEstimator;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.log4j.LogManager;
@@ -34,7 +33,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -286,7 +284,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
 
   /**
    * The type of map to use for storing the Key, values on disk after it spills
-   * from memory in the {@link ExternalSpillableMap}
+   * from memory in the {@link ExternalSpillableMap}.
    */
   public enum DiskMapType {
     BITCASK,
