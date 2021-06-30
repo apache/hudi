@@ -162,7 +162,7 @@ public class FlinkStreamerConfig extends Configuration {
   public Boolean utcTimezone = true;
 
   @Parameter(names = {"--write-partition-url-encode"}, description = "Whether to encode the partition path url, default false")
-  public Boolean writePartitionUrlEncode;
+  public Boolean writePartitionUrlEncode = false;
 
   @Parameter(names = {"--hive-style-partitioning"}, description = "Whether to use Hive style partitioning.\n"
       + "If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.\n"
