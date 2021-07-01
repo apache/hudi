@@ -177,7 +177,6 @@ public class FileIndex {
     // set up metadata.enabled=true in table DDL to enable metadata listing
     properties.put(HoodieMetadataConfig.ENABLE, conf.getBoolean(FlinkOptions.METADATA_ENABLED));
     properties.put(HoodieMetadataConfig.SYNC_ENABLE, conf.getBoolean(FlinkOptions.METADATA_ENABLED));
-    properties.put(HoodieMetadataConfig.VALIDATE_ENABLE, false);
 
     return HoodieMetadataConfig.newBuilder().fromProperties(properties).build();
   }

@@ -248,6 +248,7 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
 
   protected void finishRollback(HoodieInstant inflightInstant, HoodieRollbackMetadata rollbackMetadata) throws HoodieIOException {
     try {
+      writeTableMetadata(rollbackMetadata);
       table.getActiveTimeline().transitionRollbackInflightToComplete(inflightInstant,
           TimelineMetadataUtils.serializeRollbackMetadata(rollbackMetadata));
       LOG.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");

@@ -89,8 +89,12 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   protected HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> createTable(HoodieWriteConfig config,
-                                                                                                  Configuration hadoopConf) {
-    return HoodieJavaTable.create(config, context);
+                                                                                                  Configuration hadoopConf, boolean refreshTimeline) {
+    HoodieTable table = HoodieJavaTable.create(config, context);
+    if (refreshTimeline) {
+      table.getHoodieView().sync();
+    }
+    return table;
   }
 
   @Override

@@ -18,6 +18,9 @@
 
 package org.apache.hudi.metadata;
 
+import java.util.Arrays;
+import java.util.List;
+
 public enum MetadataPartitionType {
   FILES("files");
 
@@ -29,5 +32,9 @@ public enum MetadataPartitionType {
 
   public String partitionPath() {
     return partitionPath;
+  }
+
+  public static List<String> all() {
+    return Arrays.asList(MetadataPartitionType.FILES.partitionPath());
   }
 }

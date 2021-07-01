@@ -21,6 +21,7 @@ package org.apache.hudi.table.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
@@ -51,9 +52,8 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
@@ -136,23 +136,17 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     }
   }
 
-  private static Stream<Arguments> testRollbackWithDeltaAndCompactionCommit() {
-    return Stream.of(
-        Arguments.of(true, true),
-        Arguments.of(true, false),
-        Arguments.of(false, true),
-        Arguments.of(false, false)
-    );
-  }
-
   @ParameterizedTest
-  @MethodSource
-  void testRollbackWithDeltaAndCompactionCommit(boolean rollbackUsingMarkers, boolean populateMetaFields) throws Exception {
+  @ValueSource(booleans = {true, false})
+  void testRollbackWithDeltaAndCompactionCommit(boolean rollbackUsingMarkers) throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false, rollbackUsingMarkers, HoodieIndex.IndexType.SIMPLE);
-    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, true);
     HoodieWriteConfig cfg = cfgBuilder.build();
+    HoodieWriteConfig.Builder autoCommitCfgBuilder = getConfigBuilder(true, rollbackUsingMarkers, HoodieIndex.IndexType.SIMPLE);
+    addConfigsForPopulateMetaFields(cfgBuilder, true);
+    HoodieWriteConfig autoCommitCfg = autoCommitCfgBuilder.build();
 
-    Properties properties = populateMetaFields ? new Properties() : getPropertiesForKeyGen();
+    Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
     HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
 
@@ -176,6 +170,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
       assertNoWriteErrors(statuses);
 
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      hoodieTable.getHoodieView().sync();
 
       Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
       assertTrue(deltaCommit.isPresent());
@@ -217,6 +212,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
         // Test failed delta commit rollback
         secondClient.rollback(commitTime1);
+        hoodieTable.getHoodieView().sync();
         allFiles = listAllBaseFilesInPath(hoodieTable);
         // After rollback, there should be no base file with the failed commit time
         List<String> remainingFiles = Arrays.stream(allFiles).filter(file -> file.getPath().getName()
@@ -279,11 +275,13 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
         assertNoWriteErrors(statuses);
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
+        SparkRDDWriteClient compactClient = getHoodieWriteClient(autoCommitCfg);
 
-        String compactionInstantTime = thirdClient.scheduleCompaction(Option.empty()).get().toString();
-        thirdClient.compact(compactionInstantTime);
+        String compactionInstantTime = compactClient.scheduleCompaction(Option.empty()).get().toString();
+        compactClient.compact(compactionInstantTime);
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
+        hoodieTable.getHoodieView().sync();
 
         final String compactedCommitTime = metaClient.getActiveTimeline().reload().lastInstant().get().getTimestamp();
         assertTrue(Arrays.stream(listAllBaseFilesInPath(hoodieTable))
@@ -300,10 +298,10 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  void testMultiRollbackWithDeltaAndCompactionCommit(boolean populateMetaFields) throws Exception {
-    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false);
+  @Test
+  void testMultiRollbackWithDeltaAndCompactionCommit() throws Exception {
+    boolean populateMetaFields = true;
+    HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false).withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build());
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
 
@@ -592,6 +590,7 @@ public class TestHoodieSparkMergeOnReadTableRollback extends SparkClientFunction
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
+      table.getHoodieView().sync();
       TableFileSystemView.SliceView tableRTFileSystemView = table.getSliceView();
 
       long numLogFiles = 0;

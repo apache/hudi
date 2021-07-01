@@ -453,7 +453,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
                                String metadataTableBasePath, boolean doFullValidation) throws IOException {
     HoodieTableMetadata tableMetadata = metadata(writeConfig, context);
     assertNotNull(tableMetadata, "MetadataReader should have been initialized");
-    if (!writeConfig.isMetadataTableEnabled() || !writeConfig.getMetadataConfig().validateFileListingMetadata()) {
+    if (!writeConfig.isMetadataTableEnabled()) {
       return;
     }
 
@@ -586,8 +586,6 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     HoodieWriteConfig metadataWriteConfig = metadataWriter.getWriteConfig();
     assertFalse(metadataWriteConfig.isMetadataTableEnabled(), "No metadata table for metadata table");
 
-    // Metadata table should be in sync with the dataset
-    assertTrue(metadata(writeConfig, engineContext).isInSync());
     HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
 
     // Metadata table is MOR
@@ -601,7 +599,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
     // in the .hoodie folder.
     List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, HoodieTableMetadata.getMetadataTableBasePath(basePath),
-        false, false, false);
+        false, false);
     Assertions.assertEquals(MetadataPartitionType.values().length, metadataTablePartitions.size());
 
     // Metadata table should automatically compact and clean
