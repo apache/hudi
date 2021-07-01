@@ -255,13 +255,13 @@ public class FlinkOptions {
           + "Actual value obtained by invoking .toString(), default ''");
 
   public static final ConfigOption<Boolean> URL_ENCODE_PARTITIONING = ConfigOptions
-      .key(KeyGeneratorOptions.URL_ENCODE_PARTITIONING_OPT_KEY)
+      .key(KeyGeneratorOptions.URL_ENCODE_PARTITIONING_OPT_KEY.key())
       .booleanType()
       .defaultValue(false)
       .withDescription("Whether to encode the partition path url, default false");
 
   public static final ConfigOption<Boolean> HIVE_STYLE_PARTITIONING = ConfigOptions
-      .key(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY)
+      .key(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY.key())
       .booleanType()
       .defaultValue(false)
       .withDescription("Whether to use Hive style partitioning.\n"
