@@ -1808,9 +1808,16 @@ HoodieWriteConfig can be built using a builder pattern as below.</p>
       <tr>
         <td>withBootstrapKeyGenClass(keyGenClass))</td>
         <td>hoodie.bootstrap.keygen.class</td>
-        <td>YES</td>
+        <td>NO</td>
         <td>N/A</td>
         <td>Key generator implementation to be used for generating keys from the bootstrapped dataset.</td>
+      </tr>
+      <tr>
+        <td>withBootstrapKeyGenType(keyGenType))</td>
+        <td>hoodie.bootstrap.keygen.type</td>
+        <td>NO</td>
+        <td>SIMPLE</td>
+        <td>Key generator type, indicating which KeyGenerator to be used for generating keys from the bootstrapped dataset.</td>
       </tr>
       <tr>
         <td>withBootstrapModeSelector(partitionSelectorClass))</td>
