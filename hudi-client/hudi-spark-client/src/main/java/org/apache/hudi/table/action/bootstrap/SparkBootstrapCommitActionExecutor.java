@@ -57,10 +57,12 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.execution.SparkBoundedInMemoryExecutor;
 import org.apache.hudi.io.HoodieBootstrapHandle;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -123,8 +125,6 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
         "Ensure Bootstrap Source Path is set");
     ValidationUtils.checkArgument(config.getBootstrapModeSelectorClass() != null,
         "Ensure Bootstrap Partition Selector is set");
-    ValidationUtils.checkArgument(config.getBootstrapKeyGeneratorClass() != null,
-        "Ensure bootstrap key generator class is set");
   }
 
   @Override
@@ -390,8 +390,15 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
 
     TypedProperties properties = new TypedProperties();
     properties.putAll(config.getProps());
-    KeyGeneratorInterface keyGenerator  = (KeyGeneratorInterface) ReflectionUtils.loadClass(config.getBootstrapKeyGeneratorClass(),
-        properties);
+
+    KeyGeneratorInterface keyGenerator;
+    try {
+      keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(properties);
+    } catch (IOException e) {
+      LOG.error("Init keyGenerator failed ", e);
+      throw new HoodieKeyGeneratorException("Init keyGenerator failed ", e);
+    }
+
     BootstrapPartitionPathTranslator translator = (BootstrapPartitionPathTranslator) ReflectionUtils.loadClass(
         config.getBootstrapPartitionPathTranslatorClass(), properties);
 
