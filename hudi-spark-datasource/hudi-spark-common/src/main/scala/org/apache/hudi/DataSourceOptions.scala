@@ -462,6 +462,11 @@ object DataSourceWriteOptions {
     .defaultValue(false)
     .withDocumentation("Whether to sync the table as managed table.")
 
+  val HIVE_BATCH_SYNC_PARTITION_NUM: ConfigProperty[Int] = ConfigProperty
+    .key("hoodie.datasource.hive_sync.batch_num")
+    .defaultValue(1000)
+    .withDocumentation("")
+
   // Async Compaction - Enabled by default for MOR
   val ASYNC_COMPACT_ENABLE_OPT_KEY: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.compaction.async.enable")

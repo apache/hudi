@@ -107,6 +107,9 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--managed-table"}, description = "Create a managed table")
   public Boolean createManagedTable = false;
 
+  @Parameter(names = {"--batch-sync-num"}, description = "how many partitions one batch when synchronous partitions to hive")
+  public Integer batchSyncNum = 1000;
+
   // enhance the similar function in child class
   public static HiveSyncConfig copy(HiveSyncConfig cfg) {
     HiveSyncConfig newConfig = new HiveSyncConfig();
@@ -127,6 +130,7 @@ public class HiveSyncConfig implements Serializable {
     newConfig.tableProperties = cfg.tableProperties;
     newConfig.serdeProperties = cfg.serdeProperties;
     newConfig.createManagedTable = cfg.createManagedTable;
+    newConfig.batchSyncNum = cfg.batchSyncNum;
     return newConfig;
   }
 
