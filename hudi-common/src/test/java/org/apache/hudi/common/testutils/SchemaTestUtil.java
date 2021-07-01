@@ -28,23 +28,30 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericArray;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.util.Utf8;
 
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystemNotFoundException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -195,5 +202,123 @@ public final class SchemaTestUtil {
 
   public static Schema getSchemaFromResource(Class<?> clazz, String name) {
     return getSchemaFromResource(clazz, name, false);
+  }
+
+  public static List<IndexedRecord> generateTestRecordsForSchema(Schema schema) {
+    RandomData generator = new RandomData(schema, 1000);
+    List<IndexedRecord> records = new ArrayList<>();
+    for (Object o : generator) {
+      IndexedRecord record = (IndexedRecord) o;
+      records.add(record);
+    }
+    return records;
+  }
+
+  //Taken from test pkg 1.8.2 avro. This is available as a util class in latest versions. When we upgrade avro we can remove this
+  static class RandomData implements Iterable<Object> {
+    private final Schema root;
+    private final long seed;
+    private final int count;
+
+    public RandomData(Schema schema, int count) {
+      this(schema, count, System.currentTimeMillis());
+    }
+
+    public RandomData(Schema schema, int count, long seed) {
+      this.root = schema;
+      this.seed = seed;
+      this.count = count;
+    }
+
+    @SuppressWarnings(value = "unchecked")
+    private static Object generate(Schema schema, Random random, int d) {
+      switch (schema.getType()) {
+        case RECORD:
+          GenericRecord record = new GenericData.Record(schema);
+          for (Schema.Field field : schema.getFields()) {
+            record.put(field.name(), generate(field.schema(), random, d + 1));
+          }
+          return record;
+        case ENUM:
+          List<String> symbols = schema.getEnumSymbols();
+          return new GenericData.EnumSymbol(schema, symbols.get(random.nextInt(symbols.size())));
+        case ARRAY:
+          int length = (random.nextInt(5) + 2) - d;
+          GenericArray<Object> array =
+              new GenericData.Array(length <= 0 ? 0 : length, schema);
+          for (int i = 0; i < length; i++) {
+            array.add(generate(schema.getElementType(), random, d + 1));
+          }
+          return array;
+        case MAP:
+          length = (random.nextInt(5) + 2) - d;
+          Map<Object, Object> map = new HashMap<Object, Object>(length <= 0 ? 0 : length);
+          for (int i = 0; i < length; i++) {
+            map.put(randomUtf8(random, 40),
+                generate(schema.getValueType(), random, d + 1));
+          }
+          return map;
+        case UNION:
+          List<Schema> types = schema.getTypes();
+          return generate(types.get(random.nextInt(types.size())), random, d);
+        case FIXED:
+          byte[] bytes = new byte[schema.getFixedSize()];
+          random.nextBytes(bytes);
+          return new GenericData.Fixed(schema, bytes);
+        case STRING:
+          return randomUtf8(random, 40);
+        case BYTES:
+          return randomBytes(random, 40);
+        case INT:
+          return random.nextInt();
+        case LONG:
+          return random.nextLong();
+        case FLOAT:
+          return random.nextFloat();
+        case DOUBLE:
+          return random.nextDouble();
+        case BOOLEAN:
+          return random.nextBoolean();
+        case NULL:
+          return null;
+        default:
+          throw new RuntimeException("Unknown type: " + schema);
+      }
+    }
+
+    private static Utf8 randomUtf8(Random rand, int maxLength) {
+      Utf8 utf8 = new Utf8().setLength(rand.nextInt(maxLength));
+      for (int i = 0; i < utf8.getLength(); i++) {
+        utf8.getBytes()[i] = (byte) ('a' + rand.nextInt('z' - 'a'));
+      }
+      return utf8;
+    }
+
+    private static ByteBuffer randomBytes(Random rand, int maxLength) {
+      ByteBuffer bytes = ByteBuffer.allocate(rand.nextInt(maxLength));
+      bytes.limit(bytes.capacity());
+      rand.nextBytes(bytes.array());
+      return bytes;
+    }
+
+    public Iterator<Object> iterator() {
+      return new Iterator<Object>() {
+        private int n;
+        private Random random = new Random(seed);
+
+        public boolean hasNext() {
+          return n < count;
+        }
+
+        public Object next() {
+          n++;
+          return generate(root, random, 0);
+        }
+
+        public void remove() {
+          throw new UnsupportedOperationException();
+        }
+      };
+    }
   }
 }

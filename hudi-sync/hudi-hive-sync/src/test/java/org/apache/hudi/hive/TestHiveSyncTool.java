@@ -321,6 +321,18 @@ public class TestHiveSyncTool {
 
   @ParameterizedTest
   @MethodSource("syncMode")
+  public void testSyncWithSchema(String syncMode) throws Exception {
+
+    hiveSyncConfig.syncMode = syncMode;
+    String commitTime = "100";
+    HiveTestUtil.createCOWTableWithSchema(commitTime, "/simple-test.avsc");
+
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    tool.syncHoodieTable();
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncMode")
   public void testSyncIncremental(String syncMode) throws Exception {
 
     hiveSyncConfig.syncMode = syncMode;

@@ -196,6 +196,40 @@ public class HiveTestUtil {
     createCommitFile(commitMetadata, instantTime);
   }
 
+  public static void createCOWTableWithSchema(String instantTime, String schemaFileName)
+      throws IOException, URISyntaxException {
+    Path path = new Path(hiveSyncConfig.basePath);
+    FileIOUtils.deleteDirectory(new File(hiveSyncConfig.basePath));
+    HoodieTableMetaClient.withPropertyBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setTableName(hiveSyncConfig.tableName)
+        .setPayloadClass(HoodieAvroPayload.class)
+        .initTable(configuration, hiveSyncConfig.basePath);
+
+    boolean result = fileSystem.mkdirs(path);
+    checkResult(result);
+    DateTime dateTime = DateTime.now().withTimeAtStartOfDay();
+
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    String partitionPath = dtfOut.print(dateTime);
+    Path partPath = new Path(hiveSyncConfig.basePath + "/" + partitionPath);
+    fileSystem.makeQualified(partPath);
+    fileSystem.mkdirs(partPath);
+    List<HoodieWriteStat> writeStats = new ArrayList<>();
+    String fileId = UUID.randomUUID().toString();
+    Path filePath = new Path(partPath.toString() + "/" + FSUtils.makeDataFileName(instantTime, "1-0-1", fileId));
+    Schema schema = SchemaTestUtil.getSchemaFromResource(HiveTestUtil.class, schemaFileName);
+    generateParquetDataWithSchema(filePath, schema);
+    HoodieWriteStat writeStat = new HoodieWriteStat();
+    writeStat.setFileId(fileId);
+    writeStat.setPath(filePath.toString());
+    writeStats.add(writeStat);
+    writeStats.forEach(s -> commitMetadata.addWriteStat(partitionPath, s));
+    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schema.toString());
+    createdTablesSet.add(hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName);
+    createCommitFile(commitMetadata, instantTime);
+  }
+
   public static void createMORTable(String commitTime, String deltaCommitTime, int numberOfPartitions,
       boolean createDeltaCommit, boolean useSchemaFromCommitMetadata)
       throws IOException, URISyntaxException, InterruptedException {
@@ -343,6 +377,27 @@ public class HiveTestUtil {
 
     List<IndexedRecord> testRecords = (isParquetSchemaSimple ? SchemaTestUtil.generateTestRecords(0, 100)
         : SchemaTestUtil.generateEvolvedTestRecords(100, 100));
+    testRecords.forEach(s -> {
+      try {
+        writer.write(s);
+      } catch (IOException e) {
+        fail("IOException while writing test records as parquet" + e.toString());
+      }
+    });
+    writer.close();
+  }
+
+  private static void generateParquetDataWithSchema(Path filePath, Schema schema)
+      throws IOException, URISyntaxException {
+    org.apache.parquet.schema.MessageType parquetSchema = new AvroSchemaConverter().convert(schema);
+    BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, -1,
+        BloomFilterTypeCode.SIMPLE.name());
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema, filter);
+    ParquetWriter writer = new ParquetWriter(filePath, writeSupport, CompressionCodecName.GZIP, 120 * 1024 * 1024,
+        ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED,
+        ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED, ParquetWriter.DEFAULT_WRITER_VERSION, fileSystem.getConf());
+
+    List<IndexedRecord> testRecords = SchemaTestUtil.generateTestRecordsForSchema(schema);
     testRecords.forEach(s -> {
       try {
         writer.write(s);
