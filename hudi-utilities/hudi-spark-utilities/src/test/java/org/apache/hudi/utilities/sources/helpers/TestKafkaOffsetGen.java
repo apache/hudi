@@ -132,7 +132,7 @@ public class TestKafkaOffsetGen {
   }
 
   @Test
-  public void testGetNextOffsetRangesFromGroups() {
+  public void testGetNextOffsetRangesFromGroup() {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.createTopic(TEST_TOPIC_NAME, 2);
     testUtils.sendMessages(TEST_TOPIC_NAME, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
