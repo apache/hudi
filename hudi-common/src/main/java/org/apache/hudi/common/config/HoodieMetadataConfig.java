@@ -41,23 +41,9 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   // Enable the internal Metadata Table which saves file listings
   public static final ConfigProperty<Boolean> ENABLE = ConfigProperty
       .key(METADATA_PREFIX + ".enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.7.0")
       .withDocumentation("Enable the internal metadata table which serves table metadata like level file listings");
-
-  // Enable syncing the Metadata Table
-  public static final ConfigProperty<Boolean> SYNC_ENABLE = ConfigProperty
-      .key(METADATA_PREFIX + ".sync.enable")
-      .defaultValue(true)
-      .sinceVersion("0.9.0")
-      .withDocumentation("Enable syncing of metadata table from actions on the dataset");
-
-  // Validate contents of Metadata Table on each access against the actual filesystem
-  public static final ConfigProperty<Boolean> VALIDATE_ENABLE = ConfigProperty
-      .key(METADATA_PREFIX + ".validate")
-      .defaultValue(false)
-      .sinceVersion("0.7.0")
-      .withDocumentation("Validate contents of metadata table on each access; e.g against the actual listings from lake storage");
 
   public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = false;
 
@@ -149,14 +135,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBoolean(ENABLE);
   }
 
-  public boolean enableSync() {
-    return enabled() && getBoolean(HoodieMetadataConfig.SYNC_ENABLE);
-  }
-
-  public boolean validateFileListingMetadata() {
-    return getBoolean(VALIDATE_ENABLE);
-  }
-
   public boolean enableMetrics() {
     return getBoolean(METRICS_ENABLE);
   }
@@ -186,18 +164,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder enableSync(boolean enable) {
-      metadataConfig.setValue(SYNC_ENABLE, String.valueOf(enable));
-      return this;
-    }
-
     public Builder enableMetrics(boolean enableMetrics) {
       metadataConfig.setValue(METRICS_ENABLE, String.valueOf(enableMetrics));
-      return this;
-    }
-
-    public Builder validate(boolean validate) {
-      metadataConfig.setValue(VALIDATE_ENABLE, String.valueOf(validate));
       return this;
     }
 
@@ -258,16 +226,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
    */
   @Deprecated
   public static final boolean DEFAULT_METADATA_ENABLE = ENABLE.defaultValue();
-  /**
-   * @deprecated Use {@link #VALIDATE_ENABLE} and its methods.
-   */
-  @Deprecated
-  public static final String METADATA_VALIDATE_PROP = VALIDATE_ENABLE.key();
-  /**
-   * @deprecated Use {@link #VALIDATE_ENABLE} and its methods.
-   */
-  @Deprecated
-  public static final boolean DEFAULT_METADATA_VALIDATE = VALIDATE_ENABLE.defaultValue();
 
   /**
    * @deprecated Use {@link #METRICS_ENABLE} and its methods.

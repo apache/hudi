@@ -61,6 +61,7 @@ import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -241,13 +242,16 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     }
   }
 
+  /**
+   * Any pre-commit actions like conflict resolution or updating metadata table goes here.
+   * @param instantTime commit instant time.
+   * @param metadata commit metadata for which pre commit is being invoked.
+   */
   protected void preCommit(String instantTime, HoodieCommitMetadata metadata) {
-    // no-op
-    // TODO : Conflict resolution is not supported for Flink & Java engines
-  }
-
-  protected void syncTableMetadata() {
-    // no-op
+    // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
+    // Important to create this after the lock to ensure latest commits show up in the timeline without need for reload
+    HoodieTable table = createTable(config, hadoopConf);
+    table.getMetadataWriter().ifPresent(w -> ((HoodieTableMetadataWriter)w).update(metadata, instantTime));
   }
 
   /**
@@ -404,16 +408,6 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
     this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
-    this.txnManager.beginTransaction(Option.of(new HoodieInstant(State.INFLIGHT, metaClient.getCommitActionType(), instantTime)), lastCompletedTxnAndMetadata
-        .isPresent()
-        ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
-    try {
-      if (writeOperationType != WriteOperationType.CLUSTER && writeOperationType != WriteOperationType.COMPACT) {
-        syncTableMetadata();
-      }
-    } finally {
-      this.txnManager.endTransaction();
-    }
     this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this);
   }
 
@@ -443,9 +437,6 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       // We cannot have unbounded commit files. Archive commits if we have to archive
       HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);
       archiveLog.archiveIfRequired(context);
-      if (operationType != null && operationType != WriteOperationType.CLUSTER && operationType != WriteOperationType.COMPACT) {
-        syncTableMetadata();
-      }
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     } finally {

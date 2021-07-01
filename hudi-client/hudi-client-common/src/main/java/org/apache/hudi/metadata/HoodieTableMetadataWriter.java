@@ -19,7 +19,6 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
-import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -31,13 +30,32 @@ import java.io.Serializable;
  */
 public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
 
+  /**
+   * Update the metadata table due to a COMMIT operation.
+   * @param commitMetadata commit metadata of the operation of interest.
+   * @param instantTime instant time of the commit.
+   */
   void update(HoodieCommitMetadata commitMetadata, String instantTime);
 
-  void update(HoodieCleanerPlan cleanerPlan, String instantTime);
-
+  /**
+   * Update the metadata table due to a CLEAN operation.
+   * @param cleanMetadata clean metadata of the operation of interest.
+   * @param instantTime instant time of the commit.
+   */
   void update(HoodieCleanMetadata cleanMetadata, String instantTime);
 
+  /**
+   * Update the metadata table due to a RESTORE operation.
+   * @param restoreMetadata restore metadata of the operation of interest.
+   * @param instantTime instant time of the commit.
+   */
   void update(HoodieRestoreMetadata restoreMetadata, String instantTime);
 
+  /**
+   * Update the metadata table due to a ROLLBACK operation.
+   * @param rollbackMetadata rollback metadata of the operation of interest.
+   * @param instantTime instant time of the commit.
+   */
   void update(HoodieRollbackMetadata rollbackMetadata, String instantTime);
+
 }

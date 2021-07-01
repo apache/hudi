@@ -453,7 +453,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
                                String metadataTableBasePath, boolean doFullValidation) throws IOException {
     HoodieTableMetadata tableMetadata = metadata(writeConfig, context);
     assertNotNull(tableMetadata, "MetadataReader should have been initialized");
-    if (!writeConfig.isMetadataTableEnabled() || !writeConfig.getMetadataConfig().validateFileListingMetadata()) {
+    if (!writeConfig.isMetadataTableEnabled()) {
       return;
     }
 
@@ -476,7 +476,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
 
     // Files within each partition should match
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieSparkTable.create(writeConfig, engineContext);
+    HoodieTable table = HoodieSparkTable.create(writeConfig, engineContext, true);
     TableFileSystemView tableView = table.getHoodieView();
     List<String> fullPartitionPaths = fsPartitions.stream().map(partition -> basePath + "/" + partition).collect(Collectors.toList());
     Map<String, FileStatus[]> partitionToFilesMap = tableMetadata.getAllFilesInPartitions(fullPartitionPaths);
@@ -497,7 +497,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
   }
 
   public void syncTableMetadata(HoodieWriteConfig writeConfig) {
-    if (!writeConfig.getMetadataConfig().enableSync()) {
+    if (!writeConfig.getMetadataConfig().enabled()) {
       return;
     }
     // Open up the metadata table again, for syncing
@@ -537,8 +537,6 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     Collections.sort(fsFileNames);
     Collections.sort(metadataFilenames);
 
-    assertEquals(fsStatuses.length, partitionToFilesMap.get(basePath + "/" + partition).length);
-
     if ((fsFileNames.size() != metadataFilenames.size()) || (!fsFileNames.equals(metadataFilenames))) {
       LOG.info("*** File system listing = " + Arrays.toString(fsFileNames.toArray()));
       LOG.info("*** Metadata listing = " + Arrays.toString(metadataFilenames.toArray()));
@@ -554,7 +552,8 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
         }
       }
     }
-
+    assertEquals(fsStatuses.length, partitionToFilesMap.get(basePath + "/" + partition).length);
+    
     // Block sizes should be valid
     Arrays.stream(metaStatuses).forEach(s -> assertTrue(s.getBlockSize() > 0));
     List<Long> fsBlockSizes = Arrays.stream(fsStatuses).map(FileStatus::getBlockSize).sorted().collect(Collectors.toList());
@@ -586,8 +585,6 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     HoodieWriteConfig metadataWriteConfig = metadataWriter.getWriteConfig();
     assertFalse(metadataWriteConfig.isMetadataTableEnabled(), "No metadata table for metadata table");
 
-    // Metadata table should be in sync with the dataset
-    assertTrue(metadata(writeConfig, engineContext).isInSync());
     HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(metadataTableBasePath).build();
 
     // Metadata table is MOR
@@ -601,7 +598,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
     // in the .hoodie folder.
     List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, HoodieTableMetadata.getMetadataTableBasePath(basePath),
-        false, false, false);
+        false, false);
     Assertions.assertEquals(MetadataPartitionType.values().length, metadataTablePartitions.size());
 
     // Metadata table should automatically compact and clean

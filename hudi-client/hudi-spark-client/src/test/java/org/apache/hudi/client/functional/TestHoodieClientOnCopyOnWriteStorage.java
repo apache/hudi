@@ -2147,19 +2147,18 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertTrue(timeline.getCommitsTimeline().filterCompletedInstants().countInstants() == 0);
   }
 
-  @ParameterizedTest
-  @MethodSource("populateMetaFieldsParams")
-  public void testParallelInsertAndCleanPreviousFailedCommits(boolean populateMetaFields) throws Exception {
+  @Test
+  public void testParallelInsertAndCleanPreviousFailedCommits() throws Exception {
     HoodieFailedWritesCleaningPolicy cleaningPolicy = HoodieFailedWritesCleaningPolicy.LAZY;
     ExecutorService service = Executors.newFixedThreadPool(2);
     HoodieTestUtils.init(hadoopConf, basePath);
     // Perform 2 failed writes to table
-    SparkRDDWriteClient client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
+    SparkRDDWriteClient client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true));
     writeBatch(client, "100", "100", Option.of(Arrays.asList("100")), "100",
             100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 100,
             0, false);
     client.close();
-    client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
+    client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true));
     writeBatch(client, "200", "200", Option.of(Arrays.asList("200")), "200",
             100, dataGen::generateInserts, SparkRDDWriteClient::bulkInsert, false, 100, 100,
             0, false);
@@ -2167,7 +2166,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // refresh data generator to delete records generated from failed commits
     dataGen = new HoodieTestDataGenerator();
     // Create a succesful commit
-    Future<JavaRDD<WriteStatus>> commit3 = service.submit(() -> writeBatch(new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields)),
+    Future<JavaRDD<WriteStatus>> commit3 = service.submit(() -> writeBatch(new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true)),
             "300", "200", Option.of(Arrays.asList("300")), "200", 100, dataGen::generateInserts,
             SparkRDDWriteClient::bulkInsert, false, 100, 100, 0, true));
     commit3.get();
@@ -2177,17 +2176,17 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         CollectionUtils.createSet(HoodieTimeline.ROLLBACK_ACTION)).countInstants() == 0);
     assertTrue(metaClient.getActiveTimeline().filterInflights().countInstants() == 2);
     assertTrue(metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() == 1);
-    client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields));
+    client = new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true));
     // Await till enough time passes such that the first 2 failed commits heartbeats are expired
     boolean conditionMet = false;
     while (!conditionMet) {
       conditionMet = client.getHeartbeatClient().isHeartbeatExpired("200");
       Thread.sleep(2000);
     }
-    Future<JavaRDD<WriteStatus>> commit4 = service.submit(() -> writeBatch(new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields)),
+    Future<JavaRDD<WriteStatus>> commit4 = service.submit(() -> writeBatch(new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true)),
             "400", "300", Option.of(Arrays.asList("400")), "400", 100, dataGen::generateInserts,
             SparkRDDWriteClient::bulkInsert, false, 100, 100, 0, true));
-    Future<HoodieCleanMetadata> clean1 = service.submit(() -> new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, populateMetaFields)).clean());
+    Future<HoodieCleanMetadata> clean1 = service.submit(() -> new SparkRDDWriteClient(context, getParallelWritingWriteConfig(cleaningPolicy, true)).clean());
     commit4.get();
     clean1.get();
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline().reload();

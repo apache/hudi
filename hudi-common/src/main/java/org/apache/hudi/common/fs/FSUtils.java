@@ -271,11 +271,10 @@ public class FSUtils {
   }
 
   public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext, String basePathStr,
-                                                  boolean useFileListingFromMetadata, boolean verifyListings,
+                                                  boolean useFileListingFromMetadata,
                                                   boolean assumeDatePartitioning) {
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(useFileListingFromMetadata)
-        .validate(verifyListings)
         .withAssumeDatePartitioning(assumeDatePartitioning)
         .build();
     try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, basePathStr,
