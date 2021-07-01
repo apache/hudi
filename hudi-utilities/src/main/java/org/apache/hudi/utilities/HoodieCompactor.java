@@ -25,6 +25,7 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
@@ -75,7 +76,7 @@ public class HoodieCompactor {
     public String compactionInstantTime = null;
     @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert", required = true)
     public int parallelism = 1;
-    @Parameter(names = {"--schema-file", "-sf"}, description = "path for Avro schema file", required = true)
+    @Parameter(names = {"--schema-file", "-sf"}, description = "path for Avro schema file", required = false)
     public String schemaFile = null;
     @Parameter(names = {"--spark-master", "-ms"}, description = "Spark master", required = false)
     public String sparkMaster = null;
@@ -135,7 +136,7 @@ public class HoodieCompactor {
 
   private int doCompact(JavaSparkContext jsc) throws Exception {
     // Get schema.
-    String schemaStr = UtilHelpers.parseSchema(fs, cfg.schemaFile);
+    String schemaStr = getSchema();
     SparkRDDWriteClient<HoodieRecordPayload> client =
         UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props);
     // If no compaction instant is provided by --instant-time, find the earliest scheduled compaction
@@ -167,5 +168,13 @@ public class HoodieCompactor {
     }
     client.scheduleCompactionAtInstant(cfg.compactionInstantTime, Option.empty());
     return 0;
+  }
+
+  private String getSchema() throws Exception {
+    if (StringUtils.isNullOrEmpty(cfg.schemaFile)) {
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(cfg.basePath).build();
+      return new TableSchemaResolver(metaClient).getTableAvroSchema().toString();
+    }
+    return UtilHelpers.parseSchema(fs, cfg.schemaFile);
   }
 }

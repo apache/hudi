@@ -141,6 +141,31 @@ public class ITTestCompactionCommand extends AbstractShellIntegrationTest {
   }
 
   /**
+   * Test case for command 'compaction run' w/o providing schema.
+   */
+  @Test
+  public void testCompactWithoutSchema() throws IOException {
+    // generate commits
+    generateCommits();
+
+    String instance = prepareScheduleCompaction();
+
+    CommandResult cr2 = getShell().executeCommand(
+        String.format("compaction run --parallelism %s --sparkMaster %s", 2, "local"));
+
+    assertAll("Command run failed",
+        () -> assertTrue(cr2.isSuccess()),
+        () -> assertTrue(
+            cr2.getResult().toString().startsWith("Compaction successfully completed for")));
+
+    // assert compaction complete
+    assertTrue(HoodieCLI.getTableMetaClient().getActiveTimeline().reload()
+        .filterCompletedInstants().getInstants()
+        .map(HoodieInstant::getTimestamp).collect(Collectors.toList()).contains(instance),
+        "Pending compaction must be completed");
+  }
+
+  /**
    * Test case for command 'compaction validate'.
    */
   @Test

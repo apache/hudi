@@ -220,7 +220,7 @@ public class CompactionCommand implements CommandMarker {
   public String compact(
       @CliOption(key = {"parallelism"}, mandatory = true,
           help = "Parallelism for hoodie compaction") final String parallelism,
-      @CliOption(key = "schemaFilePath", mandatory = true,
+      @CliOption(key = "schemaFilePath", unspecifiedDefaultValue = "",
           help = "Path for Avro schema file") final String schemaFilePath,
       @CliOption(key = "sparkMaster", unspecifiedDefaultValue = "local",
           help = "Spark Master") String master,
