@@ -106,17 +106,17 @@ public class FlinkOptions {
       .defaultValue(4)
       .withDescription("Parallelism of tasks that do actual read, default is 4");
 
-  public static final ConfigOption<String> READ_AVRO_SCHEMA_PATH = ConfigOptions
-      .key("read.avro-schema.path")
+  public static final ConfigOption<String> SOURCE_AVRO_SCHEMA_PATH = ConfigOptions
+      .key("source.avro-schema.path")
       .stringType()
       .noDefaultValue()
-      .withDescription("Avro schema file path, the parsed schema is used for deserialization");
+      .withDescription("Source avro schema file path, the parsed schema is used for deserialization");
 
-  public static final ConfigOption<String> READ_AVRO_SCHEMA = ConfigOptions
-      .key("read.avro-schema")
+  public static final ConfigOption<String> SOURCE_AVRO_SCHEMA = ConfigOptions
+      .key("source.avro-schema")
       .stringType()
       .noDefaultValue()
-      .withDescription("Avro schema string, the parsed schema is used for deserialization");
+      .withDescription("Source avro schema file path, the parsed schema is used for deserialization");
 
   public static final String QUERY_TYPE_SNAPSHOT = "snapshot";
   public static final String QUERY_TYPE_READ_OPTIMIZED = "read_optimized";
