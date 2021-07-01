@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -29,9 +30,12 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndex;
-
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.spark.api.java.JavaRDD;
 
 public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
@@ -65,5 +69,22 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
   @Override
   protected HoodieIndex<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
     return SparkHoodieIndex.createIndex(config);
+  }
+
+  @Override
+  public Option<HoodieTableMetadataWriter> getMetadataWriter() {
+    if (!config.useFileListingMetadata()) {
+      return Option.empty();
+    }
+
+    try {
+      if (!metaClient.getFs().exists(new Path(HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())))) {
+        return Option.empty();
+      }
+    } catch (Exception e) {
+      throw new HoodieMetadataException("Could not create metadata table writer", e);
+    }
+
+    return Option.of(SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config, context));
   }
 }

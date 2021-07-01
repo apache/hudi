@@ -114,8 +114,14 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       // trigger cleaning, compaction, with suffixes based on the same instant time. This ensures that any future
       // delta commits synced over will not have an instant time lesser than the last completed instant on the
       // metadata table.
-      if (writeClient.scheduleCompactionAtInstant(instantTime + "001", Option.empty())) {
-        writeClient.compact(instantTime + "001");
+      // TODO: This does not work with parallel operations because the operations having a larger timestamp
+      // may have completed earlier and hence instantTime is not the latest commit.
+      try {
+        if (writeClient.scheduleCompactionAtInstant(instantTime + "001", Option.empty())) {
+          writeClient.compact(instantTime + "001");
+        }
+      } catch (IllegalArgumentException e) {
+        LOG.info("Ignoring error in compaction: " + e);
       }
       writeClient.clean(instantTime + "002");
     }

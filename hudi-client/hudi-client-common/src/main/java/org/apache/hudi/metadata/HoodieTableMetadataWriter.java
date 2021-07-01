@@ -32,7 +32,8 @@ import java.io.Serializable;
  */
 public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
 
-  void update(HoodieCommitMetadata commitMetadata, String instantTime);
+  // Update the metadata table due to a COMMIT operation
+  void update(HoodieCommitMetadata option, String instantTime);
 
   void update(HoodieCleanerPlan cleanerPlan, String instantTime);
 

@@ -214,8 +214,6 @@ public class StreamWriteOperatorCoordinator
             startInstant();
             // sync Hive if is enabled
             syncHiveIfEnabled();
-            // sync metadata if is enabled
-            syncMetadataIfEnabled();
           }
         }, "commits the instant %s", this.instant
     );
@@ -283,23 +281,6 @@ public class StreamWriteOperatorCoordinator
     this.metadataSyncExecutor = new NonThrownExecutor(LOG, true);
   }
 
-  /**
-   * Sync the write metadata to the metadata table.
-   */
-  private void syncMetadataIfEnabled() {
-    if (tableState.syncMetadata) {
-      this.metadataSyncExecutor.execute(this::syncMetadata,
-          "sync metadata table for instant %s", this.instant);
-    }
-  }
-
-  /**
-   * Sync the write metadata to the metadata table.
-   */
-  private void syncMetadata() {
-    this.writeClient.syncTableMetadata();
-  }
-
   private void reset() {
     this.eventBuffer = new WriteMetadataEvent[this.parallelism];
   }
@@ -349,11 +330,6 @@ public class StreamWriteOperatorCoordinator
         LOG.info("Recommit instant {}", instant);
         commitInstant(instant);
       }
-      if (tableState.syncMetadata) {
-        // initialize metadata table first if enabled
-        // condition: the data set timeline has committed instants
-        syncMetadata();
-      }
       // starts a new instant
       startInstant();
     }, "initialize instant %s", instant);
@@ -374,8 +350,6 @@ public class StreamWriteOperatorCoordinator
       commitInstant(this.instant);
       // sync Hive if is enabled in batch mode.
       syncHiveIfEnabled();
-      // sync metadata if is enabled in batch mode.
-      syncMetadataIfEnabled();
     }
   }
 

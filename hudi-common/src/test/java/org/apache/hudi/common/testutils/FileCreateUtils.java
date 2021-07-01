@@ -123,6 +123,14 @@ public class FileCreateUtils {
     }
   }
 
+  private static void deleteMetaFile(String basePath, String instantTime, String suffix) throws IOException {
+    Path parentPath = Paths.get(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+    Path metaFilePath = parentPath.resolve(instantTime + suffix);
+    if (Files.exists(metaFilePath)) {
+      Files.delete(metaFilePath);
+    }
+  }
+
   public static void createCommit(String basePath, String instantTime) throws IOException {
     createMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
   }
@@ -303,5 +311,17 @@ public class FileCreateUtils {
 
   public static void deleteDeltaCommit(String basePath, String instantTime, FileSystem fs) throws IOException {
     deleteMetaFile(basePath, instantTime, HoodieTimeline.DELTA_COMMIT_EXTENSION, fs);
+  }
+
+  public static void deleteCommit(String basePath, String instantTime) throws IOException {
+    deleteMetaFile(basePath, instantTime, HoodieTimeline.COMMIT_EXTENSION);
+  }
+
+  public static void deleteRequestedCommit(String basePath, String instantTime) throws IOException {
+    deleteMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_COMMIT_EXTENSION);
+  }
+
+  public static void deleteInflightCommit(String basePath, String instantTime) throws IOException {
+    deleteMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_COMMIT_EXTENSION);
   }
 }

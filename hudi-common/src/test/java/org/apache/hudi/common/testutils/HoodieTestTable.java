@@ -76,6 +76,9 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCo
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedDeltaCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedReplaceCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRollbackFile;
+import static org.apache.hudi.common.testutils.FileCreateUtils.deleteRequestedCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.deleteInflightCommit;
+import static org.apache.hudi.common.testutils.FileCreateUtils.deleteCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
 
 public class HoodieTestTable {
@@ -432,5 +435,12 @@ public class HoodieTestTable {
     public HoodieTestTableException(Throwable t) {
       super(t);
     }
+  }
+
+  public void removeCommit(String instantTime) throws Exception {
+    deleteRequestedCommit(basePath, instantTime);
+    deleteInflightCommit(basePath, instantTime);
+    deleteCommit(basePath, instantTime);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
   }
 }

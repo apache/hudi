@@ -40,7 +40,7 @@ public class HoodiePrompt extends DefaultPromptProvider {
         case TABLE:
           return "hudi:" + tableName + "->";
         case SYNC:
-          return "hudi:" + tableName + " <==> " + HoodieCLI.syncTableMetadata.getTableConfig().getTableName() + "->";
+          return "hudi:" + tableName + " <==> " + HoodieCLI.metaClient.getTableConfig().getTableName() + "->";
         default:
           return "hudi:" + tableName + "->";
       }

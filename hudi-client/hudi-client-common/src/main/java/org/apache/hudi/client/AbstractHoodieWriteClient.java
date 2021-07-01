@@ -60,6 +60,7 @@ import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -187,6 +188,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     try {
       preCommit(instantTime, metadata);
+      // TODO: Should this be under its own transaction
+      table.getMetadataWriter().ifPresent(w -> ((HoodieTableMetadataWriter)w).update(metadata, instantTime));
       commit(table, commitActionType, instantTime, metadata, stats);
       postCommit(table, metadata, instantTime, extraMetadata);
       LOG.info("Committed " + instantTime);
@@ -239,10 +242,6 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   protected void preCommit(String instantTime, HoodieCommitMetadata metadata) {
     // no-op
     // TODO : Conflict resolution is not supported for Flink & Java engines
-  }
-
-  protected void syncTableMetadata() {
-    // no-op
   }
 
   /**
@@ -399,14 +398,6 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       HoodieTableMetaClient metaClient) {
     setOperationType(writeOperationType);
     this.lastCompletedTxnAndMetadata = TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient);
-    this.txnManager.beginTransaction(Option.of(new HoodieInstant(State.INFLIGHT, metaClient.getCommitActionType(), instantTime)), lastCompletedTxnAndMetadata
-        .isPresent()
-        ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
-    try {
-      syncTableMetadata();
-    } finally {
-      this.txnManager.endTransaction();
-    }
     this.asyncCleanerService = AsyncCleanerService.startAsyncCleaningIfEnabled(this);
   }
 
@@ -435,7 +426,6 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);
       archiveLog.archiveIfRequired(context);
       autoCleanOnCommit();
-      syncTableMetadata();
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     } finally {

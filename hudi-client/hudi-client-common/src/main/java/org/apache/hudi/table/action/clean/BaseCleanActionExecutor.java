@@ -115,6 +115,8 @@ public abstract class BaseCleanActionExecutor<T extends HoodieRecordPayload, I, 
           cleanStats
       );
 
+      syncTableMetadata(metadata);
+
       table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant,
           TimelineMetadataUtils.serializeCleanMetadata(metadata));
       LOG.info("Marked clean started on " + inflightInstant.getTimestamp() + " as complete");

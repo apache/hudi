@@ -42,10 +42,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
-import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndex;
-import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -96,6 +94,11 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                              Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService);
+    if (config.useFileListingMetadata()) {
+      // If the metadata table does not exist, it should be bootstrapped here
+      // TODO: Check if we can remove this requirement - auto bootstrap on commit
+      SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config, context);
+    }
   }
 
   /**
@@ -442,16 +445,6 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       writeTimer = metrics.getDeltaCommitCtx();
     }
     return table;
-  }
-
-  @Override
-  public void syncTableMetadata() {
-    // Open up the metadata table again, for syncing
-    try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context)) {
-      LOG.info("Successfully synced to metadata table");
-    } catch (Exception e) {
-      throw new HoodieMetadataException("Error syncing to metadata table.", e);
-    }
   }
 
   @Override

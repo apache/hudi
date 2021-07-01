@@ -197,6 +197,11 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
 
   protected void finishRollback(HoodieRollbackMetadata rollbackMetadata) throws HoodieIOException {
     try {
+      // TODO: Potential error here - rollbacks have already completed here so if the syncTableMetadata fails,
+      // metadata table will be left in an inconsistent state. This is because we do not use the inflight
+      // state for rollback.
+      syncTableMetadata(rollbackMetadata);
+
       table.getActiveTimeline().createNewInstant(
           new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.ROLLBACK_ACTION, instantTime));
       table.getActiveTimeline().saveAsComplete(

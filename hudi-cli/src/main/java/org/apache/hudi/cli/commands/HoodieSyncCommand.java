@@ -56,10 +56,10 @@ public class HoodieSyncCommand implements CommandMarker {
       @CliOption(key = {"hivePass"}, mandatory = true, unspecifiedDefaultValue = "",
           help = "hive password to connect to") final String hivePass)
       throws Exception {
-    if (HoodieCLI.syncTableMetadata == null) {
+    if (HoodieCLI.metaClient == null) {
       throw new HoodieException("Sync validate request target table not null.");
     }
-    HoodieTableMetaClient target = HoodieCLI.syncTableMetadata;
+    HoodieTableMetaClient target = HoodieCLI.metaClient;
     HoodieTimeline targetTimeline = target.getActiveTimeline().getCommitsTimeline();
     HoodieTableMetaClient source = HoodieCLI.getTableMetaClient();
     HoodieTimeline sourceTimeline = source.getActiveTimeline().getCommitsTimeline();
