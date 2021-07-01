@@ -62,15 +62,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   // Map to store key-values in memory until it hits maxInMemorySizeInBytes
   private final Map<T, R> inMemoryMap;
   // Map to store key-values on disk or db after it spilled over the memory
-<<<<<<< HEAD
-<<<<<<< HEAD
   private transient volatile DiskMap<T, R> diskBasedMap;
-=======
-  private transient volatile SpillableDiskMap<T, R> diskBasedMap;
->>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
-=======
-  private transient volatile DiskMap<T, R> diskBasedMap;
->>>>>>> 6d4b556a (Address reviewer comments)
   // TODO(na) : a dynamic sizing factor to ensure we have space for other objects in memory and
   // incorrect payload estimation
   private final Double sizingFactorForInMemoryMap = 0.8;
@@ -91,16 +83,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
 
   public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
                               SizeEstimator<R> valueSizeEstimator) throws IOException {
-    this(maxInMemorySizeInBytes, baseFilePath, keySizeEstimator,
-<<<<<<< HEAD
-<<<<<<< HEAD
-        valueSizeEstimator, DiskMapType.BITCASK);
-=======
-        valueSizeEstimator, DiskMapType.DISK_MAP);
->>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
-=======
-        valueSizeEstimator, DiskMapType.BITCASK);
->>>>>>> 6d4b556a (Address reviewer comments)
+    this(maxInMemorySizeInBytes, baseFilePath, keySizeEstimator, valueSizeEstimator, DiskMapType.BITCASK);
   }
 
   public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
@@ -114,44 +97,18 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
     this.diskMapType = diskMapType;
   }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
   private DiskMap<T, R> getDiskBasedMap() {
-=======
-  private SpillableDiskMap<T, R> getDiskBasedMap() {
->>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
-=======
-  private DiskMap<T, R> getDiskBasedMap() {
->>>>>>> 6d4b556a (Address reviewer comments)
     if (null == diskBasedMap) {
       synchronized (this) {
         if (null == diskBasedMap) {
           try {
             switch (diskMapType) {
-<<<<<<< HEAD
-<<<<<<< HEAD
               case ROCKS_DB:
                 diskBasedMap = new RocksDbDiskMap<>(baseFilePath);
                 break;
               case BITCASK:
               default:
                 diskBasedMap = new BitCaskDiskMap<>(baseFilePath);
-=======
-              case ROCK_DB:
-                diskBasedMap = new SpillableRocksDBBasedMap<>(baseFilePath);
-=======
-              case ROCKS_DB:
-                diskBasedMap = new RocksDbDiskMap<>(baseFilePath);
->>>>>>> 6d4b556a (Address reviewer comments)
-                break;
-              case BITCASK:
-              default:
-<<<<<<< HEAD
-                diskBasedMap = new DiskBasedMap<>(baseFilePath);
->>>>>>> 29a53c64 (Implement RockDbBasedMap as an alternate to DiskBasedMap in SpillableMap)
-=======
-                diskBasedMap = new BitCaskDiskMap<>(baseFilePath);
->>>>>>> 6d4b556a (Address reviewer comments)
             }
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);
@@ -335,23 +292,13 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   }
 
   /**
-   * The type of map to use for storing the Key, values on disk after it spills
-   * from memory in the {@link ExternalSpillableMap}.
-   */
-  public enum DiskMapType {
-    BITCASK,
-    ROCKS_DB,
-    UNKNOWN
-  }
-
-  /**
    * Iterator that wraps iterating over all the values for this map 1) inMemoryIterator - Iterates over all the data
    * in-memory map 2) diskLazyFileIterator - Iterates over all the data spilled to disk.
    */
   private class IteratorWrapper<R> implements Iterator<R> {
 
-    private Iterator<R> inMemoryIterator;
-    private Iterator<R> diskLazyFileIterator;
+    private final Iterator<R> inMemoryIterator;
+    private final Iterator<R> diskLazyFileIterator;
 
     public IteratorWrapper(Iterator<R> inMemoryIterator, Iterator<R> diskLazyFileIterator) {
       this.inMemoryIterator = inMemoryIterator;
