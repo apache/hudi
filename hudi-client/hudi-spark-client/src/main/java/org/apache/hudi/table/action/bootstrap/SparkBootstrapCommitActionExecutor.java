@@ -395,7 +395,6 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
     try {
       keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(properties);
     } catch (IOException e) {
-      LOG.error("Init keyGenerator failed ", e);
       throw new HoodieKeyGeneratorException("Init keyGenerator failed ", e);
     }
 
