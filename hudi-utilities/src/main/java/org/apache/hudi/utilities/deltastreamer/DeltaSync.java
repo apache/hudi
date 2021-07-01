@@ -247,6 +247,7 @@ public class DeltaSync implements Serializable {
           .setPayloadClassName(cfg.payloadClassName)
           .setBaseFileFormat(cfg.baseFileFormat)
           .setPartitionColumns(partitionColumns)
+          .setPreCombineField(cfg.sourceOrderingField)
           .initTable(new Configuration(jssc.hadoopConfiguration()),
             cfg.targetBasePath);
     }
