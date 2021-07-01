@@ -575,7 +575,6 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
         checkAnswer(s"select id, name, price from $tableName")(
           Seq(1, "a1", 10.0)
         )
-
         spark.sql(
           s"""
              | merge into $tableName
@@ -591,6 +590,56 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
           Seq(1, "a1", 20.0)
         )
       }
+    }
+  }
+
+  test("Test MergeInto For MOR With Compaction On") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}'
+           | options (
+           |  primaryKey ='id',
+           |  type = 'mor',
+           |  preCombineField = 'ts',
+           |  hoodie.compact.inline = 'true'
+           | )
+       """.stripMargin)
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
+      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
+      spark.sql(s"insert into $tableName values(4, 'a4', 10, 1000)")
+      checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+        Seq(1, "a1", 10.0, 1000),
+        Seq(2, "a2", 10.0, 1000),
+        Seq(3, "a3", 10.0, 1000),
+        Seq(4, "a4",10.0, 1000)
+      )
+
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           | select 4 as id, 'a4' as name, 11 as price, 1000 as ts
+           | ) s0
+           | on h0.id = s0.id
+           | when matched then update set *
+           |""".stripMargin)
+
+      // 5 commits will trigger compaction.
+      checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+        Seq(1, "a1", 10.0, 1000),
+        Seq(2, "a2", 10.0, 1000),
+        Seq(3, "a3", 10.0, 1000),
+        Seq(4, "a4", 11.0, 1000)
+      )
     }
   }
 }
