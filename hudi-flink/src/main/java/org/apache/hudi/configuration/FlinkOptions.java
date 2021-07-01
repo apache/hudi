@@ -116,7 +116,7 @@ public class FlinkOptions {
       .key("source.avro-schema")
       .stringType()
       .noDefaultValue()
-      .withDescription("Source avro schema file path, the parsed schema is used for deserialization");
+      .withDescription("Source avro schema string, the parsed schema is used for deserialization");
 
   public static final String QUERY_TYPE_SNAPSHOT = "snapshot";
   public static final String QUERY_TYPE_READ_OPTIMIZED = "read_optimized";
