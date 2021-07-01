@@ -40,9 +40,9 @@ public class TestHoodieWriteConfig {
   public void testPropertyLoading() throws IOException {
     Builder builder = HoodieWriteConfig.newBuilder().withPath("/tmp");
     Map<String, String> params = new HashMap<>(3);
-    params.put(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED_PROP, "1");
-    params.put(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP_PROP, "5");
-    params.put(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP_PROP, "2");
+    params.put(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED_PROP.key(), "1");
+    params.put(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP_PROP.key(), "5");
+    params.put(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP_PROP.key(), "2");
     ByteArrayOutputStream outStream = saveParamsIntoOutputStream(params);
     ByteArrayInputStream inputStream = new ByteArrayInputStream(outStream.toByteArray());
     try {

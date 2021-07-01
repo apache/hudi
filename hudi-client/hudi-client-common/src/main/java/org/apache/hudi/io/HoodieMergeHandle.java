@@ -196,7 +196,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   protected void initializeIncomingRecordsMap() {
     try {
       // Load the new records in a map
-      long memoryForMerge = IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config.getProps());
+      long memoryForMerge = IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config);
       LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
       this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
           new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(tableSchema));

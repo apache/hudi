@@ -56,7 +56,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER;
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP;
 
 /**
  * Utilities for Flink stream read and write.
@@ -209,7 +209,7 @@ public class StreamerUtil {
           .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
           .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
           .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS))
-          .setArchiveLogFolder(DEFAULT_ARCHIVELOG_FOLDER)
+          .setArchiveLogFolder(HOODIE_ARCHIVELOG_FOLDER_PROP.defaultValue())
           .setTimelineLayoutVersion(1)
           .initTable(hadoopConf, basePath);
       LOG.info("Table initialized under base path {}", basePath);
