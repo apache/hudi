@@ -482,4 +482,10 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
       HoodieWrapperFileSystem.setMetricsRegistry(registry, registryMeta);
     }
   }
+
+  @Override
+  protected void unpersistRDD() {
+    ((HoodieSparkEngineContext) context).getJavaSparkContext().getPersistentRDDs().values()
+        .forEach(rdd -> rdd.unpersist());
+  }
 }

@@ -40,12 +40,12 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.sync.common.AbstractSyncTool
 import org.apache.hudi.table.BulkInsertPartitioner
 import org.apache.log4j.LogManager
-import org.apache.spark.{SPARK_VERSION, SparkContext}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{DataFrame, Dataset,Row, SQLContext, SaveMode, SparkSession}
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
+import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SaveMode, SparkSession}
+import org.apache.spark.{SPARK_VERSION, SparkContext}
 
 import java.util
 import java.util.Properties
@@ -242,22 +242,6 @@ object HoodieSparkSqlWriter {
         commitAndPerformPostOperations(sqlContext.sparkSession, df.schema,
           writeResult, parameters, writeClient, tableConfig, jsc,
           TableInstantInfo(basePath, instantTime, commitActionType, operation))
-
-      def unpersistRdd(rdd: RDD[_]): Unit = {
-        if (sparkContext.getPersistentRDDs.contains(rdd.id)) {
-          try {
-            rdd.unpersist()
-          } catch {
-            case t: Exception => log.warn("Got excepting trying to unpersist rdd", t)
-          }
-        }
-        val parentRdds = rdd.dependencies.map(_.rdd)
-        parentRdds.foreach { parentRdd =>
-          unpersistRdd(parentRdd)
-        }
-      }
-      // it's safe to unpersist cached rdds here
-      unpersistRdd(writeResult.getWriteStatuses.rdd)
 
       (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
     }

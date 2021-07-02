@@ -184,6 +184,7 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
       commit(table, commitActionType, instantTime, metadata, stats);
       postCommit(table, metadata, instantTime, extraMetadata);
       LOG.info("Committed " + instantTime);
+      unpersistRDD();
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
     } finally {
@@ -1034,6 +1035,10 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
     } catch (IOException e) {
       throw new HoodieIOException("IOException thrown while reading last commit metadata", e);
     }
+  }
+
+  protected void unpersistRDD() {
+    // do nothing here
   }
 
   @Override
