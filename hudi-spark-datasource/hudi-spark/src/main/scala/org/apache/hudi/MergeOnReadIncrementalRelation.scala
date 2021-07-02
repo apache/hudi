@@ -111,15 +111,9 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
       val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.last.getTimestamp)
       filters :+isNotNullFilter :+ largerThanFilter :+ lessThanFilter
     }
-    var requiredStructSchema = StructType(Seq())
-    requiredColumns.foreach(col => {
-      val field = tableStructSchema.find(_.name == col)
-      if (field.isDefined) {
-        requiredStructSchema = requiredStructSchema.add(field.get)
-      }
-    })
-    val requiredAvroSchema = AvroConversionUtils
-      .convertStructTypeToAvroSchema(requiredStructSchema, tableAvroSchema.getName, tableAvroSchema.getNamespace)
+    val (requiredAvroSchema, requiredStructSchema) =
+      MergeOnReadSnapshotRelation.getRequiredSchema(tableAvroSchema, requiredColumns)
+
     val hoodieTableState = HoodieMergeOnReadTableState(
       tableStructSchema,
       requiredStructSchema,
