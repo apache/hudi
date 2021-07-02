@@ -66,10 +66,9 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Runnab
 
     assert(primaryColumns.nonEmpty,
       s"There are no primary key defined in table $tableId, cannot execute delete operator")
-
     withSparkConf(sparkSession, targetTable.storage.properties) {
       Map(
-        "path" -> path.toString,
+        "path" -> path,
         KEYGENERATOR_CLASS_OPT_KEY.key -> classOf[SqlKeyGenerator].getCanonicalName,
         TABLE_NAME.key -> tableId.table,
         OPERATION_OPT_KEY.key -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
