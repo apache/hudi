@@ -92,7 +92,7 @@ public class TestInputFormat {
     TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
 
     // refresh the input format
-    this.tableSource.reloadActiveTimeline();
+    this.tableSource.reset();
     inputFormat = this.tableSource.getInputFormat();
 
     result = readData(inputFormat);
@@ -133,8 +133,12 @@ public class TestInputFormat {
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
     TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
 
+    // write another commit using logs with separate partition
+    // so the file group has only logs
+    TestData.writeData(TestData.DATA_SET_INSERT_SEPARATE_PARTITION, conf);
+
     // refresh the input format
-    this.tableSource.reloadActiveTimeline();
+    this.tableSource.reset();
     inputFormat = this.tableSource.getInputFormat();
 
     result = readData(inputFormat);
@@ -143,6 +147,10 @@ public class TestInputFormat {
     expected = "[id1,Danny,24,1970-01-01T00:00:00.001,par1, "
         + "id10,Ella,38,1970-01-01T00:00:00.007,par4, "
         + "id11,Phoebe,52,1970-01-01T00:00:00.008,par4, "
+        + "id12,Monica,27,1970-01-01T00:00:00.009,par5, "
+        + "id13,Phoebe,31,1970-01-01T00:00:00.010,par5, "
+        + "id14,Rachel,52,1970-01-01T00:00:00.011,par6, "
+        + "id15,Ross,29,1970-01-01T00:00:00.012,par6, "
         + "id2,Stephen,34,1970-01-01T00:00:00.002,par1, "
         + "id3,Julian,54,1970-01-01T00:00:00.003,par2, "
         + "id4,Fabian,32,1970-01-01T00:00:00.004,par2, "
