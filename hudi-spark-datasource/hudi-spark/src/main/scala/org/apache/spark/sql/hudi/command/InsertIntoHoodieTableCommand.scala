@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi.command
 
 import java.util.Properties
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord}
@@ -232,7 +231,7 @@ object InsertIntoHoodieTableCommand {
     } else {
       classOf[DefaultHoodieRecordPayload].getCanonicalName
     }
-
+    val enableHive = isEnableHive(sparkSession)
     withSparkConf(sparkSession, options) {
       Map(
         "path" -> path,
@@ -244,7 +243,7 @@ object InsertIntoHoodieTableCommand {
         RECORDKEY_FIELD_OPT_KEY.key -> primaryColumns.mkString(","),
         PARTITIONPATH_FIELD_OPT_KEY.key -> partitionFields,
         PAYLOAD_CLASS_OPT_KEY.key -> payloadClassName,
-        META_SYNC_ENABLED_OPT_KEY.key -> "true",
+        META_SYNC_ENABLED_OPT_KEY.key -> enableHive.toString,
         HIVE_USE_JDBC_OPT_KEY.key -> "false",
         HIVE_DATABASE_OPT_KEY.key -> table.identifier.database.getOrElse("default"),
         HIVE_TABLE_OPT_KEY.key -> table.identifier.table,
