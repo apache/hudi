@@ -642,4 +642,49 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
       )
     }
   }
+
+  test("Test MereInto With Null Fields") {
+    withTempDir { tmp =>
+      val types = Seq(
+        "string" ,
+        "int",
+        "bigint",
+        "double",
+        "float",
+        "timestamp",
+        "date",
+        "decimal"
+      )
+      types.foreach { dataType =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  value $dataType,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | options (
+             |  primaryKey ='id',
+             |  preCombineField = 'ts'
+             | )
+       """.stripMargin)
+
+        spark.sql(
+          s"""
+             |merge into $tableName h0
+             |using (
+             | select 1 as id, 'a1' as name, cast(null as $dataType) as value, 1000 as ts
+             | ) s0
+             | on h0.id = s0.id
+             | when not matched then insert *
+             |""".stripMargin)
+        checkAnswer(s"select id, name, value, ts from $tableName")(
+          Seq(1, "a1", null, 1000)
+        )
+      }
+    }
+  }
 }

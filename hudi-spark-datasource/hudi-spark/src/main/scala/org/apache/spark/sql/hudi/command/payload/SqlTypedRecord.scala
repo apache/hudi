@@ -51,7 +51,11 @@ class SqlTypedRecord(val record: IndexedRecord) extends IndexedRecord {
     val value = record.get(i)
     val avroFieldType = getSchema.getFields.get(i).schema()
     val sqlFieldType = sqlType.fields(i).dataType
-    convert(avroFieldType, sqlFieldType, value)
+    if (value == null) {
+      null
+    } else {
+      convert(avroFieldType, sqlFieldType, value)
+    }
   }
 
   private def convert(avroFieldType: Schema, sqlFieldType: DataType, value: AnyRef): AnyRef = {
@@ -89,6 +93,7 @@ class SqlTypedRecord(val record: IndexedRecord) extends IndexedRecord {
       case (STRING, StringType) => value match {
         case s: String => UTF8String.fromString(s)
         case s: Utf8 => UTF8String.fromString(s.toString)
+        case o => throw new IllegalArgumentException(s"Cannot convert $o to StringType")
       }
 
       case (ENUM, StringType) => value.toString
