@@ -59,9 +59,9 @@ public class DefaultSource extends BaseDefaultSource implements DataSourceV2,
       DataSourceOptions options) {
     String instantTime = options.get(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY).get();
     String path = options.get("path").get();
-    String tblName = options.get(HoodieWriteConfig.TABLE_NAME).get();
+    String tblName = options.get(HoodieWriteConfig.TABLE_NAME.key()).get();
     // 1st arg to createHooodieConfig is not really reuqired to be set. but passing it anyways.
-    HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(options.get(HoodieWriteConfig.AVRO_SCHEMA).get(), path, tblName, options.asMap());
+    HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(options.get(HoodieWriteConfig.AVRO_SCHEMA.key()).get(), path, tblName, options.asMap());
     return Optional.of(new HoodieDataSourceInternalWriter(instantTime, config, schema, getSparkSession(),
             getConfiguration()));
   }

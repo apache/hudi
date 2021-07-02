@@ -19,11 +19,11 @@ package org.apache.spark.sql.hudi.command.payload
 
 import java.util.{Base64, Properties}
 import java.util.concurrent.Callable
-
 import scala.collection.JavaConverters._
 import com.google.common.cache.CacheBuilder
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
+import org.apache.avro.util.Utf8
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
@@ -171,7 +171,7 @@ class ExpressionPayload(record: GenericRecord,
   }
 
   private def isMORTable(properties: Properties): Boolean = {
-    properties.getProperty(TABLE_TYPE_OPT_KEY, null) == MOR_TABLE_TYPE_OPT_VAL
+    properties.getProperty(TABLE_TYPE_OPT_KEY.key, null) == MOR_TABLE_TYPE_OPT_VAL
   }
 
   private def convertToRecord(values: Array[AnyRef], schema: Schema): IndexedRecord = {
@@ -188,9 +188,9 @@ class ExpressionPayload(record: GenericRecord,
    */
   private def initWriteSchemaIfNeed(properties: Properties): Unit = {
     if (writeSchema == null) {
-      ValidationUtils.checkArgument(properties.containsKey(HoodieWriteConfig.WRITE_SCHEMA_PROP),
-        s"Missing ${HoodieWriteConfig.WRITE_SCHEMA_PROP}")
-      writeSchema = new Schema.Parser().parse(properties.getProperty(HoodieWriteConfig.WRITE_SCHEMA_PROP))
+      ValidationUtils.checkArgument(properties.containsKey(HoodieWriteConfig.WRITE_SCHEMA_PROP.key),
+        s"Missing ${HoodieWriteConfig.WRITE_SCHEMA_PROP.key}")
+      writeSchema = new Schema.Parser().parse(properties.getProperty(HoodieWriteConfig.WRITE_SCHEMA_PROP.key))
     }
   }
 
@@ -290,15 +290,15 @@ object ExpressionPayload {
 
   /**
    * As the "baseEvaluator" return "UTF8String" for the string type which cannot be process by
-   * the Avro, The StringConvertEvaluator will convert the "UTF8String" to "String".
+   * the Avro, The StringConvertEvaluator will convert the "UTF8String" to "Utf8".
    */
   case class StringConvertEvaluator(baseEvaluator: IExpressionEvaluator) extends IExpressionEvaluator {
     /**
-     * Convert the UTF8String to String
+     * Convert the UTF8String to Utf8
      */
     override def eval(record: IndexedRecord): Array[AnyRef] = {
-      baseEvaluator.eval(record).map{
-        case s: UTF8String => s.toString
+      baseEvaluator.eval(record).map {
+        case s: UTF8String => new Utf8(s.toString)
         case o => o
       }
     }

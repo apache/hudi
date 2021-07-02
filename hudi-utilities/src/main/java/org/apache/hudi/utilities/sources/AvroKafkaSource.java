@@ -40,6 +40,9 @@ import org.apache.spark.streaming.kafka010.KafkaUtils;
 import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 
+import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config.DEFAULT_ENABLE_KAFKA_COMMIT_OFFSET;
+import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.Config.ENABLE_KAFKA_COMMIT_OFFSET;
+
 /**
  * Reads avro serialized Kafka data, based on the confluent schema-registry.
  */
@@ -57,17 +60,17 @@ public class AvroKafkaSource extends AvroSource {
     super(props, sparkContext, sparkSession, schemaProvider);
 
     props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class);
-    String deserializerClassName = props.getString(DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER(), "");
+    String deserializerClassName = props.getString(DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER().key(), "");
 
     if (deserializerClassName.isEmpty()) {
       props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, KafkaAvroDeserializer.class);
     } else {
       try {
+        props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, Class.forName(deserializerClassName));
         if (schemaProvider == null) {
           throw new HoodieIOException("SchemaProvider has to be set to use custom Deserializer");
         }
-        props.put(DataSourceWriteOptions.SCHEMA_PROVIDER_CLASS_PROP(), schemaProvider.getClass().getName());
-        props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, Class.forName(deserializerClassName));
+        props.put(DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA().key(), schemaProvider.getSourceSchema().toString());
       } catch (ClassNotFoundException e) {
         String error = "Could not load custom avro kafka deserializer: " + deserializerClassName;
         LOG.error(error);
@@ -94,5 +97,12 @@ public class AvroKafkaSource extends AvroSource {
   private JavaRDD<GenericRecord> toRDD(OffsetRange[] offsetRanges) {
     return KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
             LocationStrategies.PreferConsistent()).map(obj -> (GenericRecord) obj.value());
+  }
+
+  @Override
+  public void onCommit(String lastCkptStr) {
+    if (this.props.getBoolean(ENABLE_KAFKA_COMMIT_OFFSET, DEFAULT_ENABLE_KAFKA_COMMIT_OFFSET)) {
+      offsetGen.commitOffsetToKafka(lastCkptStr);
+    }
   }
 }

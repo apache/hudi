@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.log4j.LogManager
+import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.execution.datasources.{DataSource, FileStatusCache, HadoopFsRelation}
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
@@ -70,10 +71,10 @@ class DefaultSource extends RelationProvider
                               optParams: Map[String, String],
                               schema: StructType): BaseRelation = {
     // Add default options for unspecified read options keys.
-    val parameters = translateViewTypesToQueryTypes(optParams)
+    val parameters = DataSourceOptionsHelper.translateConfigurations(optParams)
 
     val path = parameters.get("path")
-    val readPathsStr = parameters.get(DataSourceReadOptions.READ_PATHS_OPT_KEY)
+    val readPathsStr = parameters.get(DataSourceReadOptions.READ_PATHS_OPT_KEY.key)
     if (path.isEmpty && readPathsStr.isEmpty) {
       throw new HoodieException(s"'path' or '$READ_PATHS_OPT_KEY' or both must be specified.")
     }
@@ -84,10 +85,10 @@ class DefaultSource extends RelationProvider
     val fs = FSUtils.getFs(allPaths.head, sqlContext.sparkContext.hadoopConfiguration)
     // Use the HoodieFileIndex only if the 'path' is not globbed.
     // Or else we use the original way to read hoodie table.
-    val enableFileIndex = optParams.get(ENABLE_HOODIE_FILE_INDEX)
-      .map(_.toBoolean).getOrElse(DEFAULT_ENABLE_HOODIE_FILE_INDEX)
+    val enableFileIndex = optParams.get(ENABLE_HOODIE_FILE_INDEX.key)
+      .map(_.toBoolean).getOrElse(ENABLE_HOODIE_FILE_INDEX.defaultValue)
     val useHoodieFileIndex = enableFileIndex && path.isDefined && !path.get.contains("*") &&
-      !parameters.contains(DataSourceReadOptions.READ_PATHS_OPT_KEY)
+      !parameters.contains(DataSourceReadOptions.READ_PATHS_OPT_KEY.key)
     val globPaths = if (useHoodieFileIndex) {
       None
     } else {
@@ -104,7 +105,7 @@ class DefaultSource extends RelationProvider
     val metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(tablePath).build()
     val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
     val tableType = metaClient.getTableType
-    val queryType = parameters(QUERY_TYPE_OPT_KEY)
+    val queryType = parameters.getOrElse(QUERY_TYPE_OPT_KEY.key, QUERY_TYPE_OPT_KEY.defaultValue)
     log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType")
 
     (tableType, queryType, isBootstrappedTable) match {
@@ -156,7 +157,7 @@ class DefaultSource extends RelationProvider
     val translatedOptions = DataSourceWriteOptions.translateSqlOptions(parameters)
     val dfWithoutMetaCols = df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala:_*)
 
-    if (translatedOptions(OPERATION_OPT_KEY).equals(BOOTSTRAP_OPERATION_OPT_VAL)) {
+    if (translatedOptions(OPERATION_OPT_KEY.key).equals(BOOTSTRAP_OPERATION_OPT_VAL)) {
       HoodieSparkSqlWriter.bootstrap(sqlContext, mode, translatedOptions, dfWithoutMetaCols)
     } else {
       HoodieSparkSqlWriter.write(sqlContext, mode, translatedOptions, dfWithoutMetaCols)
@@ -213,11 +214,27 @@ class DefaultSource extends RelationProvider
         classOf[HoodieROTablePathFilter],
         classOf[org.apache.hadoop.fs.PathFilter])
 
+      val specifySchema = if (schema == null) {
+        // Load the schema from the commit meta data.
+        // Here we should specify the schema to the latest commit schema since
+        // the table schema evolution.
+        val tableSchemaResolver = new TableSchemaResolver(metaClient)
+        try {
+          Some(SchemaConverters.toSqlType(tableSchemaResolver.getTableAvroSchema)
+            .dataType.asInstanceOf[StructType])
+        } catch {
+          case _: Throwable =>
+            None // If there is no commit in the table, we can not get the schema
+                 // with tableSchemaResolver, return None here.
+        }
+      } else {
+        Some(schema)
+      }
       // simply return as a regular relation
       DataSource.apply(
         sparkSession = sqlContext.sparkSession,
         paths = extraReadPaths,
-        userSpecifiedSchema = Option(schema),
+        userSpecifiedSchema = specifySchema,
         className = formatClassName,
         options = optParams)
         .resolveRelation()

@@ -371,7 +371,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     List<GenericRecord> records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
         jsc.hadoopConfiguration(),
         FSUtils.getAllPartitionPaths(context, basePath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS,
-            HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE, false).stream()
+            HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue(), false).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
         basePath, roJobConf, false, schema, TRIP_HIVE_COLUMN_TYPES, false, new ArrayList<>());
     assertEquals(totalRecords, records.size());
@@ -390,7 +390,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
         jsc.hadoopConfiguration(),
         FSUtils.getAllPartitionPaths(context, basePath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS,
-            HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE, false).stream()
+            HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue(), false).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
         basePath, rtJobConf, true, schema,  TRIP_HIVE_COLUMN_TYPES, false, new ArrayList<>());
     assertEquals(totalRecords, records.size());
@@ -407,7 +407,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
         jsc.hadoopConfiguration(),
         FSUtils.getAllPartitionPaths(context, basePath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS,
-            HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE, false).stream()
+            HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue(), false).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
         basePath, roJobConf, false, schema, TRIP_HIVE_COLUMN_TYPES,
         true, HoodieRecord.HOODIE_META_COLUMNS);
@@ -425,7 +425,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
         jsc.hadoopConfiguration(),
         FSUtils.getAllPartitionPaths(context, basePath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS,
-            HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE, false).stream()
+            HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue(), false).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
         basePath, rtJobConf, true, schema,  TRIP_HIVE_COLUMN_TYPES, true,
         HoodieRecord.HOODIE_META_COLUMNS);
@@ -441,7 +441,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
         jsc.hadoopConfiguration(),
         FSUtils.getAllPartitionPaths(context, basePath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS,
-            HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE, false).stream()
+            HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue(), false).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
         basePath, roJobConf, false, schema, TRIP_HIVE_COLUMN_TYPES, true,
         Arrays.asList("_row_key"));
@@ -459,7 +459,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
         jsc.hadoopConfiguration(),
         FSUtils.getAllPartitionPaths(context, basePath, HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS,
-            HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE, false).stream()
+            HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue(), false).stream()
             .map(f -> basePath + "/" + f).collect(Collectors.toList()),
         basePath, rtJobConf, true, schema,  TRIP_HIVE_COLUMN_TYPES, true,
         Arrays.asList("_row_key"));
@@ -550,8 +550,8 @@ public class TestBootstrap extends HoodieClientTestBase {
     HoodieWriteConfig.Builder builder = getConfigBuilder(schemaStr, IndexType.BLOOM)
         .withExternalSchemaTrasformation(true);
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key");
-    properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "datestr");
+    properties.setProperty(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY().key(), "_row_key");
+    properties.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY().key(), "datestr");
     builder = builder.withProps(properties);
     return builder;
   }

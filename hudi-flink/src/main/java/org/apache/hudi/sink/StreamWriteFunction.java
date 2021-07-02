@@ -32,12 +32,14 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.sink.event.BatchWriteSuccessEvent;
+import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.api.common.state.CheckpointListener;
+import org.apache.flink.api.common.state.ListState;
+import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
@@ -78,20 +80,18 @@ import java.util.stream.Collectors;
  * starts a new instant on the time line when a checkpoint triggers, the coordinator checkpoints always
  * start before its operator, so when this function starts a checkpoint, a REQUESTED instant already exists.
  *
- * <p>In order to improve the throughput, The function process thread does not block data buffering
- * after the checkpoint thread starts flushing the existing data buffer. So there is possibility that the next checkpoint
- * batch was written to current checkpoint. When a checkpoint failure triggers the write rollback, there may be some duplicate records
- * (e.g. the eager write batch), the semantics is still correct using the UPSERT operation.
+ * <p>The function process thread blocks data buffering after the checkpoint thread finishes flushing the existing data buffer until
+ * the current checkpoint succeed and the coordinator starts a new instant. Any error triggers the job failure during the metadata committing,
+ * when the job recovers from a failure, the write function re-send the write metadata to the coordinator to see if these metadata
+ * can re-commit, thus if unexpected error happens during the instant committing, the coordinator would retry to commit when the job
+ * recovers.
  *
  * <p><h2>Fault Tolerance</h2>
  *
- * <p>The operator coordinator checks and commits the last instant then starts a new one when a checkpoint finished successfully.
- * The operator rolls back the written data and throws to trigger a failover when any error occurs.
- * This means one Hoodie instant may span one or more checkpoints(some checkpoints notifications may be skipped).
- * If a checkpoint timed out, the next checkpoint would help to rewrite the left buffer data (clean the buffer in the last
- * step of the #flushBuffer method).
- *
- * <p>The operator coordinator would try several times when committing the write status.
+ * <p>The operator coordinator checks and commits the last instant then starts a new one after a checkpoint finished successfully.
+ * It rolls back any inflight instant before it starts a new instant, this means one hoodie instant only span one checkpoint,
+ * the write function blocks data buffer flushing for the configured checkpoint timeout
+ * before it throws exception, any checkpoint failure would finally trigger the job failure.
  *
  * <p>Note: The function task requires the input stream be shuffled by the file IDs.
  *
@@ -100,7 +100,7 @@ import java.util.stream.Collectors;
  */
 public class StreamWriteFunction<K, I, O>
     extends KeyedProcessFunction<K, I, O>
-    implements CheckpointedFunction, CheckpointListener {
+    implements CheckpointedFunction {
 
   private static final long serialVersionUID = 1L;
 
@@ -149,11 +149,6 @@ public class StreamWriteFunction<K, I, O>
   private transient TotalSizeTracer tracer;
 
   /**
-   * Whether write in exactly-once semantics.
-   */
-  private boolean exactlyOnce;
-
-  /**
    * Flag saying whether the write task is waiting for the checkpoint success notification
    * after it finished a checkpoint.
    *
@@ -170,6 +165,16 @@ public class StreamWriteFunction<K, I, O>
   private volatile boolean confirming = false;
 
   /**
+   * List state of the write metadata events.
+   */
+  private transient ListState<WriteMetadataEvent> writeMetadataState;
+
+  /**
+   * Write status list for the current checkpoint.
+   */
+  private List<WriteStatus> writeStatuses;
+
+  /**
    * Constructs a StreamingSinkFunction.
    *
    * @param config The config options
@@ -180,28 +185,43 @@ public class StreamWriteFunction<K, I, O>
 
   @Override
   public void open(Configuration parameters) throws IOException {
-    this.taskID = getRuntimeContext().getIndexOfThisSubtask();
-    this.writeClient = StreamerUtil.createWriteClient(this.config, getRuntimeContext());
-    this.actionType = CommitUtils.getCommitActionType(
-        WriteOperationType.fromValue(config.getString(FlinkOptions.OPERATION)),
-        HoodieTableType.valueOf(config.getString(FlinkOptions.TABLE_TYPE)));
     this.tracer = new TotalSizeTracer(this.config);
-    this.exactlyOnce = config.getBoolean(FlinkOptions.WRITE_EXACTLY_ONCE_ENABLED);
     initBuffer();
     initWriteFunction();
   }
 
   @Override
-  public void initializeState(FunctionInitializationContext context) {
-    // no operation
+  public void initializeState(FunctionInitializationContext context) throws Exception {
+    this.taskID = getRuntimeContext().getIndexOfThisSubtask();
+    this.writeClient = StreamerUtil.createWriteClient(this.config, getRuntimeContext());
+    this.actionType = CommitUtils.getCommitActionType(
+        WriteOperationType.fromValue(config.getString(FlinkOptions.OPERATION)),
+        HoodieTableType.valueOf(config.getString(FlinkOptions.TABLE_TYPE)));
+
+    this.writeStatuses = new ArrayList<>();
+    this.writeMetadataState = context.getOperatorStateStore().getListState(
+        new ListStateDescriptor<>(
+            "write-metadata-state",
+            TypeInformation.of(WriteMetadataEvent.class)
+        ));
+
+    if (context.isRestored()) {
+      restoreWriteMetadata();
+    } else {
+      sendBootstrapEvent();
+    }
+    // blocks flushing until the coordinator starts a new instant
+    this.confirming = true;
   }
 
   @Override
-  public void snapshotState(FunctionSnapshotContext functionSnapshotContext) {
+  public void snapshotState(FunctionSnapshotContext functionSnapshotContext) throws Exception {
     // Based on the fact that the coordinator starts the checkpoint first,
     // it would check the validity.
     // wait for the buffer data flush out and request a new instant
     flushRemaining(false);
+    // Reload the snapshot state as the current state.
+    reloadWriteMetaState();
   }
 
   @Override
@@ -217,17 +237,13 @@ public class StreamWriteFunction<K, I, O>
     }
   }
 
-  @Override
-  public void notifyCheckpointComplete(long checkpointId) {
-    this.writeClient.cleanHandles();
-  }
-
   /**
    * End input action for batch source.
    */
   public void endInput() {
     flushRemaining(true);
     this.writeClient.cleanHandles();
+    this.writeStatuses.clear();
   }
 
   // -------------------------------------------------------------------------
@@ -285,6 +301,49 @@ public class StreamWriteFunction<K, I, O>
       default:
         throw new RuntimeException("Unsupported write operation : " + writeOperation);
     }
+  }
+
+  private void restoreWriteMetadata() throws Exception {
+    String lastInflight = this.writeClient.getLastPendingInstant(this.actionType);
+    boolean eventSent = false;
+    for (WriteMetadataEvent event : this.writeMetadataState.get()) {
+      if (Objects.equals(lastInflight, event.getInstantTime())) {
+        // The checkpoint succeed but the meta does not commit,
+        // re-commit the inflight instant
+        this.eventGateway.sendEventToCoordinator(event);
+        LOG.info("Send uncommitted write metadata event to coordinator, task[{}].", taskID);
+        eventSent = true;
+      }
+    }
+    if (!eventSent) {
+      sendBootstrapEvent();
+    }
+  }
+
+  private void sendBootstrapEvent() {
+    WriteMetadataEvent event = WriteMetadataEvent.builder()
+        .taskID(taskID)
+        .writeStatus(Collections.emptyList())
+        .instantTime("")
+        .isBootstrap(true)
+        .build();
+    this.eventGateway.sendEventToCoordinator(event);
+    LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
+  }
+
+  /**
+   * Reload the write metadata state as the current checkpoint.
+   */
+  private void reloadWriteMetaState() throws Exception {
+    this.writeMetadataState.clear();
+    WriteMetadataEvent event = WriteMetadataEvent.builder()
+        .taskID(taskID)
+        .instantTime(currentInstant)
+        .writeStatus(new ArrayList<>(writeStatuses))
+        .isBootstrap(true)
+        .build();
+    this.writeMetadataState.add(event);
+    writeStatuses.clear();
   }
 
   /**
@@ -490,23 +549,23 @@ public class StreamWriteFunction<K, I, O>
     bucket.records.add(item);
   }
 
-  @SuppressWarnings("unchecked, rawtypes")
-  private boolean flushBucket(DataBucket bucket) {
+  private boolean hasData() {
+    return this.buckets.size() > 0
+        && this.buckets.values().stream().anyMatch(bucket -> bucket.records.size() > 0);
+  }
+
+  private String instantToWrite(boolean hasData) {
     String instant = this.writeClient.getLastPendingInstant(this.actionType);
-
-    if (instant == null) {
-      // in case there are empty checkpoints that has no input data
-      LOG.info("No inflight instant when flushing data, skip.");
-      return false;
-    }
-
     // if exactly-once semantics turns on,
     // waits for the checkpoint notification until the checkpoint timeout threshold hits.
-    if (exactlyOnce && confirming) {
+    if (confirming) {
       long waitingTime = 0L;
       long ckpTimeout = config.getLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT);
       long interval = 500L;
-      while (Objects.equals(instant, this.currentInstant)) {
+      // wait condition:
+      // 1. there is no inflight instant
+      // 2. the inflight instant does not change and the checkpoint has buffering data
+      while (instant == null || (instant.equals(this.currentInstant) && hasData)) {
         // sleep for a while
         try {
           if (waitingTime > ckpTimeout) {
@@ -524,6 +583,18 @@ public class StreamWriteFunction<K, I, O>
       // successfully.
       confirming = false;
     }
+    return instant;
+  }
+
+  @SuppressWarnings("unchecked, rawtypes")
+  private boolean flushBucket(DataBucket bucket) {
+    String instant = instantToWrite(true);
+
+    if (instant == null) {
+      // in case there are empty checkpoints that has no input data
+      LOG.info("No inflight instant when flushing data, skip.");
+      return false;
+    }
 
     List<HoodieRecord> records = bucket.writeBuffer();
     ValidationUtils.checkState(records.size() > 0, "Data bucket to flush has no buffering records");
@@ -533,20 +604,22 @@ public class StreamWriteFunction<K, I, O>
     bucket.preWrite(records);
     final List<WriteStatus> writeStatus = new ArrayList<>(writeFunction.apply(records, instant));
     records.clear();
-    final BatchWriteSuccessEvent event = BatchWriteSuccessEvent.builder()
+    final WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
         .instantTime(instant) // the write instant may shift but the event still use the currentInstant.
         .writeStatus(writeStatus)
         .isLastBatch(false)
         .isEndInput(false)
         .build();
+
     this.eventGateway.sendEventToCoordinator(event);
+    writeStatuses.addAll(writeStatus);
     return true;
   }
 
   @SuppressWarnings("unchecked, rawtypes")
   private void flushRemaining(boolean isEndInput) {
-    this.currentInstant = this.writeClient.getLastPendingInstant(this.actionType);
+    this.currentInstant = instantToWrite(hasData());
     if (this.currentInstant == null) {
       // in case there are empty checkpoints that has no input data
       throw new HoodieException("No inflight instant when flushing data!");
@@ -573,16 +646,20 @@ public class StreamWriteFunction<K, I, O>
       LOG.info("No data to write in subtask [{}] for instant [{}]", taskID, currentInstant);
       writeStatus = Collections.emptyList();
     }
-    final BatchWriteSuccessEvent event = BatchWriteSuccessEvent.builder()
+    final WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
         .instantTime(currentInstant)
         .writeStatus(writeStatus)
         .isLastBatch(true)
         .isEndInput(isEndInput)
         .build();
+
     this.eventGateway.sendEventToCoordinator(event);
     this.buckets.clear();
     this.tracer.reset();
+    this.writeClient.cleanHandles();
+    this.writeStatuses.addAll(writeStatus);
+    // blocks flushing until the coordinator starts a new instant
     this.confirming = true;
   }
 }

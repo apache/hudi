@@ -58,10 +58,10 @@ public class HiveSyncTool extends AbstractSyncTool {
   public static final String SUFFIX_SNAPSHOT_TABLE = "_rt";
   public static final String SUFFIX_READ_OPTIMIZED_TABLE = "_ro";
 
-  private final HiveSyncConfig cfg;
-  private HoodieHiveClient hoodieHiveClient = null;
-  private String snapshotTableName = null;
-  private Option<String> roTableName = null;
+  protected final HiveSyncConfig cfg;
+  protected HoodieHiveClient hoodieHiveClient = null;
+  protected String snapshotTableName = null;
+  protected Option<String> roTableName = null;
 
   public HiveSyncTool(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
     super(configuration.getAllProperties(), fs);
@@ -106,13 +106,13 @@ public class HiveSyncTool extends AbstractSyncTool {
       if (hoodieHiveClient != null) {
         switch (hoodieHiveClient.getTableType()) {
           case COPY_ON_WRITE:
-            syncHoodieTable(snapshotTableName, false);
+            syncHoodieTable(snapshotTableName, false, false);
             break;
           case MERGE_ON_READ:
             // sync a RO table for MOR
-            syncHoodieTable(roTableName.get(), false);
+            syncHoodieTable(roTableName.get(), false, true);
             // sync a RT table for MOR
-            syncHoodieTable(snapshotTableName, true);
+            syncHoodieTable(snapshotTableName, true, false);
             break;
           default:
             LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
@@ -127,8 +127,9 @@ public class HiveSyncTool extends AbstractSyncTool {
       }
     }
   }
-
-  private void syncHoodieTable(String tableName, boolean useRealtimeInputFormat) {
+  
+  protected void syncHoodieTable(String tableName, boolean useRealtimeInputFormat,
+                               boolean readAsOptimized) {
     LOG.info("Trying to sync hoodie table " + tableName + " with base path " + hoodieHiveClient.getBasePath()
         + " of type " + hoodieHiveClient.getTableType());
 
@@ -152,7 +153,7 @@ public class HiveSyncTool extends AbstractSyncTool {
     // Get the parquet schema for this table looking at the latest commit
     MessageType schema = hoodieHiveClient.getDataSchema();
     // Sync schema if needed
-    syncSchema(tableName, tableExists, useRealtimeInputFormat, schema);
+    syncSchema(tableName, tableExists, useRealtimeInputFormat, readAsOptimized, schema);
 
     LOG.info("Schema sync complete. Syncing partitions for " + tableName);
     // Get the last time we successfully synced partitions
@@ -177,7 +178,8 @@ public class HiveSyncTool extends AbstractSyncTool {
    * @param tableExists - does table exist
    * @param schema - extracted schema
    */
-  private void syncSchema(String tableName, boolean tableExists, boolean useRealTimeInputFormat, MessageType schema) {
+  private void syncSchema(String tableName, boolean tableExists, boolean useRealTimeInputFormat,
+                          boolean readAsOptimized, MessageType schema) {
     // Check and sync schema
     if (!tableExists) {
       LOG.info("Hive table " + tableName + " is not found. Creating it");
@@ -194,11 +196,27 @@ public class HiveSyncTool extends AbstractSyncTool {
       String outputFormatClassName = HoodieInputFormatUtils.getOutputFormatClassName(baseFileFormat);
       String serDeFormatClassName = HoodieInputFormatUtils.getSerDeClassName(baseFileFormat);
 
+      Map<String, String> serdeProperties = ConfigUtils.toMap(cfg.serdeProperties);
+
+      // The serdeProperties is non-empty only for spark sync meta data currently.
+      if (!serdeProperties.isEmpty()) {
+        String queryTypeKey = serdeProperties.remove(ConfigUtils.SPARK_QUERY_TYPE_KEY);
+        String queryAsROKey = serdeProperties.remove(ConfigUtils.SPARK_QUERY_AS_RO_KEY);
+        String queryAsRTKey = serdeProperties.remove(ConfigUtils.SPARK_QUERY_AS_RT_KEY);
+
+        if (queryTypeKey != null && queryAsROKey != null && queryAsRTKey != null) {
+          if (readAsOptimized) { // read optimized
+            serdeProperties.put(queryTypeKey, queryAsROKey);
+          } else { // read snapshot
+            serdeProperties.put(queryTypeKey, queryAsRTKey);
+          }
+        }
+      }
       // Custom serde will not work with ALTER TABLE REPLACE COLUMNS
       // https://github.com/apache/hive/blob/release-1.1.0/ql/src/java/org/apache/hadoop/hive
       // /ql/exec/DDLTask.java#L3488
       hoodieHiveClient.createTable(tableName, schema, inputFormatClassName,
-          outputFormatClassName, serDeFormatClassName, ConfigUtils.toMap(cfg.serdeProperties), ConfigUtils.toMap(cfg.tableProperties));
+          outputFormatClassName, serDeFormatClassName, serdeProperties, ConfigUtils.toMap(cfg.tableProperties));
     } else {
       // Check if the table schema has evolved
       Map<String, String> tableSchema = hoodieHiveClient.getTableSchema(tableName);

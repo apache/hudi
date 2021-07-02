@@ -36,7 +36,6 @@ import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.compact.CompactionPlanSourceFunction;
 import org.apache.hudi.sink.compact.FlinkCompactionConfig;
-import org.apache.hudi.sink.compact.NonKeyedCompactFunction;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.partitioner.BucketAssignOperator;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
@@ -62,11 +61,9 @@ import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.FileProcessingMode;
-import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
-import org.apache.flink.table.api.TableResult;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
@@ -143,8 +140,8 @@ public class StreamWriteITCase extends TestLogger {
 
     if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
       hoodieDataStream = hoodieDataStream.transform("index_bootstrap",
-              TypeInformation.of(HoodieRecord.class),
-              new ProcessOperator<>(new BootstrapFunction<>(conf)));
+          TypeInformation.of(HoodieRecord.class),
+          new ProcessOperator<>(new BootstrapFunction<>(conf)));
     }
 
     DataStream<Object> pipeline = hoodieDataStream
@@ -174,24 +171,26 @@ public class StreamWriteITCase extends TestLogger {
     EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
     TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
     tableEnv.getConfig().getConfiguration()
-            .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
+        .setInteger(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 1);
     Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "false");
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
     options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 values\n"
-            + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1'),\n"
-            + "('id2','Stephen',33,TIMESTAMP '1970-01-01 00:00:02','par1'),\n"
-            + "('id3','Julian',53,TIMESTAMP '1970-01-01 00:00:03','par2'),\n"
-            + "('id4','Fabian',31,TIMESTAMP '1970-01-01 00:00:04','par2'),\n"
-            + "('id5','Sophia',18,TIMESTAMP '1970-01-01 00:00:05','par3'),\n"
-            + "('id6','Emma',20,TIMESTAMP '1970-01-01 00:00:06','par3'),\n"
-            + "('id7','Bob',44,TIMESTAMP '1970-01-01 00:00:07','par4'),\n"
-            + "('id8','Han',56,TIMESTAMP '1970-01-01 00:00:08','par4')";
-    TableResult tableResult = tableEnv.executeSql(insertInto);
-    TimeUnit.SECONDS.sleep(5);
-    tableResult.await();
+        + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1'),\n"
+        + "('id2','Stephen',33,TIMESTAMP '1970-01-01 00:00:02','par1'),\n"
+        + "('id3','Julian',53,TIMESTAMP '1970-01-01 00:00:03','par2'),\n"
+        + "('id4','Fabian',31,TIMESTAMP '1970-01-01 00:00:04','par2'),\n"
+        + "('id5','Sophia',18,TIMESTAMP '1970-01-01 00:00:05','par3'),\n"
+        + "('id6','Emma',20,TIMESTAMP '1970-01-01 00:00:06','par3'),\n"
+        + "('id7','Bob',44,TIMESTAMP '1970-01-01 00:00:07','par4'),\n"
+        + "('id8','Han',56,TIMESTAMP '1970-01-01 00:00:08','par4')";
+    tableEnv.executeSql(insertInto).await();
+
+    // wait for the asynchronous commit to finish
+    TimeUnit.SECONDS.sleep(3);
 
     // Make configuration and setAvroSchema.
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -199,10 +198,9 @@ public class StreamWriteITCase extends TestLogger {
     cfg.path = tempFile.getAbsolutePath();
     Configuration conf = FlinkCompactionConfig.toFlinkConfig(cfg);
     conf.setString(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
-    conf.setString(FlinkOptions.PARTITION_PATH_FIELD.key(), "partition");
 
     // create metaClient
-    HoodieTableMetaClient metaClient = CompactionUtil.createMetaClient(conf);
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
 
     // set the table name
     conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
@@ -212,34 +210,30 @@ public class StreamWriteITCase extends TestLogger {
 
     // judge whether have operation
     // To compute the compaction instant time and do compaction.
-    String instantTime = CompactionUtil.getCompactionInstantTime(metaClient);
+    String compactionInstantTime = CompactionUtil.getCompactionInstantTime(metaClient);
     HoodieFlinkWriteClient writeClient = StreamerUtil.createWriteClient(conf, null);
-    writeClient.scheduleCompactionAtInstant(instantTime, Option.empty());
+    writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
 
     HoodieFlinkTable<?> table = writeClient.getHoodieTable();
-    // the last instant takes the highest priority.
-    Option<HoodieInstant> compactionInstant = table.getActiveTimeline().filterPendingCompactionTimeline().lastInstant();
-    String compactionInstantTime = compactionInstant.get().getTimestamp();
-
     // generate compaction plan
     // should support configurable commit metadata
     HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
-            table.getMetaClient(), compactionInstantTime);
+        table.getMetaClient(), compactionInstantTime);
 
     HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
 
     env.addSource(new CompactionPlanSourceFunction(table, instant, compactionPlan, compactionInstantTime))
-            .name("compaction_source")
-            .uid("uid_compaction_source")
-            .rebalance()
-            .transform("compact_task",
-                    TypeInformation.of(CompactionCommitEvent.class),
-                    new ProcessOperator<>(new NonKeyedCompactFunction(conf)))
-            .setParallelism(compactionPlan.getOperations().size())
-            .addSink(new CompactionCommitSink(conf))
-            .name("clean_commits")
-            .uid("uid_clean_commits")
-            .setParallelism(1);
+        .name("compaction_source")
+        .uid("uid_compaction_source")
+        .rebalance()
+        .transform("compact_task",
+            TypeInformation.of(CompactionCommitEvent.class),
+            new ProcessOperator<>(new CompactFunction(conf)))
+        .setParallelism(compactionPlan.getOperations().size())
+        .addSink(new CompactionCommitSink(conf))
+        .name("clean_commits")
+        .uid("uid_clean_commits")
+        .setParallelism(1);
 
     env.execute("flink_hudi_compaction");
     TestData.checkWrittenFullData(tempFile, EXPECTED);
@@ -284,12 +278,12 @@ public class StreamWriteITCase extends TestLogger {
         .readFile(format, sourcePath, FileProcessingMode.PROCESS_CONTINUOUSLY, 1000, typeInfo)
         .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
         .setParallelism(4)
-            .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class));
+        .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class));
 
     if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
       hoodieDataStream = hoodieDataStream.transform("index_bootstrap",
-              TypeInformation.of(HoodieRecord.class),
-              new ProcessOperator<>(new BootstrapFunction<>(conf)));
+          TypeInformation.of(HoodieRecord.class),
+          new ProcessOperator<>(new BootstrapFunction<>(conf)));
     }
 
     DataStream<Object> pipeline = hoodieDataStream
@@ -314,10 +308,10 @@ public class StreamWriteITCase extends TestLogger {
         new CompactionPlanOperator(conf))
         .uid("uid_compact_plan_generate")
         .setParallelism(1) // plan generate must be singleton
-        .keyBy(event -> event.getOperation().hashCode())
+        .rebalance()
         .transform("compact_task",
             TypeInformation.of(CompactionCommitEvent.class),
-            new KeyedProcessOperator<>(new CompactFunction(conf)))
+            new ProcessOperator<>(new CompactFunction(conf)))
         .addSink(new CompactionCommitSink(conf))
         .name("compact_commit")
         .setParallelism(1);

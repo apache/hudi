@@ -135,8 +135,8 @@ public class RowKeyGeneratorHelper {
    * 4 = "StructField(nested_col,StructType(StructField(prop1,StringType,false), StructField(prop2,LongType,false)),false)"
    *
    * the logic fetches the value from field nested_col.prop1.
-   * If any level of the nested field is null, {@link NULL_RECORDKEY_PLACEHOLDER} is returned.
-   * If the field value is an empty String, {@link EMPTY_RECORDKEY_PLACEHOLDER} is returned.
+   * If any level of the nested field is null, {@link KeyGenUtils#NULL_RECORDKEY_PLACEHOLDER} is returned.
+   * If the field value is an empty String, {@link KeyGenUtils#EMPTY_RECORDKEY_PLACEHOLDER} is returned.
    *
    * @param row instance of {@link Row} of interest
    * @param positions tree style positions where the leaf node need to be fetched and returned

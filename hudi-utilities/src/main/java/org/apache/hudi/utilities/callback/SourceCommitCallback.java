@@ -16,36 +16,18 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.config;
-
-import java.io.Serializable;
-import java.util.Properties;
+package org.apache.hudi.utilities.callback;
 
 /**
- * Default Way to load Hoodie config through a {@link java.util.Properties}.
+ * A callback interface that provides the Source an option to perform action on successful Hudi commit.
  */
-public class DefaultHoodieConfig implements Serializable {
+public interface SourceCommitCallback {
 
-  protected final Properties props;
-
-  public DefaultHoodieConfig(Properties props) {
-    this.props = props;
+  /**
+   * Performs some action on successful Hudi commit like committing offsets to Kafka.
+   *
+   * @param lastCkptStr last checkpoint string.
+   */
+  default void onCommit(String lastCkptStr) {
   }
-
-  public static void setDefaultOnCondition(Properties props, boolean condition, String propName, String defaultValue) {
-    if (condition) {
-      props.setProperty(propName, defaultValue);
-    }
-  }
-
-  public static void setDefaultOnCondition(Properties props, boolean condition, DefaultHoodieConfig config) {
-    if (condition) {
-      props.putAll(config.getProps());
-    }
-  }
-
-  public Properties getProps() {
-    return props;
-  }
-
 }

@@ -20,7 +20,6 @@ package org.apache.spark.sql.hudi
 import scala.collection.JavaConverters._
 import java.net.URI
 import java.util.Locale
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.SparkAdapterSupport
@@ -30,7 +29,7 @@ import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
-import org.apache.spark.sql.catalyst.expressions.{And, Cast, Expression, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Cast, Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.internal.SQLConf
@@ -104,6 +103,10 @@ object HoodieSqlUtils extends SparkAdapterSupport {
     } else {
       df
     }
+  }
+
+  def removeMetaFields(attrs: Seq[Attribute]): Seq[Attribute] = {
+    attrs.filterNot(attr => isMetaField(attr.name))
   }
 
   /**

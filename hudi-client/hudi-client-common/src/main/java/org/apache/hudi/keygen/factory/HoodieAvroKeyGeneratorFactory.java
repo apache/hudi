@@ -50,7 +50,7 @@ public class HoodieAvroKeyGeneratorFactory {
   private static KeyGenerator createAvroKeyGeneratorByType(TypedProperties props) throws IOException {
     // Use KeyGeneratorType.SIMPLE as default keyGeneratorType
     String keyGeneratorType =
-        props.getString(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP, KeyGeneratorType.SIMPLE.name());
+        props.getString(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key(), KeyGeneratorType.SIMPLE.name());
 
     KeyGeneratorType keyGeneratorTypeEnum;
     try {

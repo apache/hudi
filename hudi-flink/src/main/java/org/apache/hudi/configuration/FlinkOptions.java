@@ -142,12 +142,6 @@ public class FlinkOptions {
           + "2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the\n"
           + "   log file records(combines the two records with same key for base and log file records), then read the left log file records");
 
-  public static final ConfigOption<Boolean> HIVE_STYLE_PARTITION = ConfigOptions
-      .key("hoodie.datasource.hive_style_partition")
-      .booleanType()
-      .defaultValue(false)
-      .withDescription("Whether the partition path is with Hive style, e.g. '{partition key}={partition value}', default false");
-
   public static final ConfigOption<Boolean> UTC_TIMEZONE = ConfigOptions
       .key("read.utc-timezone")
       .booleanType()
@@ -179,7 +173,7 @@ public class FlinkOptions {
   //  Write Options
   // ------------------------------------------------------------------------
   public static final ConfigOption<String> TABLE_NAME = ConfigOptions
-      .key(HoodieWriteConfig.TABLE_NAME)
+      .key(HoodieWriteConfig.TABLE_NAME.key())
       .stringType()
       .noDefaultValue()
       .withDescription("Table name to register to Hive metastore");
@@ -246,7 +240,7 @@ public class FlinkOptions {
           + "By default true (in favor of streaming progressing over data integrity)");
 
   public static final ConfigOption<String> RECORD_KEY_FIELD = ConfigOptions
-      .key(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY)
+      .key(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key())
       .stringType()
       .defaultValue("uuid")
       .withDescription("Record key field. Value to be used as the `recordKey` component of `HoodieKey`.\n"
@@ -254,26 +248,34 @@ public class FlinkOptions {
           + "the dot notation eg: `a.b.c`");
 
   public static final ConfigOption<String> PARTITION_PATH_FIELD = ConfigOptions
-      .key(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY)
+      .key(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key())
       .stringType()
       .defaultValue("")
       .withDescription("Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`.\n"
           + "Actual value obtained by invoking .toString(), default ''");
 
-  public static final ConfigOption<Boolean> PARTITION_PATH_URL_ENCODE = ConfigOptions
-      .key("write.partition.url_encode")
+  public static final ConfigOption<Boolean> URL_ENCODE_PARTITIONING = ConfigOptions
+      .key(KeyGeneratorOptions.URL_ENCODE_PARTITIONING_OPT_KEY.key())
       .booleanType()
       .defaultValue(false)
       .withDescription("Whether to encode the partition path url, default false");
 
+  public static final ConfigOption<Boolean> HIVE_STYLE_PARTITIONING = ConfigOptions
+      .key(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY.key())
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to use Hive style partitioning.\n"
+          + "If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.\n"
+          + "By default false (the names of partition folders are only partition values)");
+
   public static final ConfigOption<String> KEYGEN_CLASS = ConfigOptions
-      .key(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP)
+      .key(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP.key())
       .stringType()
       .defaultValue("")
       .withDescription("Key generator class, that implements will extract the key out of incoming record");
 
   public static final ConfigOption<String> KEYGEN_TYPE = ConfigOptions
-      .key(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP)
+      .key(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key())
       .stringType()
       .defaultValue(KeyGeneratorType.SIMPLE.name())
       .withDescription("Key generator type, that implements will extract the key out of incoming record");
@@ -314,14 +316,6 @@ public class FlinkOptions {
       .intType()
       .defaultValue(100) // default 100 MB
       .withDescription("Max memory in MB for merge, default 100MB");
-
-  public static final ConfigOption<Boolean> WRITE_EXACTLY_ONCE_ENABLED = ConfigOptions
-      .key("write.exactly_once.enabled")
-      .booleanType()
-      .defaultValue(false) // default at least once
-      .withDescription("Whether write in exactly_once semantics, if true,\n"
-          + "the write task would block flushing after it finishes a checkpoint\n"
-          + "until it receives the checkpoint success event, default false");
 
   // this is only for internal use
   public static final ConfigOption<Long> WRITE_COMMIT_ACK_TIMEOUT = ConfigOptions

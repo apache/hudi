@@ -132,7 +132,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
 
   @BeforeEach
   public void init() throws IOException {
-    init(HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT);
+    init(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue());
   }
 
   @AfterEach

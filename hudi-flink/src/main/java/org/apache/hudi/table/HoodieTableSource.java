@@ -218,7 +218,7 @@ public class HoodieTableSource implements
   @Override
   public Optional<List<Map<String, String>>> listPartitions() {
     List<Map<String, String>> partitions = FilePathUtils.getPartitions(path, hadoopConf,
-        partitionKeys, defaultPartName, conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITION));
+        partitionKeys, defaultPartName, conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING));
     return Optional.of(partitions);
   }
 
@@ -446,7 +446,7 @@ public class HoodieTableSource implements
     return partitionKeys.isEmpty()
         ? new Path[] {path}
         : FilePathUtils.partitionPath2ReadPath(path, partitionKeys, getOrFetchPartitions(),
-        conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITION));
+        conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING));
   }
 
   private static class LatestFileFilter extends FilePathFilter {
