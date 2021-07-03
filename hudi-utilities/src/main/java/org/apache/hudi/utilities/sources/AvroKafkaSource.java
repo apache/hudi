@@ -24,11 +24,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
+import org.apache.hudi.utilities.deser.KafkaAvroSchemaDeserializer;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 
-import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.log4j.LogManager;
@@ -67,20 +67,18 @@ public class AvroKafkaSource extends AvroSource {
     String deserializerClassName = props.getString(DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS().key(),
             DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS().defaultValue());
 
-    if (deserializerClassName.isEmpty()) {
-      props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, KafkaAvroDeserializer.class);
-    } else {
-      try {
-        props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, Class.forName(deserializerClassName));
+    try {
+      props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, Class.forName(deserializerClassName));
+      if (deserializerClassName.equals(KafkaAvroSchemaDeserializer.class.toString())) {
         if (schemaProvider == null) {
-          throw new HoodieIOException("SchemaProvider has to be set to use custom Deserializer");
+          throw new HoodieIOException("SchemaProvider has to be set to use KafkaAvroSchemaDeserializer");
         }
         props.put(KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA, schemaProvider.getSourceSchema().toString());
-      } catch (ClassNotFoundException e) {
-        String error = "Could not load custom avro kafka deserializer: " + deserializerClassName;
-        LOG.error(error);
-        throw new HoodieException(error, e);
       }
+    } catch (ClassNotFoundException e) {
+      String error = "Could not load custom avro kafka deserializer: " + deserializerClassName;
+      LOG.error(error);
+      throw new HoodieException(error, e);
     }
 
     this.metrics = metrics;

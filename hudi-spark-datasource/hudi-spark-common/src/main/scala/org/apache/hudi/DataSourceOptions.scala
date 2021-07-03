@@ -465,8 +465,8 @@ object DataSourceWriteOptions {
 
   val KAFKA_AVRO_VALUE_DESERIALIZER_CLASS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.deltastreamer.source.kafka.value.deserializer.class")
-    .defaultValue("")
-    .withDocumentation("This class is used by kafka client to deserialize the records. Leave empty for default confluent deserializer")
+    .defaultValue("io.confluent.kafka.serializers.KafkaAvroDeserializer")
+    .withDocumentation("This class is used by kafka client to deserialize the records")
 }
 
 object DataSourceOptionsHelper {
