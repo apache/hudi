@@ -66,6 +66,10 @@ public class TestHiveSyncTool {
     return Arrays.asList(new Object[][] {{true, true}, {true, false}, {false, true}, {false, false}});
   }
 
+  private static Iterable<Object[]> useJdbcAndSchemaFromCommitMetadataAndManagedTable() {
+    return Arrays.asList(new Object[][] {{true, true, true}, {true, false, false}, {false, true, true}, {false, false, false}});
+  }
+
   @BeforeEach
   public void setUp() throws Exception {
     HiveTestUtil.setUp();
@@ -269,6 +273,38 @@ public class TestHiveSyncTool {
       String ddl = String.join("\n", results);
       assertTrue(ddl.contains("'path'='" + hiveSyncConfig.basePath + "'"));
       assertTrue(ddl.contains("'hoodie.datasource.query.type'='" + expectQueryType + "'"));
+      assertTrue(ddl.toLowerCase().contains("create external table"));
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource({"useJdbcAndSchemaFromCommitMetadataAndManagedTable"})
+  public void testSyncManagedTable(boolean useJdbc,
+                                   boolean useSchemaFromCommitMetadata,
+                                   boolean isManagedTable) throws Exception {
+    HiveSyncConfig hiveSyncConfig = HiveTestUtil.hiveSyncConfig;
+
+    hiveSyncConfig.useJdbc = useJdbc;
+    hiveSyncConfig.createManagedTable = isManagedTable;
+    String instantTime = "100";
+    HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
+
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    tool.syncHoodieTable();
+
+    SessionState.start(HiveTestUtil.getHiveConf());
+    Driver hiveDriver = new org.apache.hadoop.hive.ql.Driver(HiveTestUtil.getHiveConf());
+    String dbTableName = hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName;
+    hiveDriver.run("SHOW TBLPROPERTIES " + dbTableName);
+
+    List<String> results = new ArrayList<>();
+    hiveDriver.run("SHOW CREATE TABLE " + dbTableName);
+    hiveDriver.getResults(results);
+    String ddl = String.join("\n", results).toLowerCase();
+    if (isManagedTable) {
+      assertTrue(ddl.contains("create table"));
+    } else {
+      assertTrue(ddl.contains("create external table"));
     }
   }
 

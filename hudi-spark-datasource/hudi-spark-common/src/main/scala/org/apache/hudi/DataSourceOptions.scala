@@ -456,6 +456,12 @@ object DataSourceWriteOptions {
     .defaultValue("true")
     .withDocumentation("")
 
+  // Create table as managed table
+  val HIVE_CREATE_MANAGED_TABLE: ConfigProperty[Boolean] = ConfigProperty
+    .key("hoodie.datasource.hive_sync.create_managed_table")
+    .defaultValue(false)
+    .withDocumentation("Whether to sync the table as managed table.")
+
   // Async Compaction - Enabled by default for MOR
   val ASYNC_COMPACT_ENABLE_OPT_KEY: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.compaction.async.enable")
