@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.FlinkStreamerUtil;
 
 import com.beust.jcommander.Parameter;
 import org.apache.flink.configuration.Configuration;
@@ -288,7 +288,7 @@ public class FlinkStreamerConfig extends Configuration {
    */
   @SuppressWarnings("unchecked, rawtypes")
   public static org.apache.flink.configuration.Configuration toFlinkConfig(FlinkStreamerConfig config) {
-    Map<String, String> propsMap = new HashMap<String, String>((Map) StreamerUtil.getProps(config));
+    Map<String, String> propsMap = new HashMap<String, String>((Map) FlinkStreamerUtil.getProps(config));
     org.apache.flink.configuration.Configuration conf = fromMap(propsMap);
 
     conf.setString(FlinkOptions.PATH, config.targetBasePath);

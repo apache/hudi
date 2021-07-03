@@ -21,7 +21,6 @@ package org.apache.hudi.util;
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
@@ -33,9 +32,7 @@ import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
-import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 
 import org.apache.avro.Schema;
@@ -45,13 +42,10 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.util.Preconditions;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.StringReader;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
@@ -65,26 +59,6 @@ public class StreamerUtil {
 
   private static final Logger LOG = LoggerFactory.getLogger(StreamerUtil.class);
 
-  public static TypedProperties appendKafkaProps(FlinkStreamerConfig config) {
-    TypedProperties properties = getProps(config);
-    properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.kafkaBootstrapServers);
-    properties.put(ConsumerConfig.GROUP_ID_CONFIG, config.kafkaGroupId);
-    return properties;
-  }
-
-  public static TypedProperties getProps(FlinkStreamerConfig cfg) {
-    if (cfg.propsFilePath.isEmpty()) {
-      return new TypedProperties();
-    }
-    return readConfig(
-        FSUtils.getFs(cfg.propsFilePath, getHadoopConf()),
-        new Path(cfg.propsFilePath), cfg.configs).getConfig();
-  }
-
-  public static Schema getSourceSchema(FlinkStreamerConfig cfg) {
-    return new FilebasedSchemaProvider(FlinkStreamerConfig.toFlinkConfig(cfg)).getSourceSchema();
-  }
-
   public static Schema getSourceSchema(org.apache.flink.configuration.Configuration conf) {
     if (conf.getOptional(FlinkOptions.READ_AVRO_SCHEMA_PATH).isPresent()) {
       return new FilebasedSchemaProvider(conf).getSourceSchema();
@@ -97,30 +71,6 @@ public class StreamerUtil {
           FlinkOptions.READ_AVRO_SCHEMA_PATH.key(), FlinkOptions.READ_AVRO_SCHEMA.key());
       throw new HoodieException(errorMsg);
     }
-  }
-
-  /**
-   * Read config from properties file (`--props` option) and cmd line (`--hoodie-conf` option).
-   */
-  public static DFSPropertiesConfiguration readConfig(FileSystem fs, Path cfgPath, List<String> overriddenProps) {
-    DFSPropertiesConfiguration conf;
-    try {
-      conf = new DFSPropertiesConfiguration(cfgPath.getFileSystem(fs.getConf()), cfgPath);
-    } catch (Exception e) {
-      conf = new DFSPropertiesConfiguration();
-      LOG.warn("Unexpected error read props file at :" + cfgPath, e);
-    }
-
-    try {
-      if (!overriddenProps.isEmpty()) {
-        LOG.info("Adding overridden properties to file properties.");
-        conf.addProperties(new BufferedReader(new StringReader(String.join("\n", overriddenProps))));
-      }
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Unexpected error adding config overrides", ioe);
-    }
-
-    return conf;
   }
 
   // Keep to avoid to much modifications.
