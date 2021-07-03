@@ -171,7 +171,7 @@ class ExpressionPayload(record: GenericRecord,
   }
 
   private def isMORTable(properties: Properties): Boolean = {
-    properties.getProperty(TABLE_TYPE_OPT_KEY, null) == MOR_TABLE_TYPE_OPT_VAL
+    properties.getProperty(TABLE_TYPE_OPT_KEY.key, null) == MOR_TABLE_TYPE_OPT_VAL
   }
 
   private def convertToRecord(values: Array[AnyRef], schema: Schema): IndexedRecord = {
@@ -188,9 +188,9 @@ class ExpressionPayload(record: GenericRecord,
    */
   private def initWriteSchemaIfNeed(properties: Properties): Unit = {
     if (writeSchema == null) {
-      ValidationUtils.checkArgument(properties.containsKey(HoodieWriteConfig.WRITE_SCHEMA_PROP),
-        s"Missing ${HoodieWriteConfig.WRITE_SCHEMA_PROP}")
-      writeSchema = new Schema.Parser().parse(properties.getProperty(HoodieWriteConfig.WRITE_SCHEMA_PROP))
+      ValidationUtils.checkArgument(properties.containsKey(HoodieWriteConfig.WRITE_SCHEMA_PROP.key),
+        s"Missing ${HoodieWriteConfig.WRITE_SCHEMA_PROP.key}")
+      writeSchema = new Schema.Parser().parse(properties.getProperty(HoodieWriteConfig.WRITE_SCHEMA_PROP.key))
     }
   }
 

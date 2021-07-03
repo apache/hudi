@@ -578,7 +578,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
 
       // Reader should sync to all the completed instants
       HoodieTableMetadata metadata  = HoodieTableMetadata.create(context, client.getConfig().getMetadataConfig(),
-          client.getConfig().getBasePath(), FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR);
+          client.getConfig().getBasePath(), FileSystemViewStorageConfig.FILESYSTEM_VIEW_SPILLABLE_DIR.defaultValue());
       assertEquals(metadata.getSyncedInstantTime().get(), newCommitTime);
 
       // Remove the inflight instance holding back table sync
@@ -591,7 +591,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
 
       // Reader should sync to all the completed instants
       metadata  = HoodieTableMetadata.create(context, client.getConfig().getMetadataConfig(),
-          client.getConfig().getBasePath(), FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR);
+          client.getConfig().getBasePath(), FileSystemViewStorageConfig.FILESYSTEM_VIEW_SPILLABLE_DIR.defaultValue());
       assertEquals(metadata.getSyncedInstantTime().get(), newCommitTime);
     }
 

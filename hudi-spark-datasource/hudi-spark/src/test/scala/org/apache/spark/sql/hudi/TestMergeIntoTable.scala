@@ -496,9 +496,9 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
         )
         // Test incremental query
         val hudiIncDF1 = spark.read.format("org.apache.hudi")
-          .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-          .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, "000")
-          .option(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY, firstCommitTime)
+          .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+          .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key, "000")
+          .option(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY.key, firstCommitTime)
           .load(targetBasePath)
         hudiIncDF1.createOrReplaceTempView("inc1")
         checkAnswer(s"select id, name, price, _ts from inc1")(
@@ -521,8 +521,8 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
         )
         // Test incremental query
         val hudiIncDF2 = spark.read.format("org.apache.hudi")
-          .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-          .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, secondCommitTime)
+          .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+          .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key, secondCommitTime)
           .load(targetBasePath)
         hudiIncDF2.createOrReplaceTempView("inc2")
         checkAnswer(s"select id, name, price, _ts from inc2 order by id")(
@@ -575,7 +575,6 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
         checkAnswer(s"select id, name, price from $tableName")(
           Seq(1, "a1", 10.0)
         )
-
         spark.sql(
           s"""
              | merge into $tableName
@@ -589,6 +588,101 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
        """.stripMargin)
         checkAnswer(s"select id, name, price from $tableName")(
           Seq(1, "a1", 20.0)
+        )
+      }
+    }
+  }
+
+  test("Test MergeInto For MOR With Compaction On") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}'
+           | options (
+           |  primaryKey ='id',
+           |  type = 'mor',
+           |  preCombineField = 'ts',
+           |  hoodie.compact.inline = 'true'
+           | )
+       """.stripMargin)
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
+      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
+      spark.sql(s"insert into $tableName values(4, 'a4', 10, 1000)")
+      checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+        Seq(1, "a1", 10.0, 1000),
+        Seq(2, "a2", 10.0, 1000),
+        Seq(3, "a3", 10.0, 1000),
+        Seq(4, "a4",10.0, 1000)
+      )
+
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           | select 4 as id, 'a4' as name, 11 as price, 1000 as ts
+           | ) s0
+           | on h0.id = s0.id
+           | when matched then update set *
+           |""".stripMargin)
+
+      // 5 commits will trigger compaction.
+      checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+        Seq(1, "a1", 10.0, 1000),
+        Seq(2, "a2", 10.0, 1000),
+        Seq(3, "a3", 10.0, 1000),
+        Seq(4, "a4", 11.0, 1000)
+      )
+    }
+  }
+
+  test("Test MereInto With Null Fields") {
+    withTempDir { tmp =>
+      val types = Seq(
+        "string" ,
+        "int",
+        "bigint",
+        "double",
+        "float",
+        "timestamp",
+        "date",
+        "decimal"
+      )
+      types.foreach { dataType =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  value $dataType,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | options (
+             |  primaryKey ='id',
+             |  preCombineField = 'ts'
+             | )
+       """.stripMargin)
+
+        spark.sql(
+          s"""
+             |merge into $tableName h0
+             |using (
+             | select 1 as id, 'a1' as name, cast(null as $dataType) as value, 1000 as ts
+             | ) s0
+             | on h0.id = s0.id
+             | when not matched then insert *
+             |""".stripMargin)
+        checkAnswer(s"select id, name, value, ts from $tableName")(
+          Seq(1, "a1", null, 1000)
         )
       }
     }

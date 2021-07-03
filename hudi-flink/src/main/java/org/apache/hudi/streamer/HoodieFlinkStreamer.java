@@ -99,7 +99,7 @@ public class HoodieFlinkStreamer {
         .uid("uid_kafka_source")
         .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class));
     if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
-      hoodieDataStream = hoodieDataStream.transform("index_bootstrap",
+      hoodieDataStream = hoodieDataStream.rebalance().transform("index_bootstrap",
               TypeInformation.of(HoodieRecord.class),
               new ProcessOperator<>(new BootstrapFunction<>(conf)));
     }

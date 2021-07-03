@@ -66,17 +66,16 @@ case class DeleteHoodieTableCommand(deleteTable: DeleteFromTable) extends Runnab
 
     assert(primaryColumns.nonEmpty,
       s"There are no primary key defined in table $tableId, cannot execute delete operator")
-
     withSparkConf(sparkSession, targetTable.storage.properties) {
       Map(
-        "path" -> path.toString,
-        KEYGENERATOR_CLASS_OPT_KEY -> classOf[SqlKeyGenerator].getCanonicalName,
-        TABLE_NAME -> tableId.table,
-        OPERATION_OPT_KEY -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
-        PARTITIONPATH_FIELD_OPT_KEY -> targetTable.partitionColumnNames.mkString(","),
-        HIVE_SUPPORT_TIMESTAMP -> "true",
-        HIVE_STYLE_PARTITIONING_OPT_KEY -> "true",
-        HoodieWriteConfig.DELETE_PARALLELISM -> "200",
+        "path" -> path,
+        KEYGENERATOR_CLASS_OPT_KEY.key -> classOf[SqlKeyGenerator].getCanonicalName,
+        TABLE_NAME.key -> tableId.table,
+        OPERATION_OPT_KEY.key -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
+        PARTITIONPATH_FIELD_OPT_KEY.key -> targetTable.partitionColumnNames.mkString(","),
+        HIVE_SUPPORT_TIMESTAMP.key -> "true",
+        HIVE_STYLE_PARTITIONING_OPT_KEY.key -> "true",
+        HoodieWriteConfig.DELETE_PARALLELISM.key -> "200",
         SqlKeyGenerator.PARTITION_SCHEMA -> targetTable.partitionSchema.toDDL
       )
     }
