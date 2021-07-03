@@ -19,6 +19,7 @@
 package org.apache.hudi.keygen.factory;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
@@ -32,6 +33,9 @@ import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.util.Locale;
 import java.util.Objects;
@@ -44,6 +48,8 @@ import java.util.Objects;
  */
 public class HoodieSparkKeyGeneratorFactory {
 
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkKeyGeneratorFactory.class);
+
   public static KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
     // keyGenerator class name has higher priority
     KeyGenerator keyGenerator = KeyGenUtils.createKeyGeneratorByClassName(props);
@@ -54,7 +60,12 @@ public class HoodieSparkKeyGeneratorFactory {
   private static BuiltinKeyGenerator createKeyGeneratorByType(TypedProperties props) throws IOException {
     // Use KeyGeneratorType.SIMPLE as default keyGeneratorType
     String keyGeneratorType =
-        props.getString(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key(), KeyGeneratorType.SIMPLE.name());
+        props.getString(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key(), null);
+
+    if (StringUtils.isNullOrEmpty(keyGeneratorType)) {
+      LOG.info("The value of {} is empty, use SIMPLE", HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key());
+      keyGeneratorType = KeyGeneratorType.SIMPLE.name();
+    }
 
     KeyGeneratorType keyGeneratorTypeEnum;
     try {

@@ -1130,6 +1130,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS);
   }
 
+  public String getBootstrapKeyGeneratorType() {
+    return getString(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_TYPE);
+  }
+
   public String getBootstrapModeSelectorRegex() {
     return getString(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR_REGEX);
   }
