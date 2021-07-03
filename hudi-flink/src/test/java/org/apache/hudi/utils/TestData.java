@@ -114,6 +114,17 @@ public class TestData {
           TimestampData.fromEpochMillis(8), StringData.fromString("par4"))
   );
 
+  public static List<RowData> DATA_SET_INSERT_SEPARATE_PARTITION = Arrays.asList(
+      insertRow(StringData.fromString("id12"), StringData.fromString("Monica"), 27,
+          TimestampData.fromEpochMillis(9), StringData.fromString("par5")),
+      insertRow(StringData.fromString("id13"), StringData.fromString("Phoebe"), 31,
+          TimestampData.fromEpochMillis(10), StringData.fromString("par5")),
+      insertRow(StringData.fromString("id14"), StringData.fromString("Rachel"), 52,
+          TimestampData.fromEpochMillis(11), StringData.fromString("par6")),
+      insertRow(StringData.fromString("id15"), StringData.fromString("Ross"), 29,
+          TimestampData.fromEpochMillis(12), StringData.fromString("par6"))
+  );
+
   public static List<RowData> DATA_SET_INSERT_DUPLICATES = new ArrayList<>();
   static {
     IntStream.range(0, 5).forEach(i -> DATA_SET_INSERT_DUPLICATES.add(
