@@ -542,7 +542,8 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
       "path" -> basePath,
       DataSourceWriteOptions.TABLE_NAME_OPT_KEY.key -> "test_hoodie",
       DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY.key -> "partition",
-      DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX.key -> "true"
+      DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX.key -> "true",
+      DataSourceWriteOptions.HIVE_CREATE_MANAGED_TABLE.key -> "true"
     )
     val parameters = HoodieWriterUtils.parametersWithWriteDefaults(params)
     val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(parameters)
@@ -559,6 +560,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
       new Path(basePath), newHoodieConfig).asInstanceOf[HiveSyncConfig]
 
     assertTrue(hiveSyncConfig.skipROSuffix)
+    assertTrue(hiveSyncConfig.createManagedTable)
     assertResult("spark.sql.sources.provider=hudi\n" +
       "spark.sql.sources.schema.partCol.0=partition\n" +
       "spark.sql.sources.schema.numParts=1\n" +
