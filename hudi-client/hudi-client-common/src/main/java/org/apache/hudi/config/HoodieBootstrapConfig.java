@@ -25,6 +25,7 @@ import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
 import java.io.File;
 import java.io.FileReader;
@@ -59,6 +60,12 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .noDefaultValue()
       .sinceVersion("0.6.0")
       .withDocumentation("Key generator implementation to be used for generating keys from the bootstrapped dataset");
+
+  public static final ConfigProperty<String> BOOTSTRAP_KEYGEN_TYPE = ConfigProperty
+      .key("hoodie.bootstrap.keygen.type")
+      .defaultValue(KeyGeneratorType.SIMPLE.name())
+      .sinceVersion("0.9.0")
+      .withDocumentation("Type of build-in key generator, currently support SIMPLE, COMPLEX, TIMESTAMP, CUSTOM, NON_PARTITION, GLOBAL_DELETE");
 
   public static final ConfigProperty<String> BOOTSTRAP_PARTITION_PATH_TRANSLATOR_CLASS = ConfigProperty
       .key("hoodie.bootstrap.partitionpath.translator.class")
@@ -128,6 +135,11 @@ public class HoodieBootstrapConfig extends HoodieConfig {
 
     public Builder withBootstrapKeyGenClass(String keyGenClass) {
       bootstrapConfig.setValue(BOOTSTRAP_KEYGEN_CLASS, keyGenClass);
+      return this;
+    }
+
+    public Builder withBootstrapKeyGenType(String keyGenType) {
+      bootstrapConfig.setValue(BOOTSTRAP_KEYGEN_TYPE, keyGenType);
       return this;
     }
 
