@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.CoordinatorExecutor;
 import org.apache.hudi.sink.utils.HiveSyncContext;
@@ -40,6 +41,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
+import org.apache.flink.runtime.operators.coordination.TaskNotRunningException;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,6 +58,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
 
@@ -354,6 +357,26 @@ public class StreamWriteOperatorCoordinator
   }
 
   /**
+   * The coordinator reuses the instant if there is no data for this round of checkpoint,
+   * sends the commit ack events to unblock the flushing.
+   */
+  private void sendCommitAckEvents() {
+    CompletableFuture<?>[] futures = IntStream.range(0, this.parallelism)
+        .mapToObj(taskID -> {
+          try {
+            return this.context.sendEvent(CommitAckEvent.getInstance(), taskID);
+          } catch (TaskNotRunningException e) {
+            throw new HoodieException("Error while sending commit ack event to task [" + taskID + "] error", e);
+          }
+        }).toArray(CompletableFuture<?>[]::new);
+    try {
+      CompletableFuture.allOf(futures).get();
+    } catch (Exception e) {
+      throw new HoodieException("Error while waiting for the commit ack events to finish sending", e);
+    }
+  }
+
+  /**
    * Commits the instant.
    *
    * @return true if the write statuses are committed successfully.
@@ -373,6 +396,8 @@ public class StreamWriteOperatorCoordinator
     if (writeResults.size() == 0) {
       // No data has written, reset the buffer and returns early
       reset();
+      // Send commit ack event to the write function to unblock the flushing
+      sendCommitAckEvents();
       return false;
     }
     doCommit(instant, writeResults);
