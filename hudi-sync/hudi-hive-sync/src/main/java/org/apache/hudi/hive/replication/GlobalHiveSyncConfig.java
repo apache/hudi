@@ -41,6 +41,7 @@ public class GlobalHiveSyncConfig extends HiveSyncConfig {
     newConfig.verifyMetadataFileListing = cfg.verifyMetadataFileListing;
     newConfig.supportTimestamp = cfg.supportTimestamp;
     newConfig.decodePartition = cfg.decodePartition;
+    newConfig.batchSyncNum = cfg.batchSyncNum;
     newConfig.globallyReplicatedTimeStamp = cfg.globallyReplicatedTimeStamp;
     return newConfig;
   }
