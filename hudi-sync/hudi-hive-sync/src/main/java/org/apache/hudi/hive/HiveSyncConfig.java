@@ -107,7 +107,7 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--managed-table"}, description = "Create a managed table")
   public Boolean createManagedTable = false;
 
-  @Parameter(names = {"--batch-sync-num"}, description = "how many partitions one batch when synchronous partitions to hive")
+  @Parameter(names = {"--batch-sync-num"}, description = "The number of partitions one batch when synchronous partitions to hive")
   public Integer batchSyncNum = 1000;
 
   // enhance the similar function in child class

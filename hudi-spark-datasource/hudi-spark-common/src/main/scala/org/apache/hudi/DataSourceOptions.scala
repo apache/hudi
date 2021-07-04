@@ -465,7 +465,7 @@ object DataSourceWriteOptions {
   val HIVE_BATCH_SYNC_PARTITION_NUM: ConfigProperty[Int] = ConfigProperty
     .key("hoodie.datasource.hive_sync.batch_num")
     .defaultValue(1000)
-    .withDocumentation("")
+    .withDocumentation("The number of partitions one batch when synchronous partitions to hive.")
 
   // Async Compaction - Enabled by default for MOR
   val ASYNC_COMPACT_ENABLE_OPT_KEY: ConfigProperty[String] = ConfigProperty
