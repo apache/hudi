@@ -41,6 +41,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.parquet.hadoop.api.ReadSupport;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
