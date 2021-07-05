@@ -67,6 +67,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 
@@ -294,7 +295,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     HoodieTableMetaClient.withPropertyBuilder()
       .setTableType(HoodieTableType.MERGE_ON_READ)
       .setTableName(tableName)
-      .setArchiveLogFolder("archived")
+      .setArchiveLogFolder(HOODIE_ARCHIVELOG_FOLDER_PROP.defaultValue())
       .setPayloadClassName(HoodieMetadataPayload.class.getName())
       .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
       .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
@@ -399,7 +400,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     // (re) init the metadata for reading.
     initTableMetadata();
     try {
-      List<HoodieInstant> instantsToSync = metadata.findInstantsToSync();
+      List<HoodieInstant> instantsToSync = metadata.findInstantsToSyncForWriter();
       if (instantsToSync.isEmpty()) {
         return;
       }
@@ -410,7 +411,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       for (HoodieInstant instant : instantsToSync) {
         LOG.info("Syncing instant " + instant + " to metadata table");
 
-        Option<List<HoodieRecord>> records = HoodieTableMetadataUtil.convertInstantToMetaRecords(datasetMetaClient, instant, metadata.getSyncedInstantTime());
+        Option<List<HoodieRecord>> records = HoodieTableMetadataUtil.convertInstantToMetaRecords(datasetMetaClient, instant, getLatestSyncedInstantTime());
         if (records.isPresent()) {
           commit(records.get(), MetadataPartitionType.FILES.partitionPath(), instant.getTimestamp());
         }

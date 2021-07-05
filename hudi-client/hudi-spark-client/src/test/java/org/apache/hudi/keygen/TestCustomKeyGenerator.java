@@ -22,59 +22,83 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.config.TypedProperties;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+
 public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
-  private TypedProperties getCommonProps(boolean getComplexRecordKey) {
+  /**
+   * Method to create props used for common cases.
+   *
+   * @param getComplexRecordKey      Use complex record key or not
+   * @param useKeyGeneratorClassName Use KeyGenerator class name initialize KeyGenerator or not.
+   *                                 true use {@code HoodieWriteConfig.KEYGENERATOR_CLASS_PROP},
+   *                                 false use {@code HoodieWriteConfig.KEYGENERATOR_TYPE_PROP}
+   * @return TypedProperties used to initialize KeyGenerator.
+   */
+  private TypedProperties getCommonProps(boolean getComplexRecordKey, boolean useKeyGeneratorClassName) {
     TypedProperties properties = new TypedProperties();
     if (getComplexRecordKey) {
-      properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_row_key, pii_col");
+      properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "_row_key, pii_col");
     } else {
-      properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_row_key");
+      properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "_row_key");
     }
-    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY, "true");
+    if (useKeyGeneratorClassName) {
+      properties.put(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP.key(), CustomKeyGenerator.class.getName());
+    } else {
+      properties.put(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key(), KeyGeneratorType.CUSTOM.name());
+    }
+    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY.key(), "true");
     return properties;
   }
 
-  private TypedProperties getPropertiesForSimpleKeyGen() {
-    TypedProperties properties = getCommonProps(false);
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp:simple");
+  private TypedProperties getPropertiesForSimpleKeyGen(boolean useKeyGeneratorClassName) {
+    TypedProperties properties = getCommonProps(false, useKeyGeneratorClassName);
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "timestamp:simple");
     return properties;
   }
 
-  private TypedProperties getImproperPartitionFieldFormatProp() {
-    TypedProperties properties = getCommonProps(false);
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp");
+  private TypedProperties getImproperPartitionFieldFormatProp(boolean useKeyGeneratorClassName) {
+    TypedProperties properties = getCommonProps(false, useKeyGeneratorClassName);
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "timestamp");
     return properties;
   }
 
-  private TypedProperties getInvalidPartitionKeyTypeProps() {
-    TypedProperties properties = getCommonProps(false);
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp:dummy");
+  private TypedProperties getInvalidPartitionKeyTypeProps(boolean useKeyGeneratorClassName) {
+    TypedProperties properties = getCommonProps(false, useKeyGeneratorClassName);
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "timestamp:dummy");
     return properties;
   }
 
-  private TypedProperties getComplexRecordKeyWithSimplePartitionProps() {
-    TypedProperties properties = getCommonProps(true);
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp:simple");
+  private TypedProperties getComplexRecordKeyWithSimplePartitionProps(boolean useKeyGeneratorClassName) {
+    TypedProperties properties = getCommonProps(true, useKeyGeneratorClassName);
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "timestamp:simple");
     return properties;
   }
 
-  private TypedProperties getComplexRecordKeyAndPartitionPathProps() {
-    TypedProperties properties = getCommonProps(true);
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp:simple,ts_ms:timestamp");
+  private TypedProperties getComplexRecordKeyAndPartitionPathProps(boolean useKeyGeneratorClassName) {
+    TypedProperties properties = getCommonProps(true, useKeyGeneratorClassName);
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "timestamp:simple,ts_ms:timestamp");
     populateNecessaryPropsForTimestampBasedKeyGen(properties);
     return properties;
   }
 
-  private TypedProperties getPropsWithoutRecordKeyFieldProps() {
+  private TypedProperties getPropsWithoutRecordKeyFieldProps(boolean useKeyGeneratorClassName) {
     TypedProperties properties = new TypedProperties();
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp:simple");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "timestamp:simple");
+    if (useKeyGeneratorClassName) {
+      properties.put(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP.key(), CustomKeyGenerator.class.getName());
+    } else {
+      properties.put(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key(), KeyGeneratorType.CUSTOM.name());
+    }
     return properties;
   }
 
@@ -84,22 +108,32 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
     properties.put("hoodie.deltastreamer.keygen.timebased.output.dateformat", "yyyyMMdd");
   }
 
-  private TypedProperties getPropertiesForTimestampBasedKeyGen() {
-    TypedProperties properties = getCommonProps(false);
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "ts_ms:timestamp");
+  private TypedProperties getPropertiesForTimestampBasedKeyGen(boolean useKeyGeneratorClassName) {
+    TypedProperties properties = getCommonProps(false, useKeyGeneratorClassName);
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "ts_ms:timestamp");
     populateNecessaryPropsForTimestampBasedKeyGen(properties);
     return properties;
   }
 
-  private TypedProperties getPropertiesForNonPartitionedKeyGen() {
-    TypedProperties properties = getCommonProps(false);
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "");
+  private TypedProperties getPropertiesForNonPartitionedKeyGen(boolean useKeyGeneratorClassName) {
+    TypedProperties properties = getCommonProps(false, useKeyGeneratorClassName);
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "");
     return properties;
   }
 
   @Test
-  public void testSimpleKeyGenerator() {
-    BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getPropertiesForSimpleKeyGen());
+  public void testSimpleKeyGeneratorWithKeyGeneratorClass() throws IOException {
+    testSimpleKeyGenerator(getPropertiesForSimpleKeyGen(true));
+  }
+
+  @Test
+  public void testSimpleKeyGeneratorWithKeyGeneratorType() throws IOException {
+    testSimpleKeyGenerator(getPropertiesForSimpleKeyGen(false));
+  }
+
+  public void testSimpleKeyGenerator(TypedProperties props) throws IOException {
+    BuiltinKeyGenerator keyGenerator =
+        (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
     GenericRecord record = getRecord();
     HoodieKey key = keyGenerator.getKey(record);
     Assertions.assertEquals(key.getRecordKey(), "key1");
@@ -110,8 +144,19 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
-  public void testTimestampBasedKeyGenerator() {
-    BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getPropertiesForTimestampBasedKeyGen());
+  public void testTimestampBasedKeyGeneratorWithKeyGeneratorClass() throws IOException {
+    testTimestampBasedKeyGenerator(getPropertiesForTimestampBasedKeyGen(true));
+  }
+
+  @Test
+  public void testTimestampBasedKeyGeneratorWithKeyGeneratorType() throws IOException {
+    testTimestampBasedKeyGenerator(getPropertiesForTimestampBasedKeyGen(false));
+  }
+
+  public void testTimestampBasedKeyGenerator(TypedProperties props) throws IOException {
+    BuiltinKeyGenerator keyGenerator =
+        (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+
     GenericRecord record = getRecord();
     HoodieKey key = keyGenerator.getKey(record);
     Assertions.assertEquals(key.getRecordKey(), "key1");
@@ -122,8 +167,19 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
-  public void testNonPartitionedKeyGenerator() {
-    BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getPropertiesForNonPartitionedKeyGen());
+  public void testNonPartitionedKeyGeneratorWithKeyGeneratorClass() throws IOException {
+    testNonPartitionedKeyGenerator(getPropertiesForNonPartitionedKeyGen(true));
+  }
+
+  @Test
+  public void testNonPartitionedKeyGeneratorWithKeyGeneratorType() throws IOException {
+    testNonPartitionedKeyGenerator(getPropertiesForNonPartitionedKeyGen(false));
+  }
+
+  public void testNonPartitionedKeyGenerator(TypedProperties props) throws IOException {
+    BuiltinKeyGenerator keyGenerator =
+        (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+
     GenericRecord record = getRecord();
     HoodieKey key = keyGenerator.getKey(record);
     Assertions.assertEquals(key.getRecordKey(), "key1");
@@ -134,9 +190,20 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
-  public void testInvalidPartitionKeyType() {
+  public void testInvalidPartitionKeyTypeWithKeyGeneratorClass() {
+    testInvalidPartitionKeyType(getInvalidPartitionKeyTypeProps(true));
+  }
+
+  @Test
+  public void testInvalidPartitionKeyTypeWithKeyGeneratorType() {
+    testInvalidPartitionKeyType(getInvalidPartitionKeyTypeProps(false));
+  }
+
+  public void testInvalidPartitionKeyType(TypedProperties props) {
     try {
-      BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getInvalidPartitionKeyTypeProps());
+      BuiltinKeyGenerator keyGenerator =
+          (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+
       keyGenerator.getKey(getRecord());
       Assertions.fail("should fail when invalid PartitionKeyType is provided!");
     } catch (Exception e) {
@@ -144,7 +211,9 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
     }
 
     try {
-      BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getInvalidPartitionKeyTypeProps());
+      BuiltinKeyGenerator keyGenerator =
+          (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+
       GenericRecord record = getRecord();
       Row row = KeyGeneratorTestUtilities.getRow(record);
       keyGenerator.getPartitionPath(row);
@@ -155,30 +224,76 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
-  public void testNoRecordKeyFieldProp() {
+  public void testNoRecordKeyFieldPropWithKeyGeneratorClass() {
+    testNoRecordKeyFieldProp(true);
+  }
+
+  @Test
+  public void testNoRecordKeyFieldPropWithKeyGeneratorType() {
+    testNoRecordKeyFieldProp(false);
+  }
+
+  public void testNoRecordKeyFieldProp(boolean useKeyGeneratorClassName) {
+    TypedProperties propsWithoutRecordKeyFieldProps = getPropsWithoutRecordKeyFieldProps(useKeyGeneratorClassName);
     try {
-      BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getPropsWithoutRecordKeyFieldProps());
+      BuiltinKeyGenerator keyGenerator =
+          (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(propsWithoutRecordKeyFieldProps);
+
       keyGenerator.getKey(getRecord());
       Assertions.fail("should fail when record key field is not provided!");
     } catch (Exception e) {
-      Assertions.assertTrue(e.getMessage().contains("Property hoodie.datasource.write.recordkey.field not found"));
+      if (useKeyGeneratorClassName) {
+        // "Property hoodie.datasource.write.recordkey.field not found" exception cause CustomKeyGenerator init fail
+        Assertions.assertTrue(e
+            .getCause()
+            .getCause()
+            .getCause()
+            .getMessage()
+            .contains("Property hoodie.datasource.write.recordkey.field not found"));
+      } else {
+        Assertions.assertTrue(e.getMessage().contains("Property hoodie.datasource.write.recordkey.field not found"));
+      }
+
     }
 
     try {
-      BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getPropsWithoutRecordKeyFieldProps());
+      BuiltinKeyGenerator keyGenerator =
+          (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(propsWithoutRecordKeyFieldProps);
+
       GenericRecord record = getRecord();
       Row row = KeyGeneratorTestUtilities.getRow(record);
       keyGenerator.getRecordKey(row);
       Assertions.fail("should fail when record key field is not provided!");
     } catch (Exception e) {
-      Assertions.assertTrue(e.getMessage().contains("Property hoodie.datasource.write.recordkey.field not found"));
+      if (useKeyGeneratorClassName) {
+        // "Property hoodie.datasource.write.recordkey.field not found" exception cause CustomKeyGenerator init fail
+        Assertions.assertTrue(e
+            .getCause()
+            .getCause()
+            .getCause()
+            .getMessage()
+            .contains("Property hoodie.datasource.write.recordkey.field not found"));
+      } else {
+        Assertions.assertTrue(e.getMessage().contains("Property hoodie.datasource.write.recordkey.field not found"));
+      }
     }
   }
 
   @Test
-  public void testPartitionFieldsInImproperFormat() {
+  public void testPartitionFieldsInImproperFormatWithKeyGeneratorClass() {
+    testPartitionFieldsInImproperFormat(getImproperPartitionFieldFormatProp(true));
+  }
+
+  @Test
+  public void testPartitionFieldsInImproperFormatWithKeyGeneratorType() {
+    testPartitionFieldsInImproperFormat(getImproperPartitionFieldFormatProp(false));
+  }
+
+  public void testPartitionFieldsInImproperFormat(TypedProperties props) {
     try {
-      BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getImproperPartitionFieldFormatProp());
+      BuiltinKeyGenerator keyGenerator =
+          (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+
       keyGenerator.getKey(getRecord());
       Assertions.fail("should fail when partition key field is provided in improper format!");
     } catch (Exception e) {
@@ -186,7 +301,9 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
     }
 
     try {
-      BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getImproperPartitionFieldFormatProp());
+      BuiltinKeyGenerator keyGenerator =
+          (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+
       GenericRecord record = getRecord();
       Row row = KeyGeneratorTestUtilities.getRow(record);
       keyGenerator.getPartitionPath(row);
@@ -197,8 +314,19 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
-  public void testComplexRecordKeyWithSimplePartitionPath() {
-    BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getComplexRecordKeyWithSimplePartitionProps());
+  public void testComplexRecordKeyWithSimplePartitionPathWithKeyGeneratorClass() throws IOException {
+    testComplexRecordKeyWithSimplePartitionPath(getComplexRecordKeyWithSimplePartitionProps(true));
+  }
+
+  @Test
+  public void testComplexRecordKeyWithSimplePartitionPathWithKeyGeneratorType() throws IOException {
+    testComplexRecordKeyWithSimplePartitionPath(getComplexRecordKeyWithSimplePartitionProps(false));
+  }
+
+  public void testComplexRecordKeyWithSimplePartitionPath(TypedProperties props) throws IOException {
+    BuiltinKeyGenerator keyGenerator =
+        (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+
     GenericRecord record = getRecord();
     HoodieKey key = keyGenerator.getKey(record);
     Assertions.assertEquals(key.getRecordKey(), "_row_key:key1,pii_col:pi");
@@ -210,8 +338,19 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @Test
-  public void testComplexRecordKeysWithComplexPartitionPath() {
-    BuiltinKeyGenerator keyGenerator = new CustomKeyGenerator(getComplexRecordKeyAndPartitionPathProps());
+  public void testComplexRecordKeysWithComplexPartitionPathWithKeyGeneratorClass() throws IOException {
+    testComplexRecordKeysWithComplexPartitionPath(getComplexRecordKeyAndPartitionPathProps(true));
+  }
+
+  @Test
+  public void testComplexRecordKeysWithComplexPartitionPathWithKeyGeneratorType() throws IOException {
+    testComplexRecordKeysWithComplexPartitionPath(getComplexRecordKeyAndPartitionPathProps(false));
+  }
+
+  public void testComplexRecordKeysWithComplexPartitionPath(TypedProperties props) throws IOException {
+    BuiltinKeyGenerator keyGenerator =
+        (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+
     GenericRecord record = getRecord();
     HoodieKey key = keyGenerator.getKey(record);
     Assertions.assertEquals(key.getRecordKey(), "_row_key:key1,pii_col:pi");

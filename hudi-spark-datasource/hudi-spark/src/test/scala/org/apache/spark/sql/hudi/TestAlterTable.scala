@@ -1,0 +1,121 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.spark.sql.hudi
+
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.types.{LongType, StructField, StructType}
+
+class TestAlterTable extends TestHoodieSqlBase {
+
+  test("Test Alter Table") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        // Create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | location '$tablePath'
+             | options (
+             |  type = '$tableType',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+       """.stripMargin)
+        // Alter table name.
+        val newTableName = s"${tableName}_1"
+        spark.sql(s"alter table $tableName rename to $newTableName")
+        assertResult(false)(
+          spark.sessionState.catalog.tableExists(new TableIdentifier(tableName))
+        )
+        assertResult(true) (
+          spark.sessionState.catalog.tableExists(new TableIdentifier(newTableName))
+        )
+        val hadoopConf = spark.sessionState.newHadoopConf()
+        val metaClient = HoodieTableMetaClient.builder().setBasePath(tablePath)
+          .setConf(hadoopConf).build()
+        assertResult(newTableName) (
+          metaClient.getTableConfig.getTableName
+        )
+        spark.sql(s"insert into $newTableName values(1, 'a1', 10, 1000)")
+
+        // Add table column
+        spark.sql(s"alter table $newTableName add columns(ext0 string)")
+        val table = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(newTableName))
+        assertResult(Seq("id", "name", "price", "ts", "ext0")) {
+          HoodieSqlUtils.removeMetaFields(table.schema).fields.map(_.name)
+        }
+        checkAnswer(s"select id, name, price, ts, ext0 from $newTableName")(
+          Seq(1, "a1", 10.0, 1000, null)
+        )
+        // Alter table column type
+        spark.sql(s"alter table $newTableName change column id id bigint")
+        assertResult(StructType(Seq(StructField("id", LongType, nullable = true))))(
+        spark.sql(s"select id from $newTableName").schema)
+
+        // Insert data to the new table.
+        spark.sql(s"insert into $newTableName values(2, 'a2', 12, 1000, 'e0')")
+        checkAnswer(s"select id, name, price, ts, ext0 from $newTableName")(
+          Seq(1, "a1", 10.0, 1000, null),
+          Seq(2, "a2", 12.0, 1000, "e0")
+        )
+
+        // Merge data to the new table.
+        spark.sql(
+          s"""
+             |merge into $newTableName t0
+             |using (
+             |  select 1 as id, 'a1' as name, 12 as price, 1001 as ts, 'e0' as ext0
+             |) s0
+             |on t0.id = s0.id
+             |when matched then update set *
+             |when not matched then insert *
+           """.stripMargin)
+        checkAnswer(s"select id, name, price, ts, ext0 from $newTableName")(
+          Seq(1, "a1", 12.0, 1001, "e0"),
+          Seq(2, "a2", 12.0, 1000, "e0")
+        )
+
+        // Update data to the new table.
+        spark.sql(s"update $newTableName set price = 10, ext0 = null where id = 1")
+        checkAnswer(s"select id, name, price, ts, ext0 from $newTableName")(
+          Seq(1, "a1", 10.0, 1001, null),
+          Seq(2, "a2", 12.0, 1000, "e0")
+        )
+        spark.sql(s"update $newTableName set price = 10, ext0 = null where id = 2")
+        checkAnswer(s"select id, name, price, ts, ext0 from $newTableName")(
+          Seq(1, "a1", 10.0, 1001, null),
+          Seq(2, "a2", 10.0, 1000, null)
+        )
+
+        // Delete data from the new table.
+        spark.sql(s"delete from $newTableName where id = 1")
+        checkAnswer(s"select id, name, price, ts, ext0 from $newTableName")(
+          Seq(2, "a2", 10.0, 1000, null)
+        )
+      }
+    }
+  }
+}

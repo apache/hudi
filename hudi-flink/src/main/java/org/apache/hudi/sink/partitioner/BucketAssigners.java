@@ -21,7 +21,8 @@ package org.apache.hudi.sink.partitioner;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.sink.partitioner.delta.DeltaBucketAssigner;
+import org.apache.hudi.sink.partitioner.profile.WriteProfile;
+import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 
 /**
  * Utilities for {@code BucketAssigner}.
@@ -35,7 +36,7 @@ public abstract class BucketAssigners {
    *
    * @param taskID The task ID
    * @param numTasks The number of tasks
-   * @param isOverwrite Whether the write operation is OVERWRITE
+   * @param overwrite Whether the write operation is OVERWRITE
    * @param tableType The table type
    * @param context The engine context
    * @param config The configuration
@@ -44,20 +45,12 @@ public abstract class BucketAssigners {
   public static BucketAssigner create(
       int taskID,
       int numTasks,
-      boolean isOverwrite,
+      boolean overwrite,
       HoodieTableType tableType,
       HoodieFlinkEngineContext context,
       HoodieWriteConfig config) {
-    if (isOverwrite) {
-      return new OverwriteBucketAssigner(taskID, numTasks, context, config);
-    }
-    switch (tableType) {
-      case COPY_ON_WRITE:
-        return new BucketAssigner(taskID, numTasks, context, config);
-      case MERGE_ON_READ:
-        return new DeltaBucketAssigner(taskID, numTasks, context, config);
-      default:
-        throw new AssertionError();
-    }
+    boolean delta = tableType.equals(HoodieTableType.MERGE_ON_READ);
+    WriteProfile writeProfile = WriteProfiles.singleton(overwrite, delta, config, context);
+    return new BucketAssigner(taskID, numTasks, writeProfile, config);
   }
 }

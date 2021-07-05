@@ -59,7 +59,6 @@ public abstract class HoodieJavaClientTestHarness extends HoodieCommonTestHarnes
   protected transient TestJavaTaskContextSupplier taskContextSupplier = null;
   protected transient FileSystem fs;
   protected transient ExecutorService executorService;
-  protected transient HoodieTableMetaClient metaClient;
   protected transient HoodieTableFileSystemView tableView;
   protected transient HoodieJavaWriteClient writeClient;
 

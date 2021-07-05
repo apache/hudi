@@ -64,7 +64,10 @@ public class HiveSchemaUtil {
     } catch (IOException e) {
       throw new HoodieHiveSyncException("Failed to convert parquet schema to hive schema", e);
     }
-    LOG.info("Getting schema difference for " + tableSchema + "\r\n\r\n" + newTableSchema);
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Getting schema difference for " + tableSchema + "\r\n\r\n" + newTableSchema);
+    }
+
     SchemaDifference.Builder schemaDiffBuilder = SchemaDifference.newBuilder(storageSchema, tableSchema);
     Set<String> tableColumns = new HashSet<>();
 
@@ -109,7 +112,9 @@ public class HiveSchemaUtil {
         schemaDiffBuilder.addTableColumn(entry.getKey(), entry.getValue());
       }
     }
-    LOG.info("Difference between schemas: " + schemaDiffBuilder.build().toString());
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Difference between schemas: " + schemaDiffBuilder.build().toString());
+    }
 
     return schemaDiffBuilder.build();
   }
@@ -408,7 +413,12 @@ public class HiveSchemaUtil {
     }
 
     String partitionsStr = String.join(",", partitionFields);
-    StringBuilder sb = new StringBuilder("CREATE EXTERNAL TABLE  IF NOT EXISTS ");
+    StringBuilder sb = new StringBuilder();
+    if (config.createManagedTable) {
+      sb.append("CREATE TABLE IF NOT EXISTS ");
+    } else {
+      sb.append("CREATE EXTERNAL TABLE IF NOT EXISTS ");
+    }
     sb.append(HIVE_ESCAPE_CHARACTER).append(config.databaseName).append(HIVE_ESCAPE_CHARACTER)
             .append(".").append(HIVE_ESCAPE_CHARACTER).append(tableName).append(HIVE_ESCAPE_CHARACTER);
     sb.append("( ").append(columns).append(")");

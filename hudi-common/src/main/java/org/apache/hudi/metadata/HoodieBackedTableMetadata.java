@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -92,7 +91,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   private void initIfNeeded() {
-    if (enabled && this.metaClient == null) {
+    if (!enabled) {
+      LOG.info("Metadata table is disabled for " + datasetBasePath);
+    } else if (this.metaClient == null) {
       this.metadataBasePath = HoodieTableMetadata.getMetadataTableBasePath(datasetBasePath);
       try {
         this.metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf.get()).setBasePath(metadataBasePath).build();
@@ -107,8 +108,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         this.enabled = false;
         this.metaClient = null;
       }
-    } else {
-      LOG.info("Metadata table is disabled.");
     }
   }
 
@@ -214,8 +213,16 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
       // Load the schema
       Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
-      logRecordScanner = new HoodieMetadataMergedLogRecordScanner(metaClient.getFs(), metadataBasePath, logFilePaths,
-          schema, latestMetaInstantTimestamp, MAX_MEMORY_SIZE_IN_BYTES, BUFFER_SIZE, spillableMapDirectory, null);
+      logRecordScanner = HoodieMetadataMergedLogRecordScanner.newBuilder()
+          .withFileSystem(metaClient.getFs())
+          .withBasePath(metadataBasePath)
+          .withLogFilePaths(logFilePaths)
+          .withReaderSchema(schema)
+          .withLatestInstantTime(latestMetaInstantTimestamp)
+          .withMaxMemorySizeInBytes(MAX_MEMORY_SIZE_IN_BYTES)
+          .withBufferSize(BUFFER_SIZE)
+          .withSpillableMapBasePath(spillableMapDirectory)
+          .build();
 
       logScannerOpenMs = timer.endTimer();
       LOG.info(String.format("Opened metadata log files from %s at instant (dataset instant=%s, metadata instant=%s) in %d ms",
@@ -257,7 +264,22 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
    * Return an ordered list of instants which have not been synced to the Metadata Table.
    */
   @Override
-  protected List<HoodieInstant> findInstantsToSync() {
+  protected List<HoodieInstant> findInstantsToSyncForReader() {
+    return findInstantsToSync(true);
+  }
+
+  /**
+   * Return an ordered list of instants which have not been synced to the Metadata Table.
+   */
+  @Override
+  protected List<HoodieInstant> findInstantsToSyncForWriter() {
+    return findInstantsToSync(false);
+  }
+
+  /**
+   * Return an ordered list of instants which have not been synced to the Metadata Table.
+   */
+  private List<HoodieInstant> findInstantsToSync(boolean ignoreIncompleteInstants) {
     initIfNeeded();
 
     // if there are no instants yet, return empty list, since there is nothing to sync here.
@@ -269,7 +291,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // are candidates for sync.
     String latestMetadataInstantTime = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get().getTimestamp();
     HoodieDefaultTimeline candidateTimeline = datasetMetaClient.getActiveTimeline().findInstantsAfter(latestMetadataInstantTime, Integer.MAX_VALUE);
-    Option<HoodieInstant> earliestIncompleteInstant = candidateTimeline.filterInflightsAndRequested().firstInstant();
+    Option<HoodieInstant> earliestIncompleteInstant = ignoreIncompleteInstants ? Option.empty()
+        : candidateTimeline.filterInflightsAndRequested().firstInstant();
 
     if (earliestIncompleteInstant.isPresent()) {
       return candidateTimeline.filterCompletedInstants()
@@ -279,20 +302,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return candidateTimeline.filterCompletedInstants()
           .getInstants().collect(Collectors.toList());
     }
-  }
-
-  /**
-   * Return the timestamp of the latest compaction instant.
-   */
-  @Override
-  public Option<String> getSyncedInstantTime() {
-    if (!enabled) {
-      return Option.empty();
-    }
-
-    HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
-    return timeline.getDeltaCommitTimeline().filterCompletedInstants()
-        .lastInstant().map(HoodieInstant::getTimestamp);
   }
 
   public boolean enabled() {

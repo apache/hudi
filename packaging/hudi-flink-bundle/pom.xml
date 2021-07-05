@@ -32,10 +32,11 @@
     <checkstyle.skip>true</checkstyle.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
     <flink.bundle.hive.scope>provided</flink.bundle.hive.scope>
-    <flink.bundle.hive.shade.prefix>org.apache.hudi.</flink.bundle.hive.shade.prefix>
+    <flink.bundle.shade.prefix>org.apache.hudi.</flink.bundle.shade.prefix>
     <javax.servlet.version>3.1.0</javax.servlet.version>
     <!-- override to be same with flink 1.12.2 -->
     <parquet.version>1.11.1</parquet.version>
+    <hive.version>2.3.1</hive.version>
   </properties>
 
   <build>
@@ -120,6 +121,9 @@
                   <include>org.eclipse.jetty.websocket:*</include>
                   <include>javax.servlet:javax.servlet-api</include>
 
+                  <!-- Used for HUDI write handle -->
+                  <inclide>com.esotericsoftware:kryo-shaded</inclide>
+
                   <include>org.apache.flink:flink-hadoop-compatibility_${scala.binary.version}</include>
                   <include>org.apache.flink:flink-avro</include>
                   <include>org.apache.flink:flink-json</include>
@@ -131,6 +135,9 @@
                   <include>org.apache.hive:hive-exec</include>
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
+                  <include>org.datanucleus:datanucleus-core</include>
+                  <include>org.datanucleus:datanucleus-api-jdo</include>
+                  <include>org.apache.thrift:libfb303</include>
 
                   <include>org.apache.hbase:hbase-common</include>
                   <include>commons-codec:commons-codec</include>
@@ -139,59 +146,59 @@
               <relocations>
                 <relocation>
                   <pattern>org.apache.avro.</pattern>
-                  <shadedPattern>${flink.bundle.hive.shade.prefix}org.apache.avro.</shadedPattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.avro.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.parquet.</pattern>
-                  <shadedPattern>${flink.bundle.hive.shade.prefix}org.apache.parquet.</shadedPattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.parquet.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.yammer.metrics.</pattern>
-                  <shadedPattern>org.apache.hudi.com.yammer.metrics.</shadedPattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}com.yammer.metrics.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.beust.jcommander.</pattern>
-                  <shadedPattern>org.apache.hudi.com.beust.jcommander.</shadedPattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}com.beust.jcommander.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hive.jdbc.</pattern>
-                  <shadedPattern>${flink.bundle.hive.shade.prefix}org.apache.hive.jdbc.</shadedPattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hive.jdbc.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hive.metastore.</pattern>
-                  <shadedPattern>${flink.bundle.hive.shade.prefix}org.apache.hadoop.hive.metastore.</shadedPattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hadoop.hive.metastore.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hive.common.</pattern>
-                  <shadedPattern>${flink.bundle.hive.shade.prefix}org.apache.hive.common.</shadedPattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hive.common.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hive.common.</pattern>
-                  <shadedPattern>${flink.bundle.hive.shade.prefix}org.apache.hadoop.hive.common.</shadedPattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hadoop.hive.common.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hive.conf.</pattern>
-                  <shadedPattern>${flink.bundle.hive.shade.prefix}org.apache.hadoop.hive.conf.</shadedPattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hadoop.hive.conf.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hive.service.</pattern>
-                  <shadedPattern>${flink.bundle.hive.shade.prefix}org.apache.hive.service.</shadedPattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hive.service.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.hadoop.hive.service.</pattern>
-                  <shadedPattern>${flink.bundle.hive.shade.prefix}org.apache.hadoop.hive.service.</shadedPattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.hadoop.hive.service.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.codahale.metrics.</pattern>
-                  <shadedPattern>org.apache.hudi.com.codahale.metrics.</shadedPattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}com.codahale.metrics.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.apache.commons.codec.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.commons.codec.</shadedPattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.commons.codec.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>org.eclipse.jetty.</pattern>
-                  <shadedPattern>org.apache.hudi.org.apache.jetty.</shadedPattern>
+                  <shadedPattern>${flink.bundle.shade.prefix}org.apache.jetty.</shadedPattern>
                 </relocation>
               </relocations>
               <filters>
@@ -398,6 +405,14 @@
           <artifactId>guava</artifactId>
           <groupId>com.google.guava</groupId>
         </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.pentaho</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -423,6 +438,10 @@
           <artifactId>guava</artifactId>
           <groupId>com.google.guava</groupId>
         </exclusion>
+        <exclusion>
+          <groupId>org.pentaho</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -434,6 +453,10 @@
         <exclusion>
           <groupId>javax.servlet</groupId>
           <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.datanucleus</groupId>
+          <artifactId>datanucleus-core</artifactId>
         </exclusion>
         <exclusion>
           <groupId>javax.servlet.jsp</groupId>
@@ -459,6 +482,10 @@
           <groupId>javax.servlet.jsp</groupId>
           <artifactId>*</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -471,13 +498,64 @@
           <groupId>org.eclipse.jetty.orbit</groupId>
           <artifactId>javax.servlet</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
       </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.datanucleus</groupId>
+      <artifactId>datanucleus-core</artifactId>
+      <scope>${flink.bundle.hive.scope}</scope>
+      <version>5.0.1</version>
+    </dependency>
+    <dependency>
+      <groupId>org.datanucleus</groupId>
+      <artifactId>datanucleus-api-jdo</artifactId>
+      <scope>${flink.bundle.hive.scope}</scope>
+      <version>5.0.1</version>
     </dependency>
 
     <dependency>
       <groupId>joda-time</groupId>
       <artifactId>joda-time</artifactId>
       <scope>compile</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-server</artifactId>
+      <version>${jetty.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-util</artifactId>
+      <version>${jetty.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-webapp</artifactId>
+      <version>${jetty.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-http</artifactId>
+      <version>${jetty.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.thrift</groupId>
+      <artifactId>libfb303</artifactId>
+      <version>0.9.3</version>
+      <scope>${flink.bundle.hive.scope}</scope>
+    </dependency>
+
+    <!-- kryo -->
+    <dependency>
+      <groupId>com.esotericsoftware</groupId>
+      <artifactId>kryo-shaded</artifactId>
+      <version>4.0.2</version>
     </dependency>
 
     <!-- Fasterxml -->
@@ -513,8 +591,16 @@
 
   <profiles>
     <profile>
-      <id>flink-bundle-shade-hive</id>
+      <id>flink-bundle-shade-hive2</id>
       <properties>
+        <hive.version>2.3.1</hive.version>
+        <flink.bundle.hive.scope>compile</flink.bundle.hive.scope>
+      </properties>
+    </profile>
+    <profile>
+      <id>flink-bundle-shade-hive3</id>
+      <properties>
+        <hive.version>3.1.2</hive.version>
         <flink.bundle.hive.scope>compile</flink.bundle.hive.scope>
       </properties>
     </profile>

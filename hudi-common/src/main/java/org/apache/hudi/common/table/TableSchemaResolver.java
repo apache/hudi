@@ -164,7 +164,22 @@ public class TableSchemaResolver {
    */
   public Schema getTableAvroSchema(boolean includeMetadataFields) throws Exception {
     Option<Schema> schemaFromCommitMetadata = getTableSchemaFromCommitMetadata(includeMetadataFields);
-    return schemaFromCommitMetadata.isPresent() ? schemaFromCommitMetadata.get() : getTableAvroSchemaFromDataFile();
+    if (schemaFromCommitMetadata.isPresent()) {
+      return schemaFromCommitMetadata.get();
+    }
+    Option<Schema> schemaFromTableConfig = metaClient.getTableConfig().getTableCreateSchema();
+    if (schemaFromTableConfig.isPresent()) {
+      if (includeMetadataFields) {
+        return HoodieAvroUtils.addMetadataFields(schemaFromTableConfig.get());
+      } else {
+        return schemaFromTableConfig.get();
+      }
+    }
+    if (includeMetadataFields) {
+      return getTableAvroSchemaFromDataFile();
+    } else {
+      return HoodieAvroUtils.removeMetadataFields(getTableAvroSchemaFromDataFile());
+    }
   }
 
   /**
@@ -186,10 +201,7 @@ public class TableSchemaResolver {
    * @throws Exception
    */
   public Schema getTableAvroSchemaWithoutMetadataFields() throws Exception {
-    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    Option<Schema> schemaFromCommitMetadata = getTableSchemaFromCommitMetadata(timeline.lastInstant().get(), false);
-    return schemaFromCommitMetadata.isPresent() ? schemaFromCommitMetadata.get() :
-           HoodieAvroUtils.removeMetadataFields(getTableAvroSchemaFromDataFile());
+    return getTableAvroSchema(false);
   }
 
   /**
@@ -201,8 +213,14 @@ public class TableSchemaResolver {
    */
   public Schema getTableAvroSchemaWithoutMetadataFields(HoodieInstant instant) throws Exception {
     Option<Schema> schemaFromCommitMetadata = getTableSchemaFromCommitMetadata(instant, false);
-    return schemaFromCommitMetadata.isPresent() ? schemaFromCommitMetadata.get() :
-        HoodieAvroUtils.removeMetadataFields(getTableAvroSchemaFromDataFile());
+    if (schemaFromCommitMetadata.isPresent()) {
+      return schemaFromCommitMetadata.get();
+    }
+    Option<Schema> schemaFromTableConfig = metaClient.getTableConfig().getTableCreateSchema();
+    if (schemaFromTableConfig.isPresent()) {
+      return schemaFromTableConfig.get();
+    }
+    return HoodieAvroUtils.removeMetadataFields(getTableAvroSchemaFromDataFile());
   }
 
   /**
@@ -212,7 +230,11 @@ public class TableSchemaResolver {
    */
   private Option<Schema> getTableSchemaFromCommitMetadata(boolean includeMetadataFields) {
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    return getTableSchemaFromCommitMetadata(timeline.lastInstant().get(), includeMetadataFields);
+    if (timeline.lastInstant().isPresent()) {
+      return getTableSchemaFromCommitMetadata(timeline.lastInstant().get(), includeMetadataFields);
+    } else {
+      return Option.empty();
+    }
   }
 
 

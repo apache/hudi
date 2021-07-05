@@ -30,14 +30,12 @@ public class HoodiePayloadProps {
    *
    * @see DefaultHoodieRecordPayload
    */
-  public static final String PAYLOAD_ORDERING_FIELD_PROP = "hoodie.payload.ordering.field";
-  public static String DEFAULT_PAYLOAD_ORDERING_FIELD_VAL = "ts";
+  public static final String PAYLOAD_ORDERING_FIELD_PROP_KEY = "hoodie.payload.ordering.field";
 
   /**
    * Property for payload event time field; to be used to extract source event time info.
    *
    * @see DefaultHoodieRecordPayload
    */
-  public static final String PAYLOAD_EVENT_TIME_FIELD_PROP = "hoodie.payload.event.time.field";
-  public static String DEFAULT_PAYLOAD_EVENT_TIME_FIELD_VAL = "ts";
+  public static final String PAYLOAD_EVENT_TIME_FIELD_PROP_KEY = "hoodie.payload.event.time.field";
 }

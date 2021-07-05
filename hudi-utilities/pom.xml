@@ -120,7 +120,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark-common</artifactId>
+      <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
@@ -134,14 +134,10 @@
         </exclusion>
       </exclusions>
     </dependency>
+
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark2_${scala.binary.version}</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark3_2.12</artifactId>
+      <artifactId>${hudi.spark.module}_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
     </dependency>
 

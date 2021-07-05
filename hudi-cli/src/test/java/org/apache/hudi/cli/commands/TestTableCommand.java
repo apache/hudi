@@ -18,14 +18,20 @@
 
 package org.apache.hudi.cli.commands;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
+import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.Option;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,9 +39,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.shell.core.CommandResult;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -191,5 +201,79 @@ public class TestTableCommand extends AbstractShellIntegrationTest {
 
     // After refresh, there are 4 instants
     assertEquals(4, timeline.countInstants(), "there should have 4 instants");
+  }
+
+  @Test
+  public void testFetchTableSchema() throws Exception {
+    // Create table and connect
+    HoodieCLI.conf = jsc.hadoopConfiguration();
+    new TableCommand().createTable(
+        tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
+        "", TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
+    metaClient = HoodieCLI.getTableMetaClient();
+
+    String schemaStr = "{\n"
+        + "         \"type\" : \"record\",\n"
+        + "         \"name\" : \"SchemaName\",\n"
+        + "         \"namespace\" : \"SchemaNS\",\n"
+        + "         \"fields\" : [ {\n"
+        + "           \"name\" : \"key\",\n"
+        + "           \"type\" : \"int\"\n"
+        + "         }, {\n"
+        + "           \"name\" : \"val\",\n"
+        + "           \"type\" : [ \"null\", \"string\" ],\n"
+        + "           \"default\" : null\n"
+        + "         }]};";
+
+    generateData(schemaStr);
+
+    CommandResult cr = getShell().executeCommand("fetch table schema");
+    assertTrue(cr.isSuccess());
+
+    String actualSchemaStr = cr.getResult().toString().substring(cr.getResult().toString().indexOf("{"));
+    Schema actualSchema = new Schema.Parser().parse(actualSchemaStr);
+
+    Schema expectedSchema = new Schema.Parser().parse(schemaStr);
+    expectedSchema = HoodieAvroUtils.addMetadataFields(expectedSchema);
+    assertEquals(actualSchema, expectedSchema);
+
+    File file = File.createTempFile("temp", null);
+    cr = getShell().executeCommand("fetch table schema --outputFilePath " + file.getAbsolutePath());
+    assertTrue(cr.isSuccess());
+
+    actualSchemaStr = getFileContent(file.getAbsolutePath());
+    actualSchema = new Schema.Parser().parse(actualSchemaStr);
+    assertEquals(actualSchema, expectedSchema);
+  }
+
+  private LinkedHashMap<String, Integer[]> generateData(String schemaStr) throws Exception {
+    // generate data and metadata
+    LinkedHashMap<String, Integer[]> data = new LinkedHashMap<>();
+    data.put("102", new Integer[] {15, 10});
+    data.put("101", new Integer[] {20, 10});
+    data.put("100", new Integer[] {15, 15});
+    for (Map.Entry<String, Integer[]> entry : data.entrySet()) {
+      String key = entry.getKey();
+      Integer[] value = entry.getValue();
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, key, HoodieCLI.conf,
+          Option.of(value[0]), Option.of(value[1]), Collections.singletonMap(HoodieCommitMetadata.SCHEMA_KEY, schemaStr));
+    }
+
+    metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
+    assertEquals(3, metaClient.reloadActiveTimeline().getCommitsTimeline().countInstants(),
+        "There should have 3 commits");
+    return data;
+  }
+
+  private String getFileContent(String fileToReadStr) throws IOException {
+    File fileToRead = new File(fileToReadStr);
+    if (!fileToRead.exists()) {
+      throw new IllegalStateException("Outfile " + fileToReadStr + "not found ");
+    }
+    FileInputStream fis = new FileInputStream(fileToRead);
+    byte[] data = new byte[(int) fileToRead.length()];
+    fis.read(data);
+    fis.close();
+    return new String(data, "UTF-8");
   }
 }

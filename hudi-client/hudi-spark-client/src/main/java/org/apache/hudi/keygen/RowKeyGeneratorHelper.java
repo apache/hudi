@@ -123,6 +123,21 @@ public class RowKeyGeneratorHelper {
 
   /**
    * Fetch the field value located at the positions requested for.
+   *
+   * The fetching logic recursively goes into the nested field based on the position list to get the field value.
+   * For example, given the row [4357686,key1,2020-03-21,pi,[val1,10]] with the following schema, which has the fourth
+   * field as a nested field, and positions list as [4,0],
+   *
+   * 0 = "StructField(timestamp,LongType,false)"
+   * 1 = "StructField(_row_key,StringType,false)"
+   * 2 = "StructField(ts_ms,StringType,false)"
+   * 3 = "StructField(pii_col,StringType,false)"
+   * 4 = "StructField(nested_col,StructType(StructField(prop1,StringType,false), StructField(prop2,LongType,false)),false)"
+   *
+   * the logic fetches the value from field nested_col.prop1.
+   * If any level of the nested field is null, {@link KeyGenUtils#NULL_RECORDKEY_PLACEHOLDER} is returned.
+   * If the field value is an empty String, {@link KeyGenUtils#EMPTY_RECORDKEY_PLACEHOLDER} is returned.
+   *
    * @param row instance of {@link Row} of interest
    * @param positions tree style positions where the leaf node need to be fetched and returned
    * @return the field value as per the positions requested for.
@@ -137,14 +152,15 @@ public class RowKeyGeneratorHelper {
     Object toReturn = null;
 
     while (index < totalCount) {
+      if (valueToProcess.isNullAt(positions.get(index))) {
+        toReturn = NULL_RECORDKEY_PLACEHOLDER;
+        break;
+      }
+
       if (index < totalCount - 1) {
-        if (valueToProcess.isNullAt(positions.get(index))) {
-          toReturn = NULL_RECORDKEY_PLACEHOLDER;
-          break;
-        }
         valueToProcess = (Row) valueToProcess.get(positions.get(index));
       } else { // last index
-        if (null != valueToProcess.getAs(positions.get(index)) && valueToProcess.getAs(positions.get(index)).toString().isEmpty()) {
+        if (valueToProcess.getAs(positions.get(index)).toString().isEmpty()) {
           toReturn = EMPTY_RECORDKEY_PLACEHOLDER;
           break;
         }

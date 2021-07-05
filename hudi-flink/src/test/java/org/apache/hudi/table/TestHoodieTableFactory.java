@@ -28,6 +28,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.CatalogTableImpl;
 import org.apache.flink.table.catalog.ObjectIdentifier;
@@ -44,7 +45,9 @@ import java.util.Objects;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Test cases for {@link HoodieTableFactory}.
@@ -75,6 +78,43 @@ public class TestHoodieTableFactory {
   }
 
   @Test
+  void testRequiredOptionsForSource() {
+    // miss pk and pre combine key will throw exception
+    TableSchema schema1 = TableSchema.builder()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .build();
+    final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema1, "f2");
+    assertThrows(ValidationException.class, () -> new HoodieTableFactory().createDynamicTableSource(sourceContext1));
+    assertThrows(ValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext1));
+
+    // given the pk and miss the pre combine key will throw exception
+    TableSchema schema2 = TableSchema.builder()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .primaryKey("f0")
+        .build();
+    final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema2, "f2");
+    assertThrows(ValidationException.class, () -> new HoodieTableFactory().createDynamicTableSource(sourceContext2));
+    assertThrows(ValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext2));
+
+    // given pk and pre combine key will be ok
+    TableSchema schema3 = TableSchema.builder()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
+        .primaryKey("f0")
+        .build();
+    final MockContext sourceContext3 = MockContext.getInstance(this.conf, schema3, "f2");
+
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext3));
+    assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext3));
+  }
+
+  @Test
   void testInferAvroSchemaForSource() {
     // infer the schema if not specified
     final HoodieTableSource tableSource1 =
@@ -99,6 +139,7 @@ public class TestHoodieTableFactory {
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
         .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0")
         .build();
     final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema1, "f2");
@@ -113,6 +154,7 @@ public class TestHoodieTableFactory {
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20).notNull())
         .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0", "f1")
         .build();
     final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema2, "f2");
@@ -128,6 +170,35 @@ public class TestHoodieTableFactory {
     final Configuration conf3 = tableSource3.getConf();
     assertThat(conf3.get(FlinkOptions.RECORD_KEY_FIELD), is("f0,f1"));
     assertThat(conf3.get(FlinkOptions.KEYGEN_CLASS), is(NonpartitionedAvroKeyGenerator.class.getName()));
+  }
+
+  @Test
+  void testSetupCleaningOptionsForSource() {
+    // definition with simple primary key and partition path
+    TableSchema schema1 = TableSchema.builder()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
+        .primaryKey("f0")
+        .build();
+    // set up new retains commits that is less than min archive commits
+    this.conf.setString(FlinkOptions.CLEAN_RETAIN_COMMITS.key(), "11");
+
+    final MockContext sourceContext1 = MockContext.getInstance(this.conf, schema1, "f2");
+    final HoodieTableSource tableSource1 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext1);
+    final Configuration conf1 = tableSource1.getConf();
+    assertThat(conf1.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), is(20));
+    assertThat(conf1.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS), is(30));
+
+    // set up new retains commits that is greater than min archive commits
+    this.conf.setString(FlinkOptions.CLEAN_RETAIN_COMMITS.key(), "25");
+
+    final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema1, "f2");
+    final HoodieTableSource tableSource2 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext2);
+    final Configuration conf2 = tableSource2.getConf();
+    assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), is(35));
+    assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS), is(45));
   }
 
   @Test
@@ -155,6 +226,7 @@ public class TestHoodieTableFactory {
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
         .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0")
         .build();
     final MockContext sinkContext1 = MockContext.getInstance(this.conf, schema1, "f2");
@@ -169,6 +241,7 @@ public class TestHoodieTableFactory {
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20).notNull())
         .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
         .primaryKey("f0", "f1")
         .build();
     final MockContext sinkContext2 = MockContext.getInstance(this.conf, schema2, "f2");
@@ -184,6 +257,35 @@ public class TestHoodieTableFactory {
     final Configuration conf3 = tableSink3.getConf();
     assertThat(conf3.get(FlinkOptions.RECORD_KEY_FIELD), is("f0,f1"));
     assertThat(conf3.get(FlinkOptions.KEYGEN_CLASS), is(NonpartitionedAvroKeyGenerator.class.getName()));
+  }
+
+  @Test
+  void testSetupCleaningOptionsForSink() {
+    // definition with simple primary key and partition path
+    TableSchema schema1 = TableSchema.builder()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
+        .primaryKey("f0")
+        .build();
+    // set up new retains commits that is less than min archive commits
+    this.conf.setString(FlinkOptions.CLEAN_RETAIN_COMMITS.key(), "11");
+
+    final MockContext sinkContext1 = MockContext.getInstance(this.conf, schema1, "f2");
+    final HoodieTableSink tableSink1 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sinkContext1);
+    final Configuration conf1 = tableSink1.getConf();
+    assertThat(conf1.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), is(20));
+    assertThat(conf1.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS), is(30));
+
+    // set up new retains commits that is greater than min archive commits
+    this.conf.setString(FlinkOptions.CLEAN_RETAIN_COMMITS.key(), "25");
+
+    final MockContext sinkContext2 = MockContext.getInstance(this.conf, schema1, "f2");
+    final HoodieTableSink tableSink2 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sinkContext2);
+    final Configuration conf2 = tableSink2.getConf();
+    assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS), is(35));
+    assertThat(conf2.getInteger(FlinkOptions.ARCHIVE_MAX_COMMITS), is(45));
   }
 
   // -------------------------------------------------------------------------

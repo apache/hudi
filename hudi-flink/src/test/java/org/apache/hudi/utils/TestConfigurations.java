@@ -23,15 +23,12 @@ import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 import org.apache.hudi.utils.factory.ContinuousFileSourceFactory;
 
-import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.types.Row;
 
 import java.util.Map;
 import java.util.Objects;
@@ -58,13 +55,6 @@ public class TestConfigurations {
           ROW_TYPE.getFieldNames().toArray(new String[0]),
           ROW_DATA_TYPE.getChildren().toArray(new DataType[0]))
       .build();
-
-  public static final TypeInformation<Row> ROW_TYPE_INFO = Types.ROW(
-      Types.STRING,
-      Types.STRING,
-      Types.INT,
-      Types.LOCAL_DATE_TIME,
-      Types.STRING);
 
   public static String getCreateHoodieTableDDL(String tableName, Map<String, String> options) {
     String createTable = "create table " + tableName + "(\n"
@@ -125,6 +115,28 @@ public class TestConfigurations {
         + ") with (\n"
         + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "'"
         + ")";
+  }
+
+  public static String getCollectSinkDDL(String tableName, TableSchema tableSchema) {
+    final StringBuilder builder = new StringBuilder("create table " + tableName + "(\n");
+    String[] fieldNames = tableSchema.getFieldNames();
+    DataType[] fieldTypes = tableSchema.getFieldDataTypes();
+    for (int i = 0; i < fieldNames.length; i++) {
+      builder.append("  `")
+              .append(fieldNames[i])
+              .append("` ")
+              .append(fieldTypes[i].toString());
+      if (i != fieldNames.length - 1) {
+        builder.append(",");
+      }
+      builder.append("\n");
+    }
+    final String withProps = ""
+            + ") with (\n"
+            + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "'\n"
+            + ")";
+    builder.append(withProps);
+    return builder.toString();
   }
 
   public static final RowDataSerializer SERIALIZER = new RowDataSerializer(ROW_TYPE);

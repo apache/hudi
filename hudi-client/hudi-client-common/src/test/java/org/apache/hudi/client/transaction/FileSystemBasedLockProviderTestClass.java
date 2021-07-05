@@ -30,9 +30,9 @@ import org.apache.hudi.exception.HoodieLockException;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP;
-import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP;
-import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP;
+import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
 
 /**
  * This lock provider is used for testing purposes only. It provides a simple file system based lock using HDFS atomic
@@ -49,7 +49,7 @@ public class FileSystemBasedLockProviderTestClass implements LockProvider<String
 
   public FileSystemBasedLockProviderTestClass(final LockConfiguration lockConfiguration, final Configuration configuration) {
     this.lockConfiguration = lockConfiguration;
-    this.lockPath = lockConfiguration.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP);
+    this.lockPath = lockConfiguration.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY);
     this.fs = FSUtils.getFs(this.lockPath, configuration);
   }
 
@@ -75,8 +75,8 @@ public class FileSystemBasedLockProviderTestClass implements LockProvider<String
     try {
       int numRetries = 0;
       while (fs.exists(new Path(lockPath + "/" + LOCK_NAME))
-          && (numRetries <= lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_NUM_RETRIES_PROP))) {
-        Thread.sleep(lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP));
+          && (numRetries <= lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY))) {
+        Thread.sleep(lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY));
       }
       acquireLock();
       return true;

@@ -52,12 +52,16 @@ public enum StorageSchemes {
   ALLUXIO("alluxio", false),
   // Tencent Cloud Object Storage
   COSN("cosn", false),
+  // Tencent Cloud HDFS
+  CHDFS("ofs", true),
   // Databricks file system
   DBFS("dbfs", false),
   // IBM Cloud Object Storage
   COS("cos", false),
   // Huawei Cloud Object Storage
-  OBS("obs", false);
+  OBS("obs", false),
+  // Baidu Object Storage
+  BOS("bos", false);
 
   private String scheme;
   private boolean supportsAppend;
