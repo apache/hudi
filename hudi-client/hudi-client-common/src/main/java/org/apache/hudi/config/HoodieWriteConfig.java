@@ -285,10 +285,10 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue("false")
       .withDocumentation("Allow duplicates with inserts while merging with existing records");
 
-  public static final ConfigProperty<String> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
+  public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
       .key("hoodie.spillable.diskmap.type")
-      .defaultValue(ExternalSpillableMap.DiskMapType.BITCASK.name())
-      .withDocumentation("Enable usage of either Bitcask or RocksDb as disk map for External Spillable Map");
+      .defaultValue(ExternalSpillableMap.DiskMapType.BITCASK)
+      .withDocumentation("Enable usage of either BITCASK or ROCKS_DB as disk map for External Spillable Map");
 
   public static final ConfigProperty<Integer> CLIENT_HEARTBEAT_INTERVAL_IN_MS_PROP = ConfigProperty
       .key("hoodie.client.heartbeat.interval_in_ms")

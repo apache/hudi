@@ -39,7 +39,6 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URISyntaxException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -69,13 +68,13 @@ public class TestRocksDbDiskMap extends HoodieCommonTestHarness {
     List<String> recordKeys = setupMapWithRecords(rocksDBBasedMap, 100);
 
     Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = rocksDBBasedMap.iterator();
-    List<HoodieRecord> oRecords = new ArrayList<>();
+    int cntSize = 0;
     while (itr.hasNext()) {
       HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
-      oRecords.add(rec);
+      cntSize++;
       assert recordKeys.contains(rec.getRecordKey());
     }
-    assertEquals(recordKeys.size(), oRecords.size());
+    assertEquals(recordKeys.size(), cntSize);
   }
 
   @Test
@@ -103,12 +102,13 @@ public class TestRocksDbDiskMap extends HoodieCommonTestHarness {
     // make sure records have spilled to disk
     assertTrue(rocksDBBasedMap.sizeOfFileOnDiskInBytes() > 0);
     Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = rocksDBBasedMap.iterator();
-    List<HoodieRecord> oRecords = new ArrayList<>();
+    int cntSize = 0;
     while (itr.hasNext()) {
       HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
-      oRecords.add(rec);
+      cntSize++;
       assert recordKeys.contains(rec.getRecordKey());
     }
+    assertEquals(recordKeys.size(), cntSize);
   }
 
   @Test
@@ -139,11 +139,7 @@ public class TestRocksDbDiskMap extends HoodieCommonTestHarness {
         String latestCommitTime =
             ((GenericRecord) indexedRecord).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
         assert recordKeys.contains(rec.getRecordKey()) || updatedRecordKeys.contains(rec.getRecordKey());
-        if (updatedRecordKeys.contains(rec.getRecordKey())) {
-          assertEquals(latestCommitTime, newCommitTime);
-        } else {
-          assertEquals(latestCommitTime, oldCommitTime);
-        }
+        assertEquals(latestCommitTime, updatedRecordKeys.contains(rec.getRecordKey()) ? newCommitTime : oldCommitTime);
       } catch (IOException io) {
         throw new UncheckedIOException(io);
       }

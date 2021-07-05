@@ -32,7 +32,10 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 /**
  * This class provides a disk spillable only map implementation.
@@ -142,7 +145,7 @@ public final class RocksDbDiskMap<T extends Serializable, R extends Serializable
 
   @Override
   public Stream<R> valueStream() {
-    return keySet.stream().map(key -> (R) get(key));
+    return StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator(), Spliterator.ORDERED), false);
   }
 
   @Override
@@ -170,4 +173,5 @@ public final class RocksDbDiskMap<T extends Serializable, R extends Serializable
     }
     return rocksDb;
   }
+
 }
