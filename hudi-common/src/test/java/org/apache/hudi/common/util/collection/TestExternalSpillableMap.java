@@ -47,6 +47,7 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -71,7 +72,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
   @EnumSource(ExternalSpillableMap.DiskMapType.class)
   public void simpleInsertTest(ExternalSpillableMap.DiskMapType diskMapType) throws IOException, URISyntaxException {
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
-    String payloadClazz = HoodieAvroPayload.class.getName();
+
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
         new ExternalSpillableMap<>(16L, basePath, new DefaultSizeEstimator(),
             new HoodieRecordSizeEstimator(schema), diskMapType); // 16B
@@ -79,13 +80,25 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
     assert (recordKeys.size() == 100);
+    
+    // Test iterator
     Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = records.iterator();
-    List<HoodieRecord> oRecords = new ArrayList<>();
+    int cntSize = 0;
     while (itr.hasNext()) {
       HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
-      oRecords.add(rec);
+      cntSize++;
       assert recordKeys.contains(rec.getRecordKey());
     }
+    assertEquals(recordKeys.size(), cntSize);
+    
+    // Test value stream
+    List<HoodieRecord<? extends HoodieRecordPayload>> values = records.valueStream().collect(Collectors.toList());
+    cntSize = 0;
+    for (HoodieRecord value : values) {
+      assert recordKeys.contains(value.getRecordKey());
+      cntSize++;
+    }
+    assertEquals(recordKeys.size(), cntSize);
   }
 
   @ParameterizedTest

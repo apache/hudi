@@ -50,7 +50,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -501,11 +500,6 @@ public class RocksDBDAO {
       R val = SerializationUtils.deserialize(iterator.value());
       iterator.next();
       return val;
-    }
-
-    @Override
-    public void forEachRemaining(Consumer<? super R> action) {
-      action.accept(next());
     }
   }
 

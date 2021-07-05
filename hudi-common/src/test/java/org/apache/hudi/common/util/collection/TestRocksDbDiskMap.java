@@ -46,6 +46,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -64,7 +65,7 @@ public class TestRocksDbDiskMap extends HoodieCommonTestHarness {
 
   @Test
   public void testSimpleInsertSequential() throws IOException, URISyntaxException {
-    RocksDbDiskMap rocksDBBasedMap = new RocksDbDiskMap<>(basePath);
+    RocksDbDiskMap<String, HoodieRecord<? extends HoodieRecordPayload>> rocksDBBasedMap = new RocksDbDiskMap<>(basePath);
     List<String> recordKeys = setupMapWithRecords(rocksDBBasedMap, 100);
 
     Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = rocksDBBasedMap.iterator();
@@ -73,6 +74,17 @@ public class TestRocksDbDiskMap extends HoodieCommonTestHarness {
       HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
       cntSize++;
       assert recordKeys.contains(rec.getRecordKey());
+    }
+    assertEquals(recordKeys.size(), cntSize);
+
+    // Test value stream
+    long currentTimeMs = System.currentTimeMillis();
+    List<HoodieRecord<? extends HoodieRecordPayload>> values =
+        rocksDBBasedMap.valueStream().collect(Collectors.toList());
+    cntSize = 0;
+    for (HoodieRecord value : values) {
+      assert recordKeys.contains(value.getRecordKey());
+      cntSize++;
     }
     assertEquals(recordKeys.size(), cntSize);
   }
