@@ -17,13 +17,16 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecord, HoodieTableType}
+import java.util.stream.Collectors
+
+import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecord, HoodieReplaceCommitMetadata, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hadoop.fs.GlobPattern
 import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
@@ -68,10 +71,10 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   private val lastInstant = commitTimeline.lastInstant().get()
 
-  private val commitsToReturn = commitTimeline.findInstantsInRange(
+  private val commitsTimelineToReturn = commitTimeline.findInstantsInRange(
     optParams(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key),
-    optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY.key, lastInstant.getTimestamp))
-    .getInstants.iterator().toList
+    optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY.key(), lastInstant.getTimestamp))
+  private val commitsToReturn = commitsTimelineToReturn.getInstants.iterator().toList
 
   // use schema from a file produced in the end/latest instant
   val usedSchema: StructType = {
@@ -96,14 +99,31 @@ class IncrementalRelation(val sqlContext: SQLContext,
     val regularFileIdToFullPath = mutable.HashMap[String, String]()
     var metaBootstrapFileIdToFullPath = mutable.HashMap[String, String]()
 
+    // create Replaced file group
+    val replacedTimeline = commitsTimelineToReturn.getCompletedReplaceTimeline
+    val replacedFile = replacedTimeline.getInstants.collect(Collectors.toList[HoodieInstant]).flatMap { instant =>
+      val replaceMetadata = HoodieReplaceCommitMetadata.
+        fromBytes(metaClient.getActiveTimeline.getInstantDetails(instant).get, classOf[HoodieReplaceCommitMetadata])
+      replaceMetadata.getPartitionToReplaceFileIds.entrySet().flatMap { entry =>
+        entry.getValue.map { e =>
+          val fullPath = FSUtils.getPartitionPath(basePath, entry.getKey).toString
+          (e, fullPath)
+        }
+      }
+    }.toMap
+
     for (commit <- commitsToReturn) {
       val metadata: HoodieCommitMetadata = HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit)
         .get, classOf[HoodieCommitMetadata])
 
       if (HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS == commit.getTimestamp) {
-        metaBootstrapFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).toMap
+        metaBootstrapFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).toMap.filterNot { case (k, v) =>
+          replacedFile.contains(k) && v.startsWith(replacedFile(k))
+        }
       } else {
-        regularFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).toMap
+        regularFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).toMap.filterNot { case (k, v) =>
+          replacedFile.contains(k) && v.startsWith(replacedFile(k))
+        }
       }
     }
 
