@@ -615,25 +615,25 @@
     <dependency>
       <groupId>io.confluent</groupId>
       <artifactId>kafka-avro-serializer</artifactId>
-      <version>5.3.4</version>
+      <version>${confluent.version}</version>
     </dependency>
 
     <dependency>
       <groupId>io.confluent</groupId>
       <artifactId>common-config</artifactId>
-      <version>5.3.4</version>
+      <version>${confluent.version}</version>
     </dependency>
 
     <dependency>
       <groupId>io.confluent</groupId>
       <artifactId>common-utils</artifactId>
-      <version>5.3.4</version>
+      <version>${confluent.version}</version>
     </dependency>
 
     <dependency>
       <groupId>io.confluent</groupId>
       <artifactId>kafka-schema-registry-client</artifactId>
-      <version>5.3.4</version>
+      <version>${confluent.version}</version>
     </dependency>
 
     <dependency>
