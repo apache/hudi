@@ -69,7 +69,7 @@ public class AvroKafkaSource extends AvroSource {
 
     try {
       props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, Class.forName(deserializerClassName));
-      if (deserializerClassName.equals(KafkaAvroSchemaDeserializer.class.toString())) {
+      if (deserializerClassName.equals(KafkaAvroSchemaDeserializer.class.getName())) {
         if (schemaProvider == null) {
           throw new HoodieIOException("SchemaProvider has to be set to use KafkaAvroSchemaDeserializer");
         }
