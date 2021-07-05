@@ -327,7 +327,7 @@ public class StreamWriteFunction<K, I, O>
         .taskID(taskID)
         .writeStatus(Collections.emptyList())
         .instantTime("")
-        .isBootstrap(true)
+        .bootstrap(true)
         .build();
     this.eventGateway.sendEventToCoordinator(event);
     LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
@@ -342,7 +342,7 @@ public class StreamWriteFunction<K, I, O>
         .taskID(taskID)
         .instantTime(currentInstant)
         .writeStatus(new ArrayList<>(writeStatuses))
-        .isBootstrap(true)
+        .bootstrap(true)
         .build();
     this.writeMetadataState.add(event);
     writeStatuses.clear();
@@ -617,8 +617,8 @@ public class StreamWriteFunction<K, I, O>
         .taskID(taskID)
         .instantTime(instant) // the write instant may shift but the event still use the currentInstant.
         .writeStatus(writeStatus)
-        .isLastBatch(false)
-        .isEndInput(false)
+        .lastBatch(false)
+        .endInput(false)
         .build();
 
     this.eventGateway.sendEventToCoordinator(event);
@@ -627,7 +627,7 @@ public class StreamWriteFunction<K, I, O>
   }
 
   @SuppressWarnings("unchecked, rawtypes")
-  private void flushRemaining(boolean isEndInput) {
+  private void flushRemaining(boolean endInput) {
     this.currentInstant = instantToWrite(hasData());
     if (this.currentInstant == null) {
       // in case there are empty checkpoints that has no input data
@@ -659,8 +659,8 @@ public class StreamWriteFunction<K, I, O>
         .taskID(taskID)
         .instantTime(currentInstant)
         .writeStatus(writeStatus)
-        .isLastBatch(true)
-        .isEndInput(isEndInput)
+        .lastBatch(true)
+        .endInput(endInput)
         .build();
 
     this.eventGateway.sendEventToCoordinator(event);
