@@ -35,6 +35,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieAvroParquetConfig;
+import org.apache.hudi.io.storage.HoodieParquetStreamReader;
 import org.apache.hudi.io.storage.HoodieParquetStreamWriter;
 import org.apache.hudi.io.storage.HoodieParquetWriter;
 
@@ -52,6 +53,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.util.Pair;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -66,6 +68,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
 
@@ -74,9 +77,6 @@ import javax.annotation.Nonnull;
  * It is used with the Parquet base file format.
  */
 public class HoodieParquetDataBlock extends HoodieDataBlock {
-
-  private ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
-  private ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
 
   public HoodieParquetDataBlock(@Nonnull Map<HeaderMetadataType, String> logBlockHeader,
                              @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
@@ -156,13 +156,6 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   // TODO (na) - Implement a recordItr instead of recordList
   @Override
   protected void deserializeRecords() throws IOException {
-    SizeAwareDataInputStream dis =
-        new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(getContent().get())));
-
-    // 1. Read version for this data block
-    int version = dis.readInt();
-    HoodieAvroDataBlockVersion logBlockVersion = new HoodieAvroDataBlockVersion(version);
-
     // Get schema from the header
     Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
@@ -171,26 +164,18 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
       schema = writerSchema;
     }
 
-    GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(writerSchema, schema);
-    // 2. Get the total records
-    int totalRecords = 0;
-    if (logBlockVersion.hasRecordCount()) {
-      totalRecords = dis.readInt();
-    }
-    List<IndexedRecord> records = new ArrayList<>(totalRecords);
+    // Read the content
+    FSDataInputStream dis =
+        new FSDataInputStream(new ByteArrayInputStream(getContent().get()));
 
-    // 3. Read the content
-    for (int i = 0; i < totalRecords; i++) {
-      int recordLength = dis.readInt();
-      BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(getContent().get(), dis.getNumberOfBytesRead(),
-          recordLength, decoderCache.get());
-      decoderCache.set(decoder);
-      IndexedRecord record = reader.read(null, decoder);
-      records.add(record);
-      dis.skipBytes(recordLength);
+    HoodieParquetStreamReader<IndexedRecord> reader =
+        new HoodieParquetStreamReader<>(new Configuration(), dis);
+
+    Iterator<IndexedRecord> avroRecords = reader.getRecordIterator(schema);
+    while (avroRecords.hasNext()) {
+      this.records.add(avroRecords.next());
     }
-    dis.close();
-    this.records = records;
+
     // Free up content to be GC'd, deflate
     deflate();
   }
