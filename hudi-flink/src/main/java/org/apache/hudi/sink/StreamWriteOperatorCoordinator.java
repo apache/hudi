@@ -366,7 +366,7 @@ public class StreamWriteOperatorCoordinator
           try {
             return this.context.sendEvent(CommitAckEvent.getInstance(), taskID);
           } catch (TaskNotRunningException e) {
-            throw new HoodieException("Error while sending commit ack event to task [" + taskID + "] error", e);
+            throw new HoodieException("Error while sending commit ack event to task [" + taskID + "]", e);
           }
         }).toArray(CompletableFuture<?>[]::new);
     try {

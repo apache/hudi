@@ -27,6 +27,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
@@ -52,6 +54,8 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
+import java.text.ParseException;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
@@ -265,16 +269,28 @@ public class StreamerUtil {
    * Return the median instant time between the given two instant time.
    */
   public static String medianInstantTime(String highVal, String lowVal) {
-    long high = Long.parseLong(highVal);
-    long low = Long.parseLong(lowVal);
-    long median = low + (high - low) / 2;
-    return String.valueOf(median);
+    try {
+      long high = HoodieActiveTimeline.COMMIT_FORMATTER.parse(highVal).getTime();
+      long low = HoodieActiveTimeline.COMMIT_FORMATTER.parse(lowVal).getTime();
+      ValidationUtils.checkArgument(high > low,
+          "Instant [" + highVal + "] should have newer timestamp than instant [" + lowVal + "]");
+      long median = low + (high - low) / 2;
+      return HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date(median));
+    } catch (ParseException e) {
+      throw new HoodieException("Get median instant time with interval [" + lowVal + ", " + highVal + "] error", e);
+    }
   }
 
   /**
    * Returns the time interval in seconds between the given instant time.
    */
-  public static long instantTimeDiff(String newInstantTime, String oldInstantTime) {
-    return Long.parseLong(newInstantTime) - Long.parseLong(oldInstantTime);
+  public static long instantTimeDiffSeconds(String newInstantTime, String oldInstantTime) {
+    try {
+      long newTimestamp = HoodieActiveTimeline.COMMIT_FORMATTER.parse(newInstantTime).getTime();
+      long oldTimestamp = HoodieActiveTimeline.COMMIT_FORMATTER.parse(oldInstantTime).getTime();
+      return (newTimestamp - oldTimestamp) / 1000;
+    } catch (ParseException e) {
+      throw new HoodieException("Get instant time diff with interval [" + oldInstantTime + ", " + newInstantTime + "] error", e);
+    }
   }
 }
