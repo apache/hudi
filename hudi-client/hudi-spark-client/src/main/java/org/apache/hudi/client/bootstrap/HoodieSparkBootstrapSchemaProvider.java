@@ -63,11 +63,11 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
     }).filter(Objects::nonNull).findAny()
             .orElseThrow(() -> new HoodieException("Could not determine schema from the data files."));
 
-    if(writeConfig.getHoodieBaseFileFormat().equals(PARQUET.toString()))
+    if(writeConfig.getBaseFileFormat().equals(PARQUET))
     {
       return getBootstrapSourceSchemaParquet(context,filePath);
     }
-    else  if(writeConfig.getHoodieBaseFileFormat().equals(ORC.toString()))
+    else  if(writeConfig.getBaseFileFormat().equals(ORC))
     {
       return getBootstrapSourceSchemaOrc(context,filePath );
     }
@@ -103,7 +103,7 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
     String structName = tableName + "_record";
     String recordNamespace = "hoodie." + tableName;
 
-    return AvroOrcUtils.createAvroSchemaNew(orcSchema,structName, recordNamespace);
+    return AvroOrcUtils.createAvroSchemaWithNamespace(orcSchema,structName, recordNamespace);
   }
 
 

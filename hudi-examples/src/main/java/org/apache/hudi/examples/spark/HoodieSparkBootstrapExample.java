@@ -76,14 +76,14 @@ public class HoodieSparkBootstrapExample {
         Map<String, String> opts = new HashMap<String,String>();
         opts.put("hoodie.table.base.file.format","ORC");
 
-        df.write().format("hudi").option(HoodieWriteConfig.TABLE_NAME, tableName)
-                .option(DataSourceWriteOptions.OPERATION_OPT_KEY(), DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL())
-                .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "sno")
-                .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "observationdate")
-                .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "observationdate")
-                .option(HoodieBootstrapConfig.HOODIE_BASE_FILE_FORMAT_PROP_NAME, HoodieFileFormat.ORC.name())
-                .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP, "/user/hive/warehouse/"+tableName)
-                .option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS, NonpartitionedKeyGenerator.class.getCanonicalName())
+        df.write().format("hudi").option(HoodieWriteConfig.TABLE_NAME.key(), tableName)
+                .option(DataSourceWriteOptions.OPERATION_OPT_KEY().key(), DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL())
+                .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY().key(), "sno")
+                .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY().key(), "observationdate")
+                .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY().key(), "observationdate")
+                .option(HoodieBootstrapConfig.HOODIE_BASE_FILE_FORMAT_PROP.key(), HoodieFileFormat.ORC.name())
+                .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP.key(), "/user/hive/warehouse/"+tableName)
+                .option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS.key(), NonpartitionedKeyGenerator.class.getCanonicalName())
                 .mode(SaveMode.Overwrite).save("/hudi/"+tableName);
 
         df.count();

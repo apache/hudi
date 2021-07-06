@@ -32,6 +32,7 @@ import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.AvroOrcUtils;
@@ -111,7 +112,7 @@ public class HoodieSparkBootstrapWriteClientExample {
                 String structName = tableName + "_record";
                 String recordNamespace = "hoodie." + tableName;
                 Reader orcReader = OrcFile.createReader(new Path(filePath), OrcFile.readerOptions(jsc.hadoopConfiguration()));
-                schema = AvroOrcUtils.createAvroSchemaNew(orcReader.getSchema(), structName, recordNamespace);
+                schema = AvroOrcUtils.createAvroSchemaWithNamespace(orcReader.getSchema(), structName, recordNamespace);
             }
             else {
                 ParquetFileReader reader = ParquetFileReader.open(metaClient.getHadoopConf(), new Path(filePath));
@@ -129,6 +130,7 @@ public class HoodieSparkBootstrapWriteClientExample {
                             .withMaxNumDeltaCommitsBeforeCompaction(1)
                             .build())
                     .withProperties(prop)
+                    .withBaseFileFormat(HoodieFileFormat.PARQUET)
                     .withBootstrapConfig(HoodieBootstrapConfig.newBuilder()
                             .withBootstrapBasePath(tablePath)
                             .withBootstrapKeyGenClass(NonpartitionedKeyGenerator.class.getCanonicalName())

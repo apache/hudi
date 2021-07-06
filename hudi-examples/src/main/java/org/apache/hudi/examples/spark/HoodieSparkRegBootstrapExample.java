@@ -18,6 +18,7 @@
 package org.apache.hudi.examples.spark;
 
 import org.apache.hudi.bootstrap.SparkOrcBootstrapDataProvider;
+import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -83,18 +84,18 @@ public class HoodieSparkRegBootstrapExample {
         Map<String, String> opts = new HashMap<String,String>();
         opts.put("hoodie.table.base.file.format","ORC");
 
-        df.write().format("hudi").option(HoodieWriteConfig.TABLE_NAME, tableName)
-                .option(DataSourceWriteOptions.OPERATION_OPT_KEY(), DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL())
-                .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "sno")
-                .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "observationdate")
-                .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "observationdate")
-                .option(HoodieBootstrapConfig.HOODIE_BASE_FILE_FORMAT_PROP_NAME, HoodieFileFormat.ORC.name())
-                .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP, "/user/hive/warehouse/"+tableName)
-                .option(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR, BootstrapRegexModeSelector.class.getCanonicalName())
-                .option(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR_REGEX, "2021/04/2[0-9]")
-                .option(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR_REGEX_MODE, "METADATA_ONLY")
-                .option(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER, SparkOrcBootstrapDataProvider.class.getCanonicalName())
-                .option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS, SimpleKeyGenerator.class.getCanonicalName())
+        df.write().format("hudi").option(HoodieWriteConfig.TABLE_NAME.key(), tableName)
+                .option(DataSourceWriteOptions.OPERATION_OPT_KEY().key(), DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL())
+                .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY().key(), "sno")
+                .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY().key(), "observationdate")
+                .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY().key(), "observationdate")
+                .option(HoodieBootstrapConfig.HOODIE_BASE_FILE_FORMAT_PROP.key(), HoodieFileFormat.ORC.name())
+                .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP.key(), "/user/hive/warehouse/"+tableName)
+                .option(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR.key(), BootstrapRegexModeSelector.class.getCanonicalName())
+                .option(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR_REGEX.key(), "2021/04/2[0-9]")
+                .option(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR_REGEX_MODE.key(), BootstrapMode.METADATA_ONLY.name())
+                .option(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER.key(), SparkOrcBootstrapDataProvider.class.getCanonicalName())
+                .option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS.key(), SimpleKeyGenerator.class.getCanonicalName())
                 .mode(SaveMode.Overwrite).save("/hudi/"+tableName);
 
         df.count();

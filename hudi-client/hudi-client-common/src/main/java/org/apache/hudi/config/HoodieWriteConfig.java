@@ -308,8 +308,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Comma separated metadata key prefixes to override from latest commit "
           + "during overlapping commits via multi writing");
 
-  public static final String HOODIE_BASE_FILE_FORMAT_PROP_NAME = "hoodie.table.base.file.format";
-  private static final String DEFAULT_TABLE_BASE_FILE_FORMAT = HoodieFileFormat.PARQUET.name();
+  public static final ConfigProperty<HoodieFileFormat> HOODIE_BASE_FILE_FORMAT_PROP = ConfigProperty
+          .key("hoodie.table.base.file.format")
+          .defaultValue(HoodieFileFormat.PARQUET)
+          .withAlternatives("hoodie.table.ro.file.format")
+          .withDocumentation("");
 
 
   /**
@@ -1234,8 +1237,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return WriteConcurrencyMode.fromValue(getString(WRITE_CONCURRENCY_MODE_PROP));
   }
 
-  public String getHoodieBaseFileFormat() {
-    return props.getProperty(HOODIE_BASE_FILE_FORMAT_PROP_NAME);
+  public HoodieFileFormat getBaseFileFormat() {
+    return HOODIE_BASE_FILE_FORMAT_PROP.defaultValue();
   }
 
 
@@ -1546,8 +1549,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withBaseFileFormat(String format) {
-      props.setProperty(HOODIE_BASE_FILE_FORMAT_PROP_NAME, format);
+    public Builder withBaseFileFormat(HoodieFileFormat fileFormat) {
+      writeConfig.setDefaultValue(HOODIE_BASE_FILE_FORMAT_PROP, fileFormat);
       return this;
     }
 
@@ -1589,9 +1592,6 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
 
       writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
-
-      setDefaultOnCondition(props, !props.containsKey(HOODIE_BASE_FILE_FORMAT_PROP_NAME), HOODIE_BASE_FILE_FORMAT_PROP_NAME, DEFAULT_TABLE_BASE_FILE_FORMAT);
-
 
     }
 

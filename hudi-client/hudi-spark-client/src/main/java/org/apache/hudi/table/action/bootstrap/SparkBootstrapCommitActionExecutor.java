@@ -100,6 +100,17 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.apache.orc.OrcFile;
+import org.apache.orc.OrcProto.UserMetadataItem;
+import org.apache.orc.Reader;
+import org.apache.orc.Reader.Options;
+import org.apache.orc.RecordReader;
+import org.apache.orc.TypeDescription;
+import org.apache.hudi.common.util.AvroOrcUtils;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.util.OrcReaderIterator;
+import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
+import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 
 public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseCommitActionExecutor<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>, HoodieBootstrapWriteMetadata> {
@@ -409,8 +420,77 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
         .collect(Collectors.toList());
 
     return jsc.parallelize(bootstrapPaths, config.getBootstrapParallelism())
-        .map(partitionFsPair -> handleMetadataBootstrap(partitionFsPair.getLeft(), partitionFsPair.getRight().getLeft(),
+        .map(partitionFsPair -> fileBasedMetadataHandler(partitionFsPair.getLeft(), partitionFsPair.getRight().getLeft(),
             partitionFsPair.getRight().getRight(), keyGenerator));
+  }
+
+  private BootstrapWriteStatus handleMetadataBootstrapOrc(String srcPartitionPath, String partitionPath,
+                                                          HoodieFileStatus srcFileStatus, KeyGeneratorInterface keyGenerator) {
+    Path sourceFilePath = FileStatusUtils.toPath(srcFileStatus.getPath());
+    HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle = new HoodieBootstrapHandle(config,
+            HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS, table, partitionPath, FSUtils.createNewFileIdPfx(),
+            table.getTaskContextSupplier());
+    Schema avroSchema = null;
+    try {
+      Reader orcReader = OrcFile.createReader(sourceFilePath, OrcFile.readerOptions(table.getHadoopConf()));
+
+      TypeDescription orcSchema = orcReader.getSchema();
+
+      avroSchema=  AvroOrcUtils.createAvroSchema(orcSchema);
+
+
+      Schema recordKeySchema = HoodieAvroUtils.generateProjectionSchema(avroSchema,
+              keyGenerator.getRecordKeyFieldNames());
+      LOG.info("Schema to be used for reading record Keys :" + recordKeySchema);
+      AvroReadSupport.setAvroReadSchema(table.getHadoopConf(), recordKeySchema);
+      AvroReadSupport.setRequestedProjection(table.getHadoopConf(), recordKeySchema);
+
+
+      BoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void> wrapper = null;
+      try (RecordReader reader = orcReader.rows(new Options(table.getHadoopConf()).schema(orcSchema))) {
+        wrapper = new SparkBoundedInMemoryExecutor<GenericRecord, HoodieRecord, Void>(config,
+                new OrcReaderIterator(reader,avroSchema,orcSchema), new BootstrapRecordConsumer(bootstrapHandle), inp -> {
+          String recKey = keyGenerator.getKey(inp).getRecordKey();
+          GenericRecord gr = new GenericData.Record(HoodieAvroUtils.RECORD_KEY_SCHEMA);
+          gr.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recKey);
+          BootstrapRecordPayload payload = new BootstrapRecordPayload(gr);
+          HoodieRecord rec = new HoodieRecord(new HoodieKey(recKey, partitionPath), payload);
+          return rec;
+        });
+        wrapper.execute();
+      } catch (Exception e) {
+        throw new HoodieException(e);
+      } finally {
+        bootstrapHandle.close();
+        if (null != wrapper) {
+          wrapper.shutdownNow();
+        }
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException(e.getMessage(), e);
+    }
+
+    BootstrapWriteStatus writeStatus = (BootstrapWriteStatus) bootstrapHandle.writeStatuses().get(0);
+    BootstrapFileMapping bootstrapFileMapping = new BootstrapFileMapping(config.getBootstrapSourceBasePath(),
+            srcPartitionPath, partitionPath, srcFileStatus, writeStatus.getFileId());
+    writeStatus.setBootstrapSourceFileMapping(bootstrapFileMapping);
+    return writeStatus;
+  }
+
+  private BootstrapWriteStatus fileBasedMetadataHandler(String srcPartitionPath, String partitionPath,
+                                                        HoodieFileStatus srcFileStatus, KeyGeneratorInterface keyGenerator)
+  {
+    Path sourceFilePath = FileStatusUtils.toPath(srcFileStatus.getPath());
+
+    String extension = FSUtils.getFileExtension(sourceFilePath.toString());
+    if (ORC.getFileExtension().equals(extension))
+      return handleMetadataBootstrapOrc(srcPartitionPath,partitionPath,srcFileStatus,keyGenerator);
+    if (PARQUET.getFileExtension().equals(extension))
+      return handleMetadataBootstrap(srcPartitionPath,partitionPath,srcFileStatus,keyGenerator);
+    else
+      throw new HoodieIOException("Hoodie InputFormat not implemented for base file format " + extension);
+
+
   }
 
   @Override
