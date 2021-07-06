@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -52,6 +53,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -282,6 +284,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.merge.allow.duplicate.on.inserts")
       .defaultValue("false")
       .withDocumentation("Allow duplicates with inserts while merging with existing records");
+
+  public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
+      .key("hoodie.spillable.diskmap.type")
+      .defaultValue(ExternalSpillableMap.DiskMapType.BITCASK)
+      .withDocumentation("Enable usage of either BITCASK or ROCKS_DB as disk map for External Spillable Map");
 
   public static final ConfigProperty<Integer> CLIENT_HEARTBEAT_INTERVAL_IN_MS_PROP = ConfigProperty
       .key("hoodie.client.heartbeat.interval_in_ms")
@@ -552,6 +559,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean allowDuplicateInserts() {
     return getBoolean(MERGE_ALLOW_DUPLICATE_ON_INSERTS);
+  }
+
+  public ExternalSpillableMap.DiskMapType getSpillableDiskMapType() {
+    return ExternalSpillableMap.DiskMapType.valueOf(getString(SPILLABLE_DISK_MAP_TYPE).toUpperCase(Locale.ROOT));
   }
 
   public EngineType getEngineType() {
@@ -1501,6 +1512,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withMergeAllowDuplicateOnInserts(boolean routeInsertsToNewFiles) {
       writeConfig.setValue(MERGE_ALLOW_DUPLICATE_ON_INSERTS, String.valueOf(routeInsertsToNewFiles));
+      return this;
+    }
+
+    public Builder withSpillableDiskMapType(ExternalSpillableMap.DiskMapType diskMapType) {
+      writeConfig.setValue(SPILLABLE_DISK_MAP_TYPE, diskMapType.name());
       return this;
     }
 
