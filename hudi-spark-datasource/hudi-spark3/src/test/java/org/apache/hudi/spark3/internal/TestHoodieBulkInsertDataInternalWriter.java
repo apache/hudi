@@ -63,13 +63,14 @@ public class TestHoodieBulkInsertDataInternalWriter extends
   @MethodSource("configParams")
   public void testDataInternalWriter(boolean sorted) throws Exception {
     // init config and table
-    HoodieWriteConfig cfg = getConfigBuilder(basePath, sorted).build();
+    HoodieWriteConfig cfg = getConfigBuilder(basePath).build();
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     // execute N rounds
     for (int i = 0; i < 5; i++) {
       String instantTime = "00" + i;
       // init writer
-      HoodieBulkInsertDataInternalWriter writer = new HoodieBulkInsertDataInternalWriter(table, cfg, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), STRUCT_TYPE);
+      HoodieBulkInsertDataInternalWriter writer = new HoodieBulkInsertDataInternalWriter(table, cfg, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), STRUCT_TYPE,
+          sorted);
 
       int size = 10 + RANDOM.nextInt(1000);
       // write N rows to partition1, N rows to partition2 and N rows to partition3 ... Each batch should create a new RowCreateHandle and a new file
@@ -113,7 +114,7 @@ public class TestHoodieBulkInsertDataInternalWriter extends
     String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
 
     String instantTime = "001";
-    HoodieBulkInsertDataInternalWriter writer = new HoodieBulkInsertDataInternalWriter(table, cfg, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), STRUCT_TYPE);
+    HoodieBulkInsertDataInternalWriter writer = new HoodieBulkInsertDataInternalWriter(table, cfg, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), STRUCT_TYPE, false);
 
     int size = 10 + RANDOM.nextInt(100);
     int totalFailures = 5;

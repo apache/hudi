@@ -31,9 +31,9 @@ import org.apache.hudi.common.config.{HoodieConfig, HoodieMetadataConfig, TypedP
 import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
-import org.apache.hudi.common.util.{CommitUtils, Option, ReflectionUtils}
+import org.apache.hudi.common.util.{CommitUtils, ReflectionUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BOOTSTRAP_BASE_PATH_PROP, BOOTSTRAP_INDEX_CLASS_PROP}
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerWithRowsFactory
 import org.apache.hudi.hive.util.ConfigUtils
@@ -337,10 +337,14 @@ object HoodieSparkSqlWriter {
     val params = parameters.updated(HoodieWriteConfig.AVRO_SCHEMA.key, schema.toString)
     val writeConfig = DataSourceUtils.createHoodieConfig(schema.toString, path.get, tblName, mapAsJavaMap(params))
     val userDefinedBulkInsertPartitionerOpt = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(writeConfig)
-    val bulkInsertPartitionerRows : BulkInsertPartitioner[Dataset[Row]] = if (userDefinedBulkInsertPartitionerOpt.isPresent) userDefinedBulkInsertPartitionerOpt.get
-    else BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig.getBulkInsertSortMode)
+    val bulkInsertPartitionerRows : BulkInsertPartitioner[Dataset[Row]] = if (userDefinedBulkInsertPartitionerOpt.isPresent)  {
+      userDefinedBulkInsertPartitionerOpt.get
+    }
+    else {
+      BulkInsertInternalPartitionerWithRowsFactory.get(writeConfig.getBulkInsertSortMode)
+    }
     val arePartitionRecordsSorted = bulkInsertPartitionerRows.arePartitionRecordsSorted();
-    parameters.updated(HoodieWriteConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED, arePartitionRecordsSorted.toString)
+    parameters.updated(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED, arePartitionRecordsSorted.toString)
     val hoodieDF = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, writeConfig, df, structName, nameSpace,
       bulkInsertPartitionerRows)
     if (SPARK_VERSION.startsWith("2.")) {

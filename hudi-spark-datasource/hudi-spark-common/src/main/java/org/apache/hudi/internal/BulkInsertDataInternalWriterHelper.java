@@ -50,6 +50,7 @@ public class BulkInsertDataInternalWriterHelper {
   private final HoodieTable hoodieTable;
   private final HoodieWriteConfig writeConfig;
   private final StructType structType;
+  private final Boolean arePartitionRecordsSorted;
   private final List<HoodieInternalWriteStatus> writeStatusList = new ArrayList<>();
 
   private HoodieRowCreateHandle handle;
@@ -59,7 +60,7 @@ public class BulkInsertDataInternalWriterHelper {
   private Map<String, HoodieRowCreateHandle> handles = new HashMap<>();
 
   public BulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
-      String instantTime, int taskPartitionId, long taskId, long taskEpochId, StructType structType) {
+      String instantTime, int taskPartitionId, long taskId, long taskEpochId, StructType structType, boolean arePartitionRecordsSorted) {
     this.hoodieTable = hoodieTable;
     this.writeConfig = writeConfig;
     this.instantTime = instantTime;
@@ -67,6 +68,7 @@ public class BulkInsertDataInternalWriterHelper {
     this.taskId = taskId;
     this.taskEpochId = taskEpochId;
     this.structType = structType;
+    this.arePartitionRecordsSorted = arePartitionRecordsSorted;
     this.fileIdPrefix = UUID.randomUUID().toString();
   }
 
@@ -98,7 +100,7 @@ public class BulkInsertDataInternalWriterHelper {
   private HoodieRowCreateHandle getRowCreateHandle(String partitionPath) throws IOException {
     if (!handles.containsKey(partitionPath)) { // if there is no handle corresponding to the partition path
       // if records are sorted, we can close all existing handles
-      if (writeConfig.getBulkInsertIsPartitionRecordsSorted()) {
+      if (arePartitionRecordsSorted) {
         close();
       }
       handles.put(partitionPath, new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),

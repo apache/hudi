@@ -18,27 +18,24 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
 /**
- * A factory to generate built-in partitioner to repartition input Rows into at least
- * expected number of output spark partitions for bulk insert operation.
+ * A built-in partitioner that does local sorting for each spark partitions after coalesce for bulk insert operation, corresponding to the {@code BulkInsertSortMode.PARTITION_SORT} mode.
  */
-public abstract class BulkInsertInternalPartitionerWithRowsFactory {
+public class PartitionSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
-  public static BulkInsertPartitioner<Dataset<Row>> get(BulkInsertSortMode sortMode) {
-    switch (sortMode) {
-      case NONE:
-        return new NonSortPartitionerWithRows();
-      case GLOBAL_SORT:
-        return new GlobalSortPartitionerWithRows();
-      case PARTITION_SORT:
-        return new PartitionSortPartitionerWithRows();
-      default:
-        throw new UnsupportedOperationException("The bulk insert sort mode \"" + sortMode.name() + "\" is not supported.");
-    }
+  @Override
+  public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
+    return rows.coalesce(outputSparkPartitions).sortWithinPartitions(HoodieRecord.PARTITION_PATH_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+  }
+
+  @Override
+  public boolean arePartitionRecordsSorted() {
+    return true;
   }
 }
