@@ -318,7 +318,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             createInstantTime);
       }).forEach(status -> {
         HoodieWriteStat writeStat = new HoodieWriteStat();
-        writeStat.setPath(partition + Path.SEPARATOR + status.getPath().getName());
+        writeStat.setPath((partition.isEmpty() ? "" : partition + Path.SEPARATOR) + status.getPath().getName());
         writeStat.setPartitionPath(partition);
         writeStat.setTotalWriteBytes(status.getLen());
         commitMetadata.addWriteStat(partition, writeStat);
@@ -374,9 +374,10 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
             .collect(Collectors.toList());
 
         if (p.getRight().length > filesInDir.size()) {
-          // Is a partition. Add all data files to result.
           String partitionName = FSUtils.getRelativePartitionPath(new Path(datasetMetaClient.getBasePath()), p.getLeft());
-          partitionToFileStatus.put(partitionName, filesInDir);
+          // deal with Non-partition table, we should exclude .hoodie
+          partitionToFileStatus.put(partitionName, filesInDir.stream()
+              .filter(f -> !f.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)).collect(Collectors.toList()));
         } else {
           // Add sub-dirs to the queue
           pathsToList.addAll(Arrays.stream(p.getRight())
