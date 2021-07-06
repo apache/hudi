@@ -21,11 +21,10 @@ package org.apache.hudi.common.table.log.block;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
+import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.io.storage.HoodieAvroParquetConfig;
 import org.apache.hudi.io.storage.HoodieParquetStreamReader;
 import org.apache.hudi.io.storage.HoodieParquetStreamWriter;
@@ -56,15 +55,15 @@ import javax.annotation.Nonnull;
 public class HoodieParquetDataBlock extends HoodieDataBlock {
 
   public HoodieParquetDataBlock(@Nonnull Map<HeaderMetadataType, String> logBlockHeader,
-                             @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
-                             @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation, @Nonnull Option<byte[]> content,
-                             FSDataInputStream inputStream, boolean readBlockLazily) {
+                                @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
+                                @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation, @Nonnull Option<byte[]> content,
+                                FSDataInputStream inputStream, boolean readBlockLazily) {
     super(logBlockHeader, logBlockFooter, blockContentLocation, content, inputStream, readBlockLazily);
   }
 
   public HoodieParquetDataBlock(HoodieLogFile logFile, FSDataInputStream inputStream, Option<byte[]> content,
-                             boolean readBlockLazily, long position, long blockSize, long blockEndpos, Schema readerSchema,
-                             Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
+                                boolean readBlockLazily, long position, long blockSize, long blockEndpos, Schema readerSchema,
+                                Map<HeaderMetadataType, String> header, Map<HeaderMetadataType, String> footer) {
     super(content, inputStream, readBlockLazily,
         Option.of(new HoodieLogBlockContentLocation(logFile, position, blockSize, blockEndpos)), readerSchema, header,
         footer);
@@ -82,17 +81,17 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   @Override
   protected byte[] serializeRecords() throws IOException {
     BloomFilter filter = BloomFilterFactory.createBloomFilter(
-        Integer.parseInt(HoodieIndexConfig.BLOOM_FILTER_NUM_ENTRIES.defaultValue()),
-        Double.parseDouble(HoodieIndexConfig.BLOOM_FILTER_FPP.defaultValue()),
-        Integer.parseInt(HoodieIndexConfig.HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES.defaultValue()),
-        HoodieIndexConfig.BLOOM_INDEX_FILTER_TYPE.defaultValue());
+        Integer.parseInt("60000"),//HoodieIndexConfig.BLOOM_FILTER_NUM_ENTRIES.defaultValue()),
+        Double.parseDouble("0.000000001"),//HoodieIndexConfig.BLOOM_FILTER_FPP.defaultValue()),
+        Integer.parseInt("100000"),//HoodieIndexConfig.HOODIE_BLOOM_INDEX_FILTER_DYNAMIC_MAX_ENTRIES.defaultValue()),
+        BloomFilterTypeCode.SIMPLE.name());//HoodieIndexConfig.BLOOM_INDEX_FILTER_TYPE.defaultValue());
 
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
         new AvroSchemaConverter().convert(schema), schema, filter);
 
     HoodieAvroParquetConfig avroParquetConfig = new HoodieAvroParquetConfig(writeSupport, CompressionCodecName.GZIP,
         ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 1024 * 1024 * 1024,
-        new Configuration(), Double.parseDouble(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO.defaultValue()));
+        new Configuration(), Double.parseDouble(String.valueOf(0.1)));//HoodieStorageConfig.PARQUET_COMPRESSION_RATIO.defaultValue()));
 
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     FSDataOutputStream outputStream = new FSDataOutputStream(baos, null);
