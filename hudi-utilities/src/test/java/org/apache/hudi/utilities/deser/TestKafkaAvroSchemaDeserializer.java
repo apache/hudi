@@ -94,7 +94,7 @@ public class TestKafkaAvroSchemaDeserializer extends UtilitiesTestBase {
   }
 
   /**
-   * Tests {@link KafkaAvroSchemaDeserializer#deserialize(boolean, String, Boolean, byte[], Schema)}.
+   * Tests {@link KafkaAvroSchemaDeserializer#deserialize(Boolean, String, Boolean, byte[], Schema)}.
    */
   @Test
   public void testKafkaAvroSchemaDeserializer() {
