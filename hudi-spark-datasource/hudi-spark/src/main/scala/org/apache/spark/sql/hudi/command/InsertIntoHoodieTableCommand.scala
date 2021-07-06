@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi.command
 
 import java.util.Properties
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord}
@@ -128,6 +127,11 @@ object InsertIntoHoodieTableCommand {
       s"Required partition columns is: ${targetPartitionSchema.json}, Current static partitions " +
         s"is: ${staticPartitionValues.mkString("," + "")}")
 
+    assert(staticPartitionValues.size + query.output.size == table.schema.size,
+      s"Required select columns count: ${removeMetaFields(table.schema).size}, " +
+        s"Current select columns(including static partition column) count: " +
+        s"${staticPartitionValues.size + removeMetaFields(query.output).size}，columns: " +
+        s"(${(removeMetaFields(query.output).map(_.name) ++ staticPartitionValues.keys).mkString(",")})")
     val queryDataFields = if (staticPartitionValues.isEmpty) { // insert dynamic partition
       query.output.dropRight(targetPartitionSchema.fields.length)
     } else { // insert static partition
@@ -156,7 +160,7 @@ object InsertIntoHoodieTableCommand {
       targetPartitionSchema.fields.map(f => {
         val staticPartitionValue = staticPartitionValues.getOrElse(f.name,
         s"Missing static partition value for: ${f.name}")
-        val castAttr = Literal.create(staticPartitionValue, f.dataType)
+        val castAttr = castIfNeeded(Literal.create(staticPartitionValue), f.dataType, conf)
         Alias(castAttr, f.name)()
       })
     }
@@ -184,7 +188,7 @@ object InsertIntoHoodieTableCommand {
     }
     val parameters = HoodieOptionConfig.mappingSqlOptionToHoodieParam(table.storage.properties)
 
-    val tableType = parameters.getOrElse(TABLE_TYPE_OPT_KEY, DEFAULT_TABLE_TYPE_OPT_VAL)
+    val tableType = parameters.getOrElse(TABLE_TYPE_OPT_KEY.key, TABLE_TYPE_OPT_KEY.defaultValue)
 
     val partitionFields = table.partitionColumnNames.mkString(",")
     val path = getTableLocation(table, sparkSession)
@@ -201,8 +205,8 @@ object InsertIntoHoodieTableCommand {
     }
 
     val dropDuplicate = sparkSession.conf
-      .getOption(INSERT_DROP_DUPS_OPT_KEY)
-      .getOrElse(DEFAULT_INSERT_DROP_DUPS_OPT_VAL)
+      .getOption(INSERT_DROP_DUPS_OPT_KEY.key)
+      .getOrElse(INSERT_DROP_DUPS_OPT_KEY.defaultValue)
       .toBoolean
 
     val operation = if (isOverwrite) {
@@ -227,29 +231,29 @@ object InsertIntoHoodieTableCommand {
     } else {
       classOf[DefaultHoodieRecordPayload].getCanonicalName
     }
-
+    val enableHive = isEnableHive(sparkSession)
     withSparkConf(sparkSession, options) {
       Map(
         "path" -> path,
-        TABLE_TYPE_OPT_KEY -> tableType,
-        TABLE_NAME -> table.identifier.table,
-        PRECOMBINE_FIELD_OPT_KEY -> tableSchema.fields.last.name,
-        OPERATION_OPT_KEY -> operation,
-        KEYGENERATOR_CLASS_OPT_KEY -> keyGenClass,
-        RECORDKEY_FIELD_OPT_KEY -> primaryColumns.mkString(","),
-        PARTITIONPATH_FIELD_OPT_KEY -> partitionFields,
-        PAYLOAD_CLASS_OPT_KEY -> payloadClassName,
-        META_SYNC_ENABLED_OPT_KEY -> "true",
-        HIVE_USE_JDBC_OPT_KEY -> "false",
-        HIVE_DATABASE_OPT_KEY -> table.identifier.database.getOrElse("default"),
-        HIVE_TABLE_OPT_KEY -> table.identifier.table,
-        HIVE_SUPPORT_TIMESTAMP -> "true",
-        HIVE_STYLE_PARTITIONING_OPT_KEY -> "true",
-        HIVE_PARTITION_FIELDS_OPT_KEY -> partitionFields,
-        HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
-        URL_ENCODE_PARTITIONING_OPT_KEY -> "true",
-        HoodieWriteConfig.INSERT_PARALLELISM -> "200",
-        HoodieWriteConfig.UPSERT_PARALLELISM -> "200",
+        TABLE_TYPE_OPT_KEY.key -> tableType,
+        TABLE_NAME.key -> table.identifier.table,
+        PRECOMBINE_FIELD_OPT_KEY.key -> tableSchema.fields.last.name,
+        OPERATION_OPT_KEY.key -> operation,
+        KEYGENERATOR_CLASS_OPT_KEY.key -> keyGenClass,
+        RECORDKEY_FIELD_OPT_KEY.key -> primaryColumns.mkString(","),
+        PARTITIONPATH_FIELD_OPT_KEY.key -> partitionFields,
+        PAYLOAD_CLASS_OPT_KEY.key -> payloadClassName,
+        META_SYNC_ENABLED_OPT_KEY.key -> enableHive.toString,
+        HIVE_USE_JDBC_OPT_KEY.key -> "false",
+        HIVE_DATABASE_OPT_KEY.key -> table.identifier.database.getOrElse("default"),
+        HIVE_TABLE_OPT_KEY.key -> table.identifier.table,
+        HIVE_SUPPORT_TIMESTAMP.key -> "true",
+        HIVE_STYLE_PARTITIONING_OPT_KEY.key -> "true",
+        HIVE_PARTITION_FIELDS_OPT_KEY.key -> partitionFields,
+        HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
+        URL_ENCODE_PARTITIONING_OPT_KEY.key -> "true",
+        HoodieWriteConfig.INSERT_PARALLELISM.key -> "200",
+        HoodieWriteConfig.UPSERT_PARALLELISM.key -> "200",
         SqlKeyGenerator.PARTITION_SCHEMA -> table.partitionSchema.toDDL
       )
     }

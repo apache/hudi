@@ -150,11 +150,14 @@ public class WriteProfiles {
       Path basePath,
       HoodieInstant instant,
       HoodieTimeline timeline) {
-    byte[] data = timeline.getInstantDetails(instant).get();
     try {
+      byte[] data = timeline.getInstantDetails(instant).get();
       return Option.of(HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class));
-    } catch (IOException e) {
+    } catch (FileNotFoundException fe) {
       // make this fail safe.
+      LOG.warn("Instant {} was deleted by the cleaner, ignore", instant.getTimestamp());
+      return Option.empty();
+    } catch (Throwable throwable) {
       LOG.error("Get write metadata for table {} with instant {} and path: {} error",
           tableName, instant.getTimestamp(), basePath);
       return Option.empty();

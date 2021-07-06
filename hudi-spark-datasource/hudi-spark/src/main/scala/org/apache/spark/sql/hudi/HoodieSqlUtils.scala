@@ -20,7 +20,6 @@ package org.apache.spark.sql.hudi
 import scala.collection.JavaConverters._
 import java.net.URI
 import java.util.Locale
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.SparkAdapterSupport
@@ -30,10 +29,10 @@ import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
-import org.apache.spark.sql.catalyst.expressions.{And, Cast, Expression, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Cast, Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types.{DataType, NullType, StringType, StructField, StructType}
 
 import scala.collection.immutable.Map
@@ -106,6 +105,10 @@ object HoodieSqlUtils extends SparkAdapterSupport {
     }
   }
 
+  def removeMetaFields(attrs: Seq[Attribute]): Seq[Attribute] = {
+    attrs.filterNot(attr => isMetaField(attr.name))
+  }
+
   /**
    * Get the table location.
    * @param tableId
@@ -168,10 +171,6 @@ object HoodieSqlUtils extends SparkAdapterSupport {
   /**
    * Append the SparkSession config and table options to the baseConfig.
    * We add the "spark" prefix to hoodie's config key.
-   * @param spark
-   * @param options
-   * @param baseConfig
-   * @return
    */
   def withSparkConf(spark: SparkSession, options: Map[String, String])
                    (baseConfig: Map[String, String]): Map[String, String] = {
@@ -181,4 +180,7 @@ object HoodieSqlUtils extends SparkAdapterSupport {
   }
 
   def isSpark3: Boolean = SPARK_VERSION.startsWith("3.")
+
+  def isEnableHive(sparkSession: SparkSession): Boolean =
+    "hive" == sparkSession.sessionState.conf.getConf(StaticSQLConf.CATALOG_IMPLEMENTATION)
 }

@@ -28,7 +28,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.sink.event.BatchWriteSuccessEvent;
+import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -135,8 +135,8 @@ public class TestWriteCopyOnWrite {
     String instant = funcWrapper.getWriteClient().getLastPendingInstant(getTableType());
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
-    MatcherAssert.assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
-    List<WriteStatus> writeStatuses = ((BatchWriteSuccessEvent) nextEvent).getWriteStatuses();
+    MatcherAssert.assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
+    List<WriteStatus> writeStatuses = ((WriteMetadataEvent) nextEvent).getWriteStatuses();
     assertNotNull(writeStatuses);
     MatcherAssert.assertThat(writeStatuses.size(), is(4)); // write 4 partition files
     assertThat(writeStatuses.stream()
@@ -162,8 +162,8 @@ public class TestWriteCopyOnWrite {
     assertNotEquals(instant, instant2);
 
     final OperatorEvent nextEvent2 = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", nextEvent2, instanceOf(BatchWriteSuccessEvent.class));
-    List<WriteStatus> writeStatuses2 = ((BatchWriteSuccessEvent) nextEvent2).getWriteStatuses();
+    assertThat("The operator expect to send an event", nextEvent2, instanceOf(WriteMetadataEvent.class));
+    List<WriteStatus> writeStatuses2 = ((WriteMetadataEvent) nextEvent2).getWriteStatuses();
     assertNotNull(writeStatuses2);
     assertThat(writeStatuses2.size(), is(0)); // write empty statuses
 
@@ -191,8 +191,8 @@ public class TestWriteCopyOnWrite {
     assertNotNull(instant);
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
-    List<WriteStatus> writeStatuses = ((BatchWriteSuccessEvent) nextEvent).getWriteStatuses();
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
+    List<WriteStatus> writeStatuses = ((WriteMetadataEvent) nextEvent).getWriteStatuses();
     assertNotNull(writeStatuses);
     assertThat(writeStatuses.size(), is(0)); // no data write
 
@@ -210,7 +210,9 @@ public class TestWriteCopyOnWrite {
     }
 
     // this returns early because there is no inflight instant
-    funcWrapper.checkpointFunction(2);
+    assertThrows(HoodieException.class,
+        () -> funcWrapper.checkpointFunction(2),
+        "Timeout(0ms) while waiting for");
     // do not sent the write event and fails the checkpoint,
     // behaves like the last checkpoint is successful.
     funcWrapper.checkpointFails(2);
@@ -232,7 +234,7 @@ public class TestWriteCopyOnWrite {
         .getLastPendingInstant(getTableType());
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
@@ -262,7 +264,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(1);
 
     OperatorEvent nextEvent = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
@@ -298,7 +300,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(1);
 
     OperatorEvent nextEvent = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
@@ -318,7 +320,7 @@ public class TestWriteCopyOnWrite {
         .getLastPendingInstant(getTableType());
 
     nextEvent = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
@@ -343,7 +345,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(1);
 
     OperatorEvent nextEvent = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
@@ -363,7 +365,7 @@ public class TestWriteCopyOnWrite {
         .getLastPendingInstant(getTableType());
 
     nextEvent = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
@@ -408,7 +410,7 @@ public class TestWriteCopyOnWrite {
 
     final OperatorEvent event1 = funcWrapper.getNextEvent(); // remove the first event first
     final OperatorEvent event2 = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", event2, instanceOf(BatchWriteSuccessEvent.class));
+    assertThat("The operator expect to send an event", event2, instanceOf(WriteMetadataEvent.class));
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, event1);
     funcWrapper.getCoordinator().handleEventFromOperator(0, event2);
@@ -470,7 +472,7 @@ public class TestWriteCopyOnWrite {
 
     final OperatorEvent event1 = funcWrapper.getNextEvent(); // remove the first event first
     final OperatorEvent event2 = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", event2, instanceOf(BatchWriteSuccessEvent.class));
+    assertThat("The operator expect to send an event", event2, instanceOf(WriteMetadataEvent.class));
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, event1);
     funcWrapper.getCoordinator().handleEventFromOperator(0, event2);
@@ -534,7 +536,7 @@ public class TestWriteCopyOnWrite {
 
     for (int i = 0; i < 2; i++) {
       final OperatorEvent event = funcWrapper.getNextEvent(); // remove the first event first
-      assertThat("The operator expect to send an event", event, instanceOf(BatchWriteSuccessEvent.class));
+      assertThat("The operator expect to send an event", event, instanceOf(WriteMetadataEvent.class));
       funcWrapper.getCoordinator().handleEventFromOperator(0, event);
     }
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
@@ -569,7 +571,7 @@ public class TestWriteCopyOnWrite {
     checkWrittenData(tempFile, expected, 1);
   }
 
-  Map<String, String> getMiniBatchExpected() {
+  protected Map<String, String> getMiniBatchExpected() {
     Map<String, String> expected = new HashMap<>();
     // the last 2 lines are merged
     expected.put("par1", "["
@@ -577,6 +579,10 @@ public class TestWriteCopyOnWrite {
         + "id1,par1,id1,Danny,23,1,par1, "
         + "id1,par1,id1,Danny,23,1,par1]");
     return expected;
+  }
+
+  protected Map<String, String> getExpectedBeforeCheckpointComplete() {
+    return EXPECTED2;
   }
 
   @Test
@@ -592,7 +598,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(1);
 
     OperatorEvent nextEvent = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
@@ -634,8 +640,10 @@ public class TestWriteCopyOnWrite {
         .getLastPendingInstant(getTableType());
 
     nextEvent = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
-    checkWrittenData(tempFile, EXPECTED2);
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
+
+    Map<String, String> expected = getExpectedBeforeCheckpointComplete();
+    checkWrittenData(tempFile, expected);
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
@@ -673,7 +681,7 @@ public class TestWriteCopyOnWrite {
 
     for (int i = 0; i < 2; i++) {
       final OperatorEvent event = funcWrapper.getNextEvent(); // remove the first event first
-      assertThat("The operator expect to send an event", event, instanceOf(BatchWriteSuccessEvent.class));
+      assertThat("The operator expect to send an event", event, instanceOf(WriteMetadataEvent.class));
       funcWrapper.getCoordinator().handleEventFromOperator(0, event);
     }
 

@@ -44,7 +44,7 @@ class AlterHoodieTableRenameCommand(
         .setConf(hadoopConf).build()
       // Init table with new name.
       HoodieTableMetaClient.withPropertyBuilder()
-        .fromProperties(metaClient.getTableConfig.getProperties)
+        .fromProperties(metaClient.getTableConfig.getProps)
         .setTableName(newName.table)
         .initTable(hadoopConf, path)
       // Call AlterTableRenameCommand#run to rename table in meta.

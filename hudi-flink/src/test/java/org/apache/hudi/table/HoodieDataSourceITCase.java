@@ -45,7 +45,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.util.Collection;
@@ -56,6 +58,7 @@ import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.utils.TestData.assertRowsEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -254,11 +257,14 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(value = ExecMode.class)
-  void testWriteAndRead(ExecMode execMode) {
+  @MethodSource("configParams")
+  void testWriteAndRead(ExecMode execMode, boolean hiveStylePartitioning) {
     TableEnvironment tableEnv = execMode == ExecMode.BATCH ? batchTableEnv : streamTableEnv;
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    if (hiveStylePartitioning) {
+      options.put(FlinkOptions.HIVE_STYLE_PARTITIONING.key(), "true");
+    }
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 values\n"
@@ -574,6 +580,19 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
   // -------------------------------------------------------------------------
   private enum ExecMode {
     BATCH, STREAM
+  }
+
+  /**
+   * Return test params => (execution mode, hive style partitioning).
+   */
+  private static Stream<Arguments> configParams() {
+    Object[][] data =
+        new Object[][] {
+            {ExecMode.BATCH, false},
+            {ExecMode.BATCH, true},
+            {ExecMode.STREAM, false},
+            {ExecMode.STREAM, true}};
+    return Stream.of(data).map(Arguments::of);
   }
 
   private void execInsertSql(TableEnvironment tEnv, String insert) {

@@ -37,8 +37,6 @@ import org.apache.avro.Schema;
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.util.Comparator;
@@ -83,13 +81,12 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
     TestData.checkWrittenDataMOR(fs, latestInstant, baseFile, expected, partitions, schema);
   }
 
-  @Disabled
-  @Test
-  public void testIndexStateBootstrap() {
-    // Ignore the index bootstrap because we only support parquet load now.
+  @Override
+  protected Map<String, String> getExpectedBeforeCheckpointComplete() {
+    return EXPECTED1;
   }
 
-  Map<String, String> getMiniBatchExpected() {
+  protected Map<String, String> getMiniBatchExpected() {
     Map<String, String> expected = new HashMap<>();
     // MOR mode merges the messages with the same key.
     expected.put("par1", "[id1,par1,id1,Danny,23,1,par1]");

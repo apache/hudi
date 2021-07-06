@@ -18,13 +18,14 @@
 
 package org.apache.hudi.hadoop.utils;
 
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -73,6 +74,7 @@ public class HoodieHiveUtils {
   public static final int MAX_COMMIT_ALL = -1;
   public static final int DEFAULT_LEVELS_TO_BASEPATH = 3;
   public static final Pattern HOODIE_CONSUME_MODE_PATTERN_STRING = Pattern.compile("hoodie\\.(.*)\\.consume\\.mode");
+  public static final String GLOBALLY_CONSISTENT_READ_TIMESTAMP = "last_replication_timestamp";
 
   public static boolean stopAtCompaction(JobContext job, String tableName) {
     String compactionPropName = String.format(HOODIE_STOP_AT_COMPACTION_PATTERN, tableName);

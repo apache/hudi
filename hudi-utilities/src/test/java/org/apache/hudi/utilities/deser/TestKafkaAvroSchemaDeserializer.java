@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.deser;
 
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.sources.helpers.SchemaTestProvider;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
@@ -51,13 +52,12 @@ public class TestKafkaAvroSchemaDeserializer extends UtilitiesTestBase {
   private final String topic;
   private final Schema origSchema = createUserSchema();
   private final Schema evolSchema = createExtendUserSchema();
-  private Properties defaultConfig = new Properties();
+  private Properties config = new Properties();
 
   public TestKafkaAvroSchemaDeserializer() {
-    defaultConfig.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
-    defaultConfig.put("hoodie.deltastreamer.schemaprovider.class", SchemaTestProvider.class.getName());
+    config.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
     schemaRegistry = new MockSchemaRegistryClient();
-    avroSerializer = new KafkaAvroSerializer(schemaRegistry, new HashMap(defaultConfig));
+    avroSerializer = new KafkaAvroSerializer(schemaRegistry, new HashMap(config));
     topic = "test";
   }
 
@@ -66,8 +66,7 @@ public class TestKafkaAvroSchemaDeserializer extends UtilitiesTestBase {
         + "\"name\": \"User\","
         + "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}]}";
     Schema.Parser parser = new Schema.Parser();
-    Schema schema = parser.parse(userSchema);
-    return schema;
+    return parser.parse(userSchema);
   }
 
   private IndexedRecord createUserRecord() {
@@ -83,8 +82,7 @@ public class TestKafkaAvroSchemaDeserializer extends UtilitiesTestBase {
         + "\"fields\": [{\"name\": \"name\", \"type\": \"string\"}, "
         + "{\"name\": \"age\", \"type\": [\"null\", \"int\"], \"default\": null}]}";
     Schema.Parser parser = new Schema.Parser();
-    Schema schema = parser.parse(userSchema);
-    return schema;
+    return parser.parse(userSchema);
   }
 
   private IndexedRecord createExtendUserRecord() {
@@ -96,15 +94,16 @@ public class TestKafkaAvroSchemaDeserializer extends UtilitiesTestBase {
   }
 
   /**
-   * Tests {@link KafkaAvroSchemaDeserializer#deserialize(boolean, String, Boolean, byte[], Schema)}.
+   * Tests {@link KafkaAvroSchemaDeserializer#deserialize(Boolean, String, Boolean, byte[], Schema)}.
    */
   @Test
   public void testKafkaAvroSchemaDeserializer() {
     byte[] bytesOrigRecord;
     IndexedRecord avroRecord = createUserRecord();
-    SchemaTestProvider.schemaToReturn.set(origSchema);
-    KafkaAvroSchemaDeserializer avroDeserializer = new KafkaAvroSchemaDeserializer(schemaRegistry, new HashMap(defaultConfig));
-    avroDeserializer.configure(new HashMap(defaultConfig), false);
+    config.put(DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA().key(), origSchema.toString());
+
+    KafkaAvroSchemaDeserializer avroDeserializer = new KafkaAvroSchemaDeserializer(schemaRegistry, new HashMap(config));
+    avroDeserializer.configure(new HashMap(config), false);
     bytesOrigRecord = avroSerializer.serialize(topic, avroRecord);
     // record is serialized in orig schema and deserialized using same schema.
     assertEquals(avroRecord, avroDeserializer.deserialize(false, topic, false, bytesOrigRecord, origSchema));
@@ -113,8 +112,9 @@ public class TestKafkaAvroSchemaDeserializer extends UtilitiesTestBase {
     byte[] bytesExtendedRecord = avroSerializer.serialize(topic, avroRecordWithAllField);
 
     SchemaTestProvider.schemaToReturn.set(evolSchema);
-    avroDeserializer = new KafkaAvroSchemaDeserializer(schemaRegistry, new HashMap(defaultConfig));
-    avroDeserializer.configure(new HashMap(defaultConfig), false);
+    config.put(DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA().key(), evolSchema.toString());
+    avroDeserializer = new KafkaAvroSchemaDeserializer(schemaRegistry, new HashMap(config));
+    avroDeserializer.configure(new HashMap(config), false);
     // record is serialized w/ evolved schema, and deserialized w/ evolved schema
     IndexedRecord avroRecordWithAllFieldActual = (IndexedRecord) avroDeserializer.deserialize(false, topic, false, bytesExtendedRecord, evolSchema);
     assertEquals(avroRecordWithAllField, avroRecordWithAllFieldActual);

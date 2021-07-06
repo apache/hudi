@@ -220,4 +220,61 @@ class TestInsertTable extends TestHoodieSqlBase {
       )
     }
   }
+
+  test("Test Different Type of Partition Column") {
+    withTempDir { tmp =>
+      val typeAndValue = Seq(
+        ("string", "'1000'"),
+        ("int", 1000),
+        ("bigint", 10000),
+        ("timestamp", "'2021-05-20 00:00:00'"),
+        ("date", "'2021-05-20'")
+      )
+      typeAndValue.foreach { case (partitionType, partitionValue) =>
+        val tableName = generateTableName
+        // Create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  dt $partitionType
+             |) using hudi
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+
+        spark.sql(s"insert into $tableName partition(dt = $partitionValue) select 1, 'a1', 10")
+        spark.sql(s"insert into $tableName select 2, 'a2', 10, $partitionValue")
+        checkAnswer(s"select id, name, price, cast(dt as string) from $tableName order by id")(
+          Seq(1, "a1", 10, removeQuotes(partitionValue).toString),
+          Seq(2, "a2", 10, removeQuotes(partitionValue).toString)
+        )
+      }
+    }
+  }
+
+  test("Test Insert Exception") {
+    val tableName = generateTableName
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  dt string
+         |) using hudi
+         | partitioned by (dt)
+       """.stripMargin)
+    checkException(s"insert into $tableName partition(dt = '2021-06-20')" +
+      s" select 1, 'a1', 10, '2021-06-20'") (
+      "assertion failed: Required select columns count: 4, Current select columns(including static partition column)" +
+        " count: 5，columns: (1,a1,10,2021-06-20,dt)"
+    )
+    checkException(s"insert into $tableName select 1, 'a1', 10")(
+      "assertion failed: Required select columns count: 4, Current select columns(including static partition column)" +
+        " count: 3，columns: (1,a1,10)"
+    )
+  }
 }

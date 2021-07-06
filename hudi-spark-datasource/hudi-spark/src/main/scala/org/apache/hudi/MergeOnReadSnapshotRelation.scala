@@ -18,6 +18,7 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Schema
 import org.apache.hudi.common.model.HoodieBaseFile
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
@@ -74,8 +75,8 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
 
   private lazy val tableStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
   private val mergeType = optParams.getOrElse(
-    DataSourceReadOptions.REALTIME_MERGE_OPT_KEY,
-    DataSourceReadOptions.DEFAULT_REALTIME_MERGE_OPT_VAL)
+    DataSourceReadOptions.REALTIME_MERGE_OPT_KEY.key,
+    DataSourceReadOptions.REALTIME_MERGE_OPT_KEY.defaultValue)
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
   private val preCombineField = {
     val preCombineFieldFromTableConfig = metaClient.getTableConfig.getPreCombineField
@@ -84,7 +85,7 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
     } else {
       // get preCombineFiled from the options if this is a old table which have not store
       // the field to hoodie.properties
-      optParams.get(DataSourceReadOptions.READ_PRE_COMBINE_FIELD)
+      optParams.get(DataSourceReadOptions.READ_PRE_COMBINE_FIELD.key)
     }
   }
   override def schema: StructType = tableStructSchema
@@ -94,16 +95,9 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
   override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
     log.debug(s" buildScan requiredColumns = ${requiredColumns.mkString(",")}")
     log.debug(s" buildScan filters = ${filters.mkString(",")}")
-    var requiredStructSchema = StructType(Seq())
-    requiredColumns.foreach(col => {
-      val field = tableStructSchema.find(_.name == col)
-      if (field.isDefined) {
-        requiredStructSchema = requiredStructSchema.add(field.get)
-      }
-    })
-    val requiredAvroSchema = AvroConversionUtils
-      .convertStructTypeToAvroSchema(requiredStructSchema, tableAvroSchema.getName, tableAvroSchema.getNamespace)
 
+    val (requiredAvroSchema, requiredStructSchema) =
+      MergeOnReadSnapshotRelation.getRequiredSchema(tableAvroSchema, requiredColumns)
     val fileIndex = buildFileIndex(filters)
     val hoodieTableState = HoodieMergeOnReadTableState(
       tableStructSchema,
@@ -210,5 +204,16 @@ object MergeOnReadSnapshotRelation {
     // See FileSourceScanExec#createBucketedReadRDD in spark project which do the same thing
     // when create PartitionedFile.
     path.toUri.toString
+  }
+
+  def getRequiredSchema(tableAvroSchema: Schema, requiredColumns: Array[String]): (Schema, StructType) = {
+    // First get the required avro-schema, then convert the avro-schema to spark schema.
+    val name2Fields = tableAvroSchema.getFields.asScala.map(f => f.name() -> f).toMap
+    val requiredFields = requiredColumns.map(c => name2Fields(c))
+      .map(f => new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal(), f.order())).toList
+    val requiredAvroSchema = Schema.createRecord(tableAvroSchema.getName, tableAvroSchema.getDoc,
+      tableAvroSchema.getNamespace, tableAvroSchema.isError, requiredFields.asJava)
+    val requiredStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(requiredAvroSchema)
+    (requiredAvroSchema, requiredStructSchema)
   }
 }

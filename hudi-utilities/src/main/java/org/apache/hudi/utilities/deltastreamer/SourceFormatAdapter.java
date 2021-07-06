@@ -118,4 +118,8 @@ public final class SourceFormatAdapter {
         throw new IllegalArgumentException("Unknown source type (" + source.getSourceType() + ")");
     }
   }
+
+  public Source getSource() {
+    return source;
+  }
 }

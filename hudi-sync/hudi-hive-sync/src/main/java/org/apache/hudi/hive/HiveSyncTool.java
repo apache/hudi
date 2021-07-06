@@ -58,10 +58,10 @@ public class HiveSyncTool extends AbstractSyncTool {
   public static final String SUFFIX_SNAPSHOT_TABLE = "_rt";
   public static final String SUFFIX_READ_OPTIMIZED_TABLE = "_ro";
 
-  private final HiveSyncConfig cfg;
-  private HoodieHiveClient hoodieHiveClient = null;
-  private String snapshotTableName = null;
-  private Option<String> roTableName = null;
+  protected final HiveSyncConfig cfg;
+  protected HoodieHiveClient hoodieHiveClient = null;
+  protected String snapshotTableName = null;
+  protected Option<String> roTableName = null;
 
   public HiveSyncTool(HiveSyncConfig cfg, HiveConf configuration, FileSystem fs) {
     super(configuration.getAllProperties(), fs);
@@ -127,8 +127,8 @@ public class HiveSyncTool extends AbstractSyncTool {
       }
     }
   }
-
-  private void syncHoodieTable(String tableName, boolean useRealtimeInputFormat,
+  
+  protected void syncHoodieTable(String tableName, boolean useRealtimeInputFormat,
                                boolean readAsOptimized) {
     LOG.info("Trying to sync hoodie table " + tableName + " with base path " + hoodieHiveClient.getBasePath()
         + " of type " + hoodieHiveClient.getTableType());

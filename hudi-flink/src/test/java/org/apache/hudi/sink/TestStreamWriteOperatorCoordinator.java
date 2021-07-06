@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.sink.event.BatchWriteSuccessEvent;
+import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.MockCoordinatorExecutor;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -70,6 +70,23 @@ public class TestStreamWriteOperatorCoordinator {
         TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), context);
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(context));
+
+    final WriteMetadataEvent event0 = WriteMetadataEvent.builder()
+        .taskID(0)
+        .instantTime("")
+        .writeStatus(Collections.emptyList())
+        .bootstrap(true)
+        .build();
+
+    final WriteMetadataEvent event1 = WriteMetadataEvent.builder()
+        .taskID(1)
+        .instantTime("")
+        .writeStatus(Collections.emptyList())
+        .bootstrap(true)
+        .build();
+
+    coordinator.handleEventFromOperator(0, event0);
+    coordinator.handleEventFromOperator(1, event1);
   }
 
   @AfterEach
@@ -85,21 +102,21 @@ public class TestStreamWriteOperatorCoordinator {
     WriteStatus writeStatus = new WriteStatus(true, 0.1D);
     writeStatus.setPartitionPath("par1");
     writeStatus.setStat(new HoodieWriteStat());
-    OperatorEvent event0 = BatchWriteSuccessEvent.builder()
+    OperatorEvent event0 = WriteMetadataEvent.builder()
         .taskID(0)
         .instantTime(instant)
         .writeStatus(Collections.singletonList(writeStatus))
-        .isLastBatch(true)
+        .lastBatch(true)
         .build();
 
     WriteStatus writeStatus1 = new WriteStatus(false, 0.2D);
     writeStatus1.setPartitionPath("par2");
     writeStatus1.setStat(new HoodieWriteStat());
-    OperatorEvent event1 = BatchWriteSuccessEvent.builder()
+    OperatorEvent event1 = WriteMetadataEvent.builder()
         .taskID(1)
         .instantTime(instant)
         .writeStatus(Collections.singletonList(writeStatus1))
-        .isLastBatch(true)
+        .lastBatch(true)
         .build();
     coordinator.handleEventFromOperator(0, event0);
     coordinator.handleEventFromOperator(1, event1);
@@ -132,7 +149,7 @@ public class TestStreamWriteOperatorCoordinator {
   public void testReceiveInvalidEvent() {
     CompletableFuture<byte[]> future = new CompletableFuture<>();
     coordinator.checkpointCoordinator(1, future);
-    OperatorEvent event = BatchWriteSuccessEvent.builder()
+    OperatorEvent event = WriteMetadataEvent.builder()
         .taskID(0)
         .instantTime("abc")
         .writeStatus(Collections.emptyList())
@@ -147,7 +164,7 @@ public class TestStreamWriteOperatorCoordinator {
     final CompletableFuture<byte[]> future = new CompletableFuture<>();
     coordinator.checkpointCoordinator(1, future);
     String instant = coordinator.getInstant();
-    OperatorEvent event = BatchWriteSuccessEvent.builder()
+    OperatorEvent event = WriteMetadataEvent.builder()
         .taskID(0)
         .instantTime(instant)
         .writeStatus(Collections.emptyList())
@@ -163,11 +180,11 @@ public class TestStreamWriteOperatorCoordinator {
     WriteStatus writeStatus1 = new WriteStatus(false, 0.2D);
     writeStatus1.setPartitionPath("par2");
     writeStatus1.setStat(new HoodieWriteStat());
-    OperatorEvent event1 = BatchWriteSuccessEvent.builder()
+    OperatorEvent event1 = WriteMetadataEvent.builder()
         .taskID(1)
         .instantTime(instant)
         .writeStatus(Collections.singletonList(writeStatus1))
-        .isLastBatch(true)
+        .lastBatch(true)
         .build();
     coordinator.handleEventFromOperator(1, event1);
     assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(2),
@@ -186,20 +203,30 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator.start();
     coordinator.setExecutor(new MockCoordinatorExecutor(context));
 
+    final WriteMetadataEvent event0 = WriteMetadataEvent.builder()
+        .taskID(0)
+        .instantTime("")
+        .writeStatus(Collections.emptyList())
+        .bootstrap(true)
+        .build();
+
+    coordinator.handleEventFromOperator(0, event0);
+
     String instant = coordinator.getInstant();
     assertNotEquals("", instant);
 
     WriteStatus writeStatus = new WriteStatus(true, 0.1D);
     writeStatus.setPartitionPath("par1");
     writeStatus.setStat(new HoodieWriteStat());
-    OperatorEvent event0 = BatchWriteSuccessEvent.builder()
+
+    OperatorEvent event1 = WriteMetadataEvent.builder()
         .taskID(0)
         .instantTime(instant)
         .writeStatus(Collections.singletonList(writeStatus))
-        .isLastBatch(true)
+        .lastBatch(true)
         .build();
 
-    coordinator.handleEventFromOperator(0, event0);
+    coordinator.handleEventFromOperator(0, event1);
 
     // never throw for hive synchronization now
     assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(1));

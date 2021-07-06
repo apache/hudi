@@ -18,26 +18,23 @@
 
 package org.apache.hudi.hive;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import org.apache.hadoop.hive.ql.Driver;
-import org.apache.hadoop.hive.ql.session.SessionState;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.hive.util.ConfigUtils;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent;
 import org.apache.hudi.sync.common.AbstractSyncHoodieClient.PartitionEvent.PartitionEventType;
-import org.apache.hudi.hive.testutils.HiveTestUtil;
-import org.apache.hudi.hive.util.HiveSchemaUtil;
 
+import org.apache.avro.Schema;
+import org.apache.avro.Schema.Field;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.Partition;
-import org.apache.parquet.schema.MessageType;
-import org.apache.parquet.schema.OriginalType;
-import org.apache.parquet.schema.PrimitiveType;
-import org.apache.parquet.schema.Types;
+import org.apache.hadoop.hive.ql.Driver;
+import org.apache.hadoop.hive.ql.session.SessionState;
 import org.joda.time.DateTime;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -48,9 +45,11 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -67,13 +66,17 @@ public class TestHiveSyncTool {
     return Arrays.asList(new Object[][] {{true, true}, {true, false}, {false, true}, {false, false}});
   }
 
+  private static Iterable<Object[]> useJdbcAndSchemaFromCommitMetadataAndManagedTable() {
+    return Arrays.asList(new Object[][] {{true, true, true}, {true, false, false}, {false, true, true}, {false, false, false}});
+  }
+
   @BeforeEach
-  public void setUp() throws IOException, InterruptedException {
+  public void setUp() throws Exception {
     HiveTestUtil.setUp();
   }
 
   @AfterEach
-  public void teardown() throws IOException {
+  public void teardown() throws Exception {
     HiveTestUtil.clear();
   }
 
@@ -82,121 +85,11 @@ public class TestHiveSyncTool {
     HiveTestUtil.shutdown();
   }
 
-  /**
-   * Testing converting array types to Hive field declaration strings.
-   * <p>
-   * Refer to the Parquet-113 spec: https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#lists
-   */
-  @Test
-  public void testSchemaConvertArray() throws IOException {
-    // Testing the 3-level annotation structure
-    MessageType schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup()
-        .optional(PrimitiveType.PrimitiveTypeName.INT32).named("element").named("list").named("int_list")
-        .named("ArrayOfInts");
-
-    String schemaString = HiveSchemaUtil.generateSchemaString(schema);
-    assertEquals("`int_list` ARRAY< int>", schemaString);
-
-    // A array of arrays
-    schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup().requiredGroup()
-        .as(OriginalType.LIST).repeatedGroup().required(PrimitiveType.PrimitiveTypeName.INT32).named("element")
-        .named("list").named("element").named("list").named("int_list_list").named("ArrayOfArrayOfInts");
-
-    schemaString = HiveSchemaUtil.generateSchemaString(schema);
-    assertEquals("`int_list_list` ARRAY< ARRAY< int>>", schemaString);
-
-    // A list of integers
-    schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeated(PrimitiveType.PrimitiveTypeName.INT32)
-        .named("element").named("int_list").named("ArrayOfInts");
-
-    schemaString = HiveSchemaUtil.generateSchemaString(schema);
-    assertEquals("`int_list` ARRAY< int>", schemaString);
-
-    // A list of structs with two fields
-    schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup()
-        .required(PrimitiveType.PrimitiveTypeName.BINARY).named("str").required(PrimitiveType.PrimitiveTypeName.INT32)
-        .named("num").named("element").named("tuple_list").named("ArrayOfTuples");
-
-    schemaString = HiveSchemaUtil.generateSchemaString(schema);
-    assertEquals("`tuple_list` ARRAY< STRUCT< `str` : binary, `num` : int>>", schemaString);
-
-    // A list of structs with a single field
-    // For this case, since the inner group name is "array", we treat the
-    // element type as a one-element struct.
-    schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup()
-        .required(PrimitiveType.PrimitiveTypeName.BINARY).named("str").named("array").named("one_tuple_list")
-        .named("ArrayOfOneTuples");
-
-    schemaString = HiveSchemaUtil.generateSchemaString(schema);
-    assertEquals("`one_tuple_list` ARRAY< STRUCT< `str` : binary>>", schemaString);
-
-    // A list of structs with a single field
-    // For this case, since the inner group name ends with "_tuple", we also treat the
-    // element type as a one-element struct.
-    schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup()
-        .required(PrimitiveType.PrimitiveTypeName.BINARY).named("str").named("one_tuple_list_tuple")
-        .named("one_tuple_list").named("ArrayOfOneTuples2");
-
-    schemaString = HiveSchemaUtil.generateSchemaString(schema);
-    assertEquals("`one_tuple_list` ARRAY< STRUCT< `str` : binary>>", schemaString);
-
-    // A list of structs with a single field
-    // Unlike the above two cases, for this the element type is the type of the
-    // only field in the struct.
-    schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup()
-        .required(PrimitiveType.PrimitiveTypeName.BINARY).named("str").named("one_tuple_list").named("one_tuple_list")
-        .named("ArrayOfOneTuples3");
-
-    schemaString = HiveSchemaUtil.generateSchemaString(schema);
-    assertEquals("`one_tuple_list` ARRAY< binary>", schemaString);
-
-    // A list of maps
-    schema = Types.buildMessage().optionalGroup().as(OriginalType.LIST).repeatedGroup().as(OriginalType.MAP)
-        .repeatedGroup().as(OriginalType.MAP_KEY_VALUE).required(PrimitiveType.PrimitiveTypeName.BINARY)
-        .as(OriginalType.UTF8).named("string_key").required(PrimitiveType.PrimitiveTypeName.INT32).named("int_value")
-        .named("key_value").named("array").named("map_list").named("ArrayOfMaps");
-
-    schemaString = HiveSchemaUtil.generateSchemaString(schema);
-    assertEquals("`map_list` ARRAY< MAP< string, int>>", schemaString);
-  }
-
-  @Test
-  public void testSchemaConvertTimestampMicros() throws IOException {
-    MessageType schema = Types.buildMessage().optional(PrimitiveType.PrimitiveTypeName.INT64)
-        .as(OriginalType.TIMESTAMP_MICROS).named("my_element").named("my_timestamp");
-    String schemaString = HiveSchemaUtil.generateSchemaString(schema);
-    // verify backward compatibility - int64 converted to bigint type
-    assertEquals("`my_element` bigint", schemaString);
-    // verify new functionality - int64 converted to timestamp type when 'supportTimestamp' is enabled
-    schemaString = HiveSchemaUtil.generateSchemaString(schema, Collections.emptyList(), true);
-    assertEquals("`my_element` TIMESTAMP", schemaString);
-  }
-
-  @Test
-  public void testSchemaDiffForTimestampMicros() {
-    MessageType schema = Types.buildMessage().optional(PrimitiveType.PrimitiveTypeName.INT64)
-        .as(OriginalType.TIMESTAMP_MICROS).named("my_element").named("my_timestamp");
-    // verify backward compatibility - int64 converted to bigint type
-    SchemaDifference schemaDifference = HiveSchemaUtil.getSchemaDifference(schema,
-        Collections.emptyMap(), Collections.emptyList(), false);
-    assertEquals("bigint", schemaDifference.getAddColumnTypes().get("`my_element`"));
-    schemaDifference = HiveSchemaUtil.getSchemaDifference(schema,
-        schemaDifference.getAddColumnTypes(), Collections.emptyList(), false);
-    assertTrue(schemaDifference.isEmpty());
-
-    // verify schema difference is calculated correctly when supportTimestamp is enabled
-    schemaDifference = HiveSchemaUtil.getSchemaDifference(schema,
-        Collections.emptyMap(), Collections.emptyList(), true);
-    assertEquals("TIMESTAMP", schemaDifference.getAddColumnTypes().get("`my_element`"));
-    schemaDifference = HiveSchemaUtil.getSchemaDifference(schema,
-        schemaDifference.getAddColumnTypes(), Collections.emptyList(), true);
-    assertTrue(schemaDifference.isEmpty());
-  }
-
   @ParameterizedTest
   @MethodSource({"useJdbcAndSchemaFromCommitMetadata"})
   public void testBasicSync(boolean useJdbc, boolean useSchemaFromCommitMetadata) throws Exception {
     HiveTestUtil.hiveSyncConfig.useJdbc = useJdbc;
+    HiveTestUtil.hiveSyncConfig.batchSyncNum = 3;
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
     HoodieHiveClient hiveClient =
@@ -246,6 +139,7 @@ public class TestHiveSyncTool {
     hiveClient = new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     List<Partition> hivePartitions = hiveClient.scanTablePartitions(HiveTestUtil.hiveSyncConfig.tableName);
     List<String> writtenPartitionsSince = hiveClient.getPartitionsWrittenToSince(Option.empty());
+    //writtenPartitionsSince.add(newPartition.get(0));
     List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince);
     assertEquals(1, partitionEvents.size(), "There should be only one partition event");
     assertEquals(PartitionEventType.UPDATE, partitionEvents.iterator().next().eventType,
@@ -267,6 +161,7 @@ public class TestHiveSyncTool {
   public void testSyncCOWTableWithProperties(boolean useJdbc,
                                              boolean useSchemaFromCommitMetadata) throws Exception {
     HiveSyncConfig hiveSyncConfig = HiveTestUtil.hiveSyncConfig;
+    HiveTestUtil.hiveSyncConfig.batchSyncNum = 3;
     Map<String, String> serdeProperties = new HashMap<String, String>() {
       {
         put("path", hiveSyncConfig.basePath);
@@ -321,6 +216,7 @@ public class TestHiveSyncTool {
   public void testSyncMORTableWithProperties(boolean useJdbc,
                                              boolean useSchemaFromCommitMetadata) throws Exception {
     HiveSyncConfig hiveSyncConfig = HiveTestUtil.hiveSyncConfig;
+    HiveTestUtil.hiveSyncConfig.batchSyncNum = 3;
     Map<String, String> serdeProperties = new HashMap<String, String>() {
       {
         put("path", hiveSyncConfig.basePath);
@@ -380,6 +276,38 @@ public class TestHiveSyncTool {
       String ddl = String.join("\n", results);
       assertTrue(ddl.contains("'path'='" + hiveSyncConfig.basePath + "'"));
       assertTrue(ddl.contains("'hoodie.datasource.query.type'='" + expectQueryType + "'"));
+      assertTrue(ddl.toLowerCase().contains("create external table"));
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource({"useJdbcAndSchemaFromCommitMetadataAndManagedTable"})
+  public void testSyncManagedTable(boolean useJdbc,
+                                   boolean useSchemaFromCommitMetadata,
+                                   boolean isManagedTable) throws Exception {
+    HiveSyncConfig hiveSyncConfig = HiveTestUtil.hiveSyncConfig;
+
+    hiveSyncConfig.useJdbc = useJdbc;
+    hiveSyncConfig.createManagedTable = isManagedTable;
+    String instantTime = "100";
+    HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
+
+    HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    tool.syncHoodieTable();
+
+    SessionState.start(HiveTestUtil.getHiveConf());
+    Driver hiveDriver = new org.apache.hadoop.hive.ql.Driver(HiveTestUtil.getHiveConf());
+    String dbTableName = hiveSyncConfig.databaseName + "." + hiveSyncConfig.tableName;
+    hiveDriver.run("SHOW TBLPROPERTIES " + dbTableName);
+
+    List<String> results = new ArrayList<>();
+    hiveDriver.run("SHOW CREATE TABLE " + dbTableName);
+    hiveDriver.getResults(results);
+    String ddl = String.join("\n", results).toLowerCase();
+    if (isManagedTable) {
+      assertTrue(ddl.contains("create table"));
+    } else {
+      assertTrue(ddl.contains("create external table"));
     }
   }
 
@@ -387,6 +315,7 @@ public class TestHiveSyncTool {
   @MethodSource("useJdbc")
   public void testSyncIncremental(boolean useJdbc) throws Exception {
     HiveTestUtil.hiveSyncConfig.useJdbc = useJdbc;
+    HiveTestUtil.hiveSyncConfig.batchSyncNum = 2;
     String commitTime1 = "100";
     HiveTestUtil.createCOWTable(commitTime1, 5, true);
     HoodieHiveClient hiveClient =
@@ -426,6 +355,7 @@ public class TestHiveSyncTool {
   @MethodSource("useJdbc")
   public void testSyncIncrementalWithSchemaEvolution(boolean useJdbc) throws Exception {
     HiveTestUtil.hiveSyncConfig.useJdbc = useJdbc;
+    HiveTestUtil.hiveSyncConfig.batchSyncNum = 2;
     String commitTime1 = "100";
     HiveTestUtil.createCOWTable(commitTime1, 5, true);
     HoodieHiveClient hiveClient =
@@ -463,6 +393,7 @@ public class TestHiveSyncTool {
   @MethodSource("useJdbcAndSchemaFromCommitMetadata")
   public void testSyncMergeOnRead(boolean useJdbc, boolean useSchemaFromCommitMetadata) throws Exception {
     HiveTestUtil.hiveSyncConfig.useJdbc = useJdbc;
+    HiveTestUtil.hiveSyncConfig.batchSyncNum = 2;
     String instantTime = "100";
     String deltaCommitTime = "101";
     HiveTestUtil.createMORTable(instantTime, deltaCommitTime, 5, true,
@@ -529,6 +460,7 @@ public class TestHiveSyncTool {
   @MethodSource("useJdbcAndSchemaFromCommitMetadata")
   public void testSyncMergeOnReadRT(boolean useJdbc, boolean useSchemaFromCommitMetadata) throws Exception {
     HiveTestUtil.hiveSyncConfig.useJdbc = useJdbc;
+    HiveTestUtil.hiveSyncConfig.batchSyncNum = 2;
     String instantTime = "100";
     String deltaCommitTime = "101";
     String snapshotTableName = HiveTestUtil.hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
@@ -599,6 +531,7 @@ public class TestHiveSyncTool {
   @MethodSource("useJdbc")
   public void testMultiPartitionKeySync(boolean useJdbc) throws Exception {
     HiveTestUtil.hiveSyncConfig.useJdbc = useJdbc;
+    HiveTestUtil.hiveSyncConfig.batchSyncNum = 2;
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, true);
 
@@ -673,6 +606,7 @@ public class TestHiveSyncTool {
   @MethodSource("useJdbc")
   public void testNonPartitionedSync(boolean useJdbc) throws Exception {
     HiveTestUtil.hiveSyncConfig.useJdbc = useJdbc;
+    HiveTestUtil.hiveSyncConfig.batchSyncNum = 2;
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, true);
 
@@ -702,6 +636,7 @@ public class TestHiveSyncTool {
   @MethodSource("useJdbc")
   public void testReadSchemaForMOR(boolean useJdbc) throws Exception {
     HiveTestUtil.hiveSyncConfig.useJdbc = useJdbc;
+    HiveTestUtil.hiveSyncConfig.batchSyncNum = 2;
     String commitTime = "100";
     String snapshotTableName = HiveTestUtil.hiveSyncConfig.tableName + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
     HiveTestUtil.createMORTable(commitTime, "", 5, false, true);
@@ -750,6 +685,7 @@ public class TestHiveSyncTool {
   @Test
   public void testConnectExceptionIgnoreConfigSet() throws IOException, URISyntaxException {
     HiveTestUtil.hiveSyncConfig.useJdbc = true;
+    HiveTestUtil.hiveSyncConfig.batchSyncNum = 2;
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, false);
     HoodieHiveClient hiveClient =
@@ -769,10 +705,144 @@ public class TestHiveSyncTool {
         "Table " + HiveTestUtil.hiveSyncConfig.tableName + " should not exist initially");
   }
 
+  private void verifyOldParquetFileTest(HoodieHiveClient hiveClient, String emptyCommitTime) throws Exception {
+    assertTrue(hiveClient.doesTableExist(HiveTestUtil.hiveSyncConfig.tableName), "Table " + HiveTestUtil.hiveSyncConfig.tableName + " should exist after sync completes");
+    assertEquals(hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName).size(),
+        hiveClient.getDataSchema().getColumns().size() + 1,
+        "Hive Schema should match the table schema + partition field");
+    assertEquals(1, hiveClient.scanTablePartitions(HiveTestUtil.hiveSyncConfig.tableName).size(),"Table partitions should match the number of partitions we wrote");
+    assertEquals(emptyCommitTime,
+        hiveClient.getLastCommitTimeSynced(HiveTestUtil.hiveSyncConfig.tableName).get(),"The last commit that was sycned should be updated in the TBLPROPERTIES");
+
+    // make sure correct schema is picked
+    Schema schema = SchemaTestUtil.getSimpleSchema();
+    for (Field field : schema.getFields()) {
+      assertEquals(field.schema().getType().getName(),
+          hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName).get(field.name()).toLowerCase(),
+          String.format("Hive Schema Field %s was added", field));
+    }
+    assertEquals("string",
+        hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName).get("datestr").toLowerCase(), "Hive Schema Field datestr was added");
+    assertEquals(schema.getFields().size() + 1 + HoodieRecord.HOODIE_META_COLUMNS.size(),
+        hiveClient.getTableSchema(HiveTestUtil.hiveSyncConfig.tableName).size(),"Hive Schema fields size");
+  }
+
+  @ParameterizedTest
+  @MethodSource("useJdbc")
+  public void testPickingOlderParquetFileIfLatestIsEmptyCommit(boolean useJdbc) throws Exception {
+    HiveTestUtil.hiveSyncConfig.useJdbc = useJdbc;
+    HiveTestUtil.hiveSyncConfig.batchSyncNum = 2;
+    final String commitTime = "100";
+    HiveTestUtil.createCOWTable(commitTime, 1, true);
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    // create empty commit
+    final String emptyCommitTime = "200";
+    HiveTestUtil.createCommitFileWithSchema(commitMetadata, emptyCommitTime, true);
+    HoodieHiveClient hiveClient =
+        new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    assertFalse(hiveClient.doesTableExist(HiveTestUtil.hiveSyncConfig.tableName),"Table " + HiveTestUtil.hiveSyncConfig.tableName + " should not exist initially");
+
+    HiveSyncTool tool = new HiveSyncTool(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    tool.syncHoodieTable();
+
+    verifyOldParquetFileTest(hiveClient, emptyCommitTime);
+  }
+
+  @ParameterizedTest
+  @MethodSource("useJdbc")
+  public void testNotPickingOlderParquetFileWhenLatestCommitReadFails(boolean useJdbc) throws Exception {
+    HiveTestUtil.hiveSyncConfig.useJdbc = useJdbc;
+    HiveTestUtil.hiveSyncConfig.batchSyncNum = 2;
+    final String commitTime = "100";
+    HiveTestUtil.createCOWTable(commitTime, 1, true);
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+
+    // evolve the schema
+    DateTime dateTime = DateTime.now().plusDays(6);
+    String commitTime2 = "101";
+    HiveTestUtil.addCOWPartitions(1, false, true, dateTime, commitTime2);
+
+    // create empty commit
+    final String emptyCommitTime = "200";
+    HiveTestUtil.createCommitFile(commitMetadata, emptyCommitTime);
+
+    HoodieHiveClient hiveClient =
+        new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    assertFalse(
+        hiveClient.doesTableExist(HiveTestUtil.hiveSyncConfig.tableName),"Table " + HiveTestUtil.hiveSyncConfig.tableName + " should not exist initially");
+
+    HiveSyncTool tool = new HiveSyncTool(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+
+    // now delete the evolved commit instant
+    Path fullPath = new Path(HiveTestUtil.hiveSyncConfig.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+        + hiveClient.getActiveTimeline().getInstants()
+        .filter(inst -> inst.getTimestamp().equals(commitTime2))
+        .findFirst().get().getFileName());
+    assertTrue(HiveTestUtil.fileSystem.delete(fullPath, false));
+
+    try {
+      tool.syncHoodieTable();
+    } catch (RuntimeException e) {
+      // we expect the table sync to fail
+    }
+
+    // table should not be synced yet
+    assertFalse(
+        hiveClient.doesTableExist(HiveTestUtil.hiveSyncConfig.tableName),"Table " + HiveTestUtil.hiveSyncConfig.tableName + " should not exist at all");
+  }
+
+  @ParameterizedTest
+  @MethodSource("useJdbc")
+  public void testNotPickingOlderParquetFileWhenLatestCommitReadFailsForExistingTable(boolean useJdbc) throws Exception {
+    HiveTestUtil.hiveSyncConfig.useJdbc = useJdbc;
+    HiveTestUtil.hiveSyncConfig.batchSyncNum = 2;
+    final String commitTime = "100";
+    HiveTestUtil.createCOWTable(commitTime, 1, true);
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    // create empty commit
+    final String emptyCommitTime = "200";
+    HiveTestUtil.createCommitFileWithSchema(commitMetadata, emptyCommitTime, true);
+    //HiveTestUtil.createCommitFile(commitMetadata, emptyCommitTime);
+    HoodieHiveClient hiveClient =
+        new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    assertFalse(
+        hiveClient.doesTableExist(HiveTestUtil.hiveSyncConfig.tableName), "Table " + HiveTestUtil.hiveSyncConfig.tableName + " should not exist initially");
+
+    HiveSyncTool tool = new HiveSyncTool(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    tool.syncHoodieTable();
+
+    verifyOldParquetFileTest(hiveClient, emptyCommitTime);
+
+    // evolve the schema
+    DateTime dateTime = DateTime.now().plusDays(6);
+    String commitTime2 = "301";
+    HiveTestUtil.addCOWPartitions(1, false, true, dateTime, commitTime2);
+    //HiveTestUtil.createCommitFileWithSchema(commitMetadata, "400", false); // create another empty commit
+    //HiveTestUtil.createCommitFile(commitMetadata, "400"); // create another empty commit
+
+    tool = new HiveSyncTool(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    HoodieHiveClient hiveClientLatest = new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
+    // now delete the evolved commit instant
+    Path fullPath = new Path(HiveTestUtil.hiveSyncConfig.basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
+        + hiveClientLatest.getActiveTimeline().getInstants()
+            .filter(inst -> inst.getTimestamp().equals(commitTime2))
+            .findFirst().get().getFileName());
+    assertTrue(HiveTestUtil.fileSystem.delete(fullPath, false));
+    try {
+      tool.syncHoodieTable();
+    } catch (RuntimeException e) {
+      // we expect the table sync to fail
+    }
+
+    // old sync values should be left intact
+    verifyOldParquetFileTest(hiveClient, emptyCommitTime);
+  }
+
   @ParameterizedTest
   @MethodSource("useJdbc")
   public void testTypeConverter(boolean useJdbc) throws Exception {
     HiveTestUtil.hiveSyncConfig.useJdbc = useJdbc;
+    HiveTestUtil.hiveSyncConfig.batchSyncNum = 2;
     HiveTestUtil.createCOWTable("100", 5, true);
     HoodieHiveClient hiveClient =
         new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
@@ -807,5 +877,4 @@ public class TestHiveSyncTool {
         .containsValue("BIGINT"), errorMsg);
     hiveClient.updateHiveSQL(dropTableSql);
   }
-
 }

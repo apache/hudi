@@ -37,7 +37,6 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
     .appName("hoodie sql test")
     .withExtensions(new HoodieSparkSessionExtension)
     .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-    .config("hoodie.datasource.meta.sync.enable", "false")
     .config("hoodie.insert.shuffle.parallelism", "4")
     .config("hoodie.upsert.shuffle.parallelism", "4")
     .config("hoodie.delete.shuffle.parallelism", "4")
@@ -77,5 +76,21 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
 
   protected def checkAnswer(sql: String)(expects: Seq[Any]*): Unit = {
     assertResult(expects.map(row => Row(row: _*)).toArray)(spark.sql(sql).collect())
+  }
+
+  protected def checkException(sql: String)(errorMsg: String): Unit = {
+    try {
+      spark.sql(sql)
+    } catch {
+      case e: Throwable =>
+        assertResult(errorMsg)(e.getMessage)
+    }
+  }
+
+  protected def removeQuotes(value: Any): Any = {
+    value match {
+      case s: String => s.stripPrefix("'").stripSuffix("'")
+      case _=> value
+    }
   }
 }
