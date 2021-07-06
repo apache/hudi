@@ -29,7 +29,7 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.HoodieWriteResult
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
-import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, WriteOperationType,HoodieFileFormat}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.util.{CommitUtils, ReflectionUtils}
@@ -300,6 +300,7 @@ object HoodieSparkSqlWriter {
           .setPayloadClassName(parameters(PAYLOAD_CLASS_OPT_KEY))
           .setPreCombineField(parameters.getOrDefault(PRECOMBINE_FIELD_OPT_KEY, null))
           .setBootstrapIndexClass(bootstrapIndexClass)
+          .setBaseFileFormat(parameters.getOrDefault(HOODIE_BASE_FILE_FORMAT_PROP_NAME, HoodieFileFormat.PARQUET.name))
           .setBootstrapBasePath(bootstrapBasePath)
           .setPartitionColumns(partitionColumns)
           .initTable(sparkContext.hadoopConfiguration, path)

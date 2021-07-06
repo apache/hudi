@@ -775,6 +775,68 @@ public class AvroOrcUtils {
     }
   }
 
+
+  public static Schema createAvroSchemaWithNamespace(TypeDescription orcSchema, String recordName, String namespace) {
+    switch (orcSchema.getCategory()) {
+      case BOOLEAN:
+        return Schema.create(Schema.Type.BOOLEAN);
+      case BYTE:
+        // tinyint (8 bit), use int to hold it
+        return Schema.create(Schema.Type.INT);
+      case SHORT:
+        // smallint (16 bit), use int to hold it
+        return Schema.create(Schema.Type.INT);
+      case INT:
+        // the Avro logical type could be AvroTypeUtil.LOGICAL_TYPE_TIME_MILLIS, but there is no way to distinguish
+        return Schema.create(Schema.Type.INT);
+      case LONG:
+        // the Avro logical type could be AvroTypeUtil.LOGICAL_TYPE_TIME_MICROS, but there is no way to distinguish
+        return Schema.create(Schema.Type.LONG);
+      case FLOAT:
+        return Schema.create(Schema.Type.FLOAT);
+      case DOUBLE:
+        return Schema.create(Schema.Type.DOUBLE);
+      case VARCHAR:
+      case CHAR:
+      case STRING:
+        return Schema.create(Schema.Type.STRING);
+      case DATE:
+        Schema date = Schema.create(Schema.Type.INT);
+        LogicalTypes.date().addToSchema(date);
+        return date;
+      case TIMESTAMP:
+        // Cannot distinguish between TIMESTAMP_MILLIS and TIMESTAMP_MICROS
+        // Assume TIMESTAMP_MILLIS because Timestamp in ORC is in millis
+        Schema timestamp = Schema.create(Schema.Type.LONG);
+        LogicalTypes.timestampMillis().addToSchema(timestamp);
+        return timestamp;
+      case BINARY:
+        return Schema.create(Schema.Type.BYTES);
+      case DECIMAL:
+        Schema decimal = Schema.create(Schema.Type.BYTES);
+        LogicalTypes.decimal(orcSchema.getPrecision(), orcSchema.getScale()).addToSchema(decimal);
+        return decimal;
+      case LIST:
+        return Schema.createArray(createAvroSchema(orcSchema.getChildren().get(0)));
+      case MAP:
+        return Schema.createMap(createAvroSchema(orcSchema.getChildren().get(1)));
+      case STRUCT:
+        List<Field> childFields = new ArrayList<>();
+        for (int i = 0; i < orcSchema.getChildren().size(); i++) {
+          TypeDescription childType = orcSchema.getChildren().get(i);
+          String childName = orcSchema.getFieldNames().get(i);
+          childFields.add(new Field(childName, createAvroSchema(childType), "", null));
+        }
+        return Schema.createRecord(recordName,"",namespace ,false ,childFields);
+      case UNION:
+        return Schema.createUnion(orcSchema.getChildren().stream()
+                .map(AvroOrcUtils::createAvroSchema)
+                .collect(Collectors.toList()));
+      default:
+        throw new IllegalStateException(String.format("Unrecognized ORC type: %s", orcSchema.getCategory().getName()));
+    }
+  }
+
   /**
    * Returns the actual schema of a field.
    *

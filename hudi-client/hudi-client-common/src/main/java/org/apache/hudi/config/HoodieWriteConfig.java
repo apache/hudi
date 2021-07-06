@@ -27,10 +27,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
-import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
-import org.apache.hudi.common.model.HoodieCleaningPolicy;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
-import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.model.*;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -167,6 +164,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static final String WRITE_META_KEY_PREFIXES_PROP =
       "hoodie.write.meta.key.prefixes";
   public static final String DEFAULT_WRITE_META_KEY_PREFIXES = "";
+
+  public static final String HOODIE_BASE_FILE_FORMAT_PROP_NAME = "hoodie.table.base.file.format";
+  private static final String DEFAULT_TABLE_BASE_FILE_FORMAT = HoodieFileFormat.PARQUET.name();
+
 
   /**
    * The specified write schema. In most case, we do not need set this parameter,
@@ -1073,6 +1074,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return WriteConcurrencyMode.fromValue(props.getProperty(WRITE_CONCURRENCY_MODE_PROP));
   }
 
+  public String getHoodieBaseFileFormat() {
+    return props.getProperty(HOODIE_BASE_FILE_FORMAT_PROP_NAME);
+  }
+
+
   public Boolean inlineTableServices() {
     return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean();
   }
@@ -1375,6 +1381,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withBaseFileFormat(String format) {
+      props.setProperty(HOODIE_BASE_FILE_FORMAT_PROP_NAME, format);
+      return this;
+    }
+
     public Builder withProperties(Properties properties) {
       this.props.putAll(properties);
       return this;
@@ -1469,6 +1480,9 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
           EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION, DEFAULT_EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION);
       setDefaultOnCondition(props, !props.containsKey(TIMELINE_LAYOUT_VERSION), TIMELINE_LAYOUT_VERSION,
           String.valueOf(TimelineLayoutVersion.CURR_VERSION));
+
+      setDefaultOnCondition(props, !props.containsKey(HOODIE_BASE_FILE_FORMAT_PROP_NAME), HOODIE_BASE_FILE_FORMAT_PROP_NAME, DEFAULT_TABLE_BASE_FILE_FORMAT);
+
 
     }
 

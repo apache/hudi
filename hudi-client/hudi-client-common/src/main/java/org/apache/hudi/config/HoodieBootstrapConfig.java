@@ -1,3 +1,4 @@
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -23,6 +24,7 @@ import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelect
 import org.apache.hudi.client.bootstrap.translator.IdentityBootstrapPartitionPathTranslator;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.config.DefaultHoodieConfig;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 
 import java.io.File;
@@ -57,6 +59,9 @@ public class HoodieBootstrapConfig extends DefaultHoodieConfig {
 
   public static final String BOOTSTRAP_INDEX_CLASS_PROP = "hoodie.bootstrap.index.class";
   public static final String DEFAULT_BOOTSTRAP_INDEX_CLASS = HFileBootstrapIndex.class.getName();
+
+  public static final String HOODIE_BASE_FILE_FORMAT_PROP_NAME = "hoodie.table.base.file.format";
+  private static final String DEFAULT_TABLE_BASE_FILE_FORMAT = HoodieFileFormat.PARQUET.name();
 
   public HoodieBootstrapConfig(Properties props) {
     super(props);
@@ -117,6 +122,11 @@ public class HoodieBootstrapConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withBootstrapBaseFileFormat(String baseFileFormat) {
+      props.setProperty(HOODIE_BASE_FILE_FORMAT_PROP_NAME, baseFileFormat);
+      return this;
+    }
+
     public Builder fromProperties(Properties props) {
       this.props.putAll(props);
       return this;
@@ -139,6 +149,8 @@ public class HoodieBootstrapConfig extends DefaultHoodieConfig {
           HoodieTableConfig.getDefaultBootstrapIndexClass(props));
       setDefaultOnCondition(props, !props.containsKey(FULL_BOOTSTRAP_INPUT_PROVIDER), FULL_BOOTSTRAP_INPUT_PROVIDER,
           DEFAULT_FULL_BOOTSTRAP_INPUT_PROVIDER);
+      setDefaultOnCondition(props, !props.containsKey(HOODIE_BASE_FILE_FORMAT_PROP_NAME), HOODIE_BASE_FILE_FORMAT_PROP_NAME,
+              DEFAULT_TABLE_BASE_FILE_FORMAT);
       return config;
     }
   }

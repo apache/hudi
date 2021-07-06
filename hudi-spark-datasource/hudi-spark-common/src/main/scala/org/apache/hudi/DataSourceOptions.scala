@@ -81,6 +81,8 @@ object DataSourceReadOptions {
   @Deprecated
   val DEFAULT_VIEW_TYPE_OPT_VAL = VIEW_TYPE_READ_OPTIMIZED_OPT_VAL
 
+  val HOODIE_BASE_FILE_FORMAT_PROP_NAME = "hoodie.table.base.file.format"
+
   /**
     * This eases migration from old configs to new configs.
     */
@@ -186,6 +188,9 @@ object DataSourceWriteOptions {
   val MOR_STORAGE_TYPE_OPT_VAL = HoodieTableType.MERGE_ON_READ.name
   @Deprecated
   val DEFAULT_STORAGE_TYPE_OPT_VAL = COW_STORAGE_TYPE_OPT_VAL
+
+  val HOODIE_BASE_FILE_FORMAT_PROP_NAME = "hoodie.table.base.file.format"
+
 
   def translateStorageTypeToTableType(optParams: Map[String, String]) : Map[String, String] = {
     if (optParams.contains(STORAGE_TYPE_OPT_KEY) && !optParams.contains(TABLE_TYPE_OPT_KEY)) {

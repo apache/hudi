@@ -154,6 +154,10 @@ public class HoodieTableConfig implements Serializable {
         // Use the default bootstrap index class.
         properties.setProperty(HOODIE_BOOTSTRAP_INDEX_CLASS_PROP_NAME, getDefaultBootstrapIndexClass(properties));
       }
+
+      if (!properties.containsKey(HOODIE_BASE_FILE_FORMAT_PROP_NAME)) {
+        properties.setProperty(HOODIE_BASE_FILE_FORMAT_PROP_NAME, DEFAULT_BASE_FILE_FORMAT.name());
+      }
       properties.store(outputStream, "Properties saved on " + new Date(System.currentTimeMillis()));
     }
   }
