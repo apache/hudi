@@ -44,7 +44,6 @@ import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.orc.CompressionKind;
-import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import javax.annotation.concurrent.Immutable;
@@ -483,10 +482,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean shouldCombineBeforeInsert() {
     return getBoolean(COMBINE_BEFORE_INSERT_PROP);
-  }
-
-  public boolean shouldCombineBeforeBulkInsert() {
-    return Boolean.parseBoolean(props.getProperty(COMBINE_BEFORE_BULK_INSERT_PROP));
   }
 
   public boolean shouldCombineBeforeUpsert() {
@@ -1369,11 +1364,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     public Builder combineInput(boolean onInsert, boolean onUpsert) {
       writeConfig.setValue(COMBINE_BEFORE_INSERT_PROP, String.valueOf(onInsert));
       writeConfig.setValue(COMBINE_BEFORE_UPSERT_PROP, String.valueOf(onUpsert));
-      return this;
-    }
-
-    public Builder combineBulkInsertInput(boolean enablePreCombine) {
-      props.setProperty(COMBINE_BEFORE_BULK_INSERT_PROP, String.valueOf(enablePreCombine));
       return this;
     }
 

@@ -101,7 +101,7 @@ public class HoodieDatasetBulkInsertHelper {
                 functions.lit("").cast(DataTypes.StringType));
 
     Dataset<Row> dedupedDf = rowDatasetWithHoodieColumns;
-    if (config.shouldCombineBeforeBulkInsert()) {
+    if (config.shouldCombineBeforeInsert()) {
       dedupedDf = SparkRowWriteHelper.newInstance().deduplicateRows(rowDatasetWithHoodieColumns, config.getPreCombineField(), isGlobalIndex);
     }
 

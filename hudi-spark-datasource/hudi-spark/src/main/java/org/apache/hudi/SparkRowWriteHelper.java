@@ -47,7 +47,6 @@ public class SparkRowWriteHelper {
   }
 
   private static class WriteHelperHolder {
-
     private static final SparkRowWriteHelper SPARK_WRITE_HELPER = new SparkRowWriteHelper();
   }
 

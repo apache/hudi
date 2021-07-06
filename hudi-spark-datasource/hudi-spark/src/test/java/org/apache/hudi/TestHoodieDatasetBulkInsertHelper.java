@@ -21,7 +21,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows;
-import org.apache.hudi.execution.bulkinsert.PreCombineRow;
 import org.apache.hudi.testutils.DataSourceTestUtils;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
@@ -87,7 +86,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
 
   @Test
   public void testBulkInsertHelper() {
-    HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(getPropsAllSet()).combineBulkInsertInput(false).build();
+    HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(getPropsAllSet()).combineInput(false, false).build();
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, config, dataset, "testStructName",
@@ -117,7 +116,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("providePreCombineArgs")
   public void testBulkInsertPreCombine(boolean enablePreCombine) {
-    HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(getPropsAllSet()).combineBulkInsertInput(enablePreCombine)
+    HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(getPropsAllSet()).combineInput(enablePreCombine, enablePreCombine)
             .withPreCombineField("ts").build();
     List<Row> inserts = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> toUpdateDataset = sqlContext.createDataFrame(inserts.subList(0, 5), structType);

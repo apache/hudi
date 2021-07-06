@@ -346,7 +346,7 @@ object HoodieSparkSqlWriter {
     }
     val arePartitionRecordsSorted = bulkInsertPartitionerRows.arePartitionRecordsSorted();
     parameters.updated(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED, arePartitionRecordsSorted.toString)
-    val isGlobalIndex = SparkHoodieIndex.createIndex(writeConfig).isGlobal
+    val isGlobalIndex = SparkHoodieIndex.isGlobalIndex(writeConfig)
     val hoodieDF = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, writeConfig, df, structName, nameSpace,
       bulkInsertPartitionerRows, isGlobalIndex)
     if (SPARK_VERSION.startsWith("2.")) {

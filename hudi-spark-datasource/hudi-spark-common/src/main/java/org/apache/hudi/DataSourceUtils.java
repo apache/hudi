@@ -101,6 +101,25 @@ public class DataSourceUtils {
   }
 
   /**
+   * Create a UserDefinedBulkInsertPartitionerRows class via reflection,
+   * <br>
+   * if the class name of UserDefinedBulkInsertPartitioner is configured through the HoodieWriteConfig.
+   *
+   * @see HoodieWriteConfig#getUserDefinedBulkInsertPartitionerClass()
+   */
+  public static Option<BulkInsertPartitioner<Dataset<Row>>> createUserDefinedBulkInsertPartitionerWithRows(HoodieWriteConfig config)
+      throws HoodieException {
+    String bulkInsertPartitionerClass = config.getUserDefinedBulkInsertPartitionerClass();
+    try {
+      return StringUtils.isNullOrEmpty(bulkInsertPartitionerClass)
+          ? Option.empty() :
+          Option.of((BulkInsertPartitioner) ReflectionUtils.loadClass(bulkInsertPartitionerClass));
+    } catch (Throwable e) {
+      throw new HoodieException("Could not create UserDefinedBulkInsertPartitionerRows class " + bulkInsertPartitionerClass, e);
+    }
+  }
+
+  /**
    * Create a payload class via reflection, passing in an ordering/precombine value.
    */
   public static HoodieRecordPayload createPayload(String payloadClass, GenericRecord record, Comparable orderingVal)

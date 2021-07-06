@@ -167,13 +167,14 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
 
           // fetch all records from parquet files generated from write to hudi
           val actualDf = sqlContext.read.parquet(fullPartitionPaths(0), fullPartitionPaths(1), fullPartitionPaths(2))
+          val resultRows = actualDf.collectAsList()
 
           // remove metadata columns so that expected and actual DFs can be compared as is
           val trimmedDf = actualDf.drop(HoodieRecord.HOODIE_META_COLUMNS.get(0)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(1))
             .drop(HoodieRecord.HOODIE_META_COLUMNS.get(2)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(3))
             .drop(HoodieRecord.HOODIE_META_COLUMNS.get(4))
 
-          assert(df.except(trimmedDf).count() == 40)
+          assert(df.except(trimmedDf).count() == 0)
         } finally {
           spark.stop()
           FileUtils.deleteDirectory(path.toFile)
