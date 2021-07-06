@@ -329,6 +329,12 @@ public class FlinkOptions {
   //  Compaction Options
   // ------------------------------------------------------------------------
 
+  public static final ConfigOption<Boolean> COMPACTION_SCHEDULE_ENABLED = ConfigOptions
+      .key("compaction.schedule.enabled")
+      .booleanType()
+      .defaultValue(true) // default true for MOR write
+      .withDescription("Schedule the compaction plan, enabled by default for MOR");
+
   public static final ConfigOption<Boolean> COMPACTION_ASYNC_ENABLED = ConfigOptions
       .key("compaction.async.enabled")
       .booleanType()

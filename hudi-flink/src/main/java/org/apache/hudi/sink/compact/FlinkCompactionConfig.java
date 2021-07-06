@@ -62,7 +62,7 @@ public class FlinkCompactionConfig extends Configuration {
   public Integer compactionDeltaSeconds = 3600;
 
   @Parameter(names = {"--clean-async-enabled"}, description = "Whether to cleanup the old commits immediately on new commits, enabled by default", required = false)
-  public Boolean cleanAsyncEnable =  false;
+  public Boolean cleanAsyncEnable = false;
 
   @Parameter(names = {"--clean-retain-commits"},
       description = "Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).\n"
@@ -89,12 +89,25 @@ public class FlinkCompactionConfig extends Configuration {
   @Parameter(names = {"--compaction-tasks"}, description = "Parallelism of tasks that do actual compaction, default is -1", required = false)
   public Integer compactionTasks = -1;
 
+  @Parameter(names = {"--schedule", "-sc"}, description = "Not recommended. Schedule the compaction plan in this job.\n"
+      + "There is a risk of losing data when scheduling compaction outside the writer job.\n"
+      + "Scheduling compaction in the writer job and only let this job do the compaction execution is recommended.\n"
+      + "Default is false", required = false)
+  public Boolean schedule = false;
+
+  public static final String SEQ_FIFO = "FIFO";
+  public static final String SEQ_LIFO = "LIFO";
+  @Parameter(names = {"--seq"}, description = "Compaction plan execution sequence, two options are supported:\n"
+      + "1). FIFO: execute the oldest plan first;\n"
+      + "2). LIFO: execute the latest plan first, by default LIFO", required = false)
+  public String compactionSeq = SEQ_LIFO;
+
   /**
    * Transforms a {@code HoodieFlinkCompaction.config} into {@code Configuration}.
    * The latter is more suitable for the table APIs. It reads all the properties
    * in the properties file (set by `--props` option) and cmd line options
-   *  (set by `--hoodie-conf` option).
-   * */
+   * (set by `--hoodie-conf` option).
+   */
   public static org.apache.flink.configuration.Configuration toFlinkConfig(FlinkCompactionConfig config) {
     org.apache.flink.configuration.Configuration conf = new Configuration();
 
@@ -111,6 +124,7 @@ public class FlinkCompactionConfig extends Configuration {
     conf.setBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnable);
     // use synchronous compaction always
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    conf.setBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, config.schedule);
 
     return conf;
   }

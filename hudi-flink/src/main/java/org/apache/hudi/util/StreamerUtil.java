@@ -247,6 +247,18 @@ public class StreamerUtil {
   }
 
   /**
+   * Returns whether needs to schedule the compaction plan.
+   *
+   * @param conf The flink configuration.
+   */
+  public static boolean needsScheduleCompaction(Configuration conf) {
+    return conf.getString(FlinkOptions.TABLE_TYPE)
+        .toUpperCase(Locale.ROOT)
+        .equals(FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
+        && conf.getBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED);
+  }
+
+  /**
    * Creates the meta client.
    */
   public static HoodieTableMetaClient createMetaClient(Configuration conf) {
