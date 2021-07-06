@@ -86,8 +86,8 @@ public class FlinkCompactionConfig extends Configuration {
   @Parameter(names = {"--compaction-target-io"}, description = "Target IO per compaction (both read and write) for batching compaction, default 512000M.", required = false)
   public Long compactionTargetIo = 512000L;
 
-  @Parameter(names = {"--compaction-tasks"}, description = "Parallelism of tasks that do actual compaction, default is 10", required = false)
-  public Integer compactionTasks = 10;
+  @Parameter(names = {"--compaction-tasks"}, description = "Parallelism of tasks that do actual compaction, default is -1", required = false)
+  public Integer compactionTasks = -1;
 
   /**
    * Transforms a {@code HoodieFlinkCompaction.config} into {@code Configuration}.
