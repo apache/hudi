@@ -38,6 +38,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.execution.bulkinsert.BulkInsertInternalPartitionerWithRowsFactory
 import org.apache.hudi.hive.util.ConfigUtils
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncTool}
+import org.apache.hudi.index.SparkHoodieIndex
 import org.apache.hudi.internal.DataSourceInternalWriterHelper
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.sync.common.AbstractSyncTool
@@ -345,8 +346,9 @@ object HoodieSparkSqlWriter {
     }
     val arePartitionRecordsSorted = bulkInsertPartitionerRows.arePartitionRecordsSorted();
     parameters.updated(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED, arePartitionRecordsSorted.toString)
+    val isGlobalIndex = SparkHoodieIndex.isGlobalIndex(writeConfig)
     val hoodieDF = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsert(sqlContext, writeConfig, df, structName, nameSpace,
-      bulkInsertPartitionerRows)
+      bulkInsertPartitionerRows, isGlobalIndex)
     if (SPARK_VERSION.startsWith("2.")) {
       hoodieDF.write.format("org.apache.hudi.internal")
         .option(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY, instantTime)
