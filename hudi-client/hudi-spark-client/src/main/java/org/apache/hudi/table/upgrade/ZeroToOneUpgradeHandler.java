@@ -31,13 +31,15 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.rollback.ListingBasedRollbackHelper;
 import org.apache.hudi.table.action.rollback.ListingBasedRollbackRequest;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.table.action.rollback.RollbackUtils;
+import org.apache.hudi.table.marker.MarkerFiles;
+import org.apache.hudi.table.marker.MarkerFilesFactory;
+import org.apache.hudi.table.marker.MarkerIOMode;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -60,7 +62,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
     }
     for (String commit : commits) {
       // for every pending commit, delete old marker files and re-create marker files in new format
-      recreateMarkerFiles(commit, table, context, config.getMarkersDeleteParallelism());
+      recreateMarkerFiles(commit, table, context, config.getMarkersIOMode(), config.getMarkersDeleteParallelism());
     }
   }
 
@@ -78,6 +80,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
   private static void recreateMarkerFiles(final String commitInstantTime,
                                           HoodieSparkTable table,
                                           HoodieEngineContext context,
+                                          MarkerIOMode ioMode,
                                           int parallelism) throws HoodieRollbackException {
     try {
       // fetch hoodie instant
@@ -86,7 +89,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
           .findFirst());
       if (commitInstantOpt.isPresent()) {
         // delete existing marker files
-        MarkerFiles markerFiles = new MarkerFiles(table, commitInstantTime);
+        MarkerFiles markerFiles = MarkerFilesFactory.get(ioMode, table, commitInstantTime);
         markerFiles.quietDeleteMarkerDir(context, parallelism);
 
         // generate rollback stats

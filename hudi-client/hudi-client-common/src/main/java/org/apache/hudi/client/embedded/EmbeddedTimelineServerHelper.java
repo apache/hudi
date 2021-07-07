@@ -71,7 +71,7 @@ public class EmbeddedTimelineServerHelper {
         config.getMetadataConfig(), config.getCommonConfig(),
         config.getClientSpecifiedViewStorageConfig(), config.getBasePath(),
         config.getEmbeddedTimelineServerThreads(), config.getEmbeddedTimelineServerCompressOutput(),
-        config.getEmbeddedTimelineServerUseAsync());
+        config.getEmbeddedTimelineServerUseAsync(), config);
     timelineService.startServer();
     updateWriteConfigWithTimelineServer(timelineService, config);
     return timelineService;

@@ -64,9 +64,9 @@ import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
-import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.savepoint.SavepointHelpers;
+import org.apache.hudi.table.marker.MarkerFilesFactory;
 
 import com.codahale.metrics.Timer;
 import org.apache.hadoop.conf.Configuration;
@@ -430,7 +430,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   protected void postCommit(HoodieTable<T, I, K, O> table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata) {
     try {
       // Delete the marker directory for the instant.
-      new MarkerFiles(table, instantTime).quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+      MarkerFilesFactory.get(config.getMarkersIOMode(), table, instantTime)
+          .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
       // We cannot have unbounded commit files. Archive commits if we have to archive
       HoodieTimelineArchiveLog archiveLog = new HoodieTimelineArchiveLog(config, table);
       archiveLog.archiveIfRequired(context);

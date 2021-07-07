@@ -30,8 +30,10 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.MarkerFiles;
+import org.apache.hudi.table.marker.MarkerFiles;
+import org.apache.hudi.table.marker.MarkerFilesFactory;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -47,8 +49,9 @@ public class JavaMarkerBasedRollbackStrategy<T extends HoodieRecordPayload> exte
   @Override
   public List<HoodieRollbackStat> execute(HoodieInstant instantToRollback) {
     try {
-      MarkerFiles markerFiles = new MarkerFiles(table, instantToRollback.getTimestamp());
-      List<HoodieRollbackStat> rollbackStats = context.map(markerFiles.allMarkerFilePaths(), markerFilePath -> {
+      MarkerFiles directMarkerFiles =
+          MarkerFilesFactory.get(config.getMarkersIOMode(), table, instantToRollback.getTimestamp());
+      List<HoodieRollbackStat> rollbackStats = context.map(new ArrayList<>(directMarkerFiles.allMarkerFilePaths()), markerFilePath -> {
         String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);
         IOType type = IOType.valueOf(typeStr);
         switch (type) {

@@ -25,6 +25,8 @@ import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.table.marker.DirectMarkerFiles;
+import org.apache.hudi.table.marker.MarkerFiles;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -44,9 +46,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestMarkerFiles extends HoodieCommonTestHarness {
+public class TestDirectMarkerFiles extends HoodieCommonTestHarness {
 
-  private MarkerFiles markerFiles;
+  private DirectMarkerFiles directMarkerFiles;
   private FileSystem fs;
   private Path markerFolderPath;
   private JavaSparkContext jsc;
@@ -56,11 +58,11 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
   public void setup() throws IOException {
     initPath();
     initMetaClient();
-    this.jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest(TestMarkerFiles.class.getName()));
+    this.jsc = new JavaSparkContext(HoodieClientTestUtils.getSparkConfForTest(TestDirectMarkerFiles.class.getName()));
     this.context = new HoodieSparkEngineContext(jsc);
     this.fs = FSUtils.getFs(metaClient.getBasePath(), metaClient.getHadoopConf());
     this.markerFolderPath =  new Path(metaClient.getMarkerFolderPath("000"));
-    this.markerFiles = new MarkerFiles(fs, metaClient.getBasePath(), markerFolderPath.toString(), "000");
+    this.directMarkerFiles = new DirectMarkerFiles(fs, metaClient.getBasePath(), markerFolderPath.toString(), "000");
   }
 
   @AfterEach
@@ -70,9 +72,9 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
   }
 
   private void createSomeMarkerFiles() {
-    markerFiles.create("2020/06/01", "file1", IOType.MERGE);
-    markerFiles.create("2020/06/02", "file2", IOType.APPEND);
-    markerFiles.create("2020/06/03", "file3", IOType.CREATE);
+    directMarkerFiles.create("2020/06/01", "file1", IOType.MERGE);
+    directMarkerFiles.create("2020/06/02", "file2", IOType.APPEND);
+    directMarkerFiles.create("2020/06/03", "file3", IOType.CREATE);
   }
 
   private void createInvalidFile(String partitionPath, String invalidFileName) {
@@ -107,20 +109,20 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
   @Test
   public void testDeletionWhenMarkerDirExists() throws IOException {
     //when
-    markerFiles.create("2020/06/01", "file1", IOType.MERGE);
+    directMarkerFiles.create("2020/06/01", "file1", IOType.MERGE);
 
     // then
-    assertTrue(markerFiles.doesMarkerDirExist());
-    assertTrue(markerFiles.deleteMarkerDir(context, 2));
-    assertFalse(markerFiles.doesMarkerDirExist());
+    assertTrue(directMarkerFiles.doesMarkerDirExist());
+    assertTrue(directMarkerFiles.deleteMarkerDir(context, 2));
+    assertFalse(directMarkerFiles.doesMarkerDirExist());
   }
 
   @Test
   public void testDeletionWhenMarkerDirNotExists() throws IOException {
     // then
-    assertFalse(markerFiles.doesMarkerDirExist());
-    assertTrue(markerFiles.allMarkerFilePaths().isEmpty());
-    assertFalse(markerFiles.deleteMarkerDir(context, 2));
+    assertFalse(directMarkerFiles.doesMarkerDirExist());
+    assertTrue(directMarkerFiles.allMarkerFilePaths().isEmpty());
+    assertFalse(directMarkerFiles.deleteMarkerDir(context, 2));
   }
 
   @Test
@@ -135,7 +137,7 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
     // then
     assertIterableEquals(CollectionUtils.createImmutableList(
         "2020/06/01/file1", "2020/06/03/file3"),
-        markerFiles.createdAndMergedDataPaths(context, 2).stream().sorted().collect(Collectors.toList())
+        directMarkerFiles.createdAndMergedDataPaths(context, 2).stream().sorted().collect(Collectors.toList())
     );
   }
 
@@ -147,7 +149,7 @@ public class TestMarkerFiles extends HoodieCommonTestHarness {
     // then
     assertIterableEquals(CollectionUtils.createImmutableList("2020/06/01/file1.marker.MERGE",
         "2020/06/02/file2.marker.APPEND", "2020/06/03/file3.marker.CREATE"),
-        markerFiles.allMarkerFilePaths().stream().sorted().collect(Collectors.toList())
+        directMarkerFiles.allMarkerFilePaths().stream().sorted().collect(Collectors.toList())
     );
   }
 

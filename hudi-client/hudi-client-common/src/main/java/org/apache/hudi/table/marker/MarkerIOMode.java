@@ -16,24 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.timeline.service.handlers;
+package org.apache.hudi.table.marker;
 
-import org.apache.hudi.common.table.view.FileSystemViewManager;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-
-import java.io.IOException;
-
-public abstract class Handler {
-
-  protected final Configuration conf;
-  protected final FileSystem fileSystem;
-  protected final FileSystemViewManager viewManager;
-
-  public Handler(Configuration conf, FileSystem fileSystem, FileSystemViewManager viewManager) throws IOException {
-    this.conf = conf;
-    this.fileSystem = fileSystem;
-    this.viewManager = viewManager;
-  }
+public enum MarkerIOMode {
+  DIRECT,
+  TIMELINE_BASED
 }

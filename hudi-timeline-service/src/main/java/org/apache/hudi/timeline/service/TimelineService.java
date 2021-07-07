@@ -59,30 +59,38 @@ public class TimelineService {
   private final int numThreads;
   private final boolean shouldCompressOutput;
   private final boolean useAsync;
+  private final int markerBatchNumThreads;
+  private final long markerBatchIntervalMs;
+  private final int markerParallelism;
 
   public int getServerPort() {
     return serverPort;
   }
 
-  public TimelineService(int serverPort, FileSystemViewManager globalFileSystemViewManager, Configuration conf,
-      int numThreads, boolean compressOutput, boolean useAsync) throws IOException {
+  public TimelineService(int serverPort, FileSystemViewManager globalFileSystemViewManager, FileSystem fs, Configuration conf,
+                         int numThreads, boolean compressOutput, boolean useAsync, int markerBatchNumThreads,
+                         long markerBatchIntervalMs, int markerParallelism) throws IOException {
     this.conf = FSUtils.prepareHadoopConf(conf);
-    this.fs = FileSystem.get(conf);
+    this.fs = fs;
     this.serverPort = serverPort;
     this.fsViewsManager = globalFileSystemViewManager;
     this.numThreads = numThreads;
     this.shouldCompressOutput = compressOutput;
     this.useAsync = useAsync;
+    this.markerBatchNumThreads = markerBatchNumThreads;
+    this.markerBatchIntervalMs = markerBatchIntervalMs;
+    this.markerParallelism = markerParallelism;
   }
 
   public TimelineService(int serverPort, FileSystemViewManager globalFileSystemViewManager) throws IOException {
-    this(serverPort, globalFileSystemViewManager, new Configuration(), DEFAULT_NUM_THREADS, true, false);
+    this(serverPort, globalFileSystemViewManager, FileSystem.get(new Configuration()), new Configuration(), DEFAULT_NUM_THREADS, true, false, 20, 50, 100);
   }
 
   public TimelineService(Config config) throws IOException {
     this(config.serverPort, buildFileSystemViewManager(config,
-        new SerializableConfiguration(FSUtils.prepareHadoopConf(new Configuration()))), new Configuration(),
-        config.numThreads, config.compress, config.async);
+        new SerializableConfiguration(FSUtils.prepareHadoopConf(new Configuration()))),
+        FileSystem.get(new Configuration()), new Configuration(),
+        config.numThreads, config.compress, config.async, 20, 50, 100);
   }
 
   public static class Config implements Serializable {
@@ -159,7 +167,8 @@ public class TimelineService {
       app.disableDynamicGzip();
     }
 
-    RequestHandler requestHandler = new RequestHandler(app, conf, fsViewsManager, useAsync);
+    RequestHandler requestHandler = new RequestHandler(
+        app, conf, fs, fsViewsManager, useAsync, markerBatchNumThreads, markerBatchIntervalMs, markerParallelism);
     app.get("/", ctx -> ctx.result("Hello World"));
     requestHandler.register();
     int realServerPort = startServiceOnPort(serverPort);

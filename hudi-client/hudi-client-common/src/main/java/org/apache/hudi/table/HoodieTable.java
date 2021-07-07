@@ -68,6 +68,9 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
+import org.apache.hudi.table.marker.MarkerFiles;
+import org.apache.hudi.table.marker.MarkerFilesFactory;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -504,7 +507,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
       // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
       // (but succeeded on retry) tasks are removed.
       String basePath = getMetaClient().getBasePath();
-      MarkerFiles markers = new MarkerFiles(this, instantTs);
+      MarkerFiles markers = MarkerFilesFactory.get(config.getMarkersIOMode(), this, instantTs);
 
       if (!markers.doesMarkerDirExist()) {
         // can happen if it was an empty write say.
