@@ -21,10 +21,12 @@ package org.apache.hudi.client.embedded;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.NetworkUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.log4j.LogManager;
@@ -46,6 +48,7 @@ public class EmbeddedTimelineService {
   private final SerializableConfiguration hadoopConf;
   private final FileSystemViewStorageConfig config;
   private final HoodieMetadataConfig metadataConfig;
+  private final HoodieWriteConfig writeConfig;
   private final String basePath;
 
   private final int numThreads;
@@ -56,7 +59,7 @@ public class EmbeddedTimelineService {
 
   public EmbeddedTimelineService(HoodieEngineContext context, String embeddedTimelineServiceHostAddr, int embeddedTimelineServerPort,
                                  HoodieMetadataConfig metadataConfig, FileSystemViewStorageConfig config, String basePath,
-                                 int numThreads, boolean compressOutput, boolean useAsync) {
+                                 int numThreads, boolean compressOutput, boolean useAsync, HoodieWriteConfig writeConfig) {
     setHostAddr(embeddedTimelineServiceHostAddr);
     this.context = context;
     this.config = config;
@@ -68,6 +71,7 @@ public class EmbeddedTimelineService {
     this.numThreads = numThreads;
     this.shouldCompressOutput = compressOutput;
     this.useAsync = useAsync;
+    this.writeConfig = writeConfig;
   }
 
   private FileSystemViewManager createViewManager() {
@@ -84,7 +88,10 @@ public class EmbeddedTimelineService {
   }
 
   public void startServer() throws IOException {
-    server = new TimelineService(preferredPort, viewManager, hadoopConf.newCopy(), numThreads, shouldCompressOutput, useAsync);
+    server = new TimelineService(preferredPort, viewManager,
+        FSUtils.getFs(basePath, hadoopConf.newCopy()), hadoopConf.newCopy(), numThreads, shouldCompressOutput, useAsync,
+        writeConfig.getMarkersTimelineBasedBatchThread(), writeConfig.getMarkersTimelineBasedBatchIntervalMs(),
+        writeConfig.getMarkersDeleteParallelism());
     serverPort = server.startService();
     LOG.info("Started embedded timeline server at " + hostAddr + ":" + serverPort);
   }

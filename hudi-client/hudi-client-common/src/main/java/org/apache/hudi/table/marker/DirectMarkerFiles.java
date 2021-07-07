@@ -16,16 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table;
+package org.apache.hudi.table.marker;
 
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -36,7 +36,6 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -47,35 +46,21 @@ import java.util.stream.Collectors;
 /**
  * Operates on marker files for a given write action (commit, delta commit, compaction).
  */
-public class MarkerFiles implements Serializable {
+public class DirectMarkerFiles extends MarkerFiles {
 
-  private static final Logger LOG = LogManager.getLogger(MarkerFiles.class);
-
-  private final String instantTime;
+  private static final Logger LOG = LogManager.getLogger(DirectMarkerFiles.class);
   private final transient FileSystem fs;
-  private final transient Path markerDirPath;
-  private final String basePath;
 
-  public MarkerFiles(FileSystem fs, String basePath, String markerFolderPath, String instantTime) {
-    this.instantTime = instantTime;
+  public DirectMarkerFiles(FileSystem fs, String basePath, String markerFolderPath, String instantTime) {
+    super(basePath, markerFolderPath, instantTime);
     this.fs = fs;
-    this.markerDirPath = new Path(markerFolderPath);
-    this.basePath = basePath;
   }
 
-  public MarkerFiles(HoodieTable table, String instantTime) {
+  public DirectMarkerFiles(HoodieTable table, String instantTime) {
     this(table.getMetaClient().getFs(),
         table.getMetaClient().getBasePath(),
         table.getMetaClient().getMarkerFolderPath(instantTime),
         instantTime);
-  }
-
-  public void quietDeleteMarkerDir(HoodieEngineContext context, int parallelism) {
-    try {
-      deleteMarkerDir(context, parallelism);
-    } catch (HoodieIOException ioe) {
-      LOG.warn("Error deleting marker directory for instant " + instantTime, ioe);
-    }
   }
 
   /**
@@ -157,15 +142,11 @@ public class MarkerFiles implements Serializable {
 
   private String translateMarkerToDataPath(String markerPath) {
     String rPath = stripMarkerFolderPrefix(markerPath);
-    return MarkerFiles.stripMarkerSuffix(rPath);
+    return stripMarkerSuffix(rPath);
   }
 
-  public static String stripMarkerSuffix(String path) {
-    return path.substring(0, path.indexOf(HoodieTableMetaClient.MARKER_EXTN));
-  }
-
-  public List<String> allMarkerFilePaths() throws IOException {
-    List<String> markerFiles = new ArrayList<>();
+  public Set<String> allMarkerFilePaths() throws IOException {
+    Set<String> markerFiles = new HashSet<>();
     if (doesMarkerDirExist()) {
       FSUtils.processFiles(fs, markerDirPath.toString(), fileStatus -> {
         markerFiles.add(stripMarkerFolderPrefix(fileStatus.getPath().toString()));
@@ -175,70 +156,29 @@ public class MarkerFiles implements Serializable {
     return markerFiles;
   }
 
-  private String stripMarkerFolderPrefix(String fullMarkerPath) {
-    ValidationUtils.checkArgument(fullMarkerPath.contains(HoodieTableMetaClient.MARKER_EXTN));
-    String markerRootPath = Path.getPathWithoutSchemeAndAuthority(
-        new Path(String.format("%s/%s/%s", basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime))).toString();
-    int begin = fullMarkerPath.indexOf(markerRootPath);
-    ValidationUtils.checkArgument(begin >= 0,
-        "Not in marker dir. Marker Path=" + fullMarkerPath + ", Expected Marker Root=" + markerRootPath);
-    return fullMarkerPath.substring(begin + markerRootPath.length() + 1);
-  }
-
-  /**
-   * The marker path will be <base-path>/.hoodie/.temp/<instant_ts>/2019/04/25/filename.marker.writeIOType.
-   */
-  public Path create(String partitionPath, String dataFileName, IOType type) {
+  protected Path create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists) {
+    LOG.info("^^^ [direct] Create marker file : " + partitionPath + " " + dataFileName);
+    long startTimeMs = System.currentTimeMillis();
     Path markerPath = getMarkerPath(partitionPath, dataFileName, type);
+    Path dirPath = markerPath.getParent();
     try {
+      if (!fs.exists(dirPath)) {
+        fs.mkdirs(dirPath); // create a new partition as needed.
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to make dir " + dirPath, e);
+    }
+    try {
+      if (checkIfExists && fs.exists(markerPath)) {
+        LOG.warn("Marker Path=" + markerPath + " already exists, cancel creation");
+        return null;
+      }
       LOG.info("Creating Marker Path=" + markerPath);
       fs.create(markerPath, false).close();
     } catch (IOException e) {
       throw new HoodieException("Failed to create marker file " + markerPath, e);
     }
+    LOG.info("&&& [direct] Created marker file in " + (System.currentTimeMillis() - startTimeMs) + " ms");
     return markerPath;
   }
-
-  /**
-   * The marker path will be <base-path>/.hoodie/.temp/<instant_ts>/2019/04/25/filename.marker.writeIOType.
-   *
-   * @return true if the marker file creates successfully,
-   * false if it already exists
-   */
-  public boolean createIfNotExists(String partitionPath, String dataFileName, IOType type) {
-    Path markerPath = getMarkerPath(partitionPath, dataFileName, type);
-    try {
-      if (fs.exists(markerPath)) {
-        LOG.warn("Marker Path=" + markerPath + " already exists, cancel creation");
-        return false;
-      }
-      LOG.info("Creating Marker Path=" + markerPath);
-      fs.create(markerPath, false).close();
-    } catch (IOException e) {
-      throw new HoodieException("Failed to create marker file " + markerPath, e);
-    }
-    return true;
-  }
-
-  /**
-   * Returns the marker path. Would create the partition path first if not exists.
-   *
-   * @param partitionPath The partition path
-   * @param dataFileName  The data file name
-   * @param type          The IO type
-   * @return path of the marker file
-   */
-  private Path getMarkerPath(String partitionPath, String dataFileName, IOType type) {
-    Path path = FSUtils.getPartitionPath(markerDirPath, partitionPath);
-    try {
-      if (!fs.exists(path)) {
-        fs.mkdirs(path); // create a new partition as needed.
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to make dir " + path, e);
-    }
-    String markerFileName = String.format("%s%s.%s", dataFileName, HoodieTableMetaClient.MARKER_EXTN, type.name());
-    return new Path(path, markerFileName);
-  }
-
 }

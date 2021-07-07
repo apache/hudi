@@ -70,7 +70,7 @@ public class EmbeddedTimelineServerHelper {
         context, hostAddr.orElse(null),config.getEmbeddedTimelineServerPort(),
         config.getMetadataConfig(), config.getClientSpecifiedViewStorageConfig(), config.getBasePath(),
         config.getEmbeddedTimelineServerThreads(), config.getEmbeddedTimelineServerCompressOutput(),
-        config.getEmbeddedTimelineServerUseAsync());
+        config.getEmbeddedTimelineServerUseAsync(), config);
     timelineService.startServer();
     updateWriteConfigWithTimelineServer(timelineService, config);
     return timelineService;

@@ -33,13 +33,15 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.MarkerFiles;
+import org.apache.hudi.table.marker.MarkerFiles;
+import org.apache.hudi.table.marker.MarkerFilesFactory;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -56,8 +58,8 @@ public class SparkMarkerBasedRollbackStrategy<T extends HoodieRecordPayload> ext
   public List<HoodieRollbackStat> execute(HoodieInstant instantToRollback) {
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     try {
-      MarkerFiles markerFiles = new MarkerFiles(table, instantToRollback.getTimestamp());
-      List<String> markerFilePaths = markerFiles.allMarkerFilePaths();
+      MarkerFiles markerFiles = MarkerFilesFactory.get(config.getMarkersIOMode(), table, instantToRollback.getTimestamp());
+      List<String> markerFilePaths = new ArrayList<>(markerFiles.allMarkerFilePaths());
       int parallelism = Math.max(Math.min(markerFilePaths.size(), config.getRollbackParallelism()), 1);
       jsc.setJobGroup(this.getClass().getSimpleName(), "Rolling back using marker files");
       return jsc.parallelize(markerFilePaths, parallelism)

@@ -16,24 +16,26 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.timeline.service.handlers;
+package org.apache.hudi.table.marker;
 
-import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
-import java.io.IOException;
+public class MarkerFilesFactory {
+  private static final Logger LOG = LogManager.getLogger(MarkerFilesFactory.class);
 
-public abstract class Handler {
-
-  protected final Configuration conf;
-  protected final FileSystem fileSystem;
-  protected final FileSystemViewManager viewManager;
-
-  public Handler(Configuration conf, FileSystem fileSystem, FileSystemViewManager viewManager) throws IOException {
-    this.conf = conf;
-    this.fileSystem = fileSystem;
-    this.viewManager = viewManager;
+  public static MarkerFiles get(MarkerIOMode mode, HoodieTable table, String instantTime) {
+    LOG.info("Instantiated MarkerFiles with mode: " + mode.toString());
+    switch (mode) {
+      case DIRECT:
+        return new DirectMarkerFiles(table, instantTime);
+      case TIMELINE_BASED:
+        return new TimelineBasedMarkerFiles(table, instantTime);
+      default:
+        throw new HoodieException("The marker IO mode \"" + mode.name() + "\" is not supported.");
+    }
   }
 }

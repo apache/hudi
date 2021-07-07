@@ -19,6 +19,8 @@
 package org.apache.hudi.timeline.service.handlers;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+
 import org.apache.hudi.common.table.timeline.dto.ClusteringOpDTO;
 import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
@@ -36,8 +38,8 @@ import java.util.stream.Collectors;
  */
 public class FileSliceHandler extends Handler {
 
-  public FileSliceHandler(Configuration conf, FileSystemViewManager viewManager) throws IOException {
-    super(conf, viewManager);
+  public FileSliceHandler(Configuration conf, FileSystem fileSystem, FileSystemViewManager viewManager) throws IOException {
+    super(conf, fileSystem, viewManager);
   }
 
   public List<FileSliceDTO> getAllFileSlices(String basePath, String partitionPath) {

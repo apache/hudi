@@ -37,6 +37,7 @@ import org.apache.log4j.Logger;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Stream;
 
 /**
@@ -217,6 +218,26 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   @Override
   public Stream<Pair<HoodieFileGroupId, HoodieInstant>> getFileGroupsInPendingClustering() {
     return execute(preferredView::getFileGroupsInPendingClustering, secondaryView::getFileGroupsInPendingClustering);
+  }
+
+  @Override
+  public Set<String> getAllMarkerFilePaths(String markerDirPath) {
+    return null;
+  }
+
+  @Override
+  public Set<String> getCreateAndMergeMarkerFilePaths(String markerDirPath) {
+    return null;
+  }
+
+  @Override
+  public boolean createMarker(String markerDirPath, String markerName) {
+    return false;
+  }
+
+  @Override
+  public boolean deleteMarkerDir(String markerDirPath) {
+    return false;
   }
 
   @Override

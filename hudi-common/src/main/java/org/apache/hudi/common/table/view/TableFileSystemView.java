@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Stream;
 
 /**
@@ -185,4 +186,12 @@ public interface TableFileSystemView {
    * Filegroups that are in pending clustering.
    */
   Stream<Pair<HoodieFileGroupId, HoodieInstant>> getFileGroupsInPendingClustering();
+
+  Set<String> getAllMarkerFilePaths(String markerDirPath);
+
+  Set<String> getCreateAndMergeMarkerFilePaths(String markerDirPath);
+
+  boolean createMarker(String markerDirPath, String markerName);
+
+  boolean deleteMarkerDir(String markerDirPath);
 }
