@@ -47,7 +47,6 @@ public class HoodieMetadataMetrics implements Serializable {
   public static final String SCAN_STR = "scan";
   public static final String BASEFILE_READ_STR = "basefile_read";
   public static final String INITIALIZE_STR = "initialize";
-  public static final String SYNC_STR = "sync";
   public static final String REBOOTSTRAP_STR = "rebootstrap";
   public static final String BOOTSTRAP_ERR_STR = "bootstrap_error";
 
@@ -57,7 +56,6 @@ public class HoodieMetadataMetrics implements Serializable {
   public static final String STAT_COUNT_BASE_FILES = "baseFileCount";
   public static final String STAT_COUNT_LOG_FILES = "logFileCount";
   public static final String STAT_COUNT_PARTITION = "partitionCount";
-  public static final String STAT_IN_SYNC = "isInSync";
   public static final String STAT_LAST_COMPACTION_TIMESTAMP = "lastCompactionTimestamp";
 
   private static final Logger LOG = LogManager.getLogger(HoodieMetadataMetrics.class);
@@ -107,7 +105,6 @@ public class HoodieMetadataMetrics implements Serializable {
 
     if (detailed) {
       stats.put(HoodieMetadataMetrics.STAT_COUNT_PARTITION, String.valueOf(tableMetadata.getAllPartitionPaths().size()));
-      stats.put(HoodieMetadataMetrics.STAT_IN_SYNC, String.valueOf(tableMetadata.isInSync()));
     }
 
     return stats;

@@ -49,7 +49,6 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 
 import org.apache.hadoop.conf.Configuration;
@@ -112,15 +111,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       initRegistry();
       HoodieTableMetaClient datasetMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(datasetWriteConfig.getBasePath()).build();
       initialize(engineContext, datasetMetaClient);
-      if (enabled) {
-        // This is always called even in case the table was created for the first time. This is because
-        // initFromFilesystem() does file listing and hence may take a long time during which some new updates
-        // may have occurred on the table. Hence, calling this always ensures that the metadata is brought in sync
-        // with the active timeline.
-        HoodieTimer timer = new HoodieTimer().startTimer();
-        syncFromInstants(datasetMetaClient);
-        metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.SYNC_STR, timer.endTimer()));
-      }
+      initTableMetadata();
     } else {
       enabled = false;
       this.metrics = Option.empty();
@@ -211,15 +202,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   }
 
   /**
-   * Initialize the metadata table if it does not exist. Update the metadata to bring it in sync with the file system.
+   * Initialize the metadata table if it does not exist.
    *
-   * This can happen in two ways:
-   * 1. If the metadata table did not exist, then file and partition listing is used
-   * 2. If the metadata table exists, the instants from active timeline are read in order and changes applied
-   *
-   * The above logic has been chosen because it is faster to perform #1 at scale rather than read all the Instants
-   * which are large in size (AVRO or JSON encoded and not compressed) and incur considerable IO for de-serialization
-   * and decoding.
+   * If the metadata table did not exist, then file and partition listing is used to bootstrap the table.
    */
   protected abstract void initialize(HoodieEngineContext engineContext, HoodieTableMetaClient datasetMetaClient);
 
@@ -393,38 +378,6 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
     }
 
     return partitionToFileStatus;
-  }
-
-  /**
-   * Sync the Metadata Table from the instants created on the dataset.
-   *
-   * @param datasetMetaClient {@code HoodieTableMetaClient} for the dataset
-   */
-  private void syncFromInstants(HoodieTableMetaClient datasetMetaClient) {
-    ValidationUtils.checkState(enabled, "Metadata table cannot be synced as it is not enabled");
-    // (re) init the metadata for reading.
-    initTableMetadata();
-    try {
-      List<HoodieInstant> instantsToSync = metadata.findInstantsToSyncForWriter();
-      if (instantsToSync.isEmpty()) {
-        return;
-      }
-
-      LOG.info("Syncing " + instantsToSync.size() + " instants to metadata table: " + instantsToSync);
-
-      // Read each instant in order and sync it to metadata table
-      for (HoodieInstant instant : instantsToSync) {
-        LOG.info("Syncing instant " + instant + " to metadata table");
-
-        Option<List<HoodieRecord>> records = HoodieTableMetadataUtil.convertInstantToMetaRecords(datasetMetaClient, instant, getLatestSyncedInstantTime());
-        if (records.isPresent()) {
-          commit(records.get(), MetadataPartitionType.FILES.partitionPath(), instant.getTimestamp());
-        }
-      }
-      initTableMetadata();
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Unable to sync instants from data to metadata table.", ioe);
-    }
   }
 
   /**

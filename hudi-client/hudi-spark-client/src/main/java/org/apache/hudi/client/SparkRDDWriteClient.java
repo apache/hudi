@@ -302,6 +302,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction");
     List<HoodieWriteStat> writeStats = writeStatuses.map(WriteStatus::getStat).collect();
     finalizeWrite(table, compactionCommitTime, writeStats);
+    table.getMetadataWriter().ifPresent(w -> w.update(metadata, compactionCommitTime));
     LOG.info("Committing Compaction " + compactionCommitTime + ". Finished with result " + metadata);
     SparkCompactHelpers.newInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
 

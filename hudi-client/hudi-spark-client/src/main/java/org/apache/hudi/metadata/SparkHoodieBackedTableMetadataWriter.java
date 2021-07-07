@@ -121,7 +121,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
           writeClient.compact(instantTime + "001");
         }
       } catch (IllegalArgumentException e) {
-        LOG.info("Ignoring error in compaction: " + e);
+        LOG.info("Cannot perform compaction", e);
       }
       writeClient.clean(instantTime + "002");
     }

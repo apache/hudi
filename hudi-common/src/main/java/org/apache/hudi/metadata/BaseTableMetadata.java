@@ -64,10 +64,8 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
   protected final HoodieMetadataConfig metadataConfig;
   // Directory used for Spillable Map when merging records
   protected final String spillableMapDirectory;
-  private String syncedInstantTime;
 
   protected boolean enabled;
-  private TimelineMergedTableMetadata timelineMergedMetadata;
 
   protected BaseTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
                               String datasetBasePath, String spillableMapDirectory) {
@@ -83,9 +81,6 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       this.metrics = Option.of(new HoodieMetadataMetrics(Registry.getRegistry("HoodieMetadata")));
     } else {
       this.metrics = Option.empty();
-    }
-    if (enabled) {
-      openTimelineScanner();
     }
   }
 
@@ -161,7 +156,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
    */
   protected List<String> fetchAllPartitionPaths() throws IOException {
     HoodieTimer timer = new HoodieTimer().startTimer();
-    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getMergedRecordByKey(RECORDKEY_PARTITION_LIST);
+    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKeyFromMetadata(RECORDKEY_PARTITION_LIST);
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_PARTITIONS_STR, timer.endTimer()));
 
     List<String> partitions = Collections.emptyList();
@@ -217,7 +212,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     }
 
     HoodieTimer timer = new HoodieTimer().startTimer();
-    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getMergedRecordByKey(partitionName);
+    Option<HoodieRecord<HoodieMetadataPayload>> hoodieRecord = getRecordByKeyFromMetadata(partitionName);
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_FILES_STR, timer.endTimer()));
 
     FileStatus[] statuses = {};
@@ -273,72 +268,7 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
     return statuses;
   }
 
-  /**
-   * Retrieve the merged {@code HoodieRecord} mapped to the given key.
-   *
-   * @param key The key of the record
-   */
-  private Option<HoodieRecord<HoodieMetadataPayload>> getMergedRecordByKey(String key) {
-    Option<HoodieRecord<HoodieMetadataPayload>> mergedRecord;
-    Option<HoodieRecord<HoodieMetadataPayload>> metadataHoodieRecord = getRecordByKeyFromMetadata(key);
-    // Retrieve record from unsynced timeline instants
-    Option<HoodieRecord<HoodieMetadataPayload>> timelineHoodieRecord = timelineMergedMetadata.getRecordByKey(key);
-    if (timelineHoodieRecord.isPresent()) {
-      if (metadataHoodieRecord.isPresent()) {
-        HoodieRecordPayload mergedPayload = timelineHoodieRecord.get().getData().preCombine(metadataHoodieRecord.get().getData());
-        mergedRecord = Option.of(new HoodieRecord(metadataHoodieRecord.get().getKey(), mergedPayload));
-      } else {
-        mergedRecord = timelineHoodieRecord;
-      }
-    } else {
-      mergedRecord = metadataHoodieRecord;
-    }
-    return mergedRecord;
-  }
-
   protected abstract Option<HoodieRecord<HoodieMetadataPayload>> getRecordByKeyFromMetadata(String key);
-
-  private void openTimelineScanner() {
-    if (timelineMergedMetadata == null) {
-      List<HoodieInstant> unSyncedInstants = findInstantsToSyncForReader();
-      timelineMergedMetadata =
-          new TimelineMergedTableMetadata(datasetMetaClient, unSyncedInstants, getSyncedInstantTime(), null);
-
-      syncedInstantTime = unSyncedInstants.isEmpty() ? getLatestDatasetInstantTime()
-          : unSyncedInstants.get(unSyncedInstants.size() - 1).getTimestamp();
-    }
-  }
-
-  /**
-   * Return the timestamp of the latest synced instant.
-   */
-  @Override
-  public Option<String> getSyncedInstantTime() {
-    if (!enabled) {
-      return Option.empty();
-    }
-
-    return Option.ofNullable(syncedInstantTime);
-  }
-
-  /**
-   * Return the instants which are not-synced to the {@code HoodieTableMetadata}.
-   *
-   * This is the list of all completed but un-synched instants.
-   */
-  protected abstract List<HoodieInstant> findInstantsToSyncForReader();
-
-  /**
-   * Return the instants which are not-synced to the {@code HoodieTableMetadataWriter}.
-   *
-   * This is the list of all completed but un-synched instants which do not have any incomplete instants in between them.
-   */
-  protected abstract List<HoodieInstant> findInstantsToSyncForWriter();
-
-  @Override
-  public boolean isInSync() {
-    return enabled && findInstantsToSyncForWriter().isEmpty();
-  }
 
   protected HoodieEngineContext getEngineContext() {
     return engineContext != null ? engineContext : new HoodieLocalEngineContext(hadoopConf.get());
