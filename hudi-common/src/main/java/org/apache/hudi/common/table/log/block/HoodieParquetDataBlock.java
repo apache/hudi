@@ -26,19 +26,21 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.storage.HoodieAvroParquetConfig;
+import org.apache.hudi.io.storage.HoodieHFileReader;
 import org.apache.hudi.io.storage.HoodieParquetStreamReader;
 import org.apache.hudi.io.storage.HoodieParquetStreamWriter;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
@@ -89,6 +91,10 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
         new AvroSchemaConverter().convert(schema), schema, filter);
 
+
+    System.out.println("WNI WNI SCHEMA " + schema.toString(true));
+
+
     HoodieAvroParquetConfig avroParquetConfig = new HoodieAvroParquetConfig(writeSupport, CompressionCodecName.GZIP,
         ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 1024 * 1024 * 1024,
         new Configuration(), Double.parseDouble(String.valueOf(0.1)));//HoodieStorageConfig.PARQUET_COMPRESSION_RATIO.defaultValue()));
@@ -121,10 +127,9 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
       parquetWriter.writeAvro(recordKey, record);
     }
 
-    parquetWriter.close();
     outputStream.flush();
+    parquetWriter.close();
     outputStream.close();
-
     return baos.toByteArray();
   }
 
@@ -132,6 +137,11 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   // TODO (na) - Implement a recordItr instead of recordList
   @Override
   protected void deserializeRecords() throws IOException {
+
+    System.out.println("deserializeRecords POS = "
+        + inputStream.getPos()
+    + " CONT LEN = " + getContent().get().length);
+
     // Get schema from the header
     Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
@@ -141,11 +151,10 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     }
 
     // Read the content
-    FSDataInputStream dis =
-        new FSDataInputStream(new ByteArrayInputStream(getContent().get()));
+    FSDataInputStream dis = new FSDataInputStream(new HoodieHFileReader.SeekableByteArrayInputStream(getContent().get()));
 
     HoodieParquetStreamReader<IndexedRecord> reader =
-        new HoodieParquetStreamReader<>(new Configuration(), dis);
+        new HoodieParquetStreamReader<>(new Configuration(), dis, getContent().get().length);
 
     Iterator<IndexedRecord> avroRecords = reader.getRecordIterator(schema);
     while (avroRecords.hasNext()) {

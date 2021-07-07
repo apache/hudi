@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
@@ -334,6 +335,9 @@ public abstract class AbstractHoodieLogRecordScanner {
           break;
         case HFILE_DATA_BLOCK:
           processDataBlock((HoodieHFileDataBlock) lastBlock);
+          break;
+        case PARQUET_DATA_BLOCK:
+          processDataBlock((HoodieParquetDataBlock) lastBlock);
           break;
         case DELETE_BLOCK:
           Arrays.stream(((HoodieDeleteBlock) lastBlock).getKeysToDelete()).forEach(this::processNextDeletedKey);

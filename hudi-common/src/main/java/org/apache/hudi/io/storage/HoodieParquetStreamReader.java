@@ -42,10 +42,11 @@ public class HoodieParquetStreamReader<R extends IndexedRecord> {
   private final Configuration conf;
   private final BaseFileUtils parquetUtils;
 
-  public HoodieParquetStreamReader(Configuration configuration, FSDataInputStream inputStream) {
+  public HoodieParquetStreamReader(Configuration configuration, FSDataInputStream inputStream, int contentSize) {
     this.conf = configuration;
     this.parquetUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
-    parquetInputFile = new HoodieParquetInputFile(inputStream);
+    parquetInputFile = new HoodieParquetInputFile(inputStream, contentSize);
+    System.out.println("WNI HoodieParquetStreamReader " + contentSize);
   }
 
   public Iterator<R> getRecordIterator(Schema schema) throws IOException {
@@ -58,14 +59,16 @@ public class HoodieParquetStreamReader<R extends IndexedRecord> {
   private static class HoodieParquetInputFile implements InputFile {
 
     private final FSDataInputStream stream;
+    private final int contentSize;
 
-    public HoodieParquetInputFile(FSDataInputStream stream) {
+    public HoodieParquetInputFile(FSDataInputStream stream, int contentSize) {
       this.stream = stream;
+      this.contentSize = contentSize;
     }
 
     @Override
     public long getLength() throws IOException {
-      throw new UnsupportedOperationException("getLength is not implemented");
+      return contentSize;
     }
 
     @Override
@@ -93,14 +96,14 @@ public class HoodieParquetStreamReader<R extends IndexedRecord> {
       stream.seek(newPos);
     }
 
-    @Override
+    /*@Override
     public void readFully(byte[] bytes) throws IOException {
-      stream.readFully(bytes, 0, bytes.length);
+      readFully(bytes, 0, bytes.length);
     }
 
     @Override
     public void readFully(byte[] bytes, int start, int len) throws IOException {
-      stream.readFully(bytes);
-    }
+      stream.readFully(bytes, start, len);
+    }*/
   }
 }

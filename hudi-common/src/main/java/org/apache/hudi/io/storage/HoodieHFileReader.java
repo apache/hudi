@@ -256,7 +256,7 @@ public class HoodieHFileReader<R extends IndexedRecord> implements HoodieFileRea
     }
   }
 
-  static class SeekableByteArrayInputStream extends ByteArrayInputStream implements Seekable, PositionedReadable {
+  public static class SeekableByteArrayInputStream extends ByteArrayInputStream implements Seekable, PositionedReadable {
     public SeekableByteArrayInputStream(byte[] buf) {
       super(buf);
     }

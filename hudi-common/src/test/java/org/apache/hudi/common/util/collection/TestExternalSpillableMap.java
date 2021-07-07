@@ -19,10 +19,20 @@
 package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.inline.InLineFSUtils;
+import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.log.HoodieLogFileReader;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -34,6 +44,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.parquet.avro.AvroParquetReader;
+import org.apache.parquet.hadoop.ParquetReader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer.Alphanumeric;
 import org.junit.jupiter.api.Test;
@@ -45,10 +60,16 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.getPhantomFile;
+import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -333,6 +354,97 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     gRecord = (GenericRecord) records.get(key).getData().getInsertValue(schema).get();
     // The record returned for this key should have the updated value for the field name
     assertEquals(gRecord.get(fieldName).toString(), newValue);
+  }
+
+  @Test
+  public void tempTestParquetLog() throws IOException, URISyntaxException, InterruptedException {
+    Configuration conf = new Configuration();
+    conf.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
+    conf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
+
+    String benchmarkRoot = "file:///tmp";
+    FileSystem localFileSystem = new Path(benchmarkRoot).getFileSystem(conf);
+
+    String runBasePath = new Path("/tmp", "rm_base_path").toString();
+    java.nio.file.Files.createDirectories(java.nio.file.Paths.get(runBasePath));
+    org.apache.hadoop.fs.Path runPartitionPath = FSUtils.getPartitionPath(runBasePath, "05-20-2021");
+
+    System.out.println("WNI WNI IMP " + runPartitionPath.toString());
+
+    Schema schema = getSimpleSchema();
+    List<IndexedRecord> rawRecords = SchemaTestUtil.generateTestRecords(0, 10);
+    Schema writerSchema = HoodieAvroUtils.addMetadataFields(schema);
+    List<IndexedRecord> records = rawRecords.stream().map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s,
+        writerSchema)).peek(p -> {
+      p.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, UUID.randomUUID().toString());
+      p.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, runPartitionPath.toString());
+      p.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, "001");
+    }).collect(Collectors.toList());
+
+    HoodieLogFormat.Writer logWriter =
+        HoodieLogFormat.newWriterBuilder().onParentPath(runPartitionPath)
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+            .withFileId("rm_test_file")
+            .overBaseCommit("001")
+            .withFs(localFileSystem).build();
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "002");
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA,
+        writerSchema.toString());
+
+    HoodieDataBlock dataBlock = new HoodieParquetDataBlock(records, header);
+    //HoodieDataBlock dataBlock = new HoodieAvroDataBlock(records, header);
+
+    logWriter.appendBlock(dataBlock);
+    //FileCreateUtils.createDeltaCommit(basePath.toString(), "002", localFileSystem);
+    logWriter.close();
+
+    List<HoodieLogFile> allLogFiles =
+        FSUtils.getAllLogFiles(localFileSystem, runPartitionPath, "rm_test_file",
+            HoodieLogFile.DELTA_EXTENSION, "001").collect(Collectors.toList());
+
+    // read
+    HoodieLogFileReader reader = new HoodieLogFileReader(localFileSystem,
+        allLogFiles.get(0), writerSchema, (100*1024*1024), true, false);
+
+    System.out.println("WNI WHAT " + reader.hasNext());
+    HoodieParquetDataBlock block = (HoodieParquetDataBlock) reader.next();
+    /*List<IndexedRecord> readRecords = block.getRecords();*/
+
+
+    //Path inlinePath = getPhantomFile(outerPath, startOffset, inlineLength);
+
+    System.out.println("WNI VIMP " //+ block.getLogBlockLength()
+        + " " + block.getBlockContentLocation().get().getContentPositionInLogFile()
+    + " " + block.getBlockContentLocation().get().getBlockSize());
+
+    Path inlinePath = InLineFSUtils.getInlineFilePath(
+        allLogFiles.get(0).getPath(), "file",
+        block.getBlockContentLocation().get().getContentPositionInLogFile(),
+        block.getBlockContentLocation().get().getBlockSize());
+
+    Configuration inlineConf = new Configuration();
+    inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
+
+    ParquetReader inLineReader = AvroParquetReader.builder(inlinePath).withConf(inlineConf).build();
+    List<GenericRecord> readRecords = readParquetGenericRecords(inLineReader);
+
+    for (IndexedRecord readRecord : readRecords) {
+      System.out.println("READ RECORD " + readRecord.get(0).toString());
+    }
+
+    inLineReader.close();
+
+  }
+
+  static List<GenericRecord> readParquetGenericRecords(ParquetReader reader) throws IOException {
+    List<GenericRecord> toReturn = new ArrayList<>();
+    Object obj = reader.read();
+    while (obj instanceof GenericRecord) {
+      toReturn.add((GenericRecord) obj);
+      obj = reader.read();
+    }
+    return toReturn;
   }
 
   // TODO : come up with a performance eval test for spillableMap
