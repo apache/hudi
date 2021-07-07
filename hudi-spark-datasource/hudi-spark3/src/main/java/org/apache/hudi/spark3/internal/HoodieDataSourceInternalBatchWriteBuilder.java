@@ -37,19 +37,21 @@ public class HoodieDataSourceInternalBatchWriteBuilder implements WriteBuilder {
   private final StructType structType;
   private final SparkSession jss;
   private final Configuration hadoopConfiguration;
+  private final boolean arePartitionRecordsSorted;
 
   public HoodieDataSourceInternalBatchWriteBuilder(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
-      SparkSession jss, Configuration hadoopConfiguration) {
+      SparkSession jss, Configuration hadoopConfiguration, boolean arePartitionRecordsSorted) {
     this.instantTime = instantTime;
     this.writeConfig = writeConfig;
     this.structType = structType;
     this.jss = jss;
     this.hadoopConfiguration = hadoopConfiguration;
+    this.arePartitionRecordsSorted = arePartitionRecordsSorted;
   }
 
   @Override
   public BatchWrite buildForBatch() {
     return new HoodieDataSourceInternalBatchWrite(instantTime, writeConfig, structType, jss,
-        hadoopConfiguration);
+        hadoopConfiguration, arePartitionRecordsSorted);
   }
 }
