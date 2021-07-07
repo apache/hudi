@@ -85,24 +85,12 @@ public class HoodieParquetStreamWriter<R extends IndexedRecord> {
 
     private PositionOutputStream createPositionOutputstream() {
       return new PositionOutputStream() {
+
+        int pos = 0;
+
         @Override
         public long getPos() throws IOException {
-          return 0;
-        }
-
-        @Override
-        public void write(int b) throws IOException {
-          out.write(b);
-        }
-
-        @Override
-        public void write(byte[] b) throws IOException {
-          out.write(b);
-        }
-
-        @Override
-        public void write(byte[] b, int off, int len) throws IOException {
-          out.write(b, off, len);
+          return pos;
         }
 
         @Override
@@ -113,6 +101,18 @@ public class HoodieParquetStreamWriter<R extends IndexedRecord> {
         @Override
         public void close() throws IOException {
           out.close();
+        }
+
+        @Override
+        public void write(int b) throws IOException {
+          out.write(b);
+          pos++;
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+          out.write(b, off, len);
+          pos += len;
         }
       };
     }

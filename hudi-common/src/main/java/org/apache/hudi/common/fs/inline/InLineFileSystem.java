@@ -49,6 +49,7 @@ public class InLineFileSystem extends FileSystem {
   @Override
   public void initialize(URI name, Configuration conf) throws IOException {
     super.initialize(name, conf);
+    System.out.println("WNMI WNI WNI conf " + conf.toString());
     this.conf = conf;
   }
 
@@ -81,6 +82,9 @@ public class InLineFileSystem extends FileSystem {
   @Override
   public FileStatus getFileStatus(Path inlinePath) throws IOException {
     Path outerPath = InLineFSUtils.getOuterfilePathFromInlinePath(inlinePath);
+    System.out.println("WNMI WNI WNI " + outerPath.toString() + " " + inlinePath.toString()
+    + " " + inlinePath.getParent().getName()
+    + " " + inlinePath.getParent().getParent());
     FileSystem outerFs = outerPath.getFileSystem(conf);
     FileStatus status = outerFs.getFileStatus(outerPath);
     FileStatus toReturn = new FileStatus(InLineFSUtils.length(inlinePath), status.isDirectory(), status.getReplication(), status.getBlockSize(),

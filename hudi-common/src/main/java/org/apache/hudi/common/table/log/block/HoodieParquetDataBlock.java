@@ -22,11 +22,14 @@ import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.fs.inline.InLineFSUtils;
+import org.apache.hudi.common.fs.inline.InLineFileSystem;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.storage.HoodieAvroParquetConfig;
 import org.apache.hudi.io.storage.HoodieHFileReader;
+import org.apache.hudi.io.storage.HoodieParquetReader;
 import org.apache.hudi.io.storage.HoodieParquetStreamReader;
 import org.apache.hudi.io.storage.HoodieParquetStreamWriter;
 
@@ -36,13 +39,17 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.parquet.avro.AvroParquetWriter;
+import org.apache.hadoop.fs.Path;
+import org.apache.parquet.avro.AvroParquetReader;
+import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -91,10 +98,6 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(
         new AvroSchemaConverter().convert(schema), schema, filter);
 
-
-    System.out.println("WNI WNI SCHEMA " + schema.toString(true));
-
-
     HoodieAvroParquetConfig avroParquetConfig = new HoodieAvroParquetConfig(writeSupport, CompressionCodecName.GZIP,
         ParquetWriter.DEFAULT_BLOCK_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, 1024 * 1024 * 1024,
         new Configuration(), Double.parseDouble(String.valueOf(0.1)));//HoodieStorageConfig.PARQUET_COMPRESSION_RATIO.defaultValue()));
@@ -128,9 +131,50 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     }
 
     outputStream.flush();
-    parquetWriter.close();
     outputStream.close();
+    parquetWriter.close();
+
     return baos.toByteArray();
+  }
+
+  @Override
+  public List<IndexedRecord> getRecords() {
+    Configuration inlineConf = new Configuration();
+    List<IndexedRecord> toReturn = new ArrayList<>();
+
+    try {
+      Path inlinePath = InLineFSUtils.getInlineFilePath(
+          getBlockContentLocation().get().getLogFile().getPath(),
+          getBlockContentLocation().get().getLogFile().getPath().getFileSystem(inlineConf).getScheme(),
+          getBlockContentLocation().get().getContentPositionInLogFile(),
+          getBlockContentLocation().get().getBlockSize());
+
+      System.out.println("WNI Fatal 1 " + getBlockContentLocation().get().getLogFile().getPath()
+            + " " + getBlockContentLocation().get().getLogFile().getPath().getFileSystem(inlineConf).getScheme()
+            + " " + getBlockContentLocation().get().getContentPositionInLogFile()
+            + " " + getBlockContentLocation().get().getBlockSize()
+            + " " + inlinePath.toString());
+
+      inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
+        System.out.println("WNI Fatal 2");
+
+      inlineConf.set("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
+      inlineConf.set("fs.s3a.access.key", "AKIAXQXFDWFHCRMEVRXT");
+      inlineConf.set("fs.s3a.secret.key", "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");
+
+      HoodieParquetReader<IndexedRecord> parquetReader = new HoodieParquetReader<>(inlineConf, inlinePath);
+      System.out.println("WNI Fatal 3");
+
+      Iterator<IndexedRecord> recordIterator = parquetReader.getRecordIterator(schema);
+      System.out.println("WNI Fatal 4");
+
+      while (recordIterator.hasNext()) {
+        toReturn.add(recordIterator.next());
+      }
+    } catch (Exception exception) {
+      System.out.println("WNI Fatal " + exception);
+    }
+    return toReturn;
   }
 
   // TODO (na) - Break down content into smaller chunks of byte [] to be GC as they are used

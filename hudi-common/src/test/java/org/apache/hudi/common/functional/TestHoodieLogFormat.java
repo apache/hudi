@@ -21,7 +21,6 @@ package org.apache.hudi.common.functional;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -47,7 +46,6 @@ import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
-import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -74,7 +72,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
@@ -1604,49 +1601,6 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     for (int i = 0; i < recordsCopy.size(); ++i) {
       assertEquals(recordsCopy.get(i), readRecords.get(i));
     }
-  }
-
-  @Test
-  public void tempTestParquetLog() throws IOException, URISyntaxException, InterruptedException {
-    Schema schema = getSimpleSchema();
-    List<IndexedRecord> rawRecords = SchemaTestUtil.generateTestRecords(0, 100);
-    Schema hoodieFieldsSchema = HoodieAvroUtils.addMetadataFields(schema);
-    List<IndexedRecord> records = rawRecords.stream().map(s -> HoodieAvroUtils.rewriteRecord((GenericRecord) s, hoodieFieldsSchema)).peek(p -> {
-      p.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, UUID.randomUUID().toString());
-      p.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, partitionPath);
-      p.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, "001");
-    }).collect(Collectors.toList());
-
-    Configuration conf = new Configuration();
-    conf.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName());
-    conf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
-
-    String benchmarkRoot = "file:///tmp";
-    FileSystem localFileSystem = new Path(benchmarkRoot).getFileSystem(conf);
-
-    String runBasePath = new Path("/tmp", "rm_base_path").toString();
-    java.nio.file.Files.createDirectories(java.nio.file.Paths.get(runBasePath));
-    org.apache.hadoop.fs.Path runPartitionPath = FSUtils.getPartitionPath(runBasePath, "05-20-2021");
-
-    System.out.println("WNI WNI IMP " + runPartitionPath.toString());
-
-    HoodieLogFormat.Writer logWriter =
-        HoodieLogFormat.newWriterBuilder().onParentPath(runPartitionPath)
-            .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withFileId("rm_test_file")
-            .overBaseCommit("001")
-            .withFs(localFileSystem).build();
-    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
-    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "002");
-    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA,
-        HoodieAvroUtils.addMetadataFields(schema).toString());
-
-    //HoodieDataBlock dataBlock = new HoodieParquetDataBlock(records, header);
-    HoodieDataBlock dataBlock = new HoodieAvroDataBlock(records, header);
-
-    logWriter.appendBlock(dataBlock);
-     //FileCreateUtils.createDeltaCommit(basePath.toString(), "002", localFileSystem);
-    logWriter.close();
   }
 
   private HoodieDataBlock getDataBlock(List<IndexedRecord> records, Map<HeaderMetadataType, String> header) {

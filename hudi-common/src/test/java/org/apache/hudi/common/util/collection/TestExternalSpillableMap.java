@@ -407,19 +407,19 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     HoodieLogFileReader reader = new HoodieLogFileReader(localFileSystem,
         allLogFiles.get(0), writerSchema, (100*1024*1024), true, false);
 
-    System.out.println("WNI WHAT " + reader.hasNext());
+    System.out.println("WNI HasNext " + reader.hasNext());
     HoodieParquetDataBlock block = (HoodieParquetDataBlock) reader.next();
-    /*List<IndexedRecord> readRecords = block.getRecords();*/
 
-
-    //Path inlinePath = getPhantomFile(outerPath, startOffset, inlineLength);
-
-    System.out.println("WNI VIMP " //+ block.getLogBlockLength()
+    System.out.println("WNI VIMP "
         + " " + block.getBlockContentLocation().get().getContentPositionInLogFile()
-    + " " + block.getBlockContentLocation().get().getBlockSize());
+    + " " + block.getBlockContentLocation().get().getBlockSize()
+    + " " + block.getBlockContentLocation().get().getLogFile().getPath()
+        + " " + block.getBlockContentLocation().get().getLogFile().getPath().getFileSystem(conf).getScheme()
+    + " " + block.getBlockContentLocation().get().getLogFile().toString());
 
     Path inlinePath = InLineFSUtils.getInlineFilePath(
-        allLogFiles.get(0).getPath(), "file",
+        block.getBlockContentLocation().get().getLogFile().getPath(),
+        block.getBlockContentLocation().get().getLogFile().getPath().getFileSystem(conf).getScheme(),
         block.getBlockContentLocation().get().getContentPositionInLogFile(),
         block.getBlockContentLocation().get().getBlockSize());
 
@@ -430,10 +430,11 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     List<GenericRecord> readRecords = readParquetGenericRecords(inLineReader);
 
     for (IndexedRecord readRecord : readRecords) {
-      System.out.println("READ RECORD " + readRecord.get(0).toString());
+      System.out.println("READ RECORD " + readRecord.toString());
     }
 
     inLineReader.close();
+    reader.close();
 
   }
 
