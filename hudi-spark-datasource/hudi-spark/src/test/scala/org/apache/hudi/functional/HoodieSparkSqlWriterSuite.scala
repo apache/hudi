@@ -20,7 +20,6 @@ package org.apache.hudi.functional
 import java.time.Instant
 import java.util
 import java.util.{Collections, Date, UUID}
-
 import org.apache.commons.io.FileUtils
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
@@ -33,9 +32,10 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.hive.HiveSyncConfig
 import org.apache.hudi.testutils.DataSourceTestUtils
-import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieWriterUtils}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieWriterUtils}
 import org.apache.spark.SparkContext
 import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Row, SQLContext, SaveMode, SparkSession}
@@ -542,7 +542,8 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
       "path" -> basePath,
       DataSourceWriteOptions.TABLE_NAME_OPT_KEY.key -> "test_hoodie",
       DataSourceWriteOptions.HIVE_PARTITION_FIELDS_OPT_KEY.key -> "partition",
-      DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX.key -> "true"
+      DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX.key -> "true",
+      DataSourceWriteOptions.HIVE_CREATE_MANAGED_TABLE.key -> "true"
     )
     val parameters = HoodieWriterUtils.parametersWithWriteDefaults(params)
     val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(parameters)
@@ -559,6 +560,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
       new Path(basePath), newHoodieConfig).asInstanceOf[HiveSyncConfig]
 
     assertTrue(hiveSyncConfig.skipROSuffix)
+    assertTrue(hiveSyncConfig.createManagedTable)
     assertResult("spark.sql.sources.provider=hudi\n" +
       "spark.sql.sources.schema.partCol.0=partition\n" +
       "spark.sql.sources.schema.numParts=1\n" +
@@ -627,5 +629,121 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     sc = spark.sparkContext
     sc.setLogLevel("ERROR")
     sqlContext = spark.sqlContext
+  }
+
+  test("test Incremental View WithReplacement") {
+    List(DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL).foreach { tableType =>
+      initSparkContext("testNonPartitionTableWithMetaTable")
+      initSparkContext("test_schema_evolution")
+      val path = java.nio.file.Files.createTempDirectory("hoodie_test_path")
+      val bootStrapPath = java.nio.file.Files.createTempDirectory("hoodie_test_bootstrap")
+      val basePath = path.toAbsolutePath.toString
+      val baseBootStrapPath = bootStrapPath.toAbsolutePath.toString
+      val options = Map(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key -> tableType,
+        DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY.key -> "col3",
+        DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key -> "keyid",
+        DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key -> "",
+        DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+        HoodieWriteConfig.TABLE_NAME.key -> "hoodie_test")
+      try {
+        val df = spark.range(0, 1000).toDF("keyid")
+          .withColumn("col3", expr("keyid"))
+          .withColumn("age", lit(1))
+          .withColumn("p", lit(2))
+
+        df.write.format("hudi")
+          .options(options)
+          .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, "insert")
+          .option("hoodie.insert.shuffle.parallelism", "4")
+          .mode(SaveMode.Overwrite).save(basePath)
+
+        df.write.format("hudi")
+          .options(options)
+          .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, "insert_overwrite_table")
+          .option("hoodie.insert.shuffle.parallelism", "4")
+          .mode(SaveMode.Append).save(basePath)
+
+        val currentCommits = spark.read.format("hudi").load(basePath).select("_hoodie_commit_time").take(1).map(_.getString(0))
+        val incrementalKeyIdNum = spark.read.format("hudi").option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+          .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key, "0000")
+          .option(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY.key, currentCommits(0))
+          .load(basePath).select("keyid").orderBy("keyid").count
+        assert(incrementalKeyIdNum == 1000)
+
+        // add bootstap test
+        df.write.mode(SaveMode.Overwrite).save(baseBootStrapPath)
+        // boostrap table
+        spark.emptyDataFrame.write.format("hudi")
+          .options(options)
+          .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP.key, baseBootStrapPath)
+          .option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS.key, classOf[NonpartitionedKeyGenerator].getCanonicalName)
+          .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
+          .option(HoodieBootstrapConfig.BOOTSTRAP_PARALLELISM.key, "4")
+          .mode(SaveMode.Overwrite).save(basePath)
+
+        df.write.format("hudi")
+          .options(options)
+          .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, "insert_overwrite_table")
+          .option("hoodie.insert.shuffle.parallelism", "4")
+          .mode(SaveMode.Append).save(basePath)
+
+        val currentCommitsBootstrap = spark.read.format("hudi").load(basePath).select("_hoodie_commit_time").take(1).map(_.getString(0))
+        val incrementalKeyIdNumBootstrap = spark.read.format("hudi").option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+          .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key, "0000")
+          .option(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY.key, currentCommitsBootstrap(0))
+          .load(basePath).select("keyid").orderBy("keyid").count
+        assert(incrementalKeyIdNumBootstrap == 1000)
+      } finally {
+        spark.stop()
+        FileUtils.deleteDirectory(path.toFile)
+        FileUtils.deleteDirectory(bootStrapPath.toFile)
+      }
+    }
+  }
+
+  test("test Non partition table with metatable support") {
+    List(DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL).foreach { tableType =>
+      initSparkContext("testNonPartitionTableWithMetaTable")
+      initSparkContext("test_schema_evolution")
+      val path = java.nio.file.Files.createTempDirectory("hoodie_test_path")
+      val basePath = path.toAbsolutePath.toString
+      try {
+        val df = spark.range(0, 10).toDF("keyid")
+          .withColumn("col3", expr("keyid"))
+          .withColumn("age", expr("keyid + 1000"))
+
+        df.write.format("hudi")
+          .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key, tableType)
+          .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY.key, "col3")
+          .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key, "keyid")
+          .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "")
+          .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY.key, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+          .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, "insert")
+          .option("hoodie.insert.shuffle.parallelism", "1")
+          .option("hoodie.metadata.enable", "true")
+          .option(HoodieWriteConfig.TABLE_NAME.key, "hoodie_test")
+          .mode(SaveMode.Overwrite).save(basePath)
+        // upsert same record again
+        val df_update = spark.range(0, 10).toDF("keyid")
+          .withColumn("col3", expr("keyid"))
+          .withColumn("age", expr("keyid + 2000"))
+        df_update.write.format("hudi")
+          .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key, tableType)
+          .option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY.key, "col3")
+          .option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key, "keyid")
+          .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "")
+          .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY.key, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+          .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, "upsert")
+          .option("hoodie.upsert.shuffle.parallelism", "1")
+          .option("hoodie.metadata.enable", "true")
+          .option(HoodieWriteConfig.TABLE_NAME.key, "hoodie_test")
+          .mode(SaveMode.Append).save(basePath)
+        assert(spark.read.format("hudi").load(basePath).count() == 10)
+        assert(spark.read.format("hudi").load(basePath).where("age >= 2000").count() == 10)
+      } finally {
+        spark.stop()
+        FileUtils.deleteDirectory(path.toFile)
+      }
+    }
   }
 }

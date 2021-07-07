@@ -20,13 +20,13 @@ add jar ${hudi.hadoop.bundle};
 select symbol, max(ts) from stock_ticks_mor_ro group by symbol HAVING symbol = 'GOOG';
 select symbol, max(ts) from stock_ticks_mor_rt group by symbol HAVING symbol = 'GOOG';
 
-select symbol, ts, volume, open, close  from stock_ticks_mor_ro where  symbol = 'GOOG';
-select symbol, ts, volume, open, close  from stock_ticks_mor_rt where  symbol = 'GOOG';
+select symbol, ts, volume, open, close  from stock_ticks_mor_ro where  symbol = 'GOOG' order by ts;
+select symbol, ts, volume, open, close  from stock_ticks_mor_rt where  symbol = 'GOOG' order by ts;
 
 select symbol, max(ts) from stock_ticks_mor_bs_ro group by symbol HAVING symbol = 'GOOG';
 select symbol, max(ts) from stock_ticks_mor_bs_rt group by symbol HAVING symbol = 'GOOG';
 
-select symbol, ts, volume, open, close  from stock_ticks_mor_bs_ro where  symbol = 'GOOG';
-select symbol, ts, volume, open, close  from stock_ticks_mor_bs_rt where  symbol = 'GOOG';
+select symbol, ts, volume, open, close  from stock_ticks_mor_bs_ro where  symbol = 'GOOG' order by ts;
+select symbol, ts, volume, open, close  from stock_ticks_mor_bs_rt where  symbol = 'GOOG' order by ts;
 
 !quit

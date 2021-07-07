@@ -155,7 +155,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     validateTable(newTable)
 
     // Create table in the catalog
-    val enableHive = "hive" == sessionState.conf.getConf(StaticSQLConf.CATALOG_IMPLEMENTATION)
+    val enableHive = isEnableHive(sparkSession)
     if (enableHive) {
       createHiveDataSourceTable(newTable, sparkSession)
     } else {

@@ -93,16 +93,17 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCo
 
     assert(primaryColumns.nonEmpty,
       s"There are no primary key in table $tableId, cannot execute update operator")
+    val enableHive = isEnableHive(sparkSession)
     withSparkConf(sparkSession, targetTable.storage.properties) {
       Map(
-        "path" -> path.toString,
+        "path" -> path,
         RECORDKEY_FIELD_OPT_KEY.key -> primaryColumns.mkString(","),
         KEYGENERATOR_CLASS_OPT_KEY.key -> classOf[SqlKeyGenerator].getCanonicalName,
         PRECOMBINE_FIELD_OPT_KEY.key -> primaryColumns.head, //set the default preCombine field.
         TABLE_NAME.key -> tableId.table,
         OPERATION_OPT_KEY.key -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
         PARTITIONPATH_FIELD_OPT_KEY.key -> targetTable.partitionColumnNames.mkString(","),
-        META_SYNC_ENABLED_OPT_KEY.key -> "false", // TODO make the meta sync enable by default.
+        META_SYNC_ENABLED_OPT_KEY.key -> enableHive.toString,
         HIVE_USE_JDBC_OPT_KEY.key -> "false",
         HIVE_DATABASE_OPT_KEY.key -> tableId.database.getOrElse("default"),
         HIVE_TABLE_OPT_KEY.key -> tableId.table,

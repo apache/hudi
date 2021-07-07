@@ -20,7 +20,6 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.common.fs.FSUtils
 
-
 class TestMergeIntoTable extends TestHoodieSqlBase {
 
   test("Test MergeInto Basic") {
@@ -640,6 +639,97 @@ class TestMergeIntoTable extends TestHoodieSqlBase {
         Seq(3, "a3", 10.0, 1000),
         Seq(4, "a4", 11.0, 1000)
       )
+    }
+  }
+
+  test("Test MereInto With Null Fields") {
+    withTempDir { tmp =>
+      val types = Seq(
+        "string" ,
+        "int",
+        "bigint",
+        "double",
+        "float",
+        "timestamp",
+        "date",
+        "decimal"
+      )
+      types.foreach { dataType =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  value $dataType,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | options (
+             |  primaryKey ='id',
+             |  preCombineField = 'ts'
+             | )
+       """.stripMargin)
+
+        spark.sql(
+          s"""
+             |merge into $tableName h0
+             |using (
+             | select 1 as id, 'a1' as name, cast(null as $dataType) as value, 1000 as ts
+             | ) s0
+             | on h0.id = s0.id
+             | when not matched then insert *
+             |""".stripMargin)
+        checkAnswer(s"select id, name, value, ts from $tableName")(
+          Seq(1, "a1", null, 1000)
+        )
+      }
+    }
+  }
+
+  test("Test MereInto With All Kinds Of DataType") {
+    withTempDir { tmp =>
+      val dataAndTypes = Seq(
+        ("string", "'a1'"),
+        ("int", "10"),
+        ("bigint", "10"),
+        ("double", "10.0"),
+        ("float", "10.0"),
+        ("decimal(5,2)", "10.11"),
+        ("decimal(5,0)", "10"),
+        ("timestamp", "'2021-05-20 00:00:00'"),
+        ("date", "'2021-05-20'")
+      )
+      dataAndTypes.foreach { case (dataType, dataValue) =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  value $dataType,
+             |  ts long
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | options (
+             |  primaryKey ='id',
+             |  preCombineField = 'ts'
+             | )
+       """.stripMargin)
+
+        spark.sql(
+          s"""
+             |merge into $tableName h0
+             |using (
+             | select 1 as id, 'a1' as name, cast($dataValue as $dataType) as value, 1000 as ts
+             | ) s0
+             | on h0.id = s0.id
+             | when not matched then insert *
+             |""".stripMargin)
+        checkAnswer(s"select id, name, cast(value as string), ts from $tableName")(
+          Seq(1, "a1", removeQuotes(dataValue), 1000)
+        )
+      }
     }
   }
 }

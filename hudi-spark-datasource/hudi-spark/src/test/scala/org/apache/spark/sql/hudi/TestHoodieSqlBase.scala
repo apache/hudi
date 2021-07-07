@@ -37,7 +37,6 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
     .appName("hoodie sql test")
     .withExtensions(new HoodieSparkSessionExtension)
     .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-    .config("hoodie.datasource.meta.sync.enable", "false")
     .config("hoodie.insert.shuffle.parallelism", "4")
     .config("hoodie.upsert.shuffle.parallelism", "4")
     .config("hoodie.delete.shuffle.parallelism", "4")
@@ -85,6 +84,13 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
     } catch {
       case e: Throwable =>
         assertResult(errorMsg)(e.getMessage)
+    }
+  }
+
+  protected def removeQuotes(value: Any): Any = {
+    value match {
+      case s: String => s.stripPrefix("'").stripSuffix("'")
+      case _=> value
     }
   }
 }

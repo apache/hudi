@@ -292,6 +292,8 @@ public class DeltaSync implements Serializable {
           srcRecordsWithCkpt.getRight().getLeft(), metrics, overallTimerContext);
     }
 
+    metrics.updateDeltaStreamerSyncMetrics(System.currentTimeMillis());
+
     // Clear persistent RDDs
     jssc.getPersistentRDDs().values().forEach(JavaRDD::unpersist);
     return result;

@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi.command
 
 import java.util.Base64
-
 import org.apache.avro.Schema
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.config.HoodieWriteConfig
@@ -426,7 +425,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
       throw new IllegalArgumentException(s"Merge Key[${targetKey2SourceExpression.keySet.mkString(",")}] is not" +
         s" Equal to the defined primary key[${definedPk.mkString(",")}] in table $targetTableName")
     }
-
+    // Enable the hive sync by default if spark have enable the hive metastore.
+    val enableHive = isEnableHive(sparkSession)
     HoodieWriterUtils.parametersWithWriteDefaults(
       withSparkConf(sparkSession, options) {
         Map(
@@ -437,7 +437,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
           TABLE_NAME.key -> targetTableName,
           PARTITIONPATH_FIELD_OPT_KEY.key -> targetTable.partitionColumnNames.mkString(","),
           PAYLOAD_CLASS_OPT_KEY.key -> classOf[ExpressionPayload].getCanonicalName,
-          META_SYNC_ENABLED_OPT_KEY.key -> "true",
+          META_SYNC_ENABLED_OPT_KEY.key -> enableHive.toString,
           HIVE_USE_JDBC_OPT_KEY.key -> "false",
           HIVE_DATABASE_OPT_KEY.key -> targetTableDb,
           HIVE_TABLE_OPT_KEY.key -> targetTableName,
