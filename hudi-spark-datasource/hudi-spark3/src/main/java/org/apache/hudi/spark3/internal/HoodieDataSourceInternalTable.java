@@ -41,14 +41,16 @@ class HoodieDataSourceInternalTable implements SupportsWrite {
   private final StructType structType;
   private final SparkSession jss;
   private final Configuration hadoopConfiguration;
+  private final boolean arePartitionRecordsSorted;
 
   public HoodieDataSourceInternalTable(String instantTime, HoodieWriteConfig config,
-      StructType schema, SparkSession jss, Configuration hadoopConfiguration) {
+      StructType schema, SparkSession jss, Configuration hadoopConfiguration, boolean arePartitionRecordsSorted) {
     this.instantTime = instantTime;
     this.writeConfig = config;
     this.structType = schema;
     this.jss = jss;
     this.hadoopConfiguration = hadoopConfiguration;
+    this.arePartitionRecordsSorted = arePartitionRecordsSorted;
   }
 
   @Override
@@ -73,6 +75,6 @@ class HoodieDataSourceInternalTable implements SupportsWrite {
   @Override
   public WriteBuilder newWriteBuilder(LogicalWriteInfo logicalWriteInfo) {
     return new HoodieDataSourceInternalBatchWriteBuilder(instantTime, writeConfig, structType, jss,
-        hadoopConfiguration);
+        hadoopConfiguration, arePartitionRecordsSorted);
   }
 }

@@ -45,13 +45,15 @@ public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
   private final String instantTime;
   private final HoodieWriteConfig writeConfig;
   private final StructType structType;
+  private final boolean arePartitionRecordsSorted;
   private final DataSourceInternalWriterHelper dataSourceInternalWriterHelper;
 
   public HoodieDataSourceInternalBatchWrite(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
-      SparkSession jss, Configuration hadoopConfiguration) {
+      SparkSession jss, Configuration hadoopConfiguration, boolean arePartitionRecordsSorted) {
     this.instantTime = instantTime;
     this.writeConfig = writeConfig;
     this.structType = structType;
+    this.arePartitionRecordsSorted = arePartitionRecordsSorted;
     this.dataSourceInternalWriterHelper = new DataSourceInternalWriterHelper(instantTime, writeConfig, structType,
         jss, hadoopConfiguration);
   }
@@ -61,7 +63,7 @@ public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
     dataSourceInternalWriterHelper.createInflightCommit();
     if (WriteOperationType.BULK_INSERT == dataSourceInternalWriterHelper.getWriteOperationType()) {
       return new HoodieBulkInsertDataInternalWriterFactory(dataSourceInternalWriterHelper.getHoodieTable(),
-          writeConfig, instantTime, structType);
+          writeConfig, instantTime, structType, arePartitionRecordsSorted);
     } else {
       throw new IllegalArgumentException("Write Operation Type + " + dataSourceInternalWriterHelper.getWriteOperationType() + " not supported ");
     }

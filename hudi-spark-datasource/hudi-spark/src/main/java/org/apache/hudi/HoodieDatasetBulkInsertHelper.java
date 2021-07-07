@@ -18,17 +18,12 @@
 
 package org.apache.hudi;
 
-import static org.apache.spark.sql.functions.callUDF;
-
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BuiltinKeyGenerator;
+import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -40,7 +35,15 @@ import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 import scala.collection.JavaConverters;
+
+import static org.apache.spark.sql.functions.callUDF;
 
 /**
  * Helper class to assist in preparing {@link Dataset<Row>}s for bulk insert with datasource implementation.
@@ -60,12 +63,13 @@ public class HoodieDatasetBulkInsertHelper {
    *  4. Sorts input dataset by hoodie partition path and record key
    *
    * @param sqlContext SQL Context
-   * @param config  Hoodie Write Config
-   * @param rows    Spark Input dataset
+   * @param config Hoodie Write Config
+   * @param rows Spark Input dataset
    * @return hoodie dataset which is ready for bulk insert.
    */
   public static Dataset<Row> prepareHoodieDatasetForBulkInsert(SQLContext sqlContext,
-      HoodieWriteConfig config, Dataset<Row> rows, String structName, String recordNamespace) {
+      HoodieWriteConfig config, Dataset<Row> rows, String structName, String recordNamespace,
+                                                               BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows) {
     List<Column> originalFields =
         Arrays.stream(rows.schema().fields()).map(f -> new Column(f.name())).collect(Collectors.toList());
 
@@ -101,8 +105,6 @@ public class HoodieDatasetBulkInsertHelper {
     Dataset<Row> colOrderedDataset = rowDatasetWithHoodieColumns.select(
         JavaConverters.collectionAsScalaIterableConverter(orderedFields).asScala().toSeq());
 
-    return colOrderedDataset
-        .sort(functions.col(HoodieRecord.PARTITION_PATH_METADATA_FIELD), functions.col(HoodieRecord.RECORD_KEY_METADATA_FIELD))
-        .coalesce(config.getBulkInsertShuffleParallelism());
+    return bulkInsertPartitionerRows.repartitionRecords(colOrderedDataset, config.getBulkInsertShuffleParallelism());
   }
 }
