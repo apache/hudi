@@ -159,8 +159,6 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         System.out.println("WNI Fatal 2");
 
       inlineConf.set("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
-      inlineConf.set("fs.s3a.access.key", "AKIAXQXFDWFHCRMEVRXT");
-      inlineConf.set("fs.s3a.secret.key", "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");
 
       HoodieParquetReader<IndexedRecord> parquetReader = new HoodieParquetReader<>(inlineConf, inlinePath);
       System.out.println("WNI Fatal 3");
