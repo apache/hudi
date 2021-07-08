@@ -123,6 +123,9 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;
 
+  @Parameter(names = {"--bucket-assign-num"}, description = "Parallelism of tasks that do bucket assign, default is 4.")
+  public Integer bucketAssignNum = 4;
+
   @Parameter(names = {"--write-task-num"}, description = "Parallelism of tasks that do actual write, default is 4.")
   public Integer writeTaskNum = 4;
 
@@ -304,6 +307,7 @@ public class FlinkStreamerConfig extends Configuration {
     } else {
       conf.setString(FlinkOptions.KEYGEN_TYPE, config.keygenType);
     }
+    conf.setInteger(FlinkOptions.BUCKET_ASSIGN_TASKS, config.bucketAssignNum);
     conf.setInteger(FlinkOptions.WRITE_TASKS, config.writeTaskNum);
     conf.setString(FlinkOptions.PARTITION_DEFAULT_NAME, config.partitionDefaultName);
     conf.setBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, config.indexBootstrapEnabled);
