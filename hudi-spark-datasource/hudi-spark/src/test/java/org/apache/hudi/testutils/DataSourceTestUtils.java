@@ -21,6 +21,7 @@ package org.apache.hudi.testutils;
 import org.apache.hudi.common.util.FileIOUtils;
 
 import org.apache.avro.Schema;
+import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
 
@@ -75,6 +76,20 @@ public class DataSourceTestUtils {
     return toReturn;
   }
 
+  public static List<Row> getUniqueRows(List<Row> inserts, int count) {
+    List<Row> toReturn = new ArrayList<>();
+    int soFar = 0;
+    int curIndex = 0;
+    while (soFar < count) {
+      if (!toReturn.contains(inserts.get(curIndex))) {
+        toReturn.add(inserts.get(curIndex));
+        soFar++;
+      }
+      curIndex++;
+    }
+    return toReturn;
+  }
+
   public static List<Row> generateRandomRowsEvolvedSchema(int count) {
     Random random = new Random();
     List<Row> toReturn = new ArrayList<>();
@@ -88,5 +103,19 @@ public class DataSourceTestUtils {
       toReturn.add(RowFactory.create(values));
     }
     return toReturn;
+  }
+
+  public static List<Row> updateRowsWithHigherTs(Dataset<Row> inputDf) {
+    Random random = new Random();
+    List<Row> input = inputDf.collectAsList();
+    List<Row> rows = new ArrayList<>();
+    for (Row row : input) {
+      Object[] values = new Object[3];
+      values[0] = row.getAs("_row_key");
+      values[1] = row.getAs("partition");
+      values[2] = ((Long) row.getAs("ts")) + random.nextInt(1000);
+      rows.add(RowFactory.create(values));
+    }
+    return rows;
   }
 }

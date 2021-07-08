@@ -27,7 +27,6 @@ import org.apache.avro.generic.{GenericFixed, IndexedRecord}
 import org.apache.avro.util.Utf8
 import org.apache.avro.{LogicalTypes, Schema}
 import org.apache.spark.sql.avro.{IncompatibleSchemaException, SchemaConverters}
-import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 

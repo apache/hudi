@@ -104,6 +104,12 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--decode-partition"}, description = "Decode the partition value if the partition has encoded during writing")
   public Boolean decodePartition = false;
 
+  @Parameter(names = {"--managed-table"}, description = "Create a managed table")
+  public Boolean createManagedTable = false;
+
+  @Parameter(names = {"--batch-sync-num"}, description = "The number of partitions one batch when synchronous partitions to hive")
+  public Integer batchSyncNum = 1000;
+
   // enhance the similar function in child class
   public static HiveSyncConfig copy(HiveSyncConfig cfg) {
     HiveSyncConfig newConfig = new HiveSyncConfig();
@@ -123,6 +129,8 @@ public class HiveSyncConfig implements Serializable {
     newConfig.decodePartition = cfg.decodePartition;
     newConfig.tableProperties = cfg.tableProperties;
     newConfig.serdeProperties = cfg.serdeProperties;
+    newConfig.createManagedTable = cfg.createManagedTable;
+    newConfig.batchSyncNum = cfg.batchSyncNum;
     return newConfig;
   }
 
@@ -151,6 +159,7 @@ public class HiveSyncConfig implements Serializable {
       + ", help=" + help
       + ", supportTimestamp=" + supportTimestamp
       + ", decodePartition=" + decodePartition
+      + ", createManagedTable=" + createManagedTable
       + '}';
   }
 }

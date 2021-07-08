@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 import org.apache.hudi.util.StreamerUtil;
@@ -41,6 +42,7 @@ import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
@@ -325,7 +327,7 @@ public class StreamWriteFunction<K, I, O>
         .taskID(taskID)
         .writeStatus(Collections.emptyList())
         .instantTime("")
-        .isBootstrap(true)
+        .bootstrap(true)
         .build();
     this.eventGateway.sendEventToCoordinator(event);
     LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
@@ -340,10 +342,16 @@ public class StreamWriteFunction<K, I, O>
         .taskID(taskID)
         .instantTime(currentInstant)
         .writeStatus(new ArrayList<>(writeStatuses))
-        .isBootstrap(true)
+        .bootstrap(true)
         .build();
     this.writeMetadataState.add(event);
     writeStatuses.clear();
+  }
+
+  public void handleOperatorEvent(OperatorEvent event) {
+    ValidationUtils.checkArgument(event instanceof CommitAckEvent,
+        "The write function can only handle CommitAckEvent");
+    this.confirming = false;
   }
 
   /**
@@ -558,14 +566,14 @@ public class StreamWriteFunction<K, I, O>
     String instant = this.writeClient.getLastPendingInstant(this.actionType);
     // if exactly-once semantics turns on,
     // waits for the checkpoint notification until the checkpoint timeout threshold hits.
-    if (confirming) {
-      long waitingTime = 0L;
-      long ckpTimeout = config.getLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT);
-      long interval = 500L;
+    long waitingTime = 0L;
+    long ckpTimeout = config.getLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT);
+    long interval = 500L;
+    while (confirming) {
       // wait condition:
       // 1. there is no inflight instant
       // 2. the inflight instant does not change and the checkpoint has buffering data
-      while (instant == null || (instant.equals(this.currentInstant) && hasData)) {
+      if (instant == null || (instant.equals(this.currentInstant) && hasData)) {
         // sleep for a while
         try {
           if (waitingTime > ckpTimeout) {
@@ -578,10 +586,11 @@ public class StreamWriteFunction<K, I, O>
         }
         // refresh the inflight instant
         instant = this.writeClient.getLastPendingInstant(this.actionType);
+      } else {
+        // the inflight instant changed, which means the last instant was committed
+        // successfully.
+        confirming = false;
       }
-      // the inflight instant changed, which means the last instant was committed
-      // successfully.
-      confirming = false;
     }
     return instant;
   }
@@ -608,8 +617,8 @@ public class StreamWriteFunction<K, I, O>
         .taskID(taskID)
         .instantTime(instant) // the write instant may shift but the event still use the currentInstant.
         .writeStatus(writeStatus)
-        .isLastBatch(false)
-        .isEndInput(false)
+        .lastBatch(false)
+        .endInput(false)
         .build();
 
     this.eventGateway.sendEventToCoordinator(event);
@@ -618,7 +627,7 @@ public class StreamWriteFunction<K, I, O>
   }
 
   @SuppressWarnings("unchecked, rawtypes")
-  private void flushRemaining(boolean isEndInput) {
+  private void flushRemaining(boolean endInput) {
     this.currentInstant = instantToWrite(hasData());
     if (this.currentInstant == null) {
       // in case there are empty checkpoints that has no input data
@@ -650,8 +659,8 @@ public class StreamWriteFunction<K, I, O>
         .taskID(taskID)
         .instantTime(currentInstant)
         .writeStatus(writeStatus)
-        .isLastBatch(true)
-        .isEndInput(isEndInput)
+        .lastBatch(true)
+        .endInput(endInput)
         .build();
 
     this.eventGateway.sendEventToCoordinator(event);

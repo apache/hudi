@@ -75,15 +75,29 @@ public class HoodieFlinkCompactor {
 
     // judge whether have operation
     // to compute the compaction instant time and do compaction.
-    String compactionInstantTime = CompactionUtil.getCompactionInstantTime(metaClient);
-    boolean scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
-    if (!scheduled) {
-      // do nothing.
-      LOG.info("No compaction plan for this job ");
-      return;
+    if (cfg.schedule) {
+      String compactionInstantTime = CompactionUtil.getCompactionInstantTime(metaClient);
+      boolean scheduled = writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
+      if (!scheduled) {
+        // do nothing.
+        LOG.info("No compaction plan for this job ");
+        return;
+      }
     }
 
     table.getMetaClient().reloadActiveTimeline();
+
+    // fetch the instant based on the configured execution sequence
+    HoodieTimeline timeline = table.getActiveTimeline().filterPendingCompactionTimeline()
+        .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
+    Option<HoodieInstant> requested = CompactionUtil.isLIFO(cfg.compactionSeq) ? timeline.lastInstant() : timeline.firstInstant();
+    if (!requested.isPresent()) {
+      // do nothing.
+      LOG.info("No compaction plan scheduled, turns on the compaction plan schedule with --schedule option");
+      return;
+    }
+
+    String compactionInstantTime = requested.get().getTimestamp();
     // generate compaction plan
     // should support configurable commit metadata
     HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
@@ -92,7 +106,7 @@ public class HoodieFlinkCompactor {
     if (compactionPlan == null || (compactionPlan.getOperations() == null)
         || (compactionPlan.getOperations().isEmpty())) {
       // No compaction plan, do nothing and return.
-      LOG.info("No compaction plan for this job and instant " + compactionInstantTime);
+      LOG.info("No compaction plan for instant " + compactionInstantTime);
       return;
     }
 
@@ -112,7 +126,8 @@ public class HoodieFlinkCompactor {
     }
 
     // get compactionParallelism.
-    int compactionParallelism = Math.min(conf.getInteger(FlinkOptions.COMPACTION_TASKS), compactionPlan.getOperations().size());
+    int compactionParallelism = conf.getInteger(FlinkOptions.COMPACTION_TASKS) == -1
+        ? compactionPlan.getOperations().size() : conf.getInteger(FlinkOptions.COMPACTION_TASKS);
 
     env.addSource(new CompactionPlanSourceFunction(table, instant, compactionPlan, compactionInstantTime))
         .name("compaction_source")

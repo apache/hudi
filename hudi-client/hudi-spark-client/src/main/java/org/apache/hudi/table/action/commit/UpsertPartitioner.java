@@ -187,7 +187,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
         for (SmallFile smallFile : smallFiles) {
           long recordsToAppend = Math.min((config.getParquetMaxFileSize() - smallFile.sizeBytes) / averageRecordSize,
               totalUnassignedInserts);
-          if (recordsToAppend > 0 && totalUnassignedInserts > 0) {
+          if (recordsToAppend > 0) {
             // create a new bucket or re-use an existing bucket
             int bucket;
             if (updateLocationToBucket.containsKey(smallFile.location.getFileId())) {
@@ -200,6 +200,10 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
             bucketNumbers.add(bucket);
             recordsPerBucket.add(recordsToAppend);
             totalUnassignedInserts -= recordsToAppend;
+            if (totalUnassignedInserts <= 0) {
+              // stop the loop when all the inserts are assigned
+              break;
+            }
           }
         }
 

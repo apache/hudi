@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.sink.compact.FlinkCompactionConfig;
 import org.apache.hudi.table.HoodieFlinkTable;
 
 import org.apache.avro.Schema;
@@ -35,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Locale;
 
 /**
  * Utilities for flink hudi compaction.
@@ -70,7 +72,7 @@ public class CompactionUtil {
   public static void setAvroSchema(Configuration conf, HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     Schema tableAvroSchema = tableSchemaResolver.getTableAvroSchema(false);
-    conf.setString(FlinkOptions.READ_AVRO_SCHEMA, tableAvroSchema.toString());
+    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, tableAvroSchema.toString());
   }
 
   /**
@@ -99,11 +101,18 @@ public class CompactionUtil {
         .filterPendingCompactionTimeline()
         .filter(instant ->
             instant.getState() == HoodieInstant.State.INFLIGHT
-                && StreamerUtil.instantTimeDiff(curInstantTime, instant.getTimestamp()) >= deltaSeconds);
+                && StreamerUtil.instantTimeDiffSeconds(curInstantTime, instant.getTimestamp()) >= deltaSeconds);
     inflightCompactionTimeline.getInstants().forEach(inflightInstant -> {
       LOG.info("Rollback the pending compaction instant: " + inflightInstant);
       table.rollback(table.getContext(), HoodieActiveTimeline.createNewInstantTime(), inflightInstant, true);
       table.getMetaClient().reloadActiveTimeline();
     });
+  }
+
+  /**
+   * Returns whether the execution sequence is LIFO.
+   */
+  public static boolean isLIFO(String seq) {
+    return seq.toUpperCase(Locale.ROOT).equals(FlinkCompactionConfig.SEQ_LIFO);
   }
 }

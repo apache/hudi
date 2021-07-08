@@ -120,14 +120,14 @@ public class TestHoodieTableFactory {
     final HoodieTableSource tableSource1 =
         (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(MockContext.getInstance(this.conf));
     final Configuration conf1 = tableSource1.getConf();
-    assertThat(conf1.get(FlinkOptions.READ_AVRO_SCHEMA), is(INFERRED_SCHEMA));
+    assertThat(conf1.get(FlinkOptions.SOURCE_AVRO_SCHEMA), is(INFERRED_SCHEMA));
 
     // set up the explicit schema using the file path
-    this.conf.setString(FlinkOptions.READ_AVRO_SCHEMA_PATH, AVRO_SCHEMA_FILE_PATH);
+    this.conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH, AVRO_SCHEMA_FILE_PATH);
     HoodieTableSource tableSource2 =
         (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(MockContext.getInstance(this.conf));
     Configuration conf2 = tableSource2.getConf();
-    assertNull(conf2.get(FlinkOptions.READ_AVRO_SCHEMA), "expect schema string as null");
+    assertNull(conf2.get(FlinkOptions.SOURCE_AVRO_SCHEMA), "expect schema string as null");
   }
 
   @Test
@@ -207,14 +207,14 @@ public class TestHoodieTableFactory {
     final HoodieTableSink tableSink1 =
         (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf));
     final Configuration conf1 = tableSink1.getConf();
-    assertThat(conf1.get(FlinkOptions.READ_AVRO_SCHEMA), is(INFERRED_SCHEMA));
+    assertThat(conf1.get(FlinkOptions.SOURCE_AVRO_SCHEMA), is(INFERRED_SCHEMA));
 
     // set up the explicit schema using the file path
-    this.conf.setString(FlinkOptions.READ_AVRO_SCHEMA_PATH, AVRO_SCHEMA_FILE_PATH);
+    this.conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH, AVRO_SCHEMA_FILE_PATH);
     HoodieTableSink tableSink2 =
         (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf));
     Configuration conf2 = tableSink2.getConf();
-    assertNull(conf2.get(FlinkOptions.READ_AVRO_SCHEMA), "expect schema string as null");
+    assertNull(conf2.get(FlinkOptions.SOURCE_AVRO_SCHEMA), "expect schema string as null");
   }
 
   @Test

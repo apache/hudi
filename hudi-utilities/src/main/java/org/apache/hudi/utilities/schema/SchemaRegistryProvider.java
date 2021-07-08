@@ -28,8 +28,14 @@ import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Collections;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Obtains latest schema from the Confluent/Kafka schema-registry.
@@ -48,11 +54,41 @@ public class SchemaRegistryProvider extends SchemaProvider {
         "hoodie.deltastreamer.schemaprovider.registry.targetUrl";
   }
 
-  private static String fetchSchemaFromRegistry(String registryUrl) throws IOException {
-    URL registry = new URL(registryUrl);
+  /**
+   * The method takes the provided url {@code registryUrl} and gets the schema from the schema registry using that url.
+   * If the caller provides userInfo credentials in the url (e.g "https://foo:bar@schemaregistry.org") then the credentials
+   * are extracted the url using the Matcher and the extracted credentials are set on the request as an Authorization
+   * header.
+   * @param registryUrl
+   * @return the Schema in String form.
+   * @throws IOException
+   */
+  public String fetchSchemaFromRegistry(String registryUrl) throws IOException {
+    URL registry;
+    HttpURLConnection connection;
+    Matcher matcher = Pattern.compile("://(.*?)@").matcher(registryUrl);
+    if (matcher.find()) {
+      String creds = matcher.group(1);
+      String urlWithoutCreds = registryUrl.replace(creds + "@", "");
+      registry = new URL(urlWithoutCreds);
+      connection = (HttpURLConnection) registry.openConnection();
+      setAuthorizationHeader(matcher.group(1), connection);
+    } else {
+      registry = new URL(registryUrl);
+      connection = (HttpURLConnection) registry.openConnection();
+    }
     ObjectMapper mapper = new ObjectMapper();
-    JsonNode node = mapper.readTree(registry.openStream());
+    JsonNode node = mapper.readTree(getStream(connection));
     return node.get("schema").asText();
+  }
+
+  protected void setAuthorizationHeader(String creds, HttpURLConnection connection) {
+    String encodedAuth = Base64.getEncoder().encodeToString(creds.getBytes(StandardCharsets.UTF_8));
+    connection.setRequestProperty("Authorization", "Basic " + encodedAuth);
+  }
+
+  protected InputStream getStream(HttpURLConnection connection) throws IOException {
+    return connection.getInputStream();
   }
 
   public SchemaRegistryProvider(TypedProperties props, JavaSparkContext jssc) {
@@ -60,7 +96,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.SRC_SCHEMA_REGISTRY_URL_PROP));
   }
 
-  private static Schema getSchema(String registryUrl) throws IOException {
+  private Schema getSchema(String registryUrl) throws IOException {
     return new Schema.Parser().parse(fetchSchemaFromRegistry(registryUrl));
   }
 
