@@ -134,10 +134,10 @@ public class TestHiveMetastoreBasedLockProvider extends HiveSyncFunctionalTestHa
     HiveMetastoreBasedLockProvider lockProvider2 = new HiveMetastoreBasedLockProvider(lockConfiguration, hiveConf());
     lockComponent.setOperationType(DataOperationType.NO_TXN);
     Assertions.assertTrue(lockProvider1.acquireLock(lockConfiguration.getConfig()
-        .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP), TimeUnit.MILLISECONDS, lockComponent));
+        .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, lockComponent));
     try {
       boolean acquireStatus = lockProvider2.acquireLock(lockConfiguration.getConfig()
-          .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP), TimeUnit.MILLISECONDS, lockComponent);
+          .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, lockComponent);
       Assertions.assertFalse(acquireStatus);
     } catch (IllegalArgumentException e) {
       // expected
@@ -146,7 +146,7 @@ public class TestHiveMetastoreBasedLockProvider extends HiveSyncFunctionalTestHa
     // create the third HiveMetastoreBasedLockProvider to acquire lock
     HiveMetastoreBasedLockProvider lockProvider3 = new HiveMetastoreBasedLockProvider(lockConfiguration, hiveConf());
     boolean acquireStatus = lockProvider3.acquireLock(lockConfiguration.getConfig()
-        .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP), TimeUnit.MILLISECONDS, lockComponent);
+        .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, lockComponent);
     // we should acquired lock, since lockProvider1 has already released lock
     Assertions.assertTrue(acquireStatus);
     lockProvider3.unlock();
