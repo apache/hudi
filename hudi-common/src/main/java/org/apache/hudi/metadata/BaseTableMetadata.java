@@ -26,11 +26,8 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieMetadataException;
@@ -41,13 +38,10 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public abstract class BaseTableMetadata implements HoodieTableMetadata {
 
@@ -174,28 +168,6 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
       }
     }
 
-    if (metadataConfig.validateFileListingMetadata()) {
-      // Validate the Metadata Table data by listing the partitions from the file system
-      timer.startTimer();
-      FileSystemBackedTableMetadata fileSystemBackedTableMetadata = new FileSystemBackedTableMetadata(getEngineContext(),
-          hadoopConf, datasetBasePath, metadataConfig.shouldAssumeDatePartitioning());
-      List<String> actualPartitions = fileSystemBackedTableMetadata.getAllPartitionPaths();
-      metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.VALIDATE_PARTITIONS_STR, timer.endTimer()));
-
-      Collections.sort(actualPartitions);
-      Collections.sort(partitions);
-      if (!actualPartitions.equals(partitions)) {
-        LOG.error("Validation of metadata partition list failed. Lists do not match.");
-        LOG.error("Partitions from metadata: " + Arrays.toString(partitions.toArray()));
-        LOG.error("Partitions from file system: " + Arrays.toString(actualPartitions.toArray()));
-
-        metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.VALIDATE_ERRORS_STR, 0));
-      }
-
-      // Return the direct listing as it should be correct
-      partitions = actualPartitions;
-    }
-
     LOG.info("Listed partitions from metadata: #partitions=" + partitions.size());
     return partitions;
   }
@@ -222,46 +194,6 @@ public abstract class BaseTableMetadata implements HoodieTableMetadata {
             + hoodieRecord.get().getData());
       }
       statuses = hoodieRecord.get().getData().getFileStatuses(hadoopConf.get(), partitionPath);
-    }
-
-    if (metadataConfig.validateFileListingMetadata()) {
-      // Validate the Metadata Table data by listing the partitions from the file system
-      timer.startTimer();
-
-      String partitionPathStr = FSUtils.getRelativePartitionPath(new Path(datasetMetaClient.getBasePath()), partitionPath);
-      String latestDataInstantTime = getLatestDatasetInstantTime();
-      HoodieTableFileSystemView dataFsView = new HoodieTableFileSystemView(datasetMetaClient, datasetMetaClient.getActiveTimeline());
-      List<FileStatus> directStatuses = dataFsView.getAllFileSlices(partitionPathStr).flatMap(slice -> {
-        List<FileStatus> paths = new ArrayList<>();
-        slice.getBaseFile().ifPresent(baseFile -> {
-          if (HoodieTimeline.compareTimestamps(baseFile.getCommitTime(), HoodieTimeline.LESSER_THAN_OR_EQUALS, latestDataInstantTime)) {
-            paths.add(baseFile.getFileStatus());
-          }
-        });
-        //TODO(metadata): this will remain problematic; no way to know the commit time based on log file written
-        slice.getLogFiles().forEach(logFile -> paths.add(logFile.getFileStatus()));
-        return paths.stream();
-      }).collect(Collectors.toList());
-
-      List<String> directFilenames = directStatuses.stream()
-          .map(fileStatus -> fileStatus.getPath().getName()).sorted()
-          .collect(Collectors.toList());
-      metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.VALIDATE_FILES_STR, timer.endTimer()));
-
-      List<String> metadataFilenames = Arrays.stream(statuses)
-          .map(s -> s.getPath().getName()).sorted()
-          .collect(Collectors.toList());
-
-      if (!metadataFilenames.equals(directFilenames)) {
-        LOG.error("Validation of metadata file listing for partition " + partitionName + " failed.");
-        LOG.error("File list from metadata: " + Arrays.toString(metadataFilenames.toArray()));
-        LOG.error("File list from direct listing: " + Arrays.toString(directFilenames.toArray()));
-
-        metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.VALIDATE_ERRORS_STR, 0));
-      }
-
-      // Return the direct listing as it should be correct
-      statuses = directStatuses.toArray(new FileStatus[0]);
     }
 
     LOG.info("Listed file in partition from metadata: partition=" + partitionName + ", #files=" + statuses.length);

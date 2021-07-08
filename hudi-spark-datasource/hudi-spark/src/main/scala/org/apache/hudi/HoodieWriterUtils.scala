@@ -26,7 +26,6 @@ import org.apache.hudi.common.config.{HoodieConfig, TypedProperties}
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 import org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_ENABLE_PROP
-import org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_VALIDATE_PROP
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenerator}
 
@@ -54,7 +53,6 @@ object HoodieWriterUtils {
       PARTITIONPATH_FIELD.key -> PARTITIONPATH_FIELD.defaultValue,
       KEYGENERATOR_CLASS.key -> DEFAULT_KEYGENERATOR_CLASS_OPT_VAL,
       METADATA_ENABLE_PROP.key -> METADATA_ENABLE_PROP.defaultValue.toString,
-      METADATA_VALIDATE_PROP.key -> METADATA_VALIDATE_PROP.defaultValue.toString,
       COMMIT_METADATA_KEYPREFIX.key -> COMMIT_METADATA_KEYPREFIX.defaultValue,
       INSERT_DROP_DUPS.key -> INSERT_DROP_DUPS.defaultValue,
       STREAMING_RETRY_CNT.key -> STREAMING_RETRY_CNT.defaultValue,

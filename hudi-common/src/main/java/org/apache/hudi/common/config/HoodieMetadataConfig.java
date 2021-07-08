@@ -44,13 +44,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Enable the internal metadata table which serves table metadata like level file listings");
 
-  // Validate contents of Metadata Table on each access against the actual filesystem
-  public static final ConfigProperty<Boolean> METADATA_VALIDATE_PROP = ConfigProperty
-      .key(METADATA_PREFIX + ".validate")
-      .defaultValue(false)
-      .sinceVersion("0.7.0")
-      .withDocumentation("Validate contents of metadata table on each access; e.g against the actual listings from lake storage");
-
   public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = false;
 
   // Enable metrics for internal Metadata Table
@@ -141,10 +134,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBoolean(METADATA_ENABLE_PROP);
   }
 
-  public boolean validateFileListingMetadata() {
-    return getBoolean(METADATA_VALIDATE_PROP);
-  }
-
   public boolean enableMetrics() {
     return getBoolean(METADATA_METRICS_ENABLE_PROP);
   }
@@ -176,11 +165,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder enableMetrics(boolean enableMetrics) {
       metadataConfig.setValue(METADATA_METRICS_ENABLE_PROP, String.valueOf(enableMetrics));
-      return this;
-    }
-
-    public Builder validate(boolean validate) {
-      metadataConfig.setValue(METADATA_VALIDATE_PROP, String.valueOf(validate));
       return this;
     }
 

@@ -41,9 +41,6 @@ public class HoodieMetadataMetrics implements Serializable {
   // Metric names
   public static final String LOOKUP_PARTITIONS_STR = "lookup_partitions";
   public static final String LOOKUP_FILES_STR = "lookup_files";
-  public static final String VALIDATE_PARTITIONS_STR = "validate_partitions";
-  public static final String VALIDATE_FILES_STR = "validate_files";
-  public static final String VALIDATE_ERRORS_STR = "validate_errors";
   public static final String SCAN_STR = "scan";
   public static final String BASEFILE_READ_STR = "basefile_read";
   public static final String INITIALIZE_STR = "initialize";

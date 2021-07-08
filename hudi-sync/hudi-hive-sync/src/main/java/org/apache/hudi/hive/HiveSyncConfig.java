@@ -89,9 +89,6 @@ public class HiveSyncConfig implements Serializable {
   @Parameter(names = {"--use-file-listing-from-metadata"}, description = "Fetch file listing from Hudi's metadata")
   public Boolean useFileListingFromMetadata = HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 
-  @Parameter(names = {"--verify-metadata-file-listing"}, description = "Verify file listing from Hudi's metadata against file system")
-  public Boolean verifyMetadataFileListing = HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue();
-
   @Parameter(names = {"--table-properties"}, description = "Table properties to hive table")
   public String tableProperties;
 
@@ -134,7 +131,6 @@ public class HiveSyncConfig implements Serializable {
     newConfig.tableName = cfg.tableName;
     newConfig.usePreApacheInputFormat = cfg.usePreApacheInputFormat;
     newConfig.useFileListingFromMetadata = cfg.useFileListingFromMetadata;
-    newConfig.verifyMetadataFileListing = cfg.verifyMetadataFileListing;
     newConfig.supportTimestamp = cfg.supportTimestamp;
     newConfig.decodePartition = cfg.decodePartition;
     newConfig.tableProperties = cfg.tableProperties;
@@ -165,7 +161,6 @@ public class HiveSyncConfig implements Serializable {
       + ", ignoreExceptions=" + ignoreExceptions
       + ", skipROSuffix=" + skipROSuffix
       + ", useFileListingFromMetadata=" + useFileListingFromMetadata
-      + ", verifyMetadataFileListing=" + verifyMetadataFileListing
       + ", tableProperties='" + tableProperties + '\''
       + ", serdeProperties='" + serdeProperties + '\''
       + ", help=" + help

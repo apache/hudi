@@ -52,7 +52,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
 
   private HoodieWriteConfig getConfig(Boolean autoCommit) {
     return getConfigBuilder(autoCommit)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).validate(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
         .build();
   }
 

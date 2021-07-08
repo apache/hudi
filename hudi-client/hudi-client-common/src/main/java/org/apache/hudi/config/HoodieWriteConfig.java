@@ -1220,10 +1220,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.useFileListingMetadata();
   }
 
-  public boolean getFileListingMetadataVerify() {
-    return metadataConfig.validateFileListingMetadata();
-  }
-
   public int getMetadataInsertParallelism() {
     return getInt(HoodieMetadataConfig.METADATA_INSERT_PARALLELISM_PROP);
   }

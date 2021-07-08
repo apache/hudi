@@ -122,9 +122,6 @@ case class HoodieFileIndex(
     properties.put(HoodieMetadataConfig.METADATA_ENABLE_PROP,
       sqlConf.getConfString(HoodieMetadataConfig.METADATA_ENABLE_PROP.key(),
         HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS.toString))
-    properties.put(HoodieMetadataConfig.METADATA_VALIDATE_PROP,
-      sqlConf.getConfString(HoodieMetadataConfig.METADATA_VALIDATE_PROP.key(),
-        HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue().toString))
     properties.putAll(options.asJava)
     properties
   }
