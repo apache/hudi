@@ -55,6 +55,7 @@ import org.apache.spark.sql.Row;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -130,6 +131,18 @@ public class DataSourceUtils {
     } catch (Throwable e) {
       throw new IOException("Could not create payload for class: " + payloadClass, e);
     }
+  }
+
+  public static Map<String, String> getExtraMetadata(Map<String, String> properties) {
+    Map<String, String> extraMetadataMap = new HashMap<>();
+    if (properties.containsKey(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX_OPT_KEY().key())) {
+      properties.entrySet().forEach(entry -> {
+        if (entry.getKey().startsWith(properties.get(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX_OPT_KEY().key()))) {
+          extraMetadataMap.put(entry.getKey(), entry.getValue());
+        }
+      });
+    }
+    return extraMetadataMap;
   }
 
   /**
