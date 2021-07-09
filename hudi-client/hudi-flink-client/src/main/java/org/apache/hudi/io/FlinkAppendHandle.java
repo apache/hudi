@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.MarkerFiles;
-import org.apache.hudi.table.action.commit.BucketType;
 
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
@@ -81,7 +80,7 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
   @Override
   protected boolean isUpdateRecord(HoodieRecord<T> hoodieRecord) {
     return hoodieRecord.getCurrentLocation() != null
-        && hoodieRecord.getCurrentLocation().getInstantTime().equals(BucketType.UPDATE.name());
+        && hoodieRecord.getCurrentLocation().getInstantTime().equals("U");
   }
 
   @Override
