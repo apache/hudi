@@ -23,6 +23,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -36,6 +37,9 @@ public class GlobalAvroDeleteKeyGenerator extends BaseKeyGenerator {
   public GlobalAvroDeleteKeyGenerator(TypedProperties config) {
     super(config);
     this.recordKeyFields = Arrays.asList(config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(","));
+    this.indexKeyFields = config.getStringList(
+        KeyGeneratorOptions.INDEX_KEY_FILED_NAME.key(), ",", Collections.emptyList());
+    super.validateIndexKeyField();
   }
 
   @Override
@@ -46,6 +50,11 @@ public class GlobalAvroDeleteKeyGenerator extends BaseKeyGenerator {
   @Override
   public String getPartitionPath(GenericRecord record) {
     return EMPTY_PARTITION;
+  }
+
+  @Override
+  public List<Object> getIndexKey(GenericRecord record) {
+    return KeyGenUtils.getIndexKey(record, getIndexKeyFields());
   }
 
   @Override

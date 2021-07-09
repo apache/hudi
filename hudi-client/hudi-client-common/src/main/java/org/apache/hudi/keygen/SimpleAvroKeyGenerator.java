@@ -19,9 +19,11 @@ package org.apache.hudi.keygen;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.util.Collections;
+import java.util.List;
 
 /**
  * Avro simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
@@ -30,19 +32,30 @@ public class SimpleAvroKeyGenerator extends BaseKeyGenerator {
 
   public SimpleAvroKeyGenerator(TypedProperties props) {
     this(props, props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()),
-        props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()));
+        props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()),
+        props.getString(KeyGeneratorOptions.INDEX_KEY_FILED_NAME.key(),
+            KeyGeneratorOptions.INDEX_KEY_FILED_NAME.defaultValue()));
   }
 
   SimpleAvroKeyGenerator(TypedProperties props, String partitionPathField) {
-    this(props, null, partitionPathField);
+    this(props, null, partitionPathField, null);
   }
 
   SimpleAvroKeyGenerator(TypedProperties props, String recordKeyField, String partitionPathField) {
+    this(props, recordKeyField, partitionPathField, null);
+  }
+
+  SimpleAvroKeyGenerator(TypedProperties props, String recordKeyField, String partitionPathField,
+      String indexKeyField) {
     super(props);
     this.recordKeyFields = recordKeyField == null
         ? Collections.emptyList()
         : Collections.singletonList(recordKeyField);
     this.partitionPathFields = Collections.singletonList(partitionPathField);
+    this.indexKeyFields = StringUtils.isNullOrEmpty(indexKeyField)
+        ? Collections.emptyList()
+        : Collections.singletonList(indexKeyField);
+    super.validateIndexKeyField();
   }
 
   @Override
@@ -53,5 +66,10 @@ public class SimpleAvroKeyGenerator extends BaseKeyGenerator {
   @Override
   public String getPartitionPath(GenericRecord record) {
     return KeyGenUtils.getPartitionPath(record, getPartitionPathFields().get(0), hiveStylePartitioning, encodePartitionPath);
+  }
+
+  @Override
+  public List<Object> getIndexKey(GenericRecord record) {
+    return KeyGenUtils.getIndexKey(record, getIndexKeyFields());
   }
 }

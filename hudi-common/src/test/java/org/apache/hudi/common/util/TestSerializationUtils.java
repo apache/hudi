@@ -19,9 +19,12 @@
 package org.apache.hudi.common.util;
 
 import org.apache.avro.util.Utf8;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Objects;
@@ -50,6 +53,40 @@ public class TestSerializationUtils {
     verifyObject(new Utf8("test-key"));
     // Verify serialization of list.
     verifyObject(new LinkedList<>(Arrays.asList(2, 3, 5)));
+  }
+  
+  @Test
+  public void testHoodieKeV1Compatibility() throws IOException {
+    HoodieKey[] hoodieKeys = new HoodieKey[2];
+    hoodieKeys[0] = new HoodieKey("key1", "part1");
+    hoodieKeys[1] = new HoodieKey("key2", "part2");
+    verifyHoodieKeyCompatibility(hoodieKeys, "hoodie-key-v1.bin", 1);
+  }
+
+  @Test
+  public void testHoodieKeyV2Compatibility() throws IOException {
+    HoodieKey[] hoodieKeys = new HoodieKey[3];
+    hoodieKeys[0] = new HoodieKey("key1", "part1");
+    hoodieKeys[1] = new HoodieKey("key2", "part2", new ArrayList<>(Arrays.asList("indexKey2")));
+    hoodieKeys[2] = new HoodieKey("key3", "part3", new ArrayList<>(Arrays.asList("indexKey3")));
+    verifyHoodieKeyCompatibility(hoodieKeys, "hoodie-key-v2.bin", 2);
+    // Add this check to the latest version
+    verifyHoodieKeyCompatibility(hoodieKeys, "hoodie-key-v2.bin");
+  }
+  
+  private void verifyHoodieKeyCompatibility(HoodieKey[] hoodieKeys, String file)
+      throws IOException {
+    verifyHoodieKeyCompatibility(hoodieKeys, file, HoodieLogBlock.version);
+  }
+
+  private void verifyHoodieKeyCompatibility(HoodieKey[] hoodieKeys, String file, int version)
+      throws IOException {
+    byte[] serializedHoodieKeys = FileIOUtils.readAsByteArray(
+        getClass().getClassLoader().getResourceAsStream(file));
+    HoodieKey[] deserialized = SerializationUtils.deserialize(serializedHoodieKeys, version);
+    for (int i = 0; i < hoodieKeys.length; i++) {
+      assertEquals(hoodieKeys[i], deserialized[i]);
+    }
   }
 
   private <T> void verifyObject(T expectedValue) throws IOException {

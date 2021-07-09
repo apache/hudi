@@ -20,6 +20,7 @@ package org.apache.hudi.keygen;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -32,6 +33,7 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
   protected List<String> partitionPathFields;
   protected final boolean encodePartitionPath;
   protected final boolean hiveStylePartitioning;
+  protected List<String> indexKeyFields;
 
   protected BaseKeyGenerator(TypedProperties config) {
     super(config);
@@ -51,6 +53,8 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
    */
   public abstract String getPartitionPath(GenericRecord record);
 
+  public abstract List<Object> getIndexKey(GenericRecord record);
+
   /**
    * Generate a Hoodie Key out of provided generic record.
    */
@@ -59,7 +63,7 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
     if (getRecordKeyFields() == null || getPartitionPathFields() == null) {
       throw new HoodieKeyException("Unable to find field names for record key or partition path in cfg");
     }
-    return new HoodieKey(getRecordKey(record), getPartitionPath(record));
+    return new HoodieKey(getRecordKey(record), getPartitionPath(record), getIndexKey(record));
   }
 
   @Override
@@ -71,11 +75,24 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
     }).collect(Collectors.toList());
   }
 
+  public List<String> getIndexKeyFields() {
+    return indexKeyFields;
+  }
+
   public List<String> getRecordKeyFields() {
     return recordKeyFields;
   }
 
   public List<String> getPartitionPathFields() {
     return partitionPathFields;
+  }
+
+  /**
+   * If index key exists, it should be the subset of the record key list.
+   */
+  protected void validateIndexKeyField() {
+    if (indexKeyFields.size() != 0 && !recordKeyFields.containsAll(indexKeyFields)) {
+      throw new HoodieException("Index key (if configured) must be subset of record key.");
+    }
   }
 }

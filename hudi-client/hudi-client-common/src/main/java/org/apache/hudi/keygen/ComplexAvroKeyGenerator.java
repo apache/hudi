@@ -22,6 +22,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -36,6 +38,9 @@ public class ComplexAvroKeyGenerator extends BaseKeyGenerator {
         .split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
     this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
         .split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
+    this.indexKeyFields = props.getStringList(
+        KeyGeneratorOptions.INDEX_KEY_FILED_NAME.key(), ",", Collections.emptyList());
+    super.validateIndexKeyField();
   }
 
   @Override
@@ -46,5 +51,10 @@ public class ComplexAvroKeyGenerator extends BaseKeyGenerator {
   @Override
   public String getPartitionPath(GenericRecord record) {
     return KeyGenUtils.getRecordPartitionPath(record, getPartitionPathFields(), hiveStylePartitioning, encodePartitionPath);
+  }
+
+  @Override
+  public List<Object> getIndexKey(GenericRecord record) {
+    return KeyGenUtils.getIndexKey(record, getIndexKeyFields());
   }
 }

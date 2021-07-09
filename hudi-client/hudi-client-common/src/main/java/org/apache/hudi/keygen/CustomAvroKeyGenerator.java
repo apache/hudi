@@ -26,6 +26,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -46,6 +47,8 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
   private static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
   public static final String SPLIT_REGEX = ":";
 
+  private BaseKeyGenerator innerKeyGenerator;
+
   /**
    * Used as a part of config in CustomKeyGenerator.java.
    */
@@ -57,6 +60,13 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
     super(props);
     this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
     this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
+    this.innerKeyGenerator = getRecordKeyFields().size() == 1 ? new SimpleAvroKeyGenerator(config) : new ComplexAvroKeyGenerator(config);
+    this.indexKeyFields = this.innerKeyGenerator.indexKeyFields;
+  }
+
+  @Override
+  public List<Object> getIndexKey(GenericRecord record) {
+    return innerKeyGenerator.getIndexKey(record);
   }
 
   @Override
@@ -103,9 +113,7 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
   @Override
   public String getRecordKey(GenericRecord record) {
     validateRecordKeyFields();
-    return getRecordKeyFields().size() == 1
-        ? new SimpleAvroKeyGenerator(config).getRecordKey(record)
-        : new ComplexAvroKeyGenerator(config).getRecordKey(record);
+    return innerKeyGenerator.getRecordKey(record);
   }
 
   private void validateRecordKeyFields() {

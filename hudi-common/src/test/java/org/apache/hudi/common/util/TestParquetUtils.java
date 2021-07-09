@@ -259,6 +259,11 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     }
 
     @Override
+    public List<Object> getIndexKey(GenericRecord record) {
+      return null;
+    }
+
+    @Override
     public List<String> getRecordKeyFields() {
       return Arrays.asList(new String[]{recordKeyField});
     }

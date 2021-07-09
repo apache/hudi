@@ -18,6 +18,10 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.exception.HoodieSerializationException;
+
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
@@ -70,12 +74,23 @@ public class SerializationUtils {
    * @param objectData the serialized object, must not be null
    * @return the deserialized object
    * @throws IllegalArgumentException if {@code objectData} is {@code null}
+   * @throws HoodieSerializationException (runtime) if the serialization fails
    */
   public static <T> T deserialize(final byte[] objectData) {
     if (objectData == null) {
       throw new IllegalArgumentException("The byte[] must not be null");
     }
     return (T) SERIALIZER_REF.get().deserialize(objectData);
+  }
+
+  public static <T> T deserialize(final byte[] objectData, int version) {
+    if (objectData == null) {
+      throw new IllegalArgumentException("The byte[] must not be null");
+    }
+    if (version == HoodieLogBlock.version) {
+      return (T) SERIALIZER_REF.get().deserialize(objectData);
+    }
+    return (T) new KryoSerializerInstance(version).deserialize(objectData);
   }
 
   private static class KryoSerializerInstance implements Serializable {
@@ -85,8 +100,12 @@ public class SerializationUtils {
     private final ByteArrayOutputStream baos;
 
     KryoSerializerInstance() {
+      this(HoodieLogBlock.version);
+    }
+
+    KryoSerializerInstance(int version) {
       KryoInstantiator kryoInstantiator = new KryoInstantiator();
-      kryo = kryoInstantiator.newKryo();
+      kryo = kryoInstantiator.newKryo(version);
       baos = new ByteArrayOutputStream(KRYO_SERIALIZER_INITIAL_BUFFER_SIZE);
       kryo.setRegistrationRequired(false);
     }
@@ -112,7 +131,10 @@ public class SerializationUtils {
   private static class KryoInstantiator implements Serializable {
 
     public Kryo newKryo() {
+      return newKryo(HoodieLogBlock.version);
+    }
 
+    public Kryo newKryo(int version) {
       Kryo kryo = new Kryo();
       // ensure that kryo doesn't fail if classes are not registered with kryo.
       kryo.setRegistrationRequired(false);
@@ -121,6 +143,10 @@ public class SerializationUtils {
       // Handle cases where we may have an odd classloader setup like with libjars
       // for hadoop
       kryo.setClassLoader(Thread.currentThread().getContextClassLoader());
+      if (version < HoodieLogBlock.version) {
+        String hoodieKeySerializerClass = "org.apache.hudi.common.util.serializer.HoodieKeyV" + version + "Serializer";
+        kryo.register(HoodieKey.class, ReflectionUtils.loadClass(hoodieKeySerializerClass));
+      }
       return kryo;
     }
 

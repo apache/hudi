@@ -23,6 +23,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -39,11 +40,19 @@ public class NonpartitionedAvroKeyGenerator extends BaseKeyGenerator {
     this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
         .split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
     this.partitionPathFields = EMPTY_PARTITION_FIELD_LIST;
+    this.indexKeyFields = props.getStringList(
+        KeyGeneratorOptions.INDEX_KEY_FILED_NAME.key(), ",", Collections.emptyList());
+    super.validateIndexKeyField();
   }
 
   @Override
   public String getPartitionPath(GenericRecord record) {
     return EMPTY_PARTITION;
+  }
+
+  @Override
+  public List<Object> getIndexKey(GenericRecord record) {
+    return KeyGenUtils.getIndexKey(record, getIndexKeyFields());
   }
 
   @Override

@@ -32,6 +32,7 @@ import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -56,6 +57,7 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
     this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
     this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
     customAvroKeyGenerator = new CustomAvroKeyGenerator(props);
+    this.indexKeyFields = customAvroKeyGenerator.indexKeyFields;
   }
 
   @Override
@@ -66,6 +68,11 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
   @Override
   public String getPartitionPath(GenericRecord record) {
     return customAvroKeyGenerator.getPartitionPath(record);
+  }
+
+  @Override
+  public List<Object> getIndexKey(GenericRecord record) {
+    return customAvroKeyGenerator.getIndexKey(record);
   }
 
   @Override

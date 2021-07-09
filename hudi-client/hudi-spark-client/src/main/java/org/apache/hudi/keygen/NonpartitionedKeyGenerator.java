@@ -56,6 +56,11 @@ public class NonpartitionedKeyGenerator extends BuiltinKeyGenerator {
   }
 
   @Override
+  public List<Object> getIndexKey(GenericRecord record) {
+    return nonpartitionedAvroKeyGenerator.getIndexKey(record);
+  }
+
+  @Override
   public List<String> getPartitionPathFields() {
     return nonpartitionedAvroKeyGenerator.getPartitionPathFields();
   }
