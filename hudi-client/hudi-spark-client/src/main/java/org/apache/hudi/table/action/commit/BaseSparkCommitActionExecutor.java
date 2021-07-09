@@ -216,7 +216,11 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   }
 
   protected Partitioner getPartitioner(WorkloadProfile profile) {
-    if (WriteOperationType.isChangingRecords(operationType)) {
+    Option<org.apache.hudi.table.action.commit.Partitioner> customizedPartitioner = table.getIndex()
+        .getCustomizedPartitioner(profile, context, table, config);
+    if (customizedPartitioner.isPresent()) {
+      return (Partitioner) customizedPartitioner.get();
+    } else if (WriteOperationType.isChangingRecords(operationType)) {
       return getUpsertPartitioner(profile);
     } else {
       return getInsertPartitioner(profile);
@@ -305,7 +309,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   @SuppressWarnings("unchecked")
   protected Iterator<List<WriteStatus>> handleUpsertPartition(String instantTime, Integer partition, Iterator recordItr,
                                                               Partitioner partitioner) {
-    UpsertPartitioner upsertPartitioner = (UpsertPartitioner) partitioner;
+    SparkHoodiePartitioner upsertPartitioner = (SparkHoodiePartitioner) partitioner;
     BucketInfo binfo = upsertPartitioner.getBucketInfo(partition);
     BucketType btype = binfo.bucketType;
     try {

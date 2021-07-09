@@ -32,6 +32,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
+import org.apache.hudi.index.bucket.SparkBucketIndex;
 import org.apache.hudi.index.hbase.SparkHoodieHBaseIndex;
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex;
 import org.apache.hudi.index.simple.HoodieSimpleIndex;
@@ -60,7 +61,7 @@ public class TestHoodieIndexConfigs {
   }
 
   @ParameterizedTest
-  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE", "HBASE"})
+  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE", "HBASE", "BUCKET_INDEX"})
   public void testCreateIndex(IndexType indexType) throws Exception {
     HoodieWriteConfig config;
     HoodieWriteConfig.Builder clientConfigBuilder = HoodieWriteConfig.newBuilder();
@@ -92,6 +93,12 @@ public class TestHoodieIndexConfigs {
                 .withHBaseIndexConfig(new HoodieHBaseIndexConfig.Builder().build()).build())
             .build();
         assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof SparkHoodieHBaseIndex);
+        break;
+      case BUCKET_INDEX:
+        config = clientConfigBuilder.withPath(basePath)
+            .withIndexConfig(indexConfigBuilder.withIndexType(IndexType.BUCKET_INDEX)
+            .withBucketNum("8").withIndexKeyField("row_key").build()).build();
+        assertTrue(SparkHoodieIndexFactory.createIndex(config) instanceof SparkBucketIndex);
         break;
       default:
         // no -op. just for checkstyle errors

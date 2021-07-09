@@ -38,6 +38,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
@@ -76,6 +77,11 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     // TODO : Remove this once we refactor and move out autoCommit method from here, since the TxnManager is held in {@link AbstractHoodieWriteClient}.
     this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
     this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
+    // TODO: HUDI-2155 bulk insert support bucket index, HUDI-2156 cluster the table with bucket index.
+    if (this.config.getIndexType() == HoodieIndex.IndexType.BUCKET_INDEX
+        && (operationType == WriteOperationType.BULK_INSERT || operationType == WriteOperationType.CLUSTER)) {
+      throw new UnsupportedOperationException("Executor " + this.getClass().getSimpleName() + " is not compatible with bucket index");
+    }
   }
 
   public abstract HoodieWriteMetadata<O> execute(I inputRecords);
