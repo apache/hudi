@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
@@ -144,6 +145,11 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       TableSchema schema) {
     // table name
     conf.setString(FlinkOptions.TABLE_NAME.key(), tableName);
+    // append only
+    if (conf.getBoolean(FlinkOptions.APPEND_ONLY_ENABLE)) {
+      // append only should use insert operation
+      conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT.value());
+    }
     // hoodie key about options
     setupHoodieKeyOptions(conf, table);
     // cleaning options
