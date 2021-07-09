@@ -85,6 +85,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
 
   protected HoodieBackedTableMetadata metadata;
   protected HoodieTableMetaClient metaClient;
+  protected HoodieTableMetaClient datasetMetaClient;
   protected Option<HoodieMetadataMetrics> metrics;
   protected boolean enabled;
   protected SerializableConfiguration hadoopConf;
@@ -109,8 +110,8 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       ValidationUtils.checkArgument(!this.metadataWriteConfig.useFileListingMetadata(), "File listing cannot be used for Metadata Table");
 
       initRegistry();
-      HoodieTableMetaClient datasetMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(datasetWriteConfig.getBasePath()).build();
-      initialize(engineContext, datasetMetaClient);
+      this.datasetMetaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(datasetWriteConfig.getBasePath()).build();
+      initialize(engineContext);
       initTableMetadata();
     } else {
       enabled = false;
@@ -206,7 +207,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
    *
    * If the metadata table did not exist, then file and partition listing is used to bootstrap the table.
    */
-  protected abstract void initialize(HoodieEngineContext engineContext, HoodieTableMetaClient datasetMetaClient);
+  protected abstract void initialize(HoodieEngineContext engineContext);
 
   protected void initTableMetadata() {
     try {

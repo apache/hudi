@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.TableFileSystemView;
@@ -48,6 +47,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -80,7 +80,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void initialize(HoodieEngineContext engineContext, HoodieTableMetaClient datasetMetaClient) {
+  protected void initialize(HoodieEngineContext engineContext) {
     try {
       metrics.map(HoodieMetadataMetrics::registry).ifPresent(registry -> {
         if (registry instanceof DistributedRegistry) {
@@ -111,19 +111,9 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
           throw new HoodieMetadataException("Failed to commit metadata table records at instant " + instantTime);
         }
       });
-      // trigger cleaning, compaction, with suffixes based on the same instant time. This ensures that any future
-      // delta commits synced over will not have an instant time lesser than the last completed instant on the
-      // metadata table.
-      // TODO: This does not work with parallel operations because the operations having a larger timestamp
-      // may have completed earlier and hence instantTime is not the latest commit.
-      try {
-        if (writeClient.scheduleCompactionAtInstant(instantTime + "001", Option.empty())) {
-          writeClient.compact(instantTime + "001");
-        }
-      } catch (IllegalArgumentException e) {
-        LOG.info("Cannot perform compaction", e);
-      }
-      writeClient.clean(instantTime + "002");
+
+      compactIfNecessary(writeClient, instantTime);
+      cleanIfNecessary(writeClient, instantTime);
     }
 
     // Update total size of the metadata and count of base/log files
@@ -155,6 +145,37 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
     return timeline.getDeltaCommitTimeline().filterCompletedInstants()
         .lastInstant().map(HoodieInstant::getTimestamp);
+  }
+
+  /**
+   *  Perform a compaction on the Metadata Table.
+   *
+   * We cannot perform compaction if there are previous inflight operations on the dataset. This is because
+   * a compacted metadata base file at time Tx should represent all the actions on the dataset till time Tx.
+   */
+  private void compactIfNecessary(SparkRDDWriteClient writeClient, String instantTime) {
+    List<HoodieInstant> pendingInstants = datasetMetaClient.reloadActiveTimeline().filterInflightsAndRequested().findInstantsBefore(instantTime)
+        .getInstants().collect(Collectors.toList());
+    if (!pendingInstants.isEmpty()) {
+      LOG.info(String.format("Cannot compact metadata table as there are %d inflight instants before latest deltacommit %s: %s",
+          pendingInstants.size(), instantTime, Arrays.toString(pendingInstants.toArray())));
+      return;
+    }
+
+    // Trigger compaction with suffixes based on the same instant time. This ensures that any future
+    // delta commits synced over will not have an instant time lesser than the last completed instant on the
+    // metadata table.
+    final String compactionInstantTime = instantTime + "001";
+    if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
+      writeClient.compact(compactionInstantTime);
+    }
+  }
+
+  private void cleanIfNecessary(SparkRDDWriteClient writeClient, String instantTime) {
+    // Trigger cleaning with suffixes based on the same instant time. This ensures that any future
+    // delta commits synced over will not have an instant time lesser than the last completed instant on the
+    // metadata table.
+    writeClient.clean(instantTime + "002");
   }
 
   /**
