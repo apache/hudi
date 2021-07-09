@@ -140,6 +140,7 @@
                   <include>org.datanucleus:datanucleus-api-jdo</include>
                   <include>org.apache.thrift:libfb303</include>
                   <include>org.apache.orc:orc-core</include>
+                  <include>org.apache.flink:flink-sql-connector-hive-2.3.6_${scala.binary.version}</include>
 
                   <include>org.apache.hbase:hbase-common</include>
                   <include>commons-codec:commons-codec</include>
@@ -630,6 +631,16 @@
           <artifactId>hive-service-rpc</artifactId>
           <version>${hive.version}</version>
           <scope>${flink.bundle.hive.scope}</scope>
+        </dependency>
+      </dependencies>
+    </profile>
+    <profile>
+      <id>include-flink-sql-connector-hive</id>
+      <dependencies>
+        <dependency>
+          <groupId>org.apache.flink</groupId>
+          <artifactId>flink-sql-connector-hive-2.3.6_${scala.binary.version}</artifactId>
+          <version>${flink.version}</version>
         </dependency>
       </dependencies>
     </profile>
