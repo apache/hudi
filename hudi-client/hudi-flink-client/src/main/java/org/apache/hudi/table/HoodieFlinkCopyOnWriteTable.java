@@ -351,10 +351,10 @@ public class HoodieFlinkCopyOnWriteTable<T extends HoodieRecordPayload> extends 
                                               Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
     if (requireSortedRecords()) {
       return new HoodieSortedMergeHandle<>(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
-          dataFileToBeMerged, taskContextSupplier);
+          dataFileToBeMerged, taskContextSupplier, Option.empty());
     } else {
       return new HoodieMergeHandle<>(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
-          dataFileToBeMerged,taskContextSupplier);
+          dataFileToBeMerged,taskContextSupplier, Option.empty());
     }
   }
 
