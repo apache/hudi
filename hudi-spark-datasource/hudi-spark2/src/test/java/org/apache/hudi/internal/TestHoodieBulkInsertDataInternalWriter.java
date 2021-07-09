@@ -27,7 +27,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -113,7 +112,8 @@ public class TestHoodieBulkInsertDataInternalWriter extends
    * Issue some corrupted or wrong schematized InternalRow after few valid InternalRows so that global error is thrown. write batch 1 of valid records write batch2 of invalid records which is expected
    * to throw Global Error. Verify global error is set appropriately and only first batch of records are written to disk.
    */
-  @Test
+  @ParameterizedTest
+  @MethodSource("bulkInsertTypeParams")
   public void testGlobalFailure() throws Exception {
     // init config and table
     HoodieWriteConfig cfg = getWriteConfig(true);

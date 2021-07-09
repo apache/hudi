@@ -37,14 +37,14 @@ import java.util.stream.Collectors;
 /**
  * This is a generic implementation of KeyGenerator where users can configure record key as a single field or a combination of fields. Similarly partition path can be configured to have multiple
  * fields or only one field. This class expects value for prop "hoodie.datasource.write.partitionpath.field" in a specific format. For example:
- *
+ * <p>
  * properties.put("hoodie.datasource.write.partitionpath.field", "field1:PartitionKeyType1,field2:PartitionKeyType2").
- *
+ * <p>
  * The complete partition path is created as <value for field1 basis PartitionKeyType1>/<value for field2 basis PartitionKeyType2> and so on.
- *
+ * <p>
  * Few points to consider: 1. If you want to customize some partition path field on a timestamp basis, you can use field1:timestampBased 2. If you simply want to have the value of your configured
  * field in the partition path, use field1:simple 3. If you want your table to be non partitioned, simply leave it as blank.
- *
+ * <p>
  * RecordKey is internally generated using either SimpleKeyGenerator or ComplexKeyGenerator.
  */
 public class CustomKeyGenerator extends BuiltinKeyGenerator {

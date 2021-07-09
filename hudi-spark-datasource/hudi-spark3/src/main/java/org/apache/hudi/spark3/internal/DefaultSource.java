@@ -25,6 +25,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.BaseDefaultSource;
 import org.apache.hudi.internal.DataSourceInternalWriterHelper;
 
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.sql.connector.catalog.Table;
 import org.apache.spark.sql.connector.catalog.TableProvider;
 import org.apache.spark.sql.connector.expressions.Transform;
@@ -38,6 +40,8 @@ import java.util.Map;
  * This class is only compatible with datasource V2 API in Spark 3.
  */
 public class DefaultSource extends BaseDefaultSource implements TableProvider {
+
+  private static final Logger LOG = LogManager.getLogger(DefaultSource.class);
 
   @Override
   public StructType inferSchema(CaseInsensitiveStringMap options) {

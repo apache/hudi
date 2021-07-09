@@ -37,6 +37,7 @@ import java.util.List;
 public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
 
   private final GlobalAvroDeleteKeyGenerator globalAvroDeleteKeyGenerator;
+
   public GlobalDeleteKeyGenerator(TypedProperties config) {
     super(config);
     this.recordKeyFields = Arrays.asList(config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key()).split(","));

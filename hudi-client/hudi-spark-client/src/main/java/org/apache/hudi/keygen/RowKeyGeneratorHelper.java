@@ -50,10 +50,11 @@ public class RowKeyGeneratorHelper {
 
   /**
    * Generates record key for the corresponding {@link Row}.
-   * @param row instance of {@link Row} of interest
-   * @param recordKeyFields record key fields as a list
+   *
+   * @param row                instance of {@link Row} of interest
+   * @param recordKeyFields    record key fields as a list
    * @param recordKeyPositions record key positions for the corresponding record keys in {@code recordKeyFields}
-   * @param prefixFieldName {@code true} if field name need to be prefixed in the returned result. {@code false} otherwise.
+   * @param prefixFieldName    {@code true} if field name need to be prefixed in the returned result. {@code false} otherwise.
    * @return the record key thus generated
    */
   public static String getRecordKeyFromRow(Row row, List<String> recordKeyFields, Map<String, List<Integer>> recordKeyPositions, boolean prefixFieldName) {
@@ -89,9 +90,10 @@ public class RowKeyGeneratorHelper {
 
   /**
    * Generates partition path for the corresponding {@link Row}.
-   * @param row instance of {@link Row} of interest
-   * @param partitionPathFields partition path fields as a list
-   * @param hiveStylePartitioning {@code true} if hive style partitioning is set. {@code false} otherwise
+   *
+   * @param row                    instance of {@link Row} of interest
+   * @param partitionPathFields    partition path fields as a list
+   * @param hiveStylePartitioning  {@code true} if hive style partitioning is set. {@code false} otherwise
    * @param partitionPathPositions partition path positions for the corresponding fields in {@code partitionPathFields}
    * @return the generated partition path for the row
    */
@@ -173,25 +175,24 @@ public class RowKeyGeneratorHelper {
     return val;
   }
 
-
   /**
    * Fetch the field value located at the positions requested for.
-   *
+   * <p>
    * The fetching logic recursively goes into the nested field based on the position list to get the field value.
    * For example, given the row [4357686,key1,2020-03-21,pi,[val1,10]] with the following schema, which has the fourth
    * field as a nested field, and positions list as [4,0],
-   *
+   * <p>
    * 0 = "StructField(timestamp,LongType,false)"
    * 1 = "StructField(_row_key,StringType,false)"
    * 2 = "StructField(ts_ms,StringType,false)"
    * 3 = "StructField(pii_col,StringType,false)"
    * 4 = "StructField(nested_col,StructType(StructField(prop1,StringType,false), StructField(prop2,LongType,false)),false)"
-   *
+   * <p>
    * the logic fetches the value from field nested_col.prop1.
    * If any level of the nested field is null, {@link KeyGenUtils#NULL_RECORDKEY_PLACEHOLDER} is returned.
    * If the field value is an empty String, {@link KeyGenUtils#EMPTY_RECORDKEY_PLACEHOLDER} is returned.
    *
-   * @param row instance of {@link Row} of interest
+   * @param row       instance of {@link Row} of interest
    * @param positions tree style positions where the leaf node need to be fetched and returned
    * @return the field value as per the positions requested for.
    */
@@ -226,8 +227,9 @@ public class RowKeyGeneratorHelper {
 
   /**
    * Generate the tree style positions for the field requested for as per the defined struct type.
-   * @param structType schema of interest
-   * @param field field of interest for which the positions are requested for
+   *
+   * @param structType  schema of interest
+   * @param field       field of interest for which the positions are requested for
    * @param isRecordKey {@code true} if the field requested for is a record key. {@code false} incase of a partition path.
    * @return the positions of the field as per the struct type.
    */
@@ -241,8 +243,8 @@ public class RowKeyGeneratorHelper {
       Option<Object> curIndexOpt = structType.getFieldIndex(slice);
       if (curIndexOpt.isDefined()) {
         int curIndex = (int) curIndexOpt.get();
-        positions.add(curIndex);
         final StructField nestedField = structType.fields()[curIndex];
+        positions.add(curIndex);
         if (index < totalCount - 1) {
           if (!(nestedField.dataType() instanceof StructType)) {
             if (isRecordKey) {

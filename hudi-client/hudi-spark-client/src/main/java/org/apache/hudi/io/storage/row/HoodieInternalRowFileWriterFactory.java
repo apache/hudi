@@ -39,13 +39,13 @@ public class HoodieInternalRowFileWriterFactory {
 
   /**
    * Factory method to assist in instantiating an instance of {@link HoodieInternalRowFileWriter}.
-   * @param path path of the RowFileWriter.
+   *
+   * @param path        path of the RowFileWriter.
    * @param hoodieTable instance of {@link HoodieTable} in use.
-   * @param config instance of {@link HoodieWriteConfig} to use.
-   * @param schema schema of the dataset in use.
+   * @param config      instance of {@link HoodieWriteConfig} to use.
+   * @param schema      schema of the dataset in use.
    * @return the instantiated {@link HoodieInternalRowFileWriter}.
    * @throws IOException if format is not supported or if any exception during instantiating the RowFileWriter.
-   *
    */
   public static HoodieInternalRowFileWriter getInternalRowFileWriter(
       Path path, HoodieTable hoodieTable, HoodieWriteConfig config, StructType schema)
@@ -61,21 +61,47 @@ public class HoodieInternalRowFileWriterFactory {
       Path path, HoodieWriteConfig writeConfig, StructType structType, HoodieTable table)
       throws IOException {
     BloomFilter filter = BloomFilterFactory.createBloomFilter(
-            writeConfig.getBloomFilterNumEntries(),
-            writeConfig.getBloomFilterFPP(),
-            writeConfig.getDynamicBloomFilterMaxNumEntries(),
-            writeConfig.getBloomFilterType());
+        writeConfig.getBloomFilterNumEntries(),
+        writeConfig.getBloomFilterFPP(),
+        writeConfig.getDynamicBloomFilterMaxNumEntries(),
+        writeConfig.getBloomFilterType());
     HoodieRowParquetWriteSupport writeSupport =
-            new HoodieRowParquetWriteSupport(table.getHadoopConf(), structType, filter);
+        new HoodieRowParquetWriteSupport(table.getHadoopConf(), structType, filter);
     return new HoodieInternalRowParquetWriter(
         path, new HoodieRowParquetConfig(
-            writeSupport,
-            writeConfig.getParquetCompressionCodec(),
-            writeConfig.getParquetBlockSize(),
-            writeConfig.getParquetPageSize(),
-            writeConfig.getParquetMaxFileSize(),
-            writeSupport.getHadoopConf(),
-            writeConfig.getParquetCompressionRatio()));
+        writeSupport,
+        writeConfig.getParquetCompressionCodec(),
+        writeConfig.getParquetBlockSize(),
+        writeConfig.getParquetPageSize(),
+        writeConfig.getParquetMaxFileSize(),
+        writeSupport.getHadoopConf(),
+        writeConfig.getParquetCompressionRatio()));
+  }
+
+  public static HoodieInternalRowFileWriter getInternalRowAppendOnlyFileWriter(
+      Path path, HoodieTable hoodieTable, HoodieWriteConfig config, StructType schema)
+      throws IOException {
+    final String extension = FSUtils.getFileExtension(path.getName());
+    if (PARQUET.getFileExtension().equals(extension)) {
+      return newParquetInternalRowAppendOnlyFileWriter(path, config, schema, hoodieTable);
+    }
+    throw new UnsupportedOperationException(extension + " format not supported yet.");
+  }
+
+  private static HoodieInternalRowFileWriter newParquetInternalRowAppendOnlyFileWriter(
+      Path path, HoodieWriteConfig writeConfig, StructType structType, HoodieTable table)
+      throws IOException {
+    HoodieAppendOnlyRowParquetWriteSupport writeSupport =
+        new HoodieAppendOnlyRowParquetWriteSupport(table.getHadoopConf(), structType);
+    return new HoodieAppendOnlyInternalRowParquetWriter(
+        path, new HoodieRowParquetConfig(
+        writeSupport,
+        writeConfig.getParquetCompressionCodec(),
+        writeConfig.getParquetBlockSize(),
+        writeConfig.getParquetPageSize(),
+        writeConfig.getParquetMaxFileSize(),
+        writeSupport.getHadoopConf(),
+        writeConfig.getParquetCompressionRatio()));
   }
 
   public static HoodieInternalRowFileWriter getInternalRowFileWriterWithoutMetaFields(

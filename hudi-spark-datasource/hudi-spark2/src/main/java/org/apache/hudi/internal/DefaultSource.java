@@ -23,6 +23,8 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieInternalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.sources.DataSourceRegister;
 import org.apache.spark.sql.sources.v2.DataSourceOptions;
@@ -41,6 +43,8 @@ import java.util.Optional;
 public class DefaultSource extends BaseDefaultSource implements DataSourceV2,
     ReadSupport, WriteSupport, DataSourceRegister {
 
+  private static final Logger LOG = LogManager.getLogger(DefaultSource.class);
+
   @Override
   public String shortName() {
     return "hudi_internal";
@@ -58,7 +62,7 @@ public class DefaultSource extends BaseDefaultSource implements DataSourceV2,
 
   @Override
   public Optional<DataSourceWriter> createWriter(String writeUUID, StructType schema, SaveMode mode,
-      DataSourceOptions options) {
+                                                 DataSourceOptions options) {
     String instantTime = options.get(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY).get();
     String path = options.get("path").get();
     String tblName = options.get(HoodieWriteConfig.TABLE_NAME.key()).get();

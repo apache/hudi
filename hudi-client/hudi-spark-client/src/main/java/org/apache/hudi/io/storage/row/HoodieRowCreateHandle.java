@@ -68,8 +68,8 @@ public class HoodieRowCreateHandle implements Serializable {
   private final HoodieTimer currTimer;
 
   public HoodieRowCreateHandle(HoodieTable table, HoodieWriteConfig writeConfig, String partitionPath, String fileId,
-      String instantTime, int taskPartitionId, long taskId, long taskEpochId,
-      StructType structType) {
+                               String instantTime, int taskPartitionId, long taskId, long taskEpochId,
+                               StructType structType) {
     this.partitionPath = partitionPath;
     this.table = table;
     this.writeConfig = writeConfig;
@@ -105,6 +105,7 @@ public class HoodieRowCreateHandle implements Serializable {
   /**
    * Writes an {@link InternalRow} to the underlying HoodieInternalRowFileWriter. Before writing, value for meta columns are computed as required
    * and wrapped in {@link HoodieInternalRow}. {@link HoodieInternalRow} is what gets written to HoodieInternalRowFileWriter.
+   *
    * @param record instance of {@link InternalRow} that needs to be written to the fileWriter.
    * @throws IOException
    */
@@ -139,6 +140,7 @@ public class HoodieRowCreateHandle implements Serializable {
   /**
    * Closes the {@link HoodieRowCreateHandle} and returns an instance of {@link HoodieInternalWriteStatus} containing the stats and
    * status of the writes to this handle.
+   *
    * @return the {@link HoodieInternalWriteStatus} containing the stats and status of the writes to this handle.
    * @throws IOException
    */

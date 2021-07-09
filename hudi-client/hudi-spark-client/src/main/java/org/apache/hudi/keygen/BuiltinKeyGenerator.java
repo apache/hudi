@@ -33,10 +33,17 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+
+import scala.Function1;
+import scala.collection.JavaConversions;
+import scala.collection.JavaConverters;
 
 import scala.Function1;
 
@@ -62,6 +69,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
 
   /**
    * Fetch record key from {@link Row}.
+   *
    * @param row instance of {@link Row} from which record key is requested.
    * @return the record key of interest from {@link Row}.
    */
@@ -77,6 +85,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
 
   /**
    * Fetch partition path from {@link Row}.
+   *
    * @param row instance of {@link Row} from which partition path is requested
    * @return the partition path of interest from {@link Row}.
    */

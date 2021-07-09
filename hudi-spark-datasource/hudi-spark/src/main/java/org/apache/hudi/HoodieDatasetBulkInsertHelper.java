@@ -58,18 +58,18 @@ public class HoodieDatasetBulkInsertHelper {
 
   /**
    * Prepares input hoodie spark dataset for bulk insert. It does the following steps.
-   *  1. Uses KeyGenerator to generate hoodie record keys and partition path.
-   *  2. Add hoodie columns to input spark dataset.
-   *  3. Reorders input dataset columns so that hoodie columns appear in the beginning.
-   *  4. Sorts input dataset by hoodie partition path and record key
+   * 1. Uses KeyGenerator to generate hoodie record keys and partition path.
+   * 2. Add hoodie columns to input spark dataset.
+   * 3. Reorders input dataset columns so that hoodie columns appear in the beginning.
+   * 4. Sorts input dataset by hoodie partition path and record key
    *
    * @param sqlContext SQL Context
-   * @param config Hoodie Write Config
-   * @param rows Spark Input dataset
+   * @param config     Hoodie Write Config
+   * @param rows       Spark Input dataset
    * @return hoodie dataset which is ready for bulk insert.
    */
   public static Dataset<Row> prepareHoodieDatasetForBulkInsert(SQLContext sqlContext,
-      HoodieWriteConfig config, Dataset<Row> rows, String structName, String recordNamespace,
+                                                               HoodieWriteConfig config, Dataset<Row> rows, String structName, String recordNamespace,
                                                                BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows,
                                                                boolean isGlobalIndex) {
     List<Column> originalFields =
