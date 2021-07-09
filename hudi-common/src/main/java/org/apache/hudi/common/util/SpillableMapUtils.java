@@ -110,8 +110,15 @@ public class SpillableMapUtils {
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
   public static <R> R convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz) {
-    String recKey = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-    String partitionPath = rec.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+    return convertToHoodieRecordPayload(rec, payloadClazz, HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD);
+  }
+
+  /**
+   * Utility method to convert bytes to HoodieRecord using schema and payload class.
+   */
+  public static <R> R convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz, String recordKeyField, String partitionPathField) {
+    String recKey = rec.get(recordKeyField).toString();
+    String partitionPath = rec.get(partitionPathField).toString();
     HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(new HoodieKey(recKey, partitionPath),
         ReflectionUtils.loadPayload(payloadClazz, new Object[] {Option.of(rec)}, Option.class));
     return (R) hoodieRecord;

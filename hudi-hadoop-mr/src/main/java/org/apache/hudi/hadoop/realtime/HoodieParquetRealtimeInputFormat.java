@@ -18,10 +18,15 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
+import org.apache.hudi.hadoop.UseRecordReaderFromInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 
@@ -36,9 +41,9 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
-import org.apache.hudi.hadoop.UseRecordReaderFromInputFormat;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -80,6 +85,27 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat i
   }
 
   void addProjectionToJobConf(final RealtimeSplit realtimeSplit, final JobConf jobConf) {
+
+    // set appropriate configs in jobConf to handle disabling of meta fields within canAddProjectionToJobConf and addRequiredProjectionFields
+    if (!realtimeSplit.getDeltaLogPaths().isEmpty()) {
+      // inject actual field info if meta fields are disabled
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(jobConf).setBasePath(realtimeSplit.getBasePath()).build();
+      HoodieTableConfig tableConfig = metaClient.getTableConfig();
+      if (!tableConfig.populateMetaFields()) {
+        TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
+        try {
+          MessageType parquetSchema = tableSchemaResolver.getTableParquetSchema();
+          jobConf.set(HoodieInputFormatUtils.HOODIE_USE_META_FIELDS, String.valueOf(tableConfig.populateMetaFields()));
+          jobConf.set(HoodieInputFormatUtils.RECORD_KEY_FIELD, tableConfig.getRecordKeyFieldProp());
+          jobConf.set(HoodieInputFormatUtils.RECORD_KEY_FIELD_INDEX, String.valueOf(parquetSchema.getFieldIndex(tableConfig.getRecordKeyFieldProp())));
+          jobConf.set(HoodieInputFormatUtils.PARTITION_PATH_FIELD, tableConfig.getPartitionFieldProp());
+          jobConf.set(HoodieInputFormatUtils.PARTITION_PATH_FIELD_INDEX, String.valueOf(parquetSchema.getFieldIndex(tableConfig.getPartitionFieldProp())));
+        } catch (Exception exception) {
+          throw new HoodieException("Fetching table schema failed with exception ", exception);
+        }
+      }
+    }
+
     // Hive on Spark invokes multiple getRecordReaders from different threads in the same spark task (and hence the
     // same JVM) unlike Hive on MR. Due to this, accesses to JobConf, which is shared across all threads, is at the
     // risk of experiencing race conditions. Hence, we synchronize on the JobConf object here. There is negligible

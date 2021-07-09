@@ -68,6 +68,7 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
   private static final Logger LOG = LogManager.getLogger(HoodieTableConfig.class);
 
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
+  public static final String DEFAULT_HOODIE_TABLE_KEY_GENERATOR_CLASS = "org.apache.hudi.keygen.SimpleKeyGenerator";
 
   public static final ConfigProperty<String> HOODIE_TABLE_NAME_PROP = ConfigProperty
       .key("hoodie.table.name")
@@ -156,6 +157,11 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
       .defaultValue("true")
       .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated "
           + "and incremental queries will not be functional. This is only meant to be used for append only/immutable data for batch processing");
+
+  public static final ConfigProperty<String> HOODIE_TABLE_KEY_GENERATOR_CLASS = ConfigProperty
+      .key("hoodie.datasource.write.keygenerator.class")
+      .noDefaultValue()
+      .withDocumentation("Key Generator class property for the hoodie table");
 
   public static final String NO_OP_BOOTSTRAP_INDEX_CLASS = NoOpBootstrapIndex.class.getName();
 
@@ -277,6 +283,13 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
   }
 
   /**
+   * @returns the partition field prop.
+   */
+  public String getPartitionFieldProp() {
+    return getString(HOODIE_TABLE_PARTITION_FIELDS_PROP);
+  }
+
+  /**
    * Read the payload class for HoodieRecords from the table properties.
    */
   public String getBootstrapIndexClass() {
@@ -342,6 +355,13 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
    */
   public boolean populateMetaFields() {
     return Boolean.parseBoolean(getStringOrDefault(HOODIE_POPULATE_META_FIELDS));
+  }
+
+  /**
+   * @returns the record key field prop.
+   */
+  public String getRecordKeyFieldProp() {
+    return getString(HOODIE_TABLE_RECORDKEY_FIELDS);
   }
 
   public Map<String, String> propsMap() {

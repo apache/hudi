@@ -80,6 +80,10 @@ public abstract class AbstractHoodieLogRecordScanner {
   private final HoodieTableMetaClient hoodieTableMetaClient;
   // Merge strategy to use when combining records from log
   private final String payloadClassFQN;
+  // simple recordKey field
+  private Option<String> simpleRecordKeyFieldOpt = Option.empty();
+  // simple partition path field
+  private Option<String> simplePartitionPathField = Option.empty();
   // Log File Paths
   protected final List<String> logFilePaths;
   // Read Lazily flag
@@ -115,6 +119,10 @@ public abstract class AbstractHoodieLogRecordScanner {
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
     // load class from the payload fully qualified class name
     this.payloadClassFQN = this.hoodieTableMetaClient.getTableConfig().getPayloadClass();
+    if (!this.hoodieTableMetaClient.getTableConfig().populateMetaFields()) {
+      this.simpleRecordKeyFieldOpt = Option.of(this.hoodieTableMetaClient.getTableConfig().getRecordKeyFieldProp());
+      this.simplePartitionPathField = Option.of(this.hoodieTableMetaClient.getTableConfig().getPartitionFieldProp());
+    }
     this.totalLogFiles.addAndGet(logFilePaths.size());
     this.logFilePaths = logFilePaths;
     this.readBlocksLazily = readBlocksLazily;
@@ -302,7 +310,12 @@ public abstract class AbstractHoodieLogRecordScanner {
   }
 
   protected HoodieRecord<?> createHoodieRecord(IndexedRecord rec) {
-    return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN);
+    if (!simpleRecordKeyFieldOpt.isPresent()) {
+      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN);
+    } else {
+      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN, this.simpleRecordKeyFieldOpt.get(),
+          this.simplePartitionPathField.get());
+    }
   }
 
   /**

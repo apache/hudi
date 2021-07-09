@@ -18,13 +18,15 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SpillableMapUtils;
+import org.apache.hudi.io.storage.HoodieFileReader;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.util.SpillableMapUtils;
-import org.apache.hudi.io.storage.HoodieFileReader;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -36,11 +38,14 @@ public class HoodieFileSliceReader implements Iterator<HoodieRecord<? extends Ho
   private Iterator<HoodieRecord<? extends HoodieRecordPayload>> recordsIterator;
 
   public static <R extends IndexedRecord, T extends HoodieRecordPayload> HoodieFileSliceReader getFileSliceReader(
-      HoodieFileReader<R> baseFileReader, HoodieMergedLogRecordScanner scanner, Schema schema, String payloadClass) throws IOException {
+      HoodieFileReader<R> baseFileReader, HoodieMergedLogRecordScanner scanner, Schema schema, String payloadClass,
+      Option<String> simpleRecordKeyFieldOpt, Option<String> simplePartitionPathFieldOpt) throws IOException {
     Iterator<R> baseIterator = baseFileReader.getRecordIterator(schema);
     while (baseIterator.hasNext()) {
-      GenericRecord record = (GenericRecord)  baseIterator.next();
-      HoodieRecord<T> hoodieRecord = SpillableMapUtils.convertToHoodieRecordPayload(record, payloadClass);
+      GenericRecord record = (GenericRecord) baseIterator.next();
+      HoodieRecord<T> hoodieRecord = simpleRecordKeyFieldOpt.isPresent()
+          ? SpillableMapUtils.convertToHoodieRecordPayload(record, payloadClass, simpleRecordKeyFieldOpt.get(), simplePartitionPathFieldOpt.get())
+          : SpillableMapUtils.convertToHoodieRecordPayload(record, payloadClass);
       scanner.processNextRecord(hoodieRecord);
     }
     return new HoodieFileSliceReader(scanner.iterator());

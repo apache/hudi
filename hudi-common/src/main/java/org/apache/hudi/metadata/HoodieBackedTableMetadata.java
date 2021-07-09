@@ -126,8 +126,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         HoodieTimer readTimer = new HoodieTimer().startTimer();
         Option<GenericRecord> baseRecord = baseFileReader.getRecordByKey(key);
         if (baseRecord.isPresent()) {
-          hoodieRecord = SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(),
-              metaClient.getTableConfig().getPayloadClass());
+          hoodieRecord = metaClient.getTableConfig().populateMetaFields() ? SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(),
+              metaClient.getTableConfig().getPayloadClass()) : SpillableMapUtils.convertToHoodieRecordPayload(baseRecord.get(),
+              metaClient.getTableConfig().getPayloadClass(), metaClient.getTableConfig().getRecordKeyFieldProp(),
+              metaClient.getTableConfig().getPartitionFieldProp());
           metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BASEFILE_READ_STR, readTimer.endTimer()));
         }
       }

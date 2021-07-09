@@ -118,7 +118,8 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     return Stream.of(
         Arguments.of(HoodieTableType.COPY_ON_WRITE, true),
         Arguments.of(HoodieTableType.COPY_ON_WRITE, false),
-        Arguments.of(HoodieTableType.MERGE_ON_READ, true)
+        Arguments.of(HoodieTableType.MERGE_ON_READ, true),
+        Arguments.of(HoodieTableType.MERGE_ON_READ, false)
     );
   }
 

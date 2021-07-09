@@ -324,6 +324,14 @@ public class HoodieTableMetaClient implements Serializable {
         && Boolean.parseBoolean((String) properties.getOrDefault(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key(), HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.defaultValue()))) {
       throw new HoodieException(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key() + " already disabled for the table. Can't be re-enabled back");
     }
+
+    // meta fields can be disabled only with SimpleKeyGenerator
+    if (!getTableConfig().populateMetaFields()
+        && !properties.getProperty(HoodieTableConfig.HOODIE_TABLE_KEY_GENERATOR_CLASS.key(), HoodieTableConfig.DEFAULT_HOODIE_TABLE_KEY_GENERATOR_CLASS)
+        .equals(HoodieTableConfig.DEFAULT_HOODIE_TABLE_KEY_GENERATOR_CLASS)) {
+      throw new HoodieException("Only SimpleKeyGenerators are supported when meta fields are disabled. KeyGenerator used : "
+          + properties.getProperty(HoodieTableConfig.HOODIE_TABLE_KEY_GENERATOR_CLASS.key()));
+    }
   }
 
   /**
@@ -617,6 +625,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String bootstrapIndexClass;
     private String bootstrapBasePath;
     private Boolean populateMetaFields;
+    private String keyGeneratorClassProp;
 
     private PropertyBuilder() {
 
@@ -695,6 +704,11 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setKeyGeneratorClassProp(String keyGeneratorClassProp) {
+      this.keyGeneratorClassProp = keyGeneratorClassProp;
+      return this;
+    }
+
     public PropertyBuilder fromMetaClient(HoodieTableMetaClient metaClient) {
       return setTableType(metaClient.getTableType())
         .setTableName(metaClient.getTableConfig().getTableName())
@@ -747,6 +761,9 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (hoodieConfig.contains(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS)) {
         setPopulateMetaFields(hoodieConfig.getBoolean(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.HOODIE_TABLE_KEY_GENERATOR_CLASS)) {
+        setKeyGeneratorClassProp(hoodieConfig.getString(HoodieTableConfig.HOODIE_TABLE_KEY_GENERATOR_CLASS));
       }
       return this;
     }
@@ -803,6 +820,9 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != populateMetaFields) {
         tableConfig.setValue(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
+      }
+      if (null != keyGeneratorClassProp) {
+        tableConfig.setValue(HoodieTableConfig.HOODIE_TABLE_KEY_GENERATOR_CLASS, keyGeneratorClassProp);
       }
       return tableConfig.getProps();
     }

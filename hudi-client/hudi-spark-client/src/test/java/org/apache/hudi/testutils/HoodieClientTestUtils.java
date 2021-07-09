@@ -171,6 +171,33 @@ public class HoodieClientTestUtils {
     }
   }
 
+  /**
+   * Obtain all new data written into the Hoodie table since the given timestamp.
+   */
+  public static long countAllRecords(JavaSparkContext jsc, String basePath, SQLContext sqlContext,
+                                       HoodieTimeline commitTimeline) {
+    List<HoodieInstant> commitsToReturn =
+        commitTimeline.getInstants().collect(Collectors.toList());
+    try {
+      // Go over the commit metadata, and obtain the new files that need to be read.
+      HashMap<String, String> fileIdToFullPath = getLatestFileIDsToFullPath(basePath, commitTimeline, commitsToReturn);
+      String[] paths = fileIdToFullPath.values().toArray(new String[fileIdToFullPath.size()]);
+      if (paths[0].endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+        return sqlContext.read().parquet(paths)
+            .count();
+      } else if (paths[0].endsWith(HoodieFileFormat.HFILE.getFileExtension())) {
+        return readHFile(jsc, paths)
+            .count();
+      } else if (paths[0].endsWith(HoodieFileFormat.ORC.getFileExtension())) {
+        return sqlContext.read().orc(paths)
+            .count();
+      }
+      throw new HoodieException("Unsupported base file format for file :" + paths[0]);
+    } catch (IOException e) {
+      throw new HoodieException("Error pulling data ", e);
+    }
+  }
+
   public static List<HoodieBaseFile> getLatestBaseFiles(String basePath, FileSystem fs,
                                                 String... paths) {
     List<HoodieBaseFile> latestFiles = new ArrayList<>();

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hadoop.utils;
 
-import org.apache.hadoop.mapred.JobConf;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -38,20 +37,21 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 import org.apache.hudi.hadoop.realtime.RealtimeBootstrapBaseFileSplit;
+import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.SplitLocationInfo;
-import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -173,7 +173,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
     });
     return baseAndLogsList;
   }
-  
+
 
   /**
    * Add a field to the existing fields projected.
@@ -206,16 +206,28 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
 
   public static void addRequiredProjectionFields(Configuration configuration) {
     // Need this to do merge records in HoodieRealtimeRecordReader
-    addProjectionField(configuration, HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS);
-    addProjectionField(configuration, HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_COMMIT_TIME_COL_POS);
-    addProjectionField(configuration, HoodieRecord.PARTITION_PATH_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_PARTITION_PATH_COL_POS);
+    if (configuration.get(HoodieInputFormatUtils.HOODIE_USE_META_FIELDS) == null || configuration.get(HoodieInputFormatUtils.HOODIE_USE_META_FIELDS)
+        .equals(HoodieInputFormatUtils.DEFAULT_HOODIE_USE_META_FIELDS)) {
+      addProjectionField(configuration, HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS);
+      addProjectionField(configuration, HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_COMMIT_TIME_COL_POS);
+      addProjectionField(configuration, HoodieRecord.PARTITION_PATH_METADATA_FIELD, HoodieInputFormatUtils.HOODIE_PARTITION_PATH_COL_POS);
+    } else {
+      addProjectionField(configuration, configuration.get(HoodieInputFormatUtils.RECORD_KEY_FIELD), Integer.parseInt(configuration.get(HoodieInputFormatUtils.RECORD_KEY_FIELD_INDEX)));
+      addProjectionField(configuration, configuration.get(HoodieInputFormatUtils.PARTITION_PATH_FIELD), Integer.parseInt(configuration.get(HoodieInputFormatUtils.PARTITION_PATH_FIELD_INDEX)));
+    }
   }
 
   public static boolean requiredProjectionFieldsExistInConf(Configuration configuration) {
     String readColNames = configuration.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, "");
-    return readColNames.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD)
-        && readColNames.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
-        && readColNames.contains(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
+    if (configuration.get(HoodieInputFormatUtils.HOODIE_USE_META_FIELDS) == null || configuration.get(HoodieInputFormatUtils.HOODIE_USE_META_FIELDS)
+        .equals(HoodieInputFormatUtils.DEFAULT_HOODIE_USE_META_FIELDS)) {
+      return readColNames.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD)
+          && readColNames.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
+          && readColNames.contains(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
+    } else {
+      return readColNames.contains(HoodieInputFormatUtils.RECORD_KEY_FIELD)
+          && readColNames.contains(HoodieInputFormatUtils.PARTITION_PATH_FIELD);
+    }
   }
 
   public static boolean canAddProjectionToJobConf(final RealtimeSplit realtimeSplit, final JobConf jobConf) {

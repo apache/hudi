@@ -18,10 +18,6 @@
 
 package org.apache.hudi.table.action.cluster;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -55,6 +51,11 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
 import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -98,7 +99,7 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
 
     JavaRDD<WriteStatus>[] writeStatuses = convertStreamToArray(writeStatusRDDStream);
     JavaRDD<WriteStatus> writeStatusRDD = engineContext.union(writeStatuses);
-    
+
     HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = buildWriteMetadata(writeStatusRDD);
     JavaRDD<WriteStatus> statuses = updateIndex(writeStatusRDD, writeMetadata);
     writeMetadata.setWriteStats(statuses.map(WriteStatus::getStat).collect());
@@ -129,7 +130,7 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
   /**
    * Validate actions taken by clustering. In the first implementation, we validate at least one new file is written.
    * But we can extend this to add more validation. E.g. number of records read = number of records written etc.
-   * 
+   *
    * We can also make these validations in BaseCommitActionExecutor to reuse pre-commit hooks for multiple actions.
    */
   private void validateWriteResult(HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata) {
@@ -212,8 +213,11 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
               .build();
 
           recordIterators.add(HoodieFileSliceReader.getFileSliceReader(baseFileReader, scanner, readerSchema,
-              table.getMetaClient().getTableConfig().getPayloadClass()));
+              table.getMetaClient().getTableConfig().getPayloadClass(),
+              table.getMetaClient().getTableConfig().populateMetaFields() ? Option.empty() : Option.of(table.getMetaClient().getTableConfig().getRecordKeyFieldProp()),
+              table.getMetaClient().getTableConfig().populateMetaFields() ? Option.empty() : Option.of(table.getMetaClient().getTableConfig().getPartitionFieldProp())));
         } catch (IOException e) {
+
           throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
               + " and " + clusteringOp.getDeltaFilePaths(), e);
         }
