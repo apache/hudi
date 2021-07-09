@@ -53,6 +53,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
@@ -310,6 +311,14 @@ public class HoodieTableMetaClient implements Serializable {
       archivedTimeline = new HoodieArchivedTimeline(this);
     }
     return archivedTimeline;
+  }
+
+  public void validateTableProperties(Map<String, String> properties) {
+    // once meta fields are disabled, it cant be re-enabled for a given table.
+    if (!getTableConfig().populateMetaFields()
+        && Boolean.parseBoolean(properties.getOrDefault(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key(), HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.defaultValue()))) {
+      throw new HoodieException(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key() + " already disabled for the table. Can't be re-enabled back");
+    }
   }
 
   /**
@@ -602,6 +611,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String partitionColumns;
     private String bootstrapIndexClass;
     private String bootstrapBasePath;
+    private Boolean populateMetaFields;
 
     private PropertyBuilder() {
 
@@ -675,6 +685,11 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setPopulateMetaFields(boolean populateMetaFields) {
+      this.populateMetaFields = populateMetaFields;
+      return this;
+    }
+
     public PropertyBuilder fromMetaClient(HoodieTableMetaClient metaClient) {
       return setTableType(metaClient.getTableType())
         .setTableName(metaClient.getTableConfig().getTableName())
@@ -724,6 +739,9 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (hoodieConfig.contains(HoodieTableConfig.HOODIE_TABLE_CREATE_SCHEMA)) {
         setTableCreateSchema(hoodieConfig.getString(HoodieTableConfig.HOODIE_TABLE_CREATE_SCHEMA));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS)) {
+        setPopulateMetaFields(hoodieConfig.getBoolean(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS));
       }
       return this;
     }
@@ -777,6 +795,9 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (null != recordKeyFields) {
         tableConfig.setValue(HoodieTableConfig.HOODIE_TABLE_RECORDKEY_FIELDS, recordKeyFields);
+      }
+      if (null != populateMetaFields) {
+        tableConfig.setValue(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
       }
       return tableConfig.getProps();
     }

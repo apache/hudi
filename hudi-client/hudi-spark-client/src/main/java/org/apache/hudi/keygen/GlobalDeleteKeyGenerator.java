@@ -18,10 +18,13 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.types.StructType;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -63,6 +66,11 @@ public class GlobalDeleteKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getPartitionPath(Row row) {
+    return globalAvroDeleteKeyGenerator.getEmptyPartition();
+  }
+
+  @Override
+  public String getPartitionPath(InternalRow row, StructType structType) {
     return globalAvroDeleteKeyGenerator.getEmptyPartition();
   }
 }

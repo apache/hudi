@@ -16,20 +16,21 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.types.StructType;
 
-import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
-
 import java.io.IOException;
+
+import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 
 /**
  * Factory to assist in instantiating a new {@link HoodieInternalRowFileWriter}.
@@ -75,5 +76,30 @@ public class HoodieInternalRowFileWriterFactory {
             writeConfig.getParquetMaxFileSize(),
             writeSupport.getHadoopConf(),
             writeConfig.getParquetCompressionRatio()));
+  }
+
+  public static HoodieInternalRowFileWriter getInternalRowFileWriterWithoutMetaFields(
+      Path path, HoodieTable hoodieTable, HoodieWriteConfig config, StructType schema)
+      throws IOException {
+    if (PARQUET.getFileExtension().equals(hoodieTable.getBaseFileExtension())) {
+      return newParquetInternalRowFileWriterWithoutMetaFields(path, config, schema, hoodieTable);
+    }
+    throw new HoodieIOException(hoodieTable.getBaseFileExtension() + " format not supported yet in row writer path");
+  }
+
+  private static HoodieInternalRowFileWriter newParquetInternalRowFileWriterWithoutMetaFields(
+      Path path, HoodieWriteConfig writeConfig, StructType structType, HoodieTable table)
+      throws IOException {
+    HoodieRowParquetWriteSupport writeSupport =
+        new HoodieRowParquetWriteSupport(table.getHadoopConf(), structType, null);
+    return new HoodieInternalRowParquetWriter(
+        path, new HoodieRowParquetConfig(
+        writeSupport,
+        writeConfig.getParquetCompressionCodec(),
+        writeConfig.getParquetBlockSize(),
+        writeConfig.getParquetPageSize(),
+        writeConfig.getParquetMaxFileSize(),
+        writeSupport.getHadoopConf(),
+        writeConfig.getParquetCompressionRatio()));
   }
 }
