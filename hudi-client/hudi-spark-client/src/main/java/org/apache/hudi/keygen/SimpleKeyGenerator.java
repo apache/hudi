@@ -24,6 +24,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.spark.sql.Row;
 
 import java.util.Collections;
+import java.util.List;
 
 /**
  * Simple key generator, which takes names of fields to be used for recordKey and partitionPath as configs.
@@ -34,20 +35,27 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
 
   public SimpleKeyGenerator(TypedProperties props) {
     this(props, props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key()),
-        props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key()));
+        props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key()),
+        props.getString(KeyGeneratorOptions.INDEXKEY_FILED_OPT.key(),
+            KeyGeneratorOptions.INDEXKEY_FILED_OPT.defaultValue()));
   }
 
   SimpleKeyGenerator(TypedProperties props, String partitionPathField) {
-    this(props, null, partitionPathField);
+    this(props, null, partitionPathField, null);
   }
 
   SimpleKeyGenerator(TypedProperties props, String recordKeyField, String partitionPathField) {
+    this(props, recordKeyField, partitionPathField, null);
+  }
+
+  SimpleKeyGenerator(TypedProperties props, String recordKeyField, String partitionPathField, String indexKeyField) {
     super(props);
     this.recordKeyFields = recordKeyField == null
         ? Collections.emptyList()
         : Collections.singletonList(recordKeyField);
     this.partitionPathFields = Collections.singletonList(partitionPathField);
-    simpleAvroKeyGenerator = new SimpleAvroKeyGenerator(props, recordKeyField, partitionPathField);
+    simpleAvroKeyGenerator = new SimpleAvroKeyGenerator(props, recordKeyField, partitionPathField, indexKeyField);
+    this.indexKeyFields = simpleAvroKeyGenerator.indexKeyFields;
   }
 
   @Override
@@ -58,6 +66,11 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
   @Override
   public String getPartitionPath(GenericRecord record) {
     return simpleAvroKeyGenerator.getPartitionPath(record);
+  }
+
+  @Override
+  public List<Object> getIndexKey(GenericRecord record) {
+    return simpleAvroKeyGenerator.getIndexKey(record);
   }
 
   @Override

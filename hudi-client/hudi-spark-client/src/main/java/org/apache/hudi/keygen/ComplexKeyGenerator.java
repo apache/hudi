@@ -23,6 +23,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.spark.sql.Row;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -39,6 +40,7 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
     this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key())
         .split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
     complexAvroKeyGenerator = new ComplexAvroKeyGenerator(props);
+    this.indexKeyFields = complexAvroKeyGenerator.getIndexKeyFields();
   }
 
   @Override
@@ -49,6 +51,11 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
   @Override
   public String getPartitionPath(GenericRecord record) {
     return complexAvroKeyGenerator.getPartitionPath(record);
+  }
+
+  @Override
+  public List<Object> getIndexKey(GenericRecord record) {
+    return complexAvroKeyGenerator.getIndexKey(record);
   }
 
   @Override

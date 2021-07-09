@@ -45,8 +45,9 @@ public abstract class HoodieLogBlock {
    * The current version of the log block. Anytime the logBlock format changes this version needs to be bumped and
    * corresponding changes need to be made to {@link HoodieLogBlockVersion} TODO : Change this to a class, something
    * like HoodieLogBlockVersionV1/V2 and implement/override operations there
+   * BD version starts from 1000 to avoid conflict wth community.
    */
-  public static int version = 1;
+  public static int version = 1000;
   // Header for each log block
   private final Map<HeaderMetadataType, String> logBlockHeader;
   // Footer for each log block

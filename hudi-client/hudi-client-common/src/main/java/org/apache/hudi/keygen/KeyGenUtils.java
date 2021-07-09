@@ -25,12 +25,14 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.keygen.parser.AbstractHoodieDateTimeParser;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 
 public class KeyGenUtils {
@@ -111,6 +113,20 @@ public class KeyGenUtils {
     }
     partitionPath.deleteCharAt(partitionPath.length() - 1);
     return partitionPath.toString();
+  }
+
+  /**
+   * Index key is nullable.
+   */
+  public static List<Object> getIndexKey(GenericRecord record, List<String> indexKeyFields) {
+    if (indexKeyFields == null || indexKeyFields.size() == 0) {
+      throw new HoodieException("Index key fields cannot be empty when used.");
+    }
+    List<Object> indexKeyValues = new ArrayList<>();
+    for (int i = 0; i < indexKeyFields.size(); i++) {
+      indexKeyValues.add(HoodieAvroUtils.getNestedFieldVal(record, indexKeyFields.get(i), true));
+    }
+    return indexKeyValues;
   }
 
   public static String getRecordKey(GenericRecord record, String recordKeyField) {
