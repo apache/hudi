@@ -195,7 +195,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   @Override
   public R put(T key, R value) {
     if (this.currentInMemoryMapSize < maxInMemorySizeInBytes || inMemoryMap.containsKey(key)) {
-      if (shouldEstimatePayloadSize && estimatedPayloadSize == 0) {
+      /*if (shouldEstimatePayloadSize && estimatedPayloadSize == 0) {
         // At first, use the sizeEstimate of a record being inserted into the spillable map.
         // Note, the converter may over estimate the size of a record in the JVM
         this.estimatedPayloadSize = keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value);
@@ -209,7 +209,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
         this.estimatedPayloadSize = totalMapSize / inMemoryMap.size();
         shouldEstimatePayloadSize = false;
         LOG.info("New Estimated Payload size => " + this.estimatedPayloadSize);
-      }
+      }*/
       if (!inMemoryMap.containsKey(key)) {
         // TODO : Add support for adjusting payloadSize for updates to the same key
         currentInMemoryMapSize += this.estimatedPayloadSize;

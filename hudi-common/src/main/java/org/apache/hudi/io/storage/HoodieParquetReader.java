@@ -62,6 +62,7 @@ public class HoodieParquetReader<R extends IndexedRecord> implements HoodieFileR
   @Override
   public Iterator<R> getRecordIterator(Schema schema) throws IOException {
     AvroReadSupport.setAvroReadSchema(conf, schema);
+    AvroReadSupport.setRequestedProjection(conf, schema);
     ParquetReader<IndexedRecord> reader = AvroParquetReader.<IndexedRecord>builder(path).withConf(conf).build();
     return new ParquetReaderIterator(reader);
   }

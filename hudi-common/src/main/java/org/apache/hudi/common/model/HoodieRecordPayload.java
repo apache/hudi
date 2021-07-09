@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.io.ArrayWritable;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -101,6 +102,10 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   default Option<IndexedRecord> getInsertValue(Schema schema, Properties properties) throws IOException {
     return getInsertValue(schema);
+  }
+
+  default Option<ArrayWritable> getArrayWrittableInsertValue() {
+    return Option.empty();
   }
 
   /**

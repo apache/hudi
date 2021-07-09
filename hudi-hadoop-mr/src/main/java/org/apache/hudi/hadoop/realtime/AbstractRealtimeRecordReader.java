@@ -121,7 +121,7 @@ public abstract class AbstractRealtimeRecordReader {
       Field field = schemaFieldsMap.get(columnName.toLowerCase());
 
       if (field != null) {
-        hiveSchemaFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()));
+        hiveSchemaFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultValue()));
       } else {
         // Hive has some extra virtual columns like BLOCK__OFFSET__INSIDE__FILE which do not exist in table schema.
         // They will get skipped as they won't be found in the original schema.

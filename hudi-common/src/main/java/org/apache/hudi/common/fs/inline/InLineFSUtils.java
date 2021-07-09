@@ -46,8 +46,6 @@ public class InLineFSUtils {
    */
   public static Path getInlineFilePath(Path outerPath, String origScheme, long inLineStartOffset, long inLineLength) {
     String subPath = outerPath.toString().substring(outerPath.toString().indexOf(":") + 1);
-    System.out.println("WNI getInlinePath " + subPath
-    + " " + origScheme);
     return new Path(
         InLineFileSystem.SCHEME + ":" + subPath + "/" + origScheme
             + "/" + "?" + START_OFFSET_STR + EQUALS_STR + inLineStartOffset

@@ -137,7 +137,7 @@ public class HoodieRealtimeRecordReaderUtils {
         throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
             + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
       } else {
-        projectedFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()));
+        projectedFields.add(new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultValue()));
       }
     }
 
@@ -167,9 +167,9 @@ public class HoodieRealtimeRecordReaderUtils {
       case BYTES:
         return new BytesWritable(((ByteBuffer)value).array());
       case INT:
-        if (schema.getLogicalType() != null && schema.getLogicalType().getName().equals("date")) {
+        /*if (schema.getLogicalType() != null && schema.getLogicalType().getName().equals("date")) {
           return new DateWritable((Integer) value);
-        }
+        }*/
         return new IntWritable((Integer) value);
       case LONG:
         return new LongWritable((Long) value);
@@ -228,13 +228,13 @@ public class HoodieRealtimeRecordReaderUtils {
           throw new IllegalArgumentException("Only support union with null");
         }
       case FIXED:
-        if (schema.getLogicalType() != null && schema.getLogicalType().getName().equals("decimal")) {
+        /*if (schema.getLogicalType() != null && schema.getLogicalType().getName().equals("decimal")) {
           LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) LogicalTypes.fromSchema(schema);
           HiveDecimalWritable writable = new HiveDecimalWritable(((GenericFixed) value).bytes(),
               decimal.getScale());
           return HiveDecimalUtils.enforcePrecisionScale(writable,
               new DecimalTypeInfo(decimal.getPrecision(), decimal.getScale()));
-        }
+        }*/
         return new BytesWritable(((GenericFixed) value).bytes());
       default:
         return null;

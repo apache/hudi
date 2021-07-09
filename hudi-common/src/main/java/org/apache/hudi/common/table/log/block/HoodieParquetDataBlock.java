@@ -33,13 +33,26 @@ import org.apache.hudi.io.storage.HoodieParquetReader;
 import org.apache.hudi.io.storage.HoodieParquetStreamReader;
 import org.apache.hudi.io.storage.HoodieParquetStreamWriter;
 
+import com.esotericsoftware.reflectasm.shaded.org.objectweb.asm.TypePath;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.exceptions.IllegalArgumentIOException;
+import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
+import org.apache.hadoop.hive.ql.io.IOConstants;
+import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
+import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
+import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.mapred.FileSplit;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.RecordReader;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
@@ -48,12 +61,14 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
 
@@ -137,6 +152,78 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
     return baos.toByteArray();
   }
 
+  public List<ArrayWritable> getArrayWritableRecords() {
+    JobConf inlineConf = new JobConf();
+    List<ArrayWritable> toReturn = new ArrayList<>();
+
+    try {
+      // Step 1: Make the config
+      List<Schema.Field> fields = schema.getFields();
+
+      String names = fields.stream()
+          .map(f -> f.name()).collect(Collectors.joining(","));
+      String positions = fields.stream()
+          .map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
+
+      String hiveColumnTypes ="string,string,string,string,string," + "string,bigint,string,string,struct<id:int,login:string,gravatar_id:string,url:string,avatar_url:string,display_login:string>," +
+          "struct<id:int,name:string,url:string>," +
+          "string,struct<id:int,login:string,gravatar_id:string,url:string,avatar_url:string,display_login:string>," +
+          "bigint,boolean";
+      String hiveColumnNames = "_hoodie_commit_time,_hoodie_commit_seqno,_hoodie_record_key,_hoodie_partition_path,_hoodie_file_name,date,timestamp,id,type,actor,repo,payload,org,created_at,public";
+
+      inlineConf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
+      inlineConf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, hiveColumnTypes);
+      inlineConf.set(ColumnProjectionUtils.READ_ALL_COLUMNS, "false");
+      inlineConf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
+      inlineConf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, positions);
+
+      Configuration conf = new Configuration();
+      conf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
+      conf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, hiveColumnTypes);
+      conf.set(ColumnProjectionUtils.READ_ALL_COLUMNS, "false");
+      conf.set(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, names);
+      conf.set(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, positions);
+      conf.set(IOConstants.COLUMNS, hiveColumnNames);
+      conf.get(IOConstants.COLUMNS_TYPES, hiveColumnTypes);
+
+      inlineConf.addResource(conf);
+
+      Path inlinePath = InLineFSUtils.getInlineFilePath(
+          getBlockContentLocation().get().getLogFile().getPath(),
+          getBlockContentLocation().get().getLogFile().getPath().getFileSystem(inlineConf).getScheme(),
+          getBlockContentLocation().get().getContentPositionInLogFile(),
+          getBlockContentLocation().get().getBlockSize());
+
+      /*System.out.println("WNI HoodieParquetDataBlock getRecords " + getBlockContentLocation().get().getLogFile().getPath()
+            + " " + getBlockContentLocation().get().getLogFile().getPath().getFileSystem(inlineConf).getScheme()
+            + " " + getBlockContentLocation().get().getContentPositionInLogFile()
+            + " " + getBlockContentLocation().get().getBlockSize()
+            + " " + inlinePath.toString());*/
+
+      inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
+      inlineConf.set("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
+
+      RecordReader<NullWritable, ArrayWritable> reader =
+          new MapredParquetInputFormat().getRecordReader(
+          new FileSplit(inlinePath, 0,
+              getBlockContentLocation().get().getBlockSize(), (String[]) null),
+          inlineConf, null);
+
+      // use reader to read base Parquet File and log file, merge in flight and return latest commit
+      // here all 100 records should be updated, see above
+      NullWritable key = reader.createKey();
+      ArrayWritable value = reader.createValue();
+      while (reader.next(key, value)) {
+        toReturn.add(value);
+      }
+      reader.close();
+    } catch (Exception exception) {
+        System.out.println("WNI Fatal " + exception);
+      }
+    return toReturn;
+  }
+
+
   @Override
   public List<IndexedRecord> getRecords() {
     Configuration inlineConf = new Configuration();
@@ -149,26 +236,22 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
           getBlockContentLocation().get().getContentPositionInLogFile(),
           getBlockContentLocation().get().getBlockSize());
 
-      System.out.println("WNI Fatal 1 " + getBlockContentLocation().get().getLogFile().getPath()
+      /*System.out.println("WNI HoodieParquetDataBlock getRecords " + getBlockContentLocation().get().getLogFile().getPath()
             + " " + getBlockContentLocation().get().getLogFile().getPath().getFileSystem(inlineConf).getScheme()
             + " " + getBlockContentLocation().get().getContentPositionInLogFile()
             + " " + getBlockContentLocation().get().getBlockSize()
-            + " " + inlinePath.toString());
+            + " " + inlinePath.toString());*/
 
       inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
-        System.out.println("WNI Fatal 2");
-
       inlineConf.set("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
 
       HoodieParquetReader<IndexedRecord> parquetReader = new HoodieParquetReader<>(inlineConf, inlinePath);
-      System.out.println("WNI Fatal 3");
-
       Iterator<IndexedRecord> recordIterator = parquetReader.getRecordIterator(schema);
-      System.out.println("WNI Fatal 4");
 
       while (recordIterator.hasNext()) {
         toReturn.add(recordIterator.next());
       }
+
     } catch (Exception exception) {
       System.out.println("WNI Fatal " + exception);
     }
@@ -179,31 +262,6 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
   // TODO (na) - Implement a recordItr instead of recordList
   @Override
   protected void deserializeRecords() throws IOException {
-
-    System.out.println("deserializeRecords POS = "
-        + inputStream.getPos()
-    + " CONT LEN = " + getContent().get().length);
-
-    // Get schema from the header
-    Schema writerSchema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
-
-    // If readerSchema was not present, use writerSchema
-    if (schema == null) {
-      schema = writerSchema;
-    }
-
-    // Read the content
-    FSDataInputStream dis = new FSDataInputStream(new HoodieHFileReader.SeekableByteArrayInputStream(getContent().get()));
-
-    HoodieParquetStreamReader<IndexedRecord> reader =
-        new HoodieParquetStreamReader<>(new Configuration(), dis, getContent().get().length);
-
-    Iterator<IndexedRecord> avroRecords = reader.getRecordIterator(schema);
-    while (avroRecords.hasNext()) {
-      this.records.add(avroRecords.next());
-    }
-
-    // Free up content to be GC'd, deflate
-    deflate();
+    throw new IOException("Not implemented");
   }
 }

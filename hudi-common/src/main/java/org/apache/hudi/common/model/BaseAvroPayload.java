@@ -46,7 +46,9 @@ public abstract class BaseAvroPayload implements Serializable {
    * @param orderingVal {@link Comparable} to be used in pre combine.
    */
   public BaseAvroPayload(GenericRecord record, Comparable orderingVal) {
-    this.recordBytes = record != null ? HoodieAvroUtils.avroToBytes(record) : new byte[0];
+    //this.recordBytes = record != null ? HoodieAvroUtils.avroToBytes(record) : new byte[0];
+    // RM Testing without overhead of converting avro to byte array
+    this.recordBytes = new byte[0];
     this.orderingVal = orderingVal;
     if (orderingVal == null) {
       throw new HoodieException("Ordering value is null for record: " + record);

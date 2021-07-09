@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.io.ArrayWritable;
 
 import java.io.IOException;
 
@@ -38,12 +39,23 @@ import java.io.IOException;
 public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
     implements HoodieRecordPayload<OverwriteWithLatestAvroPayload> {
 
+  private final GenericRecord record;
+  private final ArrayWritable arrayWritable;
+
   public OverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
+    this.record = record;
+    this.arrayWritable = null;
   }
 
   public OverwriteWithLatestAvroPayload(Option<GenericRecord> record) {
     this(record.isPresent() ? record.get() : null, 0); // natural order
+  }
+
+  public OverwriteWithLatestAvroPayload(ArrayWritable arrayWritable) {
+    super(null, 0);
+    this.record = null;
+    this.arrayWritable = arrayWritable;
   }
 
   @Override
@@ -57,13 +69,18 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
   }
 
   @Override
+  public Option<ArrayWritable> getArrayWrittableInsertValue() {
+    return Option.of(arrayWritable);
+  }
+
+  @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
     return getInsertValue(schema);
   }
 
   @Override
   public Option<IndexedRecord> getInsertValue(Schema schema) throws IOException {
-    if (recordBytes.length == 0) {
+    /*if (recordBytes.length == 0) {
       return Option.empty();
     }
     IndexedRecord indexedRecord = HoodieAvroUtils.bytesToAvro(recordBytes, schema);
@@ -71,7 +88,9 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
       return Option.empty();
     } else {
       return Option.of(indexedRecord);
-    }
+    }*/
+    // RM Testing without overhead of converting avro to byte array
+    return Option.of(record);
   }
 
   /**

@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
@@ -40,6 +41,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.hadoop.io.ArrayWritable;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -56,6 +59,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.COMMAND_BLOCK;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.CORRUPT_BLOCK;
+import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK;
 
 /**
  * Implements logic to scan log blocks and expose valid and deleted log records to subclass implementation. Subclass is
@@ -296,11 +300,52 @@ public abstract class AbstractHoodieLogRecordScanner {
    */
   private void processDataBlock(HoodieDataBlock dataBlock) throws Exception {
     // TODO (NA) - Implement getRecordItr() in HoodieAvroDataBlock and use that here
-    List<IndexedRecord> recs = dataBlock.getRecords();
-    totalLogRecords.addAndGet(recs.size());
-    for (IndexedRecord rec : recs) {
-      processNextRecord(createHoodieRecord(rec));
+
+    if (dataBlock.getBlockType() == PARQUET_DATA_BLOCK) {
+      long startTimeMs = System.currentTimeMillis();
+      List<ArrayWritable> recs = ((HoodieParquetDataBlock) dataBlock).getArrayWritableRecords();
+      long endTimeMs = System.currentTimeMillis();
+      System.out.println("WNI ARRAYWRITTABLE dataBlock.getRecords time taken = " + (endTimeMs - startTimeMs) + " recs.size() " + recs.size());
+      totalLogRecords.addAndGet(recs.size());
+      long createHoodieTimeMs = 0;
+      long processNextRecordTimeMs = 0;
+      for (ArrayWritable rec : recs) {
+        startTimeMs = System.currentTimeMillis();
+        //HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS = 2;
+        //HoodieInputFormatUtils.HOODIE_PARTITION_PATH_COL_POS = 3;
+        String recKey = rec.get()[2].toString();
+        String partitionPath = rec.get()[3].toString();
+
+        HoodieRecordPayload payload = new OverwriteWithLatestAvroPayload(rec);
+
+        HoodieRecord<? extends HoodieRecordPayload> hoodieRecord =
+            new HoodieRecord<>(new HoodieKey(recKey, partitionPath), payload);
+        endTimeMs = System.currentTimeMillis();
+        createHoodieTimeMs += (endTimeMs - startTimeMs);
+        processNextRecord(hoodieRecord);
+        processNextRecordTimeMs += (System.currentTimeMillis() - endTimeMs);
+      }
+      System.out.println("WNI ARRAYWRITTABLE processDataBlock processNextRecord time taken = " + createHoodieTimeMs + " " + processNextRecordTimeMs);
+      return;
     }
+
+    long startTimeMs = System.currentTimeMillis();
+    List<IndexedRecord> recs = dataBlock.getRecords();
+    long endTimeMs = System.currentTimeMillis();
+    System.out.println("WNI dataBlock.getRecords time taken = " + (endTimeMs - startTimeMs));
+    totalLogRecords.addAndGet(recs.size());
+
+    long createHoodieTimeMs = 0;
+    long processNextRecordTimeMs = 0;
+    for (IndexedRecord rec : recs) {
+      startTimeMs = System.currentTimeMillis();
+      HoodieRecord hoodieRecord = createHoodieRecord(rec);
+      endTimeMs = System.currentTimeMillis();
+      createHoodieTimeMs += (endTimeMs - startTimeMs);
+      processNextRecord(hoodieRecord);
+      processNextRecordTimeMs += (System.currentTimeMillis() - endTimeMs);
+    }
+    System.out.println("WNI processDataBlock processNextRecord time taken = " + createHoodieTimeMs + " " + processNextRecordTimeMs);
   }
 
   protected HoodieRecord<?> createHoodieRecord(IndexedRecord rec) {
@@ -329,15 +374,18 @@ public abstract class AbstractHoodieLogRecordScanner {
       LOG.info("Number of remaining logblocks to merge " + lastBlocks.size());
       // poll the element at the bottom of the stack since that's the order it was inserted
       HoodieLogBlock lastBlock = lastBlocks.pollLast();
+      long startTimeMs = System.currentTimeMillis();
       switch (lastBlock.getBlockType()) {
         case AVRO_DATA_BLOCK:
           processDataBlock((HoodieAvroDataBlock) lastBlock);
+          System.out.println("WNI AVRO_DATA_BLOCK processDataBlock = " + (System.currentTimeMillis() - startTimeMs));
           break;
         case HFILE_DATA_BLOCK:
           processDataBlock((HoodieHFileDataBlock) lastBlock);
           break;
         case PARQUET_DATA_BLOCK:
           processDataBlock((HoodieParquetDataBlock) lastBlock);
+          System.out.println("WNI PARQUET_DATA_BLOCK processDataBlock = " + (System.currentTimeMillis() - startTimeMs));
           break;
         case DELETE_BLOCK:
           Arrays.stream(((HoodieDeleteBlock) lastBlock).getKeysToDelete()).forEach(this::processNextDeletedKey);

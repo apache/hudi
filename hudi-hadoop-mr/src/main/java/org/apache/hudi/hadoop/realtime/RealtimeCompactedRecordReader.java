@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
@@ -52,7 +53,10 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
       RecordReader<NullWritable, ArrayWritable> realReader) throws IOException {
     super(split, job);
     this.parquetReader = realReader;
+    long startTimeMs = System.currentTimeMillis();
     this.deltaRecordMap = getMergedLogRecordScanner().getRecords();
+    System.out.println("WNI RealtimeCompactedRecordReader time = " + (System.currentTimeMillis() - startTimeMs));
+
   }
 
   /**
@@ -89,6 +93,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
   public boolean next(NullWritable aVoid, ArrayWritable arrayWritable) throws IOException {
     // Call the underlying parquetReader.next - which may replace the passed in ArrayWritable
     // with a new block of values
+    System.out.println("WNI HUDI DBG 1");
     boolean result = this.parquetReader.next(aVoid, arrayWritable);
     if (!result) {
       // if the result is false, then there are no more records
@@ -99,10 +104,11 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
       // would be true until we have a way to index logs too)
       // return from delta records map if we have some match.
       String key = arrayWritable.get()[HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS].toString();
+      System.out.println("WNI HUDI DBG 2 " + key);
       if (deltaRecordMap.containsKey(key)) {
         // TODO(NA): Invoke preCombine here by converting arrayWritable to Avro. This is required since the
         // deltaRecord may not be a full record and needs values of columns from the parquet
-        Option<GenericRecord> rec;
+  /*      Option<GenericRecord> rec;
         rec = buildGenericRecordwithCustomPayload(deltaRecordMap.get(key));
         // If the record is not present, this is a delete record using an empty payload so skip this base record
         // and move to the next record
@@ -132,6 +138,10 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         // replace it. Since we want to return an arrayWritable which is the same length as the elements in the latest
         // schema, we use writerSchema to create the arrayWritable from the latest generic record
         ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(recordToReturn, getHiveSchema());
+*/
+        System.out.println("WNI HUDI DBG 3 " + key);
+        OverwriteWithLatestAvroPayload payload = (OverwriteWithLatestAvroPayload) deltaRecordMap.get(key).getData();
+        ArrayWritable aWritable = payload.getArrayWrittableInsertValue().get();
         Writable[] replaceValue = aWritable.get();
         if (LOG.isDebugEnabled()) {
           LOG.debug(String.format("key %s, base values: %s, log values: %s", key, HoodieRealtimeRecordReaderUtils.arrayWritableToString(arrayWritable),
@@ -145,6 +155,7 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
               Math.min(originalValue.length, replaceValue.length));
           arrayWritable.set(originalValue);
         } catch (RuntimeException re) {
+          System.out.println("WNI HUDI DBG OMG OMG " + re.getMessage());
           LOG.error("Got exception when doing array copy", re);
           LOG.error("Base record :" + HoodieRealtimeRecordReaderUtils.arrayWritableToString(arrayWritable));
           LOG.error("Log record :" + HoodieRealtimeRecordReaderUtils.arrayWritableToString(aWritable));

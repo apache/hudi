@@ -178,11 +178,6 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       // 6. Write the size of the content block
       outputStream.writeLong(content.length);
       // 7. Write the contents of the data block
-      System.out.println("WNI LEN AT WRITE SIDE = "
-          + " CONTENT " + content.length
-          + " HEADER " + headerBytes.length
-          + " FOOTER " + footerBytes.length
-      + " " + outputStream.getPos() + " " + startPos);
       outputStream.write(content);
       // 8. Write the footers for the log block
       outputStream.write(footerBytes);

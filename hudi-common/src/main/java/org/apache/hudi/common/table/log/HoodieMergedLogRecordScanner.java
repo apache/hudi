@@ -92,9 +92,13 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
   protected void performScan() {
     // Do the scan and merge
     timer.startTimer();
+    long startTimeMs = System.currentTimeMillis();
     scan();
     this.totalTimeTakenToReadAndMergeBlocks = timer.endTimer();
     this.numMergedRecordsInLog = records.size();
+    System.out.println("WNI performSCAN call scan() time = " + (System.currentTimeMillis() - startTimeMs)
+    + " " + numMergedRecordsInLog);
+
     LOG.info("Number of log files scanned => " + logFilePaths.size());
     LOG.info("MaxMemoryInBytes allowed for compaction => " + maxMemorySizeInBytes);
     LOG.info("Number of entries in MemoryBasedMap in ExternalSpillableMap => " + records.getInMemoryMapNumEntries());
