@@ -170,7 +170,7 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     }
     try {
       Table table = client.getTable(syncConfig.databaseName, tableName);
-      for (Map.Entry<String, String> entry: tableProperties.entrySet()) {
+      for (Map.Entry<String, String> entry : tableProperties.entrySet()) {
         table.putToParameters(entry.getKey(), entry.getValue());
       }
       client.alter_table(syncConfig.databaseName, tableName, table);

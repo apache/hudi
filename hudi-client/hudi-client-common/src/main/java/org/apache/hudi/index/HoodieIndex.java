@@ -98,12 +98,20 @@ public abstract class HoodieIndex<T extends HoodieRecordPayload, I, K, O> implem
   public abstract boolean isImplicitWithStorage();
 
   /**
+   * An index might need customized partitioner other than general upsert and insert partitioner.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public boolean needCustomizedPartitioner() {
+    return false;
+  }
+
+  /**
    * Each index type should implement it's own logic to release any resources acquired during the process.
    */
   public void close() {
   }
 
   public enum IndexType {
-    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, SIMPLE, GLOBAL_SIMPLE
+    HBASE, INMEMORY, BLOOM, GLOBAL_BLOOM, SIMPLE, GLOBAL_SIMPLE, BUCKET_INDEX
   }
 }

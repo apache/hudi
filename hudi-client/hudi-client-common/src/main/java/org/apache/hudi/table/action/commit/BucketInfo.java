@@ -30,6 +30,9 @@ public class BucketInfo implements Serializable {
   String fileIdPrefix;
   String partitionPath;
 
+  public BucketInfo() {
+  }
+
   public BucketInfo(BucketType bucketType, String fileIdPrefix, String partitionPath) {
     this.bucketType = bucketType;
     this.fileIdPrefix = fileIdPrefix;
@@ -75,5 +78,17 @@ public class BucketInfo implements Serializable {
   @Override
   public int hashCode() {
     return Objects.hash(bucketType, fileIdPrefix, partitionPath);
+  }
+
+  public void setBucketType(BucketType bucketType) {
+    this.bucketType = bucketType;
+  }
+
+  public void setFileIdPrefix(String fileIdPrefix) {
+    this.fileIdPrefix = fileIdPrefix;
+  }
+
+  public void setPartitionPath(String partitionPath) {
+    this.partitionPath = partitionPath;
   }
 }

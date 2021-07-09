@@ -39,7 +39,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.util.Try
 
-case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSplit) extends Partition
+case class HoodieMergeOnReadPartition(index: Int, split: List[HoodieMergeOnReadFileSplit]) extends Partition
 
 class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            @transient config: Configuration,
@@ -57,32 +57,54 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
   }
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val mergeOnReadPartition = split.asInstanceOf[HoodieMergeOnReadPartition]
-    mergeOnReadPartition.split match {
-      case dataFileOnlySplit if dataFileOnlySplit.logPaths.isEmpty =>
-        read(dataFileOnlySplit.dataFile.get, requiredSchemaFileReader)
-      case logFileOnlySplit if logFileOnlySplit.dataFile.isEmpty =>
-        logFileIterator(logFileOnlySplit, getConfig)
-      case skipMergeSplit if skipMergeSplit.mergeType
-        .equals(DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL) =>
-        skipMergeFileIterator(
-          skipMergeSplit,
-          read(skipMergeSplit.dataFile.get, requiredSchemaFileReader),
-          getConfig
-        )
-      case payloadCombineSplit if payloadCombineSplit.mergeType
-        .equals(DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL) =>
-        payloadCombineFileIterator(
-          payloadCombineSplit,
-          read(payloadCombineSplit.dataFile.get, fullSchemaFileReader),
-          getConfig
-        )
-      case _ => throw new HoodieException(s"Unable to select an Iterator to read the Hoodie MOR File Split for " +
-        s"file path: ${mergeOnReadPartition.split.dataFile.get.filePath}" +
-        s"log paths: ${mergeOnReadPartition.split.logPaths.toString}" +
-        s"hoodie table path: ${mergeOnReadPartition.split.tablePath}" +
-        s"spark partition Index: ${mergeOnReadPartition.index}" +
-        s"merge type: ${mergeOnReadPartition.split.mergeType}")
-    }
+    mergeOnReadPartition
+      .split
+      .iterator
+      .flatMap { sp =>
+        val it = singleSplitIterator(split.index, sp)
+        // singleSplitIterator.hasNext method is not Idempotent !!! so need a custom Iterator implementation
+        new NextIterator[InternalRow]() {
+          def getNext(): InternalRow = {
+            finished = !it.hasNext
+            if (finished) {
+              null
+            } else {
+              it.next()
+            }
+          }
+
+          def close(): Unit = {}
+        }
+      }
+  }
+
+  private def singleSplitIterator(
+      index: Int,
+      split: HoodieMergeOnReadFileSplit): Iterator[InternalRow] = split match {
+    case dataFileOnlySplit if dataFileOnlySplit.logPaths.isEmpty =>
+      read(dataFileOnlySplit.dataFile.get, requiredSchemaFileReader)
+    case logFileOnlySplit if logFileOnlySplit.dataFile.isEmpty =>
+      logFileIterator(logFileOnlySplit, getConfig)
+    case skipMergeSplit if skipMergeSplit.mergeType
+      .equals(DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL) =>
+      skipMergeFileIterator(
+        skipMergeSplit,
+        read(skipMergeSplit.dataFile.get, requiredSchemaFileReader),
+        getConfig
+      )
+    case payloadCombineSplit if payloadCombineSplit.mergeType
+      .equals(DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL) =>
+      payloadCombineFileIterator(
+        payloadCombineSplit,
+        read(payloadCombineSplit.dataFile.get, fullSchemaFileReader),
+        getConfig
+      )
+    case _ => throw new HoodieException(s"Unable to select an Iterator to read the Hoodie MOR File Split for " +
+      s"file path: ${split.dataFile.get.filePath}" +
+      s"log paths: ${split.logPaths.toString}" +
+      s"hoodie table path: ${split.tablePath}" +
+      s"spark partition Index: ${index}" +
+      s"merge type: ${split.mergeType}")
   }
 
   override protected def getPartitions: Array[Partition] = {

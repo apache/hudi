@@ -299,6 +299,8 @@ public class DataSourceUtils {
         DataSourceWriteOptions.HIVE_SKIP_RO_SUFFIX().defaultValue()));
     hiveSyncConfig.supportTimestamp = Boolean.valueOf(props.getString(DataSourceWriteOptions.HIVE_SUPPORT_TIMESTAMP().key(),
         DataSourceWriteOptions.HIVE_SUPPORT_TIMESTAMP().defaultValue()));
+    hiveSyncConfig.bucketSpec = props.getString(DataSourceWriteOptions.HIVE_BUCKET_SPEC_OPT().key(),
+        DataSourceWriteOptions.HIVE_BUCKET_SPEC_OPT().defaultValue());
     return hiveSyncConfig;
   }
 }

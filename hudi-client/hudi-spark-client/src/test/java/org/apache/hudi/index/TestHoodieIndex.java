@@ -23,6 +23,7 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -81,6 +82,9 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     config = getConfigBuilder()
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType)
             .build()).withAutoCommit(false).build();
+    if (indexType == IndexType.BUCKET_INDEX) {
+      config.setValue(HoodieTableConfig.HOODIE_TABLE_NUM_BUCKETS, "8");
+    }
     writeClient = getHoodieWriteClient(config);
     this.index = writeClient.getIndex();
   }
@@ -91,12 +95,12 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   }
 
   @ParameterizedTest
-  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE"})
+  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE", "BUCKET_INDEX"})
   public void testSimpleTagLocationAndUpdate(IndexType indexType) throws Exception {
     setUp(indexType);
     String newCommitTime = "001";
     int totalRecords = 10 + random.nextInt(20);
-    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
+    List<HoodieRecord> records = generateInserts(newCommitTime, totalRecords, indexType);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -141,12 +145,12 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   }
 
   @ParameterizedTest
-  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE"})
+  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE", "BUCKET_INDEX"})
   public void testTagLocationAndDuplicateUpdate(IndexType indexType) throws Exception {
     setUp(indexType);
     String newCommitTime = "001";
     int totalRecords = 10 + random.nextInt(20);
-    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
+    List<HoodieRecord> records = generateInserts(newCommitTime, totalRecords, indexType);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
 
     HoodieSparkTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
@@ -191,12 +195,12 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   }
 
   @ParameterizedTest
-  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE"})
+  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE", "BUCKET_INDEX"})
   public void testSimpleTagLocationAndUpdateWithRollback(IndexType indexType) throws Exception {
     setUp(indexType);
     String newCommitTime = writeClient.startCommit();
     int totalRecords = 20 + random.nextInt(20);
-    List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
+    List<HoodieRecord> records = generateInserts(newCommitTime, totalRecords, indexType);
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -429,5 +433,9 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
         ? Option.of(Pair.of(hr.getPartitionPath(), hr.getCurrentLocation().getFileId()))
         : Option.empty())
     );
+  }
+
+  private List<HoodieRecord> generateInserts(String instantTime, Integer n, IndexType indexType) {
+    return dataGen.generateInserts(instantTime, n);
   }
 }

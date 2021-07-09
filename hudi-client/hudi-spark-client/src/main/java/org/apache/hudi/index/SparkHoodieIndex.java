@@ -31,6 +31,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.bloom.SparkHoodieBloomIndex;
 import org.apache.hudi.index.bloom.SparkHoodieGlobalBloomIndex;
+import org.apache.hudi.index.bucket.SparkHiveBucketIndex;
 import org.apache.hudi.index.hbase.SparkHoodieHBaseIndex;
 import org.apache.hudi.index.simple.SparkHoodieGlobalSimpleIndex;
 import org.apache.hudi.index.simple.SparkHoodieSimpleIndex;
@@ -66,6 +67,8 @@ public abstract class SparkHoodieIndex<T extends HoodieRecordPayload> extends Ho
         return new SparkHoodieSimpleIndex(config);
       case GLOBAL_SIMPLE:
         return new SparkHoodieGlobalSimpleIndex(config);
+      case BUCKET_INDEX:
+        return new SparkHiveBucketIndex(config);
       default:
         throw new HoodieIndexException("Index type unspecified, set " + config.getIndexType());
     }

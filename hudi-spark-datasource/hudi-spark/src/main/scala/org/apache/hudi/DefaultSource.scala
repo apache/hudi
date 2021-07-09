@@ -38,6 +38,7 @@ import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode, SparkSession}
+import org.apache.spark.sql.catalyst.catalog.BucketSpec
 
 import scala.collection.JavaConverters._
 
@@ -114,6 +115,15 @@ class DefaultSource extends RelationProvider
       .getOrElse(parameters.getOrElse(QUERY_TYPE_OPT_KEY.key, QUERY_TYPE_OPT_KEY.defaultValue()))
 
     log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
+    val bucketSpec = optParams.get("bucketSpec").flatMap(specStr => specStr.split("\t") match {
+      case Array(numBuckets, bucketColumns, sortColumns) =>
+        Some(BucketSpec(numBuckets.toInt,
+          bucketColumns.split(","), sortColumns.split(",")))
+      case Array(numBuckets, bucketColumns) =>
+        Some(BucketSpec(numBuckets.toInt,
+          bucketColumns.split(","), Nil))
+      case _ => None
+    })
 
     (tableType, queryType, isBootstrappedTable) match {
       case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
@@ -126,7 +136,7 @@ class DefaultSource extends RelationProvider
         new IncrementalRelation(sqlContext, parameters, schema, metaClient)
 
       case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
-        new MergeOnReadSnapshotRelation(sqlContext, parameters, schema, globPaths, metaClient)
+        new MergeOnReadSnapshotRelation(sqlContext, parameters, schema, globPaths, metaClient, bucketSpec)
 
       case (MERGE_ON_READ, QUERY_TYPE_INCREMENTAL_OPT_VAL, _) =>
         new MergeOnReadIncrementalRelation(sqlContext, parameters, schema, metaClient)

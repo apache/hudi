@@ -38,8 +38,10 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
+import org.apache.hudi.index.bucket.SparkHiveBucketIndex;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieSortedMergeHandle;
@@ -180,7 +182,9 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   }
 
   protected Partitioner getPartitioner(WorkloadProfile profile) {
-    if (WriteOperationType.isChangingRecords(operationType)) {
+    if (table.getIndex().needCustomizedPartitioner()) {
+      return getCustomizedPartitioner(profile);
+    } else if (WriteOperationType.isChangingRecords(operationType)) {
       return getUpsertPartitioner(profile);
     } else {
       return getInsertPartitioner(profile);
@@ -270,7 +274,7 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   @SuppressWarnings("unchecked")
   protected Iterator<List<WriteStatus>> handleUpsertPartition(String instantTime, Integer partition, Iterator recordItr,
                                                               Partitioner partitioner) {
-    UpsertPartitioner upsertPartitioner = (UpsertPartitioner) partitioner;
+    SparkHoodiePartitioner upsertPartitioner = (SparkHoodiePartitioner) partitioner;
     BucketInfo binfo = upsertPartitioner.getBucketInfo(partition);
     BucketType btype = binfo.bucketType;
     try {
@@ -369,4 +373,16 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     return getUpsertPartitioner(profile);
   }
 
+  /**
+   * Provides a customized partitioner, based on the workload profile.
+   */
+  protected Partitioner getCustomizedPartitioner(WorkloadProfile profile) {
+    // TODO Using a factory to produce customized partitioner
+    if (table.getIndex() instanceof SparkHiveBucketIndex) {
+      return new SparkHiveBucketPartitioner<>(profile, context, table, config);
+    } else {
+      throw new HoodieException("Customized partitioner is not supported for "
+          + table.getIndex().getClass().getSimpleName() + ".");
+    }
+  }
 }
