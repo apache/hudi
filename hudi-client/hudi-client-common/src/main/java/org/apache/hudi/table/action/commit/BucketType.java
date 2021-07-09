@@ -19,5 +19,5 @@
 package org.apache.hudi.table.action.commit;
 
 public enum BucketType {
-  UPDATE, INSERT, APPEND_ONLY
+  UPDATE, INSERT
 }
