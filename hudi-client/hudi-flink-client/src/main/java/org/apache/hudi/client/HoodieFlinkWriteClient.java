@@ -56,6 +56,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
 import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.table.action.compact.FlinkCompactHelpers;
 import org.apache.hudi.table.upgrade.FlinkUpgradeDowngrade;
 import org.apache.hudi.util.FlinkClientUtil;
@@ -408,6 +409,12 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     final HoodieRecordLocation loc = record.getCurrentLocation();
     final String fileID = loc.getFileId();
     final String partitionPath = record.getPartitionPath();
+    // append only mode always use FlinkCreateHandle
+    if (loc.getInstantTime().equals(BucketType.APPEND_ONLY.name())) {
+      return new FlinkCreateHandle<>(config, instantTime, table, partitionPath,
+          fileID, table.getTaskContextSupplier());
+    }
+
     if (bucketToHandles.containsKey(fileID)) {
       MiniBatchHandle lastHandle = (MiniBatchHandle) bucketToHandles.get(fileID);
       if (lastHandle.shouldReplace()) {
@@ -424,7 +431,8 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     if (isDelta) {
       writeHandle = new FlinkAppendHandle<>(config, instantTime, table, partitionPath, fileID, recordItr,
           table.getTaskContextSupplier());
-    } else if (loc.getInstantTime().equals("I")) {
+    } else if (loc.getInstantTime().equals(BucketType.INSERT.name()) || loc.getInstantTime().equals(BucketType.APPEND_ONLY.name())) {
+      // use the same handle for insert bucket
       writeHandle = new FlinkCreateHandle<>(config, instantTime, table, partitionPath,
           fileID, table.getTaskContextSupplier());
     } else {
