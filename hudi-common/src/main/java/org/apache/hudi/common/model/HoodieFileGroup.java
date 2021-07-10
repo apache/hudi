@@ -21,13 +21,11 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.Serializable;
 import java.util.Comparator;
 import java.util.List;
 import java.util.TreeMap;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -62,9 +60,7 @@ public class HoodieFileGroup implements Serializable {
   public HoodieFileGroup(HoodieFileGroup fileGroup) {
     this.timeline = fileGroup.timeline;
     this.fileGroupId = fileGroup.fileGroupId;
-    this.fileSlices = new TreeMap<>(fileGroup.fileSlices.entrySet().stream()
-        .map(e -> Pair.of(e.getKey(), new FileSlice(e.getValue())))
-        .collect(Collectors.toMap(Pair::getKey, Pair::getValue)));
+    this.fileSlices = new TreeMap<>(fileGroup.fileSlices);
     this.lastInstant = fileGroup.lastInstant;
   }
 

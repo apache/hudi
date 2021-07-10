@@ -204,8 +204,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
     testTable.withPartitionMetaFiles("p1", "p2", filteredDirectoryOne, filteredDirectoryTwo, filteredDirectoryThree)
         .addCommit("001").withBaseFilesInPartition("p1", 10).withBaseFilesInPartition("p2", 10, 10)
-        .addCommit("002").withBaseFilesInPartition("p1", 10).withBaseFilesInPartition("p2", 10, 10, 10)
-        .addInflightCommit("003").withBaseFilesInPartition("p1", 10).withBaseFilesInPartition("p2", 10);
+        .addCommit("002").withBaseFilesInPartition("p1", 10).withBaseFilesInPartition("p2", 10, 10, 10);
 
     final HoodieWriteConfig writeConfig =
             getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.NEVER, true, true, false)

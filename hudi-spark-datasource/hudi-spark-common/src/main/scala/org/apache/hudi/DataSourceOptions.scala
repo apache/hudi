@@ -25,6 +25,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hive.{HiveSyncTool, SlashEncodedDayPartitionValueExtractor}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{CustomKeyGenerator, SimpleKeyGenerator}
+
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 
@@ -478,15 +479,11 @@ object DataSourceWriteOptions {
     .defaultValue("true")
     .withDocumentation("")
 
-  val KAFKA_AVRO_VALUE_DESERIALIZER: ConfigProperty[String] = ConfigProperty
+  val KAFKA_AVRO_VALUE_DESERIALIZER_CLASS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.deltastreamer.source.kafka.value.deserializer.class")
-    .noDefaultValue()
-    .withDocumentation("")
-
-  val KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.deltastreamer.source.kafka.value.deserializer.schema")
-    .noDefaultValue()
-    .withDocumentation("")
+    .defaultValue("io.confluent.kafka.serializers.KafkaAvroDeserializer")
+    .sinceVersion("0.9.0")
+    .withDocumentation("This class is used by kafka client to deserialize the records")
 }
 
 object DataSourceOptionsHelper {
