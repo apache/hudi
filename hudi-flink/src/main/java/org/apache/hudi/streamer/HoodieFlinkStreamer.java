@@ -82,7 +82,6 @@ public class HoodieFlinkStreamer {
         (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(cfg))
             .getLogicalType();
     Configuration conf = FlinkStreamerConfig.toFlinkConfig(cfg);
-    int numWriteTask = conf.getInteger(FlinkOptions.WRITE_TASKS);
     StreamWriteOperatorFactory<HoodieRecord> operatorFactory =
         new StreamWriteOperatorFactory<>(conf);
 
@@ -111,12 +110,13 @@ public class HoodieFlinkStreamer {
             "bucket_assigner",
             TypeInformation.of(HoodieRecord.class),
             new KeyedProcessOperator<>(new BucketAssignFunction<>(conf)))
+        .setParallelism(conf.getInteger(FlinkOptions.BUCKET_ASSIGN_TASKS))
         .uid("uid_bucket_assigner")
         // shuffle by fileId(bucket id)
         .keyBy(record -> record.getCurrentLocation().getFileId())
         .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
         .uid("uid_hoodie_stream_write")
-        .setParallelism(numWriteTask);
+        .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
     if (StreamerUtil.needsAsyncCompaction(conf)) {
       pipeline.transform("compact_plan_generate",
               TypeInformation.of(CompactionPlanEvent.class),
