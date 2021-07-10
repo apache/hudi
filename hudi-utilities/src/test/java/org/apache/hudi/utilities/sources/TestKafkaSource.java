@@ -193,7 +193,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
 
     Source jsonSource = new JsonKafkaSource(props, jsc, sparkSession, schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
-    props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents", "500");
+    //props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents", "500");
 
     /*
     1. Extract without any checkpoint => get all the data, respecting default upper cap since both sourceLimit and
@@ -294,7 +294,7 @@ public class TestKafkaSource extends UtilitiesTestBase {
 
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     TypedProperties props = createPropsForJsonSource(null, "earliest");
-    props.put(ENABLE_KAFKA_COMMIT_OFFSET, "true");
+    props.put(ENABLE_KAFKA_COMMIT_OFFSET.key(), "true");
     Source jsonSource = new JsonKafkaSource(props, jsc, sparkSession, schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
 
