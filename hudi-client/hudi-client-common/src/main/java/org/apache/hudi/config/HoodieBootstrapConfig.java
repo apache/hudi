@@ -171,7 +171,7 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withBootstrapBaseFileFormat(HoodieFileFormat fileFormat) {
+    public Builder withBaseFileFormat(HoodieFileFormat fileFormat) {
       bootstrapConfig.setDefaultValue(HOODIE_BASE_FILE_FORMAT_PROP, fileFormat);
       return this;
     }

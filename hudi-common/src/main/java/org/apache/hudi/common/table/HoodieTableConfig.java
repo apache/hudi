@@ -266,6 +266,7 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
     return defaultClass;
   }
 
+
   public Option<String> getBootstrapBasePath() {
     return Option.ofNullable(getString(HOODIE_BOOTSTRAP_BASE_PATH_PROP));
   }

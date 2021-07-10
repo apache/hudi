@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.common.config.ConfigProperty
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
-import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType , HoodieFileFormat}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hive.{HiveSyncTool, SlashEncodedDayPartitionValueExtractor}
@@ -81,6 +81,8 @@ object DataSourceReadOptions {
     .key("hoodie.file.index.enable")
     .defaultValue(true)
     .withDocumentation("")
+
+  val  HOODIE_BASE_FILE_FORMAT_PROP = HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP
 
   @Deprecated
   val VIEW_TYPE_OPT_KEY = "hoodie.datasource.view.type"
@@ -200,6 +202,9 @@ object DataSourceWriteOptions {
   val MOR_STORAGE_TYPE_OPT_VAL = HoodieTableType.MERGE_ON_READ.name
   @Deprecated
   val DEFAULT_STORAGE_TYPE_OPT_VAL = COW_STORAGE_TYPE_OPT_VAL
+
+  val  HOODIE_BASE_FILE_FORMAT_PROP = HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP
+
 
   /**
     * Translate spark parameters to hudi parameters

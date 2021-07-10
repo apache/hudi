@@ -62,12 +62,12 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
       return   FileStatusUtils.toPath(fs.getPath());
     }).filter(Objects::nonNull).findAny()
             .orElseThrow(() -> new HoodieException("Could not determine schema from the data files."));
-
-    if(writeConfig.getBaseFileFormat().equals(PARQUET))
+    String fileExtension = FSUtils.getFileExtension(filePath.getName());
+    if(fileExtension.equals(PARQUET.getFileExtension()))
     {
       return getBootstrapSourceSchemaParquet(context,filePath);
     }
-    else  if(writeConfig.getBaseFileFormat().equals(ORC))
+    else  if(fileExtension.equals(ORC.getFileExtension()))
     {
       return getBootstrapSourceSchemaOrc(context,filePath );
     }
