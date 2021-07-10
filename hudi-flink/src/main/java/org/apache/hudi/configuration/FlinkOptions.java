@@ -286,6 +286,12 @@ public class FlinkOptions {
       .defaultValue(KeyGeneratorType.SIMPLE.name())
       .withDescription("Key generator type, that implements will extract the key out of incoming record");
 
+  public static final ConfigOption<Integer> BUCKET_ASSIGN_TASKS = ConfigOptions
+      .key("bucket_assign.tasks")
+      .intType()
+      .defaultValue(4)
+      .withDescription("Parallelism of tasks that do bucket assign, default is 4");
+
   public static final ConfigOption<Integer> WRITE_TASKS = ConfigOptions
       .key("write.tasks")
       .intType()
