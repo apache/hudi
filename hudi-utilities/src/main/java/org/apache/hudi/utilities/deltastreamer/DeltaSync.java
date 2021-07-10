@@ -334,7 +334,7 @@ public class DeltaSync implements Serializable {
                   + commitMetadata.toJsonString());
         }
         if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
-          props.remove(KafkaOffsetGen.Config.KAFKA_CHECKPOINT_TYPE);
+          props.remove(KafkaOffsetGen.Config.KAFKA_CHECKPOINT_TYPE.key());
         }
       }
     } else {
