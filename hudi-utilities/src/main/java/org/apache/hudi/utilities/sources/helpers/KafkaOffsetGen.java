@@ -185,7 +185,7 @@ public class KafkaOffsetGen {
     private static final ConfigProperty<KafkaResetOffsetStrategies> KAFKA_AUTO_OFFSET_RESET = ConfigProperty
             .key("auto.offset.reset")
             .defaultValue(KafkaResetOffsetStrategies.LATEST)
-            .withDocumentation("Kafka consumer strategy for reading data．");
+            .withDocumentation("Kafka consumer strategy for reading data.");
 
     public static final String KAFKA_CHECKPOINT_TYPE_TIMESTAMP = "timestamp";
   }
