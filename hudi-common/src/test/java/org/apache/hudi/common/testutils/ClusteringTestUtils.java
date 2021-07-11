@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.hudi.common.testutils;
 
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
@@ -34,20 +35,20 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION
 
 public class ClusteringTestUtils {
 
-    public static HoodieClusteringPlan createClusteringPlan(HoodieTableMetaClient metaClient, String instantTime, String fileId) {
-        try {
-            final String basePath = metaClient.getBasePath();
-            final String partition = DEFAULT_PARTITION_PATHS[0];
-            createBaseFile(basePath, partition, instantTime, fileId);
-            FileSlice slice = new FileSlice(partition, instantTime, fileId);
-            slice.setBaseFile(new CompactionTestUtils.DummyHoodieBaseFile(Paths.get(basePath, partition,
-                    baseFileName(instantTime, fileId)).toString()));
-            List<FileSlice>[] fileSliceGroups = new List[] {Collections.singletonList(slice)};
-            HoodieClusteringPlan clusteringPlan = ClusteringUtils.createClusteringPlan("strategy", new HashMap<>(),
-                    fileSliceGroups, Collections.emptyMap());
-            return clusteringPlan;
-        } catch (Exception e) {
-            throw new HoodieException(e.getMessage(), e);
-        }
+  public static HoodieClusteringPlan createClusteringPlan(HoodieTableMetaClient metaClient, String instantTime, String fileId) {
+    try {
+      String basePath = metaClient.getBasePath();
+      String partition = DEFAULT_PARTITION_PATHS[0];
+      createBaseFile(basePath, partition, instantTime, fileId, 1);
+      FileSlice slice = new FileSlice(partition, instantTime, fileId);
+      slice.setBaseFile(new CompactionTestUtils.DummyHoodieBaseFile(Paths.get(basePath, partition,
+              baseFileName(instantTime, fileId)).toString()));
+      List<FileSlice>[] fileSliceGroups = new List[] {Collections.singletonList(slice)};
+      HoodieClusteringPlan clusteringPlan = ClusteringUtils.createClusteringPlan("strategy", new HashMap<>(),
+              fileSliceGroups, Collections.emptyMap());
+      return clusteringPlan;
+    } catch (Exception e) {
+      throw new HoodieException(e.getMessage(), e);
     }
+  }
 }
