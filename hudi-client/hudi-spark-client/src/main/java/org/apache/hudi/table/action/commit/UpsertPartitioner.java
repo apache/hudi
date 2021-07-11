@@ -146,7 +146,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends Partiti
    * @return smallFiles not in clustering
    */
   private List<SmallFile> filterSmallFilesInClustering(final Set<String> pendingClusteringFileGroupsId, final List<SmallFile> smallFiles) {
-    if (this.config.isClusteringEnabled() || !pendingClusteringFileGroupsId.isEmpty()) {
+    if (!pendingClusteringFileGroupsId.isEmpty()) {
       return smallFiles.stream()
           .filter(smallFile -> !pendingClusteringFileGroupsId.contains(smallFile.location.getFileId())).collect(Collectors.toList());
     } else {
