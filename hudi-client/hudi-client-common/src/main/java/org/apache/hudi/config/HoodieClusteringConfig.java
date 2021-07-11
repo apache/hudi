@@ -53,7 +53,13 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .key("hoodie.clustering.inline.max.commits")
       .defaultValue("4")
       .sinceVersion("0.7.0")
-      .withDocumentation("Config to control frequency of clustering");
+      .withDocumentation("Config to control frequency of inline clustering");
+
+  public static final ConfigProperty<String> ASYNC_CLUSTERING_MAX_COMMIT_PROP = ConfigProperty
+      .key("hoodie.clustering.async.max.commits")
+      .defaultValue("4")
+      .sinceVersion("0.9.0")
+      .withDocumentation("Config to control frequency of async clustering");
 
   // Any strategy specific params can be saved with this prefix
   public static final String CLUSTERING_STRATEGY_PARAM_PREFIX = "hoodie.clustering.plan.strategy.";
@@ -174,6 +180,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withInlineClusteringNumCommits(int numCommits) {
       clusteringConfig.setValue(INLINE_CLUSTERING_MAX_COMMIT_PROP, String.valueOf(numCommits));
+      return this;
+    }
+
+    public Builder withAsyncClusteringMaxCommits(int numCommits) {
+      clusteringConfig.setValue(ASYNC_CLUSTERING_MAX_COMMIT_PROP, String.valueOf(numCommits));
       return this;
     }
 
