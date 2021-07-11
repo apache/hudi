@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -75,8 +76,8 @@ public class HoodieClusteringJob {
     public String basePath = null;
     @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
     public String tableName = null;
-    @Parameter(names = {"--instant-time", "-it"}, description = "Clustering Instant time, only need when set --mode execute. " +
-            "When set \"--mode scheduleAndExecute\" this instant-time will be ignored.", required = false)
+    @Parameter(names = {"--instant-time", "-it"}, description = "Clustering Instant time, only need when set --mode execute. "
+            + "When set \"--mode scheduleAndExecute\" this instant-time will be ignored.", required = false)
     public String clusteringInstantTime = null;
     @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for hoodie insert", required = false)
     public int parallelism = 1;
@@ -90,9 +91,9 @@ public class HoodieClusteringJob {
     @Parameter(names = {"--schedule", "-sc"}, description = "Schedule clustering @desperate soon please use \"--mode schedule\" instead")
     public Boolean runSchedule = false;
 
-    @Parameter(names = {"--mode", "-m"}, description = "Set job mode: Set \"schedule\" means make a cluster plan; " +
-            "Set \"execute\" means execute a cluster plan at given instant which means --instant-time is needed here; " +
-            "Set \"scheduleAndExecute\" means make a cluster plan first and execute that plan immediately", required = false)
+    @Parameter(names = {"--mode", "-m"}, description = "Set job mode: Set \"schedule\" means make a cluster plan; "
+            + "Set \"execute\" means execute a cluster plan at given instant which means --instant-time is needed here; "
+            + "Set \"scheduleAndExecute\" means make a cluster plan first and execute that plan immediately", required = false)
     public String runningMode = null;
 
     @Parameter(names = {"--help", "-h"}, help = true)
