@@ -108,9 +108,9 @@ public class StreamWriteOperatorCoordinator
   private final int parallelism;
 
   /**
-   * Whether to schedule asynchronous compaction task on finished checkpoints.
+   * Whether to schedule compaction plan on finished checkpoints.
    */
-  private final boolean asyncCompaction;
+  private final boolean scheduleCompaction;
 
   /**
    * A single-thread executor to handle all the asynchronous jobs of the coordinator.
@@ -144,7 +144,7 @@ public class StreamWriteOperatorCoordinator
     this.conf = conf;
     this.context = context;
     this.parallelism = context.currentParallelism();
-    this.asyncCompaction = StreamerUtil.needsAsyncCompaction(conf);
+    this.scheduleCompaction = StreamerUtil.needsScheduleCompaction(conf);
   }
 
   @Override
@@ -205,7 +205,7 @@ public class StreamWriteOperatorCoordinator
           final boolean committed = commitInstant(this.instant);
           if (committed) {
             // if async compaction is on, schedule the compaction
-            if (asyncCompaction) {
+            if (scheduleCompaction) {
               writeClient.scheduleCompaction(Option.empty());
             }
             // start new instant.
@@ -366,7 +366,7 @@ public class StreamWriteOperatorCoordinator
           try {
             return this.context.sendEvent(CommitAckEvent.getInstance(), taskID);
           } catch (TaskNotRunningException e) {
-            throw new HoodieException("Error while sending commit ack event to task [" + taskID + "] error", e);
+            throw new HoodieException("Error while sending commit ack event to task [" + taskID + "]", e);
           }
         }).toArray(CompletableFuture<?>[]::new);
     try {

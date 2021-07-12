@@ -89,6 +89,7 @@
     <fasterxml.jackson.dataformat.yaml.version>2.7.4</fasterxml.jackson.dataformat.yaml.version>
     <fasterxml.spark3.version>2.10.0</fasterxml.spark3.version>
     <kafka.version>2.0.0</kafka.version>
+    <confluent.version>5.3.4</confluent.version>
     <glassfish.version>2.17</glassfish.version>
     <parquet.version>1.10.1</parquet.version>
     <junit.jupiter.version>5.7.0-M1</junit.jupiter.version>

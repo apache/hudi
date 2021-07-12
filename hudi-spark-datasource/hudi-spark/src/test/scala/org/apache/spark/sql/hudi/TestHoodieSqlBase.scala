@@ -86,4 +86,11 @@ class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
         assertResult(errorMsg)(e.getMessage)
     }
   }
+
+  protected def removeQuotes(value: Any): Any = {
+    value match {
+      case s: String => s.stripPrefix("'").stripSuffix("'")
+      case _=> value
+    }
+  }
 }

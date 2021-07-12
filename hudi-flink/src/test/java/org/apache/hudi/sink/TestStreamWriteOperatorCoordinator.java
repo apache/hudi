@@ -75,14 +75,14 @@ public class TestStreamWriteOperatorCoordinator {
         .taskID(0)
         .instantTime("")
         .writeStatus(Collections.emptyList())
-        .isBootstrap(true)
+        .bootstrap(true)
         .build();
 
     final WriteMetadataEvent event1 = WriteMetadataEvent.builder()
         .taskID(1)
         .instantTime("")
         .writeStatus(Collections.emptyList())
-        .isBootstrap(true)
+        .bootstrap(true)
         .build();
 
     coordinator.handleEventFromOperator(0, event0);
@@ -106,7 +106,7 @@ public class TestStreamWriteOperatorCoordinator {
         .taskID(0)
         .instantTime(instant)
         .writeStatus(Collections.singletonList(writeStatus))
-        .isLastBatch(true)
+        .lastBatch(true)
         .build();
 
     WriteStatus writeStatus1 = new WriteStatus(false, 0.2D);
@@ -116,7 +116,7 @@ public class TestStreamWriteOperatorCoordinator {
         .taskID(1)
         .instantTime(instant)
         .writeStatus(Collections.singletonList(writeStatus1))
-        .isLastBatch(true)
+        .lastBatch(true)
         .build();
     coordinator.handleEventFromOperator(0, event0);
     coordinator.handleEventFromOperator(1, event1);
@@ -184,7 +184,7 @@ public class TestStreamWriteOperatorCoordinator {
         .taskID(1)
         .instantTime(instant)
         .writeStatus(Collections.singletonList(writeStatus1))
-        .isLastBatch(true)
+        .lastBatch(true)
         .build();
     coordinator.handleEventFromOperator(1, event1);
     assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(2),
@@ -207,7 +207,7 @@ public class TestStreamWriteOperatorCoordinator {
         .taskID(0)
         .instantTime("")
         .writeStatus(Collections.emptyList())
-        .isBootstrap(true)
+        .bootstrap(true)
         .build();
 
     coordinator.handleEventFromOperator(0, event0);
@@ -223,7 +223,7 @@ public class TestStreamWriteOperatorCoordinator {
         .taskID(0)
         .instantTime(instant)
         .writeStatus(Collections.singletonList(writeStatus))
-        .isLastBatch(true)
+        .lastBatch(true)
         .build();
 
     coordinator.handleEventFromOperator(0, event1);
