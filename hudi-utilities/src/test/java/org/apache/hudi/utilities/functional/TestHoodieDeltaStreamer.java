@@ -1059,6 +1059,50 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     assertEquals(1, metaClient.getActiveTimeline().getCompletedReplaceTimeline().getInstants().toArray().length);
   }
 
+  @Test
+  public void testHoodieAsyncClusteringJobWithScheduleAndExecute() throws Exception {
+    String tableBasePath = dfsBasePath + "/asyncClustering";
+    // Keep it higher than batch-size to test continuous mode
+    int totalRecords = 3000;
+
+    // Initial bulk insert
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT);
+    cfg.continuousMode = true;
+    cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
+    cfg.configs.add(String.format("%s=%d", SourceConfigs.MAX_UNIQUE_RECORDS_PROP, totalRecords));
+    cfg.configs.add(String.format("%s=false", HoodieCompactionConfig.AUTO_CLEAN_PROP.key()));
+    cfg.configs.add(String.format("%s=true", HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE_OPT_KEY.key()));
+    HoodieDeltaStreamer ds = new HoodieDeltaStreamer(cfg, jsc);
+    deltaStreamerTestRunner(ds, cfg, (r) -> {
+      TestHelpers.assertAtLeastNCommits(2, tableBasePath, dfs);
+      HoodieClusteringJob.Config scheduleClusteringConfig = buildHoodieClusteringUtilConfig(tableBasePath,
+              null, true);
+      scheduleClusteringConfig.runningMode = "scheduleAndExecute";
+      HoodieClusteringJob scheduleClusteringJob = new HoodieClusteringJob(jsc, scheduleClusteringConfig);
+
+      try {
+        int result = scheduleClusteringJob.doScheduleAndCluster();
+        if (result == 0) {
+          LOG.info("Cluster success");
+        } else {
+          LOG.warn("Import failed");
+          return false;
+        }
+      } catch (Exception e) {
+        LOG.warn("ScheduleAndExecute clustering failed", e);
+        return false;
+      }
+
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(this.dfs.getConf()).setBasePath(tableBasePath).setLoadActiveTimelineOnLoad(true).build();
+      int pendingReplaceSize = metaClient.getActiveTimeline().filterPendingReplaceTimeline().getInstants().toArray().length;
+      int completeReplaceSize = metaClient.getActiveTimeline().getCompletedReplaceTimeline().getInstants().toArray().length;
+      LOG.info("PendingReplaceSize=" + pendingReplaceSize + ",completeReplaceSize = " + completeReplaceSize);
+      return completeReplaceSize > 0;
+    });
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(this.dfs.getConf()).setBasePath(tableBasePath).setLoadActiveTimelineOnLoad(true).build();
+    assertEquals(1, metaClient.getActiveTimeline().getCompletedReplaceTimeline().getInstants().toArray().length);
+  }
+
   /**
    * Test Bulk Insert and upserts with hive syncing. Tests Hudi incremental processing using a 2 step pipeline The first
    * step involves using a SQL template to transform a source TEST-DATA-SOURCE ============================> HUDI TABLE

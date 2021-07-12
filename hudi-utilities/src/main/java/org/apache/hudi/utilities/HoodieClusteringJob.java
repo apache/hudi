@@ -200,7 +200,12 @@ public class HoodieClusteringJob {
     }
   }
 
-  private int doScheduleAndCluster(JavaSparkContext jsc) throws Exception {
+  @TestOnly
+  public int doScheduleAndCluster() throws Exception {
+    return this.doScheduleAndCluster(jsc);
+  }
+
+  public int doScheduleAndCluster(JavaSparkContext jsc) throws Exception {
     LOG.info("Step 1: Do schedule");
     String schemaStr = getSchemaFromLatestInstant();
     try (SparkRDDWriteClient client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
