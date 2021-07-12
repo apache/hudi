@@ -106,6 +106,12 @@ case class HoodieFileIndex(
     }
   }
 
+  private lazy val metadataConfig = {
+    val properties = new Properties()
+    properties.putAll(options.asJava)
+    HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
+  }
+
   @transient @volatile private var fileSystemView: HoodieTableFileSystemView = _
   @transient @volatile private var cachedAllInputFiles: Array[HoodieBaseFile] = _
   @transient @volatile private var cachedFileSize: Long = 0L
@@ -195,8 +201,8 @@ case class HoodieFileIndex(
    * @param predicates The filter condition.
    * @return The Pruned partition paths.
    */
-  private def prunePartition(partitionPaths: Seq[PartitionRowPath],
-                             predicates: Seq[Expression]): Seq[PartitionRowPath] = {
+  def prunePartition(partitionPaths: Seq[PartitionRowPath],
+                     predicates: Seq[Expression]): Seq[PartitionRowPath] = {
 
     val partitionColumnNames = partitionSchema.fields.map(_.name).toSet
     val partitionPruningPredicates = predicates.filter {
@@ -222,26 +228,13 @@ case class HoodieFileIndex(
     }
   }
 
-  /**
-   * Load all partition paths and it's files under the query table path.
-   */
-  private def loadPartitionPathFiles(): Map[PartitionRowPath, Array[FileStatus]] = {
+  def getAllQueryPartitionPaths: Seq[PartitionRowPath] = {
     val sparkEngine = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
-    val properties = new Properties()
-    properties.putAll(options.asJava)
-    val metadataConfig = HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
-
     val queryPartitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), queryPath)
     // Load all the partition path from the basePath, and filter by the query partition path.
     // TODO load files from the queryPartitionPath directly.
     val partitionPaths = FSUtils.getAllPartitionPaths(sparkEngine, metadataConfig, basePath).asScala
       .filter(_.startsWith(queryPartitionPath))
-
-    val writeConfig = HoodieWriteConfig.newBuilder()
-      .withPath(basePath).withProperties(properties).build()
-    val maxListParallelism = writeConfig.getFileListingParallelism
-
-    val serializableConf = new SerializableConfiguration(spark.sessionState.newHadoopConf())
     val partitionSchema = _partitionSchemaFromProperties
     val timeZoneId = CaseInsensitiveMap(options)
       .get(DateTimeUtils.TIMEZONE_OPTION)
@@ -250,7 +243,7 @@ case class HoodieFileIndex(
     val sparkParsePartitionUtil = sparkAdapter.createSparkParsePartitionUtil(spark
       .sessionState.conf)
     // Convert partition path to PartitionRowPath
-    val partitionRowPaths = partitionPaths.map { partitionPath =>
+    partitionPaths.map { partitionPath =>
       val partitionRow = if (partitionSchema.fields.length == 0) {
         // This is a non-partitioned table
         InternalRow.empty
@@ -308,7 +301,20 @@ case class HoodieFileIndex(
       }
       PartitionRowPath(partitionRow, partitionPath)
     }
+  }
 
+  /**
+   * Load all partition paths and it's files under the query table path.
+   */
+  private def loadPartitionPathFiles(): Map[PartitionRowPath, Array[FileStatus]] = {
+    val properties = new Properties()
+    properties.putAll(options.asJava)
+    val writeConfig = HoodieWriteConfig.newBuilder()
+      .withPath(basePath).withProperties(properties).build()
+
+    val maxListParallelism = writeConfig.getFileListingParallelism
+    val serializableConf = new SerializableConfiguration(spark.sessionState.newHadoopConf())
+    val partitionRowPaths = getAllQueryPartitionPaths
     // List files in all of the partition path.
     val pathToFetch = mutable.ArrayBuffer[PartitionRowPath]()
     val cachePartitionToFiles = mutable.Map[PartitionRowPath, Array[FileStatus]]()
