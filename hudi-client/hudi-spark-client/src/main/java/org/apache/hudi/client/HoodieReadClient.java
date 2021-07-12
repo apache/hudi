@@ -146,10 +146,7 @@ public class HoodieReadClient<T extends HoodieRecordPayload> implements Serializ
     // record locations might be same for multiple keys, so need a unique list
     Set<String> uniquePaths = new HashSet<>(paths);
     Dataset<Row> originalDF = null;
-    if (uniquePaths.size() == 0) {
-      originalDF = sqlContextOpt.get().read().parquet(uniquePaths.toArray(new String[uniquePaths.size()]));
-    }
-    if (paths.get(0).endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
+    if (paths.size() == 0 || paths.get(0).endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
       originalDF = sqlContextOpt.get().read().parquet(uniquePaths.toArray(new String[uniquePaths.size()]));
     } else if (paths.get(0).endsWith(HoodieFileFormat.ORC.getFileExtension())) {
       originalDF = sqlContextOpt.get().read().orc(uniquePaths.toArray(new String[uniquePaths.size()]));
