@@ -18,8 +18,8 @@
 
 package org.apache.hudi.utilities.deser;
 
-import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.utilities.sources.AvroKafkaSource;
 import org.apache.hudi.utilities.sources.helpers.SchemaTestProvider;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
@@ -100,7 +100,7 @@ public class TestKafkaAvroSchemaDeserializer extends UtilitiesTestBase {
   public void testKafkaAvroSchemaDeserializer() {
     byte[] bytesOrigRecord;
     IndexedRecord avroRecord = createUserRecord();
-    config.put(DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA().key(), origSchema.toString());
+    config.put(AvroKafkaSource.KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA, origSchema.toString());
 
     KafkaAvroSchemaDeserializer avroDeserializer = new KafkaAvroSchemaDeserializer(schemaRegistry, new HashMap(config));
     avroDeserializer.configure(new HashMap(config), false);
@@ -112,7 +112,7 @@ public class TestKafkaAvroSchemaDeserializer extends UtilitiesTestBase {
     byte[] bytesExtendedRecord = avroSerializer.serialize(topic, avroRecordWithAllField);
 
     SchemaTestProvider.schemaToReturn.set(evolSchema);
-    config.put(DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA().key(), evolSchema.toString());
+    config.put(AvroKafkaSource.KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA, evolSchema.toString());
     avroDeserializer = new KafkaAvroSchemaDeserializer(schemaRegistry, new HashMap(config));
     avroDeserializer.configure(new HashMap(config), false);
     // record is serialized w/ evolved schema, and deserialized w/ evolved schema

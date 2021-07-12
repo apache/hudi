@@ -677,6 +677,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMIT_PROP);
   }
 
+  public int getAsyncClusterMaxCommits() {
+    return getInt(HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMIT_PROP);
+  }
+
   public String getPayloadClass() {
     return getString(HoodieCompactionConfig.PAYLOAD_CLASS_PROP);
   }
@@ -1578,7 +1582,6 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
 
       writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
-
     }
 
     private void validate() {

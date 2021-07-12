@@ -16,21 +16,27 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.internal;
+package org.apache.hudi.execution.bulkinsert;
 
-import org.apache.hudi.client.HoodieInternalWriteStatus;
+import org.apache.hudi.table.BulkInsertPartitioner;
 
-import org.apache.spark.sql.sources.v2.writer.WriterCommitMessage;
-
-import java.util.List;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 
 /**
- * Hoodie's {@link WriterCommitMessage} used in datasource implementation.
+ * A built-in partitioner that only does coalesce for input Rows for bulk insert operation,
+ * corresponding to the {@code BulkInsertSortMode.NONE} mode.
+ *
  */
-public class HoodieWriterCommitMessage extends BaseWriterCommitMessage
-    implements WriterCommitMessage {
+public class NonSortPartitionerWithRows implements BulkInsertPartitioner<Dataset<Row>> {
 
-  public HoodieWriterCommitMessage(List<HoodieInternalWriteStatus> writeStatuses) {
-    super(writeStatuses);
+  @Override
+  public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputSparkPartitions) {
+    return rows.coalesce(outputSparkPartitions);
+  }
+
+  @Override
+  public boolean arePartitionRecordsSorted() {
+    return false;
   }
 }
