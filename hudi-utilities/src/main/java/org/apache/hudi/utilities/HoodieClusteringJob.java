@@ -229,7 +229,7 @@ public class HoodieClusteringJob {
       LOG.info("Step 2: Do cluster");
       JavaRDD<WriteStatus> writeResponse =
               (JavaRDD<WriteStatus>) client.cluster(instantTime.get(), true).getWriteStatuses();
-      return UtilHelpers.handleErrors(jsc, cfg.clusteringInstantTime, writeResponse);
+      return UtilHelpers.handleErrors(jsc, instantTime.get(), writeResponse);
     }
   }
 
