@@ -1061,7 +1061,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
 
   @Test
   public void testHoodieAsyncClusteringJobWithScheduleAndExecute() throws Exception {
-    String tableBasePath = dfsBasePath + "/asyncClustering";
+    String tableBasePath = dfsBasePath + "/asyncClustering2";
     // Keep it higher than batch-size to test continuous mode
     int totalRecords = 3000;
 
