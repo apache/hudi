@@ -112,8 +112,10 @@ public class SparkRecentDaysClusteringPlanStrategy<T extends HoodieRecordPayload
   @Override
   protected List<String> filterPartitionPaths(List<String> partitionPaths) {
     int targetPartitionsForClustering = getWriteConfig().getTargetPartitionsForClustering();
+    int skipPartitionsFromLatestForClustering = getWriteConfig().getSkipPartitionsFromLatestForClustering();
     return partitionPaths.stream()
         .sorted(Comparator.reverseOrder())
+        .skip(Math.max(skipPartitionsFromLatestForClustering, 0))
         .limit(targetPartitionsForClustering > 0 ? targetPartitionsForClustering : partitionPaths.size())
         .collect(Collectors.toList());
   }
