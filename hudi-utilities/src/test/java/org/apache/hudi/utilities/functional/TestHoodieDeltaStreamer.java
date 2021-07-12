@@ -138,7 +138,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
   private static final int PARQUET_NUM_RECORDS = 5;
   private static final int CSV_NUM_RECORDS = 3;
   private static final int JSON_KAFKA_NUM_RECORDS = 5;
-  private static String kafkaCheckpointType = "string";
+  private String kafkaCheckpointType = "string";
   // Required fields
   private static final String TGT_BASE_PATH_PARAM = "--target-base-path";
   private static final String TGT_BASE_PATH_VALUE = "s3://mybucket/blah";
@@ -603,7 +603,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
             Arguments.of(allConfig, conf)
     );
   }
-  
+
   @ParameterizedTest
   @MethodSource("provideValidCliArgs")
   public void testValidCommandLineArgs(String[] args, HoodieDeltaStreamer.Config expected) {
