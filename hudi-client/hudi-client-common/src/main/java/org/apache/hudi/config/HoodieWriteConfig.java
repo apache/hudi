@@ -339,8 +339,9 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("");
 
   public static final ConfigProperty<String> EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION = ConfigProperty
-      .key(AVRO_SCHEMA + ".externalTransformation")
+      .key(AVRO_SCHEMA.key() + ".external.transformation")
       .defaultValue("false")
+      .withAlternatives(AVRO_SCHEMA.key() + ".externalTransformation")
       .withDocumentation("");
 
   private ConsistencyGuardConfig consistencyGuardConfig;
