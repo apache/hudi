@@ -141,7 +141,8 @@ public class HoodieClusteringJob {
   public int cluster(int retry) {
     this.fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
     int ret = UtilHelpers.retry(retry, () -> {
-      switch (cfg.runningMode.toLowerCase()) {
+      String runningMode = cfg.runningMode == null ? "" : cfg.runningMode.toLowerCase();
+      switch (runningMode) {
         case SCHEDULE: {
           LOG.info("Running Mode: [" + SCHEDULE + "]; Do schedule");
           Option<String> instantTime = doSchedule(jsc);
