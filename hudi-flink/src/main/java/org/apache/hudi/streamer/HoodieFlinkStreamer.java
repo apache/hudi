@@ -52,7 +52,7 @@ import java.util.Properties;
 /**
  * An Utility which can incrementally consume data from Kafka and apply it to the target table.
  * currently, it only support COW table and insert, upsert operation.
- *
+ * <p>
  * note: HoodieFlinkStreamer is not suitable to initialize on large tables when we have no checkpoint to restore from.
  */
 public class HoodieFlinkStreamer {
@@ -98,9 +98,13 @@ public class HoodieFlinkStreamer {
         .uid("uid_kafka_source")
         .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class));
     if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
-      hoodieDataStream = hoodieDataStream.rebalance().transform("index_bootstrap",
+      hoodieDataStream = hoodieDataStream.rebalance()
+          .transform(
+              "index_bootstrap",
               TypeInformation.of(HoodieRecord.class),
-              new ProcessOperator<>(new BootstrapFunction<>(conf)));
+              new ProcessOperator<>(new BootstrapFunction<>(conf)))
+          .setParallelism(conf.getInteger(FlinkOptions.INDEX_BOOTSTRAP_TASKS))
+          .uid("uid_index_bootstrap_" + conf.getString(FlinkOptions.TABLE_NAME));
     }
 
     DataStream<Object> pipeline = hoodieDataStream
@@ -119,22 +123,22 @@ public class HoodieFlinkStreamer {
         .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
     if (StreamerUtil.needsAsyncCompaction(conf)) {
       pipeline.transform("compact_plan_generate",
-              TypeInformation.of(CompactionPlanEvent.class),
-              new CompactionPlanOperator(conf))
-              .uid("uid_compact_plan_generate")
-              .setParallelism(1) // plan generate must be singleton
-              .rebalance()
-              .transform("compact_task",
-                      TypeInformation.of(CompactionCommitEvent.class),
-                      new ProcessOperator<>(new CompactFunction(conf)))
-              .setParallelism(conf.getInteger(FlinkOptions.COMPACTION_TASKS))
-              .addSink(new CompactionCommitSink(conf))
-              .name("compact_commit")
-              .setParallelism(1); // compaction commit should be singleton
+          TypeInformation.of(CompactionPlanEvent.class),
+          new CompactionPlanOperator(conf))
+          .uid("uid_compact_plan_generate")
+          .setParallelism(1) // plan generate must be singleton
+          .rebalance()
+          .transform("compact_task",
+              TypeInformation.of(CompactionCommitEvent.class),
+              new ProcessOperator<>(new CompactFunction(conf)))
+          .setParallelism(conf.getInteger(FlinkOptions.COMPACTION_TASKS))
+          .addSink(new CompactionCommitSink(conf))
+          .name("compact_commit")
+          .setParallelism(1); // compaction commit should be singleton
     } else {
       pipeline.addSink(new CleanFunction<>(conf))
-              .setParallelism(1)
-              .name("clean_commits").uid("uid_clean_commits");
+          .setParallelism(1)
+          .name("clean_commits").uid("uid_clean_commits");
     }
 
     env.execute(cfg.targetTableName);
