@@ -339,8 +339,9 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("");
 
   public static final ConfigProperty<String> EXTERNAL_RECORD_AND_SCHEMA_TRANSFORMATION = ConfigProperty
-      .key(AVRO_SCHEMA + ".externalTransformation")
+      .key(AVRO_SCHEMA.key() + ".external.transformation")
       .defaultValue("false")
+      .withAlternatives(AVRO_SCHEMA.key() + ".externalTransformation")
       .withDocumentation("");
 
   private ConsistencyGuardConfig consistencyGuardConfig;
@@ -675,6 +676,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getInlineClusterMaxCommits() {
     return getInt(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMIT_PROP);
+  }
+
+  public int getAsyncClusterMaxCommits() {
+    return getInt(HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMIT_PROP);
   }
 
   public String getPayloadClass() {

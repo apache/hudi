@@ -23,6 +23,8 @@ import org.apache.hudi.config.HoodieWriteConfig.Builder;
 
 import org.apache.hudi.index.HoodieIndex;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -33,16 +35,23 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieWriteConfig {
 
-  @Test
-  public void testPropertyLoading() throws IOException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testPropertyLoading(boolean withAlternative) throws IOException {
     Builder builder = HoodieWriteConfig.newBuilder().withPath("/tmp");
     Map<String, String> params = new HashMap<>(3);
     params.put(HoodieCompactionConfig.CLEANER_COMMITS_RETAINED_PROP.key(), "1");
     params.put(HoodieCompactionConfig.MAX_COMMITS_TO_KEEP_PROP.key(), "5");
     params.put(HoodieCompactionConfig.MIN_COMMITS_TO_KEEP_PROP.key(), "2");
+    if (withAlternative) {
+      params.put("hoodie.avro.schema.externalTransformation", "true");
+    } else {
+      params.put("hoodie.avro.schema.external.transformation", "true");
+    }
     ByteArrayOutputStream outStream = saveParamsIntoOutputStream(params);
     ByteArrayInputStream inputStream = new ByteArrayInputStream(outStream.toByteArray());
     try {
@@ -54,6 +63,7 @@ public class TestHoodieWriteConfig {
     HoodieWriteConfig config = builder.build();
     assertEquals(5, config.getMaxCommitsToKeep());
     assertEquals(2, config.getMinCommitsToKeep());
+    assertTrue(config.shouldUseExternalSchemaTransformation());
   }
 
   @Test
