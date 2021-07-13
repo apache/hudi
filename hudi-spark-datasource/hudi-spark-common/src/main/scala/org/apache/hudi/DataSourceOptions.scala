@@ -479,6 +479,18 @@ object DataSourceWriteOptions {
     .defaultValue("true")
     .withDocumentation("")
 
+  val INLINE_CLUSTERING_ENABLE_OPT_KEY: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.clustering.inline.enable")
+    .defaultValue("false")
+    .sinceVersion("0.9.0")
+    .withDocumentation("Enable inline clustering. Disabled by default.")
+
+  val ASYNC_CLUSTERING_ENABLE_OPT_KEY: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.clustering.async.enable")
+    .defaultValue("false")
+    .sinceVersion("0.9.0")
+    .withDocumentation("Enable asynchronous clustering. Disabled by default.")
+
   val KAFKA_AVRO_VALUE_DESERIALIZER_CLASS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.deltastreamer.source.kafka.value.deserializer.class")
     .defaultValue("io.confluent.kafka.serializers.KafkaAvroDeserializer")
