@@ -42,18 +42,20 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
    */
   @Deprecated
   @PublicAPIMethod(maturity = ApiMaturityLevel.DEPRECATED)
-  T preCombine(T another);
+  T preCombine(T oldValue);
 
   /**
    * When more than one HoodieRecord have the same HoodieKey, this function combines them before attempting to insert/upsert by taking in a property map.
    * Implementation can leverage the property to decide their business logic to do preCombine.
-   * @param another instance of another {@link HoodieRecordPayload} to be combined with.
+   *
+   * @param oldValue instance of the old {@link HoodieRecordPayload} to be combined with.
    * @param properties Payload related properties. For example pass the ordering field(s) name to extract from value in storage.
+   *
    * @return the combined value
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
-  default T preCombine(T another, Properties properties) {
-    return preCombine(another);
+  default T preCombine(T oldValue, Properties properties) {
+    return preCombine(oldValue);
   }
 
   /**

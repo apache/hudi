@@ -38,6 +38,10 @@ import java.util.List;
  */
 public class OverwriteNonDefaultsWithLatestAvroPayload extends OverwriteWithLatestAvroPayload {
 
+  public OverwriteNonDefaultsWithLatestAvroPayload(GenericRecord record, String orderingField) {
+    super(record, orderingField);
+  }
+
   public OverwriteNonDefaultsWithLatestAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
   }

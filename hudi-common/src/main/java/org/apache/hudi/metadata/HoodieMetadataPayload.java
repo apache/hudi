@@ -70,6 +70,12 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private int type = 0;
   private Map<String, HoodieMetadataFileInfo> filesystemMetadata = null;
 
+  // Constructor for read path with explicit ordering field.
+  // Ignore the orderingField to use natural order.
+  public HoodieMetadataPayload(GenericRecord record, String orderingField) {
+    this(Option.of(record));
+  }
+
   public HoodieMetadataPayload(Option<GenericRecord> record) {
     if (record.isPresent()) {
       // This can be simplified using SpecificData.deepcopy once this bug is fixed

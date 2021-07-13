@@ -18,11 +18,6 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -39,6 +34,12 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -93,6 +94,8 @@ public abstract class AbstractHoodieLogRecordScanner {
   private final Option<InstantRange> instantRange;
   // FileSystem
   private final FileSystem fs;
+  // Ordering field
+  private final String orderingField;
   // Total log files read - for metrics
   private AtomicLong totalLogFiles = new AtomicLong(0);
   // Total log blocks read - for metrics
@@ -113,6 +116,7 @@ public abstract class AbstractHoodieLogRecordScanner {
     this.readerSchema = readerSchema;
     this.latestInstantTime = latestInstantTime;
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
+    this.orderingField = this.hoodieTableMetaClient.getTableConfig().getPreCombineField();
     // load class from the payload fully qualified class name
     this.payloadClassFQN = this.hoodieTableMetaClient.getTableConfig().getPayloadClass();
     this.totalLogFiles.addAndGet(logFilePaths.size());
@@ -302,7 +306,7 @@ public abstract class AbstractHoodieLogRecordScanner {
   }
 
   protected HoodieRecord<?> createHoodieRecord(IndexedRecord rec) {
-    return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN);
+    return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN, this.orderingField);
   }
 
   /**
