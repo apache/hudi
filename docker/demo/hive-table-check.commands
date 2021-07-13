@@ -22,13 +22,6 @@ show partitions stock_ticks_cow;
 show partitions stock_ticks_mor_ro;
 show partitions stock_ticks_mor_rt;
 
-show create table stock_ticks_cow;
-show create table stock_ticks_mor_ro;
-show create table stock_ticks_mor_rt;
-show create table stock_ticks_cow_bs;
-show create table stock_ticks_mor_bs_ro;
-show create table stock_ticks_mor_bs_rt;
-
 !quit
 
 

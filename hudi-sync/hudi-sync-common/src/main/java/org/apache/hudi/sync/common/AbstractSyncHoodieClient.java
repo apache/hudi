@@ -108,10 +108,6 @@ public abstract class AbstractSyncHoodieClient {
     return fs;
   }
 
-  public boolean isBootstrap() {
-    return metaClient.getTableConfig().getBootstrapBasePath().isPresent();
-  }
-
   public void closeQuietly(ResultSet resultSet, Statement stmt) {
     try {
       if (stmt != null) {

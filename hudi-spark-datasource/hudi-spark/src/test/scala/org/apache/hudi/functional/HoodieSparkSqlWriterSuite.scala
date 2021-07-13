@@ -37,7 +37,8 @@ import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceUt
 import org.apache.spark.SparkContext
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.functions.{expr, lit}
-import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
+import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Row, SQLContext, SaveMode, SparkSession}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{spy, times, verify}
@@ -537,6 +538,11 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
 
   test("Test build sync config for spark sql") {
     initSparkContext("test build sync config")
+    val addSqlTablePropertiesMethod =
+        HoodieSparkSqlWriter.getClass.getDeclaredMethod("addSqlTableProperties",
+          classOf[SQLConf], classOf[StructType], classOf[HoodieConfig])
+    addSqlTablePropertiesMethod.setAccessible(true)
+
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
     val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
     val basePath = "/tmp/hoodie_test"
@@ -549,23 +555,49 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     )
     val parameters = HoodieWriterUtils.parametersWithWriteDefaults(params)
     val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(parameters)
+    val newHoodieConfig = addSqlTablePropertiesMethod.invoke(HoodieSparkSqlWriter,
+      spark.sessionState.conf, structType, hoodieConfig)
+      .asInstanceOf[HoodieConfig]
 
     val buildSyncConfigMethod =
       HoodieSparkSqlWriter.getClass.getDeclaredMethod("buildSyncConfig", classOf[Path],
-        classOf[HoodieConfig], classOf[SQLConf])
+        classOf[HoodieConfig])
     buildSyncConfigMethod.setAccessible(true)
 
     val hiveSyncConfig = buildSyncConfigMethod.invoke(HoodieSparkSqlWriter,
-      new Path(basePath), hoodieConfig, spark.sessionState.conf).asInstanceOf[HiveSyncConfig]
+      new Path(basePath), newHoodieConfig).asInstanceOf[HiveSyncConfig]
+
     assertTrue(hiveSyncConfig.skipROSuffix)
     assertTrue(hiveSyncConfig.createManagedTable)
-    assertTrue(hiveSyncConfig.syncAsSparkDataSourceTable)
-    assertResult(spark.sessionState.conf.getConf(StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD))(hiveSyncConfig.sparkSchemaLengthThreshold)
+    assertResult("spark.sql.sources.provider=hudi\n" +
+      "spark.sql.sources.schema.partCol.0=partition\n" +
+      "spark.sql.sources.schema.numParts=1\n" +
+      "spark.sql.sources.schema.numPartCols=1\n" +
+      "spark.sql.sources.schema.part.0=" +
+      "{\"type\":\"struct\",\"fields\":[{\"name\":\"_hoodie_commit_time\"," +
+      "\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":" +
+      "\"_hoodie_commit_seqno\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}," +
+      "{\"name\":\"_hoodie_record_key\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}," +
+      "{\"name\":\"_hoodie_partition_path\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}," +
+      "{\"name\":\"_hoodie_file_name\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}," +
+      "{\"name\":\"_row_key\",\"type\":\"string\",\"nullable\":false,\"metadata\":{}}," +
+      "{\"name\":\"ts\",\"type\":\"long\",\"nullable\":true,\"metadata\":{}}," +
+      "{\"name\":\"partition\",\"type\":\"string\",\"nullable\":false,\"metadata\":{}}]}")(hiveSyncConfig.tableProperties)
+    assertResult("path=/tmp/hoodie_test\n" +
+      "spark.query.type.key=hoodie.datasource.query.type\n" +
+      "spark.query.as.rt.key=snapshot\n" +
+      "spark.query.as.ro.key=read_optimized")(hiveSyncConfig.serdeProperties)
   }
 
   test("Test build sync config for skip Ro Suffix vals") {
     initSparkContext("test build sync config for skip Ro suffix vals")
+    val addSqlTablePropertiesMethod =
+      HoodieSparkSqlWriter.getClass.getDeclaredMethod("addSqlTableProperties",
+        classOf[SQLConf], classOf[StructType], classOf[HoodieConfig])
+    addSqlTablePropertiesMethod.setAccessible(true)
+
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
+    val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
     val basePath = "/tmp/hoodie_test"
     val params = Map(
       "path" -> basePath,
@@ -574,14 +606,18 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     )
     val parameters = HoodieWriterUtils.parametersWithWriteDefaults(params)
     val hoodieConfig = HoodieWriterUtils.convertMapToHoodieConfig(parameters)
+    val newHoodieConfig = addSqlTablePropertiesMethod.invoke(HoodieSparkSqlWriter,
+      spark.sessionState.conf, structType, hoodieConfig)
+      .asInstanceOf[HoodieConfig]
 
     val buildSyncConfigMethod =
       HoodieSparkSqlWriter.getClass.getDeclaredMethod("buildSyncConfig", classOf[Path],
-        classOf[HoodieConfig], classOf[SQLConf])
+        classOf[HoodieConfig])
     buildSyncConfigMethod.setAccessible(true)
 
     val hiveSyncConfig = buildSyncConfigMethod.invoke(HoodieSparkSqlWriter,
-      new Path(basePath), hoodieConfig, spark.sessionState.conf).asInstanceOf[HiveSyncConfig]
+      new Path(basePath), newHoodieConfig).asInstanceOf[HiveSyncConfig]
+
     assertFalse(hiveSyncConfig.skipROSuffix)
   }
 
