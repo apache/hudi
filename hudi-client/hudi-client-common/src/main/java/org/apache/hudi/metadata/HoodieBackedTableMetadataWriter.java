@@ -32,12 +32,17 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -290,6 +295,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
       .initTable(hadoopConf.get(), metadataWriteConfig.getBasePath());
 
     initTableMetadata();
+    initializeShards(datasetMetaClient, MetadataPartitionType.FILES.partitionPath(), createInstantTime, 1);
 
     // List all partitions in the basePath of the containing dataset
     LOG.info("Initializing metadata table by using file listings in " + datasetWriteConfig.getBasePath());
@@ -382,6 +388,57 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   }
 
   /**
+   * Initialize shards for a partition.
+   *
+   * Each shard is a single log file with the following format:
+   *    <fileIdPrefix>ABCD
+   * where ABCD are digits. This allows up to 9999 shards.
+   *
+   * Example:
+   *    fc9f18eb-6049-4f47-bc51-23884bef0001
+   *    fc9f18eb-6049-4f47-bc51-23884bef0002
+   */
+  private void initializeShards(HoodieTableMetaClient datasetMetaClient, String partition, String instantTime,
+      int shardCount) throws IOException {
+    ValidationUtils.checkArgument(shardCount <= 9999, "Maximum 9999 shards are supported.");
+
+    final String newFileId = FSUtils.createNewFileIdPfx();
+    final String newFileIdPrefix = newFileId.substring(0, 32);
+    final HashMap<HeaderMetadataType, String> blockHeader = new HashMap<>();
+    blockHeader.put(HeaderMetadataType.INSTANT_TIME, instantTime);
+    final HoodieDeleteBlock block = new HoodieDeleteBlock(new HoodieKey[0], blockHeader);
+
+    LOG.info(String.format("Creating %d shards for partition %s with base fileId %s at instant time %s",
+        shardCount, partition, newFileId, instantTime));
+    for (int i = 0; i < shardCount; ++i) {
+      // Generate a indexed fileId for each shard and write a log block into it to create the file.
+      final String shardFileId = String.format("%s%04d", newFileIdPrefix, i + 1);
+      ValidationUtils.checkArgument(newFileId.length() == shardFileId.length(), "FileId should be of length " + newFileId.length());
+      try {
+        HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
+            .onParentPath(FSUtils.getPartitionPath(metadataWriteConfig.getBasePath(), partition))
+            .withFileId(shardFileId).overBaseCommit(instantTime)
+            .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
+            .withFileSize(0L)
+            .withSizeThreshold(metadataWriteConfig.getLogFileMaxSize())
+            .withFs(datasetMetaClient.getFs())
+            .withRolloverLogWriteToken(FSUtils.makeWriteToken(0, 0, 0))
+            .withLogWriteToken(FSUtils.makeWriteToken(0, 0, 0))
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+        writer.appendBlock(block);
+        writer.close();
+      } catch (InterruptedException e) {
+        throw new IOException("Failed to created record level index shard " + shardFileId, e);
+      }
+    }
+  }
+
+  protected String getShardFileName(String fileId, int shardIndex) {
+    ValidationUtils.checkArgument(shardIndex <= 9999, "Maximum 9999 shards are supported.");
+    return String.format("%s%04d", fileId.substring(0, 32), shardIndex + 1);
+  }
+
+  /**
    * Update from {@code HoodieCommitMetadata}.
    *
    * @param commitMetadata {@code HoodieCommitMetadata}
@@ -461,6 +518,9 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
   /**
    * Commit the {@code HoodieRecord}s to Metadata Table as a new delta-commit.
    *
+   * @param records The list of records to be written.
+   * @param partitionName The partition to which the records are to be written.
+   * @param instantTime The timestamp to use for the deltacommit.
    */
   protected abstract void commit(List<HoodieRecord> records, String partitionName, String instantTime);
 }

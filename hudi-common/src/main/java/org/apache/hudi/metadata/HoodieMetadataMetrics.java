@@ -77,28 +77,32 @@ public class HoodieMetadataMetrics implements Serializable {
     Map<String, String> stats = new HashMap<>();
 
     // Total size of the metadata and count of base/log files
-    long totalBaseFileSizeInBytes = 0;
-    long totalLogFileSizeInBytes = 0;
-    int baseFileCount = 0;
-    int logFileCount = 0;
-    List<FileSlice> latestSlices = fsView.getLatestFileSlices(MetadataPartitionType.FILES.partitionPath()).collect(Collectors.toList());
+    for (String metadataPartition : MetadataPartitionType.all()) {
+      List<FileSlice> latestSlices = fsView.getLatestFileSlices(metadataPartition).collect(Collectors.toList());
 
-    for (FileSlice slice : latestSlices) {
-      if (slice.getBaseFile().isPresent()) {
-        totalBaseFileSizeInBytes += slice.getBaseFile().get().getFileStatus().getLen();
-        ++baseFileCount;
+      // Total size of the metadata and count of base/log files
+      long totalBaseFileSizeInBytes = 0;
+      long totalLogFileSizeInBytes = 0;
+      int baseFileCount = 0;
+      int logFileCount = 0;
+
+      for (FileSlice slice : latestSlices) {
+        if (slice.getBaseFile().isPresent()) {
+          totalBaseFileSizeInBytes += slice.getBaseFile().get().getFileStatus().getLen();
+          ++baseFileCount;
+        }
+        Iterator<HoodieLogFile> it = slice.getLogFiles().iterator();
+        while (it.hasNext()) {
+          totalLogFileSizeInBytes += it.next().getFileStatus().getLen();
+          ++logFileCount;
+        }
       }
-      Iterator<HoodieLogFile> it = slice.getLogFiles().iterator();
-      while (it.hasNext()) {
-        totalLogFileSizeInBytes += it.next().getFileStatus().getLen();
-        ++logFileCount;
-      }
+
+      stats.put(metadataPartition + "." + STAT_TOTAL_BASE_FILE_SIZE, String.valueOf(totalBaseFileSizeInBytes));
+      stats.put(metadataPartition + "." + STAT_TOTAL_LOG_FILE_SIZE, String.valueOf(totalLogFileSizeInBytes));
+      stats.put(metadataPartition + "." + STAT_COUNT_BASE_FILES, String.valueOf(baseFileCount));
+      stats.put(metadataPartition + "." + STAT_COUNT_LOG_FILES, String.valueOf(logFileCount));
     }
-
-    stats.put(HoodieMetadataMetrics.STAT_TOTAL_BASE_FILE_SIZE, String.valueOf(totalBaseFileSizeInBytes));
-    stats.put(HoodieMetadataMetrics.STAT_TOTAL_LOG_FILE_SIZE, String.valueOf(totalLogFileSizeInBytes));
-    stats.put(HoodieMetadataMetrics.STAT_COUNT_BASE_FILES, String.valueOf(baseFileCount));
-    stats.put(HoodieMetadataMetrics.STAT_COUNT_LOG_FILES, String.valueOf(logFileCount));
 
     if (detailed) {
       stats.put(HoodieMetadataMetrics.STAT_COUNT_PARTITION, String.valueOf(tableMetadata.getAllPartitionPaths().size()));
@@ -115,26 +119,20 @@ public class HoodieMetadataMetrics implements Serializable {
     // Update sum of duration and total for count
     String countKey = action + ".count";
     String durationKey = action + ".totalDuration";
-    metricsRegistry.add(countKey, 1);
-    metricsRegistry.add(durationKey, durationInMs);
-
-    LOG.info(String.format("Updating metadata metrics (%s=%dms, %s=1)", durationKey, durationInMs, countKey));
+    incrementMetric(countKey, 1);
+    incrementMetric(durationKey, durationInMs);
   }
 
-  public void updateMetrics(long totalBaseFileSizeInBytes, long totalLogFileSizeInBytes, int baseFileCount,
-                            int logFileCount) {
-    if (metricsRegistry == null) {
-      return;
+  public void updateSizeMetrics(HoodieTableMetaClient metaClient, HoodieBackedTableMetadata metadata) {
+    Map<String, String> stats = getStats(false, metaClient, metadata);
+    for (Map.Entry<String, String> e : stats.entrySet()) {
+      incrementMetric(e.getKey(), Long.parseLong(e.getValue()));
     }
+  }
 
-    // Update sizes and count for metadata table's data files
-    metricsRegistry.add("basefile.size", totalBaseFileSizeInBytes);
-    metricsRegistry.add("logfile.size", totalLogFileSizeInBytes);
-    metricsRegistry.add("basefile.count", baseFileCount);
-    metricsRegistry.add("logfile.count", logFileCount);
-
-    LOG.info(String.format("Updating metadata size metrics (basefile.size=%d, logfile.size=%d, basefile.count=%d, "
-        + "logfile.count=%d)", totalBaseFileSizeInBytes, totalLogFileSizeInBytes, baseFileCount, logFileCount));
+  protected void incrementMetric(String action, long value) {
+    LOG.info(String.format("Updating metadata metrics (%s=%d) in %s", action, value, metricsRegistry));
+    metricsRegistry.add(action, value);
   }
 
   public Registry registry() {

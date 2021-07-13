@@ -956,10 +956,11 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataMetrics.INITIALIZE_STR + ".count"));
       assertTrue(metricsRegistry.getAllCounts().containsKey(HoodieMetadataMetrics.INITIALIZE_STR + ".totalDuration"));
       assertTrue(metricsRegistry.getAllCounts().get(HoodieMetadataMetrics.INITIALIZE_STR + ".count") >= 1L);
-      assertTrue(metricsRegistry.getAllCounts().containsKey("basefile.size"));
-      assertTrue(metricsRegistry.getAllCounts().containsKey("logfile.size"));
-      assertTrue(metricsRegistry.getAllCounts().containsKey("basefile.count"));
-      assertTrue(metricsRegistry.getAllCounts().containsKey("logfile.count"));
+      final String prefix = MetadataPartitionType.FILES.partitionPath() + ".";
+      assertTrue(metricsRegistry.getAllCounts().containsKey(prefix + HoodieMetadataMetrics.STAT_COUNT_BASE_FILES));
+      assertTrue(metricsRegistry.getAllCounts().containsKey(prefix + HoodieMetadataMetrics.STAT_COUNT_LOG_FILES));
+      assertTrue(metricsRegistry.getAllCounts().containsKey(prefix + HoodieMetadataMetrics.STAT_TOTAL_BASE_FILE_SIZE));
+      assertTrue(metricsRegistry.getAllCounts().containsKey(prefix + HoodieMetadataMetrics.STAT_TOTAL_LOG_FILE_SIZE));
     }
   }
 

@@ -22,13 +22,17 @@ import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -40,6 +44,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -339,5 +344,47 @@ public class HoodieTableMetadataUtil {
         + ", #files_deleted=" + fileChangeCount[0] + ", #files_appended=" + fileChangeCount[1]);
 
     return records;
+  }
+
+  /**
+   * Map a key to a shard.
+   *
+   * Note: For hashing, the algorithm is same as String.hashCode() but is being defined here as hashCode()
+   * implementation is not guaranteed by the JVM to be consistent across JVM versions and implementations.
+   *
+   * @param str
+   * @return An integer hash of the given string
+   */
+  public static int keyToShard(String str, int numShards) {
+    int h = 0;
+    for (int i = 0; i < str.length(); ++i) {
+      h = 31 * h + str.charAt(i);
+    }
+
+    return Math.abs(Math.abs(h) % numShards);
+  }
+
+  /**
+   * Loads the list of shards for a partition of the Metadata Table.
+   *
+   * The list of shards is returned sorted in the correct order of shard index.
+   * @param metaClient
+   * @param partition The name of the partition whose shards are to be loaded.
+   * @return List of shards
+   */
+  public static List<FileSlice> loadPartitionShards(HoodieTableMetaClient metaClient, String partition) {
+    LOG.info("Loading shards for metadata table partition " + partition);
+
+    // If there are no commits on the metadata table then the table's default FileSystemView will not return any file
+    // slices even though we may have initialized them.
+    HoodieTimeline timeline = metaClient.getActiveTimeline();
+    if (timeline.empty()) {
+      final HoodieInstant instant = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieActiveTimeline.createNewInstantTime());
+      timeline = new HoodieDefaultTimeline(Arrays.asList(instant).stream(), metaClient.getActiveTimeline()::getInstantDetails);
+    }
+
+    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, timeline);
+    return fsView.getLatestFileSlices(partition).sorted((s1, s2) -> s1.getFileId().compareTo(s2.getFileId()))
+        .collect(Collectors.toList());
   }
 }

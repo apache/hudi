@@ -24,21 +24,15 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.metrics.DistributedRegistry;
-import org.apache.hudi.table.HoodieSparkTable;
-import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.LogManager;
@@ -49,7 +43,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter {
@@ -101,7 +94,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   protected void commit(List<HoodieRecord> records, String partitionName, String instantTime) {
     ValidationUtils.checkState(enabled, "Metadata table cannot be committed to as it is not enabled");
-    JavaRDD<HoodieRecord> recordRDD = prepRecords(records, partitionName);
+    JavaRDD<HoodieRecord> recordRDD = prepRecords(records, partitionName, 1);
 
     try (SparkRDDWriteClient writeClient = new SparkRDDWriteClient(engineContext, metadataWriteConfig, true)) {
       writeClient.startCommitWithTime(instantTime);
@@ -117,17 +110,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     }
 
     // Update total size of the metadata and count of base/log files
-    metrics.ifPresent(m -> {
-      try {
-        Map<String, String> stats = m.getStats(false, metaClient, metadata);
-        m.updateMetrics(Long.parseLong(stats.get(HoodieMetadataMetrics.STAT_TOTAL_BASE_FILE_SIZE)),
-            Long.parseLong(stats.get(HoodieMetadataMetrics.STAT_TOTAL_LOG_FILE_SIZE)),
-            Integer.parseInt(stats.get(HoodieMetadataMetrics.STAT_COUNT_BASE_FILES)),
-            Integer.parseInt(stats.get(HoodieMetadataMetrics.STAT_COUNT_LOG_FILES)));
-      } catch (HoodieIOException e) {
-        LOG.error("Could not publish metadata size metrics", e);
-      }
-    });
+    metrics.ifPresent(m -> m.updateSizeMetrics(metaClient, metadata));
   }
 
   /**
@@ -179,49 +162,19 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   /**
-   * Tag each record with the location.
+   * Tag each record with the location in the given partition.
    *
-   * Since we only read the latest base file in a partition, we tag the records with the instant time of the latest
-   * base file.
+   * The record is sharded to a file based on its record key.
    */
-  private JavaRDD<HoodieRecord> prepRecords(List<HoodieRecord> records, String partitionName) {
-    HoodieTable table = HoodieSparkTable.create(metadataWriteConfig, engineContext);
-    TableFileSystemView.SliceView fsView = table.getSliceView();
-    List<HoodieBaseFile> baseFiles = fsView.getLatestFileSlices(partitionName)
-        .map(FileSlice::getBaseFile)
-        .filter(Option::isPresent)
-        .map(Option::get)
-        .collect(Collectors.toList());
-
-    // All the metadata fits within a single base file
-    if (partitionName.equals(MetadataPartitionType.FILES.partitionPath())) {
-      if (baseFiles.size() > 1) {
-        throw new HoodieMetadataException("Multiple base files found in metadata partition");
-      }
-    }
+  private JavaRDD<HoodieRecord> prepRecords(List<HoodieRecord> records, String partitionName, int shardCount) {
+    List<FileSlice> shards = HoodieTableMetadataUtil.loadPartitionShards(metaClient, partitionName);
+    ValidationUtils.checkArgument(shards.size() == shardCount, String.format("Invalid number of shards: found=%d, required=%d", shards.size(), shardCount));
 
     JavaSparkContext jsc = ((HoodieSparkEngineContext) engineContext).getJavaSparkContext();
-    String fileId;
-    String instantTime;
-    if (!baseFiles.isEmpty()) {
-      fileId = baseFiles.get(0).getFileId();
-      instantTime = baseFiles.get(0).getCommitTime();
-    } else {
-      // If there is a log file then we can assume that it has the data
-      List<HoodieLogFile> logFiles = fsView.getLatestFileSlices(MetadataPartitionType.FILES.partitionPath())
-          .map(FileSlice::getLatestLogFile)
-          .filter(Option::isPresent)
-          .map(Option::get)
-          .collect(Collectors.toList());
-      if (logFiles.isEmpty()) {
-        // No base and log files. All are new inserts
-        return jsc.parallelize(records, 1);
-      }
-
-      fileId = logFiles.get(0).getFileId();
-      instantTime = logFiles.get(0).getBaseCommitTime();
-    }
-
-    return jsc.parallelize(records, 1).map(r -> r.setCurrentLocation(new HoodieRecordLocation(instantTime, fileId)));
+    return jsc.parallelize(records, 1).map(r -> {
+      FileSlice slice = shards.get(HoodieTableMetadataUtil.keyToShard(r.getRecordKey(), shardCount));
+      r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
+      return r;
+    });
   }
 }
