@@ -71,6 +71,7 @@ import java.util.stream.Collectors;
 public class HoodieWriteConfig extends HoodieConfig {
 
   private static final long serialVersionUID = 0L;
+  private static final String VERSION_0_9_0 = "0.9.0";
 
   public static final ConfigProperty<String> TABLE_NAME = ConfigProperty
       .key("hoodie.table.name")
@@ -224,17 +225,20 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> MARKERS_IO_MODE = ConfigProperty
       .key("hoodie.markers.io.mode")
-      .defaultValue(MarkerIOMode.TIMELINE_BASED.toString())
+      .defaultValue(MarkerIOMode.DIRECT.toString())
+      .sinceVersion(VERSION_0_9_0)
       .withDocumentation("");
 
-  public static final ConfigProperty<Integer> MARKERS_TIMELINE_BASED_BATCH_THREAD = ConfigProperty
-      .key("hoodie.markers.timeline_based.batch.thread")
+  public static final ConfigProperty<Integer> MARKERS_TIMELINE_BASED_BATCH_NUM_THREADS = ConfigProperty
+      .key("hoodie.markers.timeline_based.batch.num_threads")
       .defaultValue(20)
+      .sinceVersion(VERSION_0_9_0)
       .withDocumentation("");
 
   public static final ConfigProperty<Long> MARKERS_TIMELINE_BASED_BATCH_INTERVAL_MS = ConfigProperty
       .key("hoodie.markers.timeline_based.batch.interval_ms")
       .defaultValue(50L)
+      .sinceVersion(VERSION_0_9_0)
       .withDocumentation("");
 
   public static final ConfigProperty<String> MARKERS_DELETE_PARALLELISM = ConfigProperty
@@ -554,8 +558,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return MarkerIOMode.valueOf(mode.toUpperCase());
   }
 
-  public int getMarkersTimelineBasedBatchThread() {
-    return getInt(MARKERS_TIMELINE_BASED_BATCH_THREAD);
+  public int getMarkersTimelineBasedBatchNumThreads() {
+    return getInt(MARKERS_TIMELINE_BASED_BATCH_NUM_THREADS);
   }
 
   public long getMarkersTimelineBasedBatchIntervalMs() {
@@ -1541,8 +1545,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withMarkersTimelineBasedBatchThread(int numThreads) {
-      writeConfig.setValue(MARKERS_TIMELINE_BASED_BATCH_THREAD, String.valueOf(numThreads));
+    public Builder withMarkersTimelineBasedBatchNumThreads(int numThreads) {
+      writeConfig.setValue(MARKERS_TIMELINE_BASED_BATCH_NUM_THREADS, String.valueOf(numThreads));
       return this;
     }
 

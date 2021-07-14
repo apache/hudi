@@ -59,7 +59,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.timeline.service.RequestHandler.jsonifyResult;
 
 public class MarkerHandler extends Handler {
-  public static final String MARKERS_FILENAME = "MARKERS";
+  public static final String MARKERS_FILENAME_PREFIX = "MARKERS";
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private static final Logger LOG = LogManager.getLogger(MarkerHandler.class);
   private static final long MARGIN_TIME_MS = 10L;
@@ -71,7 +71,7 @@ public class MarkerHandler extends Handler {
   // {markerDirPath -> {markerFileIndex -> markers}}
   private final Map<String, Map<Integer, StringBuilder>> fileMarkersMap = new HashMap<>();
   private final List<CreateMarkerCompletableFuture> createMarkerFutures = new ArrayList<>();
-  private final List<Boolean> isMarkerFileInUseList;
+  private final List<Boolean> markerFilesUseStatus;
   private final long batchIntervalMs;
   private final int parallelism;
   private volatile Object createMarkerRequestlockObject = new Object();
@@ -90,7 +90,7 @@ public class MarkerHandler extends Handler {
     for (int i = 0; i < batchNumThreads; i++) {
       isMarkerFileInUseList.add(false);
     }
-    this.isMarkerFileInUseList = Collections.synchronizedList(isMarkerFileInUseList);
+    this.markerFilesUseStatus = Collections.synchronizedList(isMarkerFileInUseList);
   }
 
   public Set<String> getAllMarkers(String markerDirPath) {
@@ -148,7 +148,7 @@ public class MarkerHandler extends Handler {
 
   private Set<String> getAllMarkersFromFile(String markerDirPath) {
     LOG.info("Get all markers from " + markerDirPath);
-    Path markersFilePath = new Path(markerDirPath, MARKERS_FILENAME);
+    Path markersFilePath = new Path(markerDirPath, MARKERS_FILENAME_PREFIX);
     Set<String> markers = new HashSet<>();
     try {
       if (fileSystem.exists(markersFilePath)) {
@@ -168,7 +168,7 @@ public class MarkerHandler extends Handler {
   }
 
   private class CreateMarkerCompletableFuture extends CompletableFuture<String> {
-    private Context context;
+    private final Context context;
     private final String markerDirPath;
     private final String markerName;
     private boolean result;
@@ -214,11 +214,11 @@ public class MarkerHandler extends Handler {
       List<CreateMarkerCompletableFuture> futuresToRemove = new ArrayList<>();
       Set<String> updatedMarkerDirPaths = new HashSet<>();
       int markerFileIndex = -1;
-      synchronized (isMarkerFileInUseList) {
-        for (int i = 0; i < isMarkerFileInUseList.size(); i++) {
-          if (!isMarkerFileInUseList.get(i)) {
+      synchronized (markerFilesUseStatus) {
+        for (int i = 0; i < markerFilesUseStatus.size(); i++) {
+          if (!markerFilesUseStatus.get(i)) {
             markerFileIndex = i;
-            isMarkerFileInUseList.set(i, true);
+            markerFilesUseStatus.set(i, true);
             break;
           }
         }
@@ -252,7 +252,7 @@ public class MarkerHandler extends Handler {
       }
       LOG.info("Flush to MARKERS file .. ");
       flushMarkersToFile(updatedMarkerDirPaths, markerFileIndex);
-      isMarkerFileInUseList.set(markerFileIndex, false);
+      markerFilesUseStatus.set(markerFileIndex, false);
       LOG.info("Resolve request futures .. ");
       for (CreateMarkerCompletableFuture future : futuresToRemove) {
         try {
@@ -269,7 +269,7 @@ public class MarkerHandler extends Handler {
       for (String markerDirPath : updatedMarkerDirPaths) {
         LOG.info("Write to " + markerDirPath);
         long startTimeMs = System.currentTimeMillis();
-        Path markersFilePath = new Path(markerDirPath, MARKERS_FILENAME + markerFileIndex);
+        Path markersFilePath = new Path(markerDirPath, MARKERS_FILENAME_PREFIX + markerFileIndex);
         Path dirPath = markersFilePath.getParent();
         try {
           if (!fileSystem.exists(dirPath)) {

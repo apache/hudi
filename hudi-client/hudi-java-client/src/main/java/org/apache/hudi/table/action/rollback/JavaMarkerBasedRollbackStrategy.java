@@ -49,9 +49,9 @@ public class JavaMarkerBasedRollbackStrategy<T extends HoodieRecordPayload> exte
   @Override
   public List<HoodieRollbackStat> execute(HoodieInstant instantToRollback) {
     try {
-      MarkerFiles directMarkerFiles =
+      MarkerFiles markerFiles =
           MarkerFilesFactory.get(config.getMarkersIOMode(), table, instantToRollback.getTimestamp());
-      List<HoodieRollbackStat> rollbackStats = context.map(new ArrayList<>(directMarkerFiles.allMarkerFilePaths()), markerFilePath -> {
+      List<HoodieRollbackStat> rollbackStats = context.map(new ArrayList<>(markerFiles.allMarkerFilePaths()), markerFilePath -> {
         String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);
         IOType type = IOType.valueOf(typeStr);
         switch (type) {

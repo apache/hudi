@@ -18,7 +18,6 @@
 
 package org.apache.hudi.client.embedded;
 
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
@@ -42,56 +41,49 @@ public class EmbeddedTimelineService {
   private static final Logger LOG = LogManager.getLogger(EmbeddedTimelineService.class);
 
   private int serverPort;
-  private int preferredPort;
   private String hostAddr;
   private HoodieEngineContext context;
   private final SerializableConfiguration hadoopConf;
-  private final FileSystemViewStorageConfig config;
-  private final HoodieMetadataConfig metadataConfig;
   private final HoodieWriteConfig writeConfig;
   private final String basePath;
 
-  private final int numThreads;
-  private final boolean shouldCompressOutput;
-  private final boolean useAsync;
   private transient FileSystemViewManager viewManager;
   private transient TimelineService server;
 
-  public EmbeddedTimelineService(HoodieEngineContext context, String embeddedTimelineServiceHostAddr, int embeddedTimelineServerPort,
-                                 HoodieMetadataConfig metadataConfig, FileSystemViewStorageConfig config, String basePath,
-                                 int numThreads, boolean compressOutput, boolean useAsync, HoodieWriteConfig writeConfig) {
+  public EmbeddedTimelineService(HoodieEngineContext context, String embeddedTimelineServiceHostAddr, HoodieWriteConfig writeConfig) {
     setHostAddr(embeddedTimelineServiceHostAddr);
     this.context = context;
-    this.config = config;
-    this.basePath = basePath;
-    this.metadataConfig = metadataConfig;
+    this.basePath = writeConfig.getBasePath();
     this.hadoopConf = context.getHadoopConf();
     this.viewManager = createViewManager();
-    this.preferredPort = embeddedTimelineServerPort;
-    this.numThreads = numThreads;
-    this.shouldCompressOutput = compressOutput;
-    this.useAsync = useAsync;
     this.writeConfig = writeConfig;
   }
 
   private FileSystemViewManager createViewManager() {
     // Using passed-in configs to build view storage configs
     FileSystemViewStorageConfig.Builder builder =
-        FileSystemViewStorageConfig.newBuilder().fromProperties(config.getProps());
+        FileSystemViewStorageConfig.newBuilder().fromProperties(writeConfig.getClientSpecifiedViewStorageConfig().getProps());
     FileSystemViewStorageType storageType = builder.build().getStorageType();
     if (storageType.equals(FileSystemViewStorageType.REMOTE_ONLY)
         || storageType.equals(FileSystemViewStorageType.REMOTE_FIRST)) {
       // Reset to default if set to Remote
       builder.withStorageType(FileSystemViewStorageType.MEMORY);
     }
-    return FileSystemViewManager.createViewManager(context, metadataConfig, builder.build(), basePath);
+    return FileSystemViewManager.createViewManager(context, writeConfig.getMetadataConfig(), builder.build(), basePath);
   }
 
   public void startServer() throws IOException {
-    server = new TimelineService(preferredPort, viewManager,
-        FSUtils.getFs(basePath, hadoopConf.newCopy()), hadoopConf.newCopy(), numThreads, shouldCompressOutput, useAsync,
-        writeConfig.getMarkersTimelineBasedBatchThread(), writeConfig.getMarkersTimelineBasedBatchIntervalMs(),
-        writeConfig.getMarkersDeleteParallelism());
+    TimelineService.Config timelineServiceConf = new TimelineService.Config();
+    timelineServiceConf.serverPort = writeConfig.getEmbeddedTimelineServerPort();
+    timelineServiceConf.numThreads = writeConfig.getEmbeddedTimelineServerThreads();
+    timelineServiceConf.compress = writeConfig.getEmbeddedTimelineServerCompressOutput();;
+    timelineServiceConf.async = writeConfig.getEmbeddedTimelineServerUseAsync();
+    timelineServiceConf.markerBatchNumThreads = writeConfig.getMarkersTimelineBasedBatchNumThreads();
+    timelineServiceConf.markerBatchIntervalMs = writeConfig.getMarkersTimelineBasedBatchIntervalMs();
+    timelineServiceConf.markerDeleteParallelism = writeConfig.getMarkersDeleteParallelism();
+
+    server = new TimelineService(timelineServiceConf, hadoopConf.newCopy(),
+        FSUtils.getFs(basePath, hadoopConf.newCopy()), viewManager);
     serverPort = server.startService();
     LOG.info("Started embedded timeline server at " + hostAddr + ":" + serverPort);
   }
@@ -110,8 +102,9 @@ public class EmbeddedTimelineService {
    * Retrieves proper view storage configs for remote clients to access this service.
    */
   public FileSystemViewStorageConfig getRemoteFileSystemViewConfig() {
-    FileSystemViewStorageType viewStorageType = config.shouldEnableBackupForRemoteFileSystemView()
-            ? FileSystemViewStorageType.REMOTE_FIRST : FileSystemViewStorageType.REMOTE_ONLY;
+    FileSystemViewStorageType viewStorageType = writeConfig.getClientSpecifiedViewStorageConfig()
+        .shouldEnableBackupForRemoteFileSystemView()
+        ? FileSystemViewStorageType.REMOTE_FIRST : FileSystemViewStorageType.REMOTE_ONLY;
     return FileSystemViewStorageConfig.newBuilder().withStorageType(viewStorageType)
         .withRemoteServerHost(hostAddr).withRemoteServerPort(serverPort).build();
   }

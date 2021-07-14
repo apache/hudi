@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.perf;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -37,6 +38,7 @@ import com.beust.jcommander.Parameter;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Snapshot;
 import com.codahale.metrics.UniformReservoir;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -71,7 +73,11 @@ public class TimelineServerPerf implements Serializable {
   public TimelineServerPerf(Config cfg) throws IOException {
     this.cfg = cfg;
     useExternalTimelineServer = (cfg.serverHost != null);
-    this.timelineServer = new TimelineService(cfg.getTimelinServerConfig());
+    TimelineService.Config timelineServiceConf = cfg.getTimelinServerConfig();
+    this.timelineServer = new TimelineService(
+        timelineServiceConf, new Configuration(), FileSystem.get(new Configuration()),
+        TimelineService.buildFileSystemViewManager(timelineServiceConf,
+            new SerializableConfiguration(FSUtils.prepareHadoopConf(new Configuration()))));
   }
 
   private void setHostAddrFromSparkConf(SparkConf sparkConf) {

@@ -422,7 +422,6 @@ public class RequestHandler {
           ctx,
           ctx.queryParam(RemoteHoodieTableFileSystemView.MARKER_DIR_PATH_PARAM, ""),
           ctx.queryParam(RemoteHoodieTableFileSystemView.MARKER_NAME_PARAM, "")));
-      //writeValueAsString(ctx, success);
     }, false));
 
     app.post(RemoteHoodieTableFileSystemView.DELETE_MARKERS_URL, new ViewHandler(ctx -> {
