@@ -40,7 +40,7 @@ public class DefaultSource extends BaseDefaultSource implements TableProvider {
 
   @Override
   public StructType inferSchema(CaseInsensitiveStringMap options) {
-    return StructType.fromDDL(options.get(HoodieWriteConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL.key()));
+    return StructType.fromDDL(options.get(HoodieInternalConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL.key()));
   }
 
   @Override

@@ -25,7 +25,9 @@ import org.apache.hudi.common.util.ValidationUtils;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 /**
  * File System View Storage Configurations.
@@ -36,76 +38,78 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
   public static final ConfigProperty<FileSystemViewStorageType> FILESYSTEM_VIEW_STORAGE_TYPE = ConfigProperty
       .key("hoodie.filesystem.view.type")
       .defaultValue(FileSystemViewStorageType.MEMORY)
-      .withDocumentation("");
+      .withDocumentation("File system view provides APIs for viewing the files on the underlying lake storage, "
+          + " as file groups and file slices. This config controls how such a view is held. Options include "
+          + Arrays.stream(FileSystemViewStorageType.values()).map(Enum::name).collect(Collectors.joining(","))
+          + " which provide different trade offs for memory usage and API request performance.");
 
   public static final ConfigProperty<String> FILESYSTEM_VIEW_INCREMENTAL_SYNC_MODE = ConfigProperty
       .key("hoodie.filesystem.view.incr.timeline.sync.enable")
       .defaultValue("false")
-      .withDocumentation("");
+      .withDocumentation("Controls whether or not, the file system view is incrementally updated as "
+          + "new actions are performed on the timeline.");
 
   public static final ConfigProperty<FileSystemViewStorageType> FILESYSTEM_SECONDARY_VIEW_STORAGE_TYPE = ConfigProperty
       .key("hoodie.filesystem.view.secondary.type")
       .defaultValue(FileSystemViewStorageType.MEMORY)
-      .withDocumentation("");
+      .withDocumentation("Specifies the secondary form of storage for file system view, if the primary (e.g timeline server) "
+          + " is unavailable.");
 
   public static final ConfigProperty<String> FILESYSTEM_VIEW_REMOTE_HOST = ConfigProperty
       .key("hoodie.filesystem.view.remote.host")
       .defaultValue("localhost")
-      .withDocumentation("");
+      .withDocumentation("We expect this to be rarely hand configured.");
 
   public static final ConfigProperty<Integer> FILESYSTEM_VIEW_REMOTE_PORT = ConfigProperty
       .key("hoodie.filesystem.view.remote.port")
       .defaultValue(26754)
-      .withDocumentation("");
+      .withDocumentation("Port to serve file system view queries, when remote. We expect this to be rarely hand configured.");
 
   public static final ConfigProperty<String> FILESYSTEM_VIEW_SPILLABLE_DIR = ConfigProperty
       .key("hoodie.filesystem.view.spillable.dir")
       .defaultValue("/tmp/view_map/")
-      .withDocumentation("");
+      .withDocumentation("Path on local storage to use, when file system view is held in a spillable map.");
 
   public static final ConfigProperty<Long> FILESYSTEM_VIEW_SPILLABLE_MEM = ConfigProperty
       .key("hoodie.filesystem.view.spillable.mem")
       .defaultValue(100 * 1024 * 1024L) // 100 MB
-      .withDocumentation("");
+      .withDocumentation("Amount of memory to be used for holding file system view, before spilling to disk.");
 
   public static final ConfigProperty<Double> FILESYSTEM_VIEW_PENDING_COMPACTION_MEM_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.compaction.mem.fraction")
       .defaultValue(0.8)
-      .withDocumentation("");
+      .withDocumentation("Fraction of the file system view memory, to be used for holding compaction related metadata.");
 
   public static final ConfigProperty<Double> FILESYSTEM_VIEW_BOOTSTRAP_BASE_FILE_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.bootstrap.base.file.mem.fraction")
       .defaultValue(0.05)
-      .withDocumentation("");
+      .withDocumentation("Fraction of the file system view memory, to be used for holding mapping to bootstrap base files.");
 
   public static final ConfigProperty<Double> FILESYSTEM_VIEW_REPLACED_MEM_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.replaced.mem.fraction")
       .defaultValue(0.01)
-      .withDocumentation("");
+      .withDocumentation("Fraction of the file system view memory, to be used for holding replace commit related metadata.");
 
   public static final ConfigProperty<Double> FILESYSTEM_VIEW_PENDING_CLUSTERING_MEM_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.clustering.mem.fraction")
       .defaultValue(0.01)
-      .withDocumentation("");
+      .withDocumentation("Fraction of the file system view memory, to be used for holding clustering related metadata.");
 
   public static final ConfigProperty<String> ROCKSDB_BASE_PATH_PROP = ConfigProperty
       .key("hoodie.filesystem.view.rocksdb.base.path")
       .defaultValue("/tmp/hoodie_timeline_rocksdb")
-      .withDocumentation("");
+      .withDocumentation("Path on local storage to use, when storing file system view in embedded kv store/rocksdb.");
 
-  public static final ConfigProperty<Integer> FILESTYSTEM_REMOTE_TIMELINE_CLIENT_TIMEOUT_SECS = ConfigProperty
+  public static final ConfigProperty<Integer> FILESYSTEM_REMOTE_TIMELINE_CLIENT_TIMEOUT_SECS = ConfigProperty
       .key("hoodie.filesystem.view.remote.timeout.secs")
       .defaultValue(5 * 60) // 5 min
-      .withDocumentation("");
+      .withDocumentation("Timeout in seconds, to wait for API requests against a remote file system view. e.g timeline server.");
 
-  /**
-   * Configs to control whether backup needs to be configured if clients were not able to reach
-   * timeline service.
-   */
   public static final ConfigProperty<String> REMOTE_BACKUP_VIEW_HANDLER_ENABLE = ConfigProperty
       .key("hoodie.filesystem.remote.backup.view.enable")
       .defaultValue("true") // Need to be disabled only for tests.
-      .withDocumentation("");
+      .withDocumentation("Config to control whether backup needs to be configured if clients were not able to reach"
+          + " timeline service.");
 
   public static FileSystemViewStorageConfig.Builder newBuilder() {
     return new Builder();
@@ -132,7 +136,7 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
   }
 
   public Integer getRemoteTimelineClientTimeoutSecs() {
-    return getInt(FILESTYSTEM_REMOTE_TIMELINE_CLIENT_TIMEOUT_SECS);
+    return getInt(FILESYSTEM_REMOTE_TIMELINE_CLIENT_TIMEOUT_SECS);
   }
 
   public long getMaxMemoryForFileGroupMap() {
@@ -232,7 +236,7 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
     }
 
     public Builder withRemoteTimelineClientTimeoutSecs(Long timelineClientTimeoutSecs) {
-      fileSystemViewStorageConfig.setValue(FILESTYSTEM_REMOTE_TIMELINE_CLIENT_TIMEOUT_SECS, timelineClientTimeoutSecs.toString());
+      fileSystemViewStorageConfig.setValue(FILESYSTEM_REMOTE_TIMELINE_CLIENT_TIMEOUT_SECS, timelineClientTimeoutSecs.toString());
       return this;
     }
 
