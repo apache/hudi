@@ -48,6 +48,7 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -454,8 +455,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   @Override
   public Set<String> getAllMarkerFilePaths(String markerDirPath) {
-    Map<String, String> paramsMap = new HashMap<>();
-    paramsMap.put(MARKER_DIR_PATH_PARAM, markerDirPath);
+    Map<String, String> paramsMap = Collections.singletonMap(MARKER_DIR_PATH_PARAM, markerDirPath);
     try {
       return executeRequest(ALL_MARKERS_URL, paramsMap, new TypeReference<Set<String>>() {}, RequestMethod.GET);
     } catch (IOException e) {
@@ -465,8 +465,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   @Override
   public Set<String> getCreateAndMergeMarkerFilePaths(String markerDirPath) {
-    Map<String, String> paramsMap = new HashMap<>();
-    paramsMap.put(MARKER_DIR_PATH_PARAM, markerDirPath);
+    Map<String, String> paramsMap = Collections.singletonMap(MARKER_DIR_PATH_PARAM, markerDirPath);
     try {
       return executeRequest(CREATE_AND_MERGE_MARKERS_URL, paramsMap, new TypeReference<Set<String>>() {}, RequestMethod.GET);
     } catch (IOException e) {
@@ -488,8 +487,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   @Override
   public boolean deleteMarkerDir(String markerDirPath) {
-    Map<String, String> paramsMap = new HashMap<>();
-    paramsMap.put(MARKER_DIR_PATH_PARAM, markerDirPath);
+    Map<String, String> paramsMap = Collections.singletonMap(MARKER_DIR_PATH_PARAM, markerDirPath);
     try {
       return executeRequest(DELETE_MARKERS_URL, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.POST);
     } catch (IOException e) {

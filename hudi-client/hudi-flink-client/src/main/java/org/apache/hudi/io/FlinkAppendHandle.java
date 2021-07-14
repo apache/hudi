@@ -50,7 +50,7 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
   private static final Logger LOG = LoggerFactory.getLogger(FlinkAppendHandle.class);
 
   private boolean isClosed = false;
-  private MarkerFiles markerFiles;
+  private final MarkerFiles markerFiles;
 
   public FlinkAppendHandle(
       HoodieWriteConfig config,

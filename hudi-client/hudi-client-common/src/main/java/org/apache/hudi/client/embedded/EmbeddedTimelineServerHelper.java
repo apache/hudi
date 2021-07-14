@@ -67,11 +67,7 @@ public class EmbeddedTimelineServerHelper {
     LOG.info("Starting Timeline service !!");
     Option<String> hostAddr = context.getProperty(EngineProperty.EMBEDDED_SERVER_HOST);
     EmbeddedTimelineService timelineService = new EmbeddedTimelineService(
-        context, hostAddr.orElse(null),config.getEmbeddedTimelineServerPort(),
-        config.getMetadataConfig(), config.getCommonConfig(),
-        config.getClientSpecifiedViewStorageConfig(), config.getBasePath(),
-        config.getEmbeddedTimelineServerThreads(), config.getEmbeddedTimelineServerCompressOutput(),
-        config.getEmbeddedTimelineServerUseAsync(), config);
+        context, hostAddr.orElse(null), config);
     timelineService.startServer();
     updateWriteConfigWithTimelineServer(timelineService, config);
     return timelineService;
