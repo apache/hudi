@@ -72,66 +72,69 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
   public static final ConfigProperty<HoodieTableVersion> HOODIE_TABLE_VERSION_PROP = ConfigProperty
       .key("hoodie.table.version")
       .defaultValue(HoodieTableVersion.ZERO)
-      .withDocumentation("");
+      .withDocumentation("Version of table, used for running upgrade/downgrade steps between releases with potentially "
+          + "breaking/backwards compatible changes.");
 
   public static final ConfigProperty<String> HOODIE_TABLE_PRECOMBINE_FIELD_PROP = ConfigProperty
       .key("hoodie.table.precombine.field")
       .noDefaultValue()
-      .withDocumentation("Field used in preCombining before actual write. When two records have the same key value, "
-          + "we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)");
+      .withDocumentation("Field used in preCombining before actual write. By default, when two records have the same key value, "
+          + "the largest value for the precombine field determined by Object.compareTo(..), is picked.");
 
   public static final ConfigProperty<String> HOODIE_TABLE_PARTITION_COLUMNS_PROP = ConfigProperty
       .key("hoodie.table.partition.columns")
       .noDefaultValue()
-      .withDocumentation("Partition path field. Value to be used at the partitionPath component of HoodieKey. "
-          + "Actual value ontained by invoking .toString()");
+      .withDocumentation("Columns used to partition the table. Concatenated values of these fields are used as "
+          + "the partition path, by invoking toString()");
 
   public static final ConfigProperty<String> HOODIE_TABLE_RECORDKEY_FIELDS = ConfigProperty
       .key("hoodie.table.recordkey.fields")
       .noDefaultValue()
-      .withDocumentation("");
+      .withDocumentation("Columns used to uniquely identify the table. Concatenated values of these fields are used as "
+          + " the record key component of HoodieKey.");
 
   public static final ConfigProperty<String> HOODIE_TABLE_CREATE_SCHEMA = ConfigProperty
       .key("hoodie.table.create.schema")
       .noDefaultValue()
-      .withDocumentation("");
+      .withDocumentation("Schema used when creating the table, for the first time.");
 
   public static final ConfigProperty<HoodieFileFormat> HOODIE_BASE_FILE_FORMAT_PROP = ConfigProperty
       .key("hoodie.table.base.file.format")
       .defaultValue(HoodieFileFormat.PARQUET)
       .withAlternatives("hoodie.table.ro.file.format")
-      .withDocumentation("");
+      .withDocumentation("Base file format to store all the base file data.");
 
   public static final ConfigProperty<HoodieFileFormat> HOODIE_LOG_FILE_FORMAT_PROP = ConfigProperty
       .key("hoodie.table.log.file.format")
       .defaultValue(HoodieFileFormat.HOODIE_LOG)
       .withAlternatives("hoodie.table.rt.file.format")
-      .withDocumentation("");
+      .withDocumentation("Log format used for the delta logs.");
 
   public static final ConfigProperty<String> HOODIE_TIMELINE_LAYOUT_VERSION_PROP = ConfigProperty
       .key("hoodie.timeline.layout.version")
       .noDefaultValue()
-      .withDocumentation("");
+      .withDocumentation("Version of timeline used, by the table.");
 
   public static final ConfigProperty<String> HOODIE_PAYLOAD_CLASS_PROP = ConfigProperty
       .key("hoodie.compaction.payload.class")
       .defaultValue(OverwriteWithLatestAvroPayload.class.getName())
-      .withDocumentation("");
+      .withDocumentation("Payload class to use for performing compactions, i.e merge delta logs with current base file and then "
+          + " produce a new base file.");
 
   public static final ConfigProperty<String> HOODIE_ARCHIVELOG_FOLDER_PROP = ConfigProperty
       .key("hoodie.archivelog.folder")
       .defaultValue("archived")
-      .withDocumentation("");
+      .withDocumentation("path under the meta folder, to store archived timeline instants at.");
 
   public static final ConfigProperty<String> HOODIE_BOOTSTRAP_INDEX_ENABLE_PROP = ConfigProperty
       .key("hoodie.bootstrap.index.enable")
       .noDefaultValue()
-      .withDocumentation("");
+      .withDocumentation("Whether or not, this is a bootstrapped table, with bootstrap base data and an mapping index defined.");
 
   public static final ConfigProperty<String> HOODIE_BOOTSTRAP_INDEX_CLASS_PROP = ConfigProperty
       .key("hoodie.bootstrap.index.class")
       .defaultValue(HFileBootstrapIndex.class.getName())
-      .withDocumentation("");
+      .withDocumentation("Implementation to use, for mapping base files to bootstrap base file, that contain actual data.");
 
   public static final ConfigProperty<String> HOODIE_BOOTSTRAP_BASE_PATH_PROP = ConfigProperty
       .key("hoodie.bootstrap.base.path")

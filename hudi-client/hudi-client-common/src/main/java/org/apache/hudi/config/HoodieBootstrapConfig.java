@@ -98,7 +98,7 @@ public class HoodieBootstrapConfig extends HoodieConfig {
       .key("hoodie.bootstrap.index.class")
       .defaultValue(HFileBootstrapIndex.class.getName())
       .sinceVersion("0.6.0")
-      .withDocumentation("");
+      .withDocumentation("Implementation to use, for mapping a skeleton base file to a boostrap base file.");
 
   public static final ConfigProperty<HoodieFileFormat> HOODIE_BASE_FILE_FORMAT_PROP = ConfigProperty
           .key("hoodie.table.base.file.format")

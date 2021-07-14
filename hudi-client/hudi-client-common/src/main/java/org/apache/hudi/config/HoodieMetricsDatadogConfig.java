@@ -41,7 +41,7 @@ public class HoodieMetricsDatadogConfig extends HoodieConfig {
       .key(DATADOG_PREFIX + ".report.period.seconds")
       .defaultValue(30)
       .sinceVersion("0.6.0")
-      .withDocumentation("Datadog report period in seconds. Default to 30.");
+      .withDocumentation("Datadog reporting period in seconds. Default to 30.");
 
   public static final ConfigProperty<String> DATADOG_API_SITE = ConfigProperty
       .key(DATADOG_PREFIX + ".api.site")
