@@ -360,7 +360,6 @@ object DataSourceWriteOptions {
   // HIVE SYNC SPECIFIC CONFIGS
   // NOTE: DO NOT USE uppercase for the keys as they are internally lower-cased. Using upper-cases causes
   // unexpected issues with config getting reset
-
   val HIVE_SYNC_ENABLED_OPT_KEY: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.enable")
     .defaultValue("false")
@@ -446,16 +445,6 @@ object DataSourceWriteOptions {
     .defaultValue("false")
     .withDocumentation("‘INT64’ with original type TIMESTAMP_MICROS is converted to hive ‘timestamp’ type. " +
       "Disabled by default for backward compatibility.")
-
-  val HIVE_TABLE_PROPERTIES: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.hive_sync.table_properties")
-    .noDefaultValue()
-    .withDocumentation("")
-
-  val HIVE_TABLE_SERDE_PROPERTIES: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.hive_sync.serde_properties")
-    .noDefaultValue()
-    .withDocumentation("")
 
   val HIVE_SYNC_AS_DATA_SOURCE_TABLE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.hive_sync.sync_as_datasource")
