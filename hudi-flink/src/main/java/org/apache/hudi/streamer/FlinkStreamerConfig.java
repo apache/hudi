@@ -117,6 +117,9 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--commit-on-errors"}, description = "Commit even when some records failed to be written.")
   public Boolean commitOnErrors = false;
 
+  @Parameter(names = {"--transformer-class"})
+  public List<String> transformerClassNames = null;
+
   /**
    * Flink checkpoint interval.
    */

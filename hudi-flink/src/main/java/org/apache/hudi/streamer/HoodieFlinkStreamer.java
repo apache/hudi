@@ -19,6 +19,7 @@
 package org.apache.hudi.streamer;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperatorFactory;
@@ -30,6 +31,7 @@ import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
+import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -44,6 +46,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 
@@ -85,7 +88,7 @@ public class HoodieFlinkStreamer {
     StreamWriteOperatorFactory<HoodieRecord> operatorFactory =
         new StreamWriteOperatorFactory<>(conf);
 
-    DataStream<HoodieRecord> hoodieDataStream = env.addSource(new FlinkKafkaConsumer<>(
+    DataStream<RowData> dataStream = env.addSource(new FlinkKafkaConsumer<>(
         cfg.kafkaTopic,
         new JsonRowDataDeserializationSchema(
             rowType,
@@ -95,8 +98,17 @@ public class HoodieFlinkStreamer {
             TimestampFormat.ISO_8601
         ), kafkaProps))
         .name("kafka_source")
-        .uid("uid_kafka_source")
-        .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class));
+        .uid("uid_kafka_source");
+
+    if (cfg.transformerClassNames != null && !cfg.transformerClassNames.isEmpty()) {
+      Option<Transformer> transformer = StreamerUtil.createTransformer(cfg.transformerClassNames);
+      if (transformer.isPresent()) {
+        dataStream = transformer.get().apply(dataStream);
+      }
+    }
+
+    DataStream<HoodieRecord> hoodieDataStream = dataStream.map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class));
+
     if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
       hoodieDataStream = hoodieDataStream.rebalance().transform("index_bootstrap",
               TypeInformation.of(HoodieRecord.class),
