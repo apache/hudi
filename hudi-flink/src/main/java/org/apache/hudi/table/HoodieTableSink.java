@@ -80,9 +80,11 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       // TODO: This is a very time-consuming operation, will optimization
       if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
         hoodieDataStream = hoodieDataStream.rebalance()
-            .transform("index_bootstrap",
+            .transform(
+                "index_bootstrap",
                 TypeInformation.of(HoodieRecord.class),
                 new ProcessOperator<>(new BootstrapFunction<>(conf)))
+            .setParallelism(conf.getInteger(FlinkOptions.INDEX_BOOTSTRAP_TASKS))
             .uid("uid_index_bootstrap_" + conf.getString(FlinkOptions.TABLE_NAME));
       }
 

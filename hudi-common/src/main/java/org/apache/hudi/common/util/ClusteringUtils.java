@@ -206,4 +206,8 @@ public class ClusteringUtils {
     metrics.put(TOTAL_LOG_FILES, (double) numLogFiles);
     return metrics;
   }
+
+  public static List<HoodieInstant> getPendingClusteringInstantTimes(HoodieTableMetaClient metaClient) {
+    return metaClient.getActiveTimeline().filterPendingReplaceTimeline().getInstants().collect(Collectors.toList());
+  }
 }
