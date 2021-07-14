@@ -24,6 +24,7 @@ import org.apache.hudi.cli.commands.RepairsCommand;
 import org.apache.hudi.cli.commands.TableCommand;
 import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -62,6 +63,7 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
   private String duplicatedPartitionPathWithUpdates;
   private String duplicatedPartitionPathWithUpserts;
   private String repairedOutputPath;
+  private HoodieFileFormat fileFormat;
 
   @BeforeEach
   public void init() throws Exception {
@@ -101,6 +103,7 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
             .withInserts(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH, "8", dupRecords);
 
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
+    fileFormat = metaClient.getTableConfig().getBaseFileFormat();
   }
 
   /**
@@ -117,7 +120,7 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
 
     // Before deduplicate, all files contain 210 records
     String[] files = filteredStatuses.toArray(new String[0]);
-    Dataset df = sqlContext.read().parquet(files);
+    Dataset df = readFiles(files);
     assertEquals(210, df.count());
 
     String partitionPath = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
@@ -130,7 +133,7 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
     // After deduplicate, there are 200 records
     FileStatus[] fileStatus = fs.listStatus(new Path(repairedOutputPath));
     files = Arrays.stream(fileStatus).map(status -> status.getPath().toString()).toArray(String[]::new);
-    Dataset result = sqlContext.read().parquet(files);
+    Dataset result = readFiles(files);
     assertEquals(200, result.count());
   }
 
@@ -144,7 +147,7 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
 
     // Before deduplicate, all files contain 110 records
     String[] files = filteredStatuses.toArray(new String[0]);
-    Dataset df = sqlContext.read().parquet(files);
+    Dataset df = readFiles(files);
     assertEquals(110, df.count());
 
     String partitionPath = HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
@@ -157,7 +160,7 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
     // After deduplicate, there are 100 records
     FileStatus[] fileStatus = fs.listStatus(new Path(repairedOutputPath));
     files = Arrays.stream(fileStatus).map(status -> status.getPath().toString()).toArray(String[]::new);
-    Dataset result = sqlContext.read().parquet(files);
+    Dataset result = readFiles(files);
     assertEquals(100, result.count());
   }
 
@@ -171,7 +174,7 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
 
     // Before deduplicate, all files contain 120 records
     String[] files = filteredStatuses.toArray(new String[0]);
-    Dataset df = sqlContext.read().parquet(files);
+    Dataset df = readFiles(files);
     assertEquals(120, df.count());
 
     String partitionPath = HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
@@ -184,7 +187,7 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
     // After deduplicate, there are 100 records
     FileStatus[] fileStatus = fs.listStatus(new Path(repairedOutputPath));
     files = Arrays.stream(fileStatus).map(status -> status.getPath().toString()).toArray(String[]::new);
-    Dataset result = sqlContext.read().parquet(files);
+    Dataset result = readFiles(files);
     assertEquals(100, result.count());
   }
 
@@ -202,7 +205,7 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
 
     // Before deduplicate, all files contain 210 records
     String[] files = filteredStatuses.toArray(new String[0]);
-    Dataset df = sqlContext.read().parquet(files);
+    Dataset df = readFiles(files);
     assertEquals(210, df.count());
 
     String partitionPath = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
@@ -215,7 +218,16 @@ public class ITTestRepairsCommand extends AbstractShellIntegrationTest {
     // After deduplicate, there are 200 records under partition path
     FileStatus[] fileStatus = fs.listStatus(new Path(duplicatedPartitionPath));
     files = Arrays.stream(fileStatus).map(status -> status.getPath().toString()).toArray(String[]::new);
-    Dataset result = sqlContext.read().parquet(files);
+    Dataset result = readFiles(files);
     assertEquals(200, result.count());
+  }
+
+  private Dataset readFiles(String[] files) {
+    if (HoodieFileFormat.PARQUET.equals(fileFormat)) {
+      return sqlContext.read().parquet(files);
+    } else if (HoodieFileFormat.ORC.equals(fileFormat)) {
+      return sqlContext.read().orc(files);
+    }
+    throw new UnsupportedOperationException(fileFormat.name() + " format not supported yet.");
   }
 }
