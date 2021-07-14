@@ -35,9 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestParquet2SparkSchemaUtils {
   private final SparkToParquetSchemaConverter spark2ParquetConverter =
-          new SparkToParquetSchemaConverter(
-                  (Boolean) SQLConf.PARQUET_WRITE_LEGACY_FORMAT().defaultValue().get(),
-                  SQLConf.ParquetOutputTimestampType$.MODULE$.INT96());
+          new SparkToParquetSchemaConverter(new SQLConf());
   private final SparkSqlParser parser = new SparkSqlParser(new SQLConf());
 
   @Test
