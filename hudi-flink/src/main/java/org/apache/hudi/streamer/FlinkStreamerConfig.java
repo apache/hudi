@@ -117,7 +117,10 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--commit-on-errors"}, description = "Commit even when some records failed to be written.")
   public Boolean commitOnErrors = false;
 
-  @Parameter(names = {"--transformer-class"})
+  @Parameter(names = {"--transformer-class"},
+      description = "A subclass or a list of subclasses of org.apache.hudi.sink.transform.Transformer"
+          + ". Allows transforming raw source DataStream to a target DataStream (conforming to target schema) before "
+          + "writing. Default : Not set. Pass a comma-separated list of subclass names to chain the transformations.")
   public List<String> transformerClassNames = null;
 
   /**

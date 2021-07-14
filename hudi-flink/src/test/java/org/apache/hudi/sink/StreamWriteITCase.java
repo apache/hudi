@@ -40,7 +40,7 @@ import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.partitioner.BucketAssignOperator;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
 import org.apache.hudi.sink.transform.Transformer;
-import org.apache.hudi.streamer.ChainedTransformer;
+import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.CompactionUtil;
@@ -75,8 +75,6 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.TestLogger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -91,8 +89,6 @@ import java.util.concurrent.TimeUnit;
  * Integration test for Flink Hoodie stream sink.
  */
 public class StreamWriteITCase extends TestLogger {
-
-  protected static final Logger LOG = LoggerFactory.getLogger(StreamWriteITCase.class);
 
   private static final Map<String, List<String>> EXPECTED = new HashMap<>();
   private static final Map<String, List<String>> EXPECTED_TRANSFORMER = new HashMap<>();

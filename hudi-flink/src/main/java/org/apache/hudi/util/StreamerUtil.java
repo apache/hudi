@@ -40,7 +40,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
 import org.apache.hudi.sink.transform.Transformer;
-import org.apache.hudi.streamer.ChainedTransformer;
+import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 

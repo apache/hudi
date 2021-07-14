@@ -16,9 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.streamer;
-
-import org.apache.hudi.sink.transform.Transformer;
+package org.apache.hudi.sink.transform;
 
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.table.data.RowData;
