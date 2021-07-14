@@ -21,8 +21,8 @@ package org.apache.hudi.table.action.bootstrap;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.bootstrap.HoodieBootstrapSchemaProvider;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
+import org.apache.hudi.client.bootstrap.HoodieBootstrapSchemaProvider;
 import org.apache.hudi.client.bootstrap.BootstrapRecordPayload;
 import org.apache.hudi.client.bootstrap.BootstrapWriteStatus;
 import org.apache.hudi.client.bootstrap.FullRecordBootstrapDataProvider;
@@ -68,8 +68,8 @@ import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
 import org.apache.hudi.table.action.commit.BaseCommitActionExecutor;
+import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkBulkInsertCommitActionExecutor;
 
 import org.apache.avro.Schema;
@@ -101,13 +101,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.apache.orc.OrcFile;
-import org.apache.orc.OrcProto.UserMetadataItem;
 import org.apache.orc.Reader;
 import org.apache.orc.Reader.Options;
 import org.apache.orc.RecordReader;
 import org.apache.orc.TypeDescription;
 import org.apache.hudi.common.util.AvroOrcUtils;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.OrcReaderIterator;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
@@ -436,7 +434,7 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
 
       TypeDescription orcSchema = orcReader.getSchema();
 
-      avroSchema=  AvroOrcUtils.createAvroSchema(orcSchema);
+      avroSchema =  AvroOrcUtils.createAvroSchema(orcSchema);
 
 
       Schema recordKeySchema = HoodieAvroUtils.generateProjectionSchema(avroSchema,
@@ -478,17 +476,18 @@ public class SparkBootstrapCommitActionExecutor<T extends HoodieRecordPayload<T>
   }
 
   private BootstrapWriteStatus fileBasedMetadataHandler(String srcPartitionPath, String partitionPath,
-                                                        HoodieFileStatus srcFileStatus, KeyGeneratorInterface keyGenerator)
-  {
+                                                        HoodieFileStatus srcFileStatus, KeyGeneratorInterface keyGenerator) {
     Path sourceFilePath = FileStatusUtils.toPath(srcFileStatus.getPath());
 
     String extension = FSUtils.getFileExtension(sourceFilePath.toString());
-    if (ORC.getFileExtension().equals(extension))
-      return handleMetadataBootstrapOrc(srcPartitionPath,partitionPath,srcFileStatus,keyGenerator);
-    if (PARQUET.getFileExtension().equals(extension))
-      return handleMetadataBootstrap(srcPartitionPath,partitionPath,srcFileStatus,keyGenerator);
-    else
+    if (ORC.getFileExtension().equals(extension)) {
+      return handleMetadataBootstrapOrc(srcPartitionPath, partitionPath, srcFileStatus, keyGenerator);
+    }
+    if (PARQUET.getFileExtension().equals(extension)) {
+      return handleMetadataBootstrap(srcPartitionPath, partitionPath, srcFileStatus, keyGenerator);
+    } else {
       throw new HoodieIOException("Hoodie InputFormat not implemented for base file format " + extension);
+    }
 
 
   }

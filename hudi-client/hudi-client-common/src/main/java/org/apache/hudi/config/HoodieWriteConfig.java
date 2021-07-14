@@ -1249,8 +1249,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public HoodieFileFormat getBaseFileFormat() {
     return HOODIE_BASE_FILE_FORMAT_PROP.defaultValue();
   }
-
-
+  
   public Boolean inlineTableServices() {
     return inlineClusteringEnabled() || inlineCompactionEnabled() || isAutoClean();
   }

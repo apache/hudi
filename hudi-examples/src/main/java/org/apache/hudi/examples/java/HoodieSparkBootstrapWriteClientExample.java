@@ -112,7 +112,7 @@ public class HoodieSparkBootstrapWriteClientExample {
                 String structName = tableName + "_record";
                 String recordNamespace = "hoodie." + tableName;
                 Reader orcReader = OrcFile.createReader(new Path(filePath), OrcFile.readerOptions(jsc.hadoopConfiguration()));
-                schema = AvroOrcUtils.createAvroSchemaWithNamespace(orcReader.getSchema(), structName, recordNamespace);
+                schema = AvroOrcUtils.createAvroSchemaWithDefaultValue(orcReader.getSchema(), structName, recordNamespace,true);
             }
             else {
                 ParquetFileReader reader = ParquetFileReader.open(metaClient.getHadoopConf(), new Path(filePath));

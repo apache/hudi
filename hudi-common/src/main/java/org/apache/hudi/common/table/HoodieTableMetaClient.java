@@ -650,7 +650,7 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-     public PropertyBuilder setPreCombineField(String preCombineField) {
+    public PropertyBuilder setPreCombineField(String preCombineField) {
       this.preCombineField = preCombineField;
       return this;
     }

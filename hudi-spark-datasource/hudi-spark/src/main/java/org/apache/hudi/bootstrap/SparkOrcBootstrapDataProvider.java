@@ -45,40 +45,39 @@ import java.util.List;
  * Spark Data frame based bootstrap input provider.
  */
 public class SparkOrcBootstrapDataProvider extends FullRecordBootstrapDataProvider<JavaRDD<HoodieRecord>> {
+  private final transient SparkSession sparkSession;
 
-    private final transient SparkSession sparkSession;
-
-    public SparkOrcBootstrapDataProvider(TypedProperties props,
+  public SparkOrcBootstrapDataProvider(TypedProperties props,
                                              HoodieSparkEngineContext context) {
-        super(props, context);
-        this.sparkSession = SparkSession.builder().config(context.getJavaSparkContext().getConf()).getOrCreate();
-    }
+    super(props, context);
+    this.sparkSession = SparkSession.builder().config(context.getJavaSparkContext().getConf()).getOrCreate();
+  }
 
-    @Override
-    public JavaRDD<HoodieRecord> generateInputRecords(String tableName, String sourceBasePath,
+  @Override
+  public JavaRDD<HoodieRecord> generateInputRecords(String tableName, String sourceBasePath,
                                                       List<Pair<String, List<HoodieFileStatus>>> partitionPathsWithFiles) {
-        String[] filePaths = partitionPathsWithFiles.stream().map(Pair::getValue)
+    String[] filePaths = partitionPathsWithFiles.stream().map(Pair::getValue)
                 .flatMap(f -> f.stream().map(fs -> FileStatusUtils.toPath(fs.getPath()).toString()))
                 .toArray(String[]::new);
 
-        Dataset inputDataset = sparkSession.read().orc(filePaths);
+    Dataset inputDataset = sparkSession.read().orc(filePaths);
+    try {
+      KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+      String structName = tableName + "_record";
+      String namespace = "hoodie." + tableName;
+      RDD<GenericRecord> genericRecords = HoodieSparkUtils.createRdd(inputDataset, structName, namespace);
+      return genericRecords.toJavaRDD().map(gr -> {
+        String orderingVal = HoodieAvroUtils.getNestedFieldValAsString(
+                  gr, props.getString("hoodie.datasource.write.precombine.field"), false);
         try {
-            KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
-            String structName = tableName + "_record";
-            String namespace = "hoodie." + tableName;
-            RDD<GenericRecord> genericRecords = HoodieSparkUtils.createRdd(inputDataset, structName, namespace);
-            return genericRecords.toJavaRDD().map(gr -> {
-                String orderingVal = HoodieAvroUtils.getNestedFieldValAsString(
-                        gr, props.getString("hoodie.datasource.write.precombine.field"), false);
-                try {
-                    return DataSourceUtils.createHoodieRecord(gr, orderingVal, keyGenerator.getKey(gr),
-                            props.getString("hoodie.datasource.write.payload.class"));
-                } catch (IOException ioe) {
-                    throw new HoodieIOException(ioe.getMessage(), ioe);
-                }
-            });
+          return DataSourceUtils.createHoodieRecord(gr, orderingVal, keyGenerator.getKey(gr),
+                 props.getString("hoodie.datasource.write.payload.class"));
         } catch (IOException ioe) {
-            throw new HoodieIOException(ioe.getMessage(), ioe);
+          throw new HoodieIOException(ioe.getMessage(), ioe);
         }
+      });
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
     }
+  }
 }
