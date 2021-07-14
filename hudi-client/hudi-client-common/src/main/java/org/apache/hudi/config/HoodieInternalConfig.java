@@ -18,6 +18,7 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
 /**
@@ -30,13 +31,18 @@ public class HoodieInternalConfig extends HoodieConfig {
   public static final String BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED = "hoodie.bulkinsert.are.partitioner.records.sorted";
   public static final Boolean DEFAULT_BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED = false;
 
+  public static final ConfigProperty<String> BULKINSERT_INPUT_DATA_SCHEMA_DDL = ConfigProperty
+      .key("hoodie.bulkinsert.schema.ddl")
+      .noDefaultValue()
+      .withDocumentation("Schema set for row writer/bulk insert.");
+
   /**
    * Returns if partition records are sorted or not.
+   *
    * @param propertyValue value for property BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED.
    * @return the property value.
    */
   public static Boolean getBulkInsertIsPartitionRecordsSorted(String propertyValue) {
     return propertyValue != null ? Boolean.parseBoolean(propertyValue) : DEFAULT_BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED;
   }
-
 }

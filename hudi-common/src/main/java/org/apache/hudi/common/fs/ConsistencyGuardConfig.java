@@ -31,12 +31,11 @@ import java.util.Properties;
  */
 public class ConsistencyGuardConfig extends HoodieConfig {
 
-  // time between successive attempts to ensure written data's metadata is consistent on storage
-  @Deprecated
   public static final ConfigProperty<String> CONSISTENCY_CHECK_ENABLED_PROP = ConfigProperty
       .key("hoodie.consistency.check.enabled")
       .defaultValue("false")
       .sinceVersion("0.5.0")
+      .deprecatedAfter("0.7.0")
       .withDocumentation("Enabled to handle S3 eventual consistency issue. This property is no longer required "
           + "since S3 is now strongly consistent. Will be removed in the future releases.");
 
@@ -44,35 +43,37 @@ public class ConsistencyGuardConfig extends HoodieConfig {
       .key("hoodie.consistency.check.initial_interval_ms")
       .defaultValue(400L)
       .sinceVersion("0.5.0")
-      .withDocumentation("");
+      .deprecatedAfter("0.7.0")
+      .withDocumentation("Amount of time (in ms) to wait, before checking for consistency after an operation on storage.");
 
-  // max interval time
   public static final ConfigProperty<Long> MAX_CONSISTENCY_CHECK_INTERVAL_MS_PROP = ConfigProperty
       .key("hoodie.consistency.check.max_interval_ms")
       .defaultValue(20000L)
       .sinceVersion("0.5.0")
-      .withDocumentation("");
+      .deprecatedAfter("0.7.0")
+      .withDocumentation("Maximum amount of time (in ms), to wait for consistency checking.");
 
   // maximum number of checks, for consistency of written data. Will wait upto 140 Secs
   public static final ConfigProperty<Integer> MAX_CONSISTENCY_CHECKS_PROP = ConfigProperty
       .key("hoodie.consistency.check.max_checks")
       .defaultValue(6)
       .sinceVersion("0.5.0")
-      .withDocumentation("");
+      .deprecatedAfter("0.7.0")
+      .withDocumentation("Maximum number of consistency checks to perform, with exponential backoff.");
 
   // sleep time for OptimisticConsistencyGuard
   public static final ConfigProperty<Long> OPTIMISTIC_CONSISTENCY_GUARD_SLEEP_TIME_MS_PROP = ConfigProperty
       .key("hoodie.optimistic.consistency.guard.sleep_time_ms")
       .defaultValue(500L)
       .sinceVersion("0.6.0")
-      .withDocumentation("");
+      .withDocumentation("Amount of time (in ms), to wait after which we assume storage is consistent.");
 
   // config to enable OptimisticConsistencyGuard in finalizeWrite instead of FailSafeConsistencyGuard
   public static final ConfigProperty<Boolean> ENABLE_OPTIMISTIC_CONSISTENCY_GUARD_PROP = ConfigProperty
       .key("_hoodie.optimistic.consistency.guard.enable")
       .defaultValue(true)
       .sinceVersion("0.6.0")
-      .withDocumentation("");
+      .withDocumentation("Enable consistency guard, which optimistically assumes consistency is achieved after a certain time period.");
 
   private ConsistencyGuardConfig() {
     super();

@@ -31,31 +31,33 @@ public class HoodieWriteCommitKafkaCallbackConfig extends HoodieConfig {
       .key(CALLBACK_PREFIX + "kafka.bootstrap.servers")
       .noDefaultValue()
       .sinceVersion("0.7.0")
-      .withDocumentation("Bootstrap servers of kafka callback cluster");
+      .withDocumentation("Bootstrap servers of kafka cluster, to be used for publishing commit metadata.");
 
   public static final ConfigProperty<String> CALLBACK_KAFKA_TOPIC = ConfigProperty
       .key(CALLBACK_PREFIX + "kafka.topic")
       .noDefaultValue()
       .sinceVersion("0.7.0")
-      .withDocumentation("Kafka topic to be sent along with callback messages");
+      .withDocumentation("Kafka topic name to publish timeline activity into.");
 
   public static final ConfigProperty<String> CALLBACK_KAFKA_PARTITION = ConfigProperty
       .key(CALLBACK_PREFIX + "kafka.partition")
       .noDefaultValue()
       .sinceVersion("0.7.0")
-      .withDocumentation("partition of CALLBACK_KAFKA_TOPIC, 0 by default");
+      .withDocumentation("It may be desirable to serialize all changes into a single Kafka partition "
+          + " for providing strict ordering. By default, Kafka messages are keyed by table name, which "
+          + " guarantees ordering at the table level, but not globally (or when new partitions are added)");
 
   public static final ConfigProperty<String> CALLBACK_KAFKA_ACKS = ConfigProperty
       .key(CALLBACK_PREFIX + "kafka.acks")
       .defaultValue("all")
       .sinceVersion("0.7.0")
-      .withDocumentation("kafka acks level, all by default");
+      .withDocumentation("kafka acks level, all by default to ensure strong durability.");
 
   public static final ConfigProperty<Integer> CALLBACK_KAFKA_RETRIES = ConfigProperty
       .key(CALLBACK_PREFIX + "kafka.retries")
       .defaultValue(3)
       .sinceVersion("0.7.0")
-      .withDocumentation("Times to retry. 3 by default");
+      .withDocumentation("Times to retry the produce. 3 by default");
 
   /**
    * Set default value for {@link HoodieWriteCommitKafkaCallbackConfig} if needed.

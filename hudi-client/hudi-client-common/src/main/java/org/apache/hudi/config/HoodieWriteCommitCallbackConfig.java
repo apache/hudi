@@ -36,7 +36,7 @@ public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
       .key(CALLBACK_PREFIX + "on")
       .defaultValue(false)
       .sinceVersion("0.6.0")
-      .withDocumentation("Turn callback on/off. off by default.");
+      .withDocumentation("Turn commit callback on/off. off by default.");
 
   public static final ConfigProperty<String> CALLBACK_CLASS_PROP = ConfigProperty
       .key(CALLBACK_PREFIX + "class")
