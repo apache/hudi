@@ -39,6 +39,8 @@ import org.apache.hudi.sink.compact.FlinkCompactionConfig;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.partitioner.BucketAssignOperator;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
+import org.apache.hudi.sink.transform.Transformer;
+import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.CompactionUtil;
@@ -66,13 +68,13 @@ import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
+import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.TestLogger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -88,81 +90,67 @@ import java.util.concurrent.TimeUnit;
  */
 public class StreamWriteITCase extends TestLogger {
 
-  protected static final Logger LOG = LoggerFactory.getLogger(StreamWriteITCase.class);
-
   private static final Map<String, List<String>> EXPECTED = new HashMap<>();
+  private static final Map<String, List<String>> EXPECTED_TRANSFORMER = new HashMap<>();
+  private static final Map<String, List<String>> EXPECTED_CHAINED_TRANSFORMER = new HashMap<>();
 
   static {
     EXPECTED.put("par1", Arrays.asList("id1,par1,id1,Danny,23,1000,par1", "id2,par1,id2,Stephen,33,2000,par1"));
     EXPECTED.put("par2", Arrays.asList("id3,par2,id3,Julian,53,3000,par2", "id4,par2,id4,Fabian,31,4000,par2"));
     EXPECTED.put("par3", Arrays.asList("id5,par3,id5,Sophia,18,5000,par3", "id6,par3,id6,Emma,20,6000,par3"));
     EXPECTED.put("par4", Arrays.asList("id7,par4,id7,Bob,44,7000,par4", "id8,par4,id8,Han,56,8000,par4"));
+
+    EXPECTED_TRANSFORMER.put("par1", Arrays.asList("id1,par1,id1,Danny,24,1000,par1", "id2,par1,id2,Stephen,34,2000,par1"));
+    EXPECTED_TRANSFORMER.put("par2", Arrays.asList("id3,par2,id3,Julian,54,3000,par2", "id4,par2,id4,Fabian,32,4000,par2"));
+    EXPECTED_TRANSFORMER.put("par3", Arrays.asList("id5,par3,id5,Sophia,19,5000,par3", "id6,par3,id6,Emma,21,6000,par3"));
+    EXPECTED_TRANSFORMER.put("par4", Arrays.asList("id7,par4,id7,Bob,45,7000,par4", "id8,par4,id8,Han,57,8000,par4"));
+
+    EXPECTED_CHAINED_TRANSFORMER.put("par1", Arrays.asList("id1,par1,id1,Danny,25,1000,par1", "id2,par1,id2,Stephen,35,2000,par1"));
+    EXPECTED_CHAINED_TRANSFORMER.put("par2", Arrays.asList("id3,par2,id3,Julian,55,3000,par2", "id4,par2,id4,Fabian,33,4000,par2"));
+    EXPECTED_CHAINED_TRANSFORMER.put("par3", Arrays.asList("id5,par3,id5,Sophia,20,5000,par3", "id6,par3,id6,Emma,22,6000,par3"));
+    EXPECTED_CHAINED_TRANSFORMER.put("par4", Arrays.asList("id7,par4,id7,Bob,46,7000,par4", "id8,par4,id8,Han,58,8000,par4"));
   }
 
   @TempDir
   File tempFile;
 
   @Test
-  public void testWriteToHoodie() throws Exception {
-    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment();
-    execEnv.getConfig().disableObjectReuse();
-    execEnv.setParallelism(4);
-    // set up checkpoint interval
-    execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
-    execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
+  public void testTransformerBeforeWriting() throws Exception {
+    Transformer transformer = (ds) -> ds.map((rowdata) -> {
+      if (rowdata instanceof GenericRowData) {
+        GenericRowData genericRD = (GenericRowData) rowdata;
+        //update age field to age + 1
+        genericRD.setField(2, genericRD.getInt(2) + 1);
+        return genericRD;
+      } else {
+        throw new RuntimeException("Unrecognized row type information: " + rowdata.getClass().getSimpleName());
+      }
+    });
 
-    // Read from file source
-    RowType rowType =
-        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
-            .getLogicalType();
-    StreamWriteOperatorFactory<HoodieRecord> operatorFactory =
-        new StreamWriteOperatorFactory<>(conf);
+    testWriteToHoodie(transformer, EXPECTED_TRANSFORMER);
+  }
 
-    JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
-        rowType,
-        InternalTypeInfo.of(rowType),
-        false,
-        true,
-        TimestampFormat.ISO_8601
-    );
-    String sourcePath = Objects.requireNonNull(Thread.currentThread()
-        .getContextClassLoader().getResource("test_source.data")).toString();
+  @Test
+  public void testChainedTransformersBeforeWriting() throws Exception {
+    Transformer t1 = (ds) -> ds.map((rowdata) -> {
+      if (rowdata instanceof GenericRowData) {
+        GenericRowData genericRD = (GenericRowData) rowdata;
+        //update age field to age + 1
+        genericRD.setField(2, genericRD.getInt(2) + 1);
+        return genericRD;
+      } else {
+        throw new RuntimeException("Unrecognized row type : " + rowdata.getClass().getSimpleName());
+      }
+    });
 
-    DataStream<HoodieRecord> hoodieDataStream = execEnv
-        // use continuous file source to trigger checkpoint
-        .addSource(new ContinuousFileSource.BoundedSourceFunction(new Path(sourcePath), 2))
-        .name("continuous_file_source")
-        .setParallelism(1)
-        .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
-        .setParallelism(4)
-        .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class));
+    ChainedTransformer chainedTransformer = new ChainedTransformer(Arrays.asList(t1, t1));
 
-    if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
-      hoodieDataStream = hoodieDataStream.transform("index_bootstrap",
-          TypeInformation.of(HoodieRecord.class),
-          new ProcessOperator<>(new BootstrapFunction<>(conf)));
-    }
+    testWriteToHoodie(chainedTransformer, EXPECTED_CHAINED_TRANSFORMER);
+  }
 
-    DataStream<Object> pipeline = hoodieDataStream
-        // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
-        .keyBy(HoodieRecord::getRecordKey)
-        .transform(
-            "bucket_assigner",
-            TypeInformation.of(HoodieRecord.class),
-            new BucketAssignOperator<>(new BucketAssignFunction<>(conf)))
-        .uid("uid_bucket_assigner")
-        // shuffle by fileId(bucket id)
-        .keyBy(record -> record.getCurrentLocation().getFileId())
-        .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
-        .uid("uid_hoodie_stream_write");
-    execEnv.addOperator(pipeline.getTransformation());
-
-    JobClient client = execEnv.executeAsync(execEnv.getStreamGraph(conf.getString(FlinkOptions.TABLE_NAME)));
-    // wait for the streaming job to finish
-    client.getJobExecutionResult().get();
-
-    TestData.checkWrittenFullData(tempFile, EXPECTED);
+  @Test
+  public void testWriteToHoodieWithoutTransformer() throws Exception {
+    testWriteToHoodie(null, EXPECTED);
   }
 
   @Test
@@ -327,5 +315,77 @@ public class StreamWriteITCase extends TestLogger {
     }
 
     TestData.checkWrittenFullData(tempFile, EXPECTED);
+  }
+
+  private void testWriteToHoodie(
+      Transformer transformer,
+      Map<String, List<String>> expected) throws Exception {
+
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment();
+    execEnv.getConfig().disableObjectReuse();
+    execEnv.setParallelism(4);
+    // set up checkpoint interval
+    execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
+    execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
+
+    // Read from file source
+    RowType rowType =
+        (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(conf))
+            .getLogicalType();
+    StreamWriteOperatorFactory<HoodieRecord> operatorFactory =
+        new StreamWriteOperatorFactory<>(conf);
+
+    JsonRowDataDeserializationSchema deserializationSchema = new JsonRowDataDeserializationSchema(
+        rowType,
+        InternalTypeInfo.of(rowType),
+        false,
+        true,
+        TimestampFormat.ISO_8601
+    );
+    String sourcePath = Objects.requireNonNull(Thread.currentThread()
+        .getContextClassLoader().getResource("test_source.data")).toString();
+
+    DataStream<RowData> dataStream = execEnv
+        // use continuous file source to trigger checkpoint
+        .addSource(new ContinuousFileSource.BoundedSourceFunction(new Path(sourcePath), 2))
+        .name("continuous_file_source")
+        .setParallelism(1)
+        .map(record -> deserializationSchema.deserialize(record.getBytes(StandardCharsets.UTF_8)))
+        .setParallelism(4);
+
+    if (transformer != null) {
+      dataStream = transformer.apply(dataStream);
+    }
+
+    DataStream<HoodieRecord> hoodieDataStream = dataStream
+        .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class));
+
+    if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
+      hoodieDataStream = hoodieDataStream.transform("index_bootstrap",
+          TypeInformation.of(HoodieRecord.class),
+          new ProcessOperator<>(new BootstrapFunction<>(conf)));
+    }
+
+    DataStream<Object> pipeline = hoodieDataStream
+        // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
+        .keyBy(HoodieRecord::getRecordKey)
+        .transform(
+            "bucket_assigner",
+            TypeInformation.of(HoodieRecord.class),
+            new BucketAssignOperator<>(new BucketAssignFunction<>(conf)))
+        .uid("uid_bucket_assigner")
+        // shuffle by fileId(bucket id)
+        .keyBy(record -> record.getCurrentLocation().getFileId())
+        .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
+        .uid("uid_hoodie_stream_write");
+    execEnv.addOperator(pipeline.getTransformation());
+
+    JobClient client = execEnv.executeAsync(execEnv.getStreamGraph(conf.getString(FlinkOptions.TABLE_NAME)));
+    // wait for the streaming job to finish
+    client.getJobExecutionResult().get();
+
+    TestData.checkWrittenFullData(tempFile, expected);
+
   }
 }
