@@ -291,8 +291,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Enable usage of either BITCASK or ROCKS_DB as disk map for External Spillable Map");
 
   public static final ConfigProperty<Boolean> DISK_MAP_BITCASK_COMPRESSION_ENABLED = ConfigProperty
-      .key("hoodie.diskmap.bitcask.enabled")
-      .defaultValue(false)
+      .key("hoodie.diskmap.bitcask.compression.enabled")
+      .defaultValue(true)
       .withDocumentation("Turn on compression for BITCASK disk map used by the External Spillable Map");
 
   public static final ConfigProperty<Integer> CLIENT_HEARTBEAT_INTERVAL_IN_MS_PROP = ConfigProperty

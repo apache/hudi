@@ -116,7 +116,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
                 break;
               case BITCASK:
               default:
-                diskBasedMap = isCompressionEnabled ? (new BitCaskDiskMap<>(baseFilePath, true)) : (new BitCaskDiskMap<>(baseFilePath, false));
+                diskBasedMap =  new BitCaskDiskMap<>(baseFilePath, isCompressionEnabled);
             }
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);
