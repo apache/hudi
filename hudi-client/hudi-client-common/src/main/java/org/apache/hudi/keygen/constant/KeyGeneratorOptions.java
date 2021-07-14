@@ -19,13 +19,14 @@
 package org.apache.hudi.keygen.constant;
 
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieConfig;
 
-public class KeyGeneratorOptions {
+public class KeyGeneratorOptions extends HoodieConfig {
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING_OPT_KEY = ConfigProperty
       .key("hoodie.datasource.write.partitionpath.urlencode")
       .defaultValue("false")
-      .withDocumentation("");
+      .withDocumentation("Should we url encode the partition path value, before creating the folder structure.");
 
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_OPT_KEY = ConfigProperty
       .key("hoodie.datasource.write.hive_style_partitioning")

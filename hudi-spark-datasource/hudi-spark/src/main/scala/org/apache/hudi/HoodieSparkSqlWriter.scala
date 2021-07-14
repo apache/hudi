@@ -17,20 +17,17 @@
 
 package org.apache.hudi
 
-import java.util
-import java.util.Properties
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.client.HoodieWriteResult
-import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
 import org.apache.hudi.common.config.{HoodieConfig, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.{CommitUtils, ReflectionUtils}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BOOTSTRAP_BASE_PATH_PROP, BOOTSTRAP_INDEX_CLASS_PROP}
 import org.apache.hudi.config.{HoodieInternalConfig, HoodieWriteConfig}
@@ -43,14 +40,15 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.sync.common.AbstractSyncTool
 import org.apache.hudi.table.BulkInsertPartitioner
 import org.apache.log4j.LogManager
-import org.apache.spark.SPARK_VERSION
-import org.apache.spark.SparkContext
+import org.apache.spark.{SPARK_VERSION, SparkContext}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, Dataset,Row, SQLContext, SaveMode, SparkSession}
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 
+import java.util
+import java.util.Properties
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ListBuffer
 
@@ -365,7 +363,7 @@ object HoodieSparkSqlWriter {
     } else if (SPARK_VERSION.startsWith("3.")) {
       hoodieDF.write.format("org.apache.hudi.spark3.internal")
         .option(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY, instantTime)
-        .option(HoodieWriteConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL.key, hoodieDF.schema.toDDL)
+        .option(HoodieInternalConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL.key, hoodieDF.schema.toDDL)
         .options(params)
         .mode(SaveMode.Append)
         .save()

@@ -37,14 +37,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".enable")
       .defaultValue(false)
       .sinceVersion("0.7.0")
-      .withDocumentation("Enable the internal Metadata Table which stores table level file listings");
+      .withDocumentation("Enable the internal metadata table which serves table metadata like level file listings");
 
   // Validate contents of Metadata Table on each access against the actual filesystem
   public static final ConfigProperty<Boolean> METADATA_VALIDATE_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".validate")
       .defaultValue(false)
       .sinceVersion("0.7.0")
-      .withDocumentation("Validate contents of Metadata Table on each access against the actual listings from DFS");
+      .withDocumentation("Validate contents of metadata table on each access; e.g against the actual listings from lake storage");
 
   public static final boolean DEFAULT_METADATA_ENABLE_FOR_READERS = false;
 
@@ -53,14 +53,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".metrics.enable")
       .defaultValue(false)
       .sinceVersion("0.7.0")
-      .withDocumentation("");
+      .withDocumentation("Enable publishing of metrics around metadata table.");
 
   // Parallelism for inserts
   public static final ConfigProperty<Integer> METADATA_INSERT_PARALLELISM_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".insert.parallelism")
       .defaultValue(1)
       .sinceVersion("0.7.0")
-      .withDocumentation("Parallelism to use when writing to the metadata table");
+      .withDocumentation("Parallelism to use when inserting to the metadata table");
 
   // Async clean
   public static final ConfigProperty<Boolean> METADATA_ASYNC_CLEAN_PROP = ConfigProperty
@@ -81,32 +81,32 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".keep.min.commits")
       .defaultValue(20)
       .sinceVersion("0.7.0")
-      .withDocumentation("Controls the archival of the metadata table’s timeline");
+      .withDocumentation("Controls the archival of the metadata table’s timeline.");
 
   public static final ConfigProperty<Integer> MAX_COMMITS_TO_KEEP_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".keep.max.commits")
       .defaultValue(30)
       .sinceVersion("0.7.0")
-      .withDocumentation("Controls the archival of the metadata table’s timeline");
+      .withDocumentation("Controls the archival of the metadata table’s timeline.");
 
   // Cleaner commits retained
   public static final ConfigProperty<Integer> CLEANER_COMMITS_RETAINED_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".cleaner.commits.retained")
       .defaultValue(3)
       .sinceVersion("0.7.0")
-      .withDocumentation("");
+      .withDocumentation("Controls retention/history for metadata table.");
 
   // Regex to filter out matching directories during bootstrap
   public static final ConfigProperty<String> DIRECTORY_FILTER_REGEX = ConfigProperty
       .key(METADATA_PREFIX + ".dir.filter.regex")
       .defaultValue("")
       .sinceVersion("0.7.0")
-      .withDocumentation("");
+      .withDocumentation("Directories matching this regex, will be filtered out when initializing metadata table from lake storage for the first time.");
 
   public static final ConfigProperty<String> HOODIE_ASSUME_DATE_PARTITIONING_PROP = ConfigProperty
       .key("hoodie.assume.date.partitioning")
       .defaultValue("false")
-      .sinceVersion("0.7.0")
+      .sinceVersion("0.3.0")
       .withDocumentation("Should HoodieWriteClient assume the data is partitioned by dates, i.e three levels from base path. "
           + "This is a stop-gap to support tables created by versions < 0.3.1. Will be removed eventually");
 
@@ -114,7 +114,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key("hoodie.file.listing.parallelism")
       .defaultValue(1500)
       .sinceVersion("0.7.0")
-      .withDocumentation("");
+      .withDocumentation("Parallelism to use, when listing the table on lake storage.");
 
   private HoodieMetadataConfig() {
     super();

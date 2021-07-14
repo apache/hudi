@@ -34,19 +34,19 @@ public class HoodieMetricsPrometheusConfig extends HoodieConfig {
       .key(PUSHGATEWAY_PREFIX + ".host")
       .defaultValue("localhost")
       .sinceVersion("0.6.0")
-      .withDocumentation("");
+      .withDocumentation("Hostname of the prometheus push gateway");
 
   public static final ConfigProperty<Integer> PUSHGATEWAY_PORT = ConfigProperty
       .key(PUSHGATEWAY_PREFIX + ".port")
       .defaultValue(9091)
       .sinceVersion("0.6.0")
-      .withDocumentation("");
+      .withDocumentation("Port for the push gateway.");
 
   public static final ConfigProperty<Integer> PUSHGATEWAY_REPORT_PERIOD_SECONDS = ConfigProperty
       .key(PUSHGATEWAY_PREFIX + ".report.period.seconds")
       .defaultValue(30)
       .sinceVersion("0.6.0")
-      .withDocumentation("");
+      .withDocumentation("Reporting interval in seconds.");
 
   public static final ConfigProperty<Boolean> PUSHGATEWAY_DELETE_ON_SHUTDOWN = ConfigProperty
       .key(PUSHGATEWAY_PREFIX + ".delete.on.shutdown")
@@ -58,7 +58,7 @@ public class HoodieMetricsPrometheusConfig extends HoodieConfig {
       .key(PUSHGATEWAY_PREFIX + ".job.name")
       .defaultValue("")
       .sinceVersion("0.6.0")
-      .withDocumentation("");
+      .withDocumentation("Name of the push gateway job.");
 
   public static final ConfigProperty<Boolean> PUSHGATEWAY_RANDOM_JOB_NAME_SUFFIX = ConfigProperty
       .key(PUSHGATEWAY_PREFIX + ".random.job.name.suffix")
@@ -73,7 +73,7 @@ public class HoodieMetricsPrometheusConfig extends HoodieConfig {
       .key(PROMETHEUS_PREFIX + ".port")
       .defaultValue(9090)
       .sinceVersion("0.6.0")
-      .withDocumentation("");
+      .withDocumentation("Port for prometheus server.");
 
   private HoodieMetricsPrometheusConfig() {
     super();
