@@ -296,4 +296,16 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     return Option.empty();
   }
+
+  @Override
+  public Option<String> getLatestCompactionTime() {
+    if (metaClient != null) {
+      Option<HoodieInstant> latestCompaction = metaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().lastInstant();
+      if (latestCompaction.isPresent()) {
+        return Option.of(latestCompaction.get().getTimestamp());
+      }
+    }
+
+    return Option.empty();
+  }
 }

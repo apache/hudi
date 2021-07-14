@@ -768,14 +768,10 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   }
 
   /**
-<<<<<<< HEAD:hudi-client/hudi-spark-client/src/test/java/org/apache/hudi/client/functional/TestHoodieBackedMetadata.java
-   * Instants on Metadata Table should be archived as per config. Metadata Table should be automatically compacted as per config.
-=======
    * Instants on Metadata Table should be archived as per config but we always keep atlest the number of instants
    * as on the dataset.
    *
    * Metadata Table should be automatically compacted as per config.
->>>>>>> 0e127f095 ([HUDI-859] Fixed compactions on the Metadata Table.):hudi-client/hudi-spark-client/src/test/java/org/apache/hudi/metadata/TestHoodieBackedMetadata.java
    */
   @Test
   public void testCleaningArchivingAndCompaction() throws Exception {
@@ -783,13 +779,11 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
     final int maxDeltaCommitsBeforeCompaction = 3;
-    final int minArchiveLimit = 40;
-    final int maxArchiveLimit = 60;
     HoodieWriteConfig config = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
-            .archiveCommitsWith(6, 8).retainCommits(1)
+            .archiveCommitsWith(40, 60).retainCommits(1)
             .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommitsBeforeCompaction).build())
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(minArchiveLimit, maxArchiveLimit)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().archiveCommitsWith(2, 4)
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.NEVER)
             .retainCommits(1).retainFileVersions(1).withAutoClean(true).withAsyncClean(false).build())
         .build();
@@ -815,6 +809,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       HoodieActiveTimeline metadataTimeline = metadataMetaClient.reloadActiveTimeline();
       assertEquals(metadataTimeline.getCommitTimeline().filterCompletedInstants().countInstants(), 0);
       assertEquals(metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants(), maxDeltaCommitsBeforeCompaction - 1);
+      assertEquals(datasetMetaClient.getArchivedTimeline().reload().countInstants(), 0);
 
       // Next commit will initiate a compaction
       newCommitTime = HoodieActiveTimeline.createNewInstantTime();
@@ -824,6 +819,7 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       metadataTimeline = metadataMetaClient.reloadActiveTimeline();
       assertEquals(metadataTimeline.getCommitTimeline().filterCompletedInstants().countInstants(), 1);
       assertEquals(metadataTimeline.getCommitsTimeline().filterCompletedInstants().countInstants(), maxDeltaCommitsBeforeCompaction + 1);
+      assertEquals(datasetMetaClient.getArchivedTimeline().reload().countInstants(), 0);
 
       // More than maxDeltaCommitsBeforeCompaction commits
       String inflightCommitTime = newCommitTime;
@@ -858,6 +854,8 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
       metadataTimeline = metadataMetaClient.reloadActiveTimeline();
       assertEquals(metadataTimeline.getCommitTimeline().filterCompletedInstants().countInstants(), 2);
       assertEquals(metadataTimeline.getDeltaCommitTimeline().filterCompletedInstants().countInstants(), 2 * maxDeltaCommitsBeforeCompaction + 1 + 5 /* cleans */);
+
+      assertTrue(datasetMetaClient.getArchivedTimeline().reload().countInstants() > 0);
 
       validateMetadata(client);
     }

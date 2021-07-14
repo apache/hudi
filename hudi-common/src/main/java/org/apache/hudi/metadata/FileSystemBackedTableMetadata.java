@@ -131,6 +131,11 @@ public class FileSystemBackedTableMetadata implements HoodieTableMetadata {
   }
 
   @Override
+  public Option<String> getLatestCompactionTime() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
   public void close() throws Exception {
     // no-op
   }

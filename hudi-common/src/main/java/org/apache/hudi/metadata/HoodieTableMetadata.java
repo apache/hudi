@@ -104,4 +104,9 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * Get the instant time to which the metadata is synced w.r.t data timeline.
    */
   Option<String> getSyncedInstantTime();
+
+  /**
+   * Returns the timestamp of the latest compaction.
+   */
+  Option<String> getLatestCompactionTime();
 }
