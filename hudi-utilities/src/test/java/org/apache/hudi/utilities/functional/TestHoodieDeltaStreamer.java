@@ -1147,7 +1147,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
       HoodieClusteringJob scheduleClusteringJob = new HoodieClusteringJob(jsc, scheduleClusteringConfig);
 
       try {
-        int result = scheduleClusteringJob.doScheduleAndCluster();
+        int result = scheduleClusteringJob.doScheduleAndCluster(jsc);
         if (result == 0) {
           LOG.info("Cluster success");
         } else {

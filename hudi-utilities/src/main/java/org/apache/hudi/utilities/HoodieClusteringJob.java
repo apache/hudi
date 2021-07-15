@@ -156,10 +156,13 @@ public class HoodieClusteringJob {
           LOG.info("Running Mode: [" + SCHEDULE_AND_EXECUTE + "]");
           return doScheduleAndCluster(jsc);
         }
-        case EXECUTE:
-        default: {
+        case EXECUTE: {
           LOG.info("Running Mode: [" + EXECUTE + "]; Do cluster");
           return doCluster(jsc);
+        }
+        default: {
+          LOG.info("Unsupported running mode [" + runningMode + "], quit the job directly");
+          return -1;
         }
       }
     }, "Cluster failed");
@@ -199,11 +202,6 @@ public class HoodieClusteringJob {
       }
       return client.scheduleClustering(Option.empty());
     }
-  }
-
-  @TestOnly
-  public int doScheduleAndCluster() throws Exception {
-    return this.doScheduleAndCluster(jsc);
   }
 
   public int doScheduleAndCluster(JavaSparkContext jsc) throws Exception {
