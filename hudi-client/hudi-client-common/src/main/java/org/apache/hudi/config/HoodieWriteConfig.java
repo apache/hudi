@@ -305,6 +305,11 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "By default, we use a persistent hashmap based loosely on bitcask, that offers O(1) inserts, lookups. "
           + "Change this to `ROCKS_DB` to prefer using rocksDB, for handling the spill.");
 
+  public static final ConfigProperty<Boolean> DISK_MAP_BITCASK_COMPRESSION_ENABLED = ConfigProperty
+      .key("hoodie.diskmap.bitcask.compression.enabled")
+      .defaultValue(true)
+      .withDocumentation("Turn on compression for BITCASK disk map used by the External Spillable Map");
+
   public static final ConfigProperty<Integer> CLIENT_HEARTBEAT_INTERVAL_IN_MS_PROP = ConfigProperty
       .key("hoodie.client.heartbeat.interval_in_ms")
       .defaultValue(60 * 1000)
@@ -580,6 +585,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public ExternalSpillableMap.DiskMapType getSpillableDiskMapType() {
     return ExternalSpillableMap.DiskMapType.valueOf(getString(SPILLABLE_DISK_MAP_TYPE).toUpperCase(Locale.ROOT));
+  }
+
+  public boolean isBitCaskDiskMapCompressionEnabled() {
+    return getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED);
   }
 
   public EngineType getEngineType() {
@@ -1538,6 +1547,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withSpillableDiskMapType(ExternalSpillableMap.DiskMapType diskMapType) {
       writeConfig.setValue(SPILLABLE_DISK_MAP_TYPE, diskMapType.name());
+      return this;
+    }
+
+    public Builder withBitcaskDiskMapCompressionEnabled(boolean bitcaskDiskMapCompressionEnabled) {
+      writeConfig.setValue(DISK_MAP_BITCASK_COMPRESSION_ENABLED, String.valueOf(bitcaskDiskMapCompressionEnabled));
       return this;
     }
 
