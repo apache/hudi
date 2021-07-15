@@ -23,6 +23,7 @@ import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_BLOOM_FILTER_TY
 import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER;
 import static org.apache.hudi.avro.HoodieAvroWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -47,7 +48,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.AvroOrcUtils;
 
 public class HoodieOrcWriter<T extends HoodieRecordPayload, R extends IndexedRecord>
-    implements HoodieFileWriter<R> {
+    implements HoodieFileWriter<R>, Closeable {
   private static final AtomicLong RECORD_INDEX = new AtomicLong(1);
 
   private final long maxFileSize;

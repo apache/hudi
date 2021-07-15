@@ -37,12 +37,14 @@ public class HoodiePayloadConfig extends HoodieConfig {
   public static final ConfigProperty<String> PAYLOAD_ORDERING_FIELD_PROP = ConfigProperty
       .key(PAYLOAD_ORDERING_FIELD_PROP_KEY)
       .defaultValue("ts")
-      .withDocumentation("Property to hold the payload ordering field name");
+      .withDocumentation("Table column/field name to order records that have the same key, before "
+          + "merging and writing to storage.");
 
   public static final ConfigProperty<String> PAYLOAD_EVENT_TIME_FIELD_PROP = ConfigProperty
       .key(PAYLOAD_EVENT_TIME_FIELD_PROP_KEY)
       .defaultValue("ts")
-      .withDocumentation("Property for payload event time field");
+      .withDocumentation("Table column/field name to derive timestamp associated with the records. This can"
+          + "be useful for e.g, determining the freshness of the table.");
 
   private HoodiePayloadConfig() {
     super();

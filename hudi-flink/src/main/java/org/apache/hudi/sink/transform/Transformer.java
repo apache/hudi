@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,31 +16,20 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.fs;
+package org.apache.hudi.sink.transform;
 
-import org.apache.hadoop.fs.Path;
-
-import java.util.List;
+import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.table.data.RowData;
 
 /**
- * Default Consistency guard that does nothing. Used for lake storage which provided read-after-write
- * guarantees.
+ * Transform source stream to target stream before writing.
  */
-public class NoOpConsistencyGuard implements ConsistencyGuard {
+public interface Transformer {
 
-  @Override
-  public void waitTillFileAppears(Path filePath) {}
+  /**
+   * Transform source DataStream to target DataStream.
+   * @param source
+   */
+  DataStream<RowData> apply(DataStream<RowData> source);
 
-  @Override
-  public void waitTillFileDisappears(Path filePath) {}
-
-  @Override
-  public void waitTillAllFilesAppear(String dirPath, List<String> files) {
-
-  }
-
-  @Override
-  public void waitTillAllFilesDisappear(String dirPath, List<String> files) {
-
-  }
 }

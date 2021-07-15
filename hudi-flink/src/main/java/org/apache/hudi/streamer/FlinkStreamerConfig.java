@@ -117,6 +117,12 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--commit-on-errors"}, description = "Commit even when some records failed to be written.")
   public Boolean commitOnErrors = false;
 
+  @Parameter(names = {"--transformer-class"},
+      description = "A subclass or a list of subclasses of org.apache.hudi.sink.transform.Transformer"
+          + ". Allows transforming raw source DataStream to a target DataStream (conforming to target schema) before "
+          + "writing. Default : Not set. Pass a comma-separated list of subclass names to chain the transformations.")
+  public List<String> transformerClassNames = null;
+
   /**
    * Flink checkpoint interval.
    */
@@ -125,6 +131,9 @@ public class FlinkStreamerConfig extends Configuration {
 
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;
+
+  @Parameter(names = {"--index-bootstrap-num"}, description = "Parallelism of tasks that do bucket assign, default is 4.")
+  public Integer indexBootstrapNum = 4;
 
   @Parameter(names = {"--bucket-assign-num"}, description = "Parallelism of tasks that do bucket assign, default is 4.")
   public Integer bucketAssignNum = 4;
@@ -316,6 +325,7 @@ public class FlinkStreamerConfig extends Configuration {
     } else {
       conf.setString(FlinkOptions.KEYGEN_TYPE, config.keygenType);
     }
+    conf.setInteger(FlinkOptions.INDEX_BOOTSTRAP_TASKS, config.indexBootstrapNum);
     conf.setInteger(FlinkOptions.BUCKET_ASSIGN_TASKS, config.bucketAssignNum);
     conf.setInteger(FlinkOptions.WRITE_TASKS, config.writeTaskNum);
     conf.setString(FlinkOptions.PARTITION_DEFAULT_NAME, config.partitionDefaultName);
