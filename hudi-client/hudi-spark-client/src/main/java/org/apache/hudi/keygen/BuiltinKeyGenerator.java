@@ -75,7 +75,6 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public String getRecordKey(Row row) {
     if (null == converterFn) {
-      LOG.warn("Instantiating row converter fn 11 ");
       converterFn = AvroConversionHelper.createConverterToAvro(row.schema(), STRUCT_NAME, NAMESPACE);
     }
     GenericRecord genericRecord = (GenericRecord) converterFn.apply(row);
@@ -105,6 +104,8 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * @param structType  schema of the internalRow.
    * @return the partition path.
    */
+  @Override
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public String getPartitionPath(InternalRow internalRow, StructType structType) {
     try {
       initDeserializer(structType);

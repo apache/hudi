@@ -45,7 +45,8 @@ public class HoodieFileWriterFactory {
       TaskContextSupplier taskContextSupplier) throws IOException {
     final String extension = FSUtils.getFileExtension(path.getName());
     if (PARQUET.getFileExtension().equals(extension)) {
-      return newParquetFileWriter(instantTime, path, config, schema, hoodieTable, taskContextSupplier);
+      return newParquetFileWriter(instantTime, path, config, schema, hoodieTable, taskContextSupplier, config.populateMetaColumns(),
+          config.populateMetaColumns());
     }
     if (HFILE.getFileExtension().equals(extension)) {
       return newHFileFileWriter(instantTime, path, config, schema, hoodieTable, taskContextSupplier);
@@ -58,16 +59,15 @@ public class HoodieFileWriterFactory {
 
   private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieFileWriter<R> newParquetFileWriter(
       String instantTime, Path path, HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable,
-      TaskContextSupplier taskContextSupplier) throws IOException {
-    BloomFilter filter = createBloomFilter(config);
-    HoodieAvroWriteSupport writeSupport =
-        new HoodieAvroWriteSupport(new AvroSchemaConverter(hoodieTable.getHadoopConf()).convert(schema), schema, filter);
+      TaskContextSupplier taskContextSupplier, boolean populateMetaCols, boolean enableBloomFilter) throws IOException {
+      BloomFilter filter = enableBloomFilter ? createBloomFilter(config) : null;
+      HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter(hoodieTable.getHadoopConf()).convert(schema), schema, filter);
 
-    HoodieAvroParquetConfig parquetConfig = new HoodieAvroParquetConfig(writeSupport, config.getParquetCompressionCodec(),
-        config.getParquetBlockSize(), config.getParquetPageSize(), config.getParquetMaxFileSize(),
-        hoodieTable.getHadoopConf(), config.getParquetCompressionRatio());
+      HoodieAvroParquetConfig parquetConfig = new HoodieAvroParquetConfig(writeSupport, config.getParquetCompressionCodec(),
+          config.getParquetBlockSize(), config.getParquetPageSize(), config.getParquetMaxFileSize(),
+          hoodieTable.getHadoopConf(), config.getParquetCompressionRatio());
 
-    return new HoodieParquetWriter<>(instantTime, path, parquetConfig, schema, taskContextSupplier);
+      return new HoodieParquetWriter<>(instantTime, path, parquetConfig, schema, taskContextSupplier, populateMetaCols);
   }
 
   private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieFileWriter<R> newHFileFileWriter(

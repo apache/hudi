@@ -61,6 +61,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
@@ -240,6 +241,22 @@ public class HoodieAvroUtils {
 
     toBeAddedFields.add(recordKeyField);
     toBeAddedFields.add(partitionPathField);
+    recordSchema.setFields(toBeAddedFields);
+    return recordSchema;
+  }
+
+  /**
+   * Fetch schema for record key and partition path.
+   */
+  public static Schema getRecordKeyPartitionPathSchema(Schema fileSchema, List<String> recordKeyFields, List<String> partitionPathFields) {
+    List<Schema.Field> toBeAddedFields = new ArrayList<>();
+    Schema recordSchema = Schema.createRecord("HoodieRecordKey", "", "", false);
+
+    for(Schema.Field schemaField: fileSchema.getFields()) {
+      if (recordKeyFields.contains(schemaField.name()) || partitionPathFields.contains(schemaField.name())) {
+        toBeAddedFields.add(new Schema.Field(schemaField.name(), schemaField.schema(), schemaField.doc(), schemaField.defaultValue()));
+      }
+    }
     recordSchema.setFields(toBeAddedFields);
     return recordSchema;
   }

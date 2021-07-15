@@ -32,6 +32,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -56,6 +57,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -223,6 +225,14 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     }
 
     metaClient = HoodieTestUtils.init(hadoopConf, basePath, tableType);
+  }
+
+  protected Properties getPropertiesForKeyGen() {
+    Properties properties = new Properties();
+    properties.put(HoodieTableConfig.HOODIE_POPULATE_META_COLUMNS.key(), "false");
+    properties.put("hoodie.datasource.write.recordkey.field","_row_key");
+    properties.put("hoodie.datasource.write.partitionpath.field","partition_path");
+    return properties;
   }
 
   /**

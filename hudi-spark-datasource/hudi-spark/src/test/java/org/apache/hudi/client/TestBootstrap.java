@@ -563,7 +563,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     IntStream.range(from, to).forEach(i -> {
       String id = "" + i;
       records.add(generateGenericRecord("trip_" + id, "rider_" + id, "driver_" + id,
-          timestamp, false, false).toString());
+          Long.toString(timestamp), false, false).toString());
     });
     if (isPartitioned) {
       sqlContext.udf().register("partgen",
