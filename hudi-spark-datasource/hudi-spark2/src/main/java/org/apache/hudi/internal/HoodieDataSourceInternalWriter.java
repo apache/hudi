@@ -18,6 +18,7 @@
 
 package org.apache.hudi.internal;
 
+import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.client.HoodieInternalWriteStatus;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -26,13 +27,16 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.sources.v2.DataSourceOptions;
 import org.apache.spark.sql.sources.v2.writer.DataSourceWriter;
 import org.apache.spark.sql.sources.v2.writer.DataWriterFactory;
 import org.apache.spark.sql.sources.v2.writer.WriterCommitMessage;
 import org.apache.spark.sql.types.StructType;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -46,15 +50,18 @@ public class HoodieDataSourceInternalWriter implements DataSourceWriter {
   private final StructType structType;
   private final DataSourceInternalWriterHelper dataSourceInternalWriterHelper;
   private final Boolean arePartitionRecordsSorted;
+  private Map<String, String> extraMetadataMap = new HashMap<>();
 
   public HoodieDataSourceInternalWriter(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
-                                        SparkSession sparkSession, Configuration configuration, boolean arePartitionRecordsSorted) {
+                                        SparkSession sparkSession, Configuration configuration, DataSourceOptions dataSourceOptions,
+                                        boolean arePartitionRecordsSorted) {
     this.instantTime = instantTime;
     this.writeConfig = writeConfig;
     this.structType = structType;
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
+    this.extraMetadataMap = DataSourceUtils.getExtraMetadata(dataSourceOptions.asMap());
     this.dataSourceInternalWriterHelper = new DataSourceInternalWriterHelper(instantTime, writeConfig, structType,
-        sparkSession, configuration);
+        sparkSession, configuration, extraMetadataMap);
   }
 
   @Override
@@ -89,4 +96,5 @@ public class HoodieDataSourceInternalWriter implements DataSourceWriter {
   public void abort(WriterCommitMessage[] messages) {
     dataSourceInternalWriterHelper.abort();
   }
+
 }

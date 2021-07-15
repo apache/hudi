@@ -156,6 +156,7 @@ public class HoodieJavaApp {
             nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
                 : SimpleKeyGenerator.class.getCanonicalName())
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_OPT_KEY().key(), "false")
+        .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE_OPT_KEY().key(), "true")
         // This will remove any existing data at path below, and create a
         .mode(SaveMode.Overwrite);
 
@@ -183,6 +184,7 @@ public class HoodieJavaApp {
                 : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP.key(), "1")
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_OPT_KEY().key(), "false")
+        .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE_OPT_KEY().key(), "true")
         .option(HoodieWriteConfig.TABLE_NAME.key(), tableName).mode(SaveMode.Append);
 
     updateHiveSyncConfig(writer);
@@ -210,6 +212,7 @@ public class HoodieJavaApp {
                 : SimpleKeyGenerator.class.getCanonicalName()) // Add Key Extractor
         .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP.key(), "1")
         .option(DataSourceWriteOptions.ASYNC_COMPACT_ENABLE_OPT_KEY().key(), "false")
+        .option(DataSourceWriteOptions.ASYNC_CLUSTERING_ENABLE_OPT_KEY().key(), "true")
         .option(HoodieWriteConfig.TABLE_NAME.key(), tableName).mode(SaveMode.Append);
 
     updateHiveSyncConfig(writer);

@@ -18,21 +18,26 @@
 
 package org.apache.hudi.async;
 
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.Serializable;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 /**
- * Base Class for running clean/delta-sync/compaction in separate thread and controlling their life-cycle.
+ * Base Class for running clean/delta-sync/compaction/clustering in separate thread and controlling their life-cycle.
  */
 public abstract class HoodieAsyncService implements Serializable {
 
@@ -50,6 +55,12 @@ public abstract class HoodieAsyncService implements Serializable {
   private transient CompletableFuture future;
   // Run in daemon mode
   private final boolean runInDaemonMode;
+  // Queue to hold pending compaction/clustering instants
+  private transient BlockingQueue<HoodieInstant> pendingInstants = new LinkedBlockingQueue<>();
+  // Mutex lock for synchronized access to pendingInstants queue
+  private transient ReentrantLock queueLock = new ReentrantLock();
+  // Condition instance to use with the queueLock
+  private transient Condition consumed = queueLock.newCondition();
 
   protected HoodieAsyncService() {
     this(false);
@@ -164,5 +175,52 @@ public abstract class HoodieAsyncService implements Serializable {
 
   public boolean isRunInDaemonMode() {
     return runInDaemonMode;
+  }
+
+  /**
+   * Wait till outstanding pending compaction/clustering reduces to the passed in value.
+   *
+   * @param numPending Maximum pending compactions/clustering allowed
+   * @throws InterruptedException
+   */
+  public void waitTillPendingAsyncServiceInstantsReducesTo(int numPending) throws InterruptedException {
+    try {
+      queueLock.lock();
+      while (!isShutdown() && (pendingInstants.size() > numPending)) {
+        consumed.await();
+      }
+    } finally {
+      queueLock.unlock();
+    }
+  }
+
+  /**
+   * Enqueues new pending clustering instant.
+   * @param instant {@link HoodieInstant} to enqueue.
+   */
+  public void enqueuePendingAsyncServiceInstant(HoodieInstant instant) {
+    LOG.info("Enqueuing new pending clustering instant: " + instant.getTimestamp());
+    pendingInstants.add(instant);
+  }
+
+  /**
+   * Fetch next pending compaction/clustering instant if available.
+   *
+   * @return {@link HoodieInstant} corresponding to the next pending compaction/clustering.
+   * @throws InterruptedException
+   */
+  HoodieInstant fetchNextAsyncServiceInstant() throws InterruptedException {
+    LOG.info("Waiting for next instant upto 10 seconds");
+    HoodieInstant instant = pendingInstants.poll(10, TimeUnit.SECONDS);
+    if (instant != null) {
+      try {
+        queueLock.lock();
+        // Signal waiting thread
+        consumed.signal();
+      } finally {
+        queueLock.unlock();
+      }
+    }
+    return instant;
   }
 }
