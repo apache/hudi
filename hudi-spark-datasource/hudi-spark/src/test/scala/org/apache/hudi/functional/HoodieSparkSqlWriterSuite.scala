@@ -25,7 +25,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.{SparkRDDWriteClient, TestBootstrap}
 import org.apache.hudi.common.config.HoodieConfig
-import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordPayload}
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord, HoodieRecordPayload}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
@@ -38,7 +38,7 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{Row, SQLContext, SaveMode, SparkSession}
+import org.apache.spark.sql.{DataFrame, Row, SQLContext, SaveMode, SparkSession}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{spy, times, verify}
 import org.scalatest.{FunSuite, Matchers}
@@ -320,9 +320,12 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     }
   }
 
-  List(DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
-    .foreach(tableType => {
-      test("test basic HoodieSparkSqlWriter functionality with datasource insert for " + tableType) {
+  List((DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL, HoodieFileFormat.PARQUET.name()), (DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL, HoodieFileFormat.ORC.name()),
+    (DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL, HoodieFileFormat.PARQUET.name()), (DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL, HoodieFileFormat.ORC.name()))
+    .foreach(t => {
+      val tableType = t._1
+      val baseFileFormat = t._2
+      test("test basic HoodieSparkSqlWriter functionality with datasource insert for " + tableType + " with " + baseFileFormat + "as the base file format") {
         initSparkContext("test_insert_datasource")
         val path = java.nio.file.Files.createTempDirectory("hoodie_test_path")
         try {
@@ -332,6 +335,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
           //create a new table
           val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
             HoodieWriteConfig.TABLE_NAME.key -> hoodieFooTableName,
+            HoodieWriteConfig.BASE_FILE_FORMAT.key -> baseFileFormat,
             DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key -> tableType,
             HoodieWriteConfig.INSERT_PARALLELISM.key -> "4",
             DataSourceWriteOptions.OPERATION_OPT_KEY.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
@@ -373,7 +377,12 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
           }
 
           // fetch all records from parquet files generated from write to hudi
-          val actualDf = sqlContext.read.parquet(fullPartitionPaths(0), fullPartitionPaths(1), fullPartitionPaths(2))
+          var actualDf : DataFrame = null
+          if (baseFileFormat.equalsIgnoreCase(HoodieFileFormat.PARQUET.name())) {
+            actualDf = sqlContext.read.parquet(fullPartitionPaths(0), fullPartitionPaths(1), fullPartitionPaths(2))
+          } else if (baseFileFormat.equalsIgnoreCase(HoodieFileFormat.ORC.name())) {
+            actualDf = sqlContext.read.orc(fullPartitionPaths(0), fullPartitionPaths(1), fullPartitionPaths(2))
+          }
 
           // remove metadata columns so that expected and actual DFs can be compared as is
           val trimmedDf = actualDf.drop(HoodieRecord.HOODIE_META_COLUMNS.get(0)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(1))
