@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_REA
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
+import org.apache.hudi.hive.util.ConfigUtils
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.execution.datasources.{DataSource, FileStatusCache, HadoopFsRelation}
@@ -105,8 +106,14 @@ class DefaultSource extends RelationProvider
     val metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(tablePath).build()
     val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
     val tableType = metaClient.getTableType
-    val queryType = parameters.getOrElse(QUERY_TYPE_OPT_KEY.key, QUERY_TYPE_OPT_KEY.defaultValue)
-    log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType")
+
+    // First check if the ConfigUtils.IS_QUERY_AS_RO_TABLE has set by HiveSyncTool,
+    // or else use query type from QUERY_TYPE_OPT_KEY.
+    val queryType = parameters.get(ConfigUtils.IS_QUERY_AS_RO_TABLE)
+      .map(is => if (is.toBoolean) QUERY_TYPE_READ_OPTIMIZED_OPT_VAL else QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .getOrElse(parameters.getOrElse(QUERY_TYPE_OPT_KEY.key, QUERY_TYPE_OPT_KEY.defaultValue()))
+
+    log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
 
     (tableType, queryType, isBootstrappedTable) match {
       case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |

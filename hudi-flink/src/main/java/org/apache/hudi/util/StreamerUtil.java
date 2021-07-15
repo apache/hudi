@@ -28,6 +28,8 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
@@ -37,6 +39,8 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
+import org.apache.hudi.sink.transform.Transformer;
+import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 
@@ -55,6 +59,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
 import java.text.ParseException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -90,15 +96,15 @@ public class StreamerUtil {
   }
 
   public static Schema getSourceSchema(org.apache.flink.configuration.Configuration conf) {
-    if (conf.getOptional(FlinkOptions.READ_AVRO_SCHEMA_PATH).isPresent()) {
+    if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH).isPresent()) {
       return new FilebasedSchemaProvider(conf).getSourceSchema();
-    } else if (conf.getOptional(FlinkOptions.READ_AVRO_SCHEMA).isPresent()) {
-      final String schemaStr = conf.get(FlinkOptions.READ_AVRO_SCHEMA);
+    } else if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA).isPresent()) {
+      final String schemaStr = conf.get(FlinkOptions.SOURCE_AVRO_SCHEMA);
       return new Schema.Parser().parse(schemaStr);
     } else {
       final String errorMsg = String.format("Either option '%s' or '%s' "
               + "should be specified for avro schema deserialization",
-          FlinkOptions.READ_AVRO_SCHEMA_PATH.key(), FlinkOptions.READ_AVRO_SCHEMA.key());
+          FlinkOptions.SOURCE_AVRO_SCHEMA_PATH.key(), FlinkOptions.SOURCE_AVRO_SCHEMA.key());
       throw new HoodieException(errorMsg);
     }
   }
@@ -305,4 +311,17 @@ public class StreamerUtil {
       throw new HoodieException("Get instant time diff with interval [" + oldInstantTime + ", " + newInstantTime + "] error", e);
     }
   }
+
+  public static Option<Transformer> createTransformer(List<String> classNames) throws IOException {
+    try {
+      List<Transformer> transformers = new ArrayList<>();
+      for (String className : Option.ofNullable(classNames).orElse(Collections.emptyList())) {
+        transformers.add(ReflectionUtils.loadClass(className));
+      }
+      return transformers.isEmpty() ? Option.empty() : Option.of(new ChainedTransformer(transformers));
+    } catch (Throwable e) {
+      throw new IOException("Could not load transformer class(es) " + classNames, e);
+    }
+  }
+
 }
