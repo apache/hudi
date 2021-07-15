@@ -43,20 +43,7 @@ public class GlobalHiveSyncTool extends HiveSyncTool {
 
   @Override
   public void syncHoodieTable() {
-    switch (hoodieHiveClient.getTableType()) {
-      case COPY_ON_WRITE:
-        syncHoodieTable(snapshotTableName, false, false);
-        break;
-      case MERGE_ON_READ:
-        // sync a RO table for MOR
-        syncHoodieTable(roTableName.get(), false, true);
-        // sync a RT table for MOR
-        syncHoodieTable(snapshotTableName, true, false);
-        break;
-      default:
-        LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
-        throw new InvalidTableException(hoodieHiveClient.getBasePath());
-    }
+    doSync();
   }
 
   @Override
