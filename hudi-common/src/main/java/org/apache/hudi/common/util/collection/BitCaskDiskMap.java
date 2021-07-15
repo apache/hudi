@@ -29,9 +29,12 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.RandomAccessFile;
 import java.io.Serializable;
 import java.net.InetAddress;
@@ -47,43 +50,58 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
+import java.util.zip.Deflater;
+import java.util.zip.DeflaterOutputStream;
+import java.util.zip.InflaterInputStream;
 
 /**
  * This class provides a disk spillable only map implementation. All of the data is currenly written to one file,
  * without any rollover support. It uses the following : 1) An in-memory map that tracks the key-> latest ValueMetadata.
  * 2) Current position in the file NOTE : Only String.class type supported for Key
+ *
+ * Inspired by https://github.com/basho/bitcask
  */
-public final class DiskBasedMap<T extends Serializable, R extends Serializable> implements Map<T, R>, Iterable<R> {
+public final class BitCaskDiskMap<T extends Serializable, R extends Serializable> implements DiskMap<T, R> {
 
   public static final int BUFFER_SIZE = 128 * 1024;  // 128 KB
-  private static final Logger LOG = LogManager.getLogger(DiskBasedMap.class);
+  private static final Logger LOG = LogManager.getLogger(BitCaskDiskMap.class);
+  // Caching byte compression/decompression to avoid creating instances for every operation
+  private static final ThreadLocal<CompressionHandler> DISK_COMPRESSION_REF =
+      ThreadLocal.withInitial(CompressionHandler::new);
   // Stores the key and corresponding value's latest metadata spilled to disk
   private final Map<T, ValueMetadata> valueMetadataMap;
+  // Enables compression for all values stored in the disk map
+  private final boolean isCompressionEnabled;
   // Write only file
-  private File writeOnlyFile;
+  private final File writeOnlyFile;
   // Write only OutputStream to be able to ONLY append to the file
-  private SizeAwareDataOutputStream writeOnlyFileHandle;
+  private final SizeAwareDataOutputStream writeOnlyFileHandle;
   // FileOutputStream for the file handle to be able to force fsync
   // since FileOutputStream's flush() does not force flush to disk
-  private FileOutputStream fileOutputStream;
+  private final FileOutputStream fileOutputStream;
   // Current position in the file
-  private AtomicLong filePosition;
+  private final AtomicLong filePosition;
   // FilePath to store the spilled data
-  private String filePath;
+  private final String filePath;
   // Thread-safe random access file
-  private ThreadLocal<BufferedRandomAccessFile> randomAccessFile = new ThreadLocal<>();
-  private Queue<BufferedRandomAccessFile> openedAccessFiles = new ConcurrentLinkedQueue<>();
+  private final ThreadLocal<BufferedRandomAccessFile> randomAccessFile = new ThreadLocal<>();
+  private final Queue<BufferedRandomAccessFile> openedAccessFiles = new ConcurrentLinkedQueue<>();
 
   private transient Thread shutdownThread = null;
 
-  public DiskBasedMap(String baseFilePath) throws IOException {
+  public BitCaskDiskMap(String baseFilePath, boolean isCompressionEnabled) throws IOException {
     this.valueMetadataMap = new ConcurrentHashMap<>();
+    this.isCompressionEnabled = isCompressionEnabled;
     this.writeOnlyFile = new File(baseFilePath, UUID.randomUUID().toString());
     this.filePath = writeOnlyFile.getPath();
     initFile(writeOnlyFile);
     this.fileOutputStream = new FileOutputStream(writeOnlyFile, true);
     this.writeOnlyFileHandle = new SizeAwareDataOutputStream(fileOutputStream, BUFFER_SIZE);
     this.filePosition = new AtomicLong(0L);
+  }
+
+  public BitCaskDiskMap(String baseFilePath) throws IOException {
+    this(baseFilePath, false);
   }
 
   /**
@@ -136,7 +154,7 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
     try {
       writeOnlyFileHandle.flush();
     } catch (IOException e) {
-      throw new HoodieIOException("Failed to flush to DiskBasedMap file", e);
+      throw new HoodieIOException("Failed to flush to BitCaskDiskMap file", e);
     }
   }
 
@@ -145,12 +163,13 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
    */
   @Override
   public Iterator<R> iterator() {
-    return new LazyFileIterable(filePath, valueMetadataMap).iterator();
+    return new LazyFileIterable(filePath, valueMetadataMap, isCompressionEnabled).iterator();
   }
 
   /**
    * Number of bytes spilled to disk.
    */
+  @Override
   public long sizeOfFileOnDiskInBytes() {
     return filePosition.get();
   }
@@ -185,13 +204,16 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
   }
 
   private R get(ValueMetadata entry) {
-    return get(entry, getRandomAccessFile());
+    return get(entry, getRandomAccessFile(), isCompressionEnabled);
   }
 
-  public static <R> R get(ValueMetadata entry, RandomAccessFile file) {
+  public static <R> R get(ValueMetadata entry, RandomAccessFile file, boolean isCompressionEnabled) {
     try {
-      return SerializationUtils
-          .deserialize(SpillableMapUtils.readBytesFromDisk(file, entry.getOffsetOfValue(), entry.getSizeOfValue()));
+      byte[] bytesFromDisk = SpillableMapUtils.readBytesFromDisk(file, entry.getOffsetOfValue(), entry.getSizeOfValue());
+      if (isCompressionEnabled) {
+        return SerializationUtils.deserialize(DISK_COMPRESSION_REF.get().decompressBytes(bytesFromDisk));
+      }
+      return SerializationUtils.deserialize(bytesFromDisk);
     } catch (IOException e) {
       throw new HoodieIOException("Unable to readFromDisk Hoodie Record from disk", e);
     }
@@ -199,11 +221,12 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
 
   private synchronized R put(T key, R value, boolean flush) {
     try {
-      byte[] val = SerializationUtils.serialize(value);
+      byte[] val = isCompressionEnabled ? DISK_COMPRESSION_REF.get().compressBytes(SerializationUtils.serialize(value)) :
+          SerializationUtils.serialize(value);
       Integer valueSize = val.length;
       Long timestamp = System.currentTimeMillis();
       this.valueMetadataMap.put(key,
-          new DiskBasedMap.ValueMetadata(this.filePath, valueSize, filePosition.get(), timestamp));
+          new BitCaskDiskMap.ValueMetadata(this.filePath, valueSize, filePosition.get(), timestamp));
       byte[] serializedKey = SerializationUtils.serialize(key);
       filePosition
           .set(SpillableMapUtils.spillToDisk(writeOnlyFileHandle, new FileEntry(SpillableMapUtils.generateChecksum(val),
@@ -287,9 +310,10 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
     throw new HoodieException("Unsupported Operation Exception");
   }
 
+  @Override
   public Stream<R> valueStream() {
     final BufferedRandomAccessFile file = getRandomAccessFile();
-    return valueMetadataMap.values().stream().sorted().sequential().map(valueMetaData -> (R) get(valueMetaData, file));
+    return valueMetadataMap.values().stream().sorted().sequential().map(valueMetaData -> (R) get(valueMetaData, file, isCompressionEnabled));
   }
 
   @Override
@@ -393,6 +417,49 @@ public final class DiskBasedMap<T extends Serializable, R extends Serializable> 
     @Override
     public int compareTo(ValueMetadata o) {
       return Long.compare(this.offsetOfValue, o.offsetOfValue);
+    }
+  }
+
+  private static class CompressionHandler implements Serializable {
+    private static final int DISK_COMPRESSION_INITIAL_BUFFER_SIZE = 1048576;
+    private static final int DECOMPRESS_INTERMEDIATE_BUFFER_SIZE = 8192;
+
+    // Caching ByteArrayOutputStreams to avoid recreating it for every operation
+    private final ByteArrayOutputStream compressBaos;
+    private final ByteArrayOutputStream decompressBaos;
+    private final byte[] decompressIntermediateBuffer;
+
+    CompressionHandler() {
+      compressBaos = new ByteArrayOutputStream(DISK_COMPRESSION_INITIAL_BUFFER_SIZE);
+      decompressBaos = new ByteArrayOutputStream(DISK_COMPRESSION_INITIAL_BUFFER_SIZE);
+      decompressIntermediateBuffer = new byte[DECOMPRESS_INTERMEDIATE_BUFFER_SIZE];
+    }
+
+    private byte[] compressBytes(final byte[] value) throws IOException {
+      compressBaos.reset();
+      Deflater deflater = new Deflater(Deflater.BEST_COMPRESSION);
+      DeflaterOutputStream dos = new DeflaterOutputStream(compressBaos, deflater);
+      try {
+        dos.write(value);
+      } finally {
+        dos.close();
+        deflater.end();
+      }
+      return compressBaos.toByteArray();
+    }
+
+    private byte[] decompressBytes(final byte[] bytes) throws IOException {
+      decompressBaos.reset();
+      InputStream in = new InflaterInputStream(new ByteArrayInputStream(bytes));
+      try {
+        int len;
+        while ((len = in.read(decompressIntermediateBuffer)) > 0) {
+          decompressBaos.write(decompressIntermediateBuffer, 0, len);
+        }
+        return decompressBaos.toByteArray();
+      } catch (IOException e) {
+        throw new HoodieIOException("IOException while decompressing bytes", e);
+      }
     }
   }
 }

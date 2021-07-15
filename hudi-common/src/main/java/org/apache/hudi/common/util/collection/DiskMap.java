@@ -16,36 +16,34 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.config;
+package org.apache.hudi.common.util.collection;
 
 import java.io.Serializable;
-import java.util.Properties;
+import java.util.Map;
+import java.util.stream.Stream;
 
 /**
- * Default Way to load Hoodie config through a {@link java.util.Properties}.
+ * This interface provides the map interface for storing records in disk after they
+ * spill over from memory. Used by {@link ExternalSpillableMap}.
+ *
+ * @param <T> The generic type of the keys
+ * @param <R> The generic type of the values
  */
-public class DefaultHoodieConfig implements Serializable {
+public interface DiskMap<T extends Serializable, R extends Serializable> extends Map<T, R>, Iterable<R> {
 
-  protected final Properties props;
+  /**
+   * @returns a stream of the values stored in the disk.
+   */
+  Stream<R> valueStream();
 
-  public DefaultHoodieConfig(Properties props) {
-    this.props = props;
-  }
+  /**
+   * Number of bytes spilled to disk.
+   */
+  long sizeOfFileOnDiskInBytes();
 
-  public static void setDefaultOnCondition(Properties props, boolean condition, String propName, String defaultValue) {
-    if (condition) {
-      props.setProperty(propName, defaultValue);
-    }
-  }
-
-  public static void setDefaultOnCondition(Properties props, boolean condition, DefaultHoodieConfig config) {
-    if (condition) {
-      props.putAll(config.getProps());
-    }
-  }
-
-  public Properties getProps() {
-    return props;
-  }
+  /**
+   * Cleanup.
+   */
+  void close();
 
 }

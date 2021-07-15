@@ -18,6 +18,7 @@
 
 package org.apache.hudi.spark3.internal;
 
+import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.client.HoodieInternalWriteStatus;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -33,7 +34,9 @@ import org.apache.spark.sql.connector.write.PhysicalWriteInfo;
 import org.apache.spark.sql.types.StructType;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -45,15 +48,19 @@ public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
   private final String instantTime;
   private final HoodieWriteConfig writeConfig;
   private final StructType structType;
+  private final boolean arePartitionRecordsSorted;
   private final DataSourceInternalWriterHelper dataSourceInternalWriterHelper;
+  private Map<String, String> extraMetadata = new HashMap<>();
 
   public HoodieDataSourceInternalBatchWrite(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
-      SparkSession jss, Configuration hadoopConfiguration) {
+      SparkSession jss, Configuration hadoopConfiguration, Map<String, String> properties, boolean arePartitionRecordsSorted) {
     this.instantTime = instantTime;
     this.writeConfig = writeConfig;
     this.structType = structType;
+    this.arePartitionRecordsSorted = arePartitionRecordsSorted;
+    this.extraMetadata = DataSourceUtils.getExtraMetadata(properties);
     this.dataSourceInternalWriterHelper = new DataSourceInternalWriterHelper(instantTime, writeConfig, structType,
-        jss, hadoopConfiguration);
+        jss, hadoopConfiguration, extraMetadata);
   }
 
   @Override
@@ -61,7 +68,7 @@ public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
     dataSourceInternalWriterHelper.createInflightCommit();
     if (WriteOperationType.BULK_INSERT == dataSourceInternalWriterHelper.getWriteOperationType()) {
       return new HoodieBulkInsertDataInternalWriterFactory(dataSourceInternalWriterHelper.getHoodieTable(),
-          writeConfig, instantTime, structType);
+          writeConfig, instantTime, structType, arePartitionRecordsSorted);
     } else {
       throw new IllegalArgumentException("Write Operation Type + " + dataSourceInternalWriterHelper.getWriteOperationType() + " not supported ");
     }

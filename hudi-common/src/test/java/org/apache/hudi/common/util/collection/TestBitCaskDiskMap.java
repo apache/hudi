@@ -38,6 +38,8 @@ import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -57,36 +59,42 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests dis based map {@link DiskBasedMap}.
+ * Tests dis based map {@link BitCaskDiskMap}.
  */
-public class TestDiskBasedMap extends HoodieCommonTestHarness {
+public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
 
   @BeforeEach
   public void setup() {
     initPath();
   }
 
-  @Test
-  public void testSimpleInsert() throws IOException, URISyntaxException {
-    DiskBasedMap records = new DiskBasedMap<>(basePath);
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testSimpleInsert(boolean isCompressionEnabled) throws IOException, URISyntaxException {
+    BitCaskDiskMap records = new BitCaskDiskMap<>(basePath, isCompressionEnabled);
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
-    ((GenericRecord) iRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
+
+    Map<String, IndexedRecord> originalRecords = iRecords.stream()
+        .collect(Collectors.toMap(k -> ((GenericRecord) k).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString(), v -> v));
 
     // make sure records have spilled to disk
     assertTrue(records.sizeOfFileOnDiskInBytes() > 0);
     Iterator<HoodieRecord<? extends HoodieRecordPayload>> itr = records.iterator();
-    List<HoodieRecord> oRecords = new ArrayList<>();
     while (itr.hasNext()) {
       HoodieRecord<? extends HoodieRecordPayload> rec = itr.next();
-      oRecords.add(rec);
       assert recordKeys.contains(rec.getRecordKey());
+      IndexedRecord originalRecord = originalRecords.get(rec.getRecordKey());
+      HoodieAvroPayload payload = (HoodieAvroPayload) rec.getData();
+      Option<IndexedRecord> value = payload.getInsertValue(HoodieAvroUtils.addMetadataFields(getSimpleSchema()));
+      assertEquals(originalRecord, value.get());
     }
   }
 
-  @Test
-  public void testSimpleInsertWithoutHoodieMetadata() throws IOException, URISyntaxException {
-    DiskBasedMap records = new DiskBasedMap<>(basePath);
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testSimpleInsertWithoutHoodieMetadata(boolean isCompressionEnabled) throws IOException, URISyntaxException {
+    BitCaskDiskMap records = new BitCaskDiskMap<>(basePath, isCompressionEnabled);
     List<HoodieRecord> hoodieRecords = SchemaTestUtil.generateHoodieTestRecordsWithoutHoodieMetadata(0, 1000);
     Set<String> recordKeys = new HashSet<>();
     // insert generated records into the map
@@ -105,11 +113,12 @@ public class TestDiskBasedMap extends HoodieCommonTestHarness {
     }
   }
 
-  @Test
-  public void testSimpleUpsert() throws IOException, URISyntaxException {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testSimpleUpsert(boolean isCompressionEnabled) throws IOException, URISyntaxException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
 
-    DiskBasedMap records = new DiskBasedMap<>(basePath);
+    BitCaskDiskMap records = new BitCaskDiskMap<>(basePath, isCompressionEnabled);
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
 
     // perform some inserts
@@ -187,9 +196,10 @@ public class TestDiskBasedMap extends HoodieCommonTestHarness {
     assertTrue(payloadSize > 0);
   }
 
-  @Test
-  public void testPutAll() throws IOException, URISyntaxException {
-    DiskBasedMap<String, HoodieRecord> records = new DiskBasedMap<>(basePath);
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testPutAll(boolean isCompressionEnabled) throws IOException, URISyntaxException {
+    BitCaskDiskMap<String, HoodieRecord> records = new BitCaskDiskMap<>(basePath, isCompressionEnabled);
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     Map<String, HoodieRecord> recordMap = new HashMap<>();
     iRecords.forEach(r -> {

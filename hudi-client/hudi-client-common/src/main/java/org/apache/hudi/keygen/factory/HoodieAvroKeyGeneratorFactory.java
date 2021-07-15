@@ -18,6 +18,7 @@
 package org.apache.hudi.keygen.factory;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
@@ -30,6 +31,9 @@ import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.util.Locale;
 import java.util.Objects;
@@ -41,6 +45,9 @@ import java.util.Objects;
  * will not be overwritten by {@link KeyGeneratorType}
  */
 public class HoodieAvroKeyGeneratorFactory {
+
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroKeyGeneratorFactory.class);
+
   public static KeyGenerator createKeyGenerator(TypedProperties props) throws IOException {
     // keyGenerator class name has higher priority
     KeyGenerator keyGenerator = KeyGenUtils.createKeyGeneratorByClassName(props);
@@ -50,7 +57,12 @@ public class HoodieAvroKeyGeneratorFactory {
   private static KeyGenerator createAvroKeyGeneratorByType(TypedProperties props) throws IOException {
     // Use KeyGeneratorType.SIMPLE as default keyGeneratorType
     String keyGeneratorType =
-        props.getString(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP, KeyGeneratorType.SIMPLE.name());
+        props.getString(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key(), null);
+
+    if (StringUtils.isNullOrEmpty(keyGeneratorType)) {
+      LOG.info("The value of {} is empty, using SIMPLE", HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key());
+      keyGeneratorType = KeyGeneratorType.SIMPLE.name();
+    }
 
     KeyGeneratorType keyGeneratorTypeEnum;
     try {

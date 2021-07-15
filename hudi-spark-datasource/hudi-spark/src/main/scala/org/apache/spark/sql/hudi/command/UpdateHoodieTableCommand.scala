@@ -93,25 +93,26 @@ case class UpdateHoodieTableCommand(updateTable: UpdateTable) extends RunnableCo
 
     assert(primaryColumns.nonEmpty,
       s"There are no primary key in table $tableId, cannot execute update operator")
+    val enableHive = isEnableHive(sparkSession)
     withSparkConf(sparkSession, targetTable.storage.properties) {
       Map(
-        "path" -> path.toString,
-        RECORDKEY_FIELD_OPT_KEY -> primaryColumns.mkString(","),
-        KEYGENERATOR_CLASS_OPT_KEY -> classOf[SqlKeyGenerator].getCanonicalName,
-        PRECOMBINE_FIELD_OPT_KEY -> primaryColumns.head, //set the default preCombine field.
-        TABLE_NAME -> tableId.table,
-        OPERATION_OPT_KEY -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-        PARTITIONPATH_FIELD_OPT_KEY -> targetTable.partitionColumnNames.mkString(","),
-        META_SYNC_ENABLED_OPT_KEY -> "false", // TODO make the meta sync enable by default.
-        HIVE_USE_JDBC_OPT_KEY -> "false",
-        HIVE_DATABASE_OPT_KEY -> tableId.database.getOrElse("default"),
-        HIVE_TABLE_OPT_KEY -> tableId.table,
-        HIVE_PARTITION_FIELDS_OPT_KEY -> targetTable.partitionColumnNames.mkString(","),
-        HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
-        URL_ENCODE_PARTITIONING_OPT_KEY -> "true",
-        HIVE_SUPPORT_TIMESTAMP -> "true",
-        HIVE_STYLE_PARTITIONING_OPT_KEY -> "true",
-        HoodieWriteConfig.UPSERT_PARALLELISM -> "200",
+        "path" -> path,
+        RECORDKEY_FIELD_OPT_KEY.key -> primaryColumns.mkString(","),
+        KEYGENERATOR_CLASS_OPT_KEY.key -> classOf[SqlKeyGenerator].getCanonicalName,
+        PRECOMBINE_FIELD_OPT_KEY.key -> primaryColumns.head, //set the default preCombine field.
+        TABLE_NAME.key -> tableId.table,
+        OPERATION_OPT_KEY.key -> DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+        PARTITIONPATH_FIELD_OPT_KEY.key -> targetTable.partitionColumnNames.mkString(","),
+        META_SYNC_ENABLED_OPT_KEY.key -> enableHive.toString,
+        HIVE_USE_JDBC_OPT_KEY.key -> "false",
+        HIVE_DATABASE_OPT_KEY.key -> tableId.database.getOrElse("default"),
+        HIVE_TABLE_OPT_KEY.key -> tableId.table,
+        HIVE_PARTITION_FIELDS_OPT_KEY.key -> targetTable.partitionColumnNames.mkString(","),
+        HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY.key -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
+        URL_ENCODE_PARTITIONING_OPT_KEY.key -> "true",
+        HIVE_SUPPORT_TIMESTAMP.key -> "true",
+        HIVE_STYLE_PARTITIONING_OPT_KEY.key -> "true",
+        HoodieWriteConfig.UPSERT_PARALLELISM.key -> "200",
         SqlKeyGenerator.PARTITION_SCHEMA -> targetTable.partitionSchema.toDDL
       )
     }

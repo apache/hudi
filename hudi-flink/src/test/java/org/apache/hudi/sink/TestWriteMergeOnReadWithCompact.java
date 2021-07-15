@@ -19,14 +19,17 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 
 import org.apache.flink.configuration.Configuration;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Test cases for delta stream write with compaction.
@@ -39,13 +42,22 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
   }
 
-  @Disabled
-  @Test
-  public void testIndexStateBootstrap() {
-    // Ignore the index bootstrap because we only support parquet load now.
+  @Override
+  protected Map<String, String> getExpectedBeforeCheckpointComplete() {
+    return EXPECTED1;
   }
 
-  Map<String, String> getMiniBatchExpected() {
+  @Test
+  public void testAppendOnly() throws Exception {
+    conf.setBoolean(FlinkOptions.APPEND_ONLY_ENABLE, true);
+    conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT.value());
+    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
+    assertThrows(IllegalArgumentException.class, () -> {
+      funcWrapper.openFunction();
+    }, "APPEND_ONLY mode only support in COPY_ON_WRITE table");
+  }
+
+  protected Map<String, String> getMiniBatchExpected() {
     Map<String, String> expected = new HashMap<>();
     // MOR mode merges the messages with the same key.
     expected.put("par1", "[id1,par1,id1,Danny,23,1,par1]");

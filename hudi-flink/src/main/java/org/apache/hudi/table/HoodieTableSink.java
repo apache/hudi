@@ -69,7 +69,6 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
     return (DataStreamSinkProvider) dataStream -> {
       // Read from kafka source
       RowType rowType = (RowType) schema.toRowDataType().notNull().getLogicalType();
-      int numWriteTasks = conf.getInteger(FlinkOptions.WRITE_TASKS);
       long ckpTimeout = dataStream.getExecutionEnvironment()
           .getCheckpointConfig().getCheckpointTimeout();
       conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
@@ -80,9 +79,13 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
 
       // TODO: This is a very time-consuming operation, will optimization
       if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
-        hoodieDataStream = hoodieDataStream.transform("index_bootstrap",
-            TypeInformation.of(HoodieRecord.class),
-            new ProcessOperator<>(new BootstrapFunction<>(conf)));
+        hoodieDataStream = hoodieDataStream.rebalance()
+            .transform(
+                "index_bootstrap",
+                TypeInformation.of(HoodieRecord.class),
+                new ProcessOperator<>(new BootstrapFunction<>(conf)))
+            .setParallelism(conf.getInteger(FlinkOptions.INDEX_BOOTSTRAP_TASKS))
+            .uid("uid_index_bootstrap_" + conf.getString(FlinkOptions.TABLE_NAME));
       }
 
       DataStream<Object> pipeline = hoodieDataStream
@@ -92,11 +95,12 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
               "bucket_assigner",
               TypeInformation.of(HoodieRecord.class),
               new BucketAssignOperator<>(new BucketAssignFunction<>(conf)))
+          .setParallelism(conf.getInteger(FlinkOptions.BUCKET_ASSIGN_TASKS))
           .uid("uid_bucket_assigner_" + conf.getString(FlinkOptions.TABLE_NAME))
           // shuffle by fileId(bucket id)
           .keyBy(record -> record.getCurrentLocation().getFileId())
           .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
-          .setParallelism(numWriteTasks);
+          .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
       if (StreamerUtil.needsAsyncCompaction(conf)) {
         return pipeline.transform("compact_plan_generate",
             TypeInformation.of(CompactionPlanEvent.class),
