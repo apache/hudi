@@ -28,13 +28,13 @@ import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{Alias, Expression, Literal, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.Inner
-import org.apache.spark.sql.catalyst.plans.logical.{Assignment, CompactionPath, CompactionShowOnPath, CompactionShowOnTable, CompactionTable, DeleteAction, DeleteFromTable, InsertAction, LogicalPlan, MergeIntoTable, Project, UpdateAction, UpdateTable}
+import org.apache.spark.sql.catalyst.plans.logical.{Assignment, ClusteringOnPath, ClusteringOnTable, CompactionPath, CompactionShowOnPath, CompactionShowOnTable, CompactionTable, DeleteAction, DeleteFromTable, InsertAction, LogicalPlan, MergeIntoTable, Project, ShowClusteringOnPath, ShowClusteringOnTable, UpdateAction, UpdateTable}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command.{AlterTableAddColumnsCommand, AlterTableChangeColumnCommand, AlterTableRenameCommand, CreateDataSourceTableCommand, TruncateTableCommand}
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlUtils}
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
-import org.apache.spark.sql.hudi.command.{AlterHoodieTableAddColumnsCommand, AlterHoodieTableChangeColumnCommand, AlterHoodieTableRenameCommand, CompactionHoodiePathCommand, CompactionHoodieTableCommand, CompactionShowHoodiePathCommand, CompactionShowHoodieTableCommand, CreateHoodieTableAsSelectCommand, CreateHoodieTableCommand, DeleteHoodieTableCommand, InsertIntoHoodieTableCommand, MergeIntoHoodieTableCommand, TruncateHoodieTableCommand, UpdateHoodieTableCommand}
+import org.apache.spark.sql.hudi.command.{AlterHoodieTableAddColumnsCommand, AlterHoodieTableChangeColumnCommand, AlterHoodieTableRenameCommand, ClusteringHoodiePathCommand, ClusteringHoodieTableCommand, ClusteringShowHoodiePathCommand, ClusteringShowHoodieTableCommand, CompactionHoodiePathCommand, CompactionHoodieTableCommand, CompactionShowHoodiePathCommand, CompactionShowHoodieTableCommand, CreateHoodieTableAsSelectCommand, CreateHoodieTableCommand, DeleteHoodieTableCommand, InsertIntoHoodieTableCommand, MergeIntoHoodieTableCommand, TruncateHoodieTableCommand, UpdateHoodieTableCommand}
 import org.apache.spark.sql.types.StringType
 
 object HoodieAnalysis {
@@ -106,6 +106,24 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
       // Convert to CompactionShowHoodiePathCommand
       case CompactionShowOnPath(path, limit) =>
         CompactionShowHoodiePathCommand(path, limit)
+
+      case ShowClusteringOnTable(table, limit)
+        if isHoodieTable(table, sparkSession) =>
+        val tableId = getTableIdentify(table)
+        val catalogTable = sparkSession.sessionState.catalog.getTableMetadata(tableId)
+        ClusteringShowHoodieTableCommand(catalogTable, limit)
+
+      case ShowClusteringOnPath(path, limit) =>
+        ClusteringShowHoodiePathCommand(path, limit)
+
+      case ClusteringOnTable(table, orderByColumns, timestamp)
+        if isHoodieTable(table, sparkSession) =>
+        val tableId = getTableIdentify(table)
+        val catalogTable = sparkSession.sessionState.catalog.getTableMetadata(tableId)
+        ClusteringHoodieTableCommand(catalogTable, orderByColumns, timestamp)
+
+      case ClusteringOnPath(path, orderByColumns, timestamp) =>
+        ClusteringHoodiePathCommand(path, orderByColumns, timestamp)
       case _=> plan
     }
   }
