@@ -41,7 +41,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
-import org.apache.hudi.index.bucket.SparkHiveBucketIndex;
+import org.apache.hudi.index.bucket.SparkBucketIndex;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieSortedMergeHandle;
@@ -378,8 +378,8 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
    */
   protected Partitioner getCustomizedPartitioner(WorkloadProfile profile) {
     // TODO Using a factory to produce customized partitioner
-    if (table.getIndex() instanceof SparkHiveBucketIndex) {
-      return new SparkHiveBucketPartitioner<>(profile, context, table, config);
+    if (table.getIndex() instanceof SparkBucketIndex) {
+      return new SparkBucketPartitioner<>(profile, context, table, config);
     } else {
       throw new HoodieException("Customized partitioner is not supported for "
           + table.getIndex().getClass().getSimpleName() + ".");

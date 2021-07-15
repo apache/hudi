@@ -436,6 +436,10 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   }
 
   private List<HoodieRecord> generateInserts(String instantTime, Integer n, IndexType indexType) {
-    return dataGen.generateInserts(instantTime, n);
+    if (indexType == IndexType.BUCKET_INDEX) {
+      return dataGen.generateInserts(true, instantTime, n);
+    } else {
+      return dataGen.generateInserts(instantTime, n);
+    }
   }
 }

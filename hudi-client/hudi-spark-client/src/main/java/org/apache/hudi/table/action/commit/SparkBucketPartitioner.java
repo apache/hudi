@@ -35,7 +35,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.index.bucket.SparkHiveBucketIndex;
+import org.apache.hudi.index.bucket.SparkBucketIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
@@ -46,7 +46,7 @@ import org.apache.hudi.utils.BucketUtils;
  *
  * @param <T>
  */
-public class SparkHiveBucketPartitioner<T extends HoodieRecordPayload<T>> extends
+public class SparkBucketPartitioner<T extends HoodieRecordPayload<T>> extends
     SparkHoodiePartitioner<T> {
 
   private final int numBuckets;
@@ -55,17 +55,17 @@ public class SparkHiveBucketPartitioner<T extends HoodieRecordPayload<T>> extend
   private Map<String, Set<String>> partitionPathFileIds;
   private Map<String, Integer> partitionPathOffset;
 
-  public SparkHiveBucketPartitioner(WorkloadProfile profile,
+  public SparkBucketPartitioner(WorkloadProfile profile,
       HoodieEngineContext context,
       HoodieTable table,
       HoodieWriteConfig config) {
     super(profile, table);
-    if (!(table.getIndex() instanceof SparkHiveBucketIndex)) {
+    if (!(table.getIndex() instanceof SparkBucketIndex)) {
       throw new HoodieException(
           "Hive bucket partitioner should only be used by HiveBucketIndex other than "
               + table.getIndex().getClass().getSimpleName());
     }
-    this.numBuckets = ((SparkHiveBucketIndex<T>) table.getIndex()).getNumBuckets();
+    this.numBuckets = ((SparkBucketIndex<T>) table.getIndex()).getNumBuckets();
     this.totalPartitionPaths = profile.getPartitionPaths().size();
     partitionNumToPartitionPath = new HashMap<>();
     partitionPathOffset = new HashMap<>();

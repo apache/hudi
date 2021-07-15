@@ -25,7 +25,7 @@ import java.util.LinkedList;
 
 import org.junit.jupiter.api.Test;
 
-public class TestHiveBucketUtils {
+public class TestBucketUtils {
 
   @Test
   public void testBucketFileId() {

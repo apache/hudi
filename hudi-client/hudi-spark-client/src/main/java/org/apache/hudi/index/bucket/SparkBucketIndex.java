@@ -46,13 +46,13 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.utils.BucketUtils;
 import org.apache.spark.api.java.JavaRDD;
 
-public class SparkHiveBucketIndex<T extends HoodieRecordPayload> extends SparkHoodieIndex<T> {
+public class SparkBucketIndex<T extends HoodieRecordPayload> extends SparkHoodieIndex<T> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(SparkHiveBucketIndex.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkBucketIndex.class);
 
   private final int numBuckets;
 
-  public SparkHiveBucketIndex(HoodieWriteConfig config) {
+  public SparkBucketIndex(HoodieWriteConfig config) {
     super(config);
     String tableNumBucket = config.getProps()
         .getProperty(HoodieTableConfig.HOODIE_TABLE_NUM_BUCKETS.key());
@@ -63,7 +63,7 @@ public class SparkHiveBucketIndex<T extends HoodieRecordPayload> extends SparkHo
           "Please set hoodie.index.hive.bucket.num or hoodie.table.numbuckets(deprecated) to a positive integer.");
     }
     this.numBuckets = Integer.parseInt(indexNumBucket != null ? indexNumBucket : tableNumBucket);
-    LOG.info("use hive bucket index, numBuckets={}", numBuckets);
+    LOG.info("use bucket index, numBuckets={}", numBuckets);
   }
 
   @Override
@@ -157,9 +157,6 @@ public class SparkHiveBucketIndex<T extends HoodieRecordPayload> extends SparkHo
 
   @Override
   public boolean canIndexLogFiles() {
-    // for hive bucket index, it's not safe to send inserts(new data in one file group) to log files
-    // as we need the base file to locate the bucket id.
-    // todo: try to loose constraint if possible
     return false;
   }
 

@@ -20,7 +20,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.exception.HoodieIndexException;
-import org.apache.hudi.index.bucket.SparkHiveBucketIndex;
+import org.apache.hudi.index.bucket.SparkBucketIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.spark.Partitioner;
@@ -43,7 +43,7 @@ public abstract class SparkHoodiePartitioner<T extends HoodieRecordPayload<T>> e
   public abstract BucketInfo getBucketInfo(int bucketNumber);
 
   protected void checkIndexCompatibility() {
-    if (table.getIndex() instanceof SparkHiveBucketIndex) {
+    if (table.getIndex() instanceof SparkBucketIndex) {
       throw new HoodieIndexException("Partitioner " + this.getClass().getSimpleName() + " is not compatible with bucket index");
     }
   }

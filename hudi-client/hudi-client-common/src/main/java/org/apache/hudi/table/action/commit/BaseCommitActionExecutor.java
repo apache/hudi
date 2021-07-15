@@ -37,7 +37,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -80,7 +79,7 @@ public abstract class BaseCommitActionExecutor<T extends HoodieRecordPayload, I,
     // TODO: HUDI-2155 bulk insert support bucket index, HUDI-2156 cluster the table with bucket index.
     if (this.config.getIndexType() == HoodieIndex.IndexType.BUCKET_INDEX
         && (operationType == WriteOperationType.BULK_INSERT || operationType == WriteOperationType.CLUSTER)) {
-      throw new HoodieIndexException("Executor " + this.getClass().getSimpleName() + " is not compatible with bucket index");
+      throw new UnsupportedOperationException("Executor " + this.getClass().getSimpleName() + " is not compatible with bucket index");
     }
   }
 
