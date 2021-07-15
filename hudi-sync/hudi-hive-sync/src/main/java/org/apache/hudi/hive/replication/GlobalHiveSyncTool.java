@@ -21,7 +21,6 @@ package org.apache.hudi.hive.replication;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hive.HiveSyncTool;
 
 import org.apache.hadoop.conf.Configuration;
