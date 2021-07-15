@@ -37,12 +37,19 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
   private final String filePath;
   // Stores the key and corresponding value's latest metadata spilled to disk
   private final Map<T, BitCaskDiskMap.ValueMetadata> inMemoryMetadataOfSpilledData;
+  // Was compressions enabled for the values when inserted into the file/ map
+  private final boolean isCompressionEnabled;
 
   private transient Thread shutdownThread = null;
 
   public LazyFileIterable(String filePath, Map<T, BitCaskDiskMap.ValueMetadata> map) {
+    this(filePath, map, false);
+  }
+
+  public LazyFileIterable(String filePath, Map<T, BitCaskDiskMap.ValueMetadata> map, boolean isCompressionEnabled) {
     this.filePath = filePath;
     this.inMemoryMetadataOfSpilledData = map;
+    this.isCompressionEnabled = isCompressionEnabled;
   }
 
   @Override
@@ -91,7 +98,7 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
         throw new IllegalStateException("next() called on EOF'ed stream. File :" + filePath);
       }
       Map.Entry<T, BitCaskDiskMap.ValueMetadata> entry = this.metadataIterator.next();
-      return BitCaskDiskMap.get(entry.getValue(), readOnlyFileHandle);
+      return BitCaskDiskMap.get(entry.getValue(), readOnlyFileHandle, isCompressionEnabled);
     }
 
     @Override

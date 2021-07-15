@@ -72,6 +72,8 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
   private final SizeEstimator<R> valueSizeEstimator;
   // Type of the disk map
   private final DiskMapType diskMapType;
+  // Enables compression of values stored in disc
+  private final boolean isCompressionEnabled;
   // current space occupied by this map in-memory
   private Long currentInMemoryMapSize;
   // An estimate of the size of each payload written to this map
@@ -88,6 +90,11 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
 
   public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
                               SizeEstimator<R> valueSizeEstimator, DiskMapType diskMapType) throws IOException {
+    this(maxInMemorySizeInBytes, baseFilePath, keySizeEstimator, valueSizeEstimator, diskMapType, false);
+  }
+
+  public ExternalSpillableMap(Long maxInMemorySizeInBytes, String baseFilePath, SizeEstimator<T> keySizeEstimator,
+                              SizeEstimator<R> valueSizeEstimator, DiskMapType diskMapType, boolean isCompressionEnabled) throws IOException {
     this.inMemoryMap = new HashMap<>();
     this.baseFilePath = baseFilePath;
     this.maxInMemorySizeInBytes = (long) Math.floor(maxInMemorySizeInBytes * sizingFactorForInMemoryMap);
@@ -95,6 +102,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
     this.keySizeEstimator = keySizeEstimator;
     this.valueSizeEstimator = valueSizeEstimator;
     this.diskMapType = diskMapType;
+    this.isCompressionEnabled = isCompressionEnabled;
   }
 
   private DiskMap<T, R> getDiskBasedMap() {
@@ -108,7 +116,7 @@ public class ExternalSpillableMap<T extends Serializable, R extends Serializable
                 break;
               case BITCASK:
               default:
-                diskBasedMap = new BitCaskDiskMap<>(baseFilePath);
+                diskBasedMap =  new BitCaskDiskMap<>(baseFilePath, isCompressionEnabled);
             }
           } catch (IOException e) {
             throw new HoodieIOException(e.getMessage(), e);
