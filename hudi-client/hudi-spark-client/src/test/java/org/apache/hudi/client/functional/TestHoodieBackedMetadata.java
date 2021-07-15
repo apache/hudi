@@ -193,6 +193,54 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
   }
 
   /**
+   * Test enable/disable sync via the config.
+   */
+  @Test
+  public void testSyncConfig() throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    // Create the metadata table
+    String firstCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true), true)) {
+      client.startCommitWithTime(firstCommitTime);
+      client.insert(jsc.parallelize(dataGen.generateInserts(firstCommitTime, 2)), firstCommitTime);
+      client.syncTableMetadata();
+      assertTrue(fs.exists(new Path(metadataTableBasePath)));
+      validateMetadata(client);
+    }
+
+    // If sync is disabled, the table will not sync
+    HoodieWriteConfig config = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true).enableMetrics(false).enableSync(false).build()).build();
+    final String metadataTableMetaPath = metadataTableBasePath + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME;
+    String secondCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, config, true)) {
+      client.startCommitWithTime(secondCommitTime);
+      client.insert(jsc.parallelize(dataGen.generateInserts(secondCommitTime, 2)), secondCommitTime);
+      client.syncTableMetadata();
+
+      // Metadata Table should not have synced
+      assertTrue(fs.exists(new Path(metadataTableMetaPath, HoodieTimeline.makeDeltaFileName(firstCommitTime))));
+      assertFalse(fs.exists(new Path(metadataTableMetaPath, HoodieTimeline.makeDeltaFileName(secondCommitTime))));
+    }
+
+    // If sync is enabled, the table will sync
+    String thirdCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true), true)) {
+      client.startCommitWithTime(thirdCommitTime);
+      client.insert(jsc.parallelize(dataGen.generateInserts(thirdCommitTime, 2)), thirdCommitTime);
+      client.syncTableMetadata();
+
+      // Metadata Table should have synced
+      assertTrue(fs.exists(new Path(metadataTableMetaPath, HoodieTimeline.makeDeltaFileName(firstCommitTime))));
+      assertTrue(fs.exists(new Path(metadataTableMetaPath, HoodieTimeline.makeDeltaFileName(secondCommitTime))));
+      assertTrue(fs.exists(new Path(metadataTableMetaPath, HoodieTimeline.makeDeltaFileName(thirdCommitTime))));
+    }
+  }
+
+  /**
    * Only valid partition directories are added to the metadata.
    */
   @Test

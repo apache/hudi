@@ -446,6 +446,11 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
 
   @Override
   public void syncTableMetadata() {
+    if (!config.getMetadataConfig().enableSync()) {
+      LOG.info("Metadata table sync is disabled in the config.");
+      return;
+    }
+
     // Open up the metadata table again, for syncing
     try (HoodieTableMetadataWriter writer = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context)) {
       LOG.info("Successfully synced to metadata table");
