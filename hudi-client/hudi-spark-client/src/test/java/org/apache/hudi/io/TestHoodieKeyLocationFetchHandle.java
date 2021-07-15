@@ -18,20 +18,26 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
@@ -40,7 +46,8 @@ import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -48,6 +55,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 import scala.Tuple2;
 
@@ -71,10 +79,6 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
     initPath();
     initTestDataGenerator();
     initFileSystem();
-    initMetaClient();
-    config = getConfigBuilder()
-        .withIndexConfig(HoodieIndexConfig.newBuilder()
-            .build()).build();
   }
 
   @AfterEach
@@ -82,8 +86,15 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
     cleanupResources();
   }
 
-  @Test
-  public void testFetchHandle() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testFetchHandle(boolean populateMetaFields) throws Exception {
+    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, populateMetaFields ? new Properties() : getPropertiesForKeyGen());
+    config = getConfigBuilder()
+        .withPopulateMetaFields(populateMetaFields)
+        .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .build()).build();
+
     List<HoodieRecord> records = dataGen.generateInserts(makeNewCommitTime(), 100);
     Map<String, List<HoodieRecord>> partitionRecordsMap = recordsToPartitionRecordsMap(records);
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
@@ -93,8 +104,11 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieClientTestHarness {
 
     List<Tuple2<String, HoodieBaseFile>> partitionPathFileIdPairs = loadAllFilesForPartitions(new ArrayList<>(partitionRecordsMap.keySet()), context, hoodieTable);
 
+    BaseKeyGenerator keyGenerator = (BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(getPropertiesForKeyGen()));
+
     for (Tuple2<String, HoodieBaseFile> entry : partitionPathFileIdPairs) {
-      HoodieKeyLocationFetchHandle fetcherHandle = new HoodieKeyLocationFetchHandle(config, hoodieTable, Pair.of(entry._1, entry._2));
+      HoodieKeyLocationFetchHandle fetcherHandle = new HoodieKeyLocationFetchHandle(config, hoodieTable, Pair.of(entry._1, entry._2),
+          populateMetaFields ? Option.empty() : Option.of(keyGenerator));
       Iterator<Pair<HoodieKey, HoodieRecordLocation>> result = fetcherHandle.locations().iterator();
       List<Tuple2<HoodieKey, HoodieRecordLocation>> actualList = new ArrayList<>();
       result.forEachRemaining(x -> actualList.add(new Tuple2<>(x.getLeft(), x.getRight())));

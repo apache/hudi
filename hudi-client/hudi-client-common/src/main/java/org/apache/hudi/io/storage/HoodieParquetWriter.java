@@ -49,9 +49,10 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
   private final HoodieAvroWriteSupport writeSupport;
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
+  private final boolean populateMetaFields;
 
   public HoodieParquetWriter(String instantTime, Path file, HoodieAvroParquetConfig parquetConfig,
-      Schema schema, TaskContextSupplier taskContextSupplier) throws IOException {
+      Schema schema, TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
     super(HoodieWrapperFileSystem.convertToHoodiePath(file, parquetConfig.getHadoopConf()),
         ParquetFileWriter.Mode.CREATE, parquetConfig.getWriteSupport(), parquetConfig.getCompressionCodecName(),
         parquetConfig.getBlockSize(), parquetConfig.getPageSize(), parquetConfig.getPageSize(),
@@ -69,14 +70,19 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
     this.writeSupport = parquetConfig.getWriteSupport();
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
+    this.populateMetaFields = populateMetaFields;
   }
 
   @Override
   public void writeAvroWithMetadata(R avroRecord, HoodieRecord record) throws IOException {
-    prepRecordWithMetadata(avroRecord, record, instantTime,
-        taskContextSupplier.getPartitionIdSupplier().get(), recordIndex, file.getName());
-    super.write(avroRecord);
-    writeSupport.add(record.getRecordKey());
+    if (populateMetaFields) {
+      prepRecordWithMetadata(avroRecord, record, instantTime,
+          taskContextSupplier.getPartitionIdSupplier().get(), recordIndex, file.getName());
+      super.write(avroRecord);
+      writeSupport.add(record.getRecordKey());
+    } else {
+      super.write(avroRecord);
+    }
   }
 
   @Override
@@ -87,7 +93,9 @@ public class HoodieParquetWriter<T extends HoodieRecordPayload, R extends Indexe
   @Override
   public void writeAvro(String key, IndexedRecord object) throws IOException {
     super.write(object);
-    writeSupport.add(key);
+    if (populateMetaFields) {
+      writeSupport.add(key);
+    }
   }
 
   @Override

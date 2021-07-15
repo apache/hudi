@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -132,6 +133,43 @@ public class ParquetUtils extends BaseFileUtils {
         if (obj instanceof GenericRecord) {
           String recordKey = ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
           String partitionPath = ((GenericRecord) obj).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+          hoodieKeys.add(new HoodieKey(recordKey, partitionPath));
+          obj = reader.read();
+        }
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to read from Parquet file " + filePath, e);
+    }
+    return hoodieKeys;
+  }
+
+  /**
+   * Fetch {@link HoodieKey}s from the given parquet file.
+   *
+   * @param filePath      The parquet file path.
+   * @param configuration configuration to build fs object
+   * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
+   */
+  @Override
+  public List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath, BaseKeyGenerator keyGenerator) {
+    List<HoodieKey> hoodieKeys = new ArrayList<>();
+    try {
+      if (!filePath.getFileSystem(configuration).exists(filePath)) {
+        return new ArrayList<>();
+      }
+
+      Configuration conf = new Configuration(configuration);
+      conf.addResource(FSUtils.getFs(filePath.toString(), conf).getConf());
+      Schema readSchema = HoodieAvroUtils.getRecordKeyPartitionPathSchema(readAvroSchema(conf, filePath), keyGenerator.getRecordKeyFields(),
+          keyGenerator.getPartitionPathFields());
+      AvroReadSupport.setAvroReadSchema(conf, readSchema);
+      AvroReadSupport.setRequestedProjection(conf, readSchema);
+      ParquetReader reader = AvroParquetReader.builder(filePath).withConf(conf).build();
+      Object obj = reader.read();
+      while (obj != null) {
+        if (obj instanceof GenericRecord) {
+          String recordKey = keyGenerator.getRecordKey((GenericRecord) obj);
+          String partitionPath = keyGenerator.getPartitionPath((GenericRecord) obj);
           hoodieKeys.add(new HoodieKey(recordKey, partitionPath));
           obj = reader.read();
         }

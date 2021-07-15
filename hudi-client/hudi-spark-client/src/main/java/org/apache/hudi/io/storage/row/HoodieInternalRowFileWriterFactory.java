@@ -78,32 +78,6 @@ public class HoodieInternalRowFileWriterFactory {
         writeConfig.getParquetCompressionRatio()));
   }
 
-  public static HoodieInternalRowFileWriter getInternalRowAppendOnlyFileWriter(
-      Path path, HoodieTable hoodieTable, HoodieWriteConfig config, StructType schema)
-      throws IOException {
-    final String extension = FSUtils.getFileExtension(path.getName());
-    if (PARQUET.getFileExtension().equals(extension)) {
-      return newParquetInternalRowAppendOnlyFileWriter(path, config, schema, hoodieTable);
-    }
-    throw new UnsupportedOperationException(extension + " format not supported yet.");
-  }
-
-  private static HoodieInternalRowFileWriter newParquetInternalRowAppendOnlyFileWriter(
-      Path path, HoodieWriteConfig writeConfig, StructType structType, HoodieTable table)
-      throws IOException {
-    HoodieAppendOnlyRowParquetWriteSupport writeSupport =
-        new HoodieAppendOnlyRowParquetWriteSupport(table.getHadoopConf(), structType);
-    return new HoodieAppendOnlyInternalRowParquetWriter(
-        path, new HoodieRowParquetConfig(
-        writeSupport,
-        writeConfig.getParquetCompressionCodec(),
-        writeConfig.getParquetBlockSize(),
-        writeConfig.getParquetPageSize(),
-        writeConfig.getParquetMaxFileSize(),
-        writeSupport.getHadoopConf(),
-        writeConfig.getParquetCompressionRatio()));
-  }
-
   public static HoodieInternalRowFileWriter getInternalRowFileWriterWithoutMetaFields(
       Path path, HoodieTable hoodieTable, HoodieWriteConfig config, StructType schema)
       throws IOException {

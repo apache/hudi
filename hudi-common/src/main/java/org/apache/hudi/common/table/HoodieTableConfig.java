@@ -322,13 +322,8 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
   /**
    * @returns true is meta fields need to be populated. else returns false.
    */
-<<<<<<< HEAD
   public boolean populateMetaFields() {
     return Boolean.parseBoolean(getStringOrDefault(HOODIE_POPULATE_META_FIELDS));
-=======
-  public boolean populateMetaColumns() {
-    return Boolean.parseBoolean(getStringOrDefault(HOODIE_POPULATE_META_COLUMNS));
->>>>>>> 0a2849c7b (Reverting changes in BuiltInKeyGen)
   }
 
   public Map<String, String> propsMap() {

@@ -244,6 +244,22 @@ public class HoodieAvroUtils {
     return recordSchema;
   }
 
+  /**
+   * Fetch schema for record key and partition path.
+   */
+  public static Schema getRecordKeyPartitionPathSchema(Schema fileSchema, List<String> recordKeyFields, List<String> partitionPathFields) {
+    List<Schema.Field> toBeAddedFields = new ArrayList<>();
+    Schema recordSchema = Schema.createRecord("HoodieRecordKey", "", "", false);
+
+    for (Schema.Field schemaField: fileSchema.getFields()) {
+      if (recordKeyFields.contains(schemaField.name()) || partitionPathFields.contains(schemaField.name())) {
+        toBeAddedFields.add(new Schema.Field(schemaField.name(), schemaField.schema(), schemaField.doc(), schemaField.defaultValue()));
+      }
+    }
+    recordSchema.setFields(toBeAddedFields);
+    return recordSchema;
+  }
+
   public static GenericRecord addHoodieKeyToRecord(GenericRecord record, String recordKey, String partitionPath,
       String fileName) {
     record.put(HoodieRecord.FILENAME_METADATA_FIELD, fileName);
