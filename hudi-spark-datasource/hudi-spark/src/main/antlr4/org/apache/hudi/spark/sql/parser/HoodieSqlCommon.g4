@@ -30,6 +30,10 @@ statement
     | operation = (RUN | SCHEDULE) COMPACTION  ON path = STRING   (AT instantTimestamp = NUMBER)?    #compactionOnPath
     | SHOW COMPACTION  ON tableIdentifier (LIMIT limit = NUMBER)?                             #showCompactionOnTable
     | SHOW COMPACTION  ON path = STRING (LIMIT limit = NUMBER)?                               #showCompactionOnPath
+    | RUN CLUSTERING ON tableIdentifier (ORDER BY orderColumn+=IDENTIFIER (',' orderColumn+=IDENTIFIER)*)? (AT timestamp = NUMBER)?   #clusteringOnTable
+    | RUN CLUSTERING ON path = STRING   (ORDER BY orderColumn+=IDENTIFIER (',' orderColumn+=IDENTIFIER)*)? (AT timestamp = NUMBER)?   #clusteringOnPath
+    | SHOW CLUSTERING ON tableIdentifier (LIMIT limit = NUMBER)?                              #showClusteringOnTable
+    | SHOW CLUSTERING ON path = STRING (LIMIT limit = NUMBER)?                                #showClusteringOnPath
     ;
 
  tableIdentifier
@@ -44,6 +48,9 @@ statement
  ON: 'ON';
  SHOW: 'SHOW';
  LIMIT: 'LIMIT';
+ CLUSTERING: 'CLUSTERING';
+ ORDER: 'ORDER';
+ BY: 'BY';
 
  NUMBER
     : DIGIT+

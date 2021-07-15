@@ -106,6 +106,24 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
       // Convert to CompactionShowHoodiePathCommand
       case CompactionShowOnPath(path, limit) =>
         CompactionShowHoodiePathCommand(path, limit)
+
+      case ShowClusteringOnTable(table, limit)
+        if isHoodieTable(table, sparkSession) =>
+        val tableId = getTableIdentify(table)
+        val catalogTable = sparkSession.sessionState.catalog.getTableMetadata(tableId)
+        ClusteringShowHoodieTableCommand(catalogTable, limit)
+
+      case ShowClusteringOnPath(path, limit) =>
+        ClusteringShowHoodiePathCommand(path, limit)
+
+      case ClusteringOnTable(table, orderByColumns, timestamp)
+        if isHoodieTable(table, sparkSession) =>
+        val tableId = getTableIdentify(table)
+        val catalogTable = sparkSession.sessionState.catalog.getTableMetadata(tableId)
+        ClusteringHoodieTableCommand(catalogTable, orderByColumns, timestamp)
+
+      case ClusteringOnPath(path, orderByColumns, timestamp) =>
+        ClusteringHoodiePathCommand(path, orderByColumns, timestamp)
       case _=> plan
     }
   }

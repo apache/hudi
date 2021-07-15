@@ -20,11 +20,18 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.{And, Cast, Expression, Literal}
-import org.apache.spark.sql.catalyst.plans.logical.{MergeIntoTable, SubqueryAlias}
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, MergeIntoTable, SubqueryAlias}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{DataType, NullType}
 
 object HoodieSqlUtils extends SparkAdapterSupport {
+
+  def getTableIdentify(table: LogicalPlan): TableIdentifier = {
+    table match {
+      case SubqueryAlias(name, _) => sparkAdapter.toTableIdentifier(name)
+      case _ => throw new IllegalArgumentException(s"Illegal table: $table")
+    }
+  }
 
   /**
    * Get the TableIdentifier of the target table in MergeInto.

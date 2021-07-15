@@ -20,13 +20,14 @@ package org.apache.spark.sql.hudi
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 
+import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieMetadataConfig}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.{AvroConversionUtils, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, DataSourceWriteOptions, HoodieWriterUtils, SparkAdapterSupport}
 
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -311,5 +312,28 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     schema.fields.collectFirst {
       case field if resolver(field.name, name) => field
     }
+  }
+
+  /**
+   * Create the SparkRDDWriteClient from the exists hoodie table path.
+   * @param sparkSession The spark session.
+   * @param basePath The base path of the hoodie table.
+   * @param parameters The parameters passed to the SparkRDDWriteClient.
+   */
+  def createHoodieClientFromPath(sparkSession: SparkSession, basePath: String,
+                                 parameters: Map[String, String]): SparkRDDWriteClient[_] = {
+    val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath)
+    .setConf(sparkSession.sessionState.newHadoopConf()).build()
+    val schemaUtil = new TableSchemaResolver(metaClient)
+    val schemaStr = schemaUtil.getTableAvroSchemaWithoutMetadataFields.toString
+    // Append the spark conf to the parameters and fill the missing key with the default value.
+    val finalParameters = HoodieWriterUtils.parametersWithWriteDefaults(
+      withSparkConf(sparkSession, Map.empty)(
+        parameters + (DataSourceWriteOptions.TABLE_TYPE.key() -> metaClient.getTableType.name()))
+    )
+
+    val jsc = new JavaSparkContext(sparkSession.sparkContext)
+    DataSourceUtils.createHoodieClient(jsc, schemaStr, basePath,
+      metaClient.getTableConfig.getTableName, finalParameters.asJava)
   }
 }

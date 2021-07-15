@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.client.WriteStatus
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieTimeline}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.{HoodieTimer, Option => HOption}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.{DataSourceUtils, DataSourceWriteOptions, HoodieWriterUtils}
@@ -45,20 +45,7 @@ case class CompactionHoodiePathCommand(path: String,
 
     assert(metaClient.getTableType == HoodieTableType.MERGE_ON_READ,
       s"Must compaction on a Merge On Read table.")
-    val schemaUtil = new TableSchemaResolver(metaClient)
-    val schemaStr = schemaUtil.getTableAvroSchemaWithoutMetadataFields.toString
-
-    val parameters = HoodieWriterUtils.parametersWithWriteDefaults(
-        HoodieSqlCommonUtils.withSparkConf(sparkSession, Map.empty)(
-          Map(
-            DataSourceWriteOptions.TABLE_TYPE.key() -> HoodieTableType.MERGE_ON_READ.name()
-          )
-        )
-      )
-    val jsc = new JavaSparkContext(sparkSession.sparkContext)
-    val client = DataSourceUtils.createHoodieClient(jsc, schemaStr, path,
-      metaClient.getTableConfig.getTableName, parameters)
-
+    val client = HoodieSqlCommonUtils.createHoodieClientFromPath(sparkSession, path, Map.empty)
     operation match {
       case SCHEDULE =>
         val instantTime = instantTimestamp.map(_.toString).getOrElse(HoodieActiveTimeline.createNewInstantTime)

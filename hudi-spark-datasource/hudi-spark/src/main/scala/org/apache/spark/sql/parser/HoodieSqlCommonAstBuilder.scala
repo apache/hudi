@@ -18,15 +18,16 @@
 package org.apache.spark.sql.parser
 
 import org.apache.hudi.SparkAdapterSupport
-import org.apache.hudi.spark.sql.parser.{HoodieSqlCommonBaseVisitor, HoodieSqlCommonParser}
-import org.apache.hudi.spark.sql.parser.HoodieSqlCommonParser.{CompactionOnPathContext, CompactionOnTableContext, ShowCompactionOnPathContext, ShowCompactionOnTableContext, SingleStatementContext, TableIdentifierContext}
+import org.apache.hudi.spark.sql.parser.HoodieSqlCommonBaseVisitor
+import org.apache.hudi.spark.sql.parser.HoodieSqlCommonParser.{ClusteringOnPathContext, ClusteringOnTableContext, CompactionOnPathContext, CompactionOnTableContext, ShowClusteringOnPathContext, ShowClusteringOnTableContext, ShowCompactionOnPathContext, ShowCompactionOnTableContext, SingleStatementContext, TableIdentifierContext}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
-import org.apache.spark.sql.catalyst.parser.ParserUtils.withOrigin
 import org.apache.spark.sql.catalyst.parser.{ParserInterface, ParserUtils}
-import org.apache.spark.sql.catalyst.plans.logical.{CompactionOperation, CompactionPath, CompactionShowOnPath, CompactionShowOnTable, CompactionTable, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{ClusteringOnPath, ClusteringOnTable, CompactionOperation, CompactionPath, CompactionShowOnPath, CompactionShowOnTable, CompactionTable, LogicalPlan, ShowClusteringOnPath, ShowClusteringOnTable}
+
+import scala.collection.JavaConverters._
 
 class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface)
   extends HoodieSqlCommonBaseVisitor[AnyRef] with Logging with SparkAdapterSupport {
@@ -66,6 +67,46 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
       CompactionShowOnPath(path, ctx.limit.getText.toInt)
     } else {
       CompactionShowOnPath(path)
+    }
+  }
+
+  override def visitClusteringOnTable(ctx: ClusteringOnTableContext): LogicalPlan = withOrigin(ctx) {
+    val table = ctx.tableIdentifier().accept(this).asInstanceOf[LogicalPlan]
+    val orderByColumns = if (ctx.orderColumn != null) {
+      ctx.orderColumn.asScala.map(_.getText)
+    } else {
+      Seq.empty[String]
+    }
+    val timestamp = if (ctx.timestamp != null) Some(ctx.timestamp.getText.toLong) else None
+    ClusteringOnTable(table, orderByColumns, timestamp)
+  }
+
+  override def visitClusteringOnPath(ctx: ClusteringOnPathContext): LogicalPlan = withOrigin(ctx) {
+    val path = string(ctx.path)
+    val orderByColumns = if (ctx.orderColumn != null) {
+      ctx.orderColumn.asScala.map(_.getText)
+    } else {
+      Seq.empty[String]
+    }
+    val timestamp = if (ctx.timestamp != null) Some(ctx.timestamp.getText.toLong) else None
+    ClusteringOnPath(path, orderByColumns, timestamp)
+  }
+
+  override def visitShowClusteringOnTable(ctx: ShowClusteringOnTableContext): LogicalPlan = withOrigin(ctx) {
+    val table = ctx.tableIdentifier().accept(this).asInstanceOf[LogicalPlan]
+    if (ctx.limit != null) {
+      ShowClusteringOnTable(table, ctx.limit.getText.toInt)
+    } else {
+      ShowClusteringOnTable(table)
+    }
+  }
+
+  override def visitShowClusteringOnPath(ctx: ShowClusteringOnPathContext): LogicalPlan = withOrigin(ctx) {
+    val path = string(ctx.path)
+    if (ctx.limit != null) {
+      ShowClusteringOnPath(path, ctx.limit.getText.toInt)
+    } else {
+      ShowClusteringOnPath(path)
     }
   }
 
