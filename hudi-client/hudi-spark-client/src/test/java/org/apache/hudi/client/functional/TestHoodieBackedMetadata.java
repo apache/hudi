@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.client.HoodieWriteResult;
@@ -53,7 +54,9 @@ import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -81,6 +84,7 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.upgrade.SparkUpgradeDowngrade;
 import org.apache.hudi.testutils.HoodieClientTestHarness;
 
 import org.apache.log4j.LogManager;
@@ -868,6 +872,63 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
     */
   }
 
+  @Test
+  public void testUpgradeDowngrade() throws IOException {
+    init(HoodieTableType.COPY_ON_WRITE);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    // Perform a commit. This should bootstrap the metadata table with latest version.
+    List<HoodieRecord> records;
+    List<WriteStatus> writeStatuses;
+    String commitTimestamp = HoodieActiveTimeline.createNewInstantTime();
+    HoodieWriteConfig writeConfig = getWriteConfig(true, true);
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      records = dataGen.generateInserts(commitTimestamp, 5);
+      client.startCommitWithTime(commitTimestamp);
+      writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), commitTimestamp).collect();
+      assertNoWriteErrors(writeStatuses);
+    }
+
+    // Metadata table should have been bootstrapped
+    assertTrue(fs.exists(new Path(metadataTableBasePath)), "Metadata table should exist");
+    FileStatus oldStatus = fs.getFileStatus(new Path(metadataTableBasePath));
+
+    // set hoodie.table.version to 1 in hoodie.properties file
+    changeTableVersion(HoodieTableVersion.ONE);
+
+    // With next commit the table should be deleted (as part of upgrade)
+    commitTimestamp = HoodieActiveTimeline.createNewInstantTime();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
+      records = dataGen.generateInserts(commitTimestamp, 5);
+      client.startCommitWithTime(commitTimestamp);
+      writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), commitTimestamp).collect();
+      assertNoWriteErrors(writeStatuses);
+    }
+    assertFalse(fs.exists(new Path(metadataTableBasePath)), "Metadata table should not exist");
+
+    // With next commit the table should be re-bootstrapped (currently in the constructor. To be changed)
+    commitTimestamp = HoodieActiveTimeline.createNewInstantTime();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, getWriteConfig(true, true))) {
+      records = dataGen.generateInserts(commitTimestamp, 5);
+      client.startCommitWithTime(commitTimestamp);
+      writeStatuses = client.bulkInsert(jsc.parallelize(records, 1), commitTimestamp).collect();
+      assertNoWriteErrors(writeStatuses);
+    }
+
+    initMetaClient();
+    assertEquals(metaClient.getTableConfig().getTableVersion().versionCode(), HoodieTableVersion.TWO.versionCode());
+    assertTrue(fs.exists(new Path(metadataTableBasePath)), "Metadata table should exist");
+    FileStatus newStatus = fs.getFileStatus(new Path(metadataTableBasePath));
+    assertTrue(oldStatus.getModificationTime() < newStatus.getModificationTime());
+
+    // Test downgrade by running the downgrader
+    new SparkUpgradeDowngrade(metaClient, writeConfig, context).run(metaClient, HoodieTableVersion.ONE, writeConfig, context, null);
+
+    assertEquals(metaClient.getTableConfig().getTableVersion().versionCode(), HoodieTableVersion.ONE.versionCode());
+    assertFalse(fs.exists(new Path(metadataTableBasePath)), "Metadata table should not exist");
+  }
+
   /**
    * Test various error scenarios.
    */
@@ -1176,6 +1237,14 @@ public class TestHoodieBackedMetadata extends HoodieClientTestHarness {
             .enableMetrics(enableMetrics).build())
         .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(enableMetrics)
             .withExecutorMetrics(true).usePrefix("unit-test").build());
+  }
+
+  private void changeTableVersion(HoodieTableVersion version) throws IOException {
+    metaClient.getTableConfig().setTableVersion(version);
+    Path propertyFile = new Path(metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE);
+    try (FSDataOutputStream os = metaClient.getFs().create(propertyFile)) {
+      metaClient.getTableConfig().getProps().store(os, "");
+    }
   }
 
   @Override

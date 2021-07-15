@@ -81,10 +81,9 @@ public abstract class HoodieSparkTable<T extends HoodieRecordPayload>
       if (!metaClient.getFs().exists(new Path(HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath())))) {
         return Option.empty();
       }
+      return Option.of(SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config, context));
     } catch (Exception e) {
       throw new HoodieMetadataException("Could not create metadata table writer", e);
     }
-
-    return Option.of(SparkHoodieBackedTableMetadataWriter.create(context.getHadoopConf().get(), config, context));
   }
 }

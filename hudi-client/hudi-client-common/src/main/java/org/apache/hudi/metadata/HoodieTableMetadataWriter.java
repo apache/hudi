@@ -18,12 +18,17 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieMetadataException;
 
 import java.io.Serializable;
 
@@ -47,4 +52,20 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
    * Return the timestamp of the latest instant synced to the metadata table.
    */
   Option<String> getLatestSyncedInstantTime();
+
+  /**
+   * Remove the metadata table for the dataset.
+   *
+   * @param basePath base path of the dataset
+   * @param context
+   */
+  static void removeMetadataTable(String basePath, HoodieEngineContext context) {
+    final String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
+    FileSystem fs = FSUtils.getFs(metadataTablePath, context.getHadoopConf().get());
+    try {
+      fs.delete(new Path(metadataTablePath), true);
+    } catch (Exception e) {
+      throw new HoodieMetadataException("Failed to remove metadata table from path " + metadataTablePath, e);
+    }
+  }
 }

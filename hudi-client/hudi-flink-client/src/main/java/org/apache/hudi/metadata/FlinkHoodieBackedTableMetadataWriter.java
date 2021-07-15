@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.TableFileSystemView;
@@ -48,7 +47,6 @@ import org.apache.log4j.Logger;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter {
@@ -75,7 +73,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void initialize(HoodieEngineContext engineContext, HoodieTableMetaClient datasetMetaClient) {
+  protected void initialize(HoodieEngineContext engineContext) {
     try {
       if (enabled) {
         bootstrapIfNeeded(engineContext, datasetMetaClient);
@@ -114,11 +112,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     // Update total size of the metadata and count of base/log files
     metrics.ifPresent(m -> {
       try {
-        Map<String, String> stats = m.getStats(false, metaClient, metadata);
-        m.updateMetrics(Long.parseLong(stats.get(HoodieMetadataMetrics.STAT_TOTAL_BASE_FILE_SIZE)),
-            Long.parseLong(stats.get(HoodieMetadataMetrics.STAT_TOTAL_LOG_FILE_SIZE)),
-            Integer.parseInt(stats.get(HoodieMetadataMetrics.STAT_COUNT_BASE_FILES)),
-            Integer.parseInt(stats.get(HoodieMetadataMetrics.STAT_COUNT_LOG_FILES)));
+        m.updateSizeMetrics(metaClient, metadata);
       } catch (HoodieIOException e) {
         LOG.error("Could not publish metadata size metrics", e);
       }

@@ -72,7 +72,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_ENABLE_PROP;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.METADATA_VALIDATE_PROP;
 
 public class HoodieInputFormatUtils {
 
@@ -419,7 +418,6 @@ public class HoodieInputFormatUtils {
   public static HoodieMetadataConfig buildMetadataConfig(Configuration conf) {
     return HoodieMetadataConfig.newBuilder()
         .enable(conf.getBoolean(METADATA_ENABLE_PROP.key(), DEFAULT_METADATA_ENABLE_FOR_READERS))
-        .validate(conf.getBoolean(METADATA_VALIDATE_PROP.key(), METADATA_VALIDATE_PROP.defaultValue()))
         .build();
   }
 
