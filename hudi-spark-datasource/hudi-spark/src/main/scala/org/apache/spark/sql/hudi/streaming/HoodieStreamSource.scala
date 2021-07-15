@@ -154,8 +154,8 @@ class HoodieStreamSource(
     } else {
       // Consume the data between (startCommitTime, endCommitTime]
       val incParams = parameters ++ Map(
-        DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key -> startCommitTime(startOffset),
-        DataSourceReadOptions.END_INSTANTTIME_OPT_KEY.key -> endOffset.commitTime
+        DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY -> startCommitTime(startOffset),
+        DataSourceReadOptions.END_INSTANTTIME_OPT_KEY -> endOffset.commitTime
       )
 
       val rdd = tableType match {

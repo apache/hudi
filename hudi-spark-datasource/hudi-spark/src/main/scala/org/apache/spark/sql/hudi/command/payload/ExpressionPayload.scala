@@ -21,9 +21,7 @@ import java.util.{Base64, Properties}
 import java.util.concurrent.Callable
 import scala.collection.JavaConverters._
 import com.google.common.cache.CacheBuilder
-import org.apache.avro.Conversions.DecimalConversion
-import org.apache.avro.Schema.Type
-import org.apache.avro.{LogicalTypes, Schema}
+import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
 import org.apache.avro.util.Utf8
 import org.apache.hudi.DataSourceWriteOptions._
@@ -35,9 +33,9 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.io.HoodieWriteHandle
 import org.apache.hudi.sql.IExpressionEvaluator
 import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.plans.logical.Assignment
 import org.apache.spark.sql.hudi.SerDeUtils
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload.getEvaluator
-import org.apache.spark.sql.types.Decimal
 import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.mutable.ArrayBuffer
@@ -86,8 +84,7 @@ class ExpressionPayload(record: GenericRecord,
     var resultRecordOpt: HOption[IndexedRecord] = null
 
     // Get the Evaluator for each condition and update assignments.
-    initWriteSchemaIfNeed(properties)
-    val updateConditionAndAssignments = getEvaluator(updateConditionAndAssignmentsText.toString, writeSchema)
+    val updateConditionAndAssignments = getEvaluator(updateConditionAndAssignmentsText.toString)
     for ((conditionEvaluator, assignmentEvaluator) <- updateConditionAndAssignments
          if resultRecordOpt == null) {
       val conditionVal = evaluate(conditionEvaluator, joinSqlRecord).head.asInstanceOf[Boolean]
@@ -95,6 +92,7 @@ class ExpressionPayload(record: GenericRecord,
       // to compute final record to update. We will return the first matched record.
       if (conditionVal) {
         val results = evaluate(assignmentEvaluator, joinSqlRecord)
+        initWriteSchemaIfNeed(properties)
         val resultRecord = convertToRecord(results, writeSchema)
 
         if (needUpdatingPersistedRecord(targetRecord, resultRecord, properties)) {
@@ -110,7 +108,7 @@ class ExpressionPayload(record: GenericRecord,
       // Process delete
       val deleteConditionText = properties.get(ExpressionPayload.PAYLOAD_DELETE_CONDITION)
       if (deleteConditionText != null) {
-        val deleteCondition = getEvaluator(deleteConditionText.toString, writeSchema).head._1
+        val deleteCondition = getEvaluator(deleteConditionText.toString).head._1
         val deleteConditionVal = evaluate(deleteCondition, joinSqlRecord).head.asInstanceOf[Boolean]
         if (deleteConditionVal) {
           resultRecordOpt = HOption.empty()
@@ -136,9 +134,8 @@ class ExpressionPayload(record: GenericRecord,
       // Process insert
       val sqlTypedRecord = new SqlTypedRecord(incomingRecord)
       // Get the evaluator for each condition and insert assignment.
-      initWriteSchemaIfNeed(properties)
       val insertConditionAndAssignments =
-        ExpressionPayload.getEvaluator(insertConditionAndAssignmentsText.toString, writeSchema)
+        ExpressionPayload.getEvaluator(insertConditionAndAssignmentsText.toString)
       var resultRecordOpt: HOption[IndexedRecord] = null
       for ((conditionEvaluator, assignmentEvaluator) <- insertConditionAndAssignments
            if resultRecordOpt == null) {
@@ -147,6 +144,7 @@ class ExpressionPayload(record: GenericRecord,
         // result record. We will return the first matched record.
         if (conditionVal) {
           val results = evaluate(assignmentEvaluator, sqlTypedRecord)
+          initWriteSchemaIfNeed(properties)
           resultRecordOpt = HOption.of(convertToRecord(results, writeSchema))
         }
       }
@@ -155,7 +153,7 @@ class ExpressionPayload(record: GenericRecord,
       if (resultRecordOpt == null && isMORTable(properties)) {
         val deleteConditionText = properties.get(ExpressionPayload.PAYLOAD_DELETE_CONDITION)
         if (deleteConditionText != null) {
-          val deleteCondition = getEvaluator(deleteConditionText.toString, writeSchema).head._1
+          val deleteCondition = getEvaluator(deleteConditionText.toString).head._1
           val deleteConditionVal = evaluate(deleteCondition, sqlTypedRecord).head.asInstanceOf[Boolean]
           if (deleteConditionVal) {
             resultRecordOpt = HOption.empty()
@@ -173,7 +171,7 @@ class ExpressionPayload(record: GenericRecord,
   }
 
   private def isMORTable(properties: Properties): Boolean = {
-    properties.getProperty(TABLE_TYPE_OPT_KEY.key, null) == MOR_TABLE_TYPE_OPT_VAL
+    properties.getProperty(TABLE_TYPE_OPT_KEY, null) == MOR_TABLE_TYPE_OPT_VAL
   }
 
   private def convertToRecord(values: Array[AnyRef], schema: Schema): IndexedRecord = {
@@ -190,9 +188,9 @@ class ExpressionPayload(record: GenericRecord,
    */
   private def initWriteSchemaIfNeed(properties: Properties): Unit = {
     if (writeSchema == null) {
-      ValidationUtils.checkArgument(properties.containsKey(HoodieWriteConfig.WRITE_SCHEMA_PROP.key),
-        s"Missing ${HoodieWriteConfig.WRITE_SCHEMA_PROP.key}")
-      writeSchema = new Schema.Parser().parse(properties.getProperty(HoodieWriteConfig.WRITE_SCHEMA_PROP.key))
+      ValidationUtils.checkArgument(properties.containsKey(HoodieWriteConfig.WRITE_SCHEMA_PROP),
+        s"Missing ${HoodieWriteConfig.WRITE_SCHEMA_PROP}")
+      writeSchema = new Schema.Parser().parse(properties.getProperty(HoodieWriteConfig.WRITE_SCHEMA_PROP))
     }
   }
 
@@ -271,19 +269,19 @@ object ExpressionPayload {
    * @return
    */
   def getEvaluator(
-    serializedConditionAssignments: String, writeSchema: Schema): Map[IExpressionEvaluator, IExpressionEvaluator] = {
+    serializedConditionAssignments: String): Map[IExpressionEvaluator, IExpressionEvaluator] = {
     cache.get(serializedConditionAssignments,
       new Callable[Map[IExpressionEvaluator, IExpressionEvaluator]] {
 
         override def call(): Map[IExpressionEvaluator, IExpressionEvaluator] = {
           val serializedBytes = Base64.getDecoder.decode(serializedConditionAssignments)
           val conditionAssignments = SerDeUtils.toObject(serializedBytes)
-            .asInstanceOf[Map[Expression, Seq[Expression]]]
+            .asInstanceOf[Map[Expression, Seq[Assignment]]]
           // Do the CodeGen for condition expression and assignment expression
           conditionAssignments.map {
             case (condition, assignments) =>
               val conditionEvaluator = ExpressionCodeGen.doCodeGen(Seq(condition))
-              val assignmentEvaluator = AvroTypeConvertEvaluator(ExpressionCodeGen.doCodeGen(assignments), writeSchema)
+              val assignmentEvaluator = StringConvertEvaluator(ExpressionCodeGen.doCodeGen(assignments))
               conditionEvaluator -> assignmentEvaluator
           }
         }
@@ -291,29 +289,17 @@ object ExpressionPayload {
   }
 
   /**
-   * A IExpressionEvaluator wrapped the base evaluator which convert the result of the base evaluator
-   * to the avro typed-value.
+   * As the "baseEvaluator" return "UTF8String" for the string type which cannot be process by
+   * the Avro, The StringConvertEvaluator will convert the "UTF8String" to "Utf8".
    */
-  case class AvroTypeConvertEvaluator(baseEvaluator: IExpressionEvaluator, writeSchema: Schema) extends IExpressionEvaluator {
-    private lazy val decimalConversions = new DecimalConversion()
-
+  case class StringConvertEvaluator(baseEvaluator: IExpressionEvaluator) extends IExpressionEvaluator {
     /**
-     * Convert to the avro typed-value.
-     * e.g. convert UTF8String -> Utf8, Dicimal -> GenericFixed.
+     * Convert the UTF8String to Utf8
      */
     override def eval(record: IndexedRecord): Array[AnyRef] = {
-      baseEvaluator.eval(record).zipWithIndex.map {
-        case (s: UTF8String, _) => new Utf8(s.toString)
-        case (d: Decimal, i) =>
-          val schema = writeSchema.getFields.get(i).schema()
-          val fixedSchema = if (schema.getType == Type.UNION) {
-            schema.getTypes.asScala.filter(s => s.getType != Type.NULL).head
-          } else {
-            schema
-          }
-          decimalConversions.toFixed(d.toJavaBigDecimal, fixedSchema
-            , LogicalTypes.decimal(d.precision, d.scale))
-        case (o, _) => o
+      baseEvaluator.eval(record).map {
+        case s: UTF8String => new Utf8(s.toString)
+        case o => o
       }
     }
 

@@ -76,10 +76,10 @@ object HoodieDataSourceExample {
     val df = spark.read.json(spark.sparkContext.parallelize(inserts, 1))
     df.write.format("org.apache.hudi").
         options(getQuickstartWriteConfigs).
-        option(PRECOMBINE_FIELD_OPT_KEY.key, "ts").
-        option(RECORDKEY_FIELD_OPT_KEY.key, "uuid").
-        option(PARTITIONPATH_FIELD_OPT_KEY.key, "partitionpath").
-        option(TABLE_NAME.key, tableName).
+        option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+        option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+        option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+        option(TABLE_NAME, tableName).
         mode(Overwrite).
         save(tablePath)
   }
@@ -121,10 +121,10 @@ object HoodieDataSourceExample {
     val df = spark.read.json(spark.sparkContext.parallelize(updates, 1))
     df.write.format("org.apache.hudi").
         options(getQuickstartWriteConfigs).
-        option(PRECOMBINE_FIELD_OPT_KEY.key, "ts").
-        option(RECORDKEY_FIELD_OPT_KEY.key, "uuid").
-        option(PARTITIONPATH_FIELD_OPT_KEY.key, "partitionpath").
-        option(TABLE_NAME.key, tableName).
+        option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+        option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+        option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+        option(TABLE_NAME, tableName).
         mode(Append).
         save(tablePath)
   }
@@ -143,8 +143,8 @@ object HoodieDataSourceExample {
     val incViewDF = spark.
         read.
         format("org.apache.hudi").
-        option(QUERY_TYPE_OPT_KEY.key, QUERY_TYPE_INCREMENTAL_OPT_VAL).
-        option(BEGIN_INSTANTTIME_OPT_KEY.key, beginTime).
+        option(QUERY_TYPE_OPT_KEY, QUERY_TYPE_INCREMENTAL_OPT_VAL).
+        option(BEGIN_INSTANTTIME_OPT_KEY, beginTime).
         load(tablePath)
     incViewDF.createOrReplaceTempView("hudi_incr_table")
     spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from hudi_incr_table where fare > 20.0").show()
@@ -163,9 +163,9 @@ object HoodieDataSourceExample {
 
     //incrementally query data
     val incViewDF = spark.read.format("org.apache.hudi").
-        option(QUERY_TYPE_OPT_KEY.key, QUERY_TYPE_INCREMENTAL_OPT_VAL).
-        option(BEGIN_INSTANTTIME_OPT_KEY.key, beginTime).
-        option(END_INSTANTTIME_OPT_KEY.key, endTime).
+        option(QUERY_TYPE_OPT_KEY, QUERY_TYPE_INCREMENTAL_OPT_VAL).
+        option(BEGIN_INSTANTTIME_OPT_KEY, beginTime).
+        option(END_INSTANTTIME_OPT_KEY, endTime).
         load(tablePath)
     incViewDF.createOrReplaceTempView("hudi_incr_table")
     spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hudi_incr_table where fare > 20.0").show()

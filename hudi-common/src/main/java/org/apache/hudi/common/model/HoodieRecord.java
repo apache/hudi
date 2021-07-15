@@ -88,9 +88,6 @@ public class HoodieRecord<T extends HoodieRecordPayload> implements Serializable
     this.sealed = record.sealed;
   }
 
-  public HoodieRecord() {
-  }
-
   public HoodieKey getKey() {
     return key;
   }

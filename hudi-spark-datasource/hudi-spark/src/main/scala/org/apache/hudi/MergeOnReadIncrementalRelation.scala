@@ -57,19 +57,19 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
   if (commitTimeline.empty()) {
     throw new HoodieException("No instants to incrementally pull")
   }
-  if (!optParams.contains(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key)) {
+  if (!optParams.contains(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY)) {
     throw new HoodieException(s"Specify the begin instant time to pull from using " +
-      s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key}")
+      s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY}")
   }
 
   private val lastInstant = commitTimeline.lastInstant().get()
   private val mergeType = optParams.getOrElse(
-    DataSourceReadOptions.REALTIME_MERGE_OPT_KEY.key,
-    DataSourceReadOptions.REALTIME_MERGE_OPT_KEY.defaultValue)
+    DataSourceReadOptions.REALTIME_MERGE_OPT_KEY,
+    DataSourceReadOptions.DEFAULT_REALTIME_MERGE_OPT_VAL)
 
   private val commitsTimelineToReturn = commitTimeline.findInstantsInRange(
-    optParams(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key),
-    optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY.key, lastInstant.getTimestamp))
+    optParams(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY),
+    optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY, lastInstant.getTimestamp))
   log.debug(s"${commitsTimelineToReturn.getInstants.iterator().toList.map(f => f.toString).mkString(",")}")
   private val commitsToReturn = commitsTimelineToReturn.getInstants.iterator().toList
   private val schemaUtil = new TableSchemaResolver(metaClient)
@@ -84,7 +84,7 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
     } else {
       // get preCombineFiled from the options if this is a old table which have not store
       // the field to hoodie.properties
-      optParams.get(DataSourceReadOptions.READ_PRE_COMBINE_FIELD.key)
+      optParams.get(DataSourceReadOptions.READ_PRE_COMBINE_FIELD)
     }
   }
   override def schema: StructType = tableStructSchema
@@ -111,9 +111,15 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
       val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.last.getTimestamp)
       filters :+isNotNullFilter :+ largerThanFilter :+ lessThanFilter
     }
-    val (requiredAvroSchema, requiredStructSchema) =
-      MergeOnReadSnapshotRelation.getRequiredSchema(tableAvroSchema, requiredColumns)
-
+    var requiredStructSchema = StructType(Seq())
+    requiredColumns.foreach(col => {
+      val field = tableStructSchema.find(_.name == col)
+      if (field.isDefined) {
+        requiredStructSchema = requiredStructSchema.add(field.get)
+      }
+    })
+    val requiredAvroSchema = AvroConversionUtils
+      .convertStructTypeToAvroSchema(requiredStructSchema, tableAvroSchema.getName, tableAvroSchema.getNamespace)
     val hoodieTableState = HoodieMergeOnReadTableState(
       tableStructSchema,
       requiredStructSchema,
@@ -172,10 +178,10 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
 
     // Filter files based on user defined glob pattern
     val pathGlobPattern = optParams.getOrElse(
-      DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY.key,
-      DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY.defaultValue)
+      DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY,
+      DataSourceReadOptions.DEFAULT_INCR_PATH_GLOB_OPT_VAL)
     val filteredFileGroup = if(!pathGlobPattern
-      .equals(DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY.defaultValue)) {
+      .equals(DataSourceReadOptions.DEFAULT_INCR_PATH_GLOB_OPT_VAL)) {
       val globMatcher = new GlobPattern("*" + pathGlobPattern)
       fileGroup.filter(f => {
         if (f.getLatestFileSlice.get().getBaseFile.isPresent) {

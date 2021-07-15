@@ -22,24 +22,20 @@ import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
-import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.BaseFileUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.sink.bootstrap.aggregate.BootstrapAggFunction;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.StreamerUtil;
 
-import org.apache.avro.Schema;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.api.common.state.ListState;
@@ -58,11 +54,10 @@ import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
-
-import static java.util.stream.Collectors.toList;
 
 /**
  * The function to load index from existing hoodieTable.
@@ -83,7 +78,6 @@ public class BootstrapFunction<I, O extends HoodieRecord>
   private final Configuration conf;
 
   private transient org.apache.hadoop.conf.Configuration hadoopConf;
-  private transient HoodieWriteConfig writeConfig;
 
   private GlobalAggregateManager aggregateManager;
   private ListState<Boolean> bootstrapState;
@@ -114,14 +108,13 @@ public class BootstrapFunction<I, O extends HoodieRecord>
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
     this.hadoopConf = StreamerUtil.getHadoopConf();
-    this.writeConfig = StreamerUtil.getHoodieClientConfig(this.conf);
     this.hoodieTable = getTable();
     this.aggregateManager = ((StreamingRuntimeContext) getRuntimeContext()).getGlobalAggregateManager();
   }
 
   @Override
   @SuppressWarnings("unchecked")
-  public void processElement(I value, Context ctx, Collector<O> out) throws Exception {
+  public void processElement(I value, Context ctx, Collector<O> out) throws IOException {
     if (!alreadyBootstrap) {
       String basePath = hoodieTable.getMetaClient().getBasePath();
       int taskID = getRuntimeContext().getIndexOfThisSubtask();
@@ -162,10 +155,11 @@ public class BootstrapFunction<I, O extends HoodieRecord>
   }
 
   private HoodieFlinkTable getTable() {
+    HoodieWriteConfig writeConfig = StreamerUtil.getHoodieClientConfig(this.conf);
     HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
         new SerializableConfiguration(this.hadoopConf),
         new FlinkTaskContextSupplier(getRuntimeContext()));
-    return HoodieFlinkTable.create(this.writeConfig, context);
+    return HoodieFlinkTable.create(writeConfig, context);
   }
 
   /**
@@ -174,64 +168,32 @@ public class BootstrapFunction<I, O extends HoodieRecord>
    * @param partitionPath The partition path
    */
   @SuppressWarnings("unchecked")
-  private void loadRecords(String partitionPath, Collector<O> out) throws Exception {
+  private void loadRecords(String partitionPath, Collector<O> out) {
     long start = System.currentTimeMillis();
-
     BaseFileUtils fileUtils = BaseFileUtils.getInstance(this.hoodieTable.getBaseFileFormat());
-    Schema schema = new TableSchemaResolver(this.hoodieTable.getMetaClient()).getTableAvroSchema();
+    List<HoodieBaseFile> latestBaseFiles =
+        HoodieIndexUtils.getLatestBaseFilesForPartition(partitionPath, this.hoodieTable);
+    LOG.info("All baseFile in partition {} size = {}", partitionPath, latestBaseFiles.size());
 
     final int parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
     final int maxParallelism = getRuntimeContext().getMaxNumberOfParallelSubtasks();
     final int taskID = getRuntimeContext().getIndexOfThisSubtask();
+    for (HoodieBaseFile baseFile : latestBaseFiles) {
+      boolean shouldLoad = KeyGroupRangeAssignment.assignKeyToParallelOperator(
+          baseFile.getFileId(), maxParallelism, parallelism) == taskID;
 
-    Option<HoodieInstant> latestCommitTime = this.hoodieTable.getMetaClient().getCommitsTimeline()
-        .filterCompletedInstants().lastInstant();
-
-    if (latestCommitTime.isPresent()) {
-      List<FileSlice> fileSlices = this.hoodieTable.getSliceView()
-          .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitTime.get().getTimestamp(), true)
-          .collect(toList());
-
-      for (FileSlice fileSlice : fileSlices) {
-        if (!shouldLoadFile(fileSlice.getFileId(), maxParallelism, parallelism, taskID)) {
-          continue;
-        }
-        LOG.info("Load records from {}.", fileSlice);
-
-        // load parquet records
-        fileSlice.getBaseFile().ifPresent(baseFile -> {
-          // filter out crushed files
-          if (baseFile.getFileSize() <= 0) {
-            return;
-          }
-
-          final List<HoodieKey> hoodieKeys;
-          try {
-            hoodieKeys =
-                fileUtils.fetchRecordKeyPartitionPath(this.hadoopConf, new Path(baseFile.getPath()));
-          } catch (Exception e) {
-            throw new HoodieException(String.format("Error when loading record keys from file: %s", baseFile), e);
-          }
-
-          for (HoodieKey hoodieKey : hoodieKeys) {
-            out.collect((O) new IndexRecord(generateHoodieRecord(hoodieKey, fileSlice)));
-          }
-        });
-
-        // load avro log records
-        List<String> logPaths = fileSlice.getLogFiles()
-                // filter out crushed files
-                .filter(logFile -> logFile.getFileSize() > 0)
-                .map(logFile -> logFile.getPath().toString())
-                .collect(toList());
-        HoodieMergedLogRecordScanner scanner = scanLog(logPaths, schema, latestCommitTime.get().getTimestamp());
-
+      if (shouldLoad) {
+        LOG.info("Load records from file {}.", baseFile);
+        final List<HoodieKey> hoodieKeys;
         try {
-          for (String recordKey : scanner.getRecords().keySet()) {
-            out.collect((O) new IndexRecord(generateHoodieRecord(new HoodieKey(recordKey, partitionPath), fileSlice)));
-          }
+          hoodieKeys =
+              fileUtils.fetchRecordKeyPartitionPath(this.hadoopConf, new Path(baseFile.getPath()));
         } catch (Exception e) {
-          throw new HoodieException(String.format("Error when loading record keys from files: %s", logPaths), e);
+          throw new HoodieException(String.format("Error when loading record keys from file: %s", baseFile), e);
+        }
+
+        for (HoodieKey hoodieKey : hoodieKeys) {
+          out.collect((O) new IndexRecord(generateHoodieRecord(hoodieKey, baseFile)));
         }
       }
     }
@@ -241,44 +203,17 @@ public class BootstrapFunction<I, O extends HoodieRecord>
         this.getClass().getSimpleName(), taskID, partitionPath, cost);
   }
 
-  private HoodieMergedLogRecordScanner scanLog(
-          List<String> logPaths,
-          Schema logSchema,
-          String latestInstantTime) {
-    String basePath = this.hoodieTable.getMetaClient().getBasePath();
-    return HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(FSUtils.getFs(basePath, this.hadoopConf))
-        .withBasePath(basePath)
-        .withLogFilePaths(logPaths)
-        .withReaderSchema(logSchema)
-        .withLatestInstantTime(latestInstantTime)
-        .withReadBlocksLazily(this.writeConfig.getCompactionLazyBlockReadEnabled())
-        .withReverseReader(false)
-        .withBufferSize(this.writeConfig.getMaxDFSStreamBufferSize())
-        .withMaxMemorySizeInBytes(this.writeConfig.getMaxMemoryPerPartitionMerge())
-        .withSpillableMapBasePath(this.writeConfig.getSpillableMapBasePath())
-        .build();
-  }
-
   @SuppressWarnings("unchecked")
-  public static HoodieRecord generateHoodieRecord(HoodieKey hoodieKey, FileSlice fileSlice) {
+  public static HoodieRecord generateHoodieRecord(HoodieKey hoodieKey, HoodieBaseFile baseFile) {
     HoodieRecord hoodieRecord = new HoodieRecord(hoodieKey, null);
-    hoodieRecord.setCurrentLocation(new HoodieRecordGlobalLocation(hoodieKey.getPartitionPath(), fileSlice.getBaseInstantTime(), fileSlice.getFileId()));
+    hoodieRecord.setCurrentLocation(new HoodieRecordGlobalLocation(hoodieKey.getPartitionPath(), baseFile.getCommitTime(), baseFile.getFileId()));
     hoodieRecord.seal();
 
     return hoodieRecord;
   }
 
-  private static boolean shouldLoadFile(String fileId,
-                                        int maxParallelism,
-                                        int parallelism,
-                                        int taskID) {
-    return KeyGroupRangeAssignment.assignKeyToParallelOperator(
-        fileId, maxParallelism, parallelism) == taskID;
-  }
-
   @Override
-  public void notifyCheckpointComplete(long checkpointId) {
+  public void notifyCheckpointComplete(long checkpointId) throws Exception {
     // no operation
   }
 

@@ -73,12 +73,6 @@ public class WriteStatus implements Serializable {
     this.random = new Random(RANDOM_SEED);
   }
 
-  public WriteStatus() {
-    this.failureFraction = 0.0d;
-    this.trackSuccessRecords = false;
-    this.random = null;
-  }
-
   /**
    * Mark write as success, optionally using given parameters for the purpose of calculating some aggregate metrics.
    * This method is not meant to cache passed arguments, since WriteStatus objects are collected in Spark Driver.

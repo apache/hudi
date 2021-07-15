@@ -57,9 +57,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests dis based map {@link BitCaskDiskMap}.
+ * Tests dis based map {@link DiskBasedMap}.
  */
-public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
+public class TestDiskBasedMap extends HoodieCommonTestHarness {
 
   @BeforeEach
   public void setup() {
@@ -68,7 +68,7 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
 
   @Test
   public void testSimpleInsert() throws IOException, URISyntaxException {
-    BitCaskDiskMap records = new BitCaskDiskMap<>(basePath);
+    DiskBasedMap records = new DiskBasedMap<>(basePath);
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     ((GenericRecord) iRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
@@ -86,7 +86,7 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
 
   @Test
   public void testSimpleInsertWithoutHoodieMetadata() throws IOException, URISyntaxException {
-    BitCaskDiskMap records = new BitCaskDiskMap<>(basePath);
+    DiskBasedMap records = new DiskBasedMap<>(basePath);
     List<HoodieRecord> hoodieRecords = SchemaTestUtil.generateHoodieTestRecordsWithoutHoodieMetadata(0, 1000);
     Set<String> recordKeys = new HashSet<>();
     // insert generated records into the map
@@ -109,7 +109,7 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
   public void testSimpleUpsert() throws IOException, URISyntaxException {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
 
-    BitCaskDiskMap records = new BitCaskDiskMap<>(basePath);
+    DiskBasedMap records = new DiskBasedMap<>(basePath);
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
 
     // perform some inserts
@@ -189,7 +189,7 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
 
   @Test
   public void testPutAll() throws IOException, URISyntaxException {
-    BitCaskDiskMap<String, HoodieRecord> records = new BitCaskDiskMap<>(basePath);
+    DiskBasedMap<String, HoodieRecord> records = new DiskBasedMap<>(basePath);
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     Map<String, HoodieRecord> recordMap = new HashMap<>();
     iRecords.forEach(r -> {

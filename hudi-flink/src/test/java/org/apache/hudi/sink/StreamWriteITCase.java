@@ -200,7 +200,7 @@ public class StreamWriteITCase extends TestLogger {
     conf.setString(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
 
     // create metaClient
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    HoodieTableMetaClient metaClient = CompactionUtil.createMetaClient(conf);
 
     // set the table name
     conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());

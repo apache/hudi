@@ -18,33 +18,24 @@
 
 package org.apache.hudi.keygen.constant;
 
-import org.apache.hudi.common.config.ConfigProperty;
-
 public class KeyGeneratorOptions {
 
-  public static final ConfigProperty<String> URL_ENCODE_PARTITIONING_OPT_KEY = ConfigProperty
-      .key("hoodie.datasource.write.partitionpath.urlencode")
-      .defaultValue("false")
-      .withDocumentation("");
+  /**
+   * Flag to indicate whether to use Hive style partitioning.
+   * If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.
+   * By default false (the names of partition folders are only partition values)
+   */
+  public static final String URL_ENCODE_PARTITIONING_OPT_KEY = "hoodie.datasource.write.partitionpath.urlencode";
+  public static final String DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL = "false";
+  public static final String HIVE_STYLE_PARTITIONING_OPT_KEY = "hoodie.datasource.write.hive_style_partitioning";
+  public static final String DEFAULT_HIVE_STYLE_PARTITIONING_OPT_VAL = "false";
 
-  public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_OPT_KEY = ConfigProperty
-      .key("hoodie.datasource.write.hive_style_partitioning")
-      .defaultValue("false")
-      .withDocumentation("Flag to indicate whether to use Hive style partitioning.\n"
-          + "If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.\n"
-          + "By default false (the names of partition folders are only partition values)");
-
-  public static final ConfigProperty<String> RECORDKEY_FIELD_OPT_KEY = ConfigProperty
-      .key("hoodie.datasource.write.recordkey.field")
-      .defaultValue("uuid")
-      .withDocumentation("Record key field. Value to be used as the `recordKey` component of `HoodieKey`.\n"
-          + "Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using\n"
-          + "the dot notation eg: `a.b.c`");
-
-  public static final ConfigProperty<String> PARTITIONPATH_FIELD_OPT_KEY = ConfigProperty
-      .key("hoodie.datasource.write.partitionpath.field")
-      .defaultValue("partitionpath")
-      .withDocumentation("Partition path field. Value to be used at the partitionPath component of HoodieKey. "
-          + "Actual value ontained by invoking .toString()");
+  /**
+   * Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value
+   * will be obtained by invoking .toString() on the field value. Nested fields can be specified using
+   * the dot notation eg: `a.b.c`
+   */
+  public static final String RECORDKEY_FIELD_OPT_KEY = "hoodie.datasource.write.recordkey.field";
+  public static final String PARTITIONPATH_FIELD_OPT_KEY = "hoodie.datasource.write.partitionpath.field";
 }
 

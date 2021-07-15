@@ -37,11 +37,11 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
   private TypedProperties getCommonProps(boolean getComplexRecordKey) {
     TypedProperties properties = new TypedProperties();
     if (getComplexRecordKey) {
-      properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "_row_key, pii_col");
+      properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_row_key, pii_col");
     } else {
-      properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "_row_key");
+      properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_row_key");
     }
-    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY.key(), "true");
+    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY, "true");
     return properties;
   }
 
@@ -51,20 +51,20 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
 
   private TypedProperties getPropertiesWithoutRecordKeyProp() {
     TypedProperties properties = new TypedProperties();
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "timestamp");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp");
     return properties;
   }
 
   private TypedProperties getWrongRecordKeyFieldProps() {
     TypedProperties properties = new TypedProperties();
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "timestamp");
-    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "_wrong_key");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp");
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_wrong_key");
     return properties;
   }
 
   private TypedProperties getProps() {
     TypedProperties properties = getCommonProps(true);
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "timestamp,ts_ms");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp,ts_ms");
     return properties;
   }
 
@@ -100,8 +100,8 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
   @Test
   public void testSingleValueKeyGenerator() {
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "_row_key");
-    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "timestamp");
+    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_row_key");
+    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp");
     ComplexKeyGenerator compositeKeyGenerator = new ComplexKeyGenerator(properties);
     assertEquals(compositeKeyGenerator.getRecordKeyFields().size(), 1);
     assertEquals(compositeKeyGenerator.getPartitionPathFields().size(), 1);
@@ -117,8 +117,8 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
   @Test
   public void testMultipleValueKeyGenerator() {
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "_row_key,timestamp");
-    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "rider,driver");
+    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_row_key,timestamp");
+    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "rider,driver");
     ComplexKeyGenerator compositeKeyGenerator = new ComplexKeyGenerator(properties);
     assertEquals(compositeKeyGenerator.getRecordKeyFields().size(), 2);
     assertEquals(compositeKeyGenerator.getPartitionPathFields().size(), 2);
@@ -136,8 +136,8 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
   @Test
   public void testMultipleValueKeyGeneratorNonPartitioned() {
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "_row_key,timestamp");
-    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "");
+    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_row_key,timestamp");
+    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "");
     ComplexKeyGenerator compositeKeyGenerator = new ComplexKeyGenerator(properties);
     assertEquals(compositeKeyGenerator.getRecordKeyFields().size(), 2);
     assertEquals(compositeKeyGenerator.getPartitionPathFields().size(), 0);

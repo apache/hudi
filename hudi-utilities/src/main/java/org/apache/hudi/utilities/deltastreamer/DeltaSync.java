@@ -18,13 +18,6 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import com.codahale.metrics.Timer;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.HoodieWriterUtils;
@@ -47,11 +40,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieDeltaStreamerException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
@@ -59,14 +50,23 @@ import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.sync.common.AbstractSyncTool;
 import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.hudi.exception.HoodieDeltaStreamerException;
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Config;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig;
-import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.Config;
 import org.apache.hudi.utilities.schema.DelegatingSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaSet;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.transform.Transformer;
+
+import com.codahale.metrics.Timer;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaRDD;
@@ -90,11 +90,9 @@ import java.util.stream.Collectors;
 
 import scala.collection.JavaConversions;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP;
-import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE_OPT_KEY;
+import static org.apache.hudi.common.table.HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_RESET_KEY;
-import static org.apache.hudi.config.HoodieClusteringConfig.INLINE_CLUSTERING_PROP;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_PROP;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT_PROP;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_UPSERT_PROP;
@@ -245,11 +243,10 @@ public class DeltaSync implements Serializable {
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
-          .setArchiveLogFolder(HOODIE_ARCHIVELOG_FOLDER_PROP.defaultValue())
+          .setArchiveLogFolder(DEFAULT_ARCHIVELOG_FOLDER)
           .setPayloadClassName(cfg.payloadClassName)
           .setBaseFileFormat(cfg.baseFileFormat)
           .setPartitionColumns(partitionColumns)
-          .setPreCombineField(cfg.sourceOrderingField)
           .initTable(new Configuration(jssc.hadoopConfiguration()),
             cfg.targetBasePath);
     }
@@ -291,8 +288,6 @@ public class DeltaSync implements Serializable {
       result = writeToSink(srcRecordsWithCkpt.getRight().getRight(),
           srcRecordsWithCkpt.getRight().getLeft(), metrics, overallTimerContext);
     }
-
-    metrics.updateDeltaStreamerSyncMetrics(System.currentTimeMillis());
 
     // Clear persistent RDDs
     jssc.getPersistentRDDs().values().forEach(JavaRDD::unpersist);
@@ -341,7 +336,7 @@ public class DeltaSync implements Serializable {
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
-          .setArchiveLogFolder(HOODIE_ARCHIVELOG_FOLDER_PROP.defaultValue())
+          .setArchiveLogFolder(DEFAULT_ARCHIVELOG_FOLDER)
           .setPayloadClassName(cfg.payloadClassName)
           .setBaseFileFormat(cfg.baseFileFormat)
           .setPartitionColumns(partitionColumns)
@@ -454,12 +449,6 @@ public class DeltaSync implements Serializable {
       case BULK_INSERT:
         writeStatusRDD = writeClient.bulkInsert(records, instantTime);
         break;
-      case INSERT_OVERWRITE:
-        writeStatusRDD = writeClient.insertOverwrite(records, instantTime).getWriteStatuses();
-        break;
-      case INSERT_OVERWRITE_TABLE:
-        writeStatusRDD = writeClient.insertOverwriteTable(records, instantTime).getWriteStatuses();
-        break;
       default:
         throw new HoodieDeltaStreamerException("Unknown operation : " + cfg.operation);
     }
@@ -467,6 +456,8 @@ public class DeltaSync implements Serializable {
     long totalErrorRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalErrorRecords).sum().longValue();
     long totalRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalRecords).sum().longValue();
     boolean hasErrors = totalErrorRecords > 0;
+    long hiveSyncTimeMs = 0;
+    long metaSyncTimeMs = 0;
     if (!hasErrors || cfg.commitOnErrors) {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
       checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
@@ -517,7 +508,6 @@ public class DeltaSync implements Serializable {
 
   /**
    * Try to start a new commit.
-   *
    * <p>
    * Exception will be thrown if it failed in 2 tries.
    *
@@ -652,9 +642,6 @@ public class DeltaSync implements Serializable {
             .withCompactionConfig(HoodieCompactionConfig.newBuilder().withPayloadClass(cfg.payloadClassName)
                 // Inline compaction is disabled for continuous mode. otherwise enabled for MOR
                 .withInlineCompaction(cfg.isInlineCompactionEnabled()).build())
-            .withClusteringConfig(HoodieClusteringConfig.newBuilder()
-                .withInlineClustering(cfg.isInlineClusteringEnabled())
-                .withAsyncClustering(cfg.isAsyncClusteringEnabled()).build())
             .withPayloadConfig(HoodiePayloadConfig.newBuilder().withPayloadOrderingField(cfg.sourceOrderingField)
                 .build())
             .forTable(cfg.targetTableName)
@@ -667,22 +654,18 @@ public class DeltaSync implements Serializable {
 
     // set default value for {@link HoodieWriteCommitKafkaCallbackConfig} if needed.
     if (config.writeCommitCallbackOn() && HoodieWriteCommitKafkaCallback.class.getName().equals(config.getCallbackClass())) {
-      HoodieWriteCommitKafkaCallbackConfig.setCallbackKafkaConfigIfNeeded(config);
+      HoodieWriteCommitKafkaCallbackConfig.setCallbackKafkaConfigIfNeeded(config.getProps());
     }
 
     // Validate what deltastreamer assumes of write-config to be really safe
     ValidationUtils.checkArgument(config.inlineCompactionEnabled() == cfg.isInlineCompactionEnabled(),
-        String.format("%s should be set to %s", INLINE_COMPACT_PROP.key(), cfg.isInlineCompactionEnabled()));
-    ValidationUtils.checkArgument(config.inlineClusteringEnabled() == cfg.isInlineClusteringEnabled(),
-        String.format("%s should be set to %s", INLINE_CLUSTERING_PROP.key(), cfg.isInlineClusteringEnabled()));
-    ValidationUtils.checkArgument(config.isAsyncClusteringEnabled() == cfg.isAsyncClusteringEnabled(),
-        String.format("%s should be set to %s", ASYNC_CLUSTERING_ENABLE_OPT_KEY.key(), cfg.isAsyncClusteringEnabled()));
+        String.format("%s should be set to %s", INLINE_COMPACT_PROP, cfg.isInlineCompactionEnabled()));
     ValidationUtils.checkArgument(!config.shouldAutoCommit(),
-        String.format("%s should be set to %s", HOODIE_AUTO_COMMIT_PROP.key(), autoCommit));
+        String.format("%s should be set to %s", HOODIE_AUTO_COMMIT_PROP, autoCommit));
     ValidationUtils.checkArgument(config.shouldCombineBeforeInsert() == cfg.filterDupes,
-        String.format("%s should be set to %s", COMBINE_BEFORE_INSERT_PROP.key(), cfg.filterDupes));
+        String.format("%s should be set to %s", COMBINE_BEFORE_INSERT_PROP, cfg.filterDupes));
     ValidationUtils.checkArgument(config.shouldCombineBeforeUpsert(),
-        String.format("%s should be set to %s", COMBINE_BEFORE_UPSERT_PROP.key(), combineBeforeUpsert));
+        String.format("%s should be set to %s", COMBINE_BEFORE_UPSERT_PROP, combineBeforeUpsert));
 
     return config;
   }
@@ -749,15 +732,5 @@ public class DeltaSync implements Serializable {
 
   public Option<HoodieTimeline> getCommitTimelineOpt() {
     return commitTimelineOpt;
-  }
-
-  /**
-   * Schedule clustering.
-   * Called from {@link HoodieDeltaStreamer} when async clustering is enabled.
-   *
-   * @return Requested clustering instant.
-   */
-  public Option<String> getClusteringInstantOpt() {
-    return writeClient.scheduleClustering(Option.empty());
   }
 }

@@ -33,6 +33,7 @@ import org.apache.log4j.Logger;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Properties;
 
 /**
  * Write commit callback http client.
@@ -46,10 +47,10 @@ public class HoodieWriteCommitHttpCallbackClient implements Closeable {
   private final String apiKey;
   private final String url;
   private final CloseableHttpClient client;
-  private HoodieWriteConfig writeConfig;
+  private Properties props;
 
   public HoodieWriteCommitHttpCallbackClient(HoodieWriteConfig config) {
-    this.writeConfig = config;
+    this.props = config.getProps();
     this.apiKey = getApiKey();
     this.url = getUrl();
     this.client = getClient();
@@ -79,11 +80,11 @@ public class HoodieWriteCommitHttpCallbackClient implements Closeable {
   }
 
   private String getApiKey() {
-    return writeConfig.getString(HoodieWriteCommitCallbackConfig.CALLBACK_HTTP_API_KEY);
+    return props.getProperty(HoodieWriteCommitCallbackConfig.CALLBACK_HTTP_API_KEY);
   }
 
   private String getUrl() {
-    return writeConfig.getString(HoodieWriteCommitCallbackConfig.CALLBACK_HTTP_URL_PROP);
+    return props.getProperty(HoodieWriteCommitCallbackConfig.CALLBACK_HTTP_URL_PROP);
   }
 
   private CloseableHttpClient getClient() {
@@ -97,7 +98,7 @@ public class HoodieWriteCommitHttpCallbackClient implements Closeable {
   }
 
   private Integer getHttpTimeoutSeconds() {
-    return writeConfig.getInt(HoodieWriteCommitCallbackConfig.CALLBACK_HTTP_TIMEOUT_SECONDS);
+    return Integer.parseInt(props.getProperty(HoodieWriteCommitCallbackConfig.CALLBACK_HTTP_TIMEOUT_SECONDS));
   }
 
   @Override

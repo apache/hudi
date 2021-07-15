@@ -347,7 +347,7 @@ public class FilePathUtils {
       return new Path[] {path};
     } else {
       final String defaultParName = conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME);
-      final boolean hivePartition = conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING);
+      final boolean hivePartition = conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITION);
       List<Map<String, String>> partitionPaths =
           getPartitions(path, hadoopConf, partitionKeys, defaultParName, hivePartition);
       return partitionPath2ReadPath(path, partitionKeys, partitionPaths, hivePartition);

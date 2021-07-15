@@ -112,7 +112,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
             HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
         .filterCompletedInstants().lastInstant().get().getTimestamp();
     // TODO(danny): make it configurable
-    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new FlinkTaskContextSupplier(null), config);
+    long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new FlinkTaskContextSupplier(null), config.getProps());
     LOG.info("MaxMemoryPerCompaction => " + maxMemoryPerCompaction);
 
     List<String> logFiles = operation.getDeltaFileNames().stream().map(

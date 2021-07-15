@@ -37,7 +37,7 @@ public class NonpartitionedKeyGenerator extends BuiltinKeyGenerator {
 
   public NonpartitionedKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key())
+    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY)
         .split(",")).map(String::trim).collect(Collectors.toList());
     this.partitionPathFields = Collections.emptyList();
     nonpartitionedAvroKeyGenerator = new NonpartitionedAvroKeyGenerator(props);

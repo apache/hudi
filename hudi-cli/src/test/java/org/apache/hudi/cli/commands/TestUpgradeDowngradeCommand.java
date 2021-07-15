@@ -20,7 +20,6 @@ package org.apache.hudi.cli.commands;
 
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.testutils.AbstractShellIntegrationTest;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -38,6 +37,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.Properties;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS;
@@ -81,7 +81,7 @@ public class TestUpgradeDowngradeCommand extends AbstractShellIntegrationTest {
     // update hoodie.table.version to 1
     metaClient.getTableConfig().setTableVersion(HoodieTableVersion.ONE);
     try (FSDataOutputStream os = metaClient.getFs().create(new Path(metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE), true)) {
-      metaClient.getTableConfig().getProps().store(os, "");
+      metaClient.getTableConfig().getProperties().store(os, "");
     }
     metaClient = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient());
 
@@ -109,9 +109,9 @@ public class TestUpgradeDowngradeCommand extends AbstractShellIntegrationTest {
     Path propertyFile = new Path(metaClient.getMetaPath() + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE);
     // Load the properties and verify
     FSDataInputStream fsDataInputStream = metaClient.getFs().open(propertyFile);
-    HoodieConfig hoodieConfig = HoodieConfig.create(fsDataInputStream);
+    Properties prop = new Properties();
+    prop.load(fsDataInputStream);
     fsDataInputStream.close();
-    assertEquals(Integer.toString(HoodieTableVersion.ZERO.versionCode()), hoodieConfig
-        .getString(HoodieTableConfig.HOODIE_TABLE_VERSION_PROP));
+    assertEquals(Integer.toString(HoodieTableVersion.ZERO.versionCode()), prop.getProperty(HoodieTableConfig.HOODIE_TABLE_VERSION_PROP_NAME));
   }
 }

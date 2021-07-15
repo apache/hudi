@@ -32,7 +32,7 @@ import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Cast, Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{DataType, NullType, StringType, StructField, StructType}
 
 import scala.collection.immutable.Map
@@ -171,6 +171,10 @@ object HoodieSqlUtils extends SparkAdapterSupport {
   /**
    * Append the SparkSession config and table options to the baseConfig.
    * We add the "spark" prefix to hoodie's config key.
+   * @param spark
+   * @param options
+   * @param baseConfig
+   * @return
    */
   def withSparkConf(spark: SparkSession, options: Map[String, String])
                    (baseConfig: Map[String, String]): Map[String, String] = {
@@ -180,7 +184,4 @@ object HoodieSqlUtils extends SparkAdapterSupport {
   }
 
   def isSpark3: Boolean = SPARK_VERSION.startsWith("3.")
-
-  def isEnableHive(sparkSession: SparkSession): Boolean =
-    "hive" == sparkSession.sessionState.conf.getConf(StaticSQLConf.CATALOG_IMPLEMENTATION)
 }

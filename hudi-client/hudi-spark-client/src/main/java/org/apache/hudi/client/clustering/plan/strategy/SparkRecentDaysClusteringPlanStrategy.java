@@ -104,7 +104,7 @@ public class SparkRecentDaysClusteringPlanStrategy<T extends HoodieRecordPayload
   protected Map<String, String> getStrategyParams() {
     Map<String, String> params = new HashMap<>();
     if (!StringUtils.isNullOrEmpty(getWriteConfig().getClusteringSortColumns())) {
-      params.put(CLUSTERING_SORT_COLUMNS_PROPERTY.key(), getWriteConfig().getClusteringSortColumns());
+      params.put(CLUSTERING_SORT_COLUMNS_PROPERTY, getWriteConfig().getClusteringSortColumns());
     }
     return params;
   }

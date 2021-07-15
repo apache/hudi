@@ -30,9 +30,7 @@ import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -63,40 +61,13 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieClientTestHarn
   }
 
   protected void assertWriteStatuses(List<HoodieInternalWriteStatus> writeStatuses, int batches, int size,
-                                     Option<List<String>> fileAbsPaths, Option<List<String>> fileNames) {
-    assertWriteStatuses(writeStatuses, batches, size, false, fileAbsPaths, fileNames);
-  }
-
-  protected void assertWriteStatuses(List<HoodieInternalWriteStatus> writeStatuses, int batches, int size, boolean areRecordsSorted,
-                                     Option<List<String>> fileAbsPaths, Option<List<String>> fileNames) {
-    if (areRecordsSorted) {
-      assertEquals(batches, writeStatuses.size());
-    } else {
-      assertEquals(Math.min(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS.length, batches), writeStatuses.size());
-    }
-
-    Map<String, Long> sizeMap = new HashMap<>();
-    if (!areRecordsSorted) {
-      // <size> no of records are written per batch. Every 4th batch goes into same writeStatus. So, populating the size expected
-      // per write status
-      for (int i = 0; i < batches; i++) {
-        String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[i % 3];
-        if (!sizeMap.containsKey(partitionPath)) {
-          sizeMap.put(partitionPath, 0L);
-        }
-        sizeMap.put(partitionPath, sizeMap.get(partitionPath) + size);
-      }
-    }
-
+      Option<List<String>> fileAbsPaths, Option<List<String>> fileNames) {
+    assertEquals(batches, writeStatuses.size());
     int counter = 0;
     for (HoodieInternalWriteStatus writeStatus : writeStatuses) {
       // verify write status
       assertEquals(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[counter % 3], writeStatus.getPartitionPath());
-      if (areRecordsSorted) {
-        assertEquals(writeStatus.getTotalRecords(), size);
-      } else {
-        assertEquals(writeStatus.getTotalRecords(), sizeMap.get(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[counter % 3]));
-      }
+      assertEquals(writeStatus.getTotalRecords(), size);
       assertNull(writeStatus.getGlobalError());
       assertEquals(writeStatus.getFailedRowsSize(), 0);
       assertEquals(writeStatus.getTotalErrorRecords(), 0);
@@ -111,13 +82,8 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieClientTestHarn
             .substring(writeStatus.getStat().getPath().lastIndexOf('/') + 1));
       }
       HoodieWriteStat writeStat = writeStatus.getStat();
-      if (areRecordsSorted) {
-        assertEquals(size, writeStat.getNumInserts());
-        assertEquals(size, writeStat.getNumWrites());
-      } else {
-        assertEquals(sizeMap.get(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[counter % 3]), writeStat.getNumInserts());
-        assertEquals(sizeMap.get(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[counter % 3]), writeStat.getNumWrites());
-      }
+      assertEquals(size, writeStat.getNumInserts());
+      assertEquals(size, writeStat.getNumWrites());
       assertEquals(fileId, writeStat.getFileId());
       assertEquals(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[counter++ % 3], writeStat.getPartitionPath());
       assertEquals(0, writeStat.getNumDeletes());

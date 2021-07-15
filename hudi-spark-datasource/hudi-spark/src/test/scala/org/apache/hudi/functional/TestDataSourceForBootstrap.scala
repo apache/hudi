@@ -41,16 +41,16 @@ class TestDataSourceForBootstrap {
 
   var spark: SparkSession = _
   val commonOpts: Map[String, String] = Map(
-    HoodieWriteConfig.INSERT_PARALLELISM.key -> "4",
-    HoodieWriteConfig.UPSERT_PARALLELISM.key -> "4",
-    HoodieWriteConfig.DELETE_PARALLELISM.key -> "4",
-    HoodieWriteConfig.BULKINSERT_PARALLELISM.key -> "4",
-    HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM.key -> "4",
-    HoodieBootstrapConfig.BOOTSTRAP_PARALLELISM.key -> "4",
-    DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key -> "_row_key",
-    DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY.key -> "timestamp",
-    HoodieWriteConfig.TABLE_NAME.key -> "hoodie_test"
+    HoodieWriteConfig.INSERT_PARALLELISM -> "4",
+    HoodieWriteConfig.UPSERT_PARALLELISM -> "4",
+    HoodieWriteConfig.DELETE_PARALLELISM -> "4",
+    HoodieWriteConfig.BULKINSERT_PARALLELISM -> "4",
+    HoodieWriteConfig.FINALIZE_WRITE_PARALLELISM -> "4",
+    HoodieBootstrapConfig.BOOTSTRAP_PARALLELISM -> "4",
+    DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY -> "_row_key",
+    DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY -> "partition",
+    DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY -> "timestamp",
+    HoodieWriteConfig.TABLE_NAME -> "hoodie_test"
   )
   var basePath: String = _
   var srcPath: String = _
@@ -117,9 +117,9 @@ class TestDataSourceForBootstrap {
     updateDF.write
       .format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
-      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY.key, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -168,11 +168,11 @@ class TestDataSourceForBootstrap {
     updateDF.write
       .format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "datestr")
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "datestr")
       // Required because source data is hive style partitioned
-      .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY.key, "true")
+      .option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING_OPT_KEY, "true")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -221,9 +221,9 @@ class TestDataSourceForBootstrap {
     updateDf1.write
       .format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "datestr")
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "datestr")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -241,9 +241,9 @@ class TestDataSourceForBootstrap {
     updateDF2.write
       .format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "datestr")
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "datestr")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -282,7 +282,7 @@ class TestDataSourceForBootstrap {
 
     // Read bootstrapped table and verify count
     val hoodieROViewDF1 = spark.read.format("hudi")
-                            .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key,
+                            .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY,
                               DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
                             .load(basePath + "/*")
     assertEquals(numRecords, hoodieROViewDF1.count())
@@ -295,11 +295,11 @@ class TestDataSourceForBootstrap {
     updateDF.write
       .format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "datestr")
-      .option(HoodieCompactionConfig.INLINE_COMPACT_PROP.key, "true")
-      .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP.key, "1")
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "datestr")
+      .option(HoodieCompactionConfig.INLINE_COMPACT_PROP, "true")
+      .option(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS_PROP, "1")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -309,14 +309,14 @@ class TestDataSourceForBootstrap {
     // Read table after upsert and verify count. Since we have inline compaction enabled the RO view will have
     // the updated rows.
     val hoodieROViewDF2 = spark.read.format("hudi")
-                            .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key,
+                            .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY,
                               DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
                             .load(basePath + "/*")
     assertEquals(numRecords, hoodieROViewDF2.count())
     assertEquals(numRecordsUpdate, hoodieROViewDF2.filter(s"timestamp == $updateTimestamp").count())
     // Test query without "*" for MOR READ_OPTIMIZED
     val hoodieROViewDFWithBasePath = spark.read.format("hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key,
+      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY,
         DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .load(basePath)
     assertEquals(numRecords, hoodieROViewDFWithBasePath.count())
@@ -347,13 +347,13 @@ class TestDataSourceForBootstrap {
 
     // Read bootstrapped table and verify count
     val hoodieROViewDF1 = spark.read.format("hudi")
-                            .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key,
+                            .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY,
                               DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
                             .load(basePath + "/*")
     assertEquals(numRecords, hoodieROViewDF1.count())
     // Read bootstrapped table without "*"
     val hoodieROViewDFWithBasePath = spark.read.format("hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key,
+      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY,
         DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .load(basePath)
     assertEquals(numRecords, hoodieROViewDFWithBasePath.count())
@@ -363,16 +363,16 @@ class TestDataSourceForBootstrap {
     updateDf1.write
       .format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "datestr")
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "datestr")
       .mode(SaveMode.Append)
       .save(basePath)
 
     // Read table after upsert and verify the value
     assertEquals(1, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, commitInstantTime1).size())
     val hoodieROViewDF2 = spark.read.format("hudi")
-                            .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key,
+                            .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY,
                               DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
                             .load(basePath + "/*")
     hoodieROViewDF2.collect()
@@ -386,9 +386,9 @@ class TestDataSourceForBootstrap {
     updateDF2.write
       .format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "datestr")
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "datestr")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -398,7 +398,7 @@ class TestDataSourceForBootstrap {
     // Read table after upsert and verify count. Since we have inline compaction off the RO view will have
     // no updated rows.
     val hoodieROViewDF3 = spark.read.format("hudi")
-                            .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key,
+                            .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY,
                               DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
                             .load(basePath + "/*")
     assertEquals(numRecords, hoodieROViewDF3.count())
@@ -428,12 +428,12 @@ class TestDataSourceForBootstrap {
     bootstrapDF.write
       .format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "datestr")
-      .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP.key, srcPath)
-      .option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS.key, classOf[SimpleKeyGenerator].getName)
-      .option(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR.key, classOf[FullRecordBootstrapModeSelector].getName)
-      .option(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER.key, classOf[SparkParquetBootstrapDataProvider].getName)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "datestr")
+      .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP, srcPath)
+      .option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS, classOf[SimpleKeyGenerator].getName)
+      .option(HoodieBootstrapConfig.BOOTSTRAP_MODE_SELECTOR, classOf[FullRecordBootstrapModeSelector].getName)
+      .option(HoodieBootstrapConfig.FULL_BOOTSTRAP_INPUT_PROVIDER, classOf[SparkParquetBootstrapDataProvider].getName)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -455,9 +455,9 @@ class TestDataSourceForBootstrap {
     updateDF.write
       .format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "datestr")
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL)
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "datestr")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -478,11 +478,11 @@ class TestDataSourceForBootstrap {
     bootstrapDF.write
       .format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key, tableType)
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, partitionColumns.getOrElse(""))
-      .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP.key, srcPath)
-      .option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS.key, classOf[SimpleKeyGenerator].getName)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY, tableType)
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, partitionColumns.getOrElse(""))
+      .option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP, srcPath)
+      .option(HoodieBootstrapConfig.BOOTSTRAP_KEYGEN_CLASS, classOf[SimpleKeyGenerator].getName)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -496,9 +496,9 @@ class TestDataSourceForBootstrap {
     // incrementally pull only changes in the bootstrap commit, which would pull all the initial records written
     // during bootstrap
     val hoodieIncViewDF1 = spark.read.format("hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key, "000")
-      .option(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY.key, bootstrapCommitInstantTime)
+      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, "000")
+      .option(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY, bootstrapCommitInstantTime)
       .load(basePath)
 
     assertEquals(numRecords, hoodieIncViewDF1.count())
@@ -509,8 +509,8 @@ class TestDataSourceForBootstrap {
     // incrementally pull only changes after bootstrap commit, which would pull only the updated records in the
     // later commits
     val hoodieIncViewDF2 = spark.read.format("hudi")
-      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key, bootstrapCommitInstantTime)
+      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, bootstrapCommitInstantTime)
       .load(basePath);
 
     assertEquals(numRecordsUpdate, hoodieIncViewDF2.count())
@@ -522,9 +522,9 @@ class TestDataSourceForBootstrap {
       val relativePartitionPath = if (isHiveStylePartitioned) "/datestr=2020-04-02/*" else "/2020-04-02/*"
       // pull the update commits within certain partitions
       val hoodieIncViewDF3 = spark.read.format("hudi")
-        .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key, bootstrapCommitInstantTime)
-        .option(DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY.key, relativePartitionPath)
+        .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+        .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY, bootstrapCommitInstantTime)
+        .option(DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY, relativePartitionPath)
         .load(basePath)
 
       assertEquals(hoodieIncViewDF2.filter(col("_hoodie_partition_path").contains("2020-04-02")).count(),

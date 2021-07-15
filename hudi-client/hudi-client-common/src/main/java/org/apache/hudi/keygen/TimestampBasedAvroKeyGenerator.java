@@ -88,8 +88,8 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
   }
 
   public TimestampBasedAvroKeyGenerator(TypedProperties config) throws IOException {
-    this(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key()),
-        config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key()));
+    this(config, config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY),
+        config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY));
   }
 
   TimestampBasedAvroKeyGenerator(TypedProperties config, String partitionPathField) throws IOException {
@@ -119,8 +119,8 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
       default:
         timeUnit = null;
     }
-    this.encodePartitionPath = config.getBoolean(KeyGeneratorOptions.URL_ENCODE_PARTITIONING_OPT_KEY.key(),
-        Boolean.parseBoolean(KeyGeneratorOptions.URL_ENCODE_PARTITIONING_OPT_KEY.defaultValue()));
+    this.encodePartitionPath = config.getBoolean(KeyGeneratorOptions.URL_ENCODE_PARTITIONING_OPT_KEY,
+        Boolean.parseBoolean(KeyGeneratorOptions.DEFAULT_URL_ENCODE_PARTITIONING_OPT_VAL));
   }
 
   @Override

@@ -275,7 +275,7 @@ public class TestHoodieCompactionStrategy {
     private final long size;
 
     public TestHoodieBaseFile(long size) {
-      super("/tmp/XYXYXYXYXYYX_11_20180918020003" + HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue().getFileExtension());
+      super("/tmp/XYXYXYXYXYYX_11_20180918020003" + HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension());
       this.size = size;
     }
 

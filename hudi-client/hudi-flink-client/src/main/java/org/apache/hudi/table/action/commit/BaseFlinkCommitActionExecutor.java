@@ -102,7 +102,9 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
     final HoodieRecord<?> record = inputRecords.get(0);
     final String partitionPath = record.getPartitionPath();
     final String fileId = record.getCurrentLocation().getFileId();
-    final BucketType bucketType = BucketType.valueOf(record.getCurrentLocation().getInstantTime());
+    final BucketType bucketType = record.getCurrentLocation().getInstantTime().equals("I")
+        ? BucketType.INSERT
+        : BucketType.UPDATE;
     handleUpsertPartition(
         instantTime,
         partitionPath,
@@ -183,7 +185,6 @@ public abstract class BaseFlinkCommitActionExecutor<T extends HoodieRecordPayloa
       } else {
         switch (bucketType) {
           case INSERT:
-          case APPEND_ONLY:
             return handleInsert(fileIdHint, recordItr);
           case UPDATE:
             return handleUpdate(partitionPath, fileIdHint, recordItr);

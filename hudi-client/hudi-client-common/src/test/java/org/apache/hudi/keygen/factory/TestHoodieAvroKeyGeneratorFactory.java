@@ -38,38 +38,38 @@ public class TestHoodieAvroKeyGeneratorFactory {
     TypedProperties props = getCommonProps();
 
     // set KeyGenerator type only
-    props.put(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key(), KeyGeneratorType.SIMPLE.name());
+    props.put(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP, KeyGeneratorType.SIMPLE.name());
     KeyGenerator keyGenerator = HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
     Assertions.assertEquals(SimpleAvroKeyGenerator.class.getName(), keyGenerator.getClass().getName());
 
     // set KeyGenerator class only
     props = getCommonProps();
-    props.put(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP.key(), SimpleAvroKeyGenerator.class.getName());
+    props.put(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP, SimpleAvroKeyGenerator.class.getName());
     KeyGenerator keyGenerator2 = HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
     Assertions.assertEquals(SimpleAvroKeyGenerator.class.getName(), keyGenerator2.getClass().getName());
 
     // set both class name and keyGenerator type
-    props.put(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key(), KeyGeneratorType.CUSTOM.name());
+    props.put(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP, KeyGeneratorType.CUSTOM.name());
     KeyGenerator keyGenerator3 = HoodieAvroKeyGeneratorFactory.createKeyGenerator(props);
     // KEYGENERATOR_TYPE_PROP was overitten by KEYGENERATOR_CLASS_PROP
     Assertions.assertEquals(SimpleAvroKeyGenerator.class.getName(), keyGenerator3.getClass().getName());
 
     // set wrong class name
     final TypedProperties props2 = getCommonProps();
-    props2.put(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP.key(), TestHoodieAvroKeyGeneratorFactory.class.getName());
+    props2.put(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP, TestHoodieAvroKeyGeneratorFactory.class.getName());
     assertThrows(IOException.class, () -> HoodieAvroKeyGeneratorFactory.createKeyGenerator(props2));
 
     // set wrong keyGenerator type
     final TypedProperties props3 = getCommonProps();
-    props3.put(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key(), "wrong_type");
+    props3.put(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP, "wrong_type");
     assertThrows(HoodieKeyGeneratorException.class, () -> HoodieAvroKeyGeneratorFactory.createKeyGenerator(props3));
   }
 
   private TypedProperties getCommonProps() {
     TypedProperties properties = new TypedProperties();
-    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "_row_key");
-    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY.key(), "true");
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "timestamp");
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_row_key");
+    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY, "true");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp");
     return properties;
   }
 }

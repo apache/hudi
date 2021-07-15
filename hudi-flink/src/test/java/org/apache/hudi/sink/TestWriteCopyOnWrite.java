@@ -23,13 +23,12 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.event.BatchWriteSuccessEvent;
 import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -45,7 +44,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -137,8 +135,8 @@ public class TestWriteCopyOnWrite {
     String instant = funcWrapper.getWriteClient().getLastPendingInstant(getTableType());
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
-    MatcherAssert.assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
-    List<WriteStatus> writeStatuses = ((WriteMetadataEvent) nextEvent).getWriteStatuses();
+    MatcherAssert.assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
+    List<WriteStatus> writeStatuses = ((BatchWriteSuccessEvent) nextEvent).getWriteStatuses();
     assertNotNull(writeStatuses);
     MatcherAssert.assertThat(writeStatuses.size(), is(4)); // write 4 partition files
     assertThat(writeStatuses.stream()
@@ -164,8 +162,8 @@ public class TestWriteCopyOnWrite {
     assertNotEquals(instant, instant2);
 
     final OperatorEvent nextEvent2 = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", nextEvent2, instanceOf(WriteMetadataEvent.class));
-    List<WriteStatus> writeStatuses2 = ((WriteMetadataEvent) nextEvent2).getWriteStatuses();
+    assertThat("The operator expect to send an event", nextEvent2, instanceOf(BatchWriteSuccessEvent.class));
+    List<WriteStatus> writeStatuses2 = ((BatchWriteSuccessEvent) nextEvent2).getWriteStatuses();
     assertNotNull(writeStatuses2);
     assertThat(writeStatuses2.size(), is(0)); // write empty statuses
 
@@ -193,8 +191,8 @@ public class TestWriteCopyOnWrite {
     assertNotNull(instant);
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
-    List<WriteStatus> writeStatuses = ((WriteMetadataEvent) nextEvent).getWriteStatuses();
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
+    List<WriteStatus> writeStatuses = ((BatchWriteSuccessEvent) nextEvent).getWriteStatuses();
     assertNotNull(writeStatuses);
     assertThat(writeStatuses.size(), is(0)); // no data write
 
@@ -212,9 +210,7 @@ public class TestWriteCopyOnWrite {
     }
 
     // this returns early because there is no inflight instant
-    assertThrows(HoodieException.class,
-        () -> funcWrapper.checkpointFunction(2),
-        "Timeout(0ms) while waiting for");
+    funcWrapper.checkpointFunction(2);
     // do not sent the write event and fails the checkpoint,
     // behaves like the last checkpoint is successful.
     funcWrapper.checkpointFails(2);
@@ -236,7 +232,7 @@ public class TestWriteCopyOnWrite {
         .getLastPendingInstant(getTableType());
 
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
@@ -266,7 +262,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(1);
 
     OperatorEvent nextEvent = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
@@ -302,7 +298,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(1);
 
     OperatorEvent nextEvent = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
@@ -322,7 +318,7 @@ public class TestWriteCopyOnWrite {
         .getLastPendingInstant(getTableType());
 
     nextEvent = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
@@ -347,7 +343,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(1);
 
     OperatorEvent nextEvent = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
@@ -367,7 +363,7 @@ public class TestWriteCopyOnWrite {
         .getLastPendingInstant(getTableType());
 
     nextEvent = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
@@ -389,19 +385,19 @@ public class TestWriteCopyOnWrite {
   @Test
   public void testInsertWithMiniBatches() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0007); // 734 bytes batch size
+    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0006); // 630 bytes batch size
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // open the function and ingest data
     funcWrapper.openFunction();
-    // Each record is 216 bytes. so 4 records expect to trigger a mini-batch write
+    // Each record is 208 bytes. so 4 records expect to trigger a mini-batch write
     for (RowData rowData : TestData.DATA_SET_INSERT_DUPLICATES) {
       funcWrapper.invoke(rowData);
     }
 
     Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
     assertThat("Should have 1 data bucket", dataBuffer.size(), is(1));
-    assertThat("2 records expect to flush out as a mini-batch",
+    assertThat("3 records expect to flush out as a mini-batch",
         dataBuffer.values().stream().findFirst().map(List::size).orElse(-1),
         is(2));
 
@@ -412,7 +408,7 @@ public class TestWriteCopyOnWrite {
 
     final OperatorEvent event1 = funcWrapper.getNextEvent(); // remove the first event first
     final OperatorEvent event2 = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", event2, instanceOf(WriteMetadataEvent.class));
+    assertThat("The operator expect to send an event", event2, instanceOf(BatchWriteSuccessEvent.class));
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, event1);
     funcWrapper.getCoordinator().handleEventFromOperator(0, event2);
@@ -450,20 +446,20 @@ public class TestWriteCopyOnWrite {
   @Test
   public void testInsertWithDeduplication() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0007); // 734 bytes batch size
+    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0006); // 630 bytes batch size
     conf.setBoolean(FlinkOptions.INSERT_DROP_DUPS, true);
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // open the function and ingest data
     funcWrapper.openFunction();
-    // Each record is 216 bytes. so 4 records expect to trigger a mini-batch write
+    // Each record is 208 bytes. so 4 records expect to trigger a mini-batch write
     for (RowData rowData : TestData.DATA_SET_INSERT_SAME_KEY) {
       funcWrapper.invoke(rowData);
     }
 
     Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
     assertThat("Should have 1 data bucket", dataBuffer.size(), is(1));
-    assertThat("2 records expect to flush out as a mini-batch",
+    assertThat("3 records expect to flush out as a mini-batch",
         dataBuffer.values().stream().findFirst().map(List::size).orElse(-1),
         is(2));
 
@@ -474,7 +470,7 @@ public class TestWriteCopyOnWrite {
 
     final OperatorEvent event1 = funcWrapper.getNextEvent(); // remove the first event first
     final OperatorEvent event2 = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", event2, instanceOf(WriteMetadataEvent.class));
+    assertThat("The operator expect to send an event", event2, instanceOf(BatchWriteSuccessEvent.class));
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, event1);
     funcWrapper.getCoordinator().handleEventFromOperator(0, event2);
@@ -512,91 +508,14 @@ public class TestWriteCopyOnWrite {
   }
 
   @Test
-  public void testAppendOnly() throws Exception {
-    // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0007); // 734 bytes batch size
-    conf.setBoolean(FlinkOptions.INSERT_DROP_DUPS, false);
-    conf.setBoolean(FlinkOptions.APPEND_ONLY_ENABLE, true);
-    conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT.value());
-    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
-
-    // open the function and ingest data
-    funcWrapper.openFunction();
-    // Each record is 216 bytes. so 4 records expect to trigger a mini-batch write
-    for (RowData rowData : TestData.DATA_SET_INSERT_SAME_KEY) {
-      funcWrapper.invoke(rowData);
-    }
-
-    // this triggers the data write and event send
-    funcWrapper.checkpointFunction(1);
-    Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
-    assertThat("All data should be flushed out", dataBuffer.size(), is(0));
-
-    final OperatorEvent event1 = funcWrapper.getNextEvent(); // remove the first event first
-    final OperatorEvent event2 = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", event2, instanceOf(WriteMetadataEvent.class));
-
-    funcWrapper.getCoordinator().handleEventFromOperator(0, event1);
-    funcWrapper.getCoordinator().handleEventFromOperator(0, event2);
-    assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
-
-    String instant = funcWrapper.getWriteClient()
-            .getLastPendingInstant(getTableType());
-
-    funcWrapper.checkpointComplete(1);
-
-    Map<String, List<String>> expected = new HashMap<>();
-
-    expected.put("par1", Arrays.asList(
-        "id1,par1,id1,Danny,23,0,par1",
-        "id1,par1,id1,Danny,23,1,par1",
-        "id1,par1,id1,Danny,23,2,par1",
-        "id1,par1,id1,Danny,23,3,par1",
-        "id1,par1,id1,Danny,23,4,par1"));
-
-    TestData.checkWrittenAllData(tempFile, expected, 1);
-
-    // started a new instant already
-    checkInflightInstant(funcWrapper.getWriteClient());
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
-
-    // insert duplicates again
-    for (RowData rowData : TestData.DATA_SET_INSERT_SAME_KEY) {
-      funcWrapper.invoke(rowData);
-    }
-
-    funcWrapper.checkpointFunction(2);
-
-    final OperatorEvent event3 = funcWrapper.getNextEvent(); // remove the first event first
-    final OperatorEvent event4 = funcWrapper.getNextEvent();
-    funcWrapper.getCoordinator().handleEventFromOperator(0, event3);
-    funcWrapper.getCoordinator().handleEventFromOperator(0, event4);
-    funcWrapper.checkpointComplete(2);
-
-    // Same the original base file content.
-    expected.put("par1", Arrays.asList(
-        "id1,par1,id1,Danny,23,0,par1",
-        "id1,par1,id1,Danny,23,0,par1",
-        "id1,par1,id1,Danny,23,1,par1",
-        "id1,par1,id1,Danny,23,1,par1",
-        "id1,par1,id1,Danny,23,2,par1",
-        "id1,par1,id1,Danny,23,2,par1",
-        "id1,par1,id1,Danny,23,3,par1",
-        "id1,par1,id1,Danny,23,3,par1",
-        "id1,par1,id1,Danny,23,4,par1",
-        "id1,par1,id1,Danny,23,4,par1"));
-    TestData.checkWrittenAllData(tempFile, expected, 1);
-  }
-
-  @Test
   public void testInsertWithSmallBufferSize() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0007); // 734 bytes buffer size
+    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0006); // 630 bytes buffer size
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // open the function and ingest data
     funcWrapper.openFunction();
-    // each record is 216 bytes. so 4 records expect to trigger buffer flush:
+    // each record is 208 bytes. so 4 records expect to trigger buffer flush:
     // flush the max size bucket once at a time.
     for (RowData rowData : TestData.DATA_SET_INSERT_DUPLICATES) {
       funcWrapper.invoke(rowData);
@@ -604,7 +523,7 @@ public class TestWriteCopyOnWrite {
 
     Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
     assertThat("Should have 1 data bucket", dataBuffer.size(), is(1));
-    assertThat("2 records expect to flush out as a mini-batch",
+    assertThat("3 records expect to flush out as a mini-batch",
         dataBuffer.values().stream().findFirst().map(List::size).orElse(-1),
         is(2));
 
@@ -615,7 +534,7 @@ public class TestWriteCopyOnWrite {
 
     for (int i = 0; i < 2; i++) {
       final OperatorEvent event = funcWrapper.getNextEvent(); // remove the first event first
-      assertThat("The operator expect to send an event", event, instanceOf(WriteMetadataEvent.class));
+      assertThat("The operator expect to send an event", event, instanceOf(BatchWriteSuccessEvent.class));
       funcWrapper.getCoordinator().handleEventFromOperator(0, event);
     }
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
@@ -650,7 +569,7 @@ public class TestWriteCopyOnWrite {
     checkWrittenData(tempFile, expected, 1);
   }
 
-  protected Map<String, String> getMiniBatchExpected() {
+  Map<String, String> getMiniBatchExpected() {
     Map<String, String> expected = new HashMap<>();
     // the last 2 lines are merged
     expected.put("par1", "["
@@ -658,10 +577,6 @@ public class TestWriteCopyOnWrite {
         + "id1,par1,id1,Danny,23,1,par1, "
         + "id1,par1,id1,Danny,23,1,par1]");
     return expected;
-  }
-
-  protected Map<String, String> getExpectedBeforeCheckpointComplete() {
-    return EXPECTED2;
   }
 
   @Test
@@ -677,7 +592,7 @@ public class TestWriteCopyOnWrite {
     funcWrapper.checkpointFunction(1);
 
     OperatorEvent nextEvent = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
@@ -719,10 +634,8 @@ public class TestWriteCopyOnWrite {
         .getLastPendingInstant(getTableType());
 
     nextEvent = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", nextEvent, instanceOf(WriteMetadataEvent.class));
-
-    Map<String, String> expected = getExpectedBeforeCheckpointComplete();
-    checkWrittenData(tempFile, expected);
+    assertThat("The operator expect to send an event", nextEvent, instanceOf(BatchWriteSuccessEvent.class));
+    checkWrittenData(tempFile, EXPECTED2);
 
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
     assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
@@ -739,7 +652,7 @@ public class TestWriteCopyOnWrite {
   public void testWriteExactlyOnce() throws Exception {
     // reset the config option
     conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 3);
-    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0007); // 734 bytes buffer size
+    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0006); // 630 bytes buffer size
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // open the function and ingest data
@@ -760,7 +673,7 @@ public class TestWriteCopyOnWrite {
 
     for (int i = 0; i < 2; i++) {
       final OperatorEvent event = funcWrapper.getNextEvent(); // remove the first event first
-      assertThat("The operator expect to send an event", event, instanceOf(WriteMetadataEvent.class));
+      assertThat("The operator expect to send an event", event, instanceOf(BatchWriteSuccessEvent.class));
       funcWrapper.getCoordinator().handleEventFromOperator(0, event);
     }
 

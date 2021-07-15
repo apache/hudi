@@ -18,34 +18,25 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.common.config.ConfigProperty;
-import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.DefaultHoodieConfig;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
 
-import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY;
-import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY;
+import static org.apache.hudi.common.model.HoodiePayloadProps.DEFAULT_PAYLOAD_EVENT_TIME_FIELD_VAL;
+import static org.apache.hudi.common.model.HoodiePayloadProps.DEFAULT_PAYLOAD_ORDERING_FIELD_VAL;
+import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP;
+import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP;
 
 /**
  * Hoodie payload related configs.
  */
-public class HoodiePayloadConfig extends HoodieConfig {
+public class HoodiePayloadConfig extends DefaultHoodieConfig {
 
-  public static final ConfigProperty<String> PAYLOAD_ORDERING_FIELD_PROP = ConfigProperty
-      .key(PAYLOAD_ORDERING_FIELD_PROP_KEY)
-      .defaultValue("ts")
-      .withDocumentation("Property to hold the payload ordering field name");
-
-  public static final ConfigProperty<String> PAYLOAD_EVENT_TIME_FIELD_PROP = ConfigProperty
-      .key(PAYLOAD_EVENT_TIME_FIELD_PROP_KEY)
-      .defaultValue("ts")
-      .withDocumentation("Property for payload event time field");
-
-  private HoodiePayloadConfig() {
-    super();
+  public HoodiePayloadConfig(Properties props) {
+    super(props);
   }
 
   public static HoodiePayloadConfig.Builder newBuilder() {
@@ -54,33 +45,37 @@ public class HoodiePayloadConfig extends HoodieConfig {
 
   public static class Builder {
 
-    private final HoodiePayloadConfig payloadConfig = new HoodiePayloadConfig();
+    private final Properties props = new Properties();
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
-        this.payloadConfig.getProps().load(reader);
+        this.props.load(reader);
         return this;
       }
     }
 
     public Builder fromProperties(Properties props) {
-      this.payloadConfig.getProps().putAll(props);
+      this.props.putAll(props);
       return this;
     }
 
     public Builder withPayloadOrderingField(String payloadOrderingField) {
-      payloadConfig.setValue(PAYLOAD_ORDERING_FIELD_PROP, String.valueOf(payloadOrderingField));
+      props.setProperty(PAYLOAD_ORDERING_FIELD_PROP, String.valueOf(payloadOrderingField));
       return this;
     }
 
     public Builder withPayloadEventTimeField(String payloadEventTimeField) {
-      payloadConfig.setValue(PAYLOAD_EVENT_TIME_FIELD_PROP, String.valueOf(payloadEventTimeField));
+      props.setProperty(PAYLOAD_EVENT_TIME_FIELD_PROP, String.valueOf(payloadEventTimeField));
       return this;
     }
 
     public HoodiePayloadConfig build() {
-      payloadConfig.setDefaults(HoodiePayloadConfig.class.getName());
-      return payloadConfig;
+      HoodiePayloadConfig config = new HoodiePayloadConfig(props);
+      setDefaultOnCondition(props, !props.containsKey(PAYLOAD_ORDERING_FIELD_PROP), PAYLOAD_ORDERING_FIELD_PROP,
+          String.valueOf(DEFAULT_PAYLOAD_ORDERING_FIELD_VAL));
+      setDefaultOnCondition(props, !props.containsKey(PAYLOAD_EVENT_TIME_FIELD_PROP), PAYLOAD_EVENT_TIME_FIELD_PROP,
+              String.valueOf(DEFAULT_PAYLOAD_EVENT_TIME_FIELD_VAL));
+      return config;
     }
   }
 

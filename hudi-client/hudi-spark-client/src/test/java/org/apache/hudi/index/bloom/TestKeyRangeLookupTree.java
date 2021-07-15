@@ -77,7 +77,7 @@ public class TestKeyRangeLookupTree {
   }
 
   /**
-   * Tests for many duplicate entries in the tree.
+   * Tests for many duplicte entries in the tree.
    */
   @Test
   public void testFileGroupLookUpManyDulicateEntries() {

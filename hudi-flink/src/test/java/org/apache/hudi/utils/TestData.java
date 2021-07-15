@@ -114,17 +114,6 @@ public class TestData {
           TimestampData.fromEpochMillis(8), StringData.fromString("par4"))
   );
 
-  public static List<RowData> DATA_SET_INSERT_SEPARATE_PARTITION = Arrays.asList(
-      insertRow(StringData.fromString("id12"), StringData.fromString("Monica"), 27,
-          TimestampData.fromEpochMillis(9), StringData.fromString("par5")),
-      insertRow(StringData.fromString("id13"), StringData.fromString("Phoebe"), 31,
-          TimestampData.fromEpochMillis(10), StringData.fromString("par5")),
-      insertRow(StringData.fromString("id14"), StringData.fromString("Rachel"), 52,
-          TimestampData.fromEpochMillis(11), StringData.fromString("par6")),
-      insertRow(StringData.fromString("id15"), StringData.fromString("Ross"), 29,
-          TimestampData.fromEpochMillis(12), StringData.fromString("par6"))
-  );
-
   public static List<RowData> DATA_SET_INSERT_DUPLICATES = new ArrayList<>();
   static {
     IntStream.range(0, 5).forEach(i -> DATA_SET_INSERT_DUPLICATES.add(
@@ -360,10 +349,8 @@ public class TestData {
     assert baseFile.isDirectory();
     FileFilter filter = file -> !file.getName().startsWith(".");
     File[] partitionDirs = baseFile.listFiles(filter);
-
     assertNotNull(partitionDirs);
     assertThat(partitionDirs.length, is(partitions));
-
     for (File partitionDir : partitionDirs) {
       File[] dataFiles = partitionDir.listFiles(filter);
       assertNotNull(dataFiles);
@@ -380,37 +367,6 @@ public class TestData {
       }
       readBuffer.sort(Comparator.naturalOrder());
       assertThat(readBuffer.toString(), is(expected.get(partitionDir.getName())));
-    }
-  }
-
-  public static void checkWrittenAllData(
-      File baseFile,
-      Map<String, List<String>> expected,
-      int partitions) throws IOException {
-    assert baseFile.isDirectory();
-    FileFilter filter = file -> !file.getName().startsWith(".");
-    File[] partitionDirs = baseFile.listFiles(filter);
-
-    assertNotNull(partitionDirs);
-    assertThat(partitionDirs.length, is(partitions));
-
-    for (File partitionDir : partitionDirs) {
-      File[] dataFiles = partitionDir.listFiles(filter);
-      assertNotNull(dataFiles);
-
-      List<String> readBuffer = new ArrayList<>();
-      for (File dataFile : dataFiles) {
-        ParquetReader<GenericRecord> reader = AvroParquetReader
-            .<GenericRecord>builder(new Path(dataFile.getAbsolutePath())).build();
-        GenericRecord nextRecord = reader.read();
-        while (nextRecord != null) {
-          readBuffer.add(filterOutVariables(nextRecord));
-          nextRecord = reader.read();
-        }
-        readBuffer.sort(Comparator.naturalOrder());
-      }
-
-      assertThat(readBuffer, is(expected.get(partitionDir.getName())));
     }
   }
 

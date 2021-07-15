@@ -71,30 +71,6 @@ public abstract class SparkHoodieIndex<T extends HoodieRecordPayload> extends Ho
     }
   }
 
-  /**
-   * Whether index is global or not.
-   * @param config HoodieWriteConfig to use.
-   * @return {@code true} if index is a global one. else {@code false}.
-   */
-  public static boolean isGlobalIndex(HoodieWriteConfig config) {
-    switch (config.getIndexType()) {
-      case HBASE:
-        return true;
-      case INMEMORY:
-        return true;
-      case BLOOM:
-        return false;
-      case GLOBAL_BLOOM:
-        return true;
-      case SIMPLE:
-        return false;
-      case GLOBAL_SIMPLE:
-        return true;
-      default:
-        return createIndex(config).isGlobal();
-    }
-  }
-
   @Override
   @PublicAPIMethod(maturity = ApiMaturityLevel.STABLE)
   public abstract JavaRDD<WriteStatus> updateLocation(JavaRDD<WriteStatus> writeStatusRDD,

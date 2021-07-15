@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
@@ -145,15 +144,10 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       TableSchema schema) {
     // table name
     conf.setString(FlinkOptions.TABLE_NAME.key(), tableName);
-    // append only
-    if (conf.getBoolean(FlinkOptions.APPEND_ONLY_ENABLE)) {
-      // append only should use insert operation
-      conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT.value());
-    }
     // hoodie key about options
     setupHoodieKeyOptions(conf, table);
-    // compaction options
-    setupCompactionOptions(conf);
+    // cleaning options
+    setupCleaningOptions(conf);
     // infer avro schema from physical DDL schema
     inferAvroSchema(conf, schema.toRowDataType().notNull().getLogicalType());
   }
@@ -192,9 +186,9 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   }
 
   /**
-   * Sets up the compaction options from the table definition.
+   * Sets up the cleaning options from the table definition.
    */
-  private static void setupCompactionOptions(Configuration conf) {
+  private static void setupCleaningOptions(Configuration conf) {
     int commitsToRetain = conf.getInteger(FlinkOptions.CLEAN_RETAIN_COMMITS);
     int minCommitsToKeep = conf.getInteger(FlinkOptions.ARCHIVE_MIN_COMMITS);
     if (commitsToRetain >= minCommitsToKeep) {
@@ -205,27 +199,21 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       conf.setInteger(FlinkOptions.ARCHIVE_MIN_COMMITS, commitsToRetain + 10);
       conf.setInteger(FlinkOptions.ARCHIVE_MAX_COMMITS, commitsToRetain + 20);
     }
-    if (conf.getBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED)
-        && !conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED)
-        && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.COMPACTION_TARGET_IO)) {
-      // if compaction schedule is on, tweak the target io to 500GB
-      conf.setLong(FlinkOptions.COMPACTION_TARGET_IO, 500 * 1024L);
-    }
   }
 
   /**
    * Inferences the deserialization Avro schema from the table schema (e.g. the DDL)
-   * if both options {@link FlinkOptions#SOURCE_AVRO_SCHEMA_PATH} and
-   * {@link FlinkOptions#SOURCE_AVRO_SCHEMA} are not specified.
+   * if both options {@link FlinkOptions#READ_AVRO_SCHEMA_PATH} and
+   * {@link FlinkOptions#READ_AVRO_SCHEMA} are not specified.
    *
    * @param conf    The configuration
    * @param rowType The specified table row type
    */
   private static void inferAvroSchema(Configuration conf, LogicalType rowType) {
-    if (!conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH).isPresent()
-        && !conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA).isPresent()) {
+    if (!conf.getOptional(FlinkOptions.READ_AVRO_SCHEMA_PATH).isPresent()
+        && !conf.getOptional(FlinkOptions.READ_AVRO_SCHEMA).isPresent()) {
       String inferredSchema = AvroSchemaConverter.convertToSchema(rowType).toString();
-      conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA, inferredSchema);
+      conf.setString(FlinkOptions.READ_AVRO_SCHEMA, inferredSchema);
     }
   }
 }

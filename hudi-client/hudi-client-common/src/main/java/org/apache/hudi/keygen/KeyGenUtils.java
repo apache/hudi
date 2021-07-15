@@ -164,7 +164,7 @@ public class KeyGenUtils {
    */
   public static KeyGenerator createKeyGeneratorByClassName(TypedProperties props) throws IOException {
     KeyGenerator keyGenerator = null;
-    String keyGeneratorClass = props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP.key(), null);
+    String keyGeneratorClass = props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_PROP, null);
     if (!StringUtils.isNullOrEmpty(keyGeneratorClass)) {
       try {
         keyGenerator = (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);

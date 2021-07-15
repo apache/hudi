@@ -196,11 +196,10 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
   protected void initializeIncomingRecordsMap() {
     try {
       // Load the new records in a map
-      long memoryForMerge = IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config);
+      long memoryForMerge = IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config.getProps());
       LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
       this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
-          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(tableSchema),
-          config.getSpillableDiskMapType());
+          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(tableSchema));
     } catch (IOException io) {
       throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
     }
@@ -232,7 +231,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
     LOG.info("Number of entries in MemoryBasedMap => "
         + ((ExternalSpillableMap) keyToNewRecords).getInMemoryMapNumEntries()
         + "Total size in bytes of MemoryBasedMap => "
-        + ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize() + "Number of entries in BitCaskDiskMap => "
+        + ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize() + "Number of entries in DiskBasedMap => "
         + ((ExternalSpillableMap) keyToNewRecords).getDiskBasedMapNumEntries() + "Size of file spilled to disk => "
         + ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes());
   }

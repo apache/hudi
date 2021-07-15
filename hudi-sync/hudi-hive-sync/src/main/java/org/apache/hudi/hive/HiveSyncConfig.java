@@ -86,7 +86,7 @@ public class HiveSyncConfig implements Serializable {
   public Boolean useFileListingFromMetadata = HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 
   @Parameter(names = {"--verify-metadata-file-listing"}, description = "Verify file listing from Hudi's metadata against file system")
-  public Boolean verifyMetadataFileListing = HoodieMetadataConfig.METADATA_VALIDATE_PROP.defaultValue();
+  public Boolean verifyMetadataFileListing = HoodieMetadataConfig.DEFAULT_METADATA_VALIDATE;
 
   @Parameter(names = {"--table-properties"}, description = "Table properties to hive table")
   public String tableProperties;
@@ -103,18 +103,6 @@ public class HiveSyncConfig implements Serializable {
 
   @Parameter(names = {"--decode-partition"}, description = "Decode the partition value if the partition has encoded during writing")
   public Boolean decodePartition = false;
-
-  @Parameter(names = {"--managed-table"}, description = "Create a managed table")
-  public Boolean createManagedTable = false;
-
-  @Parameter(names = {"--batch-sync-num"}, description = "The number of partitions one batch when synchronous partitions to hive")
-  public Integer batchSyncNum = 1000;
-
-  @Parameter(names = {"--spark-datasource"}, description = "Whether sync this table as spark data source table.")
-  public Boolean syncAsSparkDataSourceTable = true;
-
-  @Parameter(names = {"--spark-schema-length-threshold"}, description = "The maximum length allowed in a single cell when storing additional schema information in Hive's metastore.")
-  public int sparkSchemaLengthThreshold = 4000;
 
   // enhance the similar function in child class
   public static HiveSyncConfig copy(HiveSyncConfig cfg) {
@@ -135,10 +123,6 @@ public class HiveSyncConfig implements Serializable {
     newConfig.decodePartition = cfg.decodePartition;
     newConfig.tableProperties = cfg.tableProperties;
     newConfig.serdeProperties = cfg.serdeProperties;
-    newConfig.createManagedTable = cfg.createManagedTable;
-    newConfig.batchSyncNum = cfg.batchSyncNum;
-    newConfig.syncAsSparkDataSourceTable = cfg.syncAsSparkDataSourceTable;
-    newConfig.sparkSchemaLengthThreshold = cfg.sparkSchemaLengthThreshold;
     return newConfig;
   }
 
@@ -167,9 +151,6 @@ public class HiveSyncConfig implements Serializable {
       + ", help=" + help
       + ", supportTimestamp=" + supportTimestamp
       + ", decodePartition=" + decodePartition
-      + ", createManagedTable=" + createManagedTable
-      + ", syncAsSparkDataSourceTable=" + syncAsSparkDataSourceTable
-      + ", sparkSchemaLengthThreshold=" + sparkSchemaLengthThreshold
       + '}';
   }
 }

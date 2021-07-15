@@ -33,8 +33,8 @@ public class SimpleKeyGenerator extends BuiltinKeyGenerator {
   private final SimpleAvroKeyGenerator simpleAvroKeyGenerator;
 
   public SimpleKeyGenerator(TypedProperties props) {
-    this(props, props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key()),
-        props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key()));
+    this(props, props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY),
+        props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY));
   }
 
   SimpleKeyGenerator(TypedProperties props, String partitionPathField) {

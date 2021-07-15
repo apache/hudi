@@ -111,7 +111,7 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
         .build();
     this.metadata = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath(),
-        FileSystemViewStorageConfig.FILESYSTEM_VIEW_SPILLABLE_DIR.defaultValue());
+        FileSystemViewStorageConfig.DEFAULT_VIEW_SPILLABLE_DIR);
 
     this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), () -> metadata);
     this.metaClient = metaClient;

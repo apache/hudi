@@ -138,9 +138,9 @@ public class TestInputPathHandler {
   static HoodieTableMetaClient initTableType(Configuration hadoopConf, String basePath,
                                              String tableName, HoodieTableType tableType) throws IOException {
     Properties properties = new Properties();
-    properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP.key(), tableName);
-    properties.setProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP.key(), tableType.name());
-    properties.setProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP.key(), HoodieAvroPayload.class.getName());
+    properties.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_PROP_NAME, tableName);
+    properties.setProperty(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME, tableType.name());
+    properties.setProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, HoodieAvroPayload.class.getName());
     return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
   }
 

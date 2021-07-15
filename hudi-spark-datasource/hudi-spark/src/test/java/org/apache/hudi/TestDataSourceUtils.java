@@ -35,8 +35,6 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -164,25 +162,6 @@ public class TestDataSourceUtils {
     assertThat(optionCaptor.getValue().get(), is(instanceOf(NoOpBulkInsertPartitioner.class)));
   }
 
-  @Test
-  public void testCreateUserDefinedBulkInsertPartitionerRowsWithInValidPartitioner() throws HoodieException {
-    config = HoodieWriteConfig.newBuilder().withPath("/").withUserDefinedBulkInsertPartitionerClass("NonExistantUserDefinedClass").build();
-
-    Exception exception = assertThrows(HoodieException.class, () -> {
-      DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(config);
-    });
-
-    assertThat(exception.getMessage(), containsString("Could not create UserDefinedBulkInsertPartitionerRows"));
-  }
-
-  @Test
-  public void testCreateUserDefinedBulkInsertPartitionerRowsWithValidPartitioner() throws HoodieException {
-    config = HoodieWriteConfig.newBuilder().withPath("/").withUserDefinedBulkInsertPartitionerClass(NoOpBulkInsertPartitionerRows.class.getName()).build();
-
-    Option<BulkInsertPartitioner<Dataset<Row>>> partitioner = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(config);
-    assertThat(partitioner.isPresent(), is(true));
-  }
-
   private void setAndVerifyHoodieWriteClientWith(final String partitionerClassName) {
     config = HoodieWriteConfig.newBuilder().withPath(config.getBasePath())
         .withUserDefinedBulkInsertPartitionerClass(partitionerClassName)
@@ -197,20 +176,6 @@ public class TestDataSourceUtils {
 
     @Override
     public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
-      return records;
-    }
-
-    @Override
-    public boolean arePartitionRecordsSorted() {
-      return false;
-    }
-  }
-
-  public static class NoOpBulkInsertPartitionerRows
-      implements BulkInsertPartitioner<Dataset<Row>> {
-
-    @Override
-    public Dataset<Row> repartitionRecords(Dataset<Row> records, int outputSparkPartitions) {
       return records;
     }
 

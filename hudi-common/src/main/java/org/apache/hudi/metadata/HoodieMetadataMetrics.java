@@ -48,8 +48,6 @@ public class HoodieMetadataMetrics implements Serializable {
   public static final String BASEFILE_READ_STR = "basefile_read";
   public static final String INITIALIZE_STR = "initialize";
   public static final String SYNC_STR = "sync";
-  public static final String REBOOTSTRAP_STR = "rebootstrap";
-  public static final String BOOTSTRAP_ERR_STR = "bootstrap_error";
 
   // Stats names
   public static final String STAT_TOTAL_BASE_FILE_SIZE = "totalBaseFileSizeInBytes";

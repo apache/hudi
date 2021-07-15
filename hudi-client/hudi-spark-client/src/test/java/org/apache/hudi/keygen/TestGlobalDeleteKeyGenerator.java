@@ -34,29 +34,29 @@ public class TestGlobalDeleteKeyGenerator extends KeyGeneratorTestUtilities {
   private TypedProperties getCommonProps(boolean getComplexRecordKey) {
     TypedProperties properties = new TypedProperties();
     if (getComplexRecordKey) {
-      properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "_row_key,pii_col");
+      properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_row_key,pii_col");
     } else {
-      properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "_row_key");
+      properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_row_key");
     }
-    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY.key(), "true");
+    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY, "true");
     return properties;
   }
 
   private TypedProperties getPropertiesWithoutRecordKeyProp() {
     TypedProperties properties = new TypedProperties();
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "timestamp");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp");
     return properties;
   }
 
   private TypedProperties getWrongRecordKeyFieldProps() {
     TypedProperties properties = new TypedProperties();
-    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "_wrong_key");
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_wrong_key");
     return properties;
   }
 
   private TypedProperties getProps() {
     TypedProperties properties = getCommonProps(true);
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "timestamp,ts_ms");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp,ts_ms");
     return properties;
   }
 

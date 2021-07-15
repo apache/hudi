@@ -19,7 +19,6 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.DataSourceWriteOptions
 import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
@@ -70,9 +69,6 @@ case class CreateHoodieTableAsSelectCommand(
 
     // Execute the insert query
     try {
-      // Set if sync as a managed table.
-      sparkSession.sessionState.conf.setConfString(DataSourceWriteOptions.HIVE_CREATE_MANAGED_TABLE.key(),
-        (table.tableType == CatalogTableType.MANAGED).toString)
       val success = InsertIntoHoodieTableCommand.run(sparkSession, tableWithSchema, reOrderedQuery, Map.empty,
         mode == SaveMode.Overwrite, refreshTable = false)
       if (success) {

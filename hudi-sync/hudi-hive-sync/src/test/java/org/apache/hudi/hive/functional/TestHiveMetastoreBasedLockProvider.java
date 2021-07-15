@@ -38,15 +38,15 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUIRE_NUM_RETRIES;
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS;
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_ZK_CONNECTION_TIMEOUT_MS;
-import static org.apache.hudi.common.config.LockConfiguration.HIVE_DATABASE_NAME_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.HIVE_TABLE_NAME_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECTION_TIMEOUT_MS_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECT_URL_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.ZK_PORT_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT_MS_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.HIVE_DATABASE_NAME_PROP;
+import static org.apache.hudi.common.config.LockConfiguration.HIVE_TABLE_NAME_PROP;
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP;
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP;
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP;
+import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECTION_TIMEOUT_MS_PROP;
+import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECT_URL_PROP;
+import static org.apache.hudi.common.config.LockConfiguration.ZK_PORT_PROP;
+import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT_MS_PROP;
 
 /**
  * For all tests, we need to set LockComponent.setOperationType(DataOperationType.NO_TXN).
@@ -65,15 +65,15 @@ public class TestHiveMetastoreBasedLockProvider extends HiveSyncFunctionalTestHa
   @BeforeEach
   public void init() throws Exception {
     TypedProperties properties = new TypedProperties();
-    properties.setProperty(HIVE_DATABASE_NAME_PROP_KEY, TEST_DB_NAME);
-    properties.setProperty(HIVE_TABLE_NAME_PROP_KEY, TEST_TABLE_NAME);
-    properties.setProperty(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, DEFAULT_LOCK_ACQUIRE_NUM_RETRIES);
-    properties.setProperty(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, DEFAULT_LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS);
-    properties.setProperty(ZK_CONNECT_URL_PROP_KEY, zkService().connectString());
-    properties.setProperty(ZK_PORT_PROP_KEY, hiveConf().get("hive.zookeeper.client.port"));
-    properties.setProperty(ZK_SESSION_TIMEOUT_MS_PROP_KEY, hiveConf().get("hive.zookeeper.session.timeout"));
-    properties.setProperty(ZK_CONNECTION_TIMEOUT_MS_PROP_KEY, String.valueOf(DEFAULT_ZK_CONNECTION_TIMEOUT_MS));
-    properties.setProperty(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, String.valueOf(1000));
+    properties.setProperty(HIVE_DATABASE_NAME_PROP, TEST_DB_NAME);
+    properties.setProperty(HIVE_TABLE_NAME_PROP, TEST_TABLE_NAME);
+    properties.setProperty(LOCK_ACQUIRE_NUM_RETRIES_PROP, DEFAULT_LOCK_ACQUIRE_NUM_RETRIES);
+    properties.setProperty(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP, DEFAULT_LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS);
+    properties.setProperty(ZK_CONNECT_URL_PROP, zkService().connectString());
+    properties.setProperty(ZK_PORT_PROP, hiveConf().get("hive.zookeeper.client.port"));
+    properties.setProperty(ZK_SESSION_TIMEOUT_MS_PROP, hiveConf().get("hive.zookeeper.session.timeout"));
+    properties.setProperty(ZK_CONNECTION_TIMEOUT_MS_PROP, String.valueOf(DEFAULT_ZK_CONNECTION_TIMEOUT_MS));
+    properties.setProperty(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP, String.valueOf(1000));
     lockConfiguration = new LockConfiguration(properties);
     lockComponent.setTablename(TEST_TABLE_NAME);
   }
@@ -83,10 +83,10 @@ public class TestHiveMetastoreBasedLockProvider extends HiveSyncFunctionalTestHa
     HiveMetastoreBasedLockProvider lockProvider = new HiveMetastoreBasedLockProvider(lockConfiguration, hiveConf());
     lockComponent.setOperationType(DataOperationType.NO_TXN);
     Assertions.assertTrue(lockProvider.acquireLock(lockConfiguration.getConfig()
-        .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, lockComponent));
+        .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP), TimeUnit.MILLISECONDS, lockComponent));
     try {
       Assertions.assertTrue(lockProvider.acquireLock(lockConfiguration.getConfig()
-          .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, lockComponent));
+          .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP), TimeUnit.MILLISECONDS, lockComponent));
       Assertions.fail();
     } catch (Exception e) {
       // Expected since lock is already acquired
@@ -94,7 +94,7 @@ public class TestHiveMetastoreBasedLockProvider extends HiveSyncFunctionalTestHa
     lockProvider.unlock();
     // try to lock again after unlocking
     Assertions.assertTrue(lockProvider.acquireLock(lockConfiguration.getConfig()
-        .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, lockComponent));
+        .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP), TimeUnit.MILLISECONDS, lockComponent));
     lockProvider.close();
   }
 
@@ -103,11 +103,11 @@ public class TestHiveMetastoreBasedLockProvider extends HiveSyncFunctionalTestHa
     HiveMetastoreBasedLockProvider lockProvider = new HiveMetastoreBasedLockProvider(lockConfiguration, hiveConf());
     lockComponent.setOperationType(DataOperationType.NO_TXN);
     Assertions.assertTrue(lockProvider.acquireLock(lockConfiguration.getConfig()
-        .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, lockComponent));
+        .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP), TimeUnit.MILLISECONDS, lockComponent));
     lockProvider.unlock();
     // try to lock again after unlocking
     Assertions.assertTrue(lockProvider.acquireLock(lockConfiguration.getConfig()
-        .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, lockComponent));
+        .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP), TimeUnit.MILLISECONDS, lockComponent));
     lockProvider.close();
   }
 
@@ -116,44 +116,15 @@ public class TestHiveMetastoreBasedLockProvider extends HiveSyncFunctionalTestHa
     HiveMetastoreBasedLockProvider lockProvider = new HiveMetastoreBasedLockProvider(lockConfiguration, hiveConf());
     lockComponent.setOperationType(DataOperationType.NO_TXN);
     Assertions.assertTrue(lockProvider.acquireLock(lockConfiguration.getConfig()
-        .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, lockComponent));
+        .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP), TimeUnit.MILLISECONDS, lockComponent));
     try {
       lockProvider.acquireLock(lockConfiguration.getConfig()
-          .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, lockComponent);
+          .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP), TimeUnit.MILLISECONDS, lockComponent);
       Assertions.fail();
     } catch (IllegalArgumentException e) {
       // expected
     }
     lockProvider.unlock();
-  }
-
-  @Test
-  public void testWaitingLock() throws Exception {
-    // create different HiveMetastoreBasedLockProvider to simulate different applications
-    HiveMetastoreBasedLockProvider lockProvider1 = new HiveMetastoreBasedLockProvider(lockConfiguration, hiveConf());
-    HiveMetastoreBasedLockProvider lockProvider2 = new HiveMetastoreBasedLockProvider(lockConfiguration, hiveConf());
-    lockComponent.setOperationType(DataOperationType.NO_TXN);
-    Assertions.assertTrue(lockProvider1.acquireLock(lockConfiguration.getConfig()
-        .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, lockComponent));
-    try {
-      boolean acquireStatus = lockProvider2.acquireLock(lockConfiguration.getConfig()
-          .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, lockComponent);
-      Assertions.assertFalse(acquireStatus);
-    } catch (IllegalArgumentException e) {
-      // expected
-    }
-    lockProvider1.unlock();
-    // create the third HiveMetastoreBasedLockProvider to acquire lock
-    HiveMetastoreBasedLockProvider lockProvider3 = new HiveMetastoreBasedLockProvider(lockConfiguration, hiveConf());
-    boolean acquireStatus = lockProvider3.acquireLock(lockConfiguration.getConfig()
-        .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS, lockComponent);
-    // we should acquired lock, since lockProvider1 has already released lock
-    Assertions.assertTrue(acquireStatus);
-    lockProvider3.unlock();
-    // close all HiveMetastoreBasedLockProvider
-    lockProvider1.close();
-    lockProvider2.close();
-    lockProvider3.close();
   }
 
   @Test

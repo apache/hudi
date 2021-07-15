@@ -26,7 +26,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
-import org.apache.hudi.utilities.sources.AvroKafkaSource;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -152,7 +151,7 @@ public class KafkaOffsetGen {
    * Kafka reset offset strategies.
    */
   enum KafkaResetOffsetStrategies {
-    LATEST, EARLIEST, GROUP
+    LATEST, EARLIEST
   }
 
   /**
@@ -193,9 +192,6 @@ public class KafkaOffsetGen {
     if (!found) {
       throw new HoodieDeltaStreamerException(Config.KAFKA_AUTO_OFFSET_RESET + " config set to unknown value " + kafkaAutoResetOffsetsStr);
     }
-    if (autoResetValue.equals(KafkaResetOffsetStrategies.GROUP)) {
-      this.kafkaParams.put(Config.KAFKA_AUTO_OFFSET_RESET, Config.DEFAULT_KAFKA_AUTO_OFFSET_RESET.name().toLowerCase());
-    }
   }
 
   public OffsetRange[] getNextOffsetRanges(Option<String> lastCheckpointStr, long sourceLimit, HoodieDeltaStreamerMetrics metrics) {
@@ -224,11 +220,8 @@ public class KafkaOffsetGen {
           case LATEST:
             fromOffsets = consumer.endOffsets(topicPartitions);
             break;
-          case GROUP:
-            fromOffsets = getGroupOffsets(consumer, topicPartitions);
-            break;
           default:
-            throw new HoodieNotSupportedException("Auto reset value must be one of 'earliest' or 'latest' or 'group' ");
+            throw new HoodieNotSupportedException("Auto reset value must be one of 'earliest' or 'latest' ");
         }
       }
 
@@ -311,9 +304,7 @@ public class KafkaOffsetGen {
     props.keySet().stream().filter(prop -> {
       // In order to prevent printing unnecessary warn logs, here filter out the hoodie
       // configuration items before passing to kafkaParams
-      return !prop.toString().startsWith("hoodie.")
-              // We need to pass some properties to kafka client so that KafkaAvroSchemaDeserializer can use it
-              || prop.toString().startsWith(AvroKafkaSource.KAFKA_AVRO_VALUE_DESERIALIZER_PROPERTY_PREFIX);
+      return !prop.toString().startsWith("hoodie.");
     }).forEach(prop -> {
       kafkaParams.put(prop.toString(), props.get(prop.toString()));
     });
@@ -327,6 +318,7 @@ public class KafkaOffsetGen {
   public void commitOffsetToKafka(String checkpointStr) {
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(ConsumerConfig.GROUP_ID_CONFIG));
     Map<TopicPartition, Long> offsetMap = CheckpointUtils.strToOffsets(checkpointStr);
+    Map<String, Object> kafkaParams = excludeHoodieConfigs(props);
     Map<TopicPartition, OffsetAndMetadata> offsetAndMetadataMap = new HashMap<>(offsetMap.size());
     try (KafkaConsumer consumer = new KafkaConsumer(kafkaParams)) {
       offsetMap.forEach((topicPartition, offset) -> offsetAndMetadataMap.put(topicPartition, new OffsetAndMetadata(offset)));
@@ -334,20 +326,5 @@ public class KafkaOffsetGen {
     } catch (CommitFailedException | TimeoutException e) {
       LOG.warn("Committing offsets to Kafka failed, this does not impact processing of records", e);
     }
-  }
-
-  private Map<TopicPartition, Long> getGroupOffsets(KafkaConsumer consumer, Set<TopicPartition> topicPartitions) {
-    Map<TopicPartition, Long> fromOffsets = new HashMap<>();
-    for (TopicPartition topicPartition : topicPartitions) {
-      OffsetAndMetadata committedOffsetAndMetadata = consumer.committed(topicPartition);
-      if (committedOffsetAndMetadata != null) {
-        fromOffsets.put(topicPartition, committedOffsetAndMetadata.offset());
-      } else {
-        LOG.warn("There are no commits associated with this consumer group, starting to consume from latest offset");
-        fromOffsets = consumer.endOffsets(topicPartitions);
-        break;
-      }
-    }
-    return fromOffsets;
   }
 }

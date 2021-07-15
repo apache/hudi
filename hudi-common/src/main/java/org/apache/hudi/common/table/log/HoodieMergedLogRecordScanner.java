@@ -79,7 +79,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
           new HoodieRecordSizeEstimator(readerSchema));
-      this.maxMemorySizeInBytes = maxMemorySizeInBytes;
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
@@ -100,7 +99,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     LOG.info("Number of entries in MemoryBasedMap in ExternalSpillableMap => " + records.getInMemoryMapNumEntries());
     LOG.info(
         "Total size in bytes of MemoryBasedMap in ExternalSpillableMap => " + records.getCurrentInMemoryMapSize());
-    LOG.info("Number of entries in BitCaskDiskMap in ExternalSpillableMap => " + records.getDiskBasedMapNumEntries());
+    LOG.info("Number of entries in DiskBasedMap in ExternalSpillableMap => " + records.getDiskBasedMapNumEntries());
     LOG.info("Size of file spilled to disk => " + records.getSizeOfFileOnDiskInBytes());
   }
 

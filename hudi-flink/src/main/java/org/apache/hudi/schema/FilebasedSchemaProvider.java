@@ -64,10 +64,10 @@ public class FilebasedSchemaProvider extends SchemaProvider {
   }
 
   public FilebasedSchemaProvider(Configuration conf) {
-    final String sourceSchemaPath = conf.getString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH);
-    final FileSystem fs = FSUtils.getFs(sourceSchemaPath, StreamerUtil.getHadoopConf());
+    final String readSchemaPath = conf.getString(FlinkOptions.READ_AVRO_SCHEMA_PATH);
+    final FileSystem fs = FSUtils.getFs(readSchemaPath, StreamerUtil.getHadoopConf());
     try {
-      this.sourceSchema = new Schema.Parser().parse(fs.open(new Path(sourceSchemaPath)));
+      this.sourceSchema = new Schema.Parser().parse(fs.open(new Path(readSchemaPath)));
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading schema", ioe);
     }

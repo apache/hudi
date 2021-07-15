@@ -53,9 +53,9 @@ public class TestCreateKeyGeneratorByTypeWithFactory {
   @BeforeEach
   public void init() {
     props = new TypedProperties();
-    props.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "_row_key");
-    props.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY.key(), "true");
-    props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "timestamp");
+    props.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_row_key");
+    props.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY, "true");
+    props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp");
 
     // for timestamp based key generator
     props.put("hoodie.deltastreamer.keygen.timebased.timestamp.type", "DATE_STRING");
@@ -71,7 +71,7 @@ public class TestCreateKeyGeneratorByTypeWithFactory {
   @ParameterizedTest
   @MethodSource("configParams")
   public void testKeyGeneratorTypes(String keyGenType) throws IOException {
-    props.put(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP.key(), keyGenType);
+    props.put(HoodieWriteConfig.KEYGENERATOR_TYPE_PROP, keyGenType);
     KeyGeneratorType keyType = KeyGeneratorType.valueOf(keyGenType);
 
     KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);

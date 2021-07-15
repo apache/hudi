@@ -31,7 +31,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.Schema;
@@ -212,22 +211,4 @@ public class HoodieClientTestUtils {
     return valuesAsList.stream();
   }
 
-  public static Option<HoodieCommitMetadata> getCommitMetadataForLatestInstant(HoodieTableMetaClient metaClient) {
-    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    if (timeline.lastInstant().isPresent()) {
-      return getCommitMetadataForInstant(metaClient, timeline.lastInstant().get());
-    } else {
-      return Option.empty();
-    }
-  }
-
-  private static Option<HoodieCommitMetadata> getCommitMetadataForInstant(HoodieTableMetaClient metaClient, HoodieInstant instant) {
-    try {
-      HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-      byte[] data = timeline.getInstantDetails(instant).get();
-      return Option.of(HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class));
-    } catch (Exception e) {
-      throw new HoodieException("Failed to read schema from commit metadata", e);
-    }
-  }
 }

@@ -413,12 +413,7 @@ public class HiveSchemaUtil {
     }
 
     String partitionsStr = String.join(",", partitionFields);
-    StringBuilder sb = new StringBuilder();
-    if (config.createManagedTable) {
-      sb.append("CREATE TABLE IF NOT EXISTS ");
-    } else {
-      sb.append("CREATE EXTERNAL TABLE IF NOT EXISTS ");
-    }
+    StringBuilder sb = new StringBuilder("CREATE EXTERNAL TABLE  IF NOT EXISTS ");
     sb.append(HIVE_ESCAPE_CHARACTER).append(config.databaseName).append(HIVE_ESCAPE_CHARACTER)
             .append(".").append(HIVE_ESCAPE_CHARACTER).append(tableName).append(HIVE_ESCAPE_CHARACTER);
     sb.append("( ").append(columns).append(")");

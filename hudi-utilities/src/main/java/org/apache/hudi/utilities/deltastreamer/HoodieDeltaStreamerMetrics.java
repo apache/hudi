@@ -95,12 +95,6 @@ public class HoodieDeltaStreamerMetrics implements Serializable {
     }
   }
 
-  public void updateDeltaStreamerSyncMetrics(long syncEpochTimeInMs) {
-    if (config.isMetricsOn()) {
-      Metrics.registerGauge(getMetricsName("deltastreamer", "lastSync"), syncEpochTimeInMs);
-    }
-  }
-
   public long getDurationInMs(long ctxDuration) {
     return ctxDuration / 1000000;
   }

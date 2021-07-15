@@ -155,7 +155,7 @@ public class TestHoodieRealtimeRecordReader {
         } else {
           writer =
               InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid0", baseInstant,
-                  instantTime, 120, 0, logVersion);
+                  instantTime, 100, 0, logVersion);
         }
         long size = writer.getCurrentSize();
         writer.close();
@@ -182,21 +182,17 @@ public class TestHoodieRealtimeRecordReader {
 
         // use reader to read base Parquet File and log file, merge in flight and return latest commit
         // here all 100 records should be updated, see above
-        // another 20 new insert records should also output with new commit time.
         NullWritable key = recordReader.createKey();
         ArrayWritable value = recordReader.createValue();
-        int recordCnt = 0;
         while (recordReader.next(key, value)) {
           Writable[] values = value.get();
           // check if the record written is with latest commit, here "101"
           assertEquals(latestInstant, values[0].toString());
           key = recordReader.createKey();
           value = recordReader.createValue();
-          recordCnt++;
         }
         recordReader.getPos();
         assertEquals(1.0, recordReader.getProgress(), 0.05);
-        assertEquals(120, recordCnt);
         recordReader.close();
       } catch (Exception ioe) {
         throw new HoodieException(ioe.getMessage(), ioe);

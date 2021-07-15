@@ -38,7 +38,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Tests RocksDB based map {@link RocksDbDiskMap}.
+ * Tests RocksDB based map {@link RocksDBBasedMap}.
  */
 public class TestRocksDbBasedMap extends HoodieCommonTestHarness {
 
@@ -49,7 +49,7 @@ public class TestRocksDbBasedMap extends HoodieCommonTestHarness {
 
   @Test
   public void testSimple() throws IOException, URISyntaxException {
-    RocksDbDiskMap records = new RocksDbDiskMap(basePath);
+    RocksDBBasedMap records = new RocksDBBasedMap(basePath);
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     ((GenericRecord) iRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);

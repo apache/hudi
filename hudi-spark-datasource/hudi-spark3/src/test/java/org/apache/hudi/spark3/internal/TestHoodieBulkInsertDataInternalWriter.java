@@ -29,13 +29,9 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.testutils.SparkDatasetTestUtils.ENCODER;
 import static org.apache.hudi.testutils.SparkDatasetTestUtils.STRUCT_TYPE;
@@ -51,17 +47,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class TestHoodieBulkInsertDataInternalWriter extends
     HoodieBulkInsertInternalWriterTestBase {
 
-  private static Stream<Arguments> configParams() {
-    Object[][] data = new Object[][] {
-        {true},
-        {false}
-    };
-    return Stream.of(data).map(Arguments::of);
-  }
-
-  @ParameterizedTest
-  @MethodSource("configParams")
-  public void testDataInternalWriter(boolean sorted) throws Exception {
+  @Test
+  public void testDataInternalWriter() throws Exception {
     // init config and table
     HoodieWriteConfig cfg = getConfigBuilder(basePath).build();
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
@@ -69,8 +56,7 @@ public class TestHoodieBulkInsertDataInternalWriter extends
     for (int i = 0; i < 5; i++) {
       String instantTime = "00" + i;
       // init writer
-      HoodieBulkInsertDataInternalWriter writer = new HoodieBulkInsertDataInternalWriter(table, cfg, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), STRUCT_TYPE,
-          sorted);
+      HoodieBulkInsertDataInternalWriter writer = new HoodieBulkInsertDataInternalWriter(table, cfg, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), STRUCT_TYPE);
 
       int size = 10 + RANDOM.nextInt(1000);
       // write N rows to partition1, N rows to partition2 and N rows to partition3 ... Each batch should create a new RowCreateHandle and a new file
@@ -93,7 +79,7 @@ public class TestHoodieBulkInsertDataInternalWriter extends
       Option<List<String>> fileNames = Option.of(new ArrayList<>());
 
       // verify write statuses
-      assertWriteStatuses(commitMetadata.getWriteStatuses(), batches, size, sorted, fileAbsPaths, fileNames);
+      assertWriteStatuses(commitMetadata.getWriteStatuses(), batches, size, fileAbsPaths, fileNames);
 
       // verify rows
       Dataset<Row> result = sqlContext.read().parquet(fileAbsPaths.get().toArray(new String[0]));
@@ -114,7 +100,7 @@ public class TestHoodieBulkInsertDataInternalWriter extends
     String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
 
     String instantTime = "001";
-    HoodieBulkInsertDataInternalWriter writer = new HoodieBulkInsertDataInternalWriter(table, cfg, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), STRUCT_TYPE, false);
+    HoodieBulkInsertDataInternalWriter writer = new HoodieBulkInsertDataInternalWriter(table, cfg, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), STRUCT_TYPE);
 
     int size = 10 + RANDOM.nextInt(100);
     int totalFailures = 5;

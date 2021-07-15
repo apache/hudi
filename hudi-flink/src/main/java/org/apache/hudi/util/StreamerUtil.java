@@ -27,8 +27,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieStorageConfig;
@@ -54,13 +52,11 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
-import java.text.ParseException;
-import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP;
+import static org.apache.hudi.common.table.HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER;
 
 /**
  * Utilities for Flink stream read and write.
@@ -90,15 +86,15 @@ public class StreamerUtil {
   }
 
   public static Schema getSourceSchema(org.apache.flink.configuration.Configuration conf) {
-    if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH).isPresent()) {
+    if (conf.getOptional(FlinkOptions.READ_AVRO_SCHEMA_PATH).isPresent()) {
       return new FilebasedSchemaProvider(conf).getSourceSchema();
-    } else if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA).isPresent()) {
-      final String schemaStr = conf.get(FlinkOptions.SOURCE_AVRO_SCHEMA);
+    } else if (conf.getOptional(FlinkOptions.READ_AVRO_SCHEMA).isPresent()) {
+      final String schemaStr = conf.get(FlinkOptions.READ_AVRO_SCHEMA);
       return new Schema.Parser().parse(schemaStr);
     } else {
       final String errorMsg = String.format("Either option '%s' or '%s' "
               + "should be specified for avro schema deserialization",
-          FlinkOptions.SOURCE_AVRO_SCHEMA_PATH.key(), FlinkOptions.SOURCE_AVRO_SCHEMA.key());
+          FlinkOptions.READ_AVRO_SCHEMA_PATH.key(), FlinkOptions.READ_AVRO_SCHEMA.key());
       throw new HoodieException(errorMsg);
     }
   }
@@ -158,7 +154,7 @@ public class StreamerUtil {
                     .withMaxMemoryMaxSize(
                         conf.getInteger(FlinkOptions.WRITE_MERGE_MAX_MEMORY) * 1024 * 1024L,
                         conf.getInteger(FlinkOptions.COMPACTION_MAX_MEMORY) * 1024 * 1024L
-                    ).build())
+                        ).build())
             .forTable(conf.getString(FlinkOptions.TABLE_NAME))
             .withStorageConfig(HoodieStorageConfig.newBuilder()
                 .logFileDataBlockMaxSize(conf.getInteger(FlinkOptions.WRITE_LOG_BLOCK_SIZE) * 1024 * 1024)
@@ -213,9 +209,7 @@ public class StreamerUtil {
           .setTableType(conf.getString(FlinkOptions.TABLE_TYPE))
           .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
           .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS))
-          .setArchiveLogFolder(HOODIE_ARCHIVELOG_FOLDER_PROP.defaultValue())
-          .setPartitionColumns(conf.getString(FlinkOptions.PARTITION_PATH_FIELD, null))
-          .setPreCombineField(conf.getString(FlinkOptions.PRECOMBINE_FIELD))
+          .setArchiveLogFolder(DEFAULT_ARCHIVELOG_FOLDER)
           .setTimelineLayoutVersion(1)
           .initTable(hadoopConf, basePath);
       LOG.info("Table initialized under base path {}", basePath);
@@ -227,16 +221,13 @@ public class StreamerUtil {
     // some of the filesystems release the handles in #close method.
   }
 
-  /**
-   * Generates the bucket ID using format {partition path}_{fileID}.
-   */
+  /** Generates the bucket ID using format {partition path}_{fileID}. */
   public static String generateBucketKey(String partitionPath, String fileId) {
     return String.format("%s_%s", partitionPath, fileId);
   }
 
   /**
    * Returns whether needs to schedule the async compaction.
-   *
    * @param conf The flink configuration.
    */
   public static boolean needsAsyncCompaction(Configuration conf) {
@@ -244,25 +235,6 @@ public class StreamerUtil {
         .toUpperCase(Locale.ROOT)
         .equals(FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
         && conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED);
-  }
-
-  /**
-   * Returns whether needs to schedule the compaction plan.
-   *
-   * @param conf The flink configuration.
-   */
-  public static boolean needsScheduleCompaction(Configuration conf) {
-    return conf.getString(FlinkOptions.TABLE_TYPE)
-        .toUpperCase(Locale.ROOT)
-        .equals(FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
-        && conf.getBoolean(FlinkOptions.COMPACTION_SCHEDULE_ENABLED);
-  }
-
-  /**
-   * Creates the meta client.
-   */
-  public static HoodieTableMetaClient createMetaClient(Configuration conf) {
-    return HoodieTableMetaClient.builder().setBasePath(conf.getString(FlinkOptions.PATH)).setConf(FlinkClientUtil.getHadoopConf()).build();
   }
 
   /**
@@ -281,28 +253,16 @@ public class StreamerUtil {
    * Return the median instant time between the given two instant time.
    */
   public static String medianInstantTime(String highVal, String lowVal) {
-    try {
-      long high = HoodieActiveTimeline.COMMIT_FORMATTER.parse(highVal).getTime();
-      long low = HoodieActiveTimeline.COMMIT_FORMATTER.parse(lowVal).getTime();
-      ValidationUtils.checkArgument(high > low,
-          "Instant [" + highVal + "] should have newer timestamp than instant [" + lowVal + "]");
-      long median = low + (high - low) / 2;
-      return HoodieActiveTimeline.COMMIT_FORMATTER.format(new Date(median));
-    } catch (ParseException e) {
-      throw new HoodieException("Get median instant time with interval [" + lowVal + ", " + highVal + "] error", e);
-    }
+    long high = Long.parseLong(highVal);
+    long low = Long.parseLong(lowVal);
+    long median = low + (high - low) / 2;
+    return String.valueOf(median);
   }
 
   /**
    * Returns the time interval in seconds between the given instant time.
    */
-  public static long instantTimeDiffSeconds(String newInstantTime, String oldInstantTime) {
-    try {
-      long newTimestamp = HoodieActiveTimeline.COMMIT_FORMATTER.parse(newInstantTime).getTime();
-      long oldTimestamp = HoodieActiveTimeline.COMMIT_FORMATTER.parse(oldInstantTime).getTime();
-      return (newTimestamp - oldTimestamp) / 1000;
-    } catch (ParseException e) {
-      throw new HoodieException("Get instant time diff with interval [" + oldInstantTime + ", " + newInstantTime + "] error", e);
-    }
+  public static long instantTimeDiff(String newInstantTime, String oldInstantTime) {
+    return Long.parseLong(newInstantTime) - Long.parseLong(oldInstantTime);
   }
 }

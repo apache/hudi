@@ -23,14 +23,12 @@ import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestData;
@@ -39,6 +37,7 @@ import org.apache.avro.Schema;
 import org.apache.flink.configuration.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -46,8 +45,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Test cases for delta stream write.
@@ -86,22 +83,13 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
     TestData.checkWrittenDataMOR(fs, latestInstant, baseFile, expected, partitions, schema);
   }
 
-  @Override
-  protected Map<String, String> getExpectedBeforeCheckpointComplete() {
-    return EXPECTED1;
-  }
-
+  @Disabled
   @Test
-  public void testAppendOnly() throws Exception {
-    conf.setBoolean(FlinkOptions.APPEND_ONLY_ENABLE, true);
-    conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT.value());
-    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
-    assertThrows(IllegalArgumentException.class, () -> {
-      funcWrapper.openFunction();
-    }, "APPEND_ONLY mode only support in COPY_ON_WRITE table");
+  public void testIndexStateBootstrap() {
+    // Ignore the index bootstrap because we only support parquet load now.
   }
 
-  protected Map<String, String> getMiniBatchExpected() {
+  Map<String, String> getMiniBatchExpected() {
     Map<String, String> expected = new HashMap<>();
     // MOR mode merges the messages with the same key.
     expected.put("par1", "[id1,par1,id1,Danny,23,1,par1]");

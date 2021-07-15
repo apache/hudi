@@ -144,7 +144,6 @@ public class HdfsTestService {
     String user = System.getProperty("user.name");
     config.set("hadoop.proxyuser." + user + ".groups", "*");
     config.set("hadoop.proxyuser." + user + ".hosts", "*");
-    config.setBoolean("dfs.permissions",false);
     return config;
   }
 

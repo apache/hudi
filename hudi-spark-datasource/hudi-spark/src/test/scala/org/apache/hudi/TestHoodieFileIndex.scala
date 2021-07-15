@@ -47,10 +47,10 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
-    DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key -> "_row_key",
-    DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key -> "partition",
-    DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY.key -> "timestamp",
-    HoodieWriteConfig.TABLE_NAME.key -> "hoodie_test"
+    DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY -> "_row_key",
+    DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY -> "partition",
+    DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY -> "timestamp",
+    HoodieWriteConfig.TABLE_NAME -> "hoodie_test"
   )
 
   @BeforeEach override def setUp() {
@@ -69,8 +69,8 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
     inputDF1.write.format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY.key, partitionEncode)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY, partitionEncode)
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = HoodieTableMetaClient.reload(metaClient)
@@ -88,8 +88,8 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
     inputDF1.write.format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY.key, keyGenerator)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY, keyGenerator)
       .option(Config.TIMESTAMP_TYPE_FIELD_PROP, TimestampType.DATE_STRING.name())
       .option(Config.TIMESTAMP_INPUT_DATE_FORMAT_PROP, "yyyy/MM/dd")
       .option(Config.TIMESTAMP_OUTPUT_DATE_FORMAT_PROP, "yyyy-MM-dd")
@@ -109,9 +109,9 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
     inputDF1.write.format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY.key, keyGenerator)
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "partition:simple")
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY, keyGenerator)
+      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "partition:simple")
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = HoodieTableMetaClient.reload(metaClient)
@@ -128,8 +128,8 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1), 2))
     inputDF1.write.format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY.key, partitionEncode)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY, partitionEncode)
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = HoodieTableMetaClient.reload(metaClient)
@@ -166,13 +166,13 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
 
     inputDF1.write.format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(RECORDKEY_FIELD_OPT_KEY.key, "id")
-      .option(PRECOMBINE_FIELD_OPT_KEY.key, "version")
-      .option(PARTITIONPATH_FIELD_OPT_KEY.key, "dt,hh")
-      .option(KEYGENERATOR_CLASS_OPT_KEY.key, classOf[ComplexKeyGenerator].getName)
-      .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY.key, "false")
-      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP.key, useMetaFileList)
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(RECORDKEY_FIELD_OPT_KEY, "id")
+      .option(PRECOMBINE_FIELD_OPT_KEY, "version")
+      .option(PARTITIONPATH_FIELD_OPT_KEY, "dt,hh")
+      .option(KEYGENERATOR_CLASS_OPT_KEY, classOf[ComplexKeyGenerator].getName)
+      .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY, "false")
+      .option(HoodieMetadataConfig.METADATA_ENABLE_PROP, useMetaFileList)
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = HoodieTableMetaClient.reload(metaClient)
@@ -200,12 +200,12 @@ class TestHoodieFileIndex extends HoodieClientTestBase {
       s"2021/03/0${i % 2 + 1}", "10")).toDF("id", "name", "price", "version", "dt", "hh")
     inputDF2.write.format("hudi")
       .options(commonOpts)
-      .option(DataSourceWriteOptions.OPERATION_OPT_KEY.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(RECORDKEY_FIELD_OPT_KEY.key, "id")
-      .option(PRECOMBINE_FIELD_OPT_KEY.key, "version")
-      .option(PARTITIONPATH_FIELD_OPT_KEY.key, "dt,hh")
-      .option(KEYGENERATOR_CLASS_OPT_KEY.key, classOf[ComplexKeyGenerator].getName)
-      .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY.key, "false")
+      .option(DataSourceWriteOptions.OPERATION_OPT_KEY, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(RECORDKEY_FIELD_OPT_KEY, "id")
+      .option(PRECOMBINE_FIELD_OPT_KEY, "version")
+      .option(PARTITIONPATH_FIELD_OPT_KEY, "dt,hh")
+      .option(KEYGENERATOR_CLASS_OPT_KEY, classOf[ComplexKeyGenerator].getName)
+      .option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING_OPT_KEY, "false")
       .mode(SaveMode.Overwrite)
       .save(basePath)
 

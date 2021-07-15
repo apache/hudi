@@ -59,9 +59,9 @@ public class TestTimestampBasedKeyGenerator {
         .generateAvroRecordFromJson(schema, 1, "001", "f1");
     baseRow = genericRecordToRow(baseRecord);
 
-    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "field1");
-    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "createTime");
-    properties.setProperty(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY.key(), "false");
+    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "field1");
+    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "createTime");
+    properties.setProperty(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY, "false");
   }
 
   private TypedProperties getBaseKeyConfig(String timestampType, String dateFormat, String timezone, String scalarType) {

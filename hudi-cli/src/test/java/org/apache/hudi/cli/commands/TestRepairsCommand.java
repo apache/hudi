@@ -67,7 +67,7 @@ public class TestRepairsCommand extends AbstractShellIntegrationTest {
     // Create table and connect
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
-        HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP.defaultValue(), TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
+        HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER, TimelineLayoutVersion.VERSION_1, "org.apache.hudi.common.model.HoodieAvroPayload");
   }
 
   /**
@@ -156,10 +156,10 @@ public class TestRepairsCommand extends AbstractShellIntegrationTest {
     CommandResult cr = getShell().executeCommand("repair overwrite-hoodie-props --new-props-file " + newProps.getPath());
     assertTrue(cr.isSuccess());
 
-    Map<String, String> oldProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();
+    Map<String, String> oldProps = HoodieCLI.getTableMetaClient().getTableConfig().getProps();
 
     // after overwrite, the stored value in .hoodie is equals to which read from properties.
-    Map<String, String> result = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient()).getTableConfig().propsMap();
+    Map<String, String> result = HoodieTableMetaClient.reload(HoodieCLI.getTableMetaClient()).getTableConfig().getProps();
     Properties expectProps = new Properties();
     expectProps.load(new FileInputStream(new File(newProps.getPath())));
 

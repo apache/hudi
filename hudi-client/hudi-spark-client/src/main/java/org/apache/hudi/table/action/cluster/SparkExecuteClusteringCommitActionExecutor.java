@@ -190,7 +190,7 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
     return jsc.parallelize(clusteringOps, clusteringOps.size()).mapPartitions(clusteringOpsPartition -> {
       List<Iterator<HoodieRecord<? extends HoodieRecordPayload>>> recordIterators = new ArrayList<>();
       clusteringOpsPartition.forEachRemaining(clusteringOp -> {
-        long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), config);
+        long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), config.getProps());
         LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
         try {
           Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));

@@ -19,7 +19,6 @@
 package org.apache.hudi.internal;
 
 import org.apache.hudi.client.HoodieInternalWriteStatus;
-
 import org.apache.spark.sql.sources.v2.writer.WriterCommitMessage;
 
 import java.util.List;

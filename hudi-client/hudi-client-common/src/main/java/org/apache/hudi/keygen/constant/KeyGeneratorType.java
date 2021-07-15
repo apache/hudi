@@ -18,10 +18,6 @@
 
 package org.apache.hudi.keygen.constant;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-
 /**
  * Types of {@link org.apache.hudi.keygen.KeyGenerator}.
  */
@@ -59,12 +55,5 @@ public enum KeyGeneratorType {
   /**
    * Key generator for deletes using global indices.
    */
-  GLOBAL_DELETE;
-
-  public static List<String> getNames() {
-    List<String> names = new ArrayList<>(KeyGeneratorType.values().length);
-    Arrays.stream(KeyGeneratorType.values())
-        .forEach(x -> names.add(x.name()));
-    return names;
-  }
+  GLOBAL_DELETE
 }

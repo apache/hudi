@@ -49,7 +49,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP;
+import static org.apache.hudi.common.table.HoodieTableConfig.DEFAULT_ARCHIVELOG_FOLDER;
 
 /**
  * Performs bootstrap from a non-hudi source.
@@ -111,14 +111,13 @@ public class BootstrapExecutor  implements Serializable {
     this.configuration = conf;
     this.props = properties;
 
-    ValidationUtils.checkArgument(properties.containsKey(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH_PROP
-            .key()),
-        HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH_PROP.key() + " must be specified.");
-    this.bootstrapBasePath = properties.getString(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH_PROP.key());
+    ValidationUtils.checkArgument(properties.containsKey(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH),
+        HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH + " must be specified.");
+    this.bootstrapBasePath = properties.getString(HoodieTableConfig.HOODIE_BOOTSTRAP_BASE_PATH);
 
     // Add more defaults if full bootstrap requested
-    this.props.putIfAbsent(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY().key(),
-        DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY().defaultValue());
+    this.props.putIfAbsent(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY(),
+        DataSourceWriteOptions.DEFAULT_PAYLOAD_OPT_VAL());
     this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jssc);
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder().withPath(cfg.targetBasePath)
@@ -175,7 +174,7 @@ public class BootstrapExecutor  implements Serializable {
     HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
-        .setArchiveLogFolder(HOODIE_ARCHIVELOG_FOLDER_PROP.defaultValue())
+        .setArchiveLogFolder(DEFAULT_ARCHIVELOG_FOLDER)
         .setPayloadClassName(cfg.payloadClassName)
         .setBaseFileFormat(cfg.baseFileFormat)
         .setBootstrapIndexClass(cfg.bootstrapIndexClass)

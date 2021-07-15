@@ -31,9 +31,7 @@ import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -50,17 +48,15 @@ public class BulkInsertDataInternalWriterHelper {
   private final HoodieTable hoodieTable;
   private final HoodieWriteConfig writeConfig;
   private final StructType structType;
-  private final Boolean arePartitionRecordsSorted;
   private final List<HoodieInternalWriteStatus> writeStatusList = new ArrayList<>();
 
   private HoodieRowCreateHandle handle;
   private String lastKnownPartitionPath = null;
   private String fileIdPrefix;
   private int numFilesWritten = 0;
-  private Map<String, HoodieRowCreateHandle> handles = new HashMap<>();
 
   public BulkInsertDataInternalWriterHelper(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
-      String instantTime, int taskPartitionId, long taskId, long taskEpochId, StructType structType, boolean arePartitionRecordsSorted) {
+      String instantTime, int taskPartitionId, long taskId, long taskEpochId, StructType structType) {
     this.hoodieTable = hoodieTable;
     this.writeConfig = writeConfig;
     this.instantTime = instantTime;
@@ -68,7 +64,6 @@ public class BulkInsertDataInternalWriterHelper {
     this.taskId = taskId;
     this.taskEpochId = taskEpochId;
     this.structType = structType;
-    this.arePartitionRecordsSorted = arePartitionRecordsSorted;
     this.fileIdPrefix = UUID.randomUUID().toString();
   }
 
@@ -79,7 +74,7 @@ public class BulkInsertDataInternalWriterHelper {
 
       if ((lastKnownPartitionPath == null) || !lastKnownPartitionPath.equals(partitionPath) || !handle.canWrite()) {
         LOG.info("Creating new file for partition path " + partitionPath);
-        handle = getRowCreateHandle(partitionPath);
+        createNewHandle(partitionPath);
         lastKnownPartitionPath = partitionPath;
       }
       handle.write(record);
@@ -97,30 +92,19 @@ public class BulkInsertDataInternalWriterHelper {
   public void abort() {
   }
 
-  private HoodieRowCreateHandle getRowCreateHandle(String partitionPath) throws IOException {
-    if (!handles.containsKey(partitionPath)) { // if there is no handle corresponding to the partition path
-      // if records are sorted, we can close all existing handles
-      if (arePartitionRecordsSorted) {
-        close();
-      }
-      handles.put(partitionPath, new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
-          instantTime, taskPartitionId, taskId, taskEpochId, structType));
-    } else if (!handles.get(partitionPath).canWrite()) {
-      // even if there is a handle to the partition path, it could have reached its max size threshold. So, we close the handle here and
-      // create a new one.
-      writeStatusList.add(handles.remove(partitionPath).close());
-      handles.put(partitionPath, new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
-          instantTime, taskPartitionId, taskId, taskEpochId, structType));
+  private void createNewHandle(String partitionPath) throws IOException {
+    if (null != handle) {
+      close();
     }
-    return handles.get(partitionPath);
+    handle = new HoodieRowCreateHandle(hoodieTable, writeConfig, partitionPath, getNextFileId(),
+        instantTime, taskPartitionId, taskId, taskEpochId, structType);
   }
 
   public void close() throws IOException {
-    for (HoodieRowCreateHandle rowCreateHandle: handles.values()) {
-      writeStatusList.add(rowCreateHandle.close());
+    if (null != handle) {
+      writeStatusList.add(handle.close());
+      handle = null;
     }
-    handles.clear();
-    handle = null;
   }
 
   private String getNextFileId() {

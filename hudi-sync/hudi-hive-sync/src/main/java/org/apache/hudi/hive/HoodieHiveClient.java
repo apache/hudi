@@ -140,8 +140,8 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
       return;
     }
     LOG.info("Adding partitions " + partitionsToAdd.size() + " to table " + tableName);
-    List<String> sqls = constructAddPartitions(tableName, partitionsToAdd);
-    sqls.stream().forEach(sql -> updateHiveSQL(sql));
+    String sql = constructAddPartitions(tableName, partitionsToAdd);
+    updateHiveSQL(sql);
   }
 
   /**
@@ -180,36 +180,18 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
     }
   }
 
-  private StringBuilder getAlterTablePrefix(String tableName) {
+  private String constructAddPartitions(String tableName, List<String> partitions) {
     StringBuilder alterSQL = new StringBuilder("ALTER TABLE ");
     alterSQL.append(HIVE_ESCAPE_CHARACTER).append(syncConfig.databaseName)
             .append(HIVE_ESCAPE_CHARACTER).append(".").append(HIVE_ESCAPE_CHARACTER)
             .append(tableName).append(HIVE_ESCAPE_CHARACTER).append(" ADD IF NOT EXISTS ");
-    return alterSQL;
-  }
-
-  private List<String> constructAddPartitions(String tableName, List<String> partitions) {
-    if (syncConfig.batchSyncNum <= 0) {
-      throw new HoodieHiveSyncException("batch-sync-num for sync hive table must be greater than 0, pls check your parameter");
-    }
-    List<String> result = new ArrayList<>();
-    int batchSyncPartitionNum = syncConfig.batchSyncNum;
-    StringBuilder alterSQL = getAlterTablePrefix(tableName);
-    for (int i = 0; i < partitions.size(); i++) {
-      String partitionClause = getPartitionClause(partitions.get(i));
-      String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partitions.get(i)).toString();
+    for (String partition : partitions) {
+      String partitionClause = getPartitionClause(partition);
+      String fullPartitionPath = FSUtils.getPartitionPath(syncConfig.basePath, partition).toString();
       alterSQL.append("  PARTITION (").append(partitionClause).append(") LOCATION '").append(fullPartitionPath)
           .append("' ");
-      if ((i + 1) % batchSyncPartitionNum == 0) {
-        result.add(alterSQL.toString());
-        alterSQL = getAlterTablePrefix(tableName);
-      }
     }
-    // add left partitions to result
-    if (partitions.size() % batchSyncPartitionNum != 0) {
-      result.add(alterSQL.toString());
-    }
-    return result;
+    return alterSQL.toString();
   }
 
   /**

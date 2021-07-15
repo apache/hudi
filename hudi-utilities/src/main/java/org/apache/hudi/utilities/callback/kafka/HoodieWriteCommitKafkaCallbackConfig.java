@@ -17,52 +17,32 @@
 
 package org.apache.hudi.utilities.callback.kafka;
 
-import org.apache.hudi.common.config.ConfigProperty;
-import org.apache.hudi.common.config.HoodieConfig;
+import java.util.Properties;
 
+import static org.apache.hudi.common.config.DefaultHoodieConfig.setDefaultOnCondition;
 import static org.apache.hudi.config.HoodieWriteCommitCallbackConfig.CALLBACK_PREFIX;
 
 /**
  * Kafka write callback related config.
  */
-public class HoodieWriteCommitKafkaCallbackConfig extends HoodieConfig {
+public class HoodieWriteCommitKafkaCallbackConfig {
 
-  public static final ConfigProperty<String> CALLBACK_KAFKA_BOOTSTRAP_SERVERS = ConfigProperty
-      .key(CALLBACK_PREFIX + "kafka.bootstrap.servers")
-      .noDefaultValue()
-      .sinceVersion("0.7.0")
-      .withDocumentation("Bootstrap servers of kafka callback cluster");
-
-  public static final ConfigProperty<String> CALLBACK_KAFKA_TOPIC = ConfigProperty
-      .key(CALLBACK_PREFIX + "kafka.topic")
-      .noDefaultValue()
-      .sinceVersion("0.7.0")
-      .withDocumentation("Kafka topic to be sent along with callback messages");
-
-  public static final ConfigProperty<String> CALLBACK_KAFKA_PARTITION = ConfigProperty
-      .key(CALLBACK_PREFIX + "kafka.partition")
-      .noDefaultValue()
-      .sinceVersion("0.7.0")
-      .withDocumentation("partition of CALLBACK_KAFKA_TOPIC, 0 by default");
-
-  public static final ConfigProperty<String> CALLBACK_KAFKA_ACKS = ConfigProperty
-      .key(CALLBACK_PREFIX + "kafka.acks")
-      .defaultValue("all")
-      .sinceVersion("0.7.0")
-      .withDocumentation("kafka acks level, all by default");
-
-  public static final ConfigProperty<Integer> CALLBACK_KAFKA_RETRIES = ConfigProperty
-      .key(CALLBACK_PREFIX + "kafka.retries")
-      .defaultValue(3)
-      .sinceVersion("0.7.0")
-      .withDocumentation("Times to retry. 3 by default");
+  public static final String CALLBACK_KAFKA_BOOTSTRAP_SERVERS = CALLBACK_PREFIX + "kafka.bootstrap.servers";
+  public static final String CALLBACK_KAFKA_TOPIC = CALLBACK_PREFIX + "kafka.topic";
+  public static final String CALLBACK_KAFKA_PARTITION = CALLBACK_PREFIX + "kafka.partition";
+  public static final String CALLBACK_KAFKA_ACKS = CALLBACK_PREFIX + "kafka.acks";
+  public static final String DEFAULT_CALLBACK_KAFKA_ACKS = "all";
+  public static final String CALLBACK_KAFKA_RETRIES = CALLBACK_PREFIX + "kafka.retries";
+  public static final int DEFAULT_CALLBACK_KAFKA_RETRIES = 3;
 
   /**
    * Set default value for {@link HoodieWriteCommitKafkaCallbackConfig} if needed.
    */
-  public static void setCallbackKafkaConfigIfNeeded(HoodieConfig config) {
-    config.setDefaultValue(CALLBACK_KAFKA_ACKS);
-    config.setDefaultValue(CALLBACK_KAFKA_RETRIES);
+  public static void setCallbackKafkaConfigIfNeeded(Properties props) {
+    setDefaultOnCondition(props, !props.containsKey(CALLBACK_KAFKA_ACKS), CALLBACK_KAFKA_ACKS,
+        DEFAULT_CALLBACK_KAFKA_ACKS);
+    setDefaultOnCondition(props, !props.containsKey(CALLBACK_KAFKA_RETRIES), CALLBACK_KAFKA_RETRIES,
+        String.valueOf(DEFAULT_CALLBACK_KAFKA_RETRIES));
   }
 
 }

@@ -397,7 +397,7 @@ public class HoodieTestTable {
   }
 
   public FileStatus[] listAllBaseFiles() throws IOException {
-    return listAllBaseFiles(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue().getFileExtension());
+    return listAllBaseFiles(HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension());
   }
 
   public FileStatus[] listAllBaseFiles(String fileExtension) throws IOException {

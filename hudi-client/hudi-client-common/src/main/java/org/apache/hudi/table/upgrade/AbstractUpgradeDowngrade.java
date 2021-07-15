@@ -122,7 +122,7 @@ public abstract class AbstractUpgradeDowngrade {
 
     // Write out the current version in hoodie.properties.updated file
     metaClient.getTableConfig().setTableVersion(toVersion);
-    createUpdatedFile(metaClient.getTableConfig().getProps());
+    createUpdatedFile(metaClient.getTableConfig().getProperties());
 
     // because for different fs the fs.rename have different action,such as:
     // a) for hdfs : if propsFilePath already exist,fs.rename will not replace propsFilePath, but just return false

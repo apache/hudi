@@ -93,7 +93,6 @@
                   <include>com.twitter:bijection-avro_${scala.binary.version}</include>
                   <include>com.twitter:bijection-core_${scala.binary.version}</include>
                   <include>io.confluent:kafka-avro-serializer</include>
-                  <include>io.confluent:kafka-schema-serializer</include>
                   <include>io.confluent:common-config</include>
                   <include>io.confluent:common-utils</include>
                   <include>io.confluent:kafka-schema-registry-client</include>

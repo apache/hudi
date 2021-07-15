@@ -30,26 +30,20 @@ import java.util.Objects;
 /**
  * An operator event to mark successful checkpoint batch write.
  */
-public class WriteMetadataEvent implements OperatorEvent {
+public class BatchWriteSuccessEvent implements OperatorEvent {
   private static final long serialVersionUID = 1L;
 
   private List<WriteStatus> writeStatuses;
-  private int taskID;
+  private final int taskID;
   private String instantTime;
-  private boolean lastBatch;
-
+  private boolean isLastBatch;
   /**
    * Flag saying whether the event comes from the end of input, e.g. the source
    * is bounded, there are two cases in which this flag should be set to true:
    * 1. batch execution mode
    * 2. bounded stream source such as VALUES
    */
-  private boolean endInput;
-
-  /**
-   * Flag saying whether the event comes from bootstrap of a write function.
-   */
-  private boolean bootstrap;
+  private final boolean isEndInput;
 
   /**
    * Creates an event.
@@ -57,32 +51,26 @@ public class WriteMetadataEvent implements OperatorEvent {
    * @param taskID        The task ID
    * @param instantTime   The instant time under which to write the data
    * @param writeStatuses The write statues list
-   * @param lastBatch   Whether the event reports the last batch
+   * @param isLastBatch   Whether the event reports the last batch
    *                      within an checkpoint interval,
    *                      if true, the whole data set of the checkpoint
    *                      has been flushed successfully
-   * @param bootstrap   Whether the event comes from the bootstrap
    */
-  private WriteMetadataEvent(
+  private BatchWriteSuccessEvent(
       int taskID,
       String instantTime,
       List<WriteStatus> writeStatuses,
-      boolean lastBatch,
-      boolean endInput,
-      boolean bootstrap) {
+      boolean isLastBatch,
+      boolean isEndInput) {
     this.taskID = taskID;
     this.instantTime = instantTime;
     this.writeStatuses = new ArrayList<>(writeStatuses);
-    this.lastBatch = lastBatch;
-    this.endInput = endInput;
-    this.bootstrap = bootstrap;
+    this.isLastBatch = isLastBatch;
+    this.isEndInput = isEndInput;
   }
 
-  // default constructor for efficient serialization
-  public WriteMetadataEvent() {}
-
   /**
-   * Returns the builder for {@link WriteMetadataEvent}.
+   * Returns the builder for {@link BatchWriteSuccessEvent}.
    */
   public static Builder builder() {
     return new Builder();
@@ -92,71 +80,41 @@ public class WriteMetadataEvent implements OperatorEvent {
     return writeStatuses;
   }
 
-  public void setWriteStatuses(List<WriteStatus> writeStatuses) {
-    this.writeStatuses = writeStatuses;
-  }
-
   public int getTaskID() {
     return taskID;
-  }
-
-  public void setTaskID(int taskID) {
-    this.taskID = taskID;
   }
 
   public String getInstantTime() {
     return instantTime;
   }
 
-  public void setInstantTime(String instantTime) {
-    this.instantTime = instantTime;
+  public boolean isLastBatch() {
+    return isLastBatch;
   }
 
   public boolean isEndInput() {
-    return endInput;
-  }
-
-  public void setEndInput(boolean endInput) {
-    this.endInput = endInput;
-  }
-
-  public boolean isBootstrap() {
-    return bootstrap;
-  }
-
-  public void setBootstrap(boolean bootstrap) {
-    this.bootstrap = bootstrap;
-  }
-
-  public boolean isLastBatch() {
-    return lastBatch;
-  }
-
-  public void setLastBatch(boolean lastBatch) {
-    this.lastBatch = lastBatch;
+    return isEndInput;
   }
 
   /**
-   * Merges this event with given {@link WriteMetadataEvent} {@code other}.
+   * Merges this event with given {@link BatchWriteSuccessEvent} {@code other}.
    *
    * @param other The event to be merged
    */
-  public void mergeWith(WriteMetadataEvent other) {
+  public void mergeWith(BatchWriteSuccessEvent other) {
     ValidationUtils.checkArgument(this.taskID == other.taskID);
     // the instant time could be monotonically increasing
     this.instantTime = other.instantTime;
-    this.lastBatch |= other.lastBatch; // true if one of the event isLastBatch true.
+    this.isLastBatch |= other.isLastBatch; // true if one of the event isLastBatch true.
     List<WriteStatus> statusList = new ArrayList<>();
     statusList.addAll(this.writeStatuses);
     statusList.addAll(other.writeStatuses);
     this.writeStatuses = statusList;
   }
 
-  /**
-   * Returns whether the event is ready to commit.
-   */
+  /** Returns whether the event is ready to commit. */
   public boolean isReady(String currentInstant) {
-    return lastBatch && this.instantTime.equals(currentInstant);
+    return isLastBatch && this.instantTime.equals(currentInstant);
   }
 
   // -------------------------------------------------------------------------
@@ -164,21 +122,20 @@ public class WriteMetadataEvent implements OperatorEvent {
   // -------------------------------------------------------------------------
 
   /**
-   * Builder for {@link WriteMetadataEvent}.
+   * Builder for {@link BatchWriteSuccessEvent}.
    */
   public static class Builder {
     private List<WriteStatus> writeStatus;
     private Integer taskID;
     private String instantTime;
-    private boolean lastBatch = false;
-    private boolean endInput = false;
-    private boolean bootstrap = false;
+    private boolean isLastBatch = false;
+    private boolean isEndInput = false;
 
-    public WriteMetadataEvent build() {
+    public BatchWriteSuccessEvent build() {
       Objects.requireNonNull(taskID);
       Objects.requireNonNull(instantTime);
       Objects.requireNonNull(writeStatus);
-      return new WriteMetadataEvent(taskID, instantTime, writeStatus, lastBatch, endInput, bootstrap);
+      return new BatchWriteSuccessEvent(taskID, instantTime, writeStatus, isLastBatch, isEndInput);
     }
 
     public Builder taskID(int taskID) {
@@ -196,18 +153,13 @@ public class WriteMetadataEvent implements OperatorEvent {
       return this;
     }
 
-    public Builder lastBatch(boolean lastBatch) {
-      this.lastBatch = lastBatch;
+    public Builder isLastBatch(boolean isLastBatch) {
+      this.isLastBatch = isLastBatch;
       return this;
     }
 
-    public Builder endInput(boolean endInput) {
-      this.endInput = endInput;
-      return this;
-    }
-
-    public Builder bootstrap(boolean bootstrap) {
-      this.bootstrap = bootstrap;
+    public Builder isEndInput(boolean isEndInput) {
+      this.isEndInput = isEndInput;
       return this;
     }
   }

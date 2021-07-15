@@ -34,9 +34,9 @@ public class ComplexKeyGenerator extends BuiltinKeyGenerator {
 
   public ComplexKeyGenerator(TypedProperties props) {
     super(props);
-    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key())
+    this.recordKeyFields = Arrays.stream(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY)
         .split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
-    this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key())
+    this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY)
         .split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
     complexAvroKeyGenerator = new ComplexAvroKeyGenerator(props);
   }

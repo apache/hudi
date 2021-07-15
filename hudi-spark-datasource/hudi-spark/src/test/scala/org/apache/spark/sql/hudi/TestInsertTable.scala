@@ -277,4 +277,11 @@ class TestInsertTable extends TestHoodieSqlBase {
         " count: 3，columns: (1,a1,10)"
     )
   }
+
+  private def removeQuotes(value: Any): Any = {
+    value match {
+      case s: String => s.stripPrefix("'").stripSuffix("'")
+      case _=> value
+    }
+  }
 }

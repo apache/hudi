@@ -34,7 +34,7 @@ public class TestHoodieDeltaWriteStat {
   @Test
   public void testBaseFileAndLogFiles() {
     HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
-    String baseFile = "file1" + HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue().getFileExtension();
+    String baseFile = "file1" + HoodieTableConfig.DEFAULT_BASE_FILE_FORMAT.getFileExtension();
     String logFile1 = ".log1.log";
     String logFile2 = ".log2.log";
 

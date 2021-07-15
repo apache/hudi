@@ -153,7 +153,7 @@ public class RepairsCommand implements CommandMarker {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     Properties newProps = new Properties();
     newProps.load(new FileInputStream(new File(overwriteFilePath)));
-    Map<String, String> oldProps = client.getTableConfig().propsMap();
+    Map<String, String> oldProps = client.getTableConfig().getProps();
     Path metaPathDir = new Path(client.getBasePath(), METAFOLDER_NAME);
     HoodieTableConfig.createHoodieProperties(client.getFs(), metaPathDir, newProps);
 

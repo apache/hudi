@@ -17,16 +17,13 @@
 
 package org.apache.hudi
 
-import java.util.stream.Collectors
-
-import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecord, HoodieReplaceCommitMetadata, HoodieTableType}
+import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hadoop.fs.GlobPattern
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.log4j.LogManager
 import org.apache.spark.api.java.JavaSparkContext
@@ -61,20 +58,20 @@ class IncrementalRelation(val sqlContext: SQLContext,
   if (commitTimeline.empty()) {
     throw new HoodieException("No instants to incrementally pull")
   }
-  if (!optParams.contains(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key)) {
+  if (!optParams.contains(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY)) {
     throw new HoodieException(s"Specify the begin instant time to pull from using " +
-      s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key}")
+      s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY}")
   }
 
-  val useEndInstantSchema = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY.key,
-    DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY.defaultValue).toBoolean
+  val useEndInstantSchema = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY,
+    DataSourceReadOptions.DEFAULT_INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_VAL).toBoolean
 
   private val lastInstant = commitTimeline.lastInstant().get()
 
-  private val commitsTimelineToReturn = commitTimeline.findInstantsInRange(
-    optParams(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key),
-    optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY.key(), lastInstant.getTimestamp))
-  private val commitsToReturn = commitsTimelineToReturn.getInstants.iterator().toList
+  private val commitsToReturn = commitTimeline.findInstantsInRange(
+    optParams(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY),
+    optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY, lastInstant.getTimestamp))
+    .getInstants.iterator().toList
 
   // use schema from a file produced in the end/latest instant
   val usedSchema: StructType = {
@@ -90,8 +87,8 @@ class IncrementalRelation(val sqlContext: SQLContext,
     StructType(skeletonSchema.fields ++ dataSchema.fields)
   }
 
-  private val filters = optParams.getOrElse(DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS_OPT_KEY.key,
-    DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS_OPT_KEY.defaultValue).split(",").filter(!_.isEmpty)
+  private val filters = optParams.getOrElse(DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS_OPT_KEY,
+    DataSourceReadOptions.DEFAULT_PUSH_DOWN_FILTERS_OPT_VAL).split(",").filter(!_.isEmpty)
 
   override def schema: StructType = usedSchema
 
@@ -99,31 +96,14 @@ class IncrementalRelation(val sqlContext: SQLContext,
     val regularFileIdToFullPath = mutable.HashMap[String, String]()
     var metaBootstrapFileIdToFullPath = mutable.HashMap[String, String]()
 
-    // create Replaced file group
-    val replacedTimeline = commitsTimelineToReturn.getCompletedReplaceTimeline
-    val replacedFile = replacedTimeline.getInstants.collect(Collectors.toList[HoodieInstant]).flatMap { instant =>
-      val replaceMetadata = HoodieReplaceCommitMetadata.
-        fromBytes(metaClient.getActiveTimeline.getInstantDetails(instant).get, classOf[HoodieReplaceCommitMetadata])
-      replaceMetadata.getPartitionToReplaceFileIds.entrySet().flatMap { entry =>
-        entry.getValue.map { e =>
-          val fullPath = FSUtils.getPartitionPath(basePath, entry.getKey).toString
-          (e, fullPath)
-        }
-      }
-    }.toMap
-
     for (commit <- commitsToReturn) {
       val metadata: HoodieCommitMetadata = HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit)
         .get, classOf[HoodieCommitMetadata])
 
       if (HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS == commit.getTimestamp) {
-        metaBootstrapFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).toMap.filterNot { case (k, v) =>
-          replacedFile.contains(k) && v.startsWith(replacedFile(k))
-        }
+        metaBootstrapFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).toMap
       } else {
-        regularFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).toMap.filterNot { case (k, v) =>
-          replacedFile.contains(k) && v.startsWith(replacedFile(k))
-        }
+        regularFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).toMap
       }
     }
 
@@ -134,10 +114,10 @@ class IncrementalRelation(val sqlContext: SQLContext,
     }
 
     val pathGlobPattern = optParams.getOrElse(
-      DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY.key,
-      DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY.defaultValue)
+      DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY,
+      DataSourceReadOptions.DEFAULT_INCR_PATH_GLOB_OPT_VAL)
     val (filteredRegularFullPaths, filteredMetaBootstrapFullPaths) = {
-      if(!pathGlobPattern.equals(DataSourceReadOptions.INCR_PATH_GLOB_OPT_KEY.defaultValue)) {
+      if(!pathGlobPattern.equals(DataSourceReadOptions.DEFAULT_INCR_PATH_GLOB_OPT_VAL)) {
         val globMatcher = new GlobPattern("*" + pathGlobPattern)
         (regularFileIdToFullPath.filter(p => globMatcher.matches(p._2)).values,
           metaBootstrapFileIdToFullPath.filter(p => globMatcher.matches(p._2)).values)
@@ -160,7 +140,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
         df = sqlContext.sparkSession.read
                .format("hudi")
                .schema(usedSchema)
-               .option(DataSourceReadOptions.READ_PATHS_OPT_KEY.key, filteredMetaBootstrapFullPaths.mkString(","))
+               .option(DataSourceReadOptions.READ_PATHS_OPT_KEY, filteredMetaBootstrapFullPaths.mkString(","))
                .load()
       }
 
