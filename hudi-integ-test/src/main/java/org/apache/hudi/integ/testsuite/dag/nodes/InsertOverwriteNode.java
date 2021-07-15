@@ -34,7 +34,7 @@ public class InsertOverwriteNode extends InsertNode {
   protected JavaRDD<WriteStatus> ingest(HoodieTestSuiteWriter hoodieTestSuiteWriter,
                                         Option<String> commitTime)
       throws Exception {
-    log.info("Execute bulk ingest node {}", this.getName());
+    log.info("Execute insert overwrite node {}", this.getName());
     return hoodieTestSuiteWriter.insertOverwrite(commitTime);
   }
 }
