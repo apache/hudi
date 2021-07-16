@@ -71,6 +71,7 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       RowType rowType = (RowType) schema.toRowDataType().notNull().getLogicalType();
       long ckpTimeout = dataStream.getExecutionEnvironment()
           .getCheckpointConfig().getCheckpointTimeout();
+      int parallelism = dataStream.getExecutionConfig().getParallelism();
       conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
       StreamWriteOperatorFactory<HoodieRecord> operatorFactory = new StreamWriteOperatorFactory<>(conf);
 
@@ -84,7 +85,7 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
                 "index_bootstrap",
                 TypeInformation.of(HoodieRecord.class),
                 new ProcessOperator<>(new BootstrapFunction<>(conf)))
-            .setParallelism(conf.getInteger(FlinkOptions.INDEX_BOOTSTRAP_TASKS))
+            .setParallelism(conf.getOptional(FlinkOptions.INDEX_BOOTSTRAP_TASKS).orElse(parallelism))
             .uid("uid_index_bootstrap_" + conf.getString(FlinkOptions.TABLE_NAME));
       }
 
@@ -95,11 +96,12 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
               "bucket_assigner",
               TypeInformation.of(HoodieRecord.class),
               new BucketAssignOperator<>(new BucketAssignFunction<>(conf)))
-          .setParallelism(conf.getInteger(FlinkOptions.BUCKET_ASSIGN_TASKS))
           .uid("uid_bucket_assigner_" + conf.getString(FlinkOptions.TABLE_NAME))
+          .setParallelism(conf.getOptional(FlinkOptions.BUCKET_ASSIGN_TASKS).orElse(parallelism))
           // shuffle by fileId(bucket id)
           .keyBy(record -> record.getCurrentLocation().getFileId())
           .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
+          .uid("uid_hoodie_stream_write" + conf.getString(FlinkOptions.TABLE_NAME))
           .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
       if (StreamerUtil.needsAsyncCompaction(conf)) {
         return pipeline.transform("compact_plan_generate",

@@ -290,13 +290,13 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Integer> INDEX_BOOTSTRAP_TASKS = ConfigOptions
       .key("write.index_bootstrap.tasks")
       .intType()
-      .defaultValue(4)
+      .noDefaultValue()
       .withDescription("Parallelism of tasks that do index bootstrap, default is 4");
 
   public static final ConfigOption<Integer> BUCKET_ASSIGN_TASKS = ConfigOptions
       .key("write.bucket_assign.tasks")
       .intType()
-      .defaultValue(4)
+      .noDefaultValue()
       .withDescription("Parallelism of tasks that do bucket assign, default is 4");
 
   public static final ConfigOption<Integer> WRITE_TASKS = ConfigOptions
