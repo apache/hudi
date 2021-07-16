@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -111,6 +112,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.5.1")
       .withDocumentation("Controls the layout of the timeline. Version 0 relied on renames, Version 1 (default) models "
           + "the timeline as an immutable log relying only on atomic writes for object storage.");
+
+  public static final ConfigProperty<HoodieFileFormat> BASE_FILE_FORMAT = ConfigProperty
+      .key("hoodie.table.base.file.format")
+      .defaultValue(HoodieFileFormat.PARQUET)
+      .withAlternatives("hoodie.table.ro.file.format")
+      .withDocumentation("");
 
   public static final ConfigProperty<String> BASE_PATH_PROP = ConfigProperty
       .key("hoodie.base.path")
