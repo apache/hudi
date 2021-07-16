@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
@@ -39,8 +40,8 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
-import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.sink.transform.ChainedTransformer;
+import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 
@@ -322,6 +323,19 @@ public class StreamerUtil {
     } catch (Throwable e) {
       throw new IOException("Could not load transformer class(es) " + classNames, e);
     }
+  }
+
+  public static boolean needShuffle(Configuration conf, int parallelism) {
+    return !isInsertOperation(conf) || !isChaining(conf, parallelism);
+  }
+
+  public static boolean isInsertOperation(Configuration conf) {
+    return WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION)).equals(WriteOperationType.INSERT);
+  }
+
+  public static boolean isChaining(Configuration conf, int parallelism) {
+    return conf.getOptional(FlinkOptions.BUCKET_ASSIGN_TASKS).orElse(parallelism)
+        .equals(conf.getInteger(FlinkOptions.WRITE_TASKS));
   }
 
 }

@@ -75,12 +75,12 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
       StreamWriteOperatorFactory<HoodieRecord> operatorFactory = new StreamWriteOperatorFactory<>(conf);
 
-      DataStream<HoodieRecord> hoodieDataStream = dataStream
+      DataStream<HoodieRecord> dataStream2 = dataStream
           .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class));
 
       // TODO: This is a very time-consuming operation, will optimization
       if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
-        hoodieDataStream = hoodieDataStream.rebalance()
+        dataStream2 = dataStream2.rebalance()
             .transform(
                 "index_bootstrap",
                 TypeInformation.of(HoodieRecord.class),
@@ -89,7 +89,7 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
             .uid("uid_index_bootstrap_" + conf.getString(FlinkOptions.TABLE_NAME));
       }
 
-      DataStream<Object> pipeline = hoodieDataStream
+      dataStream2 = dataStream2
           // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
           .keyBy(HoodieRecord::getRecordKey)
           .transform(
@@ -97,9 +97,14 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
               TypeInformation.of(HoodieRecord.class),
               new BucketAssignOperator<>(new BucketAssignFunction<>(conf)))
           .uid("uid_bucket_assigner_" + conf.getString(FlinkOptions.TABLE_NAME))
-          .setParallelism(conf.getOptional(FlinkOptions.BUCKET_ASSIGN_TASKS).orElse(parallelism))
-          // shuffle by fileId(bucket id)
-          .keyBy(record -> record.getCurrentLocation().getFileId())
+          .setParallelism(conf.getOptional(FlinkOptions.BUCKET_ASSIGN_TASKS).orElse(parallelism));
+
+      // shuffle by fileId(bucket id)
+      if (StreamerUtil.needShuffle(conf, parallelism)) {
+        dataStream2 = dataStream2.keyBy(record -> record.getCurrentLocation().getFileId());
+      }
+
+      DataStream<Object> pipeline = dataStream2
           .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
           .uid("uid_hoodie_stream_write" + conf.getString(FlinkOptions.TABLE_NAME))
           .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
