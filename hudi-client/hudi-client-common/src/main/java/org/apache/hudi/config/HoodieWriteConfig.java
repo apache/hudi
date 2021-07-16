@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -74,6 +75,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.table.name")
       .noDefaultValue()
       .withDocumentation("Table name that will be used for registering with metastores like HMS. Needs to be same across runs.");
+
+  public static final ConfigProperty<HoodieFileFormat> BASE_FILE_FORMAT = ConfigProperty
+      .key("hoodie.table.base.file.format")
+      .defaultValue(HoodieFileFormat.PARQUET)
+      .withAlternatives("hoodie.table.ro.file.format")
+      .withDocumentation("");
 
   public static final ConfigProperty<String> PRECOMBINE_FIELD_PROP = ConfigProperty
       .key("hoodie.datasource.write.precombine.field")
