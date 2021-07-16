@@ -20,6 +20,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.util.AvroSchemaConverter;
@@ -154,6 +155,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     setupHoodieKeyOptions(conf, table);
     // compaction options
     setupCompactionOptions(conf);
+    // hive options
+    setupHiveOptions(conf);
     // infer avro schema from physical DDL schema
     inferAvroSchema(conf, schema.toRowDataType().notNull().getLogicalType());
   }
@@ -210,6 +213,16 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
         && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.COMPACTION_TARGET_IO)) {
       // if compaction schedule is on, tweak the target io to 500GB
       conf.setLong(FlinkOptions.COMPACTION_TARGET_IO, 500 * 1024L);
+    }
+  }
+
+  /**
+   * Sets up the hive options from the table definition.
+   * */
+  private static void setupHiveOptions(Configuration conf) {
+    if (!conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING)
+        && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS)) {
+      conf.setString(FlinkOptions.HIVE_SYNC_PARTITION_EXTRACTOR_CLASS, MultiPartKeysValueExtractor.class.getName());
     }
   }
 
