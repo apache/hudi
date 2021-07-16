@@ -40,6 +40,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.view.AbstractTableFileSystemView.UNSUPPORTED_MARKER_OPERATION_ERROR_MSG;
+
 /**
  * A file system view which proxies request to a preferred File System View implementation. In case of error, flip all
  * subsequent calls to a backup file-system view implementation.
@@ -222,22 +224,22 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
 
   @Override
   public Set<String> getAllMarkerFilePaths(String markerDirPath) {
-    return null;
+    throw new UnsupportedOperationException(UNSUPPORTED_MARKER_OPERATION_ERROR_MSG);
   }
 
   @Override
   public Set<String> getCreateAndMergeMarkerFilePaths(String markerDirPath) {
-    return null;
+    throw new UnsupportedOperationException(UNSUPPORTED_MARKER_OPERATION_ERROR_MSG);
   }
 
   @Override
   public boolean createMarker(String markerDirPath, String markerName) {
-    return false;
+    throw new UnsupportedOperationException(UNSUPPORTED_MARKER_OPERATION_ERROR_MSG);
   }
 
   @Override
   public boolean deleteMarkerDir(String markerDirPath) {
-    return false;
+    throw new UnsupportedOperationException(UNSUPPORTED_MARKER_OPERATION_ERROR_MSG);
   }
 
   @Override

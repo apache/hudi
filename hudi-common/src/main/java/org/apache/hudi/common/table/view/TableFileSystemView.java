@@ -187,11 +187,33 @@ public interface TableFileSystemView {
    */
   Stream<Pair<HoodieFileGroupId, HoodieInstant>> getFileGroupsInPendingClustering();
 
+  /**
+   * @param markerDirPath marker directory path
+   * @return all marker paths in the marker directory
+   */
   Set<String> getAllMarkerFilePaths(String markerDirPath);
 
+  /**
+   * @param markerDirPath marker directory path
+   * @return all marker paths of write IO type "CREATE" and "MERGE"
+   */
   Set<String> getCreateAndMergeMarkerFilePaths(String markerDirPath);
 
+  /**
+   * Creates a new marker.
+   *
+   * @param markerDirPath marker directory path
+   * @param markerName marker name
+   * @return {@code true} if there is no duplicate and the marker is successfully created;
+   * {@code false} otherwise
+   */
   boolean createMarker(String markerDirPath, String markerName);
 
+  /**
+   * Deletes markers in the directory.
+   *
+   * @param markerDirPath marker directory path
+   * @return {@code true} if successful; {@code false} otherwise.
+   */
   boolean deleteMarkerDir(String markerDirPath);
 }

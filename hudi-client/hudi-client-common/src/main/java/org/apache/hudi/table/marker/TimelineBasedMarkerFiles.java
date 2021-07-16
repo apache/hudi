@@ -32,6 +32,12 @@ import java.io.IOException;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Maker file operations of using timeline service as a proxy to create and delete marker files.
+ * Each data file has a corresponding marker entry, which is stored in a limited number of
+ * marker files maintained by the timeline service (each marker file contains multiple marker
+ * entries).
+ */
 public class TimelineBasedMarkerFiles extends MarkerFiles {
   private static final Logger LOG = LogManager.getLogger(TimelineBasedMarkerFiles.class);
   private final RemoteHoodieTableFileSystemView remoteFSView;
@@ -74,11 +80,11 @@ public class TimelineBasedMarkerFiles extends MarkerFiles {
 
   @Override
   Path create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists) {
-    LOG.info("^^^ [timeline-based] Create marker file : " + partitionPath + " " + dataFileName);
+    LOG.info("[timeline-based] Create marker file : " + partitionPath + " " + dataFileName);
     long startTimeMs = System.currentTimeMillis();
     String markerFileName = getMarkerFileName(dataFileName, type);
     boolean success = remoteFSView.createMarker(markerDirPath.toString(), String.format("%s/%s", partitionPath, markerFileName));
-    LOG.info("&&& [timeline-based] Created marker file in " + (System.currentTimeMillis() - startTimeMs) + " ms");
+    LOG.info("[timeline-based] Created marker file in " + (System.currentTimeMillis() - startTimeMs) + " ms");
     if (success) {
       return new Path(new Path(markerDirPath, partitionPath), markerFileName);
     } else {

@@ -30,7 +30,9 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.table.MarkerFiles;
+import org.apache.hudi.table.marker.MarkerFiles;
+import org.apache.hudi.table.marker.MarkerFilesFactory;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -78,7 +80,7 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
 
     // Just skip the marker file creation if it already exists, the new data would append to
     // the file directly.
-    MarkerFiles markerFiles = new MarkerFiles(hoodieTable, instantTime);
+    MarkerFiles markerFiles = MarkerFilesFactory.get(config.getMarkersIOMode(), hoodieTable, instantTime);
     markerFiles.createIfNotExists(partitionPath, dataFileName, getIOType());
   }
 
