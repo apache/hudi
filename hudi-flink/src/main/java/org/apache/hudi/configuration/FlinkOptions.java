@@ -187,12 +187,6 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(TABLE_TYPE_COPY_ON_WRITE)
       .withDescription("Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ");
 
-  public static final ConfigOption<Boolean> APPEND_ONLY_ENABLE = ConfigOptions
-          .key("append_only.enable")
-          .booleanType()
-          .defaultValue(false)
-          .withDescription("Whether to write data to new baseFile without index, only support in COW, default false");
-
   public static final ConfigOption<String> OPERATION = ConfigOptions
       .key("write.operation")
       .stringType()
