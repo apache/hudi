@@ -76,12 +76,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Table name that will be used for registering with metastores like HMS. Needs to be same across runs.");
 
-  public static final ConfigProperty<HoodieFileFormat> BASE_FILE_FORMAT = ConfigProperty
-      .key("hoodie.table.base.file.format")
-      .defaultValue(HoodieFileFormat.PARQUET)
-      .withAlternatives("hoodie.table.ro.file.format")
-      .withDocumentation("");
-
   public static final ConfigProperty<String> PRECOMBINE_FIELD_PROP = ConfigProperty
       .key("hoodie.datasource.write.precombine.field")
       .defaultValue("ts")
@@ -118,6 +112,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.5.1")
       .withDocumentation("Controls the layout of the timeline. Version 0 relied on renames, Version 1 (default) models "
           + "the timeline as an immutable log relying only on atomic writes for object storage.");
+
+  public static final ConfigProperty<HoodieFileFormat> BASE_FILE_FORMAT = ConfigProperty
+      .key("hoodie.table.base.file.format")
+      .defaultValue(HoodieFileFormat.PARQUET)
+      .withAlternatives("hoodie.table.ro.file.format")
+      .withDocumentation("");
 
   public static final ConfigProperty<String> BASE_PATH_PROP = ConfigProperty
       .key("hoodie.base.path")
