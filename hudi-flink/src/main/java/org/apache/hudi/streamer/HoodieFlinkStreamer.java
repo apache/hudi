@@ -84,7 +84,12 @@ public class HoodieFlinkStreamer {
     RowType rowType =
         (RowType) AvroSchemaConverter.convertToDataType(StreamerUtil.getSourceSchema(cfg))
             .getLogicalType();
+
     Configuration conf = FlinkStreamerConfig.toFlinkConfig(cfg);
+    long ckpTimeout = env.getCheckpointConfig().getCheckpointTimeout();
+    int parallelism = env.getParallelism();
+    conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
+
     StreamWriteOperatorFactory<HoodieRecord> operatorFactory =
         new StreamWriteOperatorFactory<>(conf);
 
@@ -107,31 +112,31 @@ public class HoodieFlinkStreamer {
       }
     }
 
-    DataStream<HoodieRecord> hoodieDataStream = dataStream.map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class));
+    DataStream<HoodieRecord> dataStream2 = dataStream.map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class));
 
     if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
-      hoodieDataStream = hoodieDataStream.rebalance()
+      dataStream2 = dataStream2.rebalance()
           .transform(
               "index_bootstrap",
               TypeInformation.of(HoodieRecord.class),
               new ProcessOperator<>(new BootstrapFunction<>(conf)))
-          .setParallelism(conf.getInteger(FlinkOptions.INDEX_BOOTSTRAP_TASKS))
+          .setParallelism(conf.getOptional(FlinkOptions.INDEX_BOOTSTRAP_TASKS).orElse(parallelism))
           .uid("uid_index_bootstrap_" + conf.getString(FlinkOptions.TABLE_NAME));
     }
 
-    DataStream<Object> pipeline = hoodieDataStream
+    DataStream<Object> pipeline = dataStream2
         // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
         .keyBy(HoodieRecord::getRecordKey)
         .transform(
             "bucket_assigner",
             TypeInformation.of(HoodieRecord.class),
             new BucketAssignOperator<>(new BucketAssignFunction<>(conf)))
-        .setParallelism(conf.getInteger(FlinkOptions.BUCKET_ASSIGN_TASKS))
-        .uid("uid_bucket_assigner")
+        .uid("uid_bucket_assigner" + conf.getString(FlinkOptions.TABLE_NAME))
+        .setParallelism(conf.getOptional(FlinkOptions.BUCKET_ASSIGN_TASKS).orElse(parallelism))
         // shuffle by fileId(bucket id)
         .keyBy(record -> record.getCurrentLocation().getFileId())
         .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
-        .uid("uid_hoodie_stream_write")
+        .uid("uid_hoodie_stream_write" + conf.getString(FlinkOptions.TABLE_NAME))
         .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
     if (StreamerUtil.needsAsyncCompaction(conf)) {
       pipeline.transform("compact_plan_generate",
