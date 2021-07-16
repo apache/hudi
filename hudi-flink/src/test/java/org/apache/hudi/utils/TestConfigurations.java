@@ -69,10 +69,8 @@ public class TestConfigurations {
         + "with (\n"
         + "  'connector' = 'hudi'";
     StringBuilder builder = new StringBuilder(createTable);
-    if (options.size() != 0) {
-      options.forEach((k, v) -> builder.append(",\n")
-          .append("  '").append(k).append("' = '").append(v).append("'"));
-    }
+    options.forEach((k, v) -> builder.append(",\n")
+        .append("  '").append(k).append("' = '").append(v).append("'"));
     builder.append("\n)");
     return builder.toString();
   }
