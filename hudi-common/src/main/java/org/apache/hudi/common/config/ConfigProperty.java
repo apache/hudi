@@ -19,6 +19,7 @@
 package org.apache.hudi.common.config;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import java.io.Serializable;
@@ -74,6 +75,18 @@ public class ConfigProperty<T> implements Serializable {
 
   public boolean hasDefaultValue() {
     return defaultValue != null;
+  }
+
+  public String doc() {
+    return StringUtils.isNullOrEmpty(doc) ? StringUtils.EMPTY_STRING : doc;
+  }
+
+  public Option<String> getSinceVersion() {
+    return sinceVersion;
+  }
+
+  public Option<String> getDeprecatedVersion() {
+    return deprecatedVersion;
   }
 
   Option<Function<HoodieConfig, Option<T>>> getInferFunc() {

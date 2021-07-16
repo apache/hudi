@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.config.ConfigGroupProperty;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -32,6 +33,7 @@ import java.util.stream.Collectors;
 /**
  * File System View Storage Configurations.
  */
+@ConfigGroupProperty(name = "File System View Storage Configurations", description = "Configurations that control the Filesystem view")
 public class FileSystemViewStorageConfig extends HoodieConfig {
 
   // Property Names

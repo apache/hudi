@@ -17,6 +17,7 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigGroupProperty;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -28,6 +29,7 @@ import java.util.Properties;
 /**
  * Write callback related config.
  */
+@ConfigGroupProperty(name = "Write commit HTTP callback configs", description = "Controls HTTP callback behavior on write commit. Exception will be thrown if user enabled the callback service and errors occurred during the process of callback.")
 public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
 
   public static final String CALLBACK_PREFIX = "hoodie.write.commit.callback.";

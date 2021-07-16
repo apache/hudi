@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.common.config.ConfigGroupProperty;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -29,6 +30,7 @@ import java.util.Properties;
 /**
  * The consistency guard relevant config options.
  */
+@ConfigGroupProperty(name = "Consistency Guard Configurations", description = "The consistency guard relevant config options.")
 public class ConsistencyGuardConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> CONSISTENCY_CHECK_ENABLED_PROP = ConfigProperty
