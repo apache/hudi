@@ -22,6 +22,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -75,6 +76,7 @@ public class TimelineServerPerf implements Serializable {
     useExternalTimelineServer = (cfg.serverHost != null);
     TimelineService.Config timelineServiceConf = cfg.getTimelinServerConfig();
     this.timelineServer = new TimelineService(
+        new HoodieLocalEngineContext(FSUtils.prepareHadoopConf(new Configuration())),
         timelineServiceConf, new Configuration(), FileSystem.get(new Configuration()),
         TimelineService.buildFileSystemViewManager(timelineServiceConf,
             new SerializableConfiguration(FSUtils.prepareHadoopConf(new Configuration()))));
