@@ -361,24 +361,4 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   public boolean isClosed() {
     return closed;
   }
-
-  @Override
-  public Set<String> getAllMarkerFilePaths(String markerDirPath) {
-    return null;
-  }
-
-  @Override
-  public Set<String> getCreateAndMergeMarkerFilePaths(String markerDirPath) {
-    return null;
-  }
-
-  @Override
-  public boolean createMarker(String markerDirPath, String markerName) {
-    return false;
-  }
-
-  @Override
-  public boolean deleteMarkerDir(String markerDirPath) {
-    return false;
-  }
 }

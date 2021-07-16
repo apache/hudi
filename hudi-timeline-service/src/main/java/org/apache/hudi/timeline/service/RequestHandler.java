@@ -66,7 +66,6 @@ public class RequestHandler {
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private static final Logger LOG = LogManager.getLogger(RequestHandler.class);
 
-  private final FileSystem fileSystem;
   private final FileSystemViewManager viewManager;
   private final Javalin app;
   private final TimelineHandler instantHandler;
@@ -79,7 +78,6 @@ public class RequestHandler {
 
   public RequestHandler(Javalin app, Configuration conf, FileSystem fileSystem, FileSystemViewManager viewManager, boolean useAsync,
                         int markerBatchNumThreads, long markerBatchIntervalMs, int markerParallelism) throws IOException {
-    this.fileSystem = fileSystem;
     this.viewManager = viewManager;
     this.app = app;
     this.instantHandler = new TimelineHandler(conf, fileSystem, viewManager);
@@ -164,6 +162,17 @@ public class RequestHandler {
     }
   }
 
+  /**
+   * Serializes the result into JSON String.
+   *
+   * @param ctx Javalin context
+   * @param obj object to serialize
+   * @param metricsRegistry {@code Registry} instance for storing metrics
+   * @param objectMapper JSON object mapper
+   * @param logger {@code Logger} instance
+   * @return JSON String from the input object
+   * @throws JsonProcessingException
+   */
   public static String jsonifyResult(
       Context ctx, Object obj, Registry metricsRegistry, ObjectMapper objectMapper, Logger logger)
       throws JsonProcessingException {

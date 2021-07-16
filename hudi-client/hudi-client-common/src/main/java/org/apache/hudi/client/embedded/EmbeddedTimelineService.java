@@ -78,13 +78,13 @@ public class EmbeddedTimelineService {
     TimelineService.Config timelineServiceConf = new TimelineService.Config();
     timelineServiceConf.serverPort = writeConfig.getEmbeddedTimelineServerPort();
     timelineServiceConf.numThreads = writeConfig.getEmbeddedTimelineServerThreads();
-    timelineServiceConf.compress = writeConfig.getEmbeddedTimelineServerCompressOutput();;
+    timelineServiceConf.compress = writeConfig.getEmbeddedTimelineServerCompressOutput();
     timelineServiceConf.async = writeConfig.getEmbeddedTimelineServerUseAsync();
     timelineServiceConf.markerBatchNumThreads = writeConfig.getMarkersTimelineBasedBatchNumThreads();
     timelineServiceConf.markerBatchIntervalMs = writeConfig.getMarkersTimelineBasedBatchIntervalMs();
-    timelineServiceConf.markerDeleteParallelism = writeConfig.getMarkersDeleteParallelism();
+    timelineServiceConf.markerParallelism = writeConfig.getMarkersDeleteParallelism();
 
-    server = new TimelineService(timelineServiceConf, hadoopConf.newCopy(),
+    server = new TimelineService(context, timelineServiceConf, hadoopConf.newCopy(),
         FSUtils.getFs(basePath, hadoopConf.newCopy()), viewManager);
     serverPort = server.startService();
     LOG.info("Started embedded timeline server at " + hostAddr + ":" + serverPort);

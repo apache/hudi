@@ -33,6 +33,12 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.Set;
 
+/**
+ * Operates on marker files for a given write action (commit, delta commit, compaction).
+ *
+ * This abstract class provides abstract methods of different marker file operations, so that
+ * different marker file mechanism can be implemented.
+ */
 public abstract class MarkerFiles implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(MarkerFiles.class);
@@ -64,6 +70,12 @@ public abstract class MarkerFiles implements Serializable {
     return create(partitionPath, dataFileName, type, true);
   }
 
+  /**
+   * Quietly deletes the marker directory.
+   *
+   * @param context {@code HoodieEngineContext} instance.
+   * @param parallelism parallelism for deleting the marker files in the directory.
+   */
   public void quietDeleteMarkerDir(HoodieEngineContext context, int parallelism) {
     try {
       deleteMarkerDir(context, parallelism);
@@ -72,16 +84,29 @@ public abstract class MarkerFiles implements Serializable {
     }
   }
 
+  /**
+   * Strips the marker file suffix from the input path, i.e., ".marker.[IO_type]".
+   *
+   * @param path  file path
+   * @return Stripped path
+   */
   public static String stripMarkerSuffix(String path) {
     return path.substring(0, path.indexOf(HoodieTableMetaClient.MARKER_EXTN));
   }
 
+  /**
+   * Gets the marker file name, in the format of "[data_file_name].marker.[IO_type]".
+   *
+   * @param dataFileName data file name
+   * @param type IO type
+   * @return the marker file name
+   */
   protected String getMarkerFileName(String dataFileName, IOType type) {
     return String.format("%s%s.%s", dataFileName, HoodieTableMetaClient.MARKER_EXTN, type.name());
   }
 
   /**
-   * Returns the marker path. Would create the partition path first if not exists.
+   * Returns the marker path. Would create the partition path first if not exists
    *
    * @param partitionPath The partition path
    * @param dataFileName  The data file name
@@ -94,6 +119,12 @@ public abstract class MarkerFiles implements Serializable {
     return new Path(path, markerFileName);
   }
 
+  /**
+   * Strips the folder prefix of the marker file path.
+   *
+   * @param fullMarkerPath the full path of the marker file
+   * @return marker file name
+   */
   protected String stripMarkerFolderPrefix(String fullMarkerPath) {
     ValidationUtils.checkArgument(fullMarkerPath.contains(HoodieTableMetaClient.MARKER_EXTN));
     String markerRootPath = Path.getPathWithoutSchemeAndAuthority(
@@ -105,13 +136,43 @@ public abstract class MarkerFiles implements Serializable {
     return fullMarkerPath.substring(begin + markerRootPath.length() + 1);
   }
 
+  /**
+   * Deletes the marker directory.
+   *
+   * @param context {@code HoodieEngineContext} instance.
+   * @param parallelism parallelism for deleting the marker files in the directory.
+   * @return {@true} if successful; {@false} otherwise.
+   */
   public abstract boolean deleteMarkerDir(HoodieEngineContext context, int parallelism);
 
+  /**
+   * @return {@true} if the marker directory exists in the file system; {@false} otherwise.
+   * @throws IOException
+   */
   public abstract boolean doesMarkerDirExist() throws IOException;
 
+  /**
+   * @param context {@code HoodieEngineContext} instance.
+   * @param parallelism parallelism for reading the marker files in the directory.
+   * @return all the data file paths of write IO type "CREATE" and "MERGE"
+   * @throws IOException
+   */
   public abstract Set<String> createdAndMergedDataPaths(HoodieEngineContext context, int parallelism) throws IOException;
 
+  /**
+   * @return all the marker paths
+   * @throws IOException
+   */
   public abstract Set<String> allMarkerFilePaths() throws IOException;
 
+  /**
+   * Creates a marker.
+   *
+   * @param partitionPath  partition path in the table
+   * @param dataFileName  data file name
+   * @param type write IO type
+   * @param checkIfExists whether to check if the marker already exists
+   * @return the marker path
+   */
   abstract Path create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists);
 }

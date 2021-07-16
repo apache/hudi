@@ -233,19 +233,26 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.markers.io.mode")
       .defaultValue(MarkerIOMode.DIRECT.toString())
       .sinceVersion(VERSION_0_9_0)
-      .withDocumentation("");
+      .withDocumentation("Marker IO mode to use.  Two modes are supported: "
+          + "- DIRECT: individual marker file corresponding to each data file is directly "
+          + "created by writer. "
+          + "- TIMELINE_BASED: marker operations are all handled at the timeline service "
+          + "which serves as a proxy.  New marker entries are batch processed and written "
+          + "to a limited number of marker files for efficiency.");
+
 
   public static final ConfigProperty<Integer> MARKERS_TIMELINE_BASED_BATCH_NUM_THREADS = ConfigProperty
       .key("hoodie.markers.timeline_based.batch.num_threads")
       .defaultValue(20)
       .sinceVersion(VERSION_0_9_0)
-      .withDocumentation("");
+      .withDocumentation("Number of threads to use for batch processing marker "
+          + "creation requests at the timeline service");
 
   public static final ConfigProperty<Long> MARKERS_TIMELINE_BASED_BATCH_INTERVAL_MS = ConfigProperty
       .key("hoodie.markers.timeline_based.batch.interval_ms")
       .defaultValue(50L)
       .sinceVersion(VERSION_0_9_0)
-      .withDocumentation("");
+      .withDocumentation("The batch interval in milliseconds for marker creation batch processing");
 
   public static final ConfigProperty<String> MARKERS_DELETE_PARALLELISM = ConfigProperty
       .key("hoodie.markers.delete.parallelism")

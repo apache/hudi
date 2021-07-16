@@ -44,7 +44,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Operates on marker files for a given write action (commit, delta commit, compaction).
+ * Maker file operations of directly accessing the file system to create and delete
+ * marker files.  Each data file has a corresponding marker file.
  */
 public class DirectMarkerFiles extends MarkerFiles {
 
@@ -97,10 +98,15 @@ public class DirectMarkerFiles extends MarkerFiles {
     return false;
   }
 
+  /**
+   * @return {@code true} if marker directory exists; {@code false} otherwise.
+   * @throws IOException
+   */
   public boolean doesMarkerDirExist() throws IOException {
     return fs.exists(markerDirPath);
   }
 
+  @Override
   public Set<String> createdAndMergedDataPaths(HoodieEngineContext context, int parallelism) throws IOException {
     Set<String> dataFiles = new HashSet<>();
 
@@ -145,6 +151,7 @@ public class DirectMarkerFiles extends MarkerFiles {
     return stripMarkerSuffix(rPath);
   }
 
+  @Override
   public Set<String> allMarkerFilePaths() throws IOException {
     Set<String> markerFiles = new HashSet<>();
     if (doesMarkerDirExist()) {
@@ -156,8 +163,9 @@ public class DirectMarkerFiles extends MarkerFiles {
     return markerFiles;
   }
 
+  @Override
   protected Path create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists) {
-    LOG.info("^^^ [direct] Create marker file : " + partitionPath + " " + dataFileName);
+    LOG.info("[direct] Create marker file : " + partitionPath + " " + dataFileName);
     long startTimeMs = System.currentTimeMillis();
     Path markerPath = getMarkerPath(partitionPath, dataFileName, type);
     Path dirPath = markerPath.getParent();
@@ -170,15 +178,15 @@ public class DirectMarkerFiles extends MarkerFiles {
     }
     try {
       if (checkIfExists && fs.exists(markerPath)) {
-        LOG.warn("Marker Path=" + markerPath + " already exists, cancel creation");
+        LOG.warn("Marker path " + markerPath + " already exists, cancel creation");
         return null;
       }
-      LOG.info("Creating Marker Path=" + markerPath);
+      LOG.info("Creating marker path " + markerPath);
       fs.create(markerPath, false).close();
     } catch (IOException e) {
       throw new HoodieException("Failed to create marker file " + markerPath, e);
     }
-    LOG.info("&&& [direct] Created marker file in " + (System.currentTimeMillis() - startTimeMs) + " ms");
+    LOG.info("[direct] Created marker file in " + (System.currentTimeMillis() - startTimeMs) + " ms");
     return markerPath;
   }
 }
