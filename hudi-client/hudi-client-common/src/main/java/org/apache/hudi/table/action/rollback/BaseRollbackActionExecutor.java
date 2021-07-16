@@ -36,8 +36,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.BaseActionExecutor;
+import org.apache.hudi.table.marker.MarkerFilesFactory;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -111,7 +112,8 @@ public abstract class BaseRollbackActionExecutor<T extends HoodieRecordPayload, 
     }
 
     // Finally, remove the marker files post rollback.
-    new MarkerFiles(table, instantToRollback.getTimestamp()).quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+    MarkerFilesFactory.get(config.getMarkersIOMode(), table, instantToRollback.getTimestamp())
+        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
 
     return rollbackMetadata;
   }

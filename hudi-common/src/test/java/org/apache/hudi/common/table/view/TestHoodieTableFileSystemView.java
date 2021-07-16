@@ -56,6 +56,8 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.log4j.Level;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.junit.jupiter.api.BeforeEach;
@@ -107,6 +109,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
   @BeforeEach
   public void setup() throws IOException {
+    LOG.setLevel(Level.INFO);
     metaClient = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType(), BOOTSTRAP_SOURCE_PATH);
     basePath = metaClient.getBasePath();
     refreshFsView();
@@ -1489,6 +1492,27 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertTrue(fileIds.contains(fileId1));
     assertTrue(fileIds.contains(fileId2));
     assertFalse(fileIds.contains(fileId3));
+  }
+
+  @Test
+  public void testCreateMarker() {
+    /*
+    String markerDirPath = basePath + "/.hoodie/.temp";
+    fsView.deleteMarkerDir(markerDirPath);
+    long startTime = System.currentTimeMillis();
+    assertTrue(fsView.createMarker(markerDirPath, "a.CREATE"));
+    LOG.warn("Create marker time=" + (System.currentTimeMillis() - startTime) + "ms");
+    startTime = System.currentTimeMillis();
+    assertFalse(fsView.createMarker(markerDirPath, "a.CREATE"));
+    LOG.warn("Create marker time=" + (System.currentTimeMillis() - startTime) + "ms");
+    startTime = System.currentTimeMillis();
+    assertTrue(fsView.createMarker(markerDirPath, "b.APPEND"));
+    LOG.warn("Create marker time=" + (System.currentTimeMillis() - startTime) + "ms");
+    assertEquals(2, fsView.getAllMarkerFilePaths(markerDirPath).size());
+    assertEquals(1, fsView.getCreateAndMergeMarkerFilePaths(markerDirPath).size());
+    fsView.deleteMarkerDir(markerDirPath);
+    assertEquals(0, fsView.getAllMarkerFilePaths(markerDirPath).size());
+    */
   }
 
   @Override
