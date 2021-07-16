@@ -24,7 +24,8 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.StringUtils;
 
-import net.steppschuh.markdowngenerator.table.Table;
+import net.steppschuh.markdowngenerator.rule.HorizontalRule;
+import net.steppschuh.markdowngenerator.text.Text;
 import net.steppschuh.markdowngenerator.text.heading.Heading;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -35,8 +36,8 @@ import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.Locale;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Set;
 
 import static org.reflections.ReflectionUtils.getAllFields;
@@ -50,17 +51,20 @@ import static org.reflections.ReflectionUtils.withTypeAssignableTo;
 public class HoodieConfigDocGenerator {
 
   private static final Logger LOG = LogManager.getLogger(HoodieConfigDocGenerator.class);
+  private static final String NEWLINE = "\n";
+  private static final String LINE_BREAK = "<br>\n";
+  private static final String DOUBLE_NEWLINE = "\n\n";
+  private static final String SUMMARY = "This page covers the different ways of configuring " +
+      "your job to write/read Hudi tables. " +
+      "At a high level, you can control behaviour at few levels.";
 
   public static void main(String[] args) {
     Reflections reflections = new Reflections("org.apache.hudi");
     Set<Class<? extends HoodieConfig>> subTypes = reflections.getSubTypesOf(HoodieConfig.class);
     // Top heading
-    StringBuilder configDocBuilder = new StringBuilder()
-        .append(new Heading("Configurations", 1))
-        .append("\n")
-        .append("This page covers the different ways of configuring your job to write/read Hudi tables. \n" +
-            "At a high level, you can control behaviour at few levels.")
-        .append("\n\n");
+    StringBuilder configDocBuilder = new StringBuilder();
+    generateHeader(configDocBuilder);
+
     for (Class<? extends HoodieConfig> subType : subTypes) {
       // sub-heading using the annotation
       ConfigGroupProperty configGroupProperty = subType.getAnnotation(ConfigGroupProperty.class);
@@ -68,53 +72,96 @@ public class HoodieConfigDocGenerator {
         LOG.info("Processing params for config class: " + subType.getName() + " " + configGroupProperty.name()
             + " " + configGroupProperty.description());
         configDocBuilder.append("## ").append(configGroupProperty.name())
-            .append(" {#" + configGroupProperty.name().toLowerCase(Locale.ROOT).replace(" ", "-") + "}")
-            .append("\n\n");
+            .append(DOUBLE_NEWLINE);
         configDocBuilder.append(configGroupProperty.description()).append("\n\n");
       } else {
         configDocBuilder.append(new Heading(subType.getSimpleName(), 2)).append("\n\n");
         LOG.warn("Please add annotation ConfigGroupProperty to config class: " + subType.getName());
       }
 
-      // new table
-      /*Table.Builder tableBuilder = new Table.Builder()
-          .withAlignments(Table.ALIGN_LEFT, Table.ALIGN_LEFT, Table.ALIGN_LEFT, Table.ALIGN_LEFT, Table.ALIGN_LEFT)
-          .addRow("Option Name", "Property", "Required", "Default", "Remarks");*/
       Set<Field> fields = getAllFields(subType, withTypeAssignableTo(ConfigProperty.class));
       for (Field field : fields) {
         ConfigProperty obj = null;
         try {
-          ConfigProperty f = (ConfigProperty) field.get(obj);
-          if (StringUtils.isNullOrEmpty(f.doc())) {
+          ConfigProperty cfgProperty = (ConfigProperty) field.get(obj);
+          if (StringUtils.isNullOrEmpty(cfgProperty.doc())) {
             LOG.warn("Found empty or null description for config class = "
                 + subType.getName()
                 + " for param = "
                 + field.getName());
           }
-          //tableBuilder.addRow(field.getName(), f.key(), "NO", f.hasDefaultValue() ? f.defaultValue() : "", f.doc());
 
-          configDocBuilder.append("### ").append(f.key())
-              .append(" {#" + f.key().toLowerCase(Locale.ROOT).replace(" ", "-") + "}")
-              .append("\n");
-          configDocBuilder.append(f.doc()).append("\n");
-          configDocBuilder.append("Default Value: ").append(f.hasDefaultValue() ? f.defaultValue() : "_").append("\n");
-          //configDocBuilder.append("Required Or Optional? ").append("\n");
-          if (f.getSinceVersion().isPresent()) {
-            configDocBuilder.append("Since Version: ").append(f.getSinceVersion().get()).append("\n");
+          configDocBuilder.append("> ").append("### ").append(new Text(cfgProperty.key())).append(NEWLINE);
+
+          configDocBuilder
+              .append("> ")
+              .append("`")
+              .append("Default Value")
+              .append(": ")
+              .append(cfgProperty.hasDefaultValue() ? cfgProperty.defaultValue() : "_")
+              .append("`")
+              .append(LINE_BREAK);
+
+          if (!StringUtils.isNullOrEmpty(cfgProperty.doc())) {
+            configDocBuilder
+                .append("> ")
+                .append(cfgProperty.doc()).append(LINE_BREAK);
           }
-          if (f.getDeprecatedVersion().isPresent()) {
-            configDocBuilder.append("Deprecated Version: ").append(f.getDeprecatedVersion().get()).append("\n");
+
+          configDocBuilder
+              .append("> ")
+              .append("`")
+              .append(new Text("Config Class"))
+              .append("`")
+              .append(": ")
+              .append(subType.getName()).append(LINE_BREAK);
+          configDocBuilder
+              .append("> ")
+              .append("`")
+              .append(new Text("Config Param"))
+              .append("`")
+              .append(": ")
+              .append(field.getName()).append(LINE_BREAK);
+
+          //configDocBuilder.append(new BoldText("Required Or Optional? ")).append(NEWLINE);
+          if (cfgProperty.getSinceVersion().isPresent()) {
+            configDocBuilder
+                .append("> ")
+                .append("`")
+                .append(new Text("Since Version"))
+                .append("`")
+                .append(": ")
+                .append(cfgProperty.getSinceVersion().get()).append(LINE_BREAK);
           }
-          if (f.hasDefaultValue()) {
-            configDocBuilder.append("Type of Value: ").append(f.defaultValue().getClass().getGenericSuperclass()).append("\n");
+          if (cfgProperty.getDeprecatedVersion().isPresent()) {
+            configDocBuilder
+                .append("> ")
+                .append("`")
+                .append(new Text("Deprecated Version"))
+                .append("`")
+                .append(": ")
+                .append(cfgProperty.getDeprecatedVersion().get()).append(LINE_BREAK);
           }
-          //configDocBuilder.append("Valid Values: ").append("\n");
-          configDocBuilder.append("\n\n");
+          if (cfgProperty.hasDefaultValue()) {
+            configDocBuilder
+                .append("> ")
+                .append("`")
+                .append(new Text("Type of Value"))
+                .append("`")
+                .append(": ")
+                .append(cfgProperty.defaultValue().getClass().getGenericSuperclass()).append(LINE_BREAK);
+          }
+          //configDocBuilder
+          // .append(HYPHEN)
+          // .append(new BoldText("Valid Values: ")).append(NEWLINE);
+          configDocBuilder
+              .append(NEWLINE)
+              .append(new HorizontalRule(3))
+              .append(DOUBLE_NEWLINE);
         } catch (IllegalAccessException e) {
           LOG.error("Error while getting field through reflection ", e);
         }
       }
-      //configDocBuilder.append(tableBuilder.build()).append("\n\n");
     }
     try {
       LOG.info("Generating markdown file");
@@ -122,5 +169,30 @@ public class HoodieConfigDocGenerator {
     } catch (IOException e) {
       LOG.error("Error while writing to markdown file ", e);
     }
+  }
+
+  private static void generateHeader(StringBuilder configDocBuilder) {
+    /*
+      ---
+      title: Configurations
+      keywords: garbage collection, hudi, jvm, configs, tuning
+      permalink: /docs/configurations.html
+      summary: This section offers an overview of tools available to operate an ecosystem of Hudi
+      toc: true
+      last_modified_at: 2019-12-30T15:59:57-04:00
+      ---
+     */
+    LocalDateTime now = LocalDateTime.now();
+    configDocBuilder.append(new HorizontalRule()).append(NEWLINE)
+        .append("title: ").append("Configurations").append(NEWLINE)
+        .append("keywords: garbage collection, hudi, jvm, configs, tuning").append(NEWLINE)
+        .append("permalink: /docs/configurations.html").append(NEWLINE)
+        .append("summary: " + SUMMARY).append(NEWLINE)
+        .append("toc: true").append(NEWLINE)
+        .append("last_modified_at: " + DateTimeFormatter.ISO_DATE_TIME.format(now)).append(NEWLINE)
+        .append(new HorizontalRule())
+        .append(DOUBLE_NEWLINE);
+    // Description
+    configDocBuilder.append(SUMMARY).append(DOUBLE_NEWLINE);
   }
 }
