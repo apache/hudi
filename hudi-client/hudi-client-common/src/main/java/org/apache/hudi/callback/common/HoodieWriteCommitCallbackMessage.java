@@ -35,22 +35,22 @@ public class HoodieWriteCommitCallbackMessage implements Serializable {
   /**
    * CommitTime for one batch write, this is required.
    */
-  private String commitTime;
+  private final String commitTime;
 
   /**
    * Table name this batch commit to.
    */
-  private String tableName;
+  private final String tableName;
 
   /**
    * BathPath the table located.
    */
-  private String basePath;
+  private final String basePath;
 
-  private List<HoodieWriteStat> hoodieWriteStat;
-
-  public HoodieWriteCommitCallbackMessage() {
-  }
+  /**
+   * Statistics about Hoodie write operation.
+   */
+  private final List<HoodieWriteStat> hoodieWriteStat;
 
   public HoodieWriteCommitCallbackMessage(String commitTime, String tableName, String basePath, List<HoodieWriteStat> hoodieWriteStat) {
     this.commitTime = commitTime;
@@ -63,31 +63,15 @@ public class HoodieWriteCommitCallbackMessage implements Serializable {
     return commitTime;
   }
 
-  public void setCommitTime(String commitTime) {
-    this.commitTime = commitTime;
-  }
-
   public String getTableName() {
     return tableName;
-  }
-
-  public void setTableName(String tableName) {
-    this.tableName = tableName;
   }
 
   public String getBasePath() {
     return basePath;
   }
 
-  public void setBasePath(String basePath) {
-    this.basePath = basePath;
-  }
-
   public List<HoodieWriteStat> getHoodieWriteStat() {
     return hoodieWriteStat;
-  }
-
-  public void setHoodieWriteStat(List<HoodieWriteStat> hoodieWriteStat) {
-    this.hoodieWriteStat = hoodieWriteStat;
   }
 }
