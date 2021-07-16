@@ -324,6 +324,7 @@ public class DeltaSync implements Serializable {
                 || !cfg.checkpoint.equals(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY)))) {
           resumeCheckpointStr = Option.of(cfg.checkpoint);
         } else if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_KEY))) {
+          //if previous checkpoint is an empty string, skip resume use Option.empty()
           resumeCheckpointStr = Option.of(commitMetadata.getMetadata(CHECKPOINT_KEY));
         } else if (commitMetadata.getOperationType() == WriteOperationType.CLUSTER) {
           // incase of CLUSTER commit, no checkpoint will be available in metadata.
@@ -336,6 +337,7 @@ public class DeltaSync implements Serializable {
                   + commitTimelineOpt.get().getInstants().collect(Collectors.toList()) + ", CommitMetadata="
                   + commitMetadata.toJsonString());
         }
+        // KAFKA_CHECKPOINT_TYPE will be honored only for first batch.
         if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(CHECKPOINT_RESET_KEY))) {
           props.remove(KafkaOffsetGen.Config.KAFKA_CHECKPOINT_TYPE.key());
         }

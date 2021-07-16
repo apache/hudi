@@ -183,6 +183,7 @@ public class KafkaOffsetGen {
             .defaultValue(5000000L)
             .withDocumentation("Maximum number of records obtained in each batch.");
 
+    // "auto.offset.reset" is kafka native config param. Do not change the config param name.
     private static final ConfigProperty<KafkaResetOffsetStrategies> KAFKA_AUTO_OFFSET_RESET = ConfigProperty
             .key("auto.offset.reset")
             .defaultValue(KafkaResetOffsetStrategies.LATEST)
@@ -202,7 +203,7 @@ public class KafkaOffsetGen {
     kafkaParams = excludeHoodieConfigs(props);
     DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.KAFKA_TOPIC_NAME.key()));
     topicName = props.getString(Config.KAFKA_TOPIC_NAME.key());
-    kafkaCheckpointType = props.getString(Config.KAFKA_CHECKPOINT_TYPE.key(), "string");
+    kafkaCheckpointType = props.getString(Config.KAFKA_CHECKPOINT_TYPE.key(), Config.KAFKA_CHECKPOINT_TYPE.defaultValue());
     String kafkaAutoResetOffsetsStr = props.getString(Config.KAFKA_AUTO_OFFSET_RESET.key(), Config.KAFKA_AUTO_OFFSET_RESET.defaultValue().name().toLowerCase());
     boolean found = false;
     for (KafkaResetOffsetStrategies entry: KafkaResetOffsetStrategies.values()) {
@@ -234,7 +235,7 @@ public class KafkaOffsetGen {
       Set<TopicPartition> topicPartitions = partitionInfoList.stream()
               .map(x -> new TopicPartition(x.topic(), x.partition())).collect(Collectors.toSet());
 
-      if (Config.KAFKA_CHECKPOINT_TYPE_TIMESTAMP.equals(kafkaCheckpointType) && isValidCheckpointType(lastCheckpointStr)) {
+      if (Config.KAFKA_CHECKPOINT_TYPE_TIMESTAMP.equals(kafkaCheckpointType) && isValidTimestampCheckpointType(lastCheckpointStr)) {
         lastCheckpointStr = getOffsetsByTimestamp(consumer, partitionInfoList, topicPartitions, topicName, Long.parseLong(lastCheckpointStr.get()));
       }
       // Determine the offset ranges to read from
@@ -301,7 +302,7 @@ public class KafkaOffsetGen {
    * @param lastCheckpointStr
    * @return
    */
-  private Boolean isValidCheckpointType(Option<String> lastCheckpointStr) {
+  private Boolean isValidTimestampCheckpointType(Option<String> lastCheckpointStr) {
     if (!lastCheckpointStr.isPresent()) {
       return false;
     }
