@@ -96,6 +96,7 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload,R> extends AbstractW
       // so pick it from one of the records.
       HoodieKey reducedKey = rec1.getData().equals(reducedData) ? rec1.getKey() : rec2.getKey();
       HoodieRecord<T> hoodieRecord = new HoodieRecord<>(reducedKey, reducedData);
+      hoodieRecord.setOperation(rec2.getOperation());
       // reuse the location from the first record.
       hoodieRecord.setCurrentLocation(rec1.getCurrentLocation());
       return hoodieRecord;

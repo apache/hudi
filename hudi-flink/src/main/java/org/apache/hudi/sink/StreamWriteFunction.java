@@ -365,18 +365,21 @@ public class StreamWriteFunction<K, I, O>
     private final String key; // record key
     private final String instant; // 'U' or 'I'
     private final HoodieRecordPayload<?> data; // record payload
+    private final String operation; // operation
 
-    private DataItem(String key, String instant, HoodieRecordPayload<?> data) {
+    private DataItem(String key, String instant, HoodieRecordPayload<?> data, String operation) {
       this.key = key;
       this.instant = instant;
       this.data = data;
+      this.operation = operation;
     }
 
     public static DataItem fromHoodieRecord(HoodieRecord<?> record) {
       return new DataItem(
           record.getRecordKey(),
           record.getCurrentLocation().getInstantTime(),
-          record.getData());
+          record.getData(),
+          record.getOperation());
     }
 
     public HoodieRecord<?> toHoodieRecord(String partitionPath) {
@@ -384,6 +387,7 @@ public class StreamWriteFunction<K, I, O>
       HoodieRecord<?> record = new HoodieRecord<>(hoodieKey, data);
       HoodieRecordLocation loc = new HoodieRecordLocation(instant, null);
       record.setCurrentLocation(loc);
+      record.setOperation(operation);
       return record;
     }
   }
@@ -423,6 +427,7 @@ public class StreamWriteFunction<K, I, O>
       // rewrite the first record with expected fileID
       HoodieRecord<?> first = records.get(0);
       HoodieRecord<?> record = new HoodieRecord<>(first.getKey(), first.getData());
+      record.setOperation(first.getOperation());
       HoodieRecordLocation newLoc = new HoodieRecordLocation(first.getCurrentLocation().getInstantTime(), fileID);
       record.setCurrentLocation(newLoc);
 

@@ -19,6 +19,7 @@
 package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCdcOperation;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
@@ -28,6 +29,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.flink.types.RowKind;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 
@@ -42,6 +44,28 @@ import java.util.Map;
  */
 public class FormatUtils {
   private FormatUtils() {
+  }
+
+  public static RowKind getRowKind(IndexedRecord record, int index) {
+    if (index == -1) {
+      return null;
+    }
+    Object val = record.get(index);
+    if (val == null) {
+      return null;
+    }
+    final String flag = val.toString();
+    if (HoodieCdcOperation.isInsert(flag)) {
+      return RowKind.INSERT;
+    } else if (HoodieCdcOperation.isUpdateBefore(flag)) {
+      return RowKind.UPDATE_BEFORE;
+    } else if (HoodieCdcOperation.isUpdateAfter(flag)) {
+      return RowKind.UPDATE_AFTER;
+    } else if (HoodieCdcOperation.isDelete(flag)) {
+      return RowKind.DELETE;
+    } else {
+      throw new AssertionError();
+    }
   }
 
   public static GenericRecord buildAvroRecordBySchema(

@@ -151,7 +151,8 @@ public class HoodieAvroUtils {
         || HoodieRecord.COMMIT_SEQNO_METADATA_FIELD.equals(fieldName)
         || HoodieRecord.RECORD_KEY_METADATA_FIELD.equals(fieldName)
         || HoodieRecord.PARTITION_PATH_METADATA_FIELD.equals(fieldName)
-        || HoodieRecord.FILENAME_METADATA_FIELD.equals(fieldName);
+        || HoodieRecord.FILENAME_METADATA_FIELD.equals(fieldName)
+        || HoodieRecord.CDC_OPERATION_METADATA_FIELD.equals(fieldName);
   }
 
   public static Schema createHoodieWriteSchema(Schema originalSchema) {
@@ -164,6 +165,8 @@ public class HoodieAvroUtils {
 
   /**
    * Adds the Hoodie metadata fields to the given schema.
+   *
+   * @param schema The schema
    */
   public static Schema addMetadataFields(Schema schema) {
     List<Schema.Field> parentFields = new ArrayList<>();
@@ -178,12 +181,16 @@ public class HoodieAvroUtils {
         new Schema.Field(HoodieRecord.PARTITION_PATH_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
     Schema.Field fileNameField =
         new Schema.Field(HoodieRecord.FILENAME_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+    final Schema.Field operationField =
+        new Schema.Field(HoodieRecord.CDC_OPERATION_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
 
     parentFields.add(commitTimeField);
     parentFields.add(commitSeqnoField);
     parentFields.add(recordKeyField);
     parentFields.add(partitionPathField);
     parentFields.add(fileNameField);
+    parentFields.add(operationField);
+
     for (Schema.Field field : schema.getFields()) {
       if (!isMetadataField(field.name())) {
         Schema.Field newField = new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal());
@@ -211,7 +218,7 @@ public class HoodieAvroUtils {
   }
 
   public static String addMetadataColumnTypes(String hiveColumnTypes) {
-    return "string,string,string,string,string," + hiveColumnTypes;
+    return "string,string,string,string,string,string," + hiveColumnTypes;
   }
 
   private static Schema initRecordKeySchema() {
@@ -249,6 +256,11 @@ public class HoodieAvroUtils {
     record.put(HoodieRecord.FILENAME_METADATA_FIELD, fileName);
     record.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, partitionPath);
     record.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, recordKey);
+    return record;
+  }
+
+  public static GenericRecord addOperationToRecord(GenericRecord record, String operation) {
+    record.put(HoodieRecord.CDC_OPERATION_METADATA_FIELD, operation);
     return record;
   }
 

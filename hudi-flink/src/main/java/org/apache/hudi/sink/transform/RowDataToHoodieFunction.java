@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.transform;
 
+import org.apache.hudi.common.model.HoodieCdcOperation;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -108,9 +109,11 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieRecord<?
   private HoodieRecord toHoodieRecord(I record) throws Exception {
     GenericRecord gr = (GenericRecord) this.converter.convert(this.avroSchema, record);
     final HoodieKey hoodieKey = keyGenerator.getKey(gr);
-    // nullify the payload insert data to mark the record as a DELETE
-    final boolean isDelete = record.getRowKind() == RowKind.DELETE;
-    HoodieRecordPayload payload = payloadCreation.createPayload(gr, isDelete);
-    return new HoodieRecord<>(hoodieKey, payload);
+
+    HoodieRecordPayload payload = payloadCreation.createPayload(gr);
+    HoodieRecord hoodieRecord = new HoodieRecord<>(hoodieKey, payload);
+    final RowKind rowKind = record.getRowKind();
+    hoodieRecord.setOperation(HoodieCdcOperation.fromValue(rowKind.toByteValue()).getName());
+    return hoodieRecord;
   }
 }

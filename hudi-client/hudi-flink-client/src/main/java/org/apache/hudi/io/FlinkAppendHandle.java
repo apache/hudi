@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -27,6 +28,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.commit.BucketType;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,9 +81,19 @@ public class FlinkAppendHandle<T extends HoodieRecordPayload, I, K, O>
   }
 
   @Override
-  protected boolean isUpdateRecord(HoodieRecord<T> hoodieRecord) {
+  protected boolean isUpdateBucket(HoodieRecord<T> hoodieRecord) {
+    // do not use the HoodieRecord operation because hoodie writer has its own
+    // INSERT/MERGE bucket for 'UPSERT' semantics. For e.g, a hoodie record with fresh new key
+    // and operation HoodieCdcOperation.DELETE would be put into either an INSERT bucket or UPDATE bucket.
     return hoodieRecord.getCurrentLocation() != null
         && hoodieRecord.getCurrentLocation().getInstantTime().equals(BucketType.UPDATE.name());
+  }
+
+  @Override
+  protected void addOperationToRecord(GenericRecord record, String flag) {
+    if (flag != null) {
+      HoodieAvroUtils.addOperationToRecord(record, flag);
+    }
   }
 
   @Override

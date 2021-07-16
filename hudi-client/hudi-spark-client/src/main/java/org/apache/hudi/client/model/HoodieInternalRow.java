@@ -39,15 +39,17 @@ public class HoodieInternalRow extends InternalRow {
   private String recordKey;
   private String partitionPath;
   private String fileName;
+  private String operation;
   private InternalRow row;
 
   public HoodieInternalRow(String commitTime, String commitSeqNumber, String recordKey, String partitionPath,
-      String fileName, InternalRow row) {
+                           String fileName, String operation, InternalRow row) {
     this.commitTime = commitTime;
     this.commitSeqNumber = commitSeqNumber;
     this.recordKey = recordKey;
     this.partitionPath = partitionPath;
     this.fileName = fileName;
+    this.operation = operation;
     this.row = row;
   }
 
@@ -78,6 +80,10 @@ public class HoodieInternalRow extends InternalRow {
         }
         case 4: {
           this.fileName = null;
+          break;
+        }
+        case 5: {
+          this.operation = null;
           break;
         }
         default: throw new IllegalArgumentException("Not expected");
@@ -111,6 +117,10 @@ public class HoodieInternalRow extends InternalRow {
           this.fileName = value.toString();
           break;
         }
+        case 5: {
+          this.operation = value.toString();
+          break;
+        }
         default: throw new IllegalArgumentException("Not expected");
       }
     } else {
@@ -134,6 +144,9 @@ public class HoodieInternalRow extends InternalRow {
       }
       case 4: {
         return fileName;
+      }
+      case 5: {
+        return operation;
       }
       default: throw new IllegalArgumentException("Not expected");
     }
@@ -238,6 +251,6 @@ public class HoodieInternalRow extends InternalRow {
 
   @Override
   public InternalRow copy() {
-    return new HoodieInternalRow(commitTime, commitSeqNumber, recordKey, partitionPath, fileName, row.copy());
+    return new HoodieInternalRow(commitTime, commitSeqNumber, recordKey, partitionPath, fileName, operation, row.copy());
   }
 }

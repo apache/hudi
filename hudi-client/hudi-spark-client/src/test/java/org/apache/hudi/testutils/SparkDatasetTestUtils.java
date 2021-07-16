@@ -65,6 +65,7 @@ public class SparkDatasetTestUtils {
       new StructField(HoodieRecord.RECORD_KEY_METADATA_FIELD, DataTypes.StringType, false, Metadata.empty()),
       new StructField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, DataTypes.StringType, false, Metadata.empty()),
       new StructField(HoodieRecord.FILENAME_METADATA_FIELD, DataTypes.StringType, false, Metadata.empty()),
+      new StructField(HoodieRecord.CDC_OPERATION_METADATA_FIELD, DataTypes.StringType, false, Metadata.empty()),
       new StructField("randomInt", DataTypes.IntegerType, false, Metadata.empty()),
       new StructField("randomLong", DataTypes.LongType, false, Metadata.empty())});
 
@@ -74,6 +75,7 @@ public class SparkDatasetTestUtils {
       new StructField(HoodieRecord.RECORD_KEY_METADATA_FIELD, DataTypes.StringType, false, Metadata.empty()),
       new StructField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, DataTypes.StringType, false, Metadata.empty()),
       new StructField(HoodieRecord.FILENAME_METADATA_FIELD, DataTypes.StringType, false, Metadata.empty()),
+      new StructField(HoodieRecord.CDC_OPERATION_METADATA_FIELD, DataTypes.StringType, false, Metadata.empty()),
       new StructField("randomInt", DataTypes.IntegerType, false, Metadata.empty()),
       new StructField("randomStr", DataTypes.StringType, false, Metadata.empty())});
 
@@ -116,8 +118,8 @@ public class SparkDatasetTestUtils {
    * @return the Row thus generated.
    */
   public static Row getRandomValue(String partitionPath, boolean isError) {
-    // order commit time, seq no, record key, partition path, file name
-    Object[] values = new Object[7];
+    // order commit time, seq no, record key, partition path, file name, cdc operation
+    Object[] values = new Object[8];
     values[0] = ""; //commit time
     if (!isError) {
       values[1] = ""; // commit seq no
@@ -127,11 +129,12 @@ public class SparkDatasetTestUtils {
     values[2] = UUID.randomUUID().toString();
     values[3] = partitionPath;
     values[4] = ""; // filename
-    values[5] = RANDOM.nextInt();
+    values[5] = ""; // cdc operation
+    values[6] = RANDOM.nextInt();
     if (!isError) {
-      values[6] = RANDOM.nextLong();
+      values[7] = RANDOM.nextLong();
     } else {
-      values[6] = UUID.randomUUID().toString();
+      values[7] = UUID.randomUUID().toString();
     }
     return new GenericRow(values);
   }

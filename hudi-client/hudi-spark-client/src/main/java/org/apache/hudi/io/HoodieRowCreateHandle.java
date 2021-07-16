@@ -117,8 +117,10 @@ public class HoodieRowCreateHandle implements Serializable {
       String seqId = HoodieRecord.generateSequenceId(instantTime, taskPartitionId, SEQGEN.getAndIncrement());
       String recordKey = record.getUTF8String(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(
           HoodieRecord.RECORD_KEY_METADATA_FIELD)).toString();
-      HoodieInternalRow internalRow = new HoodieInternalRow(instantTime, seqId, recordKey, partitionPath, path.getName(),
-          record);
+      String operation = record.getUTF8String(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(
+          HoodieRecord.CDC_OPERATION_METADATA_FIELD)).toString();
+      HoodieInternalRow internalRow = new HoodieInternalRow(instantTime, seqId, recordKey, partitionPath,
+          path.getName(), operation, record);
       try {
         fileWriter.writeRow(recordKey, internalRow);
         writeStatus.markSuccess(recordKey);
