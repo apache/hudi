@@ -1,3 +1,7 @@
+# Directories #
+/build/
+target/
+
 _site
 .sass-cache
 .jekyll-cache

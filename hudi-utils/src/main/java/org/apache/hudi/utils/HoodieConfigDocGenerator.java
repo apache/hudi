@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utils;
 
+import org.apache.hudi.common.config.ConfigGroupProperty;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.StringUtils;
@@ -34,6 +35,8 @@ import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.Locale;
 import java.util.Set;
 
 import static org.reflections.ReflectionUtils.getAllFields;
@@ -54,15 +57,29 @@ public class HoodieConfigDocGenerator {
     // Top heading
     StringBuilder configDocBuilder = new StringBuilder()
         .append(new Heading("Configurations", 1))
+        .append("\n")
+        .append("This page covers the different ways of configuring your job to write/read Hudi tables. \n" +
+            "At a high level, you can control behaviour at few levels.")
         .append("\n\n");
     for (Class<? extends HoodieConfig> subType : subTypes) {
-      // sub-heading
-      configDocBuilder.append(new Heading(subType.getSimpleName(), 2)).append("\n\n");
+      // sub-heading using the annotation
+      ConfigGroupProperty configGroupProperty = subType.getAnnotation(ConfigGroupProperty.class);
+      if (configGroupProperty != null) {
+        LOG.info("Processing params for config class: " + subType.getName() + " " + configGroupProperty.name()
+            + " " + configGroupProperty.description());
+        configDocBuilder.append("## ").append(configGroupProperty.name())
+            .append(" {#" + configGroupProperty.name().toLowerCase(Locale.ROOT).replace(" ", "-") + "}")
+            .append("\n\n");
+        configDocBuilder.append(configGroupProperty.description()).append("\n\n");
+      } else {
+        configDocBuilder.append(new Heading(subType.getSimpleName(), 2)).append("\n\n");
+        LOG.warn("Please add annotation ConfigGroupProperty to config class: " + subType.getName());
+      }
 
       // new table
-      Table.Builder tableBuilder = new Table.Builder()
+      /*Table.Builder tableBuilder = new Table.Builder()
           .withAlignments(Table.ALIGN_LEFT, Table.ALIGN_LEFT, Table.ALIGN_LEFT, Table.ALIGN_LEFT, Table.ALIGN_LEFT)
-          .addRow("Option Name", "Property", "Required", "Default", "Remarks");
+          .addRow("Option Name", "Property", "Required", "Default", "Remarks");*/
       Set<Field> fields = getAllFields(subType, withTypeAssignableTo(ConfigProperty.class));
       for (Field field : fields) {
         ConfigProperty obj = null;
@@ -74,12 +91,30 @@ public class HoodieConfigDocGenerator {
                 + " for param = "
                 + field.getName());
           }
-          tableBuilder.addRow(field.getName(), f.key(), "NO", f.hasDefaultValue() ? f.defaultValue() : "", f.doc());
+          //tableBuilder.addRow(field.getName(), f.key(), "NO", f.hasDefaultValue() ? f.defaultValue() : "", f.doc());
+
+          configDocBuilder.append("### ").append(f.key())
+              .append(" {#" + f.key().toLowerCase(Locale.ROOT).replace(" ", "-") + "}")
+              .append("\n");
+          configDocBuilder.append(f.doc()).append("\n");
+          configDocBuilder.append("Default Value: ").append(f.hasDefaultValue() ? f.defaultValue() : "_").append("\n");
+          //configDocBuilder.append("Required Or Optional? ").append("\n");
+          if (f.getSinceVersion().isPresent()) {
+            configDocBuilder.append("Since Version: ").append(f.getSinceVersion().get()).append("\n");
+          }
+          if (f.getDeprecatedVersion().isPresent()) {
+            configDocBuilder.append("Deprecated Version: ").append(f.getDeprecatedVersion().get()).append("\n");
+          }
+          if (f.hasDefaultValue()) {
+            configDocBuilder.append("Type of Value: ").append(f.defaultValue().getClass().getGenericSuperclass()).append("\n");
+          }
+          //configDocBuilder.append("Valid Values: ").append("\n");
+          configDocBuilder.append("\n\n");
         } catch (IllegalAccessException e) {
           LOG.error("Error while getting field through reflection ", e);
         }
       }
-      configDocBuilder.append(tableBuilder.build()).append("\n\n");
+      //configDocBuilder.append(tableBuilder.build()).append("\n\n");
     }
     try {
       LOG.info("Generating markdown file");
