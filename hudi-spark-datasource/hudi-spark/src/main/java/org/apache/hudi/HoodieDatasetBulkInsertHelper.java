@@ -98,6 +98,8 @@ public class HoodieDatasetBulkInsertHelper {
             .withColumn(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD,
                 functions.lit("").cast(DataTypes.StringType))
             .withColumn(HoodieRecord.FILENAME_METADATA_FIELD,
+                functions.lit("").cast(DataTypes.StringType))
+            .withColumn(HoodieRecord.OPERATION_METADATA_FIELD,
                 functions.lit("").cast(DataTypes.StringType));
 
     Dataset<Row> dedupedDf = rowDatasetWithHoodieColumns;

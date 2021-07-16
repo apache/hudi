@@ -349,34 +349,34 @@ public class TestHoodieRealtimeRecordReader {
       value = recordReader.createValue();
 
       // Assert type STRING
-      assertEquals(values[5].toString(), "field" + currentRecordNo, "test value for field: field1");
-      assertEquals(values[6].toString(), "field" + currentRecordNo + recordCommitTimeSuffix,
+      assertEquals(values[6].toString(), "field" + currentRecordNo, "test value for field: field1");
+      assertEquals(values[7].toString(), "field" + currentRecordNo + recordCommitTimeSuffix,
           "test value for field: field2");
-      assertEquals(values[7].toString(), "name" + currentRecordNo,
+      assertEquals(values[8].toString(), "name" + currentRecordNo,
           "test value for field: name");
 
       // Assert type INT
-      IntWritable intWritable = (IntWritable) values[8];
+      IntWritable intWritable = (IntWritable) values[9];
       assertEquals(intWritable.get(), currentRecordNo + recordCommitTime.hashCode(),
           "test value for field: favoriteIntNumber");
 
       // Assert type LONG
-      LongWritable longWritable = (LongWritable) values[9];
+      LongWritable longWritable = (LongWritable) values[10];
       assertEquals(longWritable.get(), currentRecordNo + recordCommitTime.hashCode(),
           "test value for field: favoriteNumber");
 
       // Assert type FLOAT
-      FloatWritable floatWritable = (FloatWritable) values[10];
+      FloatWritable floatWritable = (FloatWritable) values[11];
       assertEquals(floatWritable.get(), (float) ((currentRecordNo + recordCommitTime.hashCode()) / 1024.0), 0,
           "test value for field: favoriteFloatNumber");
 
       // Assert type DOUBLE
-      DoubleWritable doubleWritable = (DoubleWritable) values[11];
+      DoubleWritable doubleWritable = (DoubleWritable) values[12];
       assertEquals(doubleWritable.get(), (currentRecordNo + recordCommitTime.hashCode()) / 1024.0, 0,
           "test value for field: favoriteDoubleNumber");
 
       // Assert type MAP
-      ArrayWritable mapItem = (ArrayWritable) values[12];
+      ArrayWritable mapItem = (ArrayWritable) values[13];
       Writable mapItemValue1 = mapItem.get()[0];
       Writable mapItemValue2 = mapItem.get()[1];
 
@@ -400,14 +400,14 @@ public class TestHoodieRealtimeRecordReader {
           "test value for field: tags[\"mapItem2\"].item2");
 
       // Assert type RECORD
-      ArrayWritable recordItem = (ArrayWritable) values[13];
+      ArrayWritable recordItem = (ArrayWritable) values[14];
       Writable[] nestedRecord = recordItem.get();
       assertFalse(((BooleanWritable) nestedRecord[0]).get(), "test value for field: testNestedRecord.isAdmin");
       assertEquals(nestedRecord[1].toString(), "UserId" + currentRecordNo + recordCommitTimeSuffix,
           "test value for field: testNestedRecord.userId");
 
       // Assert type ARRAY
-      ArrayWritable arrayValue = (ArrayWritable) values[14];
+      ArrayWritable arrayValue = (ArrayWritable) values[15];
       Writable[] arrayValues = arrayValue.get();
       for (int i = 0; i < arrayValues.length; i++) {
         assertEquals("stringArray" + i + recordCommitTimeSuffix, arrayValues[i].toString(),

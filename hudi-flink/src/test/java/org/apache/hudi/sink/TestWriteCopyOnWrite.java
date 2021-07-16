@@ -375,12 +375,7 @@ public class TestWriteCopyOnWrite {
     // the coordinator checkpoint commits the inflight instant.
     checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
 
-    Map<String, String> expected = new HashMap<>();
-    // id3, id5 were deleted and id9 is ignored
-    expected.put("par1", "[id1,par1,id1,Danny,24,1,par1, id2,par1,id2,Stephen,34,2,par1]");
-    expected.put("par2", "[id4,par2,id4,Fabian,31,4,par2]");
-    expected.put("par3", "[id6,par3,id6,Emma,20,6,par3]");
-    expected.put("par4", "[id7,par4,id7,Bob,44,7,par4, id8,par4,id8,Han,56,8,par4]");
+    Map<String, String> expected = getUpsertWithDeleteExpected();
     checkWrittenData(tempFile, expected);
   }
 
@@ -392,16 +387,17 @@ public class TestWriteCopyOnWrite {
 
     // open the function and ingest data
     funcWrapper.openFunction();
-    // Each record is 208 bytes. so 4 records expect to trigger a mini-batch write
+    // record (operation: 'I') is 216 bytes and record (operation: 'U') is 264 bytes.
+    // so 3 records expect to trigger a mini-batch write
     for (RowData rowData : TestData.DATA_SET_INSERT_DUPLICATES) {
       funcWrapper.invoke(rowData);
     }
 
     Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
     assertThat("Should have 1 data bucket", dataBuffer.size(), is(1));
-    assertThat("2 records expect to flush out as a mini-batch",
+    assertThat("3 records expect to flush out as a mini-batch",
         dataBuffer.values().stream().findFirst().map(List::size).orElse(-1),
-        is(2));
+        is(3));
 
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
@@ -454,16 +450,17 @@ public class TestWriteCopyOnWrite {
 
     // open the function and ingest data
     funcWrapper.openFunction();
-    // Each record is 208 bytes. so 4 records expect to trigger a mini-batch write
+    // record (operation: 'I') is 216 bytes and record (operation: 'U') is 264 bytes.
+    // so 3 records expect to trigger a mini-batch write
     for (RowData rowData : TestData.DATA_SET_INSERT_SAME_KEY) {
       funcWrapper.invoke(rowData);
     }
 
     Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
     assertThat("Should have 1 data bucket", dataBuffer.size(), is(1));
-    assertThat("2 records expect to flush out as a mini-batch",
+    assertThat("3 records expect to flush out as a mini-batch",
         dataBuffer.values().stream().findFirst().map(List::size).orElse(-1),
-        is(2));
+        is(3));
 
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
@@ -517,7 +514,8 @@ public class TestWriteCopyOnWrite {
 
     // open the function and ingest data
     funcWrapper.openFunction();
-    // each record is 208 bytes. so 4 records expect to trigger buffer flush:
+    // record (operation: 'I') is 216 bytes and record (operation: 'U') is 264 bytes.
+    // so 3 records expect to trigger a mini-batch write
     // flush the max size bucket once at a time.
     for (RowData rowData : TestData.DATA_SET_INSERT_DUPLICATES) {
       funcWrapper.invoke(rowData);
@@ -525,9 +523,9 @@ public class TestWriteCopyOnWrite {
 
     Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
     assertThat("Should have 1 data bucket", dataBuffer.size(), is(1));
-    assertThat("2 records expect to flush out as a mini-batch",
+    assertThat("3 records expect to flush out as a mini-batch",
         dataBuffer.values().stream().findFirst().map(List::size).orElse(-1),
-        is(2));
+        is(3));
 
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
@@ -576,8 +574,17 @@ public class TestWriteCopyOnWrite {
     // the last 2 lines are merged
     expected.put("par1", "["
         + "id1,par1,id1,Danny,23,1,par1, "
-        + "id1,par1,id1,Danny,23,1,par1, "
-        + "id1,par1,id1,Danny,23,1,par1]");
+        + "id1,par1,id1,Danny,23,1,par1" + "]");
+    return expected;
+  }
+
+  protected Map<String, String> getUpsertWithDeleteExpected() {
+    Map<String, String> expected = new HashMap<>();
+    // id3, id5 were deleted and id9 is ignored
+    expected.put("par1", "[id1,par1,id1,Danny,24,1,par1, id2,par1,id2,Stephen,34,2,par1]");
+    expected.put("par2", "[id4,par2,id4,Fabian,31,4,par2]");
+    expected.put("par3", "[id6,par3,id6,Emma,20,6,par3]");
+    expected.put("par4", "[id7,par4,id7,Bob,44,7,par4, id8,par4,id8,Han,56,8,par4]");
     return expected;
   }
 

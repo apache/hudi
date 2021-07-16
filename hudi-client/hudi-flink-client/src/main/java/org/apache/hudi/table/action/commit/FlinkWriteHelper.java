@@ -89,13 +89,18 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload,R> extends AbstractW
     }).collect(Collectors.groupingBy(Pair::getLeft));
 
     return keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((rec1, rec2) -> {
+      final T data1 = rec1.getData();
+      final T data2 = rec2.getData();
+
       @SuppressWarnings("unchecked")
-      T reducedData = (T) rec1.getData().preCombine(rec2.getData());
+      final T reducedData = (T) data2.preCombine(data1);
       // we cannot allow the user to change the key or partitionPath, since that will affect
       // everything
       // so pick it from one of the records.
-      HoodieKey reducedKey = rec1.getData().equals(reducedData) ? rec1.getKey() : rec2.getKey();
-      HoodieRecord<T> hoodieRecord = new HoodieRecord<>(reducedKey, reducedData);
+      boolean choosePrev = data1.equals(reducedData);
+      HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
+      String operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
+      HoodieRecord<T> hoodieRecord = new HoodieRecord<>(reducedKey, reducedData, operation);
       // reuse the location from the first record.
       hoodieRecord.setCurrentLocation(rec1.getCurrentLocation());
       return hoodieRecord;
