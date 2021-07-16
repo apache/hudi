@@ -17,6 +17,8 @@
 
 package org.apache.hudi.callback.common;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.common.model.HoodieWriteStat;
 
 import java.io.Serializable;
@@ -25,6 +27,7 @@ import java.util.List;
 /**
  * Base callback message, which contains commitTime and tableName only for now.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public class HoodieWriteCommitCallbackMessage implements Serializable {
 
   private static final long serialVersionUID = -3033643980627719561L;
@@ -44,9 +47,6 @@ public class HoodieWriteCommitCallbackMessage implements Serializable {
    */
   private String basePath;
 
-  /**
-   * HoodieWriteStat.
-   */
   private List<HoodieWriteStat> hoodieWriteStat;
 
   public HoodieWriteCommitCallbackMessage() {
