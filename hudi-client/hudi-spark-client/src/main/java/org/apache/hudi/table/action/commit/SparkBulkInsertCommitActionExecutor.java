@@ -55,13 +55,7 @@ public class SparkBulkInsertCommitActionExecutor<T extends HoodieRecordPayload<T
 
   @Override
   public HoodieWriteMetadata<JavaRDD<WriteStatus>> execute() {
-    try {
       return SparkBulkInsertHelper.newInstance().bulkInsert(inputRecordsRDD, instantTime, table, config,
           this, true, bulkInsertPartitioner);
-    } catch (HoodieInsertException ie) {
-      throw ie;
-    } catch (Throwable e) {
-      throw new HoodieInsertException("Failed to bulk insert for commit time " + instantTime, e);
-    }
   }
 }
