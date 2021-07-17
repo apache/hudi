@@ -107,6 +107,11 @@ public class HoodieClientTestUtils {
 
   public static Dataset<Row> readCommit(String basePath, SQLContext sqlContext, HoodieTimeline commitTimeline,
                                         String instantTime) {
+    return readCommit(basePath, sqlContext, commitTimeline, instantTime, true);
+  }
+
+  public static Dataset<Row> readCommit(String basePath, SQLContext sqlContext, HoodieTimeline commitTimeline,
+                                        String instantTime, boolean filterByCommitTime) {
     HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime);
     if (!commitTimeline.containsInstant(commitInstant)) {
       throw new HoodieException("No commit exists at " + instantTime);
@@ -115,14 +120,21 @@ public class HoodieClientTestUtils {
       HashMap<String, String> paths =
           getLatestFileIDsToFullPath(basePath, commitTimeline, Arrays.asList(commitInstant));
       LOG.info("Path :" + paths.values());
+      Dataset<Row> unFilteredRows = null;
       if (HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue().equals(HoodieFileFormat.PARQUET)) {
-        return sqlContext.read().parquet(paths.values().toArray(new String[paths.size()]))
-            .filter(String.format("%s ='%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime));
+        unFilteredRows = sqlContext.read().parquet(paths.values().toArray(new String[paths.size()]));
       } else if (HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue().equals(HoodieFileFormat.ORC)) {
-        return sqlContext.read().orc(paths.values().toArray(new String[paths.size()]))
-            .filter(String.format("%s ='%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime));
+        unFilteredRows = sqlContext.read().orc(paths.values().toArray(new String[paths.size()]));
       }
-      return sqlContext.emptyDataFrame();
+      if (unFilteredRows != null) {
+        if (filterByCommitTime) {
+          return unFilteredRows.filter(String.format("%s ='%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime));
+        } else {
+          return unFilteredRows;
+        }
+      } else {
+        return sqlContext.emptyDataFrame();
+      }
     } catch (Exception e) {
       throw new HoodieException("Error reading commit " + instantTime, e);
     }

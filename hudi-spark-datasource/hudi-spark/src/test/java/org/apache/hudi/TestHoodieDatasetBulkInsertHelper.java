@@ -113,6 +113,33 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     assertTrue(dataset.except(trimmedOutput).count() == 0);
   }
 
+  @Test
+  public void testBulkInsertHelperNoMetaFields() {
+    List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
+    Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
+    Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareHoodieDatasetForBulkInsertWithoutMetaFields(dataset);
+    StructType resultSchema = result.schema();
+
+    assertEquals(result.count(), 10);
+    assertEquals(resultSchema.fieldNames().length, structType.fieldNames().length + HoodieRecord.HOODIE_META_COLUMNS.size());
+
+    for (Map.Entry<String, Integer> entry : HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.entrySet()) {
+      assertTrue(resultSchema.fieldIndex(entry.getKey()) == entry.getValue());
+    }
+
+    result.toJavaRDD().foreach(entry -> {
+      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)).equals(""));
+      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).equals(""));
+      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)).equals(""));
+      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD)).equals(""));
+      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.FILENAME_METADATA_FIELD)).equals(""));
+    });
+
+    Dataset<Row> trimmedOutput = result.drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
+        .drop(HoodieRecord.FILENAME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+    assertTrue(dataset.except(trimmedOutput).count() == 0);
+  }
+
   @ParameterizedTest
   @MethodSource("providePreCombineArgs")
   public void testBulkInsertPreCombine(boolean enablePreCombine) {

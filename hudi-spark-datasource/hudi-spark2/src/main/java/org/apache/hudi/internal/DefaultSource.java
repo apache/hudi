@@ -19,6 +19,7 @@
 package org.apache.hudi.internal;
 
 import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieInternalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
@@ -61,12 +62,14 @@ public class DefaultSource extends BaseDefaultSource implements DataSourceV2,
     String instantTime = options.get(DataSourceInternalWriterHelper.INSTANT_TIME_OPT_KEY).get();
     String path = options.get("path").get();
     String tblName = options.get(HoodieWriteConfig.TABLE_NAME.key()).get();
+    boolean populateMetaFields = options.getBoolean(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key(),
+        Boolean.parseBoolean(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.defaultValue()));
     // 1st arg to createHooodieConfig is not really reuqired to be set. but passing it anyways.
     HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(options.get(HoodieWriteConfig.AVRO_SCHEMA.key()).get(), path, tblName, options.asMap());
     boolean arePartitionRecordsSorted = HoodieInternalConfig.getBulkInsertIsPartitionRecordsSorted(
         options.get(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED).isPresent()
             ? options.get(HoodieInternalConfig.BULKINSERT_ARE_PARTITIONER_RECORDS_SORTED).get() : null);
     return Optional.of(new HoodieDataSourceInternalWriter(instantTime, config, schema, getSparkSession(),
-            getConfiguration(), options, arePartitionRecordsSorted));
+            getConfiguration(), options, populateMetaFields, arePartitionRecordsSorted));
   }
 }

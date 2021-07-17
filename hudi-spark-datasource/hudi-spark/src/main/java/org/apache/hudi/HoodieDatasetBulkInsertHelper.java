@@ -18,12 +18,6 @@
 
 package org.apache.hudi;
 
-import static org.apache.spark.sql.functions.callUDF;
-
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -41,7 +35,16 @@ import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 import scala.collection.JavaConverters;
+
+import static org.apache.spark.sql.functions.callUDF;
 
 /**
  * Helper class to assist in preparing {@link Dataset<Row>}s for bulk insert with datasource implementation.
@@ -112,4 +115,40 @@ public class HoodieDatasetBulkInsertHelper {
 
     return bulkInsertPartitionerRows.repartitionRecords(colOrderedDataset, config.getBulkInsertShuffleParallelism());
   }
+
+  /**
+   * Add empty meta fields and reorder such that meta fields are at the beginning.
+   *
+   * @param rows
+   * @return
+   */
+  public static Dataset<Row> prepareHoodieDatasetForBulkInsertWithoutMetaFields(Dataset<Row> rows) {
+    // add empty meta cols.
+    Dataset<Row> rowsWithMetaCols = rows
+        .withColumn(HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+            functions.lit("").cast(DataTypes.StringType))
+        .withColumn(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD,
+            functions.lit("").cast(DataTypes.StringType))
+        .withColumn(HoodieRecord.RECORD_KEY_METADATA_FIELD,
+            functions.lit("").cast(DataTypes.StringType))
+        .withColumn(HoodieRecord.PARTITION_PATH_METADATA_FIELD,
+            functions.lit("").cast(DataTypes.StringType))
+        .withColumn(HoodieRecord.FILENAME_METADATA_FIELD,
+            functions.lit("").cast(DataTypes.StringType));
+
+    List<Column> originalFields =
+        Arrays.stream(rowsWithMetaCols.schema().fields()).filter(field -> !field.name().contains("_hoodie_")).map(f -> new Column(f.name())).collect(Collectors.toList());
+
+    List<Column> metaFields =
+        Arrays.stream(rowsWithMetaCols.schema().fields()).filter(field -> field.name().contains("_hoodie_")).map(f -> new Column(f.name())).collect(Collectors.toList());
+
+    // reorder such that all meta columns are at the beginning followed by original columns
+    List<Column> allCols = new ArrayList<>();
+    allCols.addAll(metaFields);
+    allCols.addAll(originalFields);
+
+    return rowsWithMetaCols.select(
+        JavaConverters.collectionAsScalaIterableConverter(allCols).asScala().toSeq());
+  }
+
 }

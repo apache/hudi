@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -600,6 +601,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public EngineType getEngineType() {
     return engineType;
+  }
+
+  public boolean populateMetaFields() {
+    return Boolean.parseBoolean(getStringOrDefault(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS,
+        HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.defaultValue()));
   }
 
   /**

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io;
+package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.client.HoodieInternalWriteStatus;
 import org.apache.hudi.client.model.HoodieInternalRow;
@@ -30,8 +30,6 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
-import org.apache.hudi.io.storage.HoodieInternalRowFileWriter;
-import org.apache.hudi.io.storage.HoodieInternalRowFileWriterFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.MarkerFiles;
 
@@ -61,12 +59,12 @@ public class HoodieRowCreateHandle implements Serializable {
   private final long taskEpochId;
   private final HoodieTable table;
   private final HoodieWriteConfig writeConfig;
-  private final HoodieInternalRowFileWriter fileWriter;
+  protected final HoodieInternalRowFileWriter fileWriter;
   private final String partitionPath;
   private final Path path;
   private final String fileId;
   private final FileSystem fs;
-  private final HoodieInternalWriteStatus writeStatus;
+  protected final HoodieInternalWriteStatus writeStatus;
   private final HoodieTimer currTimer;
 
   public HoodieRowCreateHandle(HoodieTable table, HoodieWriteConfig writeConfig, String partitionPath, String fileId,
@@ -197,7 +195,7 @@ public class HoodieRowCreateHandle implements Serializable {
     return taskPartitionId + "-" + taskId + "-" + taskEpochId;
   }
 
-  private HoodieInternalRowFileWriter createNewFileWriter(
+  protected HoodieInternalRowFileWriter createNewFileWriter(
       Path path, HoodieTable hoodieTable, HoodieWriteConfig config, StructType schema)
       throws IOException {
     return HoodieInternalRowFileWriterFactory.getInternalRowFileWriter(

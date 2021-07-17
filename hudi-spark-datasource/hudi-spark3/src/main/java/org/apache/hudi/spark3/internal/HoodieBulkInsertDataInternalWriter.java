@@ -37,9 +37,10 @@ public class HoodieBulkInsertDataInternalWriter implements DataWriter<InternalRo
   private final BulkInsertDataInternalWriterHelper bulkInsertWriterHelper;
 
   public HoodieBulkInsertDataInternalWriter(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
-      String instantTime, int taskPartitionId, long taskId, StructType structType, boolean arePartitionRecordsSorted) {
+                                            String instantTime, int taskPartitionId, long taskId, StructType structType, boolean populateMetaFields,
+                                            boolean arePartitionRecordsSorted) {
     this.bulkInsertWriterHelper = new BulkInsertDataInternalWriterHelper(hoodieTable,
-        writeConfig, instantTime, taskPartitionId, taskId, 0, structType, arePartitionRecordsSorted);
+        writeConfig, instantTime, taskPartitionId, taskId, 0, structType, populateMetaFields, arePartitionRecordsSorted);
   }
 
   @Override

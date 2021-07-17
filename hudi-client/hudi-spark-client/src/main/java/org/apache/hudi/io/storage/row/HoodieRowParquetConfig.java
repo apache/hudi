@@ -16,7 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.io.storage.row;
+
+import org.apache.hudi.io.storage.HoodieBaseParquetConfig;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
