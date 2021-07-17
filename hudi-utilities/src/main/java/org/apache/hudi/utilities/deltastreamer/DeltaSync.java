@@ -32,10 +32,13 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -82,6 +85,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.function.Function;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -460,6 +464,12 @@ public class DeltaSync implements Serializable {
       case BULK_INSERT:
         writeStatusRDD = writeClient.bulkInsert(records, instantTime);
         break;
+      case INSERT_OVERWRITE:
+        writeStatusRDD = writeClient.insertOverwrite(records, instantTime).getWriteStatuses();
+        break;
+      case INSERT_OVERWRITE_TABLE:
+        writeStatusRDD = writeClient.insertOverwriteTable(records, instantTime).getWriteStatuses();
+        break;
       default:
         throw new HoodieDeltaStreamerException("Unknown operation : " + cfg.operation);
     }
@@ -480,8 +490,8 @@ public class DeltaSync implements Serializable {
         LOG.warn("Some records failed to be merged but forcing commit since commitOnErrors set. Errors/Total="
             + totalErrorRecords + "/" + totalRecords);
       }
-
-      boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata));
+      String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
+      boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, Collections.emptyMap());
       if (success) {
         LOG.info("Commit " + instantTime + " successful!");
         this.formatAdapter.getSource().onCommit(checkpointStr);
@@ -530,7 +540,10 @@ public class DeltaSync implements Serializable {
     RuntimeException lastException = null;
     while (retryNum <= maxRetries) {
       try {
-        return writeClient.startCommit();
+        String instantTime = HoodieActiveTimeline.createNewInstantTime();
+        String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
+        writeClient.startCommitWithTime(instantTime, commitActionType);
+        return instantTime;
       } catch (IllegalArgumentException ie) {
         lastException = ie;
         LOG.error("Got error trying to start a new commit. Retrying after sleeping for a sec", ie);
