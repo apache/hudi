@@ -63,6 +63,9 @@ public class SparkInsertOverwriteCommitActionExecutor<T extends HoodieRecordPayl
 
   @Override
   protected Partitioner getPartitioner(WorkloadProfile profile) {
+    if (table.getIndex().needCustomizedPartitioner()) {
+      return getCustomizedPartitioner(profile);
+    }
     return new SparkInsertOverwritePartitioner(profile, context, table, config);
   }
 

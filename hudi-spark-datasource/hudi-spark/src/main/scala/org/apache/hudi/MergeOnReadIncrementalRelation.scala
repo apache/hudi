@@ -119,7 +119,7 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
       requiredStructSchema,
       tableAvroSchema.toString,
       requiredAvroSchema.toString,
-      fileIndex,
+      List(fileIndex),
       preCombineField
     )
     val fullSchemaParquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(

@@ -19,7 +19,9 @@
 package org.apache.hudi.common.model;
 
 import java.io.Serializable;
+import java.util.List;
 import java.util.Objects;
+import org.apache.hudi.exception.HoodieException;
 
 /**
  * HoodieKey consists of
@@ -31,13 +33,19 @@ public class HoodieKey implements Serializable {
 
   private String recordKey;
   private String partitionPath;
+  private List<Object> indexKey;
 
   public HoodieKey() {
   }
 
   public HoodieKey(String recordKey, String partitionPath) {
+    this(recordKey, partitionPath, null);
+  }
+
+  public HoodieKey(String recordKey, String partitionPath, List<Object> indexKey) {
     this.recordKey = recordKey;
     this.partitionPath = partitionPath;
+    this.indexKey = indexKey;
   }
 
   public void setRecordKey(String recordKey) {
@@ -50,6 +58,14 @@ public class HoodieKey implements Serializable {
 
   public void setPartitionPath(String partitionPath) {
     this.partitionPath = partitionPath;
+  }
+
+  public List<Object> getIndexKey() {
+    if (indexKey != null) {
+      return indexKey;
+    } else {
+      throw new HoodieException("Index key cannot be null.");
+    }
   }
 
   public String getPartitionPath() {
@@ -65,12 +81,13 @@ public class HoodieKey implements Serializable {
       return false;
     }
     HoodieKey otherKey = (HoodieKey) o;
-    return Objects.equals(recordKey, otherKey.recordKey) && Objects.equals(partitionPath, otherKey.partitionPath);
+    return Objects.equals(recordKey, otherKey.recordKey) && Objects.equals(partitionPath, otherKey.partitionPath)
+        && Objects.equals(indexKey, otherKey.indexKey);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(recordKey, partitionPath);
+    return Objects.hash(recordKey, partitionPath, indexKey);
   }
 
   @Override
@@ -78,6 +95,7 @@ public class HoodieKey implements Serializable {
     final StringBuilder sb = new StringBuilder("HoodieKey {");
     sb.append(" recordKey=").append(recordKey);
     sb.append(" partitionPath=").append(partitionPath);
+    sb.append(" indexKey=").append(indexKey);
     sb.append('}');
     return sb.toString();
   }

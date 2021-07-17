@@ -1,0 +1,27 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+true,0,527706,0.9105978527125206,0.5821051620180587,57
+false,1,426872,0.047086924541620445,0.006450027544814718,10
+false,2,690456,0.8890314912085822,0.8467033346255612,79
+true,3,1965881,0.7992259811868957,0.9117001222649345,54
+false,4,1286150,0.16960428070959954,0.5021528969450215,55
+false,5,1557227,0.7781603925919284,0.41056538992818936,2
+true,6,1914378,0.27717147580632184,0.0869232189941872,21
+false,7,746585,0.834231121795011,0.9839983285177595,28
+false,8,595516,0.6941903055001335,0.4029452603541911,94
+true,9,1764466,0.042880705144241915,0.5893424700184253,64

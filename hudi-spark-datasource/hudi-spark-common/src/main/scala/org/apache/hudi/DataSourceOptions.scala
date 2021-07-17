@@ -422,6 +422,12 @@ object DataSourceWriteOptions {
     .defaultValue("io.confluent.kafka.serializers.KafkaAvroDeserializer")
     .sinceVersion("0.9.0")
     .withDocumentation("This class is used by kafka client to deserialize the records")
+
+  // bucketSpec: CLUSTERED BY (trace_id) SORTED BY (trace_id ASC) INTO 65536 BUCKETS
+  val HIVE_BUCKET_SPEC_OPT: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.hive_sync.bucket_spec")
+    .noDefaultValue()
+    .withDocumentation("Hive metastore bucket specification.")
 }
 
 object DataSourceOptionsHelper {

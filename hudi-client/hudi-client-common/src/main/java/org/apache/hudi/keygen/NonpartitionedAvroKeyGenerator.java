@@ -47,6 +47,11 @@ public class NonpartitionedAvroKeyGenerator extends BaseKeyGenerator {
   }
 
   @Override
+  public List<Object> getIndexKey(GenericRecord record) {
+    return KeyGenUtils.getIndexKey(record, getIndexKeyFields());
+  }
+
+  @Override
   public List<String> getPartitionPathFields() {
     return EMPTY_PARTITION_FIELD_LIST;
   }

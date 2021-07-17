@@ -188,6 +188,13 @@ public class HoodieIndexConfig extends HoodieConfig {
       .defaultValue("false")
       .withDocumentation("Similar to " + BLOOM_INDEX_UPDATE_PARTITION_PATH + ", but for simple index.");
 
+  // ***** Bucket Index Configs *****
+  public static final ConfigProperty<String> BUCKET_INDEX_BUCKET_NUM = ConfigProperty
+      .key("hoodie.bucket.index.bucket.num")
+      .noDefaultValue()
+      .withDocumentation("Only applies if index type is BUCKET_INDEX. Determine the bucket num of the hudi table, "
+          + "and each partition is divided to N buckets.");
+
   private EngineType engineType;
 
   /**
@@ -316,6 +323,11 @@ public class HoodieIndexConfig extends HoodieConfig {
 
     public Builder withEngineType(EngineType engineType) {
       this.engineType = engineType;
+      return this;
+    }
+
+    public Builder withBucketNum(String bucketNum) {
+      hoodieIndexConfig.setValue(BUCKET_INDEX_BUCKET_NUM, bucketNum);
       return this;
     }
 

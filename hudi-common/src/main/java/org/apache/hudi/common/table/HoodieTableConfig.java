@@ -143,6 +143,12 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
 
   public static final String NO_OP_BOOTSTRAP_INDEX_CLASS = NoOpBootstrapIndex.class.getName();
 
+  public static final ConfigProperty<String> HOODIE_TABLE_NUM_BUCKETS = ConfigProperty
+      .key("hoodie.table.numbuckets")
+      .noDefaultValue()
+      .withDocumentation("Only applies if index type is HIVE_BUCKET_INDEX. Value has to be the same with "
+          + "`HoodieIndexConfig.HIVE_BUCKET_INDEX_BUCKET_NUM`");
+
   public HoodieTableConfig(FileSystem fs, String metaPath, String payloadClassName) {
     super();
     Path propertyPath = new Path(metaPath, HOODIE_PROPERTIES_FILE);

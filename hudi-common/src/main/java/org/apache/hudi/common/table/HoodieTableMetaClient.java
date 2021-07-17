@@ -313,8 +313,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   /**
-   * Helper method to initialize a given path as a hoodie table with configs passed in as Properties.
-   *
+   * Helper method to initialize a given path as a hoodie table with configs passed in as as Properties.
    * @return Instance of HoodieTableMetaClient
    */
   public static HoodieTableMetaClient initTableAndGetMetaClient(Configuration hadoopConf, String basePath,
@@ -602,6 +601,7 @@ public class HoodieTableMetaClient implements Serializable {
     private String partitionColumns;
     private String bootstrapIndexClass;
     private String bootstrapBasePath;
+    private String numBuckets;
 
     private PropertyBuilder() {
 
@@ -675,6 +675,11 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setNumBuckets(String numBuckets) {
+      this.numBuckets = numBuckets;
+      return this;
+    }
+
     public PropertyBuilder fromMetaClient(HoodieTableMetaClient metaClient) {
       return setTableType(metaClient.getTableType())
         .setTableName(metaClient.getTableConfig().getTableName())
@@ -725,6 +730,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.HOODIE_TABLE_CREATE_SCHEMA)) {
         setTableCreateSchema(hoodieConfig.getString(HoodieTableConfig.HOODIE_TABLE_CREATE_SCHEMA));
       }
+      if (properties.containsKey(HoodieTableConfig.HOODIE_TABLE_NUM_BUCKETS)) {
+        setNumBuckets(hoodieConfig.getString(HoodieTableConfig.HOODIE_TABLE_NUM_BUCKETS));
+      }
       return this;
     }
 
@@ -739,6 +747,10 @@ public class HoodieTableMetaClient implements Serializable {
           String.valueOf(HoodieTableVersion.current().versionCode()));
       if (tableType == HoodieTableType.MERGE_ON_READ && payloadClassName != null) {
         tableConfig.setValue(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP, payloadClassName);
+      }
+
+      if (null != numBuckets) {
+        tableConfig.setValue(HoodieTableConfig.HOODIE_TABLE_NUM_BUCKETS, numBuckets);
       }
 
       if (null != tableCreateSchema) {
