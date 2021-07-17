@@ -66,6 +66,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static junit.framework.TestCase.assertEquals;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -234,6 +235,18 @@ public class TestData {
   }
 
   /**
+   * Returns list of string format of a list of RowData.
+   */
+  public static List<String> rowDataToList(List<RowData> rows) {
+    DataStructureConverter<Object, Object> converter =
+        DataStructureConverters.getConverter(TestConfigurations.ROW_DATA_TYPE);
+    return rows.stream()
+        .map(row -> converter.toExternal(row).toString())
+        .sorted(Comparator.naturalOrder())
+        .collect(Collectors.toList());
+  }
+
+  /**
    * Write a list of row data with Hoodie format base on the given configuration.
    *
    * @param dataBuffer  The data buffer to write
@@ -304,6 +317,22 @@ public class TestData {
         .sorted(Comparator.comparing(o -> toStringSafely(o.getField(0))))
         .collect(Collectors.toList()).toString();
     assertThat(rowsString, is(rowDataToString(expected)));
+  }
+
+  /**
+   * Sort the {@code rows} using field at index {@code orderingPos} and asserts
+   * it equals with the expected string {@code expected}.
+   *
+   * @param rows     Actual result rows
+   * @param expected Expected contains string of the sorted rows
+   * @param orderingPos Field position for ordering
+   */
+  public static void assertRowsContains(List<Row> rows, List<RowData> expected, int orderingPos) {
+    String rowsString = rows.stream()
+        .sorted(Comparator.comparing(o -> toStringSafely(o.getField(orderingPos))))
+        .collect(Collectors.toList()).toString();
+
+    rowDataToList(expected).forEach(s -> assertThat(rowsString, containsString(s)));
   }
 
   /**

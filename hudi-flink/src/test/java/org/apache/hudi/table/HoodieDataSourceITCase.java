@@ -60,6 +60,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.utils.TestData.assertRowsContains;
 import static org.apache.hudi.utils.TestData.assertRowsEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -289,6 +290,45 @@ public class HoodieDataSourceITCase extends AbstractTestBase {
         + "id6,Emma,20,1970-01-01T00:00:06,par3, "
         + "id7,Bob,44,1970-01-01T00:00:07,par4, "
         + "id8,Han,56,1970-01-01T00:00:08,par4]");
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = ExecMode.class)
+  void testWriteAndReadWithInsertMode(ExecMode execMode) throws Exception {
+    TableEnvironment tableEnv = execMode == ExecMode.BATCH ? batchTableEnv : streamTableEnv;
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.OPERATION.key(), "insert");
+    options.put(FlinkOptions.BUCKET_ASSIGN_TASKS.key(), "4");
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
+    tableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 values\n"
+        + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1'),\n"
+        + "('id2','Stephen',33,TIMESTAMP '1970-01-01 00:00:02','par1'),\n"
+        + "('id3','Julian',53,TIMESTAMP '1970-01-01 00:00:03','par2'),\n"
+        + "('id4','Fabian',31,TIMESTAMP '1970-01-01 00:00:04','par2'),\n"
+        + "('id5','Sophia',18,TIMESTAMP '1970-01-01 00:00:05','par3'),\n"
+        + "('id6','Emma',20,TIMESTAMP '1970-01-01 00:00:06','par3'),\n"
+        + "('id7','Bob',44,TIMESTAMP '1970-01-01 00:00:07','par4'),\n"
+        + "('id8','Han',56,TIMESTAMP '1970-01-01 00:00:08','par4')";
+    execInsertSql(tableEnv, insertInto);
+
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result1, TestData.DATA_SET_SOURCE_INSERT);
+    // apply filters
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 where uuid > 'id5'").execute().collect());
+    assertRowsEquals(result2, "["
+        + "id6,Emma,20,1970-01-01T00:00:06,par3, "
+        + "id7,Bob,44,1970-01-01T00:00:07,par4, "
+        + "id8,Han,56,1970-01-01T00:00:08,par4]");
+
+    execInsertSql(tableEnv, insertInto);
+    List<Row> result3 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+
+    assertRowsContains(result3, TestData.DATA_SET_SOURCE_INSERT, 0);
   }
 
   @ParameterizedTest

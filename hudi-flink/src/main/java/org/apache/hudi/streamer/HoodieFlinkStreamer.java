@@ -124,7 +124,7 @@ public class HoodieFlinkStreamer {
           .uid("uid_index_bootstrap_" + conf.getString(FlinkOptions.TABLE_NAME));
     }
 
-    DataStream<Object> pipeline = dataStream2
+    dataStream2 = dataStream2
         // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
         .keyBy(HoodieRecord::getRecordKey)
         .transform(
@@ -132,9 +132,14 @@ public class HoodieFlinkStreamer {
             TypeInformation.of(HoodieRecord.class),
             new BucketAssignOperator<>(new BucketAssignFunction<>(conf)))
         .uid("uid_bucket_assigner" + conf.getString(FlinkOptions.TABLE_NAME))
-        .setParallelism(conf.getOptional(FlinkOptions.BUCKET_ASSIGN_TASKS).orElse(parallelism))
-        // shuffle by fileId(bucket id)
-        .keyBy(record -> record.getCurrentLocation().getFileId())
+        .setParallelism(conf.getOptional(FlinkOptions.BUCKET_ASSIGN_TASKS).orElse(parallelism));
+
+    // shuffle by fileId(bucket id)
+    if (StreamerUtil.needShuffle(conf, parallelism)) {
+      dataStream2 = dataStream2.keyBy(record -> record.getCurrentLocation().getFileId());
+    }
+
+    DataStream<Object> pipeline = dataStream2
         .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
         .uid("uid_hoodie_stream_write" + conf.getString(FlinkOptions.TABLE_NAME))
         .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
