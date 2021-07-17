@@ -37,6 +37,11 @@ public class HoodieAvroPayload implements HoodieRecordPayload<HoodieAvroPayload>
   // java serializable
   private final byte[] recordBytes;
 
+  // Constructor for read path with explicit ordering field.
+  public HoodieAvroPayload(GenericRecord record, String orderingField) {
+    this(Option.of(record));
+  }
+
   public HoodieAvroPayload(Option<GenericRecord> record) {
     if (record.isPresent()) {
       this.recordBytes = HoodieAvroUtils.avroToBytes(record.get());

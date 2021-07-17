@@ -43,6 +43,10 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
   public static final String METADATA_EVENT_TIME_KEY = "metadata.event_time.key";
   private Option<Object> eventTime = Option.empty();
 
+  public DefaultHoodieRecordPayload(GenericRecord record, String orderingField) {
+    super(record, orderingField);
+  }
+
   public DefaultHoodieRecordPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
   }
@@ -101,10 +105,9 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
      * NOTE: Deletes sent via EmptyHoodieRecordPayload and/or Delete operation type do not hit this code path
      * and need to be dealt with separately.
      */
-    Object persistedOrderingVal = getNestedFieldVal((GenericRecord) currentValue,
-        properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY), true);
-    Comparable incomingOrderingVal = (Comparable) getNestedFieldVal((GenericRecord) incomingRecord,
-        properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY), false);
-    return persistedOrderingVal == null || ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) <= 0;
+    final String orderingField = properties.getProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY);
+    Comparable persistedOrderingVal = getOrderingVal((GenericRecord) currentValue, orderingField);
+    Comparable incomingOrderingVal = getOrderingVal((GenericRecord) incomingRecord, orderingField);
+    return persistedOrderingVal == null || persistedOrderingVal.compareTo(incomingOrderingVal) <= 0;
   }
 }

@@ -90,7 +90,7 @@ public class FlinkWriteHelper<T extends HoodieRecordPayload,R> extends AbstractW
 
     return keyedRecords.values().stream().map(x -> x.stream().map(Pair::getRight).reduce((rec1, rec2) -> {
       @SuppressWarnings("unchecked")
-      T reducedData = (T) rec1.getData().preCombine(rec2.getData());
+      T reducedData = (T) rec2.getData().preCombine(rec1.getData());
       // we cannot allow the user to change the key or partitionPath, since that will affect
       // everything
       // so pick it from one of the records.

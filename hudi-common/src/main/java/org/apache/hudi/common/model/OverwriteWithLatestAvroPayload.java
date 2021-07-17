@@ -25,7 +25,11 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
+
+import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldVal;
 
 /**
  * Default payload used for delta streamer.
@@ -38,8 +42,15 @@ import java.io.IOException;
 public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
     implements HoodieRecordPayload<OverwriteWithLatestAvroPayload> {
 
+  // Constructor for write path with explicit ordering value.
   public OverwriteWithLatestAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
+  }
+
+  // Constructor for read path with explicit ordering field.
+  // Use natural order when orderingVal is null
+  public OverwriteWithLatestAvroPayload(GenericRecord record, String orderingField) {
+    super(record, getOrderingValWithDefault(record, orderingField));
   }
 
   public OverwriteWithLatestAvroPayload(Option<GenericRecord> record) {
@@ -47,10 +58,10 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
   }
 
   @Override
-  public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload another) {
+  public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue) {
     // pick the payload with greatest ordering value
-    if (another.orderingVal.compareTo(orderingVal) > 0) {
-      return another;
+    if (oldValue.orderingVal.compareTo(orderingVal) > 0) {
+      return oldValue;
     } else {
       return this;
     }
@@ -88,6 +99,33 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
     }
     Object deleteMarker = genericRecord.get(isDeleteKey);
     return (deleteMarker instanceof Boolean && (boolean) deleteMarker);
+  }
+
+  /**
+   * Returns the ordering value of given record {@code record} with default value.
+   * The default value represents natural order.
+   *
+   * @param record The given record
+   * @param orderingField The ordering field name
+   *
+   * @return the ordering value
+   */
+  protected static Comparable getOrderingValWithDefault(GenericRecord record, @Nullable String orderingField) {
+    Comparable orderingVal = getOrderingVal(record, orderingField);
+    return orderingVal == null ? 0 : orderingVal;
+  }
+
+  /**
+   * Returns the ordering value of given record {@code record}.
+   *
+   * @param record The given record
+   * @param orderingField The ordering field name
+   *
+   * @return the ordering value, or null if the {@code orderingField} is null
+   */
+  @Nullable
+  protected static Comparable getOrderingVal(GenericRecord record, @Nullable String orderingField) {
+    return orderingField == null ? null : (Comparable) getNestedFieldVal(record, orderingField, true);
   }
 
   /**
