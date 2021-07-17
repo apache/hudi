@@ -68,11 +68,13 @@ public class HoodieWriteableTestTable extends HoodieTestTable {
 
   protected final Schema schema;
   protected final BloomFilter filter;
+  protected final boolean populateMetaFields;
 
   protected HoodieWriteableTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, Schema schema, BloomFilter filter) {
     super(basePath, fs, metaClient);
     this.schema = schema;
     this.filter = filter;
+    this.populateMetaFields = metaClient.getTableConfig().populateMetaFields();
   }
 
   @Override
@@ -98,14 +100,18 @@ public class HoodieWriteableTestTable extends HoodieTestTable {
       try (HoodieParquetWriter writer = new HoodieParquetWriter(
           currentInstantTime,
           new Path(Paths.get(basePath, partition, fileName).toString()),
-          config, schema, contextSupplier)) {
+          config, schema, contextSupplier, populateMetaFields)) {
         int seqId = 1;
         for (HoodieRecord record : records) {
           GenericRecord avroRecord = (GenericRecord) record.getData().getInsertValue(schema).get();
-          HoodieAvroUtils.addCommitMetadataToRecord(avroRecord, currentInstantTime, String.valueOf(seqId++));
-          HoodieAvroUtils.addHoodieKeyToRecord(avroRecord, record.getRecordKey(), record.getPartitionPath(), fileName);
-          writer.writeAvro(record.getRecordKey(), avroRecord);
-          filter.add(record.getRecordKey());
+          if (populateMetaFields) {
+            HoodieAvroUtils.addCommitMetadataToRecord(avroRecord, currentInstantTime, String.valueOf(seqId++));
+            HoodieAvroUtils.addHoodieKeyToRecord(avroRecord, record.getRecordKey(), record.getPartitionPath(), fileName);
+            writer.writeAvro(record.getRecordKey(), avroRecord);
+            filter.add(record.getRecordKey());
+          } else {
+            writer.writeAvro(record.getRecordKey(), avroRecord);
+          }
         }
       }
     } else if (HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue().equals(HoodieFileFormat.ORC)) {

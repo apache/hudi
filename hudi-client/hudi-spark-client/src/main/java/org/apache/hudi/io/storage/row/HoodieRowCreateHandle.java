@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io;
+package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.client.HoodieInternalWriteStatus;
 import org.apache.hudi.client.model.HoodieInternalRow;
@@ -30,8 +30,6 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
-import org.apache.hudi.io.storage.HoodieInternalRowFileWriter;
-import org.apache.hudi.io.storage.HoodieInternalRowFileWriterFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.MarkerFiles;
 
@@ -61,17 +59,17 @@ public class HoodieRowCreateHandle implements Serializable {
   private final long taskEpochId;
   private final HoodieTable table;
   private final HoodieWriteConfig writeConfig;
-  private final HoodieInternalRowFileWriter fileWriter;
+  protected final HoodieInternalRowFileWriter fileWriter;
   private final String partitionPath;
   private final Path path;
   private final String fileId;
   private final FileSystem fs;
-  private final HoodieInternalWriteStatus writeStatus;
+  protected final HoodieInternalWriteStatus writeStatus;
   private final HoodieTimer currTimer;
 
   public HoodieRowCreateHandle(HoodieTable table, HoodieWriteConfig writeConfig, String partitionPath, String fileId,
-      String instantTime, int taskPartitionId, long taskId, long taskEpochId,
-      StructType structType) {
+                               String instantTime, int taskPartitionId, long taskId, long taskEpochId,
+                               StructType structType) {
     this.partitionPath = partitionPath;
     this.table = table;
     this.writeConfig = writeConfig;
@@ -107,6 +105,7 @@ public class HoodieRowCreateHandle implements Serializable {
   /**
    * Writes an {@link InternalRow} to the underlying HoodieInternalRowFileWriter. Before writing, value for meta columns are computed as required
    * and wrapped in {@link HoodieInternalRow}. {@link HoodieInternalRow} is what gets written to HoodieInternalRowFileWriter.
+   *
    * @param record instance of {@link InternalRow} that needs to be written to the fileWriter.
    * @throws IOException
    */
@@ -141,6 +140,7 @@ public class HoodieRowCreateHandle implements Serializable {
   /**
    * Closes the {@link HoodieRowCreateHandle} and returns an instance of {@link HoodieInternalWriteStatus} containing the stats and
    * status of the writes to this handle.
+   *
    * @return the {@link HoodieInternalWriteStatus} containing the stats and status of the writes to this handle.
    * @throws IOException
    */
@@ -197,7 +197,7 @@ public class HoodieRowCreateHandle implements Serializable {
     return taskPartitionId + "-" + taskId + "-" + taskEpochId;
   }
 
-  private HoodieInternalRowFileWriter createNewFileWriter(
+  protected HoodieInternalRowFileWriter createNewFileWriter(
       Path path, HoodieTable hoodieTable, HoodieWriteConfig config, StructType schema)
       throws IOException {
     return HoodieInternalRowFileWriterFactory.getInternalRowFileWriter(

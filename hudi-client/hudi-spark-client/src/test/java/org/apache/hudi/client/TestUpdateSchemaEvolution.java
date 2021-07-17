@@ -121,7 +121,7 @@ public class TestUpdateSchemaEvolution extends HoodieClientTestHarness {
     jsc.parallelize(Arrays.asList(1)).map(x -> {
       Executable executable = () -> {
         HoodieMergeHandle mergeHandle = new HoodieMergeHandle(updateTable.getConfig(), "101", updateTable,
-            updateRecords.iterator(), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier);
+            updateRecords.iterator(), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier, null);
         List<GenericRecord> oldRecords = BaseFileUtils.getInstance(updateTable.getBaseFileFormat())
             .readAvroRecords(updateTable.getHadoopConf(),
                 new Path(updateTable.getConfig().getBasePath() + "/" + insertResult.getStat().getPath()),

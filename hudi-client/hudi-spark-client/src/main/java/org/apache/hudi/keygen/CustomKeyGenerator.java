@@ -18,13 +18,17 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -33,14 +37,14 @@ import java.util.stream.Collectors;
 /**
  * This is a generic implementation of KeyGenerator where users can configure record key as a single field or a combination of fields. Similarly partition path can be configured to have multiple
  * fields or only one field. This class expects value for prop "hoodie.datasource.write.partitionpath.field" in a specific format. For example:
- *
+ * <p>
  * properties.put("hoodie.datasource.write.partitionpath.field", "field1:PartitionKeyType1,field2:PartitionKeyType2").
- *
+ * <p>
  * The complete partition path is created as <value for field1 basis PartitionKeyType1>/<value for field2 basis PartitionKeyType2> and so on.
- *
+ * <p>
  * Few points to consider: 1. If you want to customize some partition path field on a timestamp basis, you can use field1:timestampBased 2. If you simply want to have the value of your configured
  * field in the partition path, use field1:simple 3. If you want your table to be non partitioned, simply leave it as blank.
- *
+ * <p>
  * RecordKey is internally generated using either SimpleKeyGenerator or ComplexKeyGenerator.
  */
 public class CustomKeyGenerator extends BuiltinKeyGenerator {
@@ -74,10 +78,15 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
 
   @Override
   public String getPartitionPath(Row row) {
-    return getPartitionPath(Option.empty(), Option.of(row));
+    return getPartitionPath(Option.empty(), Option.of(row), Option.empty());
   }
 
-  private String getPartitionPath(Option<GenericRecord> record, Option<Row> row) {
+  @Override
+  public String getPartitionPath(InternalRow row, StructType structType) {
+    return getPartitionPath(Option.empty(), Option.empty(), Option.of(Pair.of(row, structType)));
+  }
+
+  private String getPartitionPath(Option<GenericRecord> record, Option<Row> row, Option<Pair<InternalRow, StructType>> internalRowStructTypePair) {
     if (getPartitionPathFields() == null) {
       throw new HoodieKeyException("Unable to find field names for partition path in cfg");
     }
@@ -101,16 +110,22 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
         case SIMPLE:
           if (record.isPresent()) {
             partitionPath.append(new SimpleKeyGenerator(config, partitionPathField).getPartitionPath(record.get()));
-          } else {
+          } else if (row.isPresent()) {
             partitionPath.append(new SimpleKeyGenerator(config, partitionPathField).getPartitionPath(row.get()));
+          } else {
+            partitionPath.append(new SimpleKeyGenerator(config, partitionPathField).getPartitionPath(internalRowStructTypePair.get().getKey(),
+                internalRowStructTypePair.get().getValue()));
           }
           break;
         case TIMESTAMP:
           try {
             if (record.isPresent()) {
               partitionPath.append(new TimestampBasedKeyGenerator(config, partitionPathField).getPartitionPath(record.get()));
-            } else {
+            } else if (row.isPresent()) {
               partitionPath.append(new TimestampBasedKeyGenerator(config, partitionPathField).getPartitionPath(row.get()));
+            } else {
+              partitionPath.append(new TimestampBasedKeyGenerator(config, partitionPathField).getPartitionPath(internalRowStructTypePair.get().getKey(),
+                  internalRowStructTypePair.get().getValue()));
             }
           } catch (IOException ioe) {
             throw new HoodieKeyGeneratorException("Unable to initialise TimestampBasedKeyGenerator class", ioe);

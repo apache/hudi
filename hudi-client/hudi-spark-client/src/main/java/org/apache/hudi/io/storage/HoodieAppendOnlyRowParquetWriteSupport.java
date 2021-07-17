@@ -16,20 +16,25 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.keygen;
+package org.apache.hudi.io.storage;
 
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.spark.sql.types.StructType;
 
+import java.util.Collections;
+
 /**
- * Spark key generator interface.
+ * Hoodie Write Support for directly writing Row to Parquet.
  */
-public interface SparkKeyGeneratorInterface extends KeyGeneratorInterface {
+public class HoodieAppendOnlyRowParquetWriteSupport extends HoodieRowParquetWriteSupport {
 
-  String getRecordKey(Row row);
+  public HoodieAppendOnlyRowParquetWriteSupport(Configuration conf, StructType structType) {
+    super(conf, structType, null);
+  }
 
-  String getPartitionPath(Row row);
-
-  String getPartitionPath(InternalRow internalRow, StructType structType);
+  @Override
+  public WriteSupport.FinalizedWriteContext finalizeWrite() {
+    return new WriteSupport.FinalizedWriteContext(Collections.emptyMap());
+  }
 }

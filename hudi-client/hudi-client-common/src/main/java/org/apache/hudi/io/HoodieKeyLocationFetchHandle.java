@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.Path;
@@ -39,18 +40,27 @@ import java.util.stream.Stream;
 public class HoodieKeyLocationFetchHandle<T extends HoodieRecordPayload, I, K, O> extends HoodieReadHandle<T, I, K, O> {
 
   private final Pair<String, HoodieBaseFile> partitionPathBaseFilePair;
+  private final BaseKeyGenerator keyGenerator;
 
   public HoodieKeyLocationFetchHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
-                                      Pair<String, HoodieBaseFile> partitionPathBaseFilePair) {
+                                      Pair<String, HoodieBaseFile> partitionPathBaseFilePair, BaseKeyGenerator keyGenerator) {
     super(config, null, hoodieTable, Pair.of(partitionPathBaseFilePair.getLeft(), partitionPathBaseFilePair.getRight().getFileId()));
     this.partitionPathBaseFilePair = partitionPathBaseFilePair;
+    this.keyGenerator = keyGenerator;
   }
 
   public Stream<Pair<HoodieKey, HoodieRecordLocation>> locations() {
     HoodieBaseFile baseFile = partitionPathBaseFilePair.getRight();
-    return BaseFileUtils.getInstance(baseFile.getPath()).fetchRecordKeyPartitionPath(
-        hoodieTable.getHadoopConf(), new Path(baseFile.getPath())).stream()
-        .map(entry -> Pair.of(entry,
-            new HoodieRecordLocation(baseFile.getCommitTime(), baseFile.getFileId())));
+    if (config.populateMetaColumns()) {
+      return BaseFileUtils.getInstance(baseFile.getPath()).fetchRecordKeyPartitionPath(
+          hoodieTable.getHadoopConf(), new Path(baseFile.getPath())).stream()
+          .map(entry -> Pair.of(entry,
+              new HoodieRecordLocation(baseFile.getCommitTime(), baseFile.getFileId())));
+    } else {
+      return BaseFileUtils.getInstance(baseFile.getPath()).fetchRecordKeyPartitionPath(
+          hoodieTable.getHadoopConf(), new Path(baseFile.getPath()), keyGenerator).stream()
+          .map(entry -> Pair.of(entry,
+              new HoodieRecordLocation(baseFile.getCommitTime(), baseFile.getFileId())));
+    }
   }
 }

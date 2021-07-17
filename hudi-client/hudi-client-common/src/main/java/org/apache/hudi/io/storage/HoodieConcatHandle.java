@@ -25,6 +25,8 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.HoodieMergeHandle;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.generic.GenericRecord;
@@ -66,13 +68,14 @@ public class HoodieConcatHandle<T extends HoodieRecordPayload, I, K, O> extends 
   private static final Logger LOG = LogManager.getLogger(HoodieConcatHandle.class);
 
   public HoodieConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable hoodieTable, Iterator recordItr,
-      String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier);
+                            String partitionPath, String fileId, TaskContextSupplier taskContextSupplier, BaseKeyGenerator keyGenerator) {
+    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGenerator);
   }
 
   public HoodieConcatHandle(HoodieWriteConfig config, String instantTime, HoodieTable hoodieTable, Map keyToNewRecords, String partitionPath, String fileId,
       HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable, keyToNewRecords, partitionPath, fileId, dataFileToBeMerged, taskContextSupplier);
+    super(config, instantTime, hoodieTable, keyToNewRecords, partitionPath, fileId, dataFileToBeMerged, taskContextSupplier,
+        null);
   }
 
   /**
@@ -80,7 +83,7 @@ public class HoodieConcatHandle<T extends HoodieRecordPayload, I, K, O> extends 
    */
   @Override
   public void write(GenericRecord oldRecord) {
-    String key = oldRecord.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+    String key = populateMetaColumns ? oldRecord.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString() : keyGenerator.getKey(oldRecord).getRecordKey();
     try {
       fileWriter.writeAvro(key, oldRecord);
     } catch (IOException | RuntimeException e) {

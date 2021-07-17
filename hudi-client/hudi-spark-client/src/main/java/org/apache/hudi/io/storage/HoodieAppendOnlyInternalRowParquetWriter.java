@@ -18,17 +18,18 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.apache.hadoop.fs.Path;
+import org.apache.spark.sql.catalyst.InternalRow;
 
-/**
- * ParquetConfig for datasource implementation with {@link org.apache.hudi.client.model.HoodieInternalRow}.
- */
-public class HoodieRowParquetConfig extends HoodieBaseParquetConfig<HoodieRowParquetWriteSupport> {
+import java.io.IOException;
 
-  public HoodieRowParquetConfig(HoodieRowParquetWriteSupport writeSupport, CompressionCodecName compressionCodecName,
-                                int blockSize, int pageSize, long maxFileSize, Configuration hadoopConf,
-                                double compressionRatio) {
-    super(writeSupport, compressionCodecName, blockSize, pageSize, maxFileSize, hadoopConf, compressionRatio);
+public class HoodieAppendOnlyInternalRowParquetWriter extends HoodieInternalRowParquetWriter {
+  public HoodieAppendOnlyInternalRowParquetWriter(Path file, HoodieRowParquetConfig parquetConfig) throws IOException {
+    super(file, parquetConfig);
+  }
+
+  @Override
+  public void writeRow(String key, InternalRow row) throws IOException {
+    super.write(row);
   }
 }

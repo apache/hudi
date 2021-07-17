@@ -59,12 +59,17 @@ import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
  */
 public class SparkDatasetTestUtils {
 
+  public static final String RECORD_KEY_FIELD_NAME = "record_key";
+  public static final String PARTITION_PATH_FIELD_NAME = "partition_path";
+
   public static final StructType STRUCT_TYPE = new StructType(new StructField[] {
       new StructField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, DataTypes.StringType, false, Metadata.empty()),
       new StructField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, DataTypes.StringType, false, Metadata.empty()),
       new StructField(HoodieRecord.RECORD_KEY_METADATA_FIELD, DataTypes.StringType, false, Metadata.empty()),
       new StructField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, DataTypes.StringType, false, Metadata.empty()),
       new StructField(HoodieRecord.FILENAME_METADATA_FIELD, DataTypes.StringType, false, Metadata.empty()),
+      new StructField(RECORD_KEY_FIELD_NAME, DataTypes.StringType, false, Metadata.empty()),
+      new StructField(PARTITION_PATH_FIELD_NAME, DataTypes.StringType, false, Metadata.empty()),
       new StructField("randomInt", DataTypes.IntegerType, false, Metadata.empty()),
       new StructField("randomLong", DataTypes.LongType, false, Metadata.empty())});
 
@@ -74,6 +79,8 @@ public class SparkDatasetTestUtils {
       new StructField(HoodieRecord.RECORD_KEY_METADATA_FIELD, DataTypes.StringType, false, Metadata.empty()),
       new StructField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, DataTypes.StringType, false, Metadata.empty()),
       new StructField(HoodieRecord.FILENAME_METADATA_FIELD, DataTypes.StringType, false, Metadata.empty()),
+      new StructField(RECORD_KEY_FIELD_NAME, DataTypes.StringType, false, Metadata.empty()),
+      new StructField(PARTITION_PATH_FIELD_NAME, DataTypes.StringType, false, Metadata.empty()),
       new StructField("randomInt", DataTypes.IntegerType, false, Metadata.empty()),
       new StructField("randomStr", DataTypes.StringType, false, Metadata.empty())});
 
@@ -117,7 +124,7 @@ public class SparkDatasetTestUtils {
    */
   public static Row getRandomValue(String partitionPath, boolean isError) {
     // order commit time, seq no, record key, partition path, file name
-    Object[] values = new Object[7];
+    Object[] values = new Object[9];
     values[0] = ""; //commit time
     if (!isError) {
       values[1] = ""; // commit seq no
@@ -127,11 +134,13 @@ public class SparkDatasetTestUtils {
     values[2] = UUID.randomUUID().toString();
     values[3] = partitionPath;
     values[4] = ""; // filename
-    values[5] = RANDOM.nextInt();
+    values[5] = UUID.randomUUID().toString();
+    values[6] = partitionPath;
+    values[7] = RANDOM.nextInt();
     if (!isError) {
-      values[6] = RANDOM.nextLong();
+      values[8] = RANDOM.nextLong();
     } else {
-      values[6] = UUID.randomUUID().toString();
+      values[8] = UUID.randomUUID().toString();
     }
     return new GenericRow(values);
   }
@@ -154,14 +163,16 @@ public class SparkDatasetTestUtils {
   public static InternalRow getInternalRowWithError(String partitionPath) {
     // order commit time, seq no, record key, partition path, file name
     String recordKey = UUID.randomUUID().toString();
-    Object[] values = new Object[7];
+    Object[] values = new Object[9];
     values[0] = "";
     values[1] = "";
     values[2] = recordKey;
     values[3] = partitionPath;
     values[4] = "";
-    values[5] = RANDOM.nextInt();
-    values[6] = RANDOM.nextBoolean();
+    values[5] = recordKey;
+    values[6] = partitionPath;
+    values[7] = RANDOM.nextInt();
+    values[8] = RANDOM.nextBoolean();
     return new GenericInternalRow(values);
   }
 

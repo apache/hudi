@@ -247,8 +247,8 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
    */
   private HoodieRecord<? extends HoodieRecordPayload> transform(IndexedRecord indexedRecord) {
     GenericRecord record = (GenericRecord) indexedRecord;
-    String key = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-    String partition = record.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+    String key = populateMetaCols ? record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString() : keyGenerator.getRecordKey(record);
+    String partition = populateMetaCols ? record.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString() : keyGenerator.getPartitionPath(record);
     HoodieKey hoodieKey = new HoodieKey(key, partition);
 
     HoodieRecordPayload avroPayload = ReflectionUtils.loadPayload(table.getMetaClient().getTableConfig().getPayloadClass(),

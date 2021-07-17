@@ -16,20 +16,21 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.keygen;
+package org.apache.hudi.io.storage.row;
 
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.types.StructType;
+import org.apache.hudi.io.storage.HoodieBaseParquetConfig;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 /**
- * Spark key generator interface.
+ * ParquetConfig for datasource implementation with {@link org.apache.hudi.client.model.HoodieInternalRow}.
  */
-public interface SparkKeyGeneratorInterface extends KeyGeneratorInterface {
+public class HoodieRowParquetConfig extends HoodieBaseParquetConfig<HoodieRowParquetWriteSupport> {
 
-  String getRecordKey(Row row);
-
-  String getPartitionPath(Row row);
-
-  String getPartitionPath(InternalRow internalRow, StructType structType);
+  public HoodieRowParquetConfig(HoodieRowParquetWriteSupport writeSupport, CompressionCodecName compressionCodecName,
+                                int blockSize, int pageSize, long maxFileSize, Configuration hadoopConf,
+                                double compressionRatio) {
+    super(writeSupport, compressionCodecName, blockSize, pageSize, maxFileSize, hadoopConf, compressionRatio);
+  }
 }

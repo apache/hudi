@@ -18,6 +18,7 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -27,6 +28,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.InternalRow;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -95,6 +97,9 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
     Row row = KeyGeneratorTestUtilities.getRow(record);
     Assertions.assertEquals(keyGenerator.getRecordKey(row), "_row_key:key1,pii_col:pi");
     Assertions.assertEquals(keyGenerator.getPartitionPath(row), "timestamp=4357686/ts_ms=2020-03-21");
+
+    InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
+    Assertions.assertEquals(keyGenerator.getPartitionPath(internalRow, row.schema()), "timestamp=4357686/ts_ms=2020-03-21");
   }
 
   @Test
@@ -112,6 +117,12 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
     HoodieKey hoodieKey = compositeKeyGenerator.getKey(record);
     assertEquals("_row_key:" + rowKey, hoodieKey.getRecordKey());
     assertEquals(partitionPath, hoodieKey.getPartitionPath());
+
+    Row row = KeyGeneratorTestUtilities.getRow(record, HoodieTestDataGenerator.AVRO_SCHEMA,
+        AvroConversionUtils.convertAvroSchemaToStructType(HoodieTestDataGenerator.AVRO_SCHEMA));
+    Assertions.assertEquals(compositeKeyGenerator.getPartitionPath(row), partitionPath);
+    InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
+    Assertions.assertEquals(compositeKeyGenerator.getPartitionPath(internalRow, row.schema()), partitionPath);
   }
 
   @Test
@@ -131,6 +142,13 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
     HoodieKey hoodieKey = compositeKeyGenerator.getKey(record);
     assertEquals(rowKey, hoodieKey.getRecordKey());
     assertEquals(partitionPath, hoodieKey.getPartitionPath());
+
+    Row row = KeyGeneratorTestUtilities.getRow(record, HoodieTestDataGenerator.AVRO_SCHEMA,
+        AvroConversionUtils.convertAvroSchemaToStructType(HoodieTestDataGenerator.AVRO_SCHEMA));
+    Assertions.assertEquals(compositeKeyGenerator.getPartitionPath(row), partitionPath);
+
+    InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
+    Assertions.assertEquals(compositeKeyGenerator.getPartitionPath(internalRow, row.schema()), partitionPath);
   }
 
   @Test
@@ -150,5 +168,12 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
     HoodieKey hoodieKey = compositeKeyGenerator.getKey(record);
     assertEquals(rowKey, hoodieKey.getRecordKey());
     assertEquals(partitionPath, hoodieKey.getPartitionPath());
+
+    Row row = KeyGeneratorTestUtilities.getRow(record, HoodieTestDataGenerator.AVRO_SCHEMA,
+        AvroConversionUtils.convertAvroSchemaToStructType(HoodieTestDataGenerator.AVRO_SCHEMA));
+    Assertions.assertEquals(compositeKeyGenerator.getPartitionPath(row), partitionPath);
+
+    InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
+    Assertions.assertEquals(compositeKeyGenerator.getPartitionPath(internalRow, row.schema()), partitionPath);
   }
 }
