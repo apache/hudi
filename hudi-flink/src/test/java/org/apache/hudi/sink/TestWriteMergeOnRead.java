@@ -93,6 +93,16 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
     return expected;
   }
 
+  protected Map<String, String> getUpsertWithDeleteExpected() {
+    Map<String, String> expected = new HashMap<>();
+    // id3, id5 were deleted and id9 is ignored
+    expected.put("par1", "[id1,par1,id1,Danny,24,1,par1, id2,par1,id2,Stephen,34,2,par1]");
+    expected.put("par2", "[id3,par2,id3,Julian,53,3,par2, id4,par2,id4,Fabian,31,4,par2]");
+    expected.put("par3", "[id5,par3,id5,Sophia,18,5,par3, id6,par3,id6,Emma,20,6,par3, id9,par3,id9,Jane,19,6,par3]");
+    expected.put("par4", "[id7,par4,id7,Bob,44,7,par4, id8,par4,id8,Han,56,8,par4]");
+    return expected;
+  }
+
   @Override
   protected HoodieTableType getTableType() {
     return HoodieTableType.MERGE_ON_READ;

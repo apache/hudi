@@ -38,20 +38,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestHoodieInternalRow {
 
   private static final Random RANDOM = new Random();
-  private static final int INTEGER_INDEX = 5;
-  private static final int STRING_INDEX = 6;
-  private static final int BOOLEAN_INDEX = 7;
-  private static final int SHORT_INDEX = 8;
-  private static final int BYTE_INDEX = 9;
-  private static final int LONG_INDEX = 10;
-  private static final int FLOAT_INDEX = 11;
-  private static final int DOUBLE_INDEX = 12;
-  private static final int DECIMAL_INDEX = 13;
-  private static final int BINARY_INDEX = 14;
-  private static final int STRUCT_INDEX = 15;
+  private static final int INTEGER_INDEX = 6;
+  private static final int STRING_INDEX = 7;
+  private static final int BOOLEAN_INDEX = 8;
+  private static final int SHORT_INDEX = 9;
+  private static final int BYTE_INDEX = 10;
+  private static final int LONG_INDEX = 11;
+  private static final int FLOAT_INDEX = 12;
+  private static final int DOUBLE_INDEX = 13;
+  private static final int DECIMAL_INDEX = 14;
+  private static final int BINARY_INDEX = 15;
+  private static final int STRUCT_INDEX = 16;
   // to do array and map
-  private static final int ARRAY_INDEX = 16;
-  private static final int MAP_INDEX = 17;
+  private static final int ARRAY_INDEX = 17;
+  private static final int MAP_INDEX = 18;
 
   private List<Integer> nullIndices;
 
@@ -64,23 +64,24 @@ public class TestHoodieInternalRow {
     Object[] values = getRandomValue(true);
 
     InternalRow row = new GenericInternalRow(values);
-    HoodieInternalRow hoodieInternalRow = new HoodieInternalRow("commitTime", "commitSeqNo", "recordKey", "partitionPath", "fileName", row);
+    HoodieInternalRow hoodieInternalRow = new HoodieInternalRow("commitTime", "commitSeqNo", "recordKey", "partitionPath", "fileName", "operation", row);
 
     assertValues(hoodieInternalRow, "commitTime", "commitSeqNo", "recordKey", "partitionPath",
-        "fileName", values, nullIndices);
+        "fileName", "operation", values, nullIndices);
   }
 
   @Test
   public void testUpdate() {
     Object[] values = getRandomValue(true);
     InternalRow row = new GenericInternalRow(values);
-    HoodieInternalRow hoodieInternalRow = new HoodieInternalRow("commitTime", "commitSeqNo", "recordKey", "partitionPath", "fileName", row);
+    HoodieInternalRow hoodieInternalRow = new HoodieInternalRow("commitTime", "commitSeqNo", "recordKey", "partitionPath", "fileName", "operation", row);
 
     hoodieInternalRow.update(0, "commitTime_updated");
     hoodieInternalRow.update(1, "commitSeqNo_updated");
     hoodieInternalRow.update(2, "recordKey_updated");
     hoodieInternalRow.update(3, "partitionPath_updated");
     hoodieInternalRow.update(4, "fileName_updated");
+    hoodieInternalRow.update(5, "operation_updated");
 
     values = getRandomValue(true);
     hoodieInternalRow.update(INTEGER_INDEX, values[INTEGER_INDEX]);
@@ -96,23 +97,23 @@ public class TestHoodieInternalRow {
     hoodieInternalRow.update(STRING_INDEX, values[STRING_INDEX].toString());
 
     assertValues(hoodieInternalRow, "commitTime_updated", "commitSeqNo_updated", "recordKey_updated", "partitionPath_updated",
-        "fileName_updated", values, nullIndices);
+        "fileName_updated", "operation_updated", values, nullIndices);
   }
 
   @Test
   public void testIsNullCheck() {
 
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < 17; i++) {
       Object[] values = getRandomValue(true);
 
       InternalRow row = new GenericInternalRow(values);
-      HoodieInternalRow hoodieInternalRow = new HoodieInternalRow("commitTime", "commitSeqNo", "recordKey", "partitionPath", "fileName", row);
+      HoodieInternalRow hoodieInternalRow = new HoodieInternalRow("commitTime", "commitSeqNo", "recordKey", "partitionPath", "fileName", "operation", row);
 
       hoodieInternalRow.setNullAt(i);
       nullIndices.clear();
       nullIndices.add(i);
       assertValues(hoodieInternalRow, "commitTime", "commitSeqNo", "recordKey", "partitionPath",
-          "fileName", values, nullIndices);
+          "fileName", "operation", values, nullIndices);
     }
 
     // try setting multiple values as null
@@ -129,7 +130,7 @@ public class TestHoodieInternalRow {
 
       Object[] values = getRandomValue(true);
       InternalRow row = new GenericInternalRow(values);
-      HoodieInternalRow hoodieInternalRow = new HoodieInternalRow("commitTime", "commitSeqNo", "recordKey", "partitionPath", "fileName", row);
+      HoodieInternalRow hoodieInternalRow = new HoodieInternalRow("commitTime", "commitSeqNo", "recordKey", "partitionPath", "fileName", "operation", row);
 
       nullIndices.clear();
 
@@ -138,7 +139,7 @@ public class TestHoodieInternalRow {
         nullIndices.add(index);
       }
       assertValues(hoodieInternalRow, "commitTime", "commitSeqNo", "recordKey", "partitionPath",
-          "fileName", values, nullIndices);
+          "fileName", "operation", values, nullIndices);
     }
   }
 
@@ -149,7 +150,7 @@ public class TestHoodieInternalRow {
    * @return the random Object[] thus generated
    */
   private Object[] getRandomValue(boolean withStructType) {
-    Object[] values = new Object[16];
+    Object[] values = new Object[17];
     values[INTEGER_INDEX] = RANDOM.nextInt();
     values[STRING_INDEX] = UUID.randomUUID().toString();
     values[BOOLEAN_INDEX] = RANDOM.nextBoolean();
@@ -172,12 +173,12 @@ public class TestHoodieInternalRow {
     return values;
   }
 
-  private void assertValues(HoodieInternalRow hoodieInternalRow, String commitTime, String commitSeqNo, String recordKey, String partitionPath, String filename, Object[] values,
-      List<Integer> nullIndexes) {
+  private void assertValues(HoodieInternalRow hoodieInternalRow, String commitTime, String commitSeqNo, String recordKey, String partitionPath, String filename, String operation, Object[] values,
+                            List<Integer> nullIndexes) {
     for (Integer index : nullIndexes) {
       assertTrue(hoodieInternalRow.isNullAt(index));
     }
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < 17; i++) {
       if (!nullIndexes.contains(i)) {
         assertFalse(hoodieInternalRow.isNullAt(i));
       }
@@ -196,6 +197,9 @@ public class TestHoodieInternalRow {
     }
     if (!nullIndexes.contains(4)) {
       assertEquals(filename, hoodieInternalRow.get(4, DataTypes.StringType).toString());
+    }
+    if (!nullIndexes.contains(5)) {
+      assertEquals(operation, hoodieInternalRow.get(5, DataTypes.StringType).toString());
     }
     if (!nullIndexes.contains(INTEGER_INDEX)) {
       assertEquals(values[INTEGER_INDEX], hoodieInternalRow.getInt(INTEGER_INDEX));

@@ -106,10 +106,12 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
       assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)).equals(""));
       assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD)).equals(""));
       assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.FILENAME_METADATA_FIELD)).equals(""));
+      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.OPERATION_METADATA_FIELD)).equals(""));
     });
 
     Dataset<Row> trimmedOutput = result.drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
-        .drop(HoodieRecord.FILENAME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+        .drop(HoodieRecord.FILENAME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
+        .drop(HoodieRecord.OPERATION_METADATA_FIELD);
     assertTrue(dataset.except(trimmedOutput).count() == 0);
   }
 
@@ -141,6 +143,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
     int metadataCommitTimeIndex = resultSchema.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
     int metadataCommitSeqNoIndex = resultSchema.fieldIndex(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD);
     int metadataFilenameIndex = resultSchema.fieldIndex(HoodieRecord.FILENAME_METADATA_FIELD);
+    int metadataCdcOperationIndex = resultSchema.fieldIndex(HoodieRecord.OPERATION_METADATA_FIELD);
 
     result.toJavaRDD().foreach(entry -> {
       assertTrue(entry.get(metadataRecordKeyIndex).equals(entry.getAs("_row_key")));
@@ -148,10 +151,12 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieClientTestBase {
       assertTrue(entry.get(metadataCommitSeqNoIndex).equals(""));
       assertTrue(entry.get(metadataCommitTimeIndex).equals(""));
       assertTrue(entry.get(metadataFilenameIndex).equals(""));
+      assertTrue(entry.get(metadataCdcOperationIndex).equals(""));
     });
 
     Dataset<Row> trimmedOutput = result.drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
-        .drop(HoodieRecord.FILENAME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+        .drop(HoodieRecord.FILENAME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
+        .drop(HoodieRecord.OPERATION_METADATA_FIELD);
 
     // find resolved input snapshot
     ExpressionEncoder encoder = getEncoder(dataset.schema());

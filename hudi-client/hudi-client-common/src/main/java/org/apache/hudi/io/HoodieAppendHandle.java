@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -179,11 +180,22 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   }
 
   /**
-   * Returns whether the hoodie record is an UPDATE.
+   * Returns whether the hoodie record belongs to an UPDATE bucket.
    */
-  protected boolean isUpdateRecord(HoodieRecord<T> hoodieRecord) {
+  protected boolean isUpdateBucket(HoodieRecord<T> hoodieRecord) {
     // If currentLocation is present, then this is an update
     return hoodieRecord.getCurrentLocation() != null;
+  }
+
+  /**
+   * Add cdc operation to the record, default do nothing.
+   *
+   * @param record The record.
+   * @param flag   The change flag name.
+   * @see HoodieOperation
+   */
+  protected void addOperationToRecord(GenericRecord record, String flag) {
+    // no operation
   }
 
   private Option<IndexedRecord> getIndexedRecord(HoodieRecord<T> hoodieRecord) {
@@ -202,7 +214,8 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord.get(), hoodieRecord.getRecordKey(),
             hoodieRecord.getPartitionPath(), fileId);
         HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord.get(), instantTime, seqId);
-        if (isUpdateRecord(hoodieRecord)) {
+        addOperationToRecord((GenericRecord) avroRecord.get(), hoodieRecord.getOperation());
+        if (isUpdateBucket(hoodieRecord)) {
           updatedRecordsWritten++;
         } else {
           insertRecordsWritten++;
