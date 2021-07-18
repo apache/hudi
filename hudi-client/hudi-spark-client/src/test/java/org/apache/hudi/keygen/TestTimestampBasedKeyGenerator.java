@@ -225,7 +225,7 @@ public class TestTimestampBasedKeyGenerator {
         "DATE_STRING",
         "yyyy-MM-dd'T'HH:mm:ss.SSSX",
         "",
-        "",
+        "GMT",
         "yyyyMMddHH",
         "GMT");
     BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
@@ -243,7 +243,7 @@ public class TestTimestampBasedKeyGenerator {
         "DATE_STRING",
         "yyyy-MM-dd'T'HH:mm:ss.SSSX",
         "",
-        "",
+        "GMT",
         "yyyyMMddHH",
         "");
     BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
@@ -261,7 +261,7 @@ public class TestTimestampBasedKeyGenerator {
         "DATE_STRING",
         "yyyy-MM-dd'T'HH:mm:ssX,yyyy-MM-dd'T'HH:mm:ss.SSSX",
         "",
-        "",
+        "GMT",
         "yyyyMMddHH",
         "UTC");
     BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
@@ -279,7 +279,7 @@ public class TestTimestampBasedKeyGenerator {
         "DATE_STRING",
         "yyyy-MM-dd'T'HH:mm:ssX,yyyy-MM-dd'T'HH:mm:ss.SSSX",
         "",
-        "",
+        "GMT",
         "yyyyMMddHH",
         "UTC");
     BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
@@ -297,7 +297,7 @@ public class TestTimestampBasedKeyGenerator {
         "DATE_STRING",
         "yyyy-MM-dd'T'HH:mm:ssXXX,yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
         "",
-        "",
+        "GMT-5",
         "yyyyMMddHH",
         "UTC");
     BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
@@ -315,7 +315,7 @@ public class TestTimestampBasedKeyGenerator {
         "DATE_STRING",
         "yyyy-MM-dd'T'HH:mm:ssXXX,yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
         "",
-        "",
+        "GMT-5",
         "yyyyMMddHH",
         "UTC");
     BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
@@ -333,7 +333,7 @@ public class TestTimestampBasedKeyGenerator {
         "DATE_STRING",
         "yyyy-MM-dd'T'HH:mm:ssX,yyyy-MM-dd'T'HH:mm:ss.SSSX",
         "",
-        "",
+        "GMT",
         "yyyyMMddHH",
         "EST5EDT");
     BuiltinKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);

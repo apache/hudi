@@ -59,6 +59,8 @@ public class HoodieDateTimeParserImpl extends AbstractHoodieDateTimeParser {
         .toFormatter();
     if (this.inputDateTimeZone != null) {
       formatter = formatter.withZone(this.inputDateTimeZone);
+    } else {
+      formatter = formatter.withZone(ZoneId.systemDefault());
     }
     return formatter;
   }
