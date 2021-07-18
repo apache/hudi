@@ -19,14 +19,12 @@
 
 package org.apache.hudi.utils;
 
-import org.apache.hudi.DataSourceReadOptions;
-import org.apache.hudi.DataSourceReadOptions$;
-import org.apache.hudi.DataSourceWriteOptions$;
 import org.apache.hudi.common.config.ConfigGroupName;
 import org.apache.hudi.common.config.ConfigGroupProperty;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.configuration.FlinkOptions;
 
 import net.steppschuh.markdowngenerator.link.Link;
 import net.steppschuh.markdowngenerator.list.ListBuilder;
@@ -34,6 +32,7 @@ import net.steppschuh.markdowngenerator.rule.HorizontalRule;
 import net.steppschuh.markdowngenerator.text.Text;
 import net.steppschuh.markdowngenerator.text.emphasis.BoldText;
 import net.steppschuh.markdowngenerator.text.heading.Heading;
+import org.apache.flink.configuration.ConfigOption;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.reflections.ReflectionUtils;
@@ -46,11 +45,8 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -84,6 +80,7 @@ public class HoodieConfigDocGenerator {
 
     // Manual step: Add all configs that are not superclasses of HoodieConfig currently
     populateSparkConfigs(contentMap);
+    populateFlinkConfigs(contentMap);
 
     // Automated: Scan through all HoodieConfig superclasses using reflection
     for (Class<? extends HoodieConfig> subType : subTypes) {
@@ -197,6 +194,59 @@ public class HoodieConfigDocGenerator {
         field.setAccessible(true);
         generateConfigMarkup(sparkConfigObject.getClass(), field, sparkConfigObject, configParamsBuilder);
       }
+    }
+  }
+
+  private static void populateFlinkConfigs(Map<ConfigGroupName, StringBuilder> contentMap) {
+    StringBuilder configParamsBuilder = contentMap.get(ConfigGroupName.FLINK_SQL);
+    String flinkClassName = "org.apache.hudi.configuration.FlinkOptions";
+    try {
+      LOG.info("Processing params for config class: " + flinkClassName);
+      // ToDo subgroup flink options into Read, Write, Index sync and Hive sync
+      /*configParamsBuilder
+          //.append("### ").append("Write Options")
+          //.append(" {" + "#").append(configGroupProperty.name().replace(" ", "-")).append("}")
+          //.append(DOUBLE_NEWLINE);*/
+      configParamsBuilder.append("Flink jobs using the SQL can be configured through the options in WITH clause. " +
+          "The actual datasource level configs are listed below.").append(DOUBLE_NEWLINE);
+
+      configParamsBuilder
+          .append("`")
+          .append(new Text("Config Class"))
+          .append("`")
+          .append(": ")
+          .append(flinkClassName).append(LINE_BREAK);
+
+      Set<Field> fields = getAllFields(FlinkOptions.class, withTypeAssignableTo(ConfigOption.class));
+      for (Field field : fields) {
+        try {
+          ConfigOption cfgProperty = (ConfigOption) field.get(null);
+
+          // Config Header
+          configParamsBuilder.append("> ").append("#### ").append(new Text(cfgProperty.key())).append(NEWLINE);
+
+          // Description
+          configParamsBuilder
+              .append("> ")
+              .append(cfgProperty.description())
+              .append(LINE_BREAK);
+
+          // Default value
+          generateConfigKeyValue(configParamsBuilder, false, "Default Value", cfgProperty.hasDefaultValue() ? cfgProperty.defaultValue() : "none");
+
+          // Config param name
+          generateConfigKeyValue(configParamsBuilder, false, "Config Param", field.getName());
+
+          configParamsBuilder
+              .append(NEWLINE)
+              .append(new HorizontalRule(3))
+              .append(DOUBLE_NEWLINE);
+        } catch (IllegalAccessException e) {
+          LOG.error("Error while getting field through reflection for config class: " + flinkClassName, e);
+        }
+      }
+    } catch (Exception e) {
+      LOG.error("FATAL error while processing config class: " + flinkClassName, e);
     }
   }
 

@@ -4,7 +4,7 @@ keywords: garbage collection, hudi, jvm, configs, tuning
 permalink: /docs/configurations.html
 summary: This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
 toc: true
-last_modified_at: 2021-07-18T03:56:23.868264
+last_modified_at: 2021-07-18T04:26:23.024238
 ---
 
 This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
@@ -14,6 +14,840 @@ This page covers the different ways of configuring your job to write/read Hudi t
 - [**Write Client Configs**](#WRITE_CLIENT): Internally, the Hudi datasource uses a RDD based HoodieWriteClient API to actually perform writes to storage. These configs provide deep control over lower level aspects like file sizing, compression, parallelism, compaction, write schema, cleaning etc. Although Hudi provides sane defaults, from time-time these configs may need to be tweaked to optimize for specific workloads.
 - [**Metrics Configs**](#METRICS): These set of configs are used to enable monitoring and reporting of keyHudi stats and metrics.
 - [**Record Payload Config**](#RECORD_PAYLOAD): This is the lowest level of customization offered by Hudi. Record payloads define how to produce new values to upsert based on incoming new record and stored old record. Hudi provides default implementations such as OverwriteWithLatestAvroPayload which simply update table with the latest/last-written record. This can be overridden to a custom class extending HoodieRecordPayload class, on both datasource and WriteClient levels.
+
+## Spark Datasource Configs {#SPARK_DATASOURCE}
+These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge records or choosing query type to read.
+
+### Read Options {#Read-Options}
+
+Options useful for reading tables via `read.format.option(...)`
+
+
+`Config Class`: org.apache.hudi.DataSourceOptions.scala<br>
+> #### hoodie.file.index.enable
+> <br>
+> `Default Value: true`<br>
+> `Config Param: ENABLE_HOODIE_FILE_INDEX`<br>
+
+---
+
+> #### hoodie.datasource.merge.type
+> <br>
+> `Default Value: payload_combine`<br>
+> `Config Param: REALTIME_MERGE_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.read.incr.path.glob
+> <br>
+> `Default Value: `<br>
+> `Config Param: INCR_PATH_GLOB_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.query.type
+> Whether data needs to be read, in incremental mode (new data since an instantTime) (or) Read Optimized mode (obtain latest view, based on columnar data) (or) Snapshot mode (obtain latest view, based on row & columnar data)<br>
+> `Default Value: snapshot`<br>
+> `Config Param: QUERY_TYPE_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.write.precombine.field
+> Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)<br>
+> `Default Value: ts`<br>
+> `Config Param: READ_PRE_COMBINE_FIELD`<br>
+
+---
+
+> #### hoodie.datasource.read.end.instanttime
+> Instant time to limit incrementally fetched data to. New data written with an instant_time <= END_INSTANTTIME are fetched out.<br>
+> `Default Value: none`<br>
+> `Config Param: END_INSTANTTIME_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.read.begin.instanttime
+> Instant time to start incrementally pulling data from. The instanttime here need not necessarily correspond to an instant on the timeline. New data written with an instant_time > BEGIN_INSTANTTIME are fetched out. For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM.<br>
+> `Default Value: none`<br>
+> `Config Param: BEGIN_INSTANTTIME_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.read.schema.use.end.instanttime
+> Uses end instant schema when incrementally fetched data to. Default: users latest instant schema.<br>
+> `Default Value: false`<br>
+> `Config Param: INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.read.incr.filters
+> <br>
+> `Default Value: `<br>
+> `Config Param: PUSH_DOWN_INCR_FILTERS_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.read.paths
+> <br>
+> `Default Value: none`<br>
+> `Config Param: READ_PATHS_OPT_KEY`<br>
+
+---
+
+### Write Options {#Write-Options}
+
+You can pass down any of the WriteClient level configs directly using `options()` or `option(k,v)` methods.
+
+```java
+inputDF.write()
+.format("org.apache.hudi")
+.options(clientOpts) // any of the Hudi client opts can be passed in as well
+.option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
+.option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
+.option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
+.option(HoodieWriteConfig.TABLE_NAME, tableName)
+.mode(SaveMode.Append)
+.save(basePath);
+```
+
+Options useful for writing tables via `write.format.option(...)`
+
+
+`Config Class`: org.apache.hudi.DataSourceOptions.scala<br>
+> #### hoodie.datasource.hive_sync.database
+> database to sync to<br>
+> `Default Value: default`<br>
+> `Config Param: HIVE_DATABASE_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.write.precombine.field
+> Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)<br>
+> `Default Value: ts`<br>
+> `Config Param: PRECOMBINE_FIELD_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.hive_sync.username
+> hive user name to use<br>
+> `Default Value: hive`<br>
+> `Config Param: HIVE_USER_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.hive_sync.table_properties
+> <br>
+> `Default Value: none`<br>
+> `Config Param: HIVE_TABLE_PROPERTIES`<br>
+
+---
+
+> #### hoodie.datasource.write.keygenerator.class
+> Key generator class, that implements will extract the key out of incoming Row object<br>
+> `Default Value: none`<br>
+> `Config Param: KEYGENERATOR_CLASS_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.hive_sync.base_file_format
+> <br>
+> `Default Value: PARQUET`<br>
+> `Config Param: HIVE_BASE_FILE_FORMAT_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.write.table.type
+> The table type for the underlying data, for this write. This can’t change between writes.<br>
+> `Default Value: COPY_ON_WRITE`<br>
+> `Config Param: TABLE_TYPE_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.write.operation
+> Whether to do upsert, insert or bulkinsert for the write operation. Use bulkinsert to load new data into a table, and there on use upsert/insert. bulk insert uses a disk based write path to scale to load large inputs without need to cache it.<br>
+> `Default Value: upsert`<br>
+> `Config Param: OPERATION_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.write.streaming.retry.interval.ms
+> <br>
+> `Default Value: 2000`<br>
+> `Config Param: STREAMING_RETRY_INTERVAL_MS_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.write.hive_style_partitioning
+> Flag to indicate whether to use Hive style partitioning.
+If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.
+By default false (the names of partition folders are only partition values)<br>
+> `Default Value: false`<br>
+> `Config Param: HIVE_STYLE_PARTITIONING_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.hive_sync.serde_properties
+> <br>
+> `Default Value: none`<br>
+> `Config Param: HIVE_TABLE_SERDE_PROPERTIES`<br>
+
+---
+
+> #### hoodie.datasource.write.payload.class
+> Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. This will render any value set for PRECOMBINE_FIELD_OPT_VAL in-effective<br>
+> `Default Value: org.apache.hudi.common.model.OverwriteWithLatestAvroPayload`<br>
+> `Config Param: PAYLOAD_CLASS_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.hive_sync.assume_date_partitioning
+> Assume partitioning is yyyy/mm/dd<br>
+> `Default Value: false`<br>
+> `Config Param: HIVE_ASSUME_DATE_PARTITION_OPT_KEY`<br>
+
+---
+
+> #### hoodie.meta.sync.client.tool.class
+> <br>
+> `Default Value: org.apache.hudi.hive.HiveSyncTool`<br>
+> `Config Param: META_SYNC_CLIENT_TOOL_CLASS`<br>
+
+---
+
+> #### hoodie.datasource.hive_sync.password
+> hive password to use<br>
+> `Default Value: hive`<br>
+> `Config Param: HIVE_PASS_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.hive_sync.partition_fields
+> field in the table to use for determining hive partition columns.<br>
+> `Default Value: `<br>
+> `Config Param: HIVE_PARTITION_FIELDS_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.write.recordkey.field
+> Record key field. Value to be used as the `recordKey` component of `HoodieKey`.
+Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using
+the dot notation eg: `a.b.c`<br>
+> `Default Value: uuid`<br>
+> `Config Param: RECORDKEY_FIELD_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.write.commitmeta.key.prefix
+> Option keys beginning with this prefix, are automatically added to the commit/deltacommit metadata. This is useful to store checkpointing information, in a consistent way with the hudi timeline<br>
+> `Default Value: _`<br>
+> `Config Param: COMMIT_METADATA_KEYPREFIX_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.hive_sync.table
+> table to sync to<br>
+> `Default Value: unknown`<br>
+> `Config Param: HIVE_TABLE_OPT_KEY`<br>
+
+---
+
+> #### hoodie.deltastreamer.source.kafka.value.deserializer.class
+> <br>
+> `Default Value: none`<br>
+> `Config Param: KAFKA_AVRO_VALUE_DESERIALIZER`<br>
+
+---
+
+> #### hoodie.datasource.hive_sync.auto_create_database
+> Auto create hive database if does not exists<br>
+> `Default Value: true`<br>
+> `Config Param: HIVE_AUTO_CREATE_DATABASE_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.write.table.name
+> Hive table name, to register the table into.<br>
+> `Default Value: none`<br>
+> `Config Param: TABLE_NAME_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.write.partitionpath.urlencode
+> <br>
+> `Default Value: false`<br>
+> `Config Param: URL_ENCODE_PARTITIONING_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.hive_sync.support_timestamp
+> ‘INT64’ with original type TIMESTAMP_MICROS is converted to hive ‘timestamp’ type. Disabled by default for backward compatibility.<br>
+> `Default Value: false`<br>
+> `Config Param: HIVE_SUPPORT_TIMESTAMP`<br>
+
+---
+
+> #### hoodie.datasource.hive_sync.jdbcurl
+> Hive metastore url<br>
+> `Default Value: jdbc:hive2://localhost:10000`<br>
+> `Config Param: HIVE_URL_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.compaction.async.enable
+> <br>
+> `Default Value: true`<br>
+> `Config Param: ASYNC_COMPACT_ENABLE_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.write.streaming.retry.count
+> <br>
+> `Default Value: 3`<br>
+> `Config Param: STREAMING_RETRY_CNT_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.hive_sync.ignore_exceptions
+> <br>
+> `Default Value: false`<br>
+> `Config Param: HIVE_IGNORE_EXCEPTIONS_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.write.insert.drop.duplicates
+> If set to true, filters out all duplicate records from incoming dataframe, during insert operations.<br>
+> `Default Value: false`<br>
+> `Config Param: INSERT_DROP_DUPS_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.hive_sync.partition_extractor_class
+> <br>
+> `Default Value: org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor`<br>
+> `Config Param: HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.hive_sync.use_pre_apache_input_format
+> <br>
+> `Default Value: false`<br>
+> `Config Param: HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.write.partitionpath.field
+> Partition path field. Value to be used at the partitionPath component of HoodieKey. Actual value ontained by invoking .toString()<br>
+> `Default Value: partitionpath`<br>
+> `Config Param: PARTITIONPATH_FIELD_OPT_KEY`<br>
+
+---
+
+> #### hoodie.deltastreamer.source.kafka.value.deserializer.schema
+> <br>
+> `Default Value: none`<br>
+> `Config Param: KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA`<br>
+
+---
+
+> #### hoodie.datasource.hive_sync.sync_as_datasource
+> <br>
+> `Default Value: true`<br>
+> `Config Param: HIVE_SYNC_AS_DATA_SOURCE_TABLE`<br>
+
+---
+
+> #### hoodie.datasource.hive_sync.skip_ro_suffix
+> Skip the _ro suffix for Read optimized table, when registering<br>
+> `Default Value: false`<br>
+> `Config Param: HIVE_SKIP_RO_SUFFIX`<br>
+
+---
+
+> #### hoodie.datasource.meta.sync.enable
+> <br>
+> `Default Value: false`<br>
+> `Config Param: META_SYNC_ENABLED_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.write.row.writer.enable
+> <br>
+> `Default Value: false`<br>
+> `Config Param: ENABLE_ROW_WRITER_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.write.streaming.ignore.failed.batch
+> <br>
+> `Default Value: true`<br>
+> `Config Param: STREAMING_IGNORE_FAILED_BATCH_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.hive_sync.enable
+> When set to true, register/sync the table to Apache Hive metastore<br>
+> `Default Value: false`<br>
+> `Config Param: HIVE_SYNC_ENABLED_OPT_KEY`<br>
+
+---
+
+> #### hoodie.datasource.hive_sync.use_jdbc
+> Use JDBC when hive synchronization is enabled<br>
+> `Default Value: true`<br>
+> `Config Param: HIVE_USE_JDBC_OPT_KEY`<br>
+
+---
+
+Flink jobs using the SQL can be configured through the options in WITH clause. The actual datasource level configs are listed below.
+
+`Config Class`: org.apache.hudi.configuration.FlinkOptions<br>
+> #### read.streaming.enabled
+> org.apache.flink.configuration.description.Description@53bc8c7e<br>
+> `Default Value: false`<br>
+> `Config Param: READ_AS_STREAMING`<br>
+
+---
+
+> #### hoodie.datasource.write.keygenerator.type
+> org.apache.flink.configuration.description.Description@8ff4795<br>
+> `Default Value: SIMPLE`<br>
+> `Config Param: KEYGEN_TYPE`<br>
+
+---
+
+> #### compaction.trigger.strategy
+> org.apache.flink.configuration.description.Description@19bdfa3e<br>
+> `Default Value: num_commits`<br>
+> `Config Param: COMPACTION_TRIGGER_STRATEGY`<br>
+
+---
+
+> #### index.state.ttl
+> org.apache.flink.configuration.description.Description@78e3bebd<br>
+> `Default Value: 1.5`<br>
+> `Config Param: INDEX_STATE_TTL`<br>
+
+---
+
+> #### compaction.max_memory
+> org.apache.flink.configuration.description.Description@4f0b02a3<br>
+> `Default Value: 100`<br>
+> `Config Param: COMPACTION_MAX_MEMORY`<br>
+
+---
+
+> #### hive_sync.support_timestamp
+> org.apache.flink.configuration.description.Description@3d3a3738<br>
+> `Default Value: false`<br>
+> `Config Param: HIVE_SYNC_SUPPORT_TIMESTAMP`<br>
+
+---
+
+> #### hive_sync.skip_ro_suffix
+> org.apache.flink.configuration.description.Description@4ba056ab<br>
+> `Default Value: false`<br>
+> `Config Param: HIVE_SYNC_SKIP_RO_SUFFIX`<br>
+
+---
+
+> #### hive_sync.assume_date_partitioning
+> org.apache.flink.configuration.description.Description@2e530f34<br>
+> `Default Value: false`<br>
+> `Config Param: HIVE_SYNC_ASSUME_DATE_PARTITION`<br>
+
+---
+
+> #### hive_sync.table
+> org.apache.flink.configuration.description.Description@39da0e47<br>
+> `Default Value: unknown`<br>
+> `Config Param: HIVE_SYNC_TABLE`<br>
+
+---
+
+> #### compaction.tasks
+> org.apache.flink.configuration.description.Description@55b56db3<br>
+> `Default Value: 10`<br>
+> `Config Param: COMPACTION_TASKS`<br>
+
+---
+
+> #### hoodie.datasource.write.hive_style_partitioning
+> org.apache.flink.configuration.description.Description@1c697ca0<br>
+> `Default Value: false`<br>
+> `Config Param: HIVE_STYLE_PARTITIONING`<br>
+
+---
+
+> #### table.type
+> org.apache.flink.configuration.description.Description@2af5eab6<br>
+> `Default Value: COPY_ON_WRITE`<br>
+> `Config Param: TABLE_TYPE`<br>
+
+---
+
+> #### hive_sync.partition_extractor_class
+> org.apache.flink.configuration.description.Description@43347199<br>
+> `Default Value: org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor`<br>
+> `Config Param: HIVE_SYNC_PARTITION_EXTRACTOR_CLASS`<br>
+
+---
+
+> #### hive_sync.auto_create_db
+> org.apache.flink.configuration.description.Description@3d1254b9<br>
+> `Default Value: true`<br>
+> `Config Param: HIVE_SYNC_AUTO_CREATE_DB`<br>
+
+---
+
+> #### hive_sync.username
+> org.apache.flink.configuration.description.Description@6a49b3c7<br>
+> `Default Value: hive`<br>
+> `Config Param: HIVE_SYNC_USERNAME`<br>
+
+---
+
+> #### hive_sync.enable
+> org.apache.flink.configuration.description.Description@6f6c4462<br>
+> `Default Value: false`<br>
+> `Config Param: HIVE_SYNC_ENABLED`<br>
+
+---
+
+> #### read.streaming.check-interval
+> org.apache.flink.configuration.description.Description@f3458af<br>
+> `Default Value: 60`<br>
+> `Config Param: READ_STREAMING_CHECK_INTERVAL`<br>
+
+---
+
+> #### hoodie.datasource.merge.type
+> org.apache.flink.configuration.description.Description@20ac726c<br>
+> `Default Value: payload_combine`<br>
+> `Config Param: MERGE_TYPE`<br>
+
+---
+
+> #### write.retry.times
+> org.apache.flink.configuration.description.Description@75c2a35<br>
+> `Default Value: 3`<br>
+> `Config Param: RETRY_TIMES`<br>
+
+---
+
+> #### read.tasks
+> org.apache.flink.configuration.description.Description@a9e31e8<br>
+> `Default Value: 4`<br>
+> `Config Param: READ_TASKS`<br>
+
+---
+
+> #### write.log.max.size
+> org.apache.flink.configuration.description.Description@27c2f134<br>
+> `Default Value: 1024`<br>
+> `Config Param: WRITE_LOG_MAX_SIZE`<br>
+
+---
+
+> #### hive_sync.file_format
+> org.apache.flink.configuration.description.Description@64bed8b2<br>
+> `Default Value: PARQUET`<br>
+> `Config Param: HIVE_SYNC_FILE_FORMAT`<br>
+
+---
+
+> #### write.retry.interval.ms
+> org.apache.flink.configuration.description.Description@2555b92<br>
+> `Default Value: 2000`<br>
+> `Config Param: RETRY_INTERVAL_MS`<br>
+
+---
+
+> #### hive_sync.db
+> org.apache.flink.configuration.description.Description@793f2b41<br>
+> `Default Value: default`<br>
+> `Config Param: HIVE_SYNC_DB`<br>
+
+---
+
+> #### hive_sync.password
+> org.apache.flink.configuration.description.Description@49442e03<br>
+> `Default Value: hive`<br>
+> `Config Param: HIVE_SYNC_PASSWORD`<br>
+
+---
+
+> #### hive_sync.use_jdbc
+> org.apache.flink.configuration.description.Description@5bad04d1<br>
+> `Default Value: true`<br>
+> `Config Param: HIVE_SYNC_USE_JDBC`<br>
+
+---
+
+> #### hive_sync.jdbc_url
+> org.apache.flink.configuration.description.Description@730c4dfd<br>
+> `Default Value: jdbc:hive2://localhost:10000`<br>
+> `Config Param: HIVE_SYNC_JDBC_URL`<br>
+
+---
+
+> #### write.batch.size
+> org.apache.flink.configuration.description.Description@736905fe<br>
+> `Default Value: 64.0`<br>
+> `Config Param: WRITE_BATCH_SIZE`<br>
+
+---
+
+> #### archive.min_commits
+> org.apache.flink.configuration.description.Description@1bb509a6<br>
+> `Default Value: 20`<br>
+> `Config Param: ARCHIVE_MIN_COMMITS`<br>
+
+---
+
+> #### index.global.enabled
+> org.apache.flink.configuration.description.Description@280d1d8d<br>
+> `Default Value: false`<br>
+> `Config Param: INDEX_GLOBAL_ENABLED`<br>
+
+---
+
+> #### write.insert.drop.duplicates
+> org.apache.flink.configuration.description.Description@397fced4<br>
+> `Default Value: false`<br>
+> `Config Param: INSERT_DROP_DUPS`<br>
+
+---
+
+> #### index.partition.regex
+> org.apache.flink.configuration.description.Description@2026af0<br>
+> `Default Value: .*`<br>
+> `Config Param: INDEX_PARTITION_REGEX`<br>
+
+---
+
+> #### read.streaming.start-commit
+> org.apache.flink.configuration.description.Description@31c9bb2f<br>
+> `Default Value: none`<br>
+> `Config Param: READ_STREAMING_START_COMMIT`<br>
+
+---
+
+> #### hoodie.table.name
+> org.apache.flink.configuration.description.Description@71e839ee<br>
+> `Default Value: none`<br>
+> `Config Param: TABLE_NAME`<br>
+
+---
+
+> #### path
+> org.apache.flink.configuration.description.Description@36a65069<br>
+> `Default Value: none`<br>
+> `Config Param: PATH`<br>
+
+---
+
+> #### index.bootstrap.enabled
+> org.apache.flink.configuration.description.Description@2762e9a7<br>
+> `Default Value: false`<br>
+> `Config Param: INDEX_BOOTSTRAP_ENABLED`<br>
+
+---
+
+> #### hoodie.datasource.write.partitionpath.urlencode
+> org.apache.flink.configuration.description.Description@5b8e2ea7<br>
+> `Default Value: false`<br>
+> `Config Param: URL_ENCODE_PARTITIONING`<br>
+
+---
+
+> #### compaction.async.enabled
+> org.apache.flink.configuration.description.Description@6b994b71<br>
+> `Default Value: true`<br>
+> `Config Param: COMPACTION_ASYNC_ENABLED`<br>
+
+---
+
+> #### hive_sync.ignore_exceptions
+> org.apache.flink.configuration.description.Description@6fb87b73<br>
+> `Default Value: false`<br>
+> `Config Param: HIVE_SYNC_IGNORE_EXCEPTIONS`<br>
+
+---
+
+> #### write.ignore.failed
+> org.apache.flink.configuration.description.Description@5f2788f2<br>
+> `Default Value: true`<br>
+> `Config Param: IGNORE_FAILED`<br>
+
+---
+
+> #### write.commit.ack.timeout
+> org.apache.flink.configuration.description.Description@75f67ea7<br>
+> `Default Value: -1`<br>
+> `Config Param: WRITE_COMMIT_ACK_TIMEOUT`<br>
+
+---
+
+> #### write.payload.class
+> org.apache.flink.configuration.description.Description@549561ab<br>
+> `Default Value: org.apache.hudi.common.model.OverwriteWithLatestAvroPayload`<br>
+> `Config Param: PAYLOAD_CLASS`<br>
+
+---
+
+> #### write.operation
+> org.apache.flink.configuration.description.Description@785aeba9<br>
+> `Default Value: upsert`<br>
+> `Config Param: OPERATION`<br>
+
+---
+
+> #### hoodie.datasource.write.partitionpath.field
+> org.apache.flink.configuration.description.Description@1bd98c48<br>
+> `Default Value: `<br>
+> `Config Param: PARTITION_PATH_FIELD`<br>
+
+---
+
+> #### compaction.delta_commits
+> org.apache.flink.configuration.description.Description@5d9ccad2<br>
+> `Default Value: 5`<br>
+> `Config Param: COMPACTION_DELTA_COMMITS`<br>
+
+---
+
+> #### partition.default_name
+> org.apache.flink.configuration.description.Description@22fb60f3<br>
+> `Default Value: __DEFAULT_PARTITION__`<br>
+> `Config Param: PARTITION_DEFAULT_NAME`<br>
+
+---
+
+> #### compaction.target_io
+> org.apache.flink.configuration.description.Description@dd3d0a6<br>
+> `Default Value: 5120`<br>
+> `Config Param: COMPACTION_TARGET_IO`<br>
+
+---
+
+> #### write.log_block.size
+> org.apache.flink.configuration.description.Description@5abfb698<br>
+> `Default Value: 128`<br>
+> `Config Param: WRITE_LOG_BLOCK_SIZE`<br>
+
+---
+
+> #### write.tasks
+> org.apache.flink.configuration.description.Description@61ce2d47<br>
+> `Default Value: 4`<br>
+> `Config Param: WRITE_TASKS`<br>
+
+---
+
+> #### clean.async.enabled
+> org.apache.flink.configuration.description.Description@184b3575<br>
+> `Default Value: true`<br>
+> `Config Param: CLEAN_ASYNC_ENABLED`<br>
+
+---
+
+> #### clean.retain_commits
+> org.apache.flink.configuration.description.Description@b0e903a<br>
+> `Default Value: 10`<br>
+> `Config Param: CLEAN_RETAIN_COMMITS`<br>
+
+---
+
+> #### read.utc-timezone
+> org.apache.flink.configuration.description.Description@2ca2fcb5<br>
+> `Default Value: true`<br>
+> `Config Param: UTC_TIMEZONE`<br>
+
+---
+
+> #### archive.max_commits
+> org.apache.flink.configuration.description.Description@3c964873<br>
+> `Default Value: 30`<br>
+> `Config Param: ARCHIVE_MAX_COMMITS`<br>
+
+---
+
+> #### hoodie.datasource.query.type
+> org.apache.flink.configuration.description.Description@7db72209<br>
+> `Default Value: snapshot`<br>
+> `Config Param: QUERY_TYPE`<br>
+
+---
+
+> #### read.avro-schema.path
+> org.apache.flink.configuration.description.Description@2c7e2c5<br>
+> `Default Value: none`<br>
+> `Config Param: READ_AVRO_SCHEMA_PATH`<br>
+
+---
+
+> #### write.precombine.field
+> org.apache.flink.configuration.description.Description@39bbe17c<br>
+> `Default Value: ts`<br>
+> `Config Param: PRECOMBINE_FIELD`<br>
+
+---
+
+> #### read.avro-schema
+> org.apache.flink.configuration.description.Description@3760f3e8<br>
+> `Default Value: none`<br>
+> `Config Param: READ_AVRO_SCHEMA`<br>
+
+---
+
+> #### write.task.max.size
+> org.apache.flink.configuration.description.Description@73032867<br>
+> `Default Value: 1024.0`<br>
+> `Config Param: WRITE_TASK_MAX_SIZE`<br>
+
+---
+
+> #### hoodie.datasource.write.keygenerator.class
+> org.apache.flink.configuration.description.Description@4e6f3d08<br>
+> `Default Value: `<br>
+> `Config Param: KEYGEN_CLASS`<br>
+
+---
+
+> #### hoodie.datasource.write.recordkey.field
+> org.apache.flink.configuration.description.Description@28b995b8<br>
+> `Default Value: uuid`<br>
+> `Config Param: RECORD_KEY_FIELD`<br>
+
+---
+
+> #### compaction.delta_seconds
+> org.apache.flink.configuration.description.Description@18f6ccf4<br>
+> `Default Value: 3600`<br>
+> `Config Param: COMPACTION_DELTA_SECONDS`<br>
+
+---
+
+> #### hive_sync.metastore.uris
+> org.apache.flink.configuration.description.Description@72dc9f9d<br>
+> `Default Value: `<br>
+> `Config Param: HIVE_SYNC_METASTORE_URIS`<br>
+
+---
+
+> #### hive_sync.partition_fields
+> org.apache.flink.configuration.description.Description@45ec6bb3<br>
+> `Default Value: `<br>
+> `Config Param: HIVE_SYNC_PARTITION_FIELDS`<br>
+
+---
+
+> #### write.merge.max_memory
+> org.apache.flink.configuration.description.Description@219c32e3<br>
+> `Default Value: 100`<br>
+> `Config Param: WRITE_MERGE_MAX_MEMORY`<br>
+
+---
 
 ## Write Client Configs {#WRITE_CLIENT}
 Internally, the Hudi datasource uses a RDD based HoodieWriteClient API to actually perform writes to storage. These configs provide deep control over lower level aspects like file sizing, compression, parallelism, compaction, write schema, cleaning etc. Although Hudi provides sane defaults, from time-time these configs may need to be tweaked to optimize for specific workloads.
@@ -1799,388 +2633,8 @@ Configurations that control bootstrap related configs. If you want to bootstrap 
 
 ---
 
-## Spark Datasource Configs {#SPARK_DATASOURCE}
-These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge records or choosing query type to read.
-
-### Read Options {#Read-Options}
-
-Options useful for reading tables via `read.format.option(...)`
-
-
-`Config Class`: org.apache.hudi.DataSourceReadOptions.scala<br>
-> #### hoodie.file.index.enable
-> <br>
-> `Default Value: true`<br>
-> `Config Param: ENABLE_HOODIE_FILE_INDEX`<br>
-
----
-
-> #### hoodie.datasource.merge.type
-> <br>
-> `Default Value: payload_combine`<br>
-> `Config Param: REALTIME_MERGE_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.read.incr.path.glob
-> <br>
-> `Default Value: `<br>
-> `Config Param: INCR_PATH_GLOB_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.query.type
-> Whether data needs to be read, in incremental mode (new data since an instantTime) (or) Read Optimized mode (obtain latest view, based on columnar data) (or) Snapshot mode (obtain latest view, based on row & columnar data)<br>
-> `Default Value: snapshot`<br>
-> `Config Param: QUERY_TYPE_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.write.precombine.field
-> Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)<br>
-> `Default Value: ts`<br>
-> `Config Param: READ_PRE_COMBINE_FIELD`<br>
-
----
-
-> #### hoodie.datasource.read.end.instanttime
-> Instant time to limit incrementally fetched data to. New data written with an instant_time <= END_INSTANTTIME are fetched out.<br>
-> `Default Value: none`<br>
-> `Config Param: END_INSTANTTIME_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.read.begin.instanttime
-> Instant time to start incrementally pulling data from. The instanttime here need not necessarily correspond to an instant on the timeline. New data written with an instant_time > BEGIN_INSTANTTIME are fetched out. For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM.<br>
-> `Default Value: none`<br>
-> `Config Param: BEGIN_INSTANTTIME_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.read.schema.use.end.instanttime
-> Uses end instant schema when incrementally fetched data to. Default: users latest instant schema.<br>
-> `Default Value: false`<br>
-> `Config Param: INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.read.incr.filters
-> <br>
-> `Default Value: `<br>
-> `Config Param: PUSH_DOWN_INCR_FILTERS_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.read.paths
-> <br>
-> `Default Value: none`<br>
-> `Config Param: READ_PATHS_OPT_KEY`<br>
-
----
-
-### Write Options {#Write-Options}
-
-You can pass down any of the WriteClient level configs directly using `options()` or `option(k,v)` methods.
-
-```java
-inputDF.write()
-.format("org.apache.hudi")
-.options(clientOpts) // any of the Hudi client opts can be passed in as well
-.option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY(), "_row_key")
-.option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), "partition")
-.option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY(), "timestamp")
-.option(HoodieWriteConfig.TABLE_NAME, tableName)
-.mode(SaveMode.Append)
-.save(basePath);
-```
-
-Options useful for writing tables via `write.format.option(...)`
-
-
-`Config Class`: org.apache.hudi.DataSourceWriteOptions.scala<br>
-> #### hoodie.datasource.hive_sync.database
-> database to sync to<br>
-> `Default Value: default`<br>
-> `Config Param: HIVE_DATABASE_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.write.precombine.field
-> Field used in preCombining before actual write. When two records have the same key value, we will pick the one with the largest value for the precombine field, determined by Object.compareTo(..)<br>
-> `Default Value: ts`<br>
-> `Config Param: PRECOMBINE_FIELD_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.hive_sync.username
-> hive user name to use<br>
-> `Default Value: hive`<br>
-> `Config Param: HIVE_USER_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.hive_sync.table_properties
-> <br>
-> `Default Value: none`<br>
-> `Config Param: HIVE_TABLE_PROPERTIES`<br>
-
----
-
-> #### hoodie.datasource.write.keygenerator.class
-> Key generator class, that implements will extract the key out of incoming Row object<br>
-> `Default Value: none`<br>
-> `Config Param: KEYGENERATOR_CLASS_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.hive_sync.base_file_format
-> <br>
-> `Default Value: PARQUET`<br>
-> `Config Param: HIVE_BASE_FILE_FORMAT_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.write.table.type
-> The table type for the underlying data, for this write. This can’t change between writes.<br>
-> `Default Value: COPY_ON_WRITE`<br>
-> `Config Param: TABLE_TYPE_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.write.operation
-> Whether to do upsert, insert or bulkinsert for the write operation. Use bulkinsert to load new data into a table, and there on use upsert/insert. bulk insert uses a disk based write path to scale to load large inputs without need to cache it.<br>
-> `Default Value: upsert`<br>
-> `Config Param: OPERATION_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.write.streaming.retry.interval.ms
-> <br>
-> `Default Value: 2000`<br>
-> `Config Param: STREAMING_RETRY_INTERVAL_MS_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.write.hive_style_partitioning
-> Flag to indicate whether to use Hive style partitioning.
-If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.
-By default false (the names of partition folders are only partition values)<br>
-> `Default Value: false`<br>
-> `Config Param: HIVE_STYLE_PARTITIONING_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.hive_sync.serde_properties
-> <br>
-> `Default Value: none`<br>
-> `Config Param: HIVE_TABLE_SERDE_PROPERTIES`<br>
-
----
-
-> #### hoodie.datasource.write.payload.class
-> Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. This will render any value set for PRECOMBINE_FIELD_OPT_VAL in-effective<br>
-> `Default Value: org.apache.hudi.common.model.OverwriteWithLatestAvroPayload`<br>
-> `Config Param: PAYLOAD_CLASS_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.hive_sync.assume_date_partitioning
-> Assume partitioning is yyyy/mm/dd<br>
-> `Default Value: false`<br>
-> `Config Param: HIVE_ASSUME_DATE_PARTITION_OPT_KEY`<br>
-
----
-
-> #### hoodie.meta.sync.client.tool.class
-> <br>
-> `Default Value: org.apache.hudi.hive.HiveSyncTool`<br>
-> `Config Param: META_SYNC_CLIENT_TOOL_CLASS`<br>
-
----
-
-> #### hoodie.datasource.hive_sync.password
-> hive password to use<br>
-> `Default Value: hive`<br>
-> `Config Param: HIVE_PASS_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.hive_sync.partition_fields
-> field in the table to use for determining hive partition columns.<br>
-> `Default Value: `<br>
-> `Config Param: HIVE_PARTITION_FIELDS_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.write.recordkey.field
-> Record key field. Value to be used as the `recordKey` component of `HoodieKey`.
-Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using
-the dot notation eg: `a.b.c`<br>
-> `Default Value: uuid`<br>
-> `Config Param: RECORDKEY_FIELD_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.write.commitmeta.key.prefix
-> Option keys beginning with this prefix, are automatically added to the commit/deltacommit metadata. This is useful to store checkpointing information, in a consistent way with the hudi timeline<br>
-> `Default Value: _`<br>
-> `Config Param: COMMIT_METADATA_KEYPREFIX_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.hive_sync.table
-> table to sync to<br>
-> `Default Value: unknown`<br>
-> `Config Param: HIVE_TABLE_OPT_KEY`<br>
-
----
-
-> #### hoodie.deltastreamer.source.kafka.value.deserializer.class
-> <br>
-> `Default Value: none`<br>
-> `Config Param: KAFKA_AVRO_VALUE_DESERIALIZER`<br>
-
----
-
-> #### hoodie.datasource.hive_sync.auto_create_database
-> Auto create hive database if does not exists<br>
-> `Default Value: true`<br>
-> `Config Param: HIVE_AUTO_CREATE_DATABASE_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.write.table.name
-> Hive table name, to register the table into.<br>
-> `Default Value: none`<br>
-> `Config Param: TABLE_NAME_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.write.partitionpath.urlencode
-> <br>
-> `Default Value: false`<br>
-> `Config Param: URL_ENCODE_PARTITIONING_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.hive_sync.support_timestamp
-> ‘INT64’ with original type TIMESTAMP_MICROS is converted to hive ‘timestamp’ type. Disabled by default for backward compatibility.<br>
-> `Default Value: false`<br>
-> `Config Param: HIVE_SUPPORT_TIMESTAMP`<br>
-
----
-
-> #### hoodie.datasource.hive_sync.jdbcurl
-> Hive metastore url<br>
-> `Default Value: jdbc:hive2://localhost:10000`<br>
-> `Config Param: HIVE_URL_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.compaction.async.enable
-> <br>
-> `Default Value: true`<br>
-> `Config Param: ASYNC_COMPACT_ENABLE_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.write.streaming.retry.count
-> <br>
-> `Default Value: 3`<br>
-> `Config Param: STREAMING_RETRY_CNT_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.hive_sync.ignore_exceptions
-> <br>
-> `Default Value: false`<br>
-> `Config Param: HIVE_IGNORE_EXCEPTIONS_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.write.insert.drop.duplicates
-> If set to true, filters out all duplicate records from incoming dataframe, during insert operations.<br>
-> `Default Value: false`<br>
-> `Config Param: INSERT_DROP_DUPS_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.hive_sync.partition_extractor_class
-> <br>
-> `Default Value: org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor`<br>
-> `Config Param: HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.hive_sync.use_pre_apache_input_format
-> <br>
-> `Default Value: false`<br>
-> `Config Param: HIVE_USE_PRE_APACHE_INPUT_FORMAT_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.write.partitionpath.field
-> Partition path field. Value to be used at the partitionPath component of HoodieKey. Actual value ontained by invoking .toString()<br>
-> `Default Value: partitionpath`<br>
-> `Config Param: PARTITIONPATH_FIELD_OPT_KEY`<br>
-
----
-
-> #### hoodie.deltastreamer.source.kafka.value.deserializer.schema
-> <br>
-> `Default Value: none`<br>
-> `Config Param: KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA`<br>
-
----
-
-> #### hoodie.datasource.hive_sync.sync_as_datasource
-> <br>
-> `Default Value: true`<br>
-> `Config Param: HIVE_SYNC_AS_DATA_SOURCE_TABLE`<br>
-
----
-
-> #### hoodie.datasource.hive_sync.skip_ro_suffix
-> Skip the _ro suffix for Read optimized table, when registering<br>
-> `Default Value: false`<br>
-> `Config Param: HIVE_SKIP_RO_SUFFIX`<br>
-
----
-
-> #### hoodie.datasource.meta.sync.enable
-> <br>
-> `Default Value: false`<br>
-> `Config Param: META_SYNC_ENABLED_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.write.row.writer.enable
-> <br>
-> `Default Value: false`<br>
-> `Config Param: ENABLE_ROW_WRITER_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.write.streaming.ignore.failed.batch
-> <br>
-> `Default Value: true`<br>
-> `Config Param: STREAMING_IGNORE_FAILED_BATCH_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.hive_sync.enable
-> When set to true, register/sync the table to Apache Hive metastore<br>
-> `Default Value: false`<br>
-> `Config Param: HIVE_SYNC_ENABLED_OPT_KEY`<br>
-
----
-
-> #### hoodie.datasource.hive_sync.use_jdbc
-> Use JDBC when hive synchronization is enabled<br>
-> `Default Value: true`<br>
-> `Config Param: HIVE_USE_JDBC_OPT_KEY`<br>
-
----
+## Record Payload Config {#RECORD_PAYLOAD}
+This is the lowest level of customization offered by Hudi. Record payloads define how to produce new values to upsert based on incoming new record and stored old record. Hudi provides default implementations such as OverwriteWithLatestAvroPayload which simply update table with the latest/last-written record. This can be overridden to a custom class extending HoodieRecordPayload class, on both datasource and WriteClient levels.
 
 ## Metrics Configs {#METRICS}
 These set of configs are used to enable monitoring and reporting of keyHudi stats and metrics.
@@ -2402,7 +2856,4 @@ Enables reporting on Hudi metrics. Hudi publishes metrics on every commit, clean
 
 ## Flink Sql Configs {#FLINK_SQL}
 These configs control the Hudi Flink SQL source/sink connectors, providing ability to define record keys, pick out the write operation, specify how to merge records, enable/disable asynchronous compaction or choosing query type to read.
-
-## Record Payload Config {#RECORD_PAYLOAD}
-This is the lowest level of customization offered by Hudi. Record payloads define how to produce new values to upsert based on incoming new record and stored old record. Hudi provides default implementations such as OverwriteWithLatestAvroPayload which simply update table with the latest/last-written record. This can be overridden to a custom class extending HoodieRecordPayload class, on both datasource and WriteClient levels.
 

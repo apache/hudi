@@ -14,6 +14,7 @@
         <hudi.version>0.9.0-SNAPSHOT</hudi.version>
         <scala.binary.version>2.11</scala.binary.version>
         <hudi.spark.module>hudi-spark2</hudi.spark.module>
+        <scala.binary.version>2.11</scala.binary.version>
         <junit.version>4.11</junit.version>
     </properties>
 
@@ -35,8 +36,15 @@
         <!-- Hudi spark datasource for Spark Configs -->
         <dependency>
             <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-spark-common_2.11</artifactId>
+            <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
             <version>${hudi.version}</version>
+        </dependency>
+
+        <!-- Hudi spark datasource for Flink Configs -->
+        <dependency>
+        <groupId>org.apache.hudi</groupId>
+        <artifactId>hudi-flink_${scala.binary.version}</artifactId>
+        <version>${hudi.version}</version>
         </dependency>
 
         <!-- Logging -->
