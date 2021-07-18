@@ -25,50 +25,17 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Hudi jars -->
+        <!-- Hudi common for HoodieConfig -->
         <dependency>
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-common</artifactId>
             <version>${hudi.version}</version>
         </dependency>
+
+        <!-- Hudi spark datasource for Spark Configs -->
         <dependency>
             <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-client-common</artifactId>
-            <version>${hudi.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-spark-client</artifactId>
-            <version>${hudi.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-hadoop-mr</artifactId>
-            <version>${hudi.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-hive-sync</artifactId>
-            <version>${hudi.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
-            <version>${hudi.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-spark_${scala.binary.version}</artifactId>
-            <version>${hudi.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.hudi</groupId>
-            <artifactId>${hudi.spark.module}_${scala.binary.version}</artifactId>
-            <version>${hudi.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-timeline-service</artifactId>
+            <artifactId>hudi-spark-common_2.11</artifactId>
             <version>${hudi.version}</version>
         </dependency>
 
