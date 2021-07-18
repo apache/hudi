@@ -18,6 +18,7 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigGroupName;
 import org.apache.hudi.common.config.ConfigGroupProperty;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -28,7 +29,11 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
 
-@ConfigGroupProperty(name = "HBase Index Configs", description = "Configurations that control indexing behavior (when HBase based indexing is enabled), which tags incoming records as either inserts or updates to older records.")
+@ConfigGroupProperty(name = "HBase Index Configs",
+    groupName = ConfigGroupName.WRITE_CLIENT,
+    description = "Configurations that control indexing behavior " +
+        "(when HBase based indexing is enabled), which tags incoming " +
+        "records as either inserts or updates to older records.")
 public class HoodieHBaseIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> HBASE_ZKQUORUM_PROP = ConfigProperty

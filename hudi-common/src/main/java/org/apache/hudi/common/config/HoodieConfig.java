@@ -68,6 +68,7 @@ public class HoodieConfig implements Serializable {
     }
   }
 
+
   public <T> void setDefaultValue(ConfigProperty<T> configProperty, T defaultVal) {
     if (!contains(configProperty)) {
       props.setProperty(configProperty.key(), defaultVal.toString());

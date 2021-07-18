@@ -28,5 +28,6 @@ import java.lang.annotation.Target;
 
 public @interface ConfigGroupProperty {
   String name();
+  ConfigGroupName groupName();
   String description();
 }

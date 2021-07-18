@@ -18,6 +18,7 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigGroupName;
 import org.apache.hudi.common.config.ConfigGroupProperty;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -30,7 +31,11 @@ import java.util.Properties;
 /**
  * Clustering specific configs.
  */
-@ConfigGroupProperty(name = "Clustering Configs", description = "Configurations that control clustering operations in hudi. Each clustering has to be configured for its strategy, and config params. This config drives the same.")
+@ConfigGroupProperty(name = "Clustering Configs",
+    groupName = ConfigGroupName.WRITE_CLIENT,
+    description = "Configurations that control clustering operations in hudi. " +
+        "Each clustering has to be configured for its strategy, and config params. " +
+        "This config drives the same.")
 public class HoodieClusteringConfig extends HoodieConfig {
 
   // Any strategy specific params can be saved with this prefix

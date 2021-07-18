@@ -18,6 +18,7 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigGroupName;
 import org.apache.hudi.common.config.ConfigGroupProperty;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -42,7 +43,11 @@ import java.util.stream.Collectors;
  * Compaction related config.
  */
 @Immutable
-@ConfigGroupProperty(name = "Compaction Configs", description = "Configurations that control compaction (merging of log files onto a new parquet base file), cleaning (reclamation of older/unused file groups).")
+@ConfigGroupProperty(name = "Compaction Configs",
+    groupName = ConfigGroupName.WRITE_CLIENT,
+    description = "Configurations that control compaction " +
+        "(merging of log files onto a new parquet base file), " +
+        "cleaning (reclamation of older/unused file groups).")
 public class HoodieCompactionConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> AUTO_CLEAN_PROP = ConfigProperty
