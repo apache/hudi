@@ -150,6 +150,12 @@ Meanwhile, we build a set of data access standards based on Hudi, which provides
 
 23. ["Apache Hudi Meetup at Uber with talks from AWS, CityStorageSystems & Uber"](https://youtu.be/iXBInMLbjo0) - By Udit Mehrotra, Wenning Ding (AWS), Alexander Filipchik (CityStorageSystems), Prashant Wason, Satish Kotha (Uber), Feb 2021
 
+24. ["Apache Hudi: The Streaming Data Lake Platform"](https://docs.google.com/presentation/d/1lVpbYV7qytAZPdwx4X9DD9ii0qFh7n9WGKJ0XQ4VpIs/edit?usp=sharing) - By Nishith Agarwal, Sivabalan Narayanan, 
+Data Summit Connect, May, 2021
+    
+25. ["Change Data Capture to Data lakes using Apache Pulsar/Hudi"](https://www.slideshare.net/streamnative/change-data-capture-to-data-lakes-using-apache-pulsar-and-apache-hudi-pulsar-summit-na-2021)
+ - By Vinoth Chandar, Pulsar Summit North America, June 2021. ["Video link"](https://www.youtube.com/watch?v=MWpnVIgcAXw) 
+
 ## Articles
 
 You can check out [our blog pages](https://hudi.apache.org/blog.html) for content written by our committers/contributors.
