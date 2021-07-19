@@ -19,8 +19,8 @@
 
 package org.apache.hudi.utils;
 
-import org.apache.hudi.common.config.ConfigGroupName;
-import org.apache.hudi.common.config.ConfigGroupProperty;
+import org.apache.hudi.common.config.ConfigGroups;
+import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.StringUtils;
@@ -31,8 +31,8 @@ import net.steppschuh.markdowngenerator.list.ListBuilder;
 import net.steppschuh.markdowngenerator.rule.HorizontalRule;
 import net.steppschuh.markdowngenerator.text.Text;
 import net.steppschuh.markdowngenerator.text.emphasis.BoldText;
-import net.steppschuh.markdowngenerator.text.heading.Heading;
 import org.apache.flink.configuration.ConfigOption;
+import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.description.HtmlFormatter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -46,12 +46,10 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collector;
 
 import static org.reflections.ReflectionUtils.getAllFields;
 import static org.reflections.ReflectionUtils.withTypeAssignableTo;
@@ -70,6 +68,7 @@ public class HoodieConfigDocGenerator {
   private static final String SUMMARY = "This page covers the different ways of configuring " +
       "your job to write/read Hudi tables. " +
       "At a high level, you can control behaviour at few levels.";
+  private static final String FLINK_CONFIG_CLASS_NAME = "org.apache.hudi.configuration.FlinkOptions";
 
   public static void main(String[] args) {
     Reflections reflections = new Reflections("org.apache.hudi");
@@ -79,40 +78,45 @@ public class HoodieConfigDocGenerator {
     generateHeader(mainDocBuilder);
 
     ListBuilder contentTableBuilder = new ListBuilder();
-    Map<ConfigGroupName, StringBuilder> contentMap = generateContentTableAndMainHeadings(contentTableBuilder);
+    Map<ConfigGroups.Names, StringBuilder> contentMap = generateContentTableAndMainHeadings(contentTableBuilder);
 
-    // Manual step: Add all configs that are not superclasses of HoodieConfig currently
+    // Special casing Spark Configs since the class does not extend HoodieConfig
+    // and also does not use ConfigClassProperty
     populateSparkConfigs(contentMap);
-    populateFlinkConfigs(contentMap);
 
     // Automated: Scan through all HoodieConfig superclasses using reflection
     for (Class<? extends HoodieConfig> subType : subTypes) {
       // sub-heading using the annotation
-      ConfigGroupProperty configGroupProperty = subType.getAnnotation(ConfigGroupProperty.class);
+      ConfigClassProperty configGroupProperty = subType.getAnnotation(ConfigClassProperty.class);
       try {
-        StringBuilder configParamsBuilder = contentMap.get(configGroupProperty.groupName());
         if (configGroupProperty != null) {
+          StringBuilder configParamsBuilder = contentMap.get(configGroupProperty.groupName());
           LOG.info("Processing params for config class: " + subType.getName() + " " + configGroupProperty.name()
-              + " " + configGroupProperty.description());
+            + " " + configGroupProperty.description());
           configParamsBuilder.append("### ").append(configGroupProperty.name())
               .append(" {" + "#").append(configGroupProperty.name().replace(" ", "-")).append("}")
               .append(DOUBLE_NEWLINE);
           configParamsBuilder.append(configGroupProperty.description()).append(DOUBLE_NEWLINE);
+
+          configParamsBuilder
+              .append("`")
+              .append(new Text("Config Class"))
+              .append("`")
+              .append(": ")
+              .append(subType.getName()).append(LINE_BREAK);
+
+          // Special casing Flink Configs since the class does not use ConfigClassProperty
+          // Also, we need to split Flink Options into Flink Read Options, Write Options...
+          if (subType.getName().equals(FLINK_CONFIG_CLASS_NAME)) {
+            generateFlinkConfigMarkup(subType, configParamsBuilder);
+          } else {
+            Set<Field> fields = getAllFields(subType, withTypeAssignableTo(ConfigProperty.class));
+            for (Field field : fields) {
+              generateConfigMarkup(subType, field, null, configParamsBuilder);
+            }
+          }
         } else {
-          configParamsBuilder.append(new Heading(subType.getSimpleName(), 3)).append(DOUBLE_NEWLINE);
-          LOG.warn("Please add annotation ConfigGroupProperty to config class: " + subType.getName());
-        }
-
-        configParamsBuilder
-            .append("`")
-            .append(new Text("Config Class"))
-            .append("`")
-            .append(": ")
-            .append(subType.getName()).append(LINE_BREAK);
-
-        Set<Field> fields = getAllFields(subType, withTypeAssignableTo(ConfigProperty.class));
-        for (Field field : fields) {
-          generateConfigMarkup(subType, field, null, configParamsBuilder);
+          LOG.error("FATAL error Please add `ConfigClassProperty` annotation for " + subType.getName());
         }
       } catch (Exception e) {
         LOG.error("FATAL error while processing config class: " + subType.getName(), e);
@@ -153,27 +157,27 @@ public class HoodieConfigDocGenerator {
     builder.append(SUMMARY).append(DOUBLE_NEWLINE);
   }
 
-  private static Map<ConfigGroupName, StringBuilder> generateContentTableAndMainHeadings(ListBuilder builder) {
-    EnumSet.allOf(ConfigGroupName.class).forEach(groupName -> builder.append(
+  private static Map<ConfigGroups.Names, StringBuilder> generateContentTableAndMainHeadings(ListBuilder builder) {
+    EnumSet.allOf(ConfigGroups.Names.class).forEach(groupName -> builder.append(
         new Link(new BoldText(groupName.name),
             "#" + groupName.name())
-            + ": " + ConfigGroupName.getDescription(groupName)));
-    Map<ConfigGroupName, StringBuilder> contentMap = new HashMap<>();
-    EnumSet.allOf(ConfigGroupName.class).forEach(groupName -> {
+            + ": " + ConfigGroups.getDescription(groupName)));
+    Map<ConfigGroups.Names, StringBuilder> contentMap = new HashMap<>();
+    EnumSet.allOf(ConfigGroups.Names.class).forEach(groupName -> {
       StringBuilder stringBuilder = new StringBuilder();
       stringBuilder.append("## ")
           .append(groupName.name)
           .append(" {" + "#").append(groupName.name()).append("}")
           .append(NEWLINE)
-          .append(ConfigGroupName.getDescription(groupName))
+          .append(ConfigGroups.getDescription(groupName))
           .append(DOUBLE_NEWLINE);
       contentMap.put(groupName, stringBuilder);
     });
     return contentMap;
   }
 
-  private static void populateSparkConfigs(Map<ConfigGroupName, StringBuilder> contentMap) {
-    StringBuilder configParamsBuilder = contentMap.get(ConfigGroupName.SPARK_DATASOURCE);
+  private static void populateSparkConfigs(Map<ConfigGroups.Names, StringBuilder> contentMap) {
+    StringBuilder configParamsBuilder = contentMap.get(ConfigGroups.Names.SPARK_DATASOURCE);
 
     for (Object sparkConfigObject : HoodieSparkConfigs.getSparkConfigObjects()) {
       String configName = HoodieSparkConfigs.name(sparkConfigObject);
@@ -200,38 +204,25 @@ public class HoodieConfigDocGenerator {
     }
   }
 
-  private static void populateFlinkConfigs(Map<ConfigGroupName, StringBuilder> contentMap) {
-    StringBuilder configParamsBuilder = contentMap.get(ConfigGroupName.FLINK_SQL);
-    String flinkClassName = "org.apache.hudi.configuration.FlinkOptions";
-    try {
-      LOG.info("Processing params for config class: " + flinkClassName);
-      // ToDo subgroup flink options into Read, Write, Index sync and Hive sync
-      /*configParamsBuilder
-          //.append("### ").append("Write Options")
-          //.append(" {" + "#").append(configGroupProperty.name().replace(" ", "-")).append("}")
-          //.append(DOUBLE_NEWLINE);*/
-      configParamsBuilder.append("Flink jobs using the SQL can be configured through the options in WITH clause. " +
-          "The actual datasource level configs are listed below.").append(DOUBLE_NEWLINE);
-
-      configParamsBuilder
-          .append("`")
-          .append(new Text("Config Class"))
-          .append("`")
-          .append(": ")
-          .append(flinkClassName).append(LINE_BREAK);
-
-      Set<Field> fields = getAllFields(FlinkOptions.class, withTypeAssignableTo(ConfigOption.class));
-      for (Field field : fields) {
-        try {
+  private static void generateFlinkConfigMarkup(Class subType, StringBuilder configParamsBuilder) {
+      try {
+        Set<Field> fields = getAllFields(FlinkOptions.class, withTypeAssignableTo(ConfigOption.class));
+        for (Field field : fields) {
           ConfigOption cfgProperty = (ConfigOption) field.get(null);
-
+          String description = new HtmlFormatter().format(cfgProperty.description());
+          if (description.isEmpty()) {
+            LOG.warn("Found empty or null description for config class = "
+                + subType.getName()
+                + " for param = "
+                + field.getName());
+          }
           // Config Header
           configParamsBuilder.append("> ").append("#### ").append(new Text(cfgProperty.key())).append(NEWLINE);
 
           // Description
           configParamsBuilder
               .append("> ")
-              .append(new HtmlFormatter().format(cfgProperty.description()))
+              .append(description)
               .append(LINE_BREAK);
 
           // Default value
@@ -244,13 +235,10 @@ public class HoodieConfigDocGenerator {
               .append(NEWLINE)
               .append(new HorizontalRule(3))
               .append(DOUBLE_NEWLINE);
-        } catch (IllegalAccessException e) {
-          LOG.error("Error while getting field through reflection for config class: " + flinkClassName, e);
         }
+      } catch (IllegalAccessException e) {
+        LOG.error("Error while getting field through reflection for config class: " + subType.getName(), e);
       }
-    } catch (Exception e) {
-      LOG.error("FATAL error while processing config class: " + flinkClassName, e);
-    }
   }
 
   private static void generateConfigMarkup(Class subType, Field field, Object object, StringBuilder configParamsBuilder) {
