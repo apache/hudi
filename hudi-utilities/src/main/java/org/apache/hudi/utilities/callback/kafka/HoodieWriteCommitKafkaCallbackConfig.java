@@ -29,9 +29,9 @@ import static org.apache.hudi.config.HoodieWriteCommitCallbackConfig.CALLBACK_PR
  */
 @ConfigClassProperty(name = "Write commit Kafka callback configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Controls Kafka callback behavior on write commit. " +
-        "Exception will be thrown if user enabled the callback service " +
-        "and errors occurred during the process of callback.")
+    description = "Controls Kafka callback behavior on write commit. "
+        + "Exception will be thrown if user enabled the callback service "
+        + "and errors occurred during the process of callback.")
 public class HoodieWriteCommitKafkaCallbackConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> CALLBACK_KAFKA_BOOTSTRAP_SERVERS = ConfigProperty

@@ -29,8 +29,8 @@ import static org.apache.hudi.config.HoodieMetricsConfig.METRIC_PREFIX;
 
 @ConfigClassProperty(name = "Metrics Configurations for Prometheus",
     groupName = ConfigGroups.Names.METRICS,
-    description = "Enables reporting on Hudi metrics using Prometheus. " +
-        " Hudi publishes metrics on every commit, clean, rollback etc.")
+    description = "Enables reporting on Hudi metrics using Prometheus. "
+        + " Hudi publishes metrics on every commit, clean, rollback etc.")
 public class HoodieMetricsPrometheusConfig extends HoodieConfig {
 
   // Prometheus PushGateWay

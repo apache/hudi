@@ -59,8 +59,8 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT
  */
 @ConfigClassProperty(name = "Locks Configurations",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configs that control locking mechanisms if " +
-        "WRITE_CONCURRENCY_MODE_PROP is set to optimistic_concurrency_control")
+    description = "Configs that control locking mechanisms if "
+        + "WRITE_CONCURRENCY_MODE_PROP is set to optimistic_concurrency_control")
 public class HoodieLockConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP = ConfigProperty

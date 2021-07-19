@@ -32,9 +32,9 @@ import java.util.Properties;
  */
 @ConfigClassProperty(name = "Write commit HTTP callback configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Controls HTTP callback behavior on write commit. " +
-        "Exception will be thrown if user enabled the callback service " +
-        "and errors occurred during the process of callback.")
+    description = "Controls HTTP callback behavior on write commit. "
+        + "Exception will be thrown if user enabled the callback service "
+        + "and errors occurred during the process of callback.")
 public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
 
   public static final String CALLBACK_PREFIX = "hoodie.write.commit.callback.";

@@ -40,37 +40,40 @@ public class ConfigGroups {
   }
 
   public static String getDescription(Names names) {
-    String description = "Please fill in the description for Config Group Name: " + names.name;
+    String description;
     switch (names) {
       case SPARK_DATASOURCE:
-        description =  "These configs control the Hudi Spark Datasource, " +
-          "providing ability to define keys/partitioning, pick out the write operation, " +
-          "specify how to merge records or choosing query type to read.";
-      break;
+        description =  "These configs control the Hudi Spark Datasource, "
+            + "providing ability to define keys/partitioning, pick out the write operation, "
+            + "specify how to merge records or choosing query type to read.";
+        break;
       case FLINK_SQL:
-        description = "These configs control the Hudi Flink SQL source/sink connectors, " +
-            "providing ability to define record keys, pick out the write operation, " +
-            "specify how to merge records, enable/disable asynchronous compaction " +
-            "or choosing query type to read.";
+        description = "These configs control the Hudi Flink SQL source/sink connectors, "
+            + "providing ability to define record keys, pick out the write operation, "
+            + "specify how to merge records, enable/disable asynchronous compaction "
+            + "or choosing query type to read.";
         break;
       case WRITE_CLIENT:
-        description = "Internally, the Hudi datasource uses a RDD based HoodieWriteClient API " +
-            "to actually perform writes to storage. These configs provide deep control over " +
-            "lower level aspects like file sizing, compression, parallelism, compaction, " +
-            "write schema, cleaning etc. Although Hudi provides sane defaults, from time-time " +
-            "these configs may need to be tweaked to optimize for specific workloads.";
+        description = "Internally, the Hudi datasource uses a RDD based HoodieWriteClient API "
+            + "to actually perform writes to storage. These configs provide deep control over "
+            + "lower level aspects like file sizing, compression, parallelism, compaction, "
+            + "write schema, cleaning etc. Although Hudi provides sane defaults, from time-time "
+            + "these configs may need to be tweaked to optimize for specific workloads.";
         break;
       case RECORD_PAYLOAD:
-        description =  "This is the lowest level of customization offered by Hudi. " +
-            "Record payloads define how to produce new values to upsert based on incoming " +
-            "new record and stored old record. Hudi provides default implementations such as " +
-            "OverwriteWithLatestAvroPayload which simply update table with the latest/last-written record. " +
-            "This can be overridden to a custom class extending HoodieRecordPayload class, " +
-            "on both datasource and WriteClient levels.";
+        description =  "This is the lowest level of customization offered by Hudi. "
+            + "Record payloads define how to produce new values to upsert based on incoming "
+            + "new record and stored old record. Hudi provides default implementations such as "
+            + "OverwriteWithLatestAvroPayload which simply update table with the latest/last-written record. "
+            + "This can be overridden to a custom class extending HoodieRecordPayload class, "
+            + "on both datasource and WriteClient levels.";
         break;
       case METRICS:
-        description = "These set of configs are used to enable monitoring and reporting of key" +
-            "Hudi stats and metrics.";
+        description = "These set of configs are used to enable monitoring and reporting of key"
+            + "Hudi stats and metrics.";
+        break;
+      default:
+        description = "Please fill in the description for Config Group Name: " + names.name;
         break;
     }
     return description;

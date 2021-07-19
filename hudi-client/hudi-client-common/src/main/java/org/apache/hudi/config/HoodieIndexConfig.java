@@ -40,8 +40,8 @@ import java.util.Properties;
 @Immutable
 @ConfigClassProperty(name = "Index Configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configurations that control indexing behavior, " +
-        "which tags incoming records as either inserts or updates to older records.")
+    description = "Configurations that control indexing behavior, "
+        + "which tags incoming records as either inserts or updates to older records.")
 public class HoodieIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> INDEX_TYPE_PROP = ConfigProperty

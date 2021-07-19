@@ -33,9 +33,9 @@ import java.util.Properties;
  */
 @ConfigClassProperty(name = "Clustering Configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configurations that control clustering operations in hudi. " +
-        "Each clustering has to be configured for its strategy, and config params. " +
-        "This config drives the same.")
+    description = "Configurations that control clustering operations in hudi. "
+        + "Each clustering has to be configured for its strategy, and config params. "
+        + "This config drives the same.")
 public class HoodieClusteringConfig extends HoodieConfig {
 
   // Any strategy specific params can be saved with this prefix

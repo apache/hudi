@@ -36,8 +36,8 @@ import java.util.Properties;
 @Immutable
 @ConfigClassProperty(name = "Memory Configurations",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Controls memory usage for compaction " +
-        "and merges, performed internally by Hudi.")
+    description = "Controls memory usage for compaction "
+        + "and merges, performed internally by Hudi.")
 public class HoodieMemoryConfig extends HoodieConfig {
 
   // Default max memory fraction during hash-merge, excess spills to disk

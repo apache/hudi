@@ -37,8 +37,8 @@ import static org.apache.hudi.config.HoodieMetricsConfig.METRIC_PREFIX;
 @Immutable
 @ConfigClassProperty(name = "Metrics Configurations for Datadog reporter",
     groupName = ConfigGroups.Names.METRICS,
-    description = "Enables reporting on Hudi metrics using the Datadog reporter type. " +
-        "Hudi publishes metrics on every commit, clean, rollback etc.")
+    description = "Enables reporting on Hudi metrics using the Datadog reporter type. "
+        + "Hudi publishes metrics on every commit, clean, rollback etc.")
 public class HoodieMetricsDatadogConfig extends HoodieConfig {
 
   public static final String DATADOG_PREFIX = METRIC_PREFIX + ".datadog";

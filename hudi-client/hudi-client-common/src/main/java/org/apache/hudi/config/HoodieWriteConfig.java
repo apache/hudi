@@ -71,8 +71,8 @@ import java.util.stream.Collectors;
 @Immutable
 @ConfigClassProperty(name = "Write Configurations",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "The datasource can be configured by passing the below options. " +
-        "These options are useful when writing tables.")
+    description = "The datasource can be configured by passing the below options. "
+        + "These options are useful when writing tables.")
 public class HoodieWriteConfig extends HoodieConfig {
 
   private static final long serialVersionUID = 0L;

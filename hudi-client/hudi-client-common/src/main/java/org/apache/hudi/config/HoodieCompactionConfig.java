@@ -45,9 +45,9 @@ import java.util.stream.Collectors;
 @Immutable
 @ConfigClassProperty(name = "Compaction Configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configurations that control compaction " +
-        "(merging of log files onto a new parquet base file), " +
-        "cleaning (reclamation of older/unused file groups).")
+    description = "Configurations that control compaction "
+        + "(merging of log files onto a new parquet base file), "
+        + "cleaning (reclamation of older/unused file groups).")
 public class HoodieCompactionConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> AUTO_CLEAN_PROP = ConfigProperty

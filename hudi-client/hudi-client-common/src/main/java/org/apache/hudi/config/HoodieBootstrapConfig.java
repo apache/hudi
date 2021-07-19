@@ -39,10 +39,10 @@ import java.util.Properties;
  */
 @ConfigClassProperty(name = "Bootstrap Configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configurations that control bootstrap related configs. " +
-        "If you want to bootstrap your data for the first time into hudi, " +
-        "this bootstrap operation will come in handy as you don’t need to wait " +
-        "for entire data to be loaded into hudi to start leveraging hudi.")
+    description = "Configurations that control bootstrap related configs. "
+        + "If you want to bootstrap your data for the first time into hudi, "
+        + "this bootstrap operation will come in handy as you don’t need to wait "
+        + "for entire data to be loaded into hudi to start leveraging hudi.")
 public class HoodieBootstrapConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> BOOTSTRAP_BASE_PATH_PROP = ConfigProperty
