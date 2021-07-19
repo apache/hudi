@@ -24,18 +24,24 @@ package org.apache.hudi.common.config;
  * level groups, such as Spark Config, Flink Configs, Metrics ....
  * This class maintains the human readable name and description of each config group.
  */
-public enum ConfigGroupName {
-  SPARK_DATASOURCE("Spark Datasource Configs"),
-  FLINK_SQL("Flink Sql Configs"),
-  WRITE_CLIENT("Write Client Configs"),
-  METRICS("Metrics Configs"),
-  RECORD_PAYLOAD("Record Payload Config");
+public class ConfigGroups {
+  public enum Names {
+    SPARK_DATASOURCE("Spark Datasource Configs"),
+    FLINK_SQL("Flink Sql Configs"),
+    WRITE_CLIENT("Write Client Configs"),
+    METRICS("Metrics Configs"),
+    RECORD_PAYLOAD("Record Payload Config");
 
-  public final String name;
+    public final String name;
 
-  public static String getDescription(ConfigGroupName configGroupName) {
-    String description = "Please fill in the description for Config Group Name: " + configGroupName.name;
-    switch (configGroupName) {
+    Names(String name) {
+      this.name = name;
+    }
+  }
+
+  public static String getDescription(Names names) {
+    String description = "Please fill in the description for Config Group Name: " + names.name;
+    switch (names) {
       case SPARK_DATASOURCE:
         description =  "These configs control the Hudi Spark Datasource, " +
           "providing ability to define keys/partitioning, pick out the write operation, " +
@@ -67,11 +73,6 @@ public enum ConfigGroupName {
             "Hudi stats and metrics.";
         break;
     }
-
     return description;
-  }
-
-  ConfigGroupName(String name) {
-    this.name = name;
   }
 }

@@ -34,6 +34,6 @@ import java.lang.annotation.Target;
  */
 public @interface ConfigClassProperty {
   String name();
-  ConfigGroupName groupName();
+  ConfigGroups.Names groupName();
   String description();
 }

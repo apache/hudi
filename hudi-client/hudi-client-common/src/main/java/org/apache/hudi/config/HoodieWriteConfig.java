@@ -21,8 +21,8 @@ package org.apache.hudi.config;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
-import org.apache.hudi.common.config.ConfigGroupName;
 import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -70,7 +70,7 @@ import java.util.stream.Collectors;
  */
 @Immutable
 @ConfigClassProperty(name = "Write Configurations",
-    groupName = ConfigGroupName.WRITE_CLIENT,
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "The datasource can be configured by passing the below options. " +
         "These options are useful when writing tables.")
 public class HoodieWriteConfig extends HoodieConfig {

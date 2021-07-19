@@ -18,8 +18,8 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.common.config.ConfigGroupName;
 import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -32,7 +32,7 @@ import java.util.Properties;
  * Clustering specific configs.
  */
 @ConfigClassProperty(name = "Clustering Configs",
-    groupName = ConfigGroupName.WRITE_CLIENT,
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "Configurations that control clustering operations in hudi. " +
         "Each clustering has to be configured for its strategy, and config params. " +
         "This config drives the same.")

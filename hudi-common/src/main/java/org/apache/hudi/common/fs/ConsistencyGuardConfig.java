@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.fs;
 
-import org.apache.hudi.common.config.ConfigGroupName;
 import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -32,7 +32,7 @@ import java.util.Properties;
  * The consistency guard relevant config options.
  */
 @ConfigClassProperty(name = "Consistency Guard Configurations",
-    groupName = ConfigGroupName.WRITE_CLIENT,
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "The consistency guard relevant config options.")
 public class ConsistencyGuardConfig extends HoodieConfig {
 

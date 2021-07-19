@@ -22,8 +22,8 @@ import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.translator.IdentityBootstrapPartitionPathTranslator;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
-import org.apache.hudi.common.config.ConfigGroupName;
 import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -38,7 +38,7 @@ import java.util.Properties;
  * Bootstrap specific configs.
  */
 @ConfigClassProperty(name = "Bootstrap Configs",
-    groupName = ConfigGroupName.WRITE_CLIENT,
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "Configurations that control bootstrap related configs. " +
         "If you want to bootstrap your data for the first time into hudi, " +
         "this bootstrap operation will come in handy as you don’t need to wait " +

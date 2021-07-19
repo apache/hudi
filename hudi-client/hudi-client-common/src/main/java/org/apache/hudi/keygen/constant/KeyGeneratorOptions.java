@@ -18,9 +18,17 @@
 
 package org.apache.hudi.keygen.constant;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
+@ConfigClassProperty(name = "Key Generator Options",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Hudi maintains hoodie keys (record key + partition path) " +
+        "for uniquely identifying a particular record. " +
+        "This config allows developers to setup the Key generator class that " +
+        "will extract these out of incoming record. .")
 public class KeyGeneratorOptions extends HoodieConfig {
 
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING_OPT_KEY = ConfigProperty

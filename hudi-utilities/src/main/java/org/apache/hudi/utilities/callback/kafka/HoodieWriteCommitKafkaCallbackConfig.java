@@ -17,8 +17,8 @@
 
 package org.apache.hudi.utilities.callback.kafka;
 
-import org.apache.hudi.common.config.ConfigGroupName;
 import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -28,7 +28,7 @@ import static org.apache.hudi.config.HoodieWriteCommitCallbackConfig.CALLBACK_PR
  * Kafka write callback related config.
  */
 @ConfigClassProperty(name = "Write commit Kafka callback configs",
-    groupName = ConfigGroupName.WRITE_CLIENT,
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "Controls Kafka callback behavior on write commit. " +
         "Exception will be thrown if user enabled the callback service " +
         "and errors occurred during the process of callback.")

@@ -18,8 +18,8 @@
 
 package org.apache.hudi.config;
 
-import org.apache.hudi.common.config.ConfigGroupName;
 import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -35,7 +35,7 @@ import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_ORDERING_F
  * Hoodie payload related configs.
  */
 @ConfigClassProperty(name = "Payload Configurations",
-    groupName = ConfigGroupName.WRITE_CLIENT,
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
     description = "Payload related configs. This config can be leveraged by " +
         "payload implementations to determine their business logic.")
 public class HoodiePayloadConfig extends HoodieConfig {
