@@ -23,7 +23,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
@@ -45,7 +44,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -389,12 +387,12 @@ public class TestWriteCopyOnWrite {
   @Test
   public void testInsertWithMiniBatches() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0007); // 734 bytes batch size
+    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0006); // 630 bytes batch size
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // open the function and ingest data
     funcWrapper.openFunction();
-    // Each record is 216 bytes. so 4 records expect to trigger a mini-batch write
+    // Each record is 208 bytes. so 4 records expect to trigger a mini-batch write
     for (RowData rowData : TestData.DATA_SET_INSERT_DUPLICATES) {
       funcWrapper.invoke(rowData);
     }
@@ -450,13 +448,13 @@ public class TestWriteCopyOnWrite {
   @Test
   public void testInsertWithDeduplication() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0007); // 734 bytes batch size
+    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0006); // 630 bytes batch size
     conf.setBoolean(FlinkOptions.INSERT_DROP_DUPS, true);
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // open the function and ingest data
     funcWrapper.openFunction();
-    // Each record is 216 bytes. so 4 records expect to trigger a mini-batch write
+    // Each record is 208 bytes. so 4 records expect to trigger a mini-batch write
     for (RowData rowData : TestData.DATA_SET_INSERT_SAME_KEY) {
       funcWrapper.invoke(rowData);
     }
@@ -512,91 +510,14 @@ public class TestWriteCopyOnWrite {
   }
 
   @Test
-  public void testAppendOnly() throws Exception {
-    // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_BATCH_SIZE, 0.0007); // 734 bytes batch size
-    conf.setBoolean(FlinkOptions.INSERT_DROP_DUPS, false);
-    conf.setBoolean(FlinkOptions.APPEND_ONLY_ENABLE, true);
-    conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT.value());
-    funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
-
-    // open the function and ingest data
-    funcWrapper.openFunction();
-    // Each record is 216 bytes. so 4 records expect to trigger a mini-batch write
-    for (RowData rowData : TestData.DATA_SET_INSERT_SAME_KEY) {
-      funcWrapper.invoke(rowData);
-    }
-
-    // this triggers the data write and event send
-    funcWrapper.checkpointFunction(1);
-    Map<String, List<HoodieRecord>> dataBuffer = funcWrapper.getDataBuffer();
-    assertThat("All data should be flushed out", dataBuffer.size(), is(0));
-
-    final OperatorEvent event1 = funcWrapper.getNextEvent(); // remove the first event first
-    final OperatorEvent event2 = funcWrapper.getNextEvent();
-    assertThat("The operator expect to send an event", event2, instanceOf(WriteMetadataEvent.class));
-
-    funcWrapper.getCoordinator().handleEventFromOperator(0, event1);
-    funcWrapper.getCoordinator().handleEventFromOperator(0, event2);
-    assertNotNull(funcWrapper.getEventBuffer()[0], "The coordinator missed the event");
-
-    String instant = funcWrapper.getWriteClient()
-            .getLastPendingInstant(getTableType());
-
-    funcWrapper.checkpointComplete(1);
-
-    Map<String, List<String>> expected = new HashMap<>();
-
-    expected.put("par1", Arrays.asList(
-        "id1,par1,id1,Danny,23,0,par1",
-        "id1,par1,id1,Danny,23,1,par1",
-        "id1,par1,id1,Danny,23,2,par1",
-        "id1,par1,id1,Danny,23,3,par1",
-        "id1,par1,id1,Danny,23,4,par1"));
-
-    TestData.checkWrittenAllData(tempFile, expected, 1);
-
-    // started a new instant already
-    checkInflightInstant(funcWrapper.getWriteClient());
-    checkInstantState(funcWrapper.getWriteClient(), HoodieInstant.State.COMPLETED, instant);
-
-    // insert duplicates again
-    for (RowData rowData : TestData.DATA_SET_INSERT_SAME_KEY) {
-      funcWrapper.invoke(rowData);
-    }
-
-    funcWrapper.checkpointFunction(2);
-
-    final OperatorEvent event3 = funcWrapper.getNextEvent(); // remove the first event first
-    final OperatorEvent event4 = funcWrapper.getNextEvent();
-    funcWrapper.getCoordinator().handleEventFromOperator(0, event3);
-    funcWrapper.getCoordinator().handleEventFromOperator(0, event4);
-    funcWrapper.checkpointComplete(2);
-
-    // Same the original base file content.
-    expected.put("par1", Arrays.asList(
-        "id1,par1,id1,Danny,23,0,par1",
-        "id1,par1,id1,Danny,23,0,par1",
-        "id1,par1,id1,Danny,23,1,par1",
-        "id1,par1,id1,Danny,23,1,par1",
-        "id1,par1,id1,Danny,23,2,par1",
-        "id1,par1,id1,Danny,23,2,par1",
-        "id1,par1,id1,Danny,23,3,par1",
-        "id1,par1,id1,Danny,23,3,par1",
-        "id1,par1,id1,Danny,23,4,par1",
-        "id1,par1,id1,Danny,23,4,par1"));
-    TestData.checkWrittenAllData(tempFile, expected, 1);
-  }
-
-  @Test
   public void testInsertWithSmallBufferSize() throws Exception {
     // reset the config option
-    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0007); // 734 bytes buffer size
+    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0006); // 630 bytes buffer size
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // open the function and ingest data
     funcWrapper.openFunction();
-    // each record is 216 bytes. so 4 records expect to trigger buffer flush:
+    // each record is 208 bytes. so 4 records expect to trigger buffer flush:
     // flush the max size bucket once at a time.
     for (RowData rowData : TestData.DATA_SET_INSERT_DUPLICATES) {
       funcWrapper.invoke(rowData);
@@ -739,7 +660,7 @@ public class TestWriteCopyOnWrite {
   public void testWriteExactlyOnce() throws Exception {
     // reset the config option
     conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 3);
-    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0007); // 734 bytes buffer size
+    conf.setDouble(FlinkOptions.WRITE_TASK_MAX_SIZE, 200.0006); // 630 bytes buffer size
     funcWrapper = new StreamWriteFunctionWrapper<>(tempFile.getAbsolutePath(), conf);
 
     // open the function and ingest data

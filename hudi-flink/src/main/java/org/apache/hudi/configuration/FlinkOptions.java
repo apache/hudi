@@ -18,6 +18,7 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -43,7 +44,7 @@ import java.util.Set;
  *
  * <p>It has the options for Hoodie table read and write. It also defines some utilities.
  */
-public class FlinkOptions {
+public class FlinkOptions extends HoodieConfig {
   private FlinkOptions() {
   }
 
@@ -186,12 +187,6 @@ public class FlinkOptions {
       .defaultValue(TABLE_TYPE_COPY_ON_WRITE)
       .withDescription("Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ");
 
-  public static final ConfigOption<Boolean> APPEND_ONLY_ENABLE = ConfigOptions
-          .key("append_only.enable")
-          .booleanType()
-          .defaultValue(false)
-          .withDescription("Whether to write data to new baseFile without index, only support in COW, default false");
-
   public static final ConfigOption<String> OPERATION = ConfigOptions
       .key("write.operation")
       .stringType()
@@ -285,6 +280,18 @@ public class FlinkOptions {
       .stringType()
       .defaultValue(KeyGeneratorType.SIMPLE.name())
       .withDescription("Key generator type, that implements will extract the key out of incoming record");
+
+  public static final ConfigOption<Integer> INDEX_BOOTSTRAP_TASKS = ConfigOptions
+      .key("write.index_bootstrap.tasks")
+      .intType()
+      .noDefaultValue()
+      .withDescription("Parallelism of tasks that do index bootstrap, default is 4");
+
+  public static final ConfigOption<Integer> BUCKET_ASSIGN_TASKS = ConfigOptions
+      .key("write.bucket_assign.tasks")
+      .intType()
+      .noDefaultValue()
+      .withDescription("Parallelism of tasks that do bucket assign, default is 4");
 
   public static final ConfigOption<Integer> WRITE_TASKS = ConfigOptions
       .key("write.tasks")

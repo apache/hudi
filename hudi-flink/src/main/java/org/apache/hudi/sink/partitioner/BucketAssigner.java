@@ -140,14 +140,6 @@ public class BucketAssigner implements AutoCloseable {
     }
 
     // if we have anything more, create new insert buckets, like normal
-    return getOrCreateNewFileBucket(partitionPath, BucketType.INSERT);
-  }
-
-  public BucketInfo addAppendOnly(String partitionPath) {
-    return getOrCreateNewFileBucket(partitionPath, BucketType.APPEND_ONLY);
-  }
-
-  private BucketInfo getOrCreateNewFileBucket(String partitionPath, BucketType bucketType) {
     if (newFileAssignStates.containsKey(partitionPath)) {
       NewFileAssignState newFileAssignState = newFileAssignStates.get(partitionPath);
       if (newFileAssignState.canAssign()) {
@@ -156,7 +148,7 @@ public class BucketAssigner implements AutoCloseable {
       final String key = StreamerUtil.generateBucketKey(partitionPath, newFileAssignState.fileId);
       return bucketInfoMap.get(key);
     }
-    BucketInfo bucketInfo = new BucketInfo(bucketType, FSUtils.createNewFileIdPfx(), partitionPath);
+    BucketInfo bucketInfo = new BucketInfo(BucketType.INSERT, FSUtils.createNewFileIdPfx(), partitionPath);
     final String key = StreamerUtil.generateBucketKey(partitionPath, bucketInfo.getFileIdPrefix());
     bucketInfoMap.put(key, bucketInfo);
     newFileAssignStates.put(partitionPath, new NewFileAssignState(bucketInfo.getFileIdPrefix(), writeProfile.getRecordsPerBucket()));

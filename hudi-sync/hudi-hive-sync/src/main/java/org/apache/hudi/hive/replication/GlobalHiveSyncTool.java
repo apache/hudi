@@ -21,7 +21,6 @@ package org.apache.hudi.hive.replication;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.hive.HiveSyncTool;
 
 import org.apache.hadoop.conf.Configuration;
@@ -43,20 +42,7 @@ public class GlobalHiveSyncTool extends HiveSyncTool {
 
   @Override
   public void syncHoodieTable() {
-    switch (hoodieHiveClient.getTableType()) {
-      case COPY_ON_WRITE:
-        syncHoodieTable(snapshotTableName, false, false);
-        break;
-      case MERGE_ON_READ:
-        // sync a RO table for MOR
-        syncHoodieTable(roTableName.get(), false, true);
-        // sync a RT table for MOR
-        syncHoodieTable(snapshotTableName, true, false);
-        break;
-      default:
-        LOG.error("Unknown table type " + hoodieHiveClient.getTableType());
-        throw new InvalidTableException(hoodieHiveClient.getBasePath());
-    }
+    doSync();
   }
 
   @Override
