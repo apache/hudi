@@ -18,6 +18,12 @@
 
 package org.apache.hudi.common.config;
 
+/**
+ * In Hudi, we have multiple superclasses of {@link HoodieConfig} that maintain
+ * several configs. This class group one or more of these superclasses into higher
+ * level groups, such as Spark Config, Flink Configs, Metrics ....
+ * This class maintains the human readable name and description of each config group.
+ */
 public enum ConfigGroupName {
   SPARK_DATASOURCE("Spark Datasource Configs"),
   FLINK_SQL("Flink Sql Configs"),
