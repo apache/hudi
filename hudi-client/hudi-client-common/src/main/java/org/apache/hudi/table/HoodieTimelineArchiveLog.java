@@ -300,11 +300,6 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
       LOG.info("Wrapper schema " + wrapperSchema.toString());
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
-        // TODO HUDI-1518 Cleaner now takes care of removing replaced file groups. This call to deleteReplacedFileGroups can be removed.
-        boolean deleteSuccess = deleteReplacedFileGroups(context, hoodieInstant);
-        if (!deleteSuccess) {
-          LOG.warn("Unable to delete file(s) for " + hoodieInstant.getFileName() + ", replaced files possibly deleted by cleaner");
-        }
         try {
           deleteAnyLeftOverMarkerFiles(context, hoodieInstant);
           records.add(convertToAvroRecord(hoodieInstant));
@@ -329,17 +324,6 @@ public class HoodieTimelineArchiveLog<T extends HoodieAvroPayload, I, K, O> {
     if (markerFiles.deleteMarkerDir(context, config.getMarkersDeleteParallelism())) {
       LOG.info("Cleaned up left over marker directory for instant :" + instant);
     }
-  }
-
-  private boolean deleteReplacedFileGroups(HoodieEngineContext context, HoodieInstant instant) {
-    if (!instant.isCompleted() || !HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
-      // only delete files for completed replace instants
-      return true;
-    }
-
-    TableFileSystemView fileSystemView = this.table.getFileSystemView();
-    List<String> replacedPartitions = getReplacedPartitions(instant);
-    return ReplaceArchivalHelper.deleteReplacedFileGroups(context, metaClient, fileSystemView, instant, replacedPartitions);
   }
 
   private List<String> getReplacedPartitions(HoodieInstant instant) {
