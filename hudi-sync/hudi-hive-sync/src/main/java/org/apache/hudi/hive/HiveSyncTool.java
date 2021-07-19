@@ -323,6 +323,12 @@ public class HiveSyncTool extends AbstractSyncTool {
    */
   private void syncPartitions(String tableName, List<String> writtenPartitionsSince) {
     try {
+
+      if (cfg.partitionFields.isEmpty()) {
+        LOG.info("Not a partitioned table.");
+        return;
+      }
+
       List<Partition> hivePartitions = hoodieHiveClient.scanTablePartitions(tableName);
       List<PartitionEvent> partitionEvents =
           hoodieHiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince);

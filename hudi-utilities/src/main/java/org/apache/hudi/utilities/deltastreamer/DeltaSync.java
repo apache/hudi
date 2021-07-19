@@ -106,7 +106,7 @@ import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_REC
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 
 /**
- * Sync's one batch of data to hoodie table.
+ * Sync's  one batch of data to hoodie table.
  */
 public class DeltaSync implements Serializable {
 
@@ -263,6 +263,7 @@ public class DeltaSync implements Serializable {
    */
   public Pair<Option<String>, JavaRDD<WriteStatus>> syncOnce() throws IOException {
     Pair<Option<String>, JavaRDD<WriteStatus>> result = null;
+    HoodieDeltaStreamerMetrics metrics = new HoodieDeltaStreamerMetrics(getHoodieClientConfig(schemaProvider));
     Timer.Context overallTimerContext = metrics.getOverallTimerContext();
 
     // Refresh Timeline
