@@ -4,7 +4,7 @@ keywords: garbage collection, hudi, jvm, configs, tuning
 permalink: /docs/configurations.html
 summary: This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
 toc: true
-last_modified_at: 2021-07-18T04:26:23.024238
+last_modified_at: 2021-07-18T04:37:09.952042
 ---
 
 This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
@@ -395,457 +395,6 @@ the dot notation eg: `a.b.c`<br>
 > Use JDBC when hive synchronization is enabled<br>
 > `Default Value: true`<br>
 > `Config Param: HIVE_USE_JDBC_OPT_KEY`<br>
-
----
-
-Flink jobs using the SQL can be configured through the options in WITH clause. The actual datasource level configs are listed below.
-
-`Config Class`: org.apache.hudi.configuration.FlinkOptions<br>
-> #### read.streaming.enabled
-> org.apache.flink.configuration.description.Description@53bc8c7e<br>
-> `Default Value: false`<br>
-> `Config Param: READ_AS_STREAMING`<br>
-
----
-
-> #### hoodie.datasource.write.keygenerator.type
-> org.apache.flink.configuration.description.Description@8ff4795<br>
-> `Default Value: SIMPLE`<br>
-> `Config Param: KEYGEN_TYPE`<br>
-
----
-
-> #### compaction.trigger.strategy
-> org.apache.flink.configuration.description.Description@19bdfa3e<br>
-> `Default Value: num_commits`<br>
-> `Config Param: COMPACTION_TRIGGER_STRATEGY`<br>
-
----
-
-> #### index.state.ttl
-> org.apache.flink.configuration.description.Description@78e3bebd<br>
-> `Default Value: 1.5`<br>
-> `Config Param: INDEX_STATE_TTL`<br>
-
----
-
-> #### compaction.max_memory
-> org.apache.flink.configuration.description.Description@4f0b02a3<br>
-> `Default Value: 100`<br>
-> `Config Param: COMPACTION_MAX_MEMORY`<br>
-
----
-
-> #### hive_sync.support_timestamp
-> org.apache.flink.configuration.description.Description@3d3a3738<br>
-> `Default Value: false`<br>
-> `Config Param: HIVE_SYNC_SUPPORT_TIMESTAMP`<br>
-
----
-
-> #### hive_sync.skip_ro_suffix
-> org.apache.flink.configuration.description.Description@4ba056ab<br>
-> `Default Value: false`<br>
-> `Config Param: HIVE_SYNC_SKIP_RO_SUFFIX`<br>
-
----
-
-> #### hive_sync.assume_date_partitioning
-> org.apache.flink.configuration.description.Description@2e530f34<br>
-> `Default Value: false`<br>
-> `Config Param: HIVE_SYNC_ASSUME_DATE_PARTITION`<br>
-
----
-
-> #### hive_sync.table
-> org.apache.flink.configuration.description.Description@39da0e47<br>
-> `Default Value: unknown`<br>
-> `Config Param: HIVE_SYNC_TABLE`<br>
-
----
-
-> #### compaction.tasks
-> org.apache.flink.configuration.description.Description@55b56db3<br>
-> `Default Value: 10`<br>
-> `Config Param: COMPACTION_TASKS`<br>
-
----
-
-> #### hoodie.datasource.write.hive_style_partitioning
-> org.apache.flink.configuration.description.Description@1c697ca0<br>
-> `Default Value: false`<br>
-> `Config Param: HIVE_STYLE_PARTITIONING`<br>
-
----
-
-> #### table.type
-> org.apache.flink.configuration.description.Description@2af5eab6<br>
-> `Default Value: COPY_ON_WRITE`<br>
-> `Config Param: TABLE_TYPE`<br>
-
----
-
-> #### hive_sync.partition_extractor_class
-> org.apache.flink.configuration.description.Description@43347199<br>
-> `Default Value: org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor`<br>
-> `Config Param: HIVE_SYNC_PARTITION_EXTRACTOR_CLASS`<br>
-
----
-
-> #### hive_sync.auto_create_db
-> org.apache.flink.configuration.description.Description@3d1254b9<br>
-> `Default Value: true`<br>
-> `Config Param: HIVE_SYNC_AUTO_CREATE_DB`<br>
-
----
-
-> #### hive_sync.username
-> org.apache.flink.configuration.description.Description@6a49b3c7<br>
-> `Default Value: hive`<br>
-> `Config Param: HIVE_SYNC_USERNAME`<br>
-
----
-
-> #### hive_sync.enable
-> org.apache.flink.configuration.description.Description@6f6c4462<br>
-> `Default Value: false`<br>
-> `Config Param: HIVE_SYNC_ENABLED`<br>
-
----
-
-> #### read.streaming.check-interval
-> org.apache.flink.configuration.description.Description@f3458af<br>
-> `Default Value: 60`<br>
-> `Config Param: READ_STREAMING_CHECK_INTERVAL`<br>
-
----
-
-> #### hoodie.datasource.merge.type
-> org.apache.flink.configuration.description.Description@20ac726c<br>
-> `Default Value: payload_combine`<br>
-> `Config Param: MERGE_TYPE`<br>
-
----
-
-> #### write.retry.times
-> org.apache.flink.configuration.description.Description@75c2a35<br>
-> `Default Value: 3`<br>
-> `Config Param: RETRY_TIMES`<br>
-
----
-
-> #### read.tasks
-> org.apache.flink.configuration.description.Description@a9e31e8<br>
-> `Default Value: 4`<br>
-> `Config Param: READ_TASKS`<br>
-
----
-
-> #### write.log.max.size
-> org.apache.flink.configuration.description.Description@27c2f134<br>
-> `Default Value: 1024`<br>
-> `Config Param: WRITE_LOG_MAX_SIZE`<br>
-
----
-
-> #### hive_sync.file_format
-> org.apache.flink.configuration.description.Description@64bed8b2<br>
-> `Default Value: PARQUET`<br>
-> `Config Param: HIVE_SYNC_FILE_FORMAT`<br>
-
----
-
-> #### write.retry.interval.ms
-> org.apache.flink.configuration.description.Description@2555b92<br>
-> `Default Value: 2000`<br>
-> `Config Param: RETRY_INTERVAL_MS`<br>
-
----
-
-> #### hive_sync.db
-> org.apache.flink.configuration.description.Description@793f2b41<br>
-> `Default Value: default`<br>
-> `Config Param: HIVE_SYNC_DB`<br>
-
----
-
-> #### hive_sync.password
-> org.apache.flink.configuration.description.Description@49442e03<br>
-> `Default Value: hive`<br>
-> `Config Param: HIVE_SYNC_PASSWORD`<br>
-
----
-
-> #### hive_sync.use_jdbc
-> org.apache.flink.configuration.description.Description@5bad04d1<br>
-> `Default Value: true`<br>
-> `Config Param: HIVE_SYNC_USE_JDBC`<br>
-
----
-
-> #### hive_sync.jdbc_url
-> org.apache.flink.configuration.description.Description@730c4dfd<br>
-> `Default Value: jdbc:hive2://localhost:10000`<br>
-> `Config Param: HIVE_SYNC_JDBC_URL`<br>
-
----
-
-> #### write.batch.size
-> org.apache.flink.configuration.description.Description@736905fe<br>
-> `Default Value: 64.0`<br>
-> `Config Param: WRITE_BATCH_SIZE`<br>
-
----
-
-> #### archive.min_commits
-> org.apache.flink.configuration.description.Description@1bb509a6<br>
-> `Default Value: 20`<br>
-> `Config Param: ARCHIVE_MIN_COMMITS`<br>
-
----
-
-> #### index.global.enabled
-> org.apache.flink.configuration.description.Description@280d1d8d<br>
-> `Default Value: false`<br>
-> `Config Param: INDEX_GLOBAL_ENABLED`<br>
-
----
-
-> #### write.insert.drop.duplicates
-> org.apache.flink.configuration.description.Description@397fced4<br>
-> `Default Value: false`<br>
-> `Config Param: INSERT_DROP_DUPS`<br>
-
----
-
-> #### index.partition.regex
-> org.apache.flink.configuration.description.Description@2026af0<br>
-> `Default Value: .*`<br>
-> `Config Param: INDEX_PARTITION_REGEX`<br>
-
----
-
-> #### read.streaming.start-commit
-> org.apache.flink.configuration.description.Description@31c9bb2f<br>
-> `Default Value: none`<br>
-> `Config Param: READ_STREAMING_START_COMMIT`<br>
-
----
-
-> #### hoodie.table.name
-> org.apache.flink.configuration.description.Description@71e839ee<br>
-> `Default Value: none`<br>
-> `Config Param: TABLE_NAME`<br>
-
----
-
-> #### path
-> org.apache.flink.configuration.description.Description@36a65069<br>
-> `Default Value: none`<br>
-> `Config Param: PATH`<br>
-
----
-
-> #### index.bootstrap.enabled
-> org.apache.flink.configuration.description.Description@2762e9a7<br>
-> `Default Value: false`<br>
-> `Config Param: INDEX_BOOTSTRAP_ENABLED`<br>
-
----
-
-> #### hoodie.datasource.write.partitionpath.urlencode
-> org.apache.flink.configuration.description.Description@5b8e2ea7<br>
-> `Default Value: false`<br>
-> `Config Param: URL_ENCODE_PARTITIONING`<br>
-
----
-
-> #### compaction.async.enabled
-> org.apache.flink.configuration.description.Description@6b994b71<br>
-> `Default Value: true`<br>
-> `Config Param: COMPACTION_ASYNC_ENABLED`<br>
-
----
-
-> #### hive_sync.ignore_exceptions
-> org.apache.flink.configuration.description.Description@6fb87b73<br>
-> `Default Value: false`<br>
-> `Config Param: HIVE_SYNC_IGNORE_EXCEPTIONS`<br>
-
----
-
-> #### write.ignore.failed
-> org.apache.flink.configuration.description.Description@5f2788f2<br>
-> `Default Value: true`<br>
-> `Config Param: IGNORE_FAILED`<br>
-
----
-
-> #### write.commit.ack.timeout
-> org.apache.flink.configuration.description.Description@75f67ea7<br>
-> `Default Value: -1`<br>
-> `Config Param: WRITE_COMMIT_ACK_TIMEOUT`<br>
-
----
-
-> #### write.payload.class
-> org.apache.flink.configuration.description.Description@549561ab<br>
-> `Default Value: org.apache.hudi.common.model.OverwriteWithLatestAvroPayload`<br>
-> `Config Param: PAYLOAD_CLASS`<br>
-
----
-
-> #### write.operation
-> org.apache.flink.configuration.description.Description@785aeba9<br>
-> `Default Value: upsert`<br>
-> `Config Param: OPERATION`<br>
-
----
-
-> #### hoodie.datasource.write.partitionpath.field
-> org.apache.flink.configuration.description.Description@1bd98c48<br>
-> `Default Value: `<br>
-> `Config Param: PARTITION_PATH_FIELD`<br>
-
----
-
-> #### compaction.delta_commits
-> org.apache.flink.configuration.description.Description@5d9ccad2<br>
-> `Default Value: 5`<br>
-> `Config Param: COMPACTION_DELTA_COMMITS`<br>
-
----
-
-> #### partition.default_name
-> org.apache.flink.configuration.description.Description@22fb60f3<br>
-> `Default Value: __DEFAULT_PARTITION__`<br>
-> `Config Param: PARTITION_DEFAULT_NAME`<br>
-
----
-
-> #### compaction.target_io
-> org.apache.flink.configuration.description.Description@dd3d0a6<br>
-> `Default Value: 5120`<br>
-> `Config Param: COMPACTION_TARGET_IO`<br>
-
----
-
-> #### write.log_block.size
-> org.apache.flink.configuration.description.Description@5abfb698<br>
-> `Default Value: 128`<br>
-> `Config Param: WRITE_LOG_BLOCK_SIZE`<br>
-
----
-
-> #### write.tasks
-> org.apache.flink.configuration.description.Description@61ce2d47<br>
-> `Default Value: 4`<br>
-> `Config Param: WRITE_TASKS`<br>
-
----
-
-> #### clean.async.enabled
-> org.apache.flink.configuration.description.Description@184b3575<br>
-> `Default Value: true`<br>
-> `Config Param: CLEAN_ASYNC_ENABLED`<br>
-
----
-
-> #### clean.retain_commits
-> org.apache.flink.configuration.description.Description@b0e903a<br>
-> `Default Value: 10`<br>
-> `Config Param: CLEAN_RETAIN_COMMITS`<br>
-
----
-
-> #### read.utc-timezone
-> org.apache.flink.configuration.description.Description@2ca2fcb5<br>
-> `Default Value: true`<br>
-> `Config Param: UTC_TIMEZONE`<br>
-
----
-
-> #### archive.max_commits
-> org.apache.flink.configuration.description.Description@3c964873<br>
-> `Default Value: 30`<br>
-> `Config Param: ARCHIVE_MAX_COMMITS`<br>
-
----
-
-> #### hoodie.datasource.query.type
-> org.apache.flink.configuration.description.Description@7db72209<br>
-> `Default Value: snapshot`<br>
-> `Config Param: QUERY_TYPE`<br>
-
----
-
-> #### read.avro-schema.path
-> org.apache.flink.configuration.description.Description@2c7e2c5<br>
-> `Default Value: none`<br>
-> `Config Param: READ_AVRO_SCHEMA_PATH`<br>
-
----
-
-> #### write.precombine.field
-> org.apache.flink.configuration.description.Description@39bbe17c<br>
-> `Default Value: ts`<br>
-> `Config Param: PRECOMBINE_FIELD`<br>
-
----
-
-> #### read.avro-schema
-> org.apache.flink.configuration.description.Description@3760f3e8<br>
-> `Default Value: none`<br>
-> `Config Param: READ_AVRO_SCHEMA`<br>
-
----
-
-> #### write.task.max.size
-> org.apache.flink.configuration.description.Description@73032867<br>
-> `Default Value: 1024.0`<br>
-> `Config Param: WRITE_TASK_MAX_SIZE`<br>
-
----
-
-> #### hoodie.datasource.write.keygenerator.class
-> org.apache.flink.configuration.description.Description@4e6f3d08<br>
-> `Default Value: `<br>
-> `Config Param: KEYGEN_CLASS`<br>
-
----
-
-> #### hoodie.datasource.write.recordkey.field
-> org.apache.flink.configuration.description.Description@28b995b8<br>
-> `Default Value: uuid`<br>
-> `Config Param: RECORD_KEY_FIELD`<br>
-
----
-
-> #### compaction.delta_seconds
-> org.apache.flink.configuration.description.Description@18f6ccf4<br>
-> `Default Value: 3600`<br>
-> `Config Param: COMPACTION_DELTA_SECONDS`<br>
-
----
-
-> #### hive_sync.metastore.uris
-> org.apache.flink.configuration.description.Description@72dc9f9d<br>
-> `Default Value: `<br>
-> `Config Param: HIVE_SYNC_METASTORE_URIS`<br>
-
----
-
-> #### hive_sync.partition_fields
-> org.apache.flink.configuration.description.Description@45ec6bb3<br>
-> `Default Value: `<br>
-> `Config Param: HIVE_SYNC_PARTITION_FIELDS`<br>
-
----
-
-> #### write.merge.max_memory
-> org.apache.flink.configuration.description.Description@219c32e3<br>
-> `Default Value: 100`<br>
-> `Config Param: WRITE_MERGE_MAX_MEMORY`<br>
 
 ---
 
@@ -2856,4 +2405,484 @@ Enables reporting on Hudi metrics. Hudi publishes metrics on every commit, clean
 
 ## Flink Sql Configs {#FLINK_SQL}
 These configs control the Hudi Flink SQL source/sink connectors, providing ability to define record keys, pick out the write operation, specify how to merge records, enable/disable asynchronous compaction or choosing query type to read.
+
+Flink jobs using the SQL can be configured through the options in WITH clause. The actual datasource level configs are listed below.
+
+`Config Class`: org.apache.hudi.configuration.FlinkOptions<br>
+> #### read.streaming.enabled
+> Whether to read as streaming source, default false<br>
+> `Default Value: false`<br>
+> `Config Param: READ_AS_STREAMING`<br>
+
+---
+
+> #### hoodie.datasource.write.keygenerator.type
+> Key generator type, that implements will extract the key out of incoming record<br>
+> `Default Value: SIMPLE`<br>
+> `Config Param: KEYGEN_TYPE`<br>
+
+---
+
+> #### compaction.trigger.strategy
+> Strategy to trigger compaction, options are 'num_commits': trigger compaction when reach N delta commits;
+'time_elapsed': trigger compaction when time elapsed &gt; N seconds since last compaction;
+'num_and_time': trigger compaction when both NUM_COMMITS and TIME_ELAPSED are satisfied;
+'num_or_time': trigger compaction when NUM_COMMITS or TIME_ELAPSED is satisfied.
+Default is 'num_commits'<br>
+> `Default Value: num_commits`<br>
+> `Config Param: COMPACTION_TRIGGER_STRATEGY`<br>
+
+---
+
+> #### index.state.ttl
+> Index state ttl in days, default 1.5 day<br>
+> `Default Value: 1.5`<br>
+> `Config Param: INDEX_STATE_TTL`<br>
+
+---
+
+> #### compaction.max_memory
+> Max memory in MB for compaction spillable map, default 100MB<br>
+> `Default Value: 100`<br>
+> `Config Param: COMPACTION_MAX_MEMORY`<br>
+
+---
+
+> #### hive_sync.support_timestamp
+> INT64 with original type TIMESTAMP_MICROS is converted to hive timestamp type.
+Disabled by default for backward compatibility.<br>
+> `Default Value: false`<br>
+> `Config Param: HIVE_SYNC_SUPPORT_TIMESTAMP`<br>
+
+---
+
+> #### hive_sync.skip_ro_suffix
+> Skip the _ro suffix for Read optimized table when registering, default false<br>
+> `Default Value: false`<br>
+> `Config Param: HIVE_SYNC_SKIP_RO_SUFFIX`<br>
+
+---
+
+> #### hive_sync.assume_date_partitioning
+> Assume partitioning is yyyy/mm/dd, default false<br>
+> `Default Value: false`<br>
+> `Config Param: HIVE_SYNC_ASSUME_DATE_PARTITION`<br>
+
+---
+
+> #### hive_sync.table
+> Table name for hive sync, default 'unknown'<br>
+> `Default Value: unknown`<br>
+> `Config Param: HIVE_SYNC_TABLE`<br>
+
+---
+
+> #### compaction.tasks
+> Parallelism of tasks that do actual compaction, default is 10<br>
+> `Default Value: 10`<br>
+> `Config Param: COMPACTION_TASKS`<br>
+
+---
+
+> #### hoodie.datasource.write.hive_style_partitioning
+> Whether to use Hive style partitioning.
+If set true, the names of partition folders follow &lt;partition_column_name&gt;=&lt;partition_value&gt; format.
+By default false (the names of partition folders are only partition values)<br>
+> `Default Value: false`<br>
+> `Config Param: HIVE_STYLE_PARTITIONING`<br>
+
+---
+
+> #### table.type
+> Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ<br>
+> `Default Value: COPY_ON_WRITE`<br>
+> `Config Param: TABLE_TYPE`<br>
+
+---
+
+> #### hive_sync.partition_extractor_class
+> Tool to extract the partition value from HDFS path, default 'SlashEncodedDayPartitionValueExtractor'<br>
+> `Default Value: org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor`<br>
+> `Config Param: HIVE_SYNC_PARTITION_EXTRACTOR_CLASS`<br>
+
+---
+
+> #### hive_sync.auto_create_db
+> Auto create hive database if it does not exists, default true<br>
+> `Default Value: true`<br>
+> `Config Param: HIVE_SYNC_AUTO_CREATE_DB`<br>
+
+---
+
+> #### hive_sync.username
+> Username for hive sync, default 'hive'<br>
+> `Default Value: hive`<br>
+> `Config Param: HIVE_SYNC_USERNAME`<br>
+
+---
+
+> #### hive_sync.enable
+> Asynchronously sync Hive meta to HMS, default false<br>
+> `Default Value: false`<br>
+> `Config Param: HIVE_SYNC_ENABLED`<br>
+
+---
+
+> #### read.streaming.check-interval
+> Check interval for streaming read of SECOND, default 1 minute<br>
+> `Default Value: 60`<br>
+> `Config Param: READ_STREAMING_CHECK_INTERVAL`<br>
+
+---
+
+> #### hoodie.datasource.merge.type
+> For Snapshot query on merge on read table. Use this key to define how the payloads are merged, in
+1) skip_merge: read the base file records plus the log file records;
+2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the
+   log file records(combines the two records with same key for base and log file records), then read the left log file records<br>
+> `Default Value: payload_combine`<br>
+> `Config Param: MERGE_TYPE`<br>
+
+---
+
+> #### write.retry.times
+> Flag to indicate how many times streaming job should retry for a failed checkpoint batch.
+By default 3<br>
+> `Default Value: 3`<br>
+> `Config Param: RETRY_TIMES`<br>
+
+---
+
+> #### read.tasks
+> Parallelism of tasks that do actual read, default is 4<br>
+> `Default Value: 4`<br>
+> `Config Param: READ_TASKS`<br>
+
+---
+
+> #### write.log.max.size
+> Maximum size allowed in MB for a log file before it is rolled over to the next version, default 1GB<br>
+> `Default Value: 1024`<br>
+> `Config Param: WRITE_LOG_MAX_SIZE`<br>
+
+---
+
+> #### hive_sync.file_format
+> File format for hive sync, default 'PARQUET'<br>
+> `Default Value: PARQUET`<br>
+> `Config Param: HIVE_SYNC_FILE_FORMAT`<br>
+
+---
+
+> #### write.retry.interval.ms
+> Flag to indicate how long (by millisecond) before a retry should issued for failed checkpoint batch.
+By default 2000 and it will be doubled by every retry<br>
+> `Default Value: 2000`<br>
+> `Config Param: RETRY_INTERVAL_MS`<br>
+
+---
+
+> #### hive_sync.db
+> Database name for hive sync, default 'default'<br>
+> `Default Value: default`<br>
+> `Config Param: HIVE_SYNC_DB`<br>
+
+---
+
+> #### hive_sync.password
+> Password for hive sync, default 'hive'<br>
+> `Default Value: hive`<br>
+> `Config Param: HIVE_SYNC_PASSWORD`<br>
+
+---
+
+> #### hive_sync.use_jdbc
+> Use JDBC when hive synchronization is enabled, default true<br>
+> `Default Value: true`<br>
+> `Config Param: HIVE_SYNC_USE_JDBC`<br>
+
+---
+
+> #### hive_sync.jdbc_url
+> Jdbc URL for hive sync, default 'jdbc:hive2://localhost:10000'<br>
+> `Default Value: jdbc:hive2://localhost:10000`<br>
+> `Config Param: HIVE_SYNC_JDBC_URL`<br>
+
+---
+
+> #### write.batch.size
+> Batch buffer size in MB to flush data into the underneath filesystem, default 64MB<br>
+> `Default Value: 64.0`<br>
+> `Config Param: WRITE_BATCH_SIZE`<br>
+
+---
+
+> #### archive.min_commits
+> Min number of commits to keep before archiving older commits into a sequential log, default 20<br>
+> `Default Value: 20`<br>
+> `Config Param: ARCHIVE_MIN_COMMITS`<br>
+
+---
+
+> #### index.global.enabled
+> Whether to update index for the old partition path
+if same key record with different partition path came in, default false<br>
+> `Default Value: false`<br>
+> `Config Param: INDEX_GLOBAL_ENABLED`<br>
+
+---
+
+> #### write.insert.drop.duplicates
+> Flag to indicate whether to drop duplicates upon insert.
+By default insert will accept duplicates, to gain extra performance<br>
+> `Default Value: false`<br>
+> `Config Param: INSERT_DROP_DUPS`<br>
+
+---
+
+> #### index.partition.regex
+> Whether to load partitions in state if partition path matching， default *<br>
+> `Default Value: .*`<br>
+> `Config Param: INDEX_PARTITION_REGEX`<br>
+
+---
+
+> #### read.streaming.start-commit
+> Start commit instant for streaming read, the commit time format should be 'yyyyMMddHHmmss', by default reading from the latest instant<br>
+> `Default Value: none`<br>
+> `Config Param: READ_STREAMING_START_COMMIT`<br>
+
+---
+
+> #### hoodie.table.name
+> Table name to register to Hive metastore<br>
+> `Default Value: none`<br>
+> `Config Param: TABLE_NAME`<br>
+
+---
+
+> #### path
+> Base path for the target hoodie table.
+The path would be created if it does not exist,
+otherwise a Hoodie table expects to be initialized successfully<br>
+> `Default Value: none`<br>
+> `Config Param: PATH`<br>
+
+---
+
+> #### index.bootstrap.enabled
+> Whether to bootstrap the index state from existing hoodie table, default false<br>
+> `Default Value: false`<br>
+> `Config Param: INDEX_BOOTSTRAP_ENABLED`<br>
+
+---
+
+> #### hoodie.datasource.write.partitionpath.urlencode
+> Whether to encode the partition path url, default false<br>
+> `Default Value: false`<br>
+> `Config Param: URL_ENCODE_PARTITIONING`<br>
+
+---
+
+> #### compaction.async.enabled
+> Async Compaction, enabled by default for MOR<br>
+> `Default Value: true`<br>
+> `Config Param: COMPACTION_ASYNC_ENABLED`<br>
+
+---
+
+> #### hive_sync.ignore_exceptions
+> Ignore exceptions during hive synchronization, default false<br>
+> `Default Value: false`<br>
+> `Config Param: HIVE_SYNC_IGNORE_EXCEPTIONS`<br>
+
+---
+
+> #### write.ignore.failed
+> Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch.
+By default true (in favor of streaming progressing over data integrity)<br>
+> `Default Value: true`<br>
+> `Config Param: IGNORE_FAILED`<br>
+
+---
+
+> #### write.commit.ack.timeout
+> Timeout limit for a writer task after it finishes a checkpoint and
+waits for the instant commit success, only for internal use<br>
+> `Default Value: -1`<br>
+> `Config Param: WRITE_COMMIT_ACK_TIMEOUT`<br>
+
+---
+
+> #### write.payload.class
+> Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting.
+This will render any value set for the option in-effective<br>
+> `Default Value: org.apache.hudi.common.model.OverwriteWithLatestAvroPayload`<br>
+> `Config Param: PAYLOAD_CLASS`<br>
+
+---
+
+> #### write.operation
+> The write operation, that this write should do<br>
+> `Default Value: upsert`<br>
+> `Config Param: OPERATION`<br>
+
+---
+
+> #### hoodie.datasource.write.partitionpath.field
+> Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`.
+Actual value obtained by invoking .toString(), default ''<br>
+> `Default Value: `<br>
+> `Config Param: PARTITION_PATH_FIELD`<br>
+
+---
+
+> #### compaction.delta_commits
+> Max delta commits needed to trigger compaction, default 5 commits<br>
+> `Default Value: 5`<br>
+> `Config Param: COMPACTION_DELTA_COMMITS`<br>
+
+---
+
+> #### partition.default_name
+> The default partition name in case the dynamic partition column value is null/empty string<br>
+> `Default Value: __DEFAULT_PARTITION__`<br>
+> `Config Param: PARTITION_DEFAULT_NAME`<br>
+
+---
+
+> #### compaction.target_io
+> Target IO per compaction (both read and write), default 5 GB<br>
+> `Default Value: 5120`<br>
+> `Config Param: COMPACTION_TARGET_IO`<br>
+
+---
+
+> #### write.log_block.size
+> Max log block size in MB for log file, default 128MB<br>
+> `Default Value: 128`<br>
+> `Config Param: WRITE_LOG_BLOCK_SIZE`<br>
+
+---
+
+> #### write.tasks
+> Parallelism of tasks that do actual write, default is 4<br>
+> `Default Value: 4`<br>
+> `Config Param: WRITE_TASKS`<br>
+
+---
+
+> #### clean.async.enabled
+> Whether to cleanup the old commits immediately on new commits, enabled by default<br>
+> `Default Value: true`<br>
+> `Config Param: CLEAN_ASYNC_ENABLED`<br>
+
+---
+
+> #### clean.retain_commits
+> Number of commits to retain. So data will be retained for num_of_commits * time_between_commits (scheduled).
+This also directly translates into how much you can incrementally pull on this table, default 10<br>
+> `Default Value: 10`<br>
+> `Config Param: CLEAN_RETAIN_COMMITS`<br>
+
+---
+
+> #### read.utc-timezone
+> Use UTC timezone or local timezone to the conversion between epoch time and LocalDateTime. Hive 0.x/1.x/2.x use local timezone. But Hive 3.x use UTC timezone, by default true<br>
+> `Default Value: true`<br>
+> `Config Param: UTC_TIMEZONE`<br>
+
+---
+
+> #### archive.max_commits
+> Max number of commits to keep before archiving older commits into a sequential log, default 30<br>
+> `Default Value: 30`<br>
+> `Config Param: ARCHIVE_MAX_COMMITS`<br>
+
+---
+
+> #### hoodie.datasource.query.type
+> Decides how data files need to be read, in
+1) Snapshot mode (obtain latest view, based on row &amp; columnar data);
+2) incremental mode (new data since an instantTime);
+3) Read Optimized mode (obtain latest view, based on columnar data)
+.Default: snapshot<br>
+> `Default Value: snapshot`<br>
+> `Config Param: QUERY_TYPE`<br>
+
+---
+
+> #### read.avro-schema.path
+> Avro schema file path, the parsed schema is used for deserialization<br>
+> `Default Value: none`<br>
+> `Config Param: READ_AVRO_SCHEMA_PATH`<br>
+
+---
+
+> #### write.precombine.field
+> Field used in preCombining before actual write. When two records have the same
+key value, we will pick the one with the largest value for the precombine field,
+determined by Object.compareTo(..)<br>
+> `Default Value: ts`<br>
+> `Config Param: PRECOMBINE_FIELD`<br>
+
+---
+
+> #### read.avro-schema
+> Avro schema string, the parsed schema is used for deserialization<br>
+> `Default Value: none`<br>
+> `Config Param: READ_AVRO_SCHEMA`<br>
+
+---
+
+> #### write.task.max.size
+> Maximum memory in MB for a write task, when the threshold hits,
+it flushes the max size data bucket to avoid OOM, default 1GB<br>
+> `Default Value: 1024.0`<br>
+> `Config Param: WRITE_TASK_MAX_SIZE`<br>
+
+---
+
+> #### hoodie.datasource.write.keygenerator.class
+> Key generator class, that implements will extract the key out of incoming record<br>
+> `Default Value: `<br>
+> `Config Param: KEYGEN_CLASS`<br>
+
+---
+
+> #### hoodie.datasource.write.recordkey.field
+> Record key field. Value to be used as the `recordKey` component of `HoodieKey`.
+Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using the dot notation eg: `a.b.c`<br>
+> `Default Value: uuid`<br>
+> `Config Param: RECORD_KEY_FIELD`<br>
+
+---
+
+> #### compaction.delta_seconds
+> Max delta seconds time needed to trigger compaction, default 1 hour<br>
+> `Default Value: 3600`<br>
+> `Config Param: COMPACTION_DELTA_SECONDS`<br>
+
+---
+
+> #### hive_sync.metastore.uris
+> Metastore uris for hive sync, default ''<br>
+> `Default Value: `<br>
+> `Config Param: HIVE_SYNC_METASTORE_URIS`<br>
+
+---
+
+> #### hive_sync.partition_fields
+> Partition fields for hive sync, default ''<br>
+> `Default Value: `<br>
+> `Config Param: HIVE_SYNC_PARTITION_FIELDS`<br>
+
+---
+
+> #### write.merge.max_memory
+> Max memory in MB for merge, default 100MB<br>
+> `Default Value: 100`<br>
+> `Config Param: WRITE_MERGE_MAX_MEMORY`<br>
+
+---
 

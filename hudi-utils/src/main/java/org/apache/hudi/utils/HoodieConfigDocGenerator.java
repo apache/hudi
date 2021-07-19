@@ -33,6 +33,7 @@ import net.steppschuh.markdowngenerator.text.Text;
 import net.steppschuh.markdowngenerator.text.emphasis.BoldText;
 import net.steppschuh.markdowngenerator.text.heading.Heading;
 import org.apache.flink.configuration.ConfigOption;
+import org.apache.flink.configuration.description.HtmlFormatter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.reflections.ReflectionUtils;
@@ -45,10 +46,12 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collector;
 
 import static org.reflections.ReflectionUtils.getAllFields;
 import static org.reflections.ReflectionUtils.withTypeAssignableTo;
@@ -228,7 +231,7 @@ public class HoodieConfigDocGenerator {
           // Description
           configParamsBuilder
               .append("> ")
-              .append(cfgProperty.description())
+              .append(new HtmlFormatter().format(cfgProperty.description()))
               .append(LINE_BREAK);
 
           // Default value
