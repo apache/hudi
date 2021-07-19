@@ -19,7 +19,7 @@
 package org.apache.hudi.config;
 
 import org.apache.hudi.common.config.ConfigGroupName;
-import org.apache.hudi.common.config.ConfigGroupProperty;
+import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -34,7 +34,7 @@ import java.util.Properties;
  * Memory related config.
  */
 @Immutable
-@ConfigGroupProperty(name = "Memory Configurations",
+@ConfigClassProperty(name = "Memory Configurations",
     groupName = ConfigGroupName.WRITE_CLIENT,
     description = "Controls memory usage for compaction " +
         "and merges, performed internally by Hudi.")

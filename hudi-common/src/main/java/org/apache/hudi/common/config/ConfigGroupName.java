@@ -19,7 +19,7 @@
 package org.apache.hudi.common.config;
 
 /**
- * In Hudi, we have multiple superclasses of {@link HoodieConfig} that maintain
+ * In Hudi, we have multiple superclasses, aka Config Classes of {@link HoodieConfig} that maintain
  * several configs. This class group one or more of these superclasses into higher
  * level groups, such as Spark Config, Flink Configs, Metrics ....
  * This class maintains the human readable name and description of each config group.

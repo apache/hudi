@@ -18,7 +18,7 @@
 package org.apache.hudi.config;
 
 import org.apache.hudi.common.config.ConfigGroupName;
-import org.apache.hudi.common.config.ConfigGroupProperty;
+import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -30,7 +30,7 @@ import java.util.Properties;
 /**
  * Write callback related config.
  */
-@ConfigGroupProperty(name = "Write commit HTTP callback configs",
+@ConfigClassProperty(name = "Write commit HTTP callback configs",
     groupName = ConfigGroupName.WRITE_CLIENT,
     description = "Controls HTTP callback behavior on write commit. " +
         "Exception will be thrown if user enabled the callback service " +

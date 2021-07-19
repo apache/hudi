@@ -21,7 +21,7 @@ package org.apache.hudi.common.table;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
 import org.apache.hudi.common.bootstrap.index.NoOpBootstrapIndex;
 import org.apache.hudi.common.config.ConfigGroupName;
-import org.apache.hudi.common.config.ConfigGroupProperty;
+import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -55,7 +55,7 @@ import java.util.stream.Collectors;
  * @see HoodieTableMetaClient
  * @since 0.3.0
  */
-@ConfigGroupProperty(name = "Table Configurations",
+@ConfigClassProperty(name = "Table Configurations",
     groupName = ConfigGroupName.WRITE_CLIENT,
     description = "Configurations on the Hoodie Table like type of ingestion, " +
         "storage formats, hive table name etc Configurations are loaded from " +

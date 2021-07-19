@@ -19,7 +19,7 @@
 package org.apache.hudi.config;
 
 import org.apache.hudi.common.config.ConfigGroupName;
-import org.apache.hudi.common.config.ConfigGroupProperty;
+import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -35,7 +35,7 @@ import static org.apache.hudi.config.HoodieMetricsConfig.METRIC_PREFIX;
  * {@link org.apache.hudi.metrics.MetricsReporterType#DATADOG}
  */
 @Immutable
-@ConfigGroupProperty(name = "Metrics Configurations for Datadog reporter",
+@ConfigClassProperty(name = "Metrics Configurations for Datadog reporter",
     groupName = ConfigGroupName.METRICS,
     description = "Enables reporting on Hudi metrics using the Datadog reporter type. " +
         "Hudi publishes metrics on every commit, clean, rollback etc.")

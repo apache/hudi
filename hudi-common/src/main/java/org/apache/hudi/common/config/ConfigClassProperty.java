@@ -32,7 +32,7 @@ import java.lang.annotation.Target;
  * it belongs to (e.g., spark/ flink/ write)
  * and the description of the config class.
  */
-public @interface ConfigGroupProperty {
+public @interface ConfigClassProperty {
   String name();
   ConfigGroupName groupName();
   String description();

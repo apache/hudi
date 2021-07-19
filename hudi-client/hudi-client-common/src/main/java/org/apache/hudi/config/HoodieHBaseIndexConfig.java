@@ -19,7 +19,7 @@
 package org.apache.hudi.config;
 
 import org.apache.hudi.common.config.ConfigGroupName;
-import org.apache.hudi.common.config.ConfigGroupProperty;
+import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.index.hbase.DefaultHBaseQPSResourceAllocator;
@@ -29,7 +29,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
 
-@ConfigGroupProperty(name = "HBase Index Configs",
+@ConfigClassProperty(name = "HBase Index Configs",
     groupName = ConfigGroupName.WRITE_CLIENT,
     description = "Configurations that control indexing behavior " +
         "(when HBase based indexing is enabled), which tags incoming " +

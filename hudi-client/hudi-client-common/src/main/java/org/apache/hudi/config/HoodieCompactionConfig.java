@@ -19,7 +19,7 @@
 package org.apache.hudi.config;
 
 import org.apache.hudi.common.config.ConfigGroupName;
-import org.apache.hudi.common.config.ConfigGroupProperty;
+import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -43,7 +43,7 @@ import java.util.stream.Collectors;
  * Compaction related config.
  */
 @Immutable
-@ConfigGroupProperty(name = "Compaction Configs",
+@ConfigClassProperty(name = "Compaction Configs",
     groupName = ConfigGroupName.WRITE_CLIENT,
     description = "Configurations that control compaction " +
         "(merging of log files onto a new parquet base file), " +

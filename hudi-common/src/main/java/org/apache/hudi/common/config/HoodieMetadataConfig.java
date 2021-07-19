@@ -28,7 +28,7 @@ import java.util.Properties;
  * Configurations used by the HUDI Metadata Table.
  */
 @Immutable
-@ConfigGroupProperty(name = "Metadata Configs",
+@ConfigClassProperty(name = "Metadata Configs",
     groupName = ConfigGroupName.WRITE_CLIENT,
     description = "Configurations used by the HUDI Metadata Table. " +
     "This table maintains the meta information stored in hudi dataset " +

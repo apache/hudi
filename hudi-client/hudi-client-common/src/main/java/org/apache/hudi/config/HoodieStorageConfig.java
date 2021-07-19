@@ -19,7 +19,7 @@
 package org.apache.hudi.config;
 
 import org.apache.hudi.common.config.ConfigGroupName;
-import org.apache.hudi.common.config.ConfigGroupProperty;
+import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -34,7 +34,7 @@ import java.util.Properties;
  * Storage related config.
  */
 @Immutable
-@ConfigGroupProperty(name = "Storage Configs",
+@ConfigClassProperty(name = "Storage Configs",
     groupName = ConfigGroupName.WRITE_CLIENT,
     description = "Configurations that control aspects around sizing parquet and log files.")
 public class HoodieStorageConfig extends HoodieConfig {

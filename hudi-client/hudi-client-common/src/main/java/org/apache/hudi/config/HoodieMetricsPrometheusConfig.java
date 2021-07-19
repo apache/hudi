@@ -19,7 +19,7 @@
 package org.apache.hudi.config;
 
 import org.apache.hudi.common.config.ConfigGroupName;
-import org.apache.hudi.common.config.ConfigGroupProperty;
+import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -27,7 +27,7 @@ import java.util.Properties;
 
 import static org.apache.hudi.config.HoodieMetricsConfig.METRIC_PREFIX;
 
-@ConfigGroupProperty(name = "Metrics Configurations for Prometheus",
+@ConfigClassProperty(name = "Metrics Configurations for Prometheus",
     groupName = ConfigGroupName.METRICS,
     description = "Enables reporting on Hudi metrics using Prometheus. " +
         " Hudi publishes metrics on every commit, clean, rollback etc.")
