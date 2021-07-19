@@ -32,7 +32,6 @@ import net.steppschuh.markdowngenerator.rule.HorizontalRule;
 import net.steppschuh.markdowngenerator.text.Text;
 import net.steppschuh.markdowngenerator.text.emphasis.BoldText;
 import org.apache.flink.configuration.ConfigOption;
-import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.description.HtmlFormatter;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -69,6 +68,7 @@ public class HoodieConfigDocGenerator {
       "your job to write/read Hudi tables. " +
       "At a high level, you can control behaviour at few levels.";
   private static final String FLINK_CONFIG_CLASS_NAME = "org.apache.hudi.configuration.FlinkOptions";
+  private static final String CONFIG_PATH = "/tmp/confid_doc.md";
 
   public static void main(String[] args) {
     Reflections reflections = new Reflections("org.apache.hudi");
@@ -126,7 +126,7 @@ public class HoodieConfigDocGenerator {
       LOG.info("Generating markdown file");
       mainDocBuilder.append(contentTableBuilder.build()).append(DOUBLE_NEWLINE);
       contentMap.forEach((k, v) -> mainDocBuilder.append(v));
-      Files.write(Paths.get("confid_doc.md"), mainDocBuilder.toString().getBytes(StandardCharsets.UTF_8));
+      Files.write(Paths.get(CONFIG_PATH), mainDocBuilder.toString().getBytes(StandardCharsets.UTF_8));
     } catch (IOException e) {
       LOG.error("Error while writing to markdown file ", e);
     }
