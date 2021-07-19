@@ -130,7 +130,6 @@ public class StreamWriteFunctionWrapper<I> {
     if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
       bootstrapFunction = new BootstrapFunction<>(conf);
       bootstrapFunction.setRuntimeContext(runtimeContext);
-      bootstrapFunction.initializeState(this.functionInitializationContext);
       bootstrapFunction.open(conf);
     }
 
