@@ -26,17 +26,14 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class JavaHoodieBackedErrorTableWriter<T extends HoodieRecordPayload> extends
     HoodieBackedErrorTableWriter<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> {
-
-  private static final Logger LOG = LogManager.getLogger(JavaHoodieBackedErrorTableWriter.class);
 
   public static HoodieBackedErrorTableWriter create(Configuration conf, HoodieWriteConfig writeConfig, HoodieEngineContext context) {
     return new JavaHoodieBackedErrorTableWriter(conf, writeConfig, context);
@@ -58,7 +55,7 @@ public class JavaHoodieBackedErrorTableWriter<T extends HoodieRecordPayload> ext
       String instantTime = writeClient.startCommit();
       writeClient.insertError(errorRecordJavaRDD, instantTime);
     } catch (Exception e) {
-      LOG.error("commit error message Fail", e);
+      throw new HoodieException("commit error message Fail.", e);
     }
   }
 }
