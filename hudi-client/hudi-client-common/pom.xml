@@ -38,6 +38,11 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-aws</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-timeline-service</artifactId>
       <version>${project.version}</version>
     </dependency>
@@ -94,7 +99,6 @@
       <groupId>io.prometheus</groupId>
       <artifactId>simpleclient_pushgateway</artifactId>
     </dependency>
-
     <!-- Hoodie - Tests -->
     <dependency>
       <groupId>org.apache.hudi</groupId>

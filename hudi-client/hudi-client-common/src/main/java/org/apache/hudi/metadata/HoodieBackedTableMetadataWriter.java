@@ -241,6 +241,7 @@ public abstract class HoodieBackedTableMetadataWriter implements HoodieTableMeta
         case PROMETHEUS_PUSHGATEWAY:
         case CONSOLE:
         case INMEMORY:
+        case CLOUDWATCH:
           break;
         default:
           throw new HoodieMetadataException("Unsupported Metrics Reporter type " + writeConfig.getMetricsReporterType());
