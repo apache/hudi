@@ -187,12 +187,6 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(TABLE_TYPE_COPY_ON_WRITE)
       .withDescription("Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ");
 
-  public static final ConfigOption<Boolean> APPEND_ONLY_ENABLE = ConfigOptions
-          .key("append_only.enable")
-          .booleanType()
-          .defaultValue(false)
-          .withDescription("Whether to write data to new baseFile without index, only support in COW, default false");
-
   public static final ConfigOption<String> OPERATION = ConfigOptions
       .key("write.operation")
       .stringType()
@@ -290,13 +284,13 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Integer> INDEX_BOOTSTRAP_TASKS = ConfigOptions
       .key("write.index_bootstrap.tasks")
       .intType()
-      .defaultValue(4)
+      .noDefaultValue()
       .withDescription("Parallelism of tasks that do index bootstrap, default is 4");
 
   public static final ConfigOption<Integer> BUCKET_ASSIGN_TASKS = ConfigOptions
       .key("write.bucket_assign.tasks")
       .intType()
-      .defaultValue(4)
+      .noDefaultValue()
       .withDescription("Parallelism of tasks that do bucket assign, default is 4");
 
   public static final ConfigOption<Integer> WRITE_TASKS = ConfigOptions
