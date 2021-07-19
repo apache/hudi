@@ -1,6 +1,7 @@
 # Directories #
 /build/
 target/
+hudi-utils/target
 
 _site
 .sass-cache
