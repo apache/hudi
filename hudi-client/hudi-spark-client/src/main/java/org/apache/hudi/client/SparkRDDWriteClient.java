@@ -403,6 +403,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
         upgradeDowngrade.run(metaClient, HoodieTableVersion.current(), config, context, instantTime);
       }
     }
+    metaClient.validateTableProperties(config.getProps(), operationType);
     return getTableAndInitCtx(metaClient, operationType, instantTime);
   }
 

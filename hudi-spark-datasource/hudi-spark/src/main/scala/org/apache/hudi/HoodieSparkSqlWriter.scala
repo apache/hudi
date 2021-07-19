@@ -131,12 +131,7 @@ object HoodieSparkSqlWriter {
           .setPopulateMetaFields(parameters.getOrElse(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key(), HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.defaultValue()).toBoolean)
           .initTable(sparkContext.hadoopConfiguration, path.get)
         tableConfig = tableMetaClient.getTableConfig
-      } else {
-        // validate table properties
-        val tableMetaClient = HoodieTableMetaClient.builder().setBasePath(path.get).setConf(sparkContext.hadoopConfiguration).build()
-        tableMetaClient.validateTableProperties(parameters)
       }
-      validateParams(parameters, operation)
 
       val commitActionType = CommitUtils.getCommitActionType(operation, tableConfig.getTableType)
 
@@ -263,14 +258,6 @@ object HoodieSparkSqlWriter {
       unpersistRdd(writeResult.getWriteStatuses.rdd)
 
       (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
-    }
-  }
-
-  def validateParams(parameters: Map[String, String], operation: WriteOperationType) : Unit = {
-    if ( !parameters.getOrElse(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key(), HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.defaultValue()).toBoolean
-      && operation != WriteOperationType.BULK_INSERT) {
-      throw new HoodieException(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key() + " can only be disabled for " + WriteOperationType.BULK_INSERT
-        + " operation");
     }
   }
 

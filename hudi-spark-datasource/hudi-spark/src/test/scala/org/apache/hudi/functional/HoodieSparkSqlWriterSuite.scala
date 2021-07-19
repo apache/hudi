@@ -207,6 +207,44 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     assert(df.except(trimmedDf).count() == 0)
   }
 
+  test("test disable and enable meta fields") {
+    initSparkContext("test_disable_enable_meta_fields")
+    val path = java.nio.file.Files.createTempDirectory("hoodie_test_path")
+    try {
+      testBulkInsertWithSortMode(BulkInsertSortMode.NONE, path, false)
+
+      // enabling meta fields back should throw exception
+      val hoodieFooTableName = "hoodie_foo_tbl"
+      //create a new table
+      val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
+        HoodieWriteConfig.TABLE_NAME.key -> hoodieFooTableName,
+        DataSourceWriteOptions.TABLE_TYPE_OPT_KEY.key -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
+        "hoodie.bulkinsert.shuffle.parallelism" -> "4",
+        DataSourceWriteOptions.OPERATION_OPT_KEY.key -> DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
+        DataSourceWriteOptions.ENABLE_ROW_WRITER_OPT_KEY.key -> "true",
+        DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key -> "_row_key",
+        DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key -> "partition",
+        HoodieWriteConfig.BULKINSERT_SORT_MODE.key() -> BulkInsertSortMode.NONE.name(),
+        DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY.key -> "org.apache.hudi.keygen.SimpleKeyGenerator")
+      val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
+
+      // generate the inserts
+      val schema = DataSourceTestUtils.getStructTypeExampleSchema
+      val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+      val inserts = DataSourceTestUtils.generateRandomRows(1000)
+      val df = spark.createDataFrame(sc.parallelize(inserts), structType)
+      try {
+        // write to Hudi
+        HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableParams, df)
+        fail("Should have thrown exception")
+      } catch {
+        case e: HoodieException => assertTrue(e.getMessage.contains("hoodie.populate.meta.fields already disabled for the table. Can't be re-enabled back"))
+      }
+    } finally {
+      spark.stop()
+      FileUtils.deleteDirectory(path.toFile)
+    }
+  }
 
   test("test drop duplicates row writing for bulk_insert") {
     initSparkContext("test_append_mode")
