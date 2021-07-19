@@ -18,9 +18,12 @@
 
 package org.apache.hudi.timeline.service.handlers;
 
+import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -33,6 +36,7 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.util.StringUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -100,6 +104,7 @@ public class MarkerHandler extends Handler {
   private final long batchIntervalMs;
   // Parallelism for reading and deleting marker files
   private final int parallelism;
+  private transient HoodieEngineContext hoodieEngineContext;
   // Lock for synchronous processing of marker creating requests
   private volatile Object createMarkerRequestLockObject = new Object();
   // Next batch process timestamp in milliseconds
@@ -107,11 +112,13 @@ public class MarkerHandler extends Handler {
   // Last marker file index used, for finding the next marker file index in a round-robin fashion
   private int lastMarkerFileIndex = 0;
 
-  public MarkerHandler(Configuration conf, FileSystem fileSystem, FileSystemViewManager viewManager, Registry metricsRegistry,
+  public MarkerHandler(Configuration conf, HoodieEngineContext hoodieEngineContext, FileSystem fileSystem,
+                       FileSystemViewManager viewManager, Registry metricsRegistry,
                        int batchNumThreads, long batchIntervalMs, int parallelism) throws IOException {
     super(conf, fileSystem, viewManager);
     LOG.info("MarkerHandler FileSystem: " + this.fileSystem.getScheme());
     LOG.info("MarkerHandler Params: batchNumThreads=" + batchNumThreads + " batchIntervalMs=" + batchIntervalMs + "ms");
+    this.hoodieEngineContext = hoodieEngineContext;
     this.metricsRegistry = metricsRegistry;
     this.batchIntervalMs = batchIntervalMs;
     this.parallelism = parallelism;
@@ -211,9 +218,13 @@ public class MarkerHandler extends Handler {
             .collect(Collectors.toList());
 
         if (markerDirSubPaths.size() > 0) {
-          for (String subPathStr: markerDirSubPaths) {
-            fileSystem.delete(new Path(subPathStr), true);
-          }
+          SerializableConfiguration conf = new SerializableConfiguration(fileSystem.getConf());
+          int actualParallelism = Math.min(markerDirSubPaths.size(), parallelism);
+          hoodieEngineContext.foreach(markerDirSubPaths, subPathStr -> {
+            Path subPath = new Path(subPathStr);
+            FileSystem fileSystem = subPath.getFileSystem(conf.get());
+            fileSystem.delete(subPath, true);
+          }, actualParallelism);
         }
 
         boolean result = fileSystem.delete(markerDirPath, true);
@@ -226,30 +237,89 @@ public class MarkerHandler extends Handler {
     return false;
   }
 
-  private Set<String> getAllMarkersFromFile(String markerDirPath) {
-    LOG.info("Get all markers from " + markerDirPath);
-    Path markersFilePath = new Path(markerDirPath, MARKERS_FILENAME_PREFIX);
-    Set<String> markers = new HashSet<>();
-    FSDataInputStream fsDataInputStream = null;
-    BufferedReader bufferedReader = null;
-    try {
-      if (fileSystem.exists(markersFilePath)) {
-        LOG.info("Marker file exists: " + markersFilePath.toString());
-        fsDataInputStream = fileSystem.open(markersFilePath);
-        bufferedReader = new BufferedReader(new InputStreamReader(fsDataInputStream, StandardCharsets.UTF_8));
-        markers = bufferedReader.lines().collect(Collectors.toSet());
-        bufferedReader.close();
-        fsDataInputStream.close();
-      } else {
-        LOG.info("Marker file not exist: " + markersFilePath.toString());
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Failed to read MARKERS file " + markerDirPath, e);
-    } finally {
-      closeQuietly(bufferedReader);
-      closeQuietly(fsDataInputStream);
+  /**
+   * Gets the marker file index from the marker file path.
+   *
+   * E.g., if the marker file path is /tmp/table/.hoodie/.temp/000/MARKERS3, the index returned is 3.
+   *
+   * @param markerFilePathStr full path of marker file
+   * @return the marker file index
+   */
+  private int getMarkerFileIndex(String markerFilePathStr) {
+    String markerFileName = new Path(markerFilePathStr).getName();
+    int prefixIndex = markerFileName.indexOf(MARKERS_FILENAME_PREFIX);
+    if (prefixIndex < 0) {
+      return -1;
     }
-    return markers;
+    try {
+      return Integer.parseInt(markerFileName.substring(prefixIndex + MARKERS_FILENAME_PREFIX.length()));
+    } catch (NumberFormatException nfe) {
+      nfe.printStackTrace();
+    }
+    return -1;
+  }
+
+  /**
+   * Syncs all markers maintained in the marker files from the marker directory in the file system.
+   *
+   * @param markerDir marker directory path
+   */
+  private void syncAllMarkersFromFile(String markerDir) {
+    Path markerDirPath = new Path(markerDir);
+    try {
+      if (fileSystem.exists(markerDirPath)) {
+        FileStatus[] fileStatuses = fileSystem.listStatus(markerDirPath);
+        List<String> markerDirSubPaths = Arrays.stream(fileStatuses)
+            .map(fileStatus -> fileStatus.getPath().toString())
+            .filter(pathStr -> pathStr.contains(MARKERS_FILENAME_PREFIX))
+            .collect(Collectors.toList());
+
+        if (markerDirSubPaths.size() > 0) {
+          SerializableConfiguration conf = new SerializableConfiguration(fileSystem.getConf());
+          int actualParallelism = Math.min(markerDirSubPaths.size(), parallelism);
+          Map<String, Set<String>> fileMarkersSetMap =
+              hoodieEngineContext.mapToPair(markerDirSubPaths, markersFilePathStr -> {
+                Path markersFilePath = new Path(markersFilePathStr);
+                FileSystem fileSystem = markersFilePath.getFileSystem(conf.get());
+                FSDataInputStream fsDataInputStream = null;
+                BufferedReader bufferedReader = null;
+                Set<String> markers = new HashSet<>();
+                try {
+                  LOG.info("Read marker file: " + markersFilePathStr);
+                  fsDataInputStream = fileSystem.open(markersFilePath);
+                  bufferedReader = new BufferedReader(new InputStreamReader(fsDataInputStream, StandardCharsets.UTF_8));
+                  markers = bufferedReader.lines().collect(Collectors.toSet());
+                  bufferedReader.close();
+                  fsDataInputStream.close();
+                } catch (IOException e) {
+                  throw new HoodieIOException("Failed to read MARKERS file " + markerDirPath, e);
+                } finally {
+                  closeQuietly(bufferedReader);
+                  closeQuietly(fsDataInputStream);
+                }
+                return new ImmutablePair<>(markersFilePathStr, markers);
+              }, actualParallelism);
+
+          Set<String> allMarkers = new HashSet<>();
+          for (String markersFilePathStr: fileMarkersSetMap.keySet()) {
+            Set<String> fileMarkers = fileMarkersSetMap.get(markersFilePathStr);
+            if (!fileMarkers.isEmpty()) {
+              Map<Integer, StringBuilder> singleDirMarkersMap =
+                  fileMarkersMap.computeIfAbsent(markerDir, k -> new HashMap<>());
+              int index = getMarkerFileIndex(markersFilePathStr);
+
+              if (index >= 0) {
+                singleDirMarkersMap.put(index, new StringBuilder(StringUtils.join(",", fileMarkers)));
+                allMarkers.addAll(fileMarkers);
+              }
+            }
+          }
+          allMarkersMap.put(markerDir, allMarkers);
+        }
+      }
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
   }
 
   /**

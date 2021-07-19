@@ -2220,11 +2220,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             path -> path.toString().contains(HoodieTableMetaClient.MARKER_EXTN)))
         .limit(1).map(status -> status.getPath().getParent().toString()).collect(Collectors.toList()).get(0);
 
-    Path markerFilePath = new DirectMarkerFiles(fs, basePath, metaClient.getMarkerFolderPath(instantTime), instantTime)
+    Option<Path> markerFilePath = new DirectMarkerFiles(fs, basePath, metaClient.getMarkerFolderPath(instantTime), instantTime)
         .create(partitionPath,
             FSUtils.makeDataFileName(instantTime, "1-0-1", UUID.randomUUID().toString()),
             IOType.MERGE);
-    LOG.info("Created a dummy marker path=" + markerFilePath);
+    LOG.info("Created a dummy marker path=" + markerFilePath.get());
 
     if (!enableOptimisticConsistencyGuard) {
       Exception e = assertThrows(HoodieCommitException.class, () -> {
@@ -2235,7 +2235,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       // with optimistic CG, commit should succeed
       client.commit(instantTime, result);
     }
-    return Pair.of(markerFilePath, result);
+    return Pair.of(markerFilePath.get(), result);
   }
 
   @ParameterizedTest

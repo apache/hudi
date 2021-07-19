@@ -30,6 +30,7 @@ import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.timeline.service.TimelineService;
+import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.Path;
@@ -91,7 +92,7 @@ public class TestTimelineBasedMarkerFiles extends TestMarkerFiles {
   @Override
   void verifyMarkersInFileSystem() throws IOException {
     List<String> markerFiles = FileSystemTestUtils.listRecursive(fs, markerFolderPath)
-        .stream().filter(status -> status.getPath().getName().contains("MARKER"))
+        .stream().filter(status -> status.getPath().getName().contains(MarkerHandler.MARKERS_FILENAME_PREFIX))
         .flatMap(status -> {
           // Read all markers stored in each marker file maintained by the timeline service
           FSDataInputStream fsDataInputStream = null;

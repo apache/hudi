@@ -18,6 +18,7 @@
 
 package org.apache.hudi.timeline.service;
 
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.dto.BaseFileDTO;
@@ -76,7 +77,8 @@ public class RequestHandler {
   private ScheduledExecutorService asyncResultService = Executors.newSingleThreadScheduledExecutor();
   private final boolean useAsync;
 
-  public RequestHandler(Javalin app, Configuration conf, FileSystem fileSystem, FileSystemViewManager viewManager, boolean useAsync,
+  public RequestHandler(Javalin app, Configuration conf, HoodieEngineContext hoodieEngineContext,
+                        FileSystem fileSystem, FileSystemViewManager viewManager, boolean useAsync,
                         int markerBatchNumThreads, long markerBatchIntervalMs, int markerParallelism) throws IOException {
     this.viewManager = viewManager;
     this.app = app;
@@ -84,15 +86,16 @@ public class RequestHandler {
     this.sliceHandler = new FileSliceHandler(conf, fileSystem, viewManager);
     this.dataFileHandler = new BaseFileHandler(conf, fileSystem, viewManager);
     this.markerHandler = new MarkerHandler(
-        conf, fileSystem, viewManager, metricsRegistry, markerBatchNumThreads, markerBatchIntervalMs, markerParallelism);
+        conf, hoodieEngineContext, fileSystem, viewManager, metricsRegistry, markerBatchNumThreads, markerBatchIntervalMs, markerParallelism);
     this.useAsync = useAsync;
     if (useAsync) {
       asyncResultService = Executors.newSingleThreadScheduledExecutor();
     }
   }
 
-  public RequestHandler(Javalin app, FileSystem fileSystem, Configuration conf, FileSystemViewManager viewManager) throws IOException {
-    this(app, conf, fileSystem, viewManager, false, 20, 50, 100);
+  public RequestHandler(Javalin app, Configuration conf, HoodieEngineContext hoodieEngineContext,
+                        FileSystem fileSystem, FileSystemViewManager viewManager) throws IOException {
+    this(app, conf, hoodieEngineContext, fileSystem, viewManager, false, 20, 50, 100);
   }
 
   public void register() {

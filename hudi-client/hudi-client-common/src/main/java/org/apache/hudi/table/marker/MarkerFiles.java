@@ -22,6 +22,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -56,7 +57,7 @@ public abstract class MarkerFiles implements Serializable {
   /**
    * The marker path will be <base-path>/.hoodie/.temp/<instant_ts>/2019/04/25/filename.marker.writeIOType.
    */
-  public Path create(String partitionPath, String dataFileName, IOType type) {
+  public Option<Path> create(String partitionPath, String dataFileName, IOType type) {
     return create(partitionPath, dataFileName, type, false);
   }
 
@@ -64,9 +65,9 @@ public abstract class MarkerFiles implements Serializable {
    * The marker path will be <base-path>/.hoodie/.temp/<instant_ts>/2019/04/25/filename.marker.writeIOType.
    *
    * @return the path of the marker file if it is created successfully,
-   * null if it already exists
+   * empty option if it already exists
    */
-  public Path createIfNotExists(String partitionPath, String dataFileName, IOType type) {
+  public Option<Path> createIfNotExists(String partitionPath, String dataFileName, IOType type) {
     return create(partitionPath, dataFileName, type, true);
   }
 
@@ -172,7 +173,7 @@ public abstract class MarkerFiles implements Serializable {
    * @param dataFileName  data file name
    * @param type write IO type
    * @param checkIfExists whether to check if the marker already exists
-   * @return the marker path
+   * @return the marker path or empty option if already exists and {@code checkIfExists} is true
    */
-  abstract Path create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists);
+  abstract Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists);
 }

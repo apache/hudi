@@ -145,6 +145,107 @@ public class TimelineService {
 
     @Parameter(names = {"--help", "-h"})
     public Boolean help = false;
+
+    public static Builder builder() {
+      return new Builder();
+    }
+
+    /**
+     * Builder of Config class.
+     */
+    public static class Builder {
+      private Integer serverPort = 26754;
+      private FileSystemViewStorageType viewStorageType = FileSystemViewStorageType.SPILLABLE_DISK;
+      private Integer maxViewMemPerTableInMB = 2048;
+      private Double memFractionForCompactionPerTable = 0.001;
+      private String baseStorePathForFileGroups = FileSystemViewStorageConfig.FILESYSTEM_VIEW_SPILLABLE_DIR.defaultValue();
+      private String rocksDBPath = FileSystemViewStorageConfig.ROCKSDB_BASE_PATH_PROP.defaultValue();
+      private int numThreads = DEFAULT_NUM_THREADS;
+      private boolean async = false;
+      private boolean compress = true;
+      private int markerBatchNumThreads = 20;
+      private long markerBatchIntervalMs = 50;
+      private int markerParallelism = 100;
+
+      public Builder() {}
+
+      public Builder serverPort(int serverPort) {
+        this.serverPort = serverPort;
+        return this;
+      }
+
+      public Builder viewStorageType(FileSystemViewStorageType viewStorageType) {
+        this.viewStorageType = viewStorageType;
+        return this;
+      }
+
+      public Builder maxViewMemPerTableInMB(int maxViewMemPerTableInMB) {
+        this.maxViewMemPerTableInMB = maxViewMemPerTableInMB;
+        return this;
+      }
+
+      public Builder memFractionForCompactionPerTable(double memFractionForCompactionPerTable) {
+        this.memFractionForCompactionPerTable = memFractionForCompactionPerTable;
+        return this;
+      }
+
+      public Builder baseStorePathForFileGroups(String baseStorePathForFileGroups) {
+        this.baseStorePathForFileGroups = baseStorePathForFileGroups;
+        return this;
+      }
+
+      public Builder rocksDBPath(String rocksDBPath) {
+        this.rocksDBPath = rocksDBPath;
+        return this;
+      }
+
+      public Builder numThreads(int numThreads) {
+        this.numThreads = numThreads;
+        return this;
+      }
+
+      public Builder async(boolean async) {
+        this.async = async;
+        return this;
+      }
+
+      public Builder compress(boolean compress) {
+        this.compress = compress;
+        return this;
+      }
+
+      public Builder markerBatchNumThreads(int markerBatchNumThreads) {
+        this.markerBatchNumThreads = markerBatchNumThreads;
+        return this;
+      }
+
+      public Builder markerBatchIntervalMs(long markerBatchIntervalMs) {
+        this.markerBatchIntervalMs = markerBatchIntervalMs;
+        return this;
+      }
+
+      public Builder markerParallelism(int markerParallelism) {
+        this.markerParallelism = markerParallelism;
+        return this;
+      }
+
+      public Config build() {
+        Config config = new Config();
+        config.serverPort = this.serverPort;
+        config.viewStorageType = this.viewStorageType;
+        config.maxViewMemPerTableInMB = this.maxViewMemPerTableInMB;
+        config.memFractionForCompactionPerTable = this.memFractionForCompactionPerTable;
+        config.baseStorePathForFileGroups = this.baseStorePathForFileGroups;
+        config.rocksDBPath = this.rocksDBPath;
+        config.numThreads = this.numThreads;
+        config.async = this.async;
+        config.compress = this.compress;
+        config.markerBatchNumThreads = this.markerBatchNumThreads;
+        config.markerBatchIntervalMs = this.markerBatchIntervalMs;
+        config.markerParallelism = this.markerParallelism;
+        return config;
+      }
+    }
   }
 
   private int startServiceOnPort(int port) throws IOException {
@@ -184,7 +285,8 @@ public class TimelineService {
     }
 
     RequestHandler requestHandler = new RequestHandler(
-        app, conf, fs, fsViewsManager, useAsync, markerBatchNumThreads, markerBatchIntervalMs, markerDeleteParallelism);
+        app, conf, context, fs, fsViewsManager, useAsync, markerBatchNumThreads,
+        markerBatchIntervalMs, markerDeleteParallelism);
     app.get("/", ctx -> ctx.result("Hello World"));
     requestHandler.register();
     int realServerPort = startServiceOnPort(serverPort);

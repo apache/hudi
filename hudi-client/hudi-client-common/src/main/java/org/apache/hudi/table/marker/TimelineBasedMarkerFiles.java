@@ -22,6 +22,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.Path;
@@ -74,21 +75,21 @@ public class TimelineBasedMarkerFiles extends MarkerFiles {
   }
 
   @Override
-  public Set<String> allMarkerFilePaths() throws IOException {
+  public Set<String> allMarkerFilePaths() {
     return remoteFSView.getAllMarkerFilePaths(markerDirPath.toString());
   }
 
   @Override
-  Path create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists) {
+  protected Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists) {
     LOG.info("[timeline-based] Create marker file : " + partitionPath + " " + dataFileName);
     long startTimeMs = System.currentTimeMillis();
     String markerFileName = getMarkerFileName(dataFileName, type);
     boolean success = remoteFSView.createMarker(markerDirPath.toString(), String.format("%s/%s", partitionPath, markerFileName));
     LOG.info("[timeline-based] Created marker file in " + (System.currentTimeMillis() - startTimeMs) + " ms");
     if (success) {
-      return new Path(new Path(markerDirPath, partitionPath), markerFileName);
+      return Option.of(new Path(new Path(markerDirPath, partitionPath), markerFileName));
     } else {
-      return null;
+      return Option.empty();
     }
   }
 }

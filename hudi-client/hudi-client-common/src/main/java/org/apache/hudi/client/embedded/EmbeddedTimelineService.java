@@ -75,14 +75,15 @@ public class EmbeddedTimelineService {
   }
 
   public void startServer() throws IOException {
-    TimelineService.Config timelineServiceConf = new TimelineService.Config();
-    timelineServiceConf.serverPort = writeConfig.getEmbeddedTimelineServerPort();
-    timelineServiceConf.numThreads = writeConfig.getEmbeddedTimelineServerThreads();
-    timelineServiceConf.compress = writeConfig.getEmbeddedTimelineServerCompressOutput();
-    timelineServiceConf.async = writeConfig.getEmbeddedTimelineServerUseAsync();
-    timelineServiceConf.markerBatchNumThreads = writeConfig.getMarkersTimelineBasedBatchNumThreads();
-    timelineServiceConf.markerBatchIntervalMs = writeConfig.getMarkersTimelineBasedBatchIntervalMs();
-    timelineServiceConf.markerParallelism = writeConfig.getMarkersDeleteParallelism();
+    TimelineService.Config timelineServiceConf = TimelineService.Config.builder()
+        .serverPort(writeConfig.getEmbeddedTimelineServerPort())
+        .numThreads(writeConfig.getEmbeddedTimelineServerThreads())
+        .compress(writeConfig.getEmbeddedTimelineServerCompressOutput())
+        .async(writeConfig.getEmbeddedTimelineServerUseAsync())
+        .markerBatchNumThreads(writeConfig.getMarkersTimelineBasedBatchNumThreads())
+        .markerBatchIntervalMs(writeConfig.getMarkersTimelineBasedBatchIntervalMs())
+        .markerParallelism(writeConfig.getMarkersDeleteParallelism())
+        .build();
 
     server = new TimelineService(context, timelineServiceConf, hadoopConf.newCopy(),
         FSUtils.getFs(basePath, hadoopConf.newCopy()), viewManager);

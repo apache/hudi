@@ -23,6 +23,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
@@ -65,7 +66,7 @@ public class DirectMarkerFiles extends MarkerFiles {
   }
 
   /**
-   * Delete Marker directory corresponding to an instant.
+   * Deletes Marker directory corresponding to an instant.
    *
    * @param context HoodieEngineContext.
    * @param parallelism parallelism for deletion.
@@ -164,7 +165,7 @@ public class DirectMarkerFiles extends MarkerFiles {
   }
 
   @Override
-  protected Path create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists) {
+  protected Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists) {
     LOG.info("[direct] Create marker file : " + partitionPath + " " + dataFileName);
     long startTimeMs = System.currentTimeMillis();
     Path markerPath = getMarkerPath(partitionPath, dataFileName, type);
@@ -179,7 +180,7 @@ public class DirectMarkerFiles extends MarkerFiles {
     try {
       if (checkIfExists && fs.exists(markerPath)) {
         LOG.warn("Marker path " + markerPath + " already exists, cancel creation");
-        return null;
+        return Option.empty();
       }
       LOG.info("Creating marker path " + markerPath);
       fs.create(markerPath, false).close();
@@ -187,6 +188,6 @@ public class DirectMarkerFiles extends MarkerFiles {
       throw new HoodieException("Failed to create marker file " + markerPath, e);
     }
     LOG.info("[direct] Created marker file in " + (System.currentTimeMillis() - startTimeMs) + " ms");
-    return markerPath;
+    return Option.of(markerPath);
   }
 }
