@@ -200,6 +200,12 @@ public interface TableFileSystemView {
   Set<String> getCreateAndMergeMarkerFilePaths(String markerDirPath);
 
   /**
+   * @param markerDirPath marker directory path
+   * @return {@code true} if the marker directory exists; {@code false} otherwise.
+   */
+  boolean doesMarkerDirExist(String markerDirPath);
+
+  /**
    * Creates a new marker.
    *
    * @param markerDirPath marker directory path

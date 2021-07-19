@@ -233,6 +233,11 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   }
 
   @Override
+  public boolean doesMarkerDirExist(String markerDirPath) {
+    throw new UnsupportedOperationException(UNSUPPORTED_MARKER_OPERATION_ERROR_MSG);
+  }
+
+  @Override
   public boolean createMarker(String markerDirPath, String markerName) {
     throw new UnsupportedOperationException(UNSUPPORTED_MARKER_OPERATION_ERROR_MSG);
   }

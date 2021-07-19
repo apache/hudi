@@ -425,6 +425,13 @@ public class RequestHandler {
       writeValueAsString(ctx, markers);
     }, false));
 
+    app.get(RemoteHoodieTableFileSystemView.MARKERS_DIR_EXISTS_URL, new ViewHandler(ctx -> {
+      metricsRegistry.add("MARKERS_DIR_EXISTS", 1);
+      boolean exist = markerHandler.doesMarkerDirExist(
+          ctx.queryParam(RemoteHoodieTableFileSystemView.MARKER_DIR_PATH_PARAM, ""));
+      writeValueAsString(ctx, exist);
+    }, false));
+
     app.post(RemoteHoodieTableFileSystemView.CREATE_MARKER_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("CREATE_MARKER", 1);
       ctx.result(markerHandler.createMarker(

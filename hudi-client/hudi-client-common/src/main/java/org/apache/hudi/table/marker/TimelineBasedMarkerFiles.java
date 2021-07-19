@@ -63,8 +63,8 @@ public class TimelineBasedMarkerFiles extends MarkerFiles {
   }
 
   @Override
-  public boolean doesMarkerDirExist() throws IOException {
-    return true;
+  public boolean doesMarkerDirExist() {
+    return remoteFSView.doesMarkerDirExist(markerDirPath.toString());
   }
 
   @Override

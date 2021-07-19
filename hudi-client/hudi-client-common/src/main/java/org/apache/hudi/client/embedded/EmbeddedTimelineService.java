@@ -55,10 +55,10 @@ public class EmbeddedTimelineService {
   public EmbeddedTimelineService(HoodieEngineContext context, String embeddedTimelineServiceHostAddr, HoodieWriteConfig writeConfig) {
     setHostAddr(embeddedTimelineServiceHostAddr);
     this.context = context;
+    this.writeConfig = writeConfig;
     this.basePath = writeConfig.getBasePath();
     this.hadoopConf = context.getHadoopConf();
     this.viewManager = createViewManager();
-    this.writeConfig = writeConfig;
   }
 
   private FileSystemViewManager createViewManager() {

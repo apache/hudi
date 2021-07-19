@@ -51,7 +51,7 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
 
     try {
-      server = new TimelineService(0,
+      server = new TimelineService(localEngineContext, 0,
           FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, sConf, commonConfig));
       server.startService();
     } catch (Exception ex) {

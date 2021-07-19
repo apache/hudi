@@ -1114,6 +1114,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     throw new UnsupportedOperationException(UNSUPPORTED_MARKER_OPERATION_ERROR_MSG);
   }
 
+  @Override
+  public boolean doesMarkerDirExist(String markerDirPath) {
+    throw new UnsupportedOperationException(UNSUPPORTED_MARKER_OPERATION_ERROR_MSG);
+  }
+
   /**
    * Performs complete reset of file-system view. Subsequent partition view calls will load file slices against latest
    * timeline

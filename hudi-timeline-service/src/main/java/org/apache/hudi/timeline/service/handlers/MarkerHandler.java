@@ -143,6 +143,19 @@ public class MarkerHandler extends Handler {
   }
 
   /**
+   * @param markerDir  marker directory path
+   * @return {@code true} if the marker directory exists; {@code false} otherwise.
+   */
+  public boolean doesMarkerDirExist(String markerDir) {
+    Path markerDirPath = new Path(markerDir);
+    try {
+      return fileSystem.exists(markerDirPath);
+    } catch (IOException ioe) {
+      throw new HoodieIOException(ioe.getMessage(), ioe);
+    }
+  }
+
+  /**
    * Generates a future for an async marker creation request
    *
    * The future is added to the marker creation future list and waits for the next batch processing
@@ -233,8 +246,8 @@ public class MarkerHandler extends Handler {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read MARKERS file " + markerDirPath, e);
     } finally {
-      closeQuietly(fsDataInputStream);
       closeQuietly(bufferedReader);
+      closeQuietly(fsDataInputStream);
     }
     return markers;
   }
@@ -386,8 +399,8 @@ public class MarkerHandler extends Handler {
         } catch (IOException e) {
           throw new HoodieIOException("Failed to overwrite marker file " + markersFilePath, e);
         } finally {
-          closeQuietly(fsDataOutputStream);
           closeQuietly(bufferedWriter);
+          closeQuietly(fsDataOutputStream);
         }
         LOG.info(markersFilePath.toString() + " written in " + (System.currentTimeMillis() - startTimeMs) + " ms");
       }
