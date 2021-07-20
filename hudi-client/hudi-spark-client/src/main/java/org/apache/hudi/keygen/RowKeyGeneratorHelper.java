@@ -19,10 +19,13 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.exception.HoodieKeyException;
+
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.types.DataType;
+import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
-import scala.Option;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -32,6 +35,8 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import scala.Option;
 
 import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH_SEPARATOR;
@@ -120,6 +125,54 @@ public class RowKeyGeneratorHelper {
       return val;
     }).collect(Collectors.joining(DEFAULT_PARTITION_PATH_SEPARATOR));
   }
+
+  public static String getPartitionPathFromInternalRow(InternalRow row, List<String> partitionPathFields, boolean hiveStylePartitioning,
+                                                       Map<String, List<Integer>> partitionPathPositions,
+                                                       Map<String, List<DataType>> partitionPathDataTypes) {
+    return IntStream.range(0, partitionPathFields.size()).mapToObj(idx -> {
+      String field = partitionPathFields.get(idx);
+      String val = null;
+      List<Integer> fieldPositions = partitionPathPositions.get(field);
+      if (fieldPositions.size() == 1) { // simple
+        Integer fieldPos = fieldPositions.get(0);
+        // for partition path, if field is not found, index will be set to -1
+        if (fieldPos == -1 || row.isNullAt(fieldPos)) {
+          val = DEFAULT_PARTITION_PATH;
+        } else {
+          Object value = row.get(fieldPos, partitionPathDataTypes.get(field).get(0));
+          if (value == null || value.toString().isEmpty()) {
+            val = DEFAULT_PARTITION_PATH;
+          } else {
+            val = value.toString();
+          }
+        }
+        if (hiveStylePartitioning) {
+          val = field + "=" + val;
+        }
+      } else { // nested
+        throw new IllegalArgumentException("Nested partitioning is not supported with disabling meta columns.");
+      }
+      return val;
+    }).collect(Collectors.joining(DEFAULT_PARTITION_PATH_SEPARATOR));
+  }
+
+  public static Object getFieldValFromInternalRow(InternalRow internalRow,
+                                                  Integer partitionPathPosition,
+                                                  DataType partitionPathDataType) {
+    Object val = null;
+    if (internalRow.isNullAt(partitionPathPosition)) {
+      return DEFAULT_PARTITION_PATH;
+    } else {
+      Object value = partitionPathDataType == DataTypes.StringType ? internalRow.getString(partitionPathPosition) : internalRow.get(partitionPathPosition, partitionPathDataType);
+      if (value == null || value.toString().isEmpty()) {
+        val = DEFAULT_PARTITION_PATH;
+      } else {
+        val = value;
+      }
+    }
+    return val;
+  }
+
 
   /**
    * Fetch the field value located at the positions requested for.
