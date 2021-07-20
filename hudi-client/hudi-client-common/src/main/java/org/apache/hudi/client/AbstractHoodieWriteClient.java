@@ -309,6 +309,17 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   public abstract O insert(I records, final String instantTime);
 
   /**
+   * Inserts the given Error HoodieRecords, into the table. This API is intended to be used for normal writes.
+   * <p>
+   * This API is intended to be used to write wrong records.
+   *
+   * @param records Error HoodieRecords to insert
+   * @param instantTime Instant time of the commit
+   * @return Collection of WriteStatus to inspect errors and counts
+   */
+  public abstract O insertError(I records, final String instantTime);
+
+  /**
    * Inserts the given prepared records into the Hoodie table, at the supplied instantTime.
    * <p>
    * This implementation skips the index check, skips de-duping and is able to leverage benefits such as small file

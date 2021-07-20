@@ -28,6 +28,8 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroSchemaPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -121,6 +123,9 @@ public class HoodieTestDataGenerator {
   public static final String SHORT_TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"shortTripRec\",\"fields\":["
       + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
       + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
+  public static final String MISS_TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"tripUberRec\",\"fields\":["
+          + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},"
+          + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
 
   public static final String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
   public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,double,double,double,double,int,bigint,float,binary,int,bigint,decimal(10,6),"
@@ -133,6 +138,7 @@ public class HoodieTestDataGenerator {
   public static final Schema AVRO_SHORT_TRIP_SCHEMA = new Schema.Parser().parse(SHORT_TRIP_SCHEMA);
   public static final Schema AVRO_TRIP_SCHEMA = new Schema.Parser().parse(TRIP_SCHEMA);
   public static final Schema FLATTENED_AVRO_SCHEMA = new Schema.Parser().parse(TRIP_FLATTENED_SCHEMA);
+  public static final Schema AVRO_MISS_TRIP_SCHEMA = new Schema.Parser().parse(MISS_TRIP_SCHEMA);
 
   private static final Random RAND = new Random(46474747);
 
@@ -179,7 +185,6 @@ public class HoodieTestDataGenerator {
     } else if (SHORT_TRIP_SCHEMA.equals(schemaStr)) {
       return generatePayloadForShortTripSchema(key, commitTime);
     }
-
     return null;
   }
 
@@ -235,6 +240,21 @@ public class HoodieTestDataGenerator {
     return new RawTripTestPayload(Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA, true);
   }
 
+  public RawTripTestPayload generatePayloadForMissTripSchema(HoodieKey key, String commitTime) throws IOException {
+    GenericRecord rec = generateRecordForMissTripSchema(key.getRecordKey(), "driver-" + commitTime, 0);
+    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), MISS_TRIP_SCHEMA);
+  }
+
+  public OverwriteWithLatestAvroSchemaPayload generateMissWithOverwriteWithLatestAvroSchemaPayload(HoodieKey key, String instantTime) {
+    GenericRecord rec = generateRecordForMissTripSchema(key.getRecordKey(), "driver-" + instantTime, 0);
+    return new OverwriteWithLatestAvroSchemaPayload(Option.of(rec));
+  }
+
+  public OverwriteWithLatestAvroPayload generateUpdatesWithOverwriteWithLatestAvroPayload(HoodieKey key, String instantTime) {
+    GenericRecord rec = generateRecordForTripSchema(key.getRecordKey(), "rider-" + instantTime,"driver-" + instantTime, 0);
+    return new OverwriteWithLatestAvroPayload(Option.of(rec));
+  }
+
   /**
    * Generates a new avro record of the above schema format, retaining the key if optionally provided.
    */
@@ -246,6 +266,16 @@ public class HoodieTestDataGenerator {
   public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
                                                     long timestamp) {
     return generateGenericRecord(rowKey, riderName, driverName, timestamp, false, false);
+  }
+
+  public GenericRecord generateRecordForMissTripSchema(String rowKey, String driverName, long timestamp) {
+    GenericRecord rec = new GenericData.Record(AVRO_MISS_TRIP_SCHEMA);
+    rec.put("_row_key", rowKey);
+    rec.put("timestamp", timestamp);
+    rec.put("driver", driverName);
+    rec.put("fare", RAND.nextDouble() * 100);
+    rec.put("_hoodie_is_deleted", false);
+    return rec;
   }
 
   public static GenericRecord generateGenericRecord(String rowKey, String riderName, String driverName,
