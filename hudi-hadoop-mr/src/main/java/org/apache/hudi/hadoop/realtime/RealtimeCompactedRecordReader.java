@@ -77,10 +77,16 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         .withReaderSchema(usesCustomPayload ? getWriterSchema() : getReaderSchema())
         .withLatestInstantTime(split.getMaxCommitTime())
         .withMaxMemorySizeInBytes(HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes(jobConf))
-        .withReadBlocksLazily(Boolean.parseBoolean(jobConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)))
+        .withReadBlocksLazily(Boolean.parseBoolean(
+            jobConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP.key(),
+                HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP.defaultValue())))
         .withReverseReader(false)
-        .withBufferSize(jobConf.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
-        .withSpillableMapBasePath(jobConf.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP, HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))
+        .withBufferSize(jobConf.getInt(
+            HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP.key(),
+                Integer.parseInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP.defaultValue())))
+        .withSpillableMapBasePath(jobConf.get(
+            HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP.key(),
+                HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP.defaultValue()))
         .build();
   }
 

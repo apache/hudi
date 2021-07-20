@@ -83,9 +83,13 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
         .withLogFilePaths(split.getDeltaLogPaths())
         .withReaderSchema(getReaderSchema())
         .withLatestInstantTime(split.getMaxCommitTime())
-        .withReadBlocksLazily(Boolean.parseBoolean(this.jobConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)))
+        .withReadBlocksLazily(jobConf.getBoolean(
+            HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP.key(),
+                Boolean.parseBoolean(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP.defaultValue())))
         .withReverseReader(false)
-        .withBufferSize(this.jobConf.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
+        .withBufferSize(jobConf.getInt(
+            HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP.key(),
+                Integer.parseInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP.defaultValue())))
         .withLogRecordScannerCallback(record -> {
           // convert Hoodie log record to Hadoop AvroWritable and buffer
           GenericRecord rec = (GenericRecord) record.getData().getInsertValue(getReaderSchema()).get();
