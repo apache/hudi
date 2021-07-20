@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.io.storage.row;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.fs.FSUtils;
@@ -63,6 +63,11 @@ public class HoodieInternalRowParquetWriter extends ParquetWriter<InternalRow>
   public void writeRow(String key, InternalRow row) throws IOException {
     super.write(row);
     writeSupport.add(key);
+  }
+
+  @Override
+  public void writeRow(InternalRow row) throws IOException {
+    super.write(row);
   }
 
   @Override

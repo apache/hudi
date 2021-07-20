@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io.storage;
+package org.apache.hudi.io.storage.row;
 
 import org.apache.spark.sql.catalyst.InternalRow;
 
@@ -33,11 +33,18 @@ public interface HoodieInternalRowFileWriter {
   boolean canWrite();
 
   /**
-   * Writes an {@link InternalRow} to the HoodieInternalRowFileWriter.
+   * Writes an {@link InternalRow} to the HoodieInternalRowFileWriter. Also takes in associated record key to be added to bloom filter if required.
    *
    * @throws IOException on any exception while writing.
    */
   void writeRow(String key, InternalRow row) throws IOException;
+
+  /**
+   * Writes an {@link InternalRow} to the HoodieInternalRowFileWriter.
+   *
+   * @throws IOException on any exception while writing.
+   */
+  void writeRow(InternalRow row) throws IOException;
 
   /**
    * Closes the {@link HoodieInternalRowFileWriter} and may not take in any more writes.
