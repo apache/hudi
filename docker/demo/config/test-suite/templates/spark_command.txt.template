@@ -1,0 +1,34 @@
+spark-submit \
+--packages org.apache.spark:spark-avro_2.11:2.4.0 \
+--conf spark.task.cpus=1 \
+--conf spark.executor.cores=1 \
+--conf spark.task.maxFailures=100 \
+--conf spark.memory.fraction=0.4  \
+--conf spark.rdd.compress=true  \
+--conf spark.kryoserializer.buffer.max=2000m \
+--conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.memory.storageFraction=0.1 \
+--conf spark.shuffle.service.enabled=true  \
+--conf spark.sql.hive.convertMetastoreParquet=false  \
+--conf spark.driver.maxResultSize=12g \
+--conf spark.executor.heartbeatInterval=120s \
+--conf spark.network.timeout=600s \
+--conf spark.yarn.max.executor.failures=10 \
+--conf spark.sql.catalogImplementation=hive \
+--class org.apache.hudi.integ.testsuite.HoodieTestSuiteJob \
+/opt/JAR_NAME \
+--source-ordering-field test_suite_source_ordering_field \
+--use-deltastreamer \
+--target-base-path OUTPUT_PATH \
+--input-base-path INPUT_PATH \
+--target-table table1 \
+--props file:/opt/staging/test.properties \
+--schemaprovider-class org.apache.hudi.integ.testsuite.schema.TestSuiteFileBasedSchemaProvider \
+--source-class org.apache.hudi.utilities.sources.AvroDFSSource \
+--input-file-size 125829120 \
+--workload-yaml-path file:/opt/staging/input_yaml \
+--workload-generator-classname org.apache.hudi.integ.testsuite.dag.WorkflowDagGenerator \
+--table-type TABLE_TYPE \
+--compact-scheduling-minshare 1 \
+--clean-input \
+--clean-output

@@ -29,6 +29,7 @@ import org.apache.spark.sql.connector.write.WriteBuilder;
 import org.apache.spark.sql.types.StructType;
 
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -41,14 +42,19 @@ class HoodieDataSourceInternalTable implements SupportsWrite {
   private final StructType structType;
   private final SparkSession jss;
   private final Configuration hadoopConfiguration;
+  private final boolean arePartitionRecordsSorted;
+  private final Map<String, String> properties;
 
   public HoodieDataSourceInternalTable(String instantTime, HoodieWriteConfig config,
-      StructType schema, SparkSession jss, Configuration hadoopConfiguration) {
+      StructType schema, SparkSession jss, Configuration hadoopConfiguration, Map<String, String> properties,
+                                       boolean arePartitionRecordsSorted) {
     this.instantTime = instantTime;
     this.writeConfig = config;
     this.structType = schema;
     this.jss = jss;
     this.hadoopConfiguration = hadoopConfiguration;
+    this.arePartitionRecordsSorted = arePartitionRecordsSorted;
+    this.properties = properties;
   }
 
   @Override
@@ -66,12 +72,13 @@ class HoodieDataSourceInternalTable implements SupportsWrite {
     return new HashSet<TableCapability>() {{
         add(TableCapability.BATCH_WRITE);
         add(TableCapability.TRUNCATE);
-      }};
+      }
+    };
   }
 
   @Override
   public WriteBuilder newWriteBuilder(LogicalWriteInfo logicalWriteInfo) {
     return new HoodieDataSourceInternalBatchWriteBuilder(instantTime, writeConfig, structType, jss,
-        hadoopConfiguration);
+        hadoopConfiguration, properties, arePartitionRecordsSorted);
   }
 }

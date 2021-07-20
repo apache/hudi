@@ -34,6 +34,7 @@ import org.apache.parquet.avro.AvroSchemaConverter;
 
 import java.io.IOException;
 
+import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.model.HoodieFileFormat.HFILE;
 
@@ -49,6 +50,9 @@ public class HoodieFileWriterFactory {
     if (HFILE.getFileExtension().equals(extension)) {
       return newHFileFileWriter(instantTime, path, config, schema, hoodieTable, taskContextSupplier);
     }
+    if (ORC.getFileExtension().equals(extension)) {
+      return newOrcFileWriter(instantTime, path, config, schema, hoodieTable, taskContextSupplier);
+    }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
 
@@ -57,7 +61,7 @@ public class HoodieFileWriterFactory {
       TaskContextSupplier taskContextSupplier) throws IOException {
     BloomFilter filter = createBloomFilter(config);
     HoodieAvroWriteSupport writeSupport =
-        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);
+        new HoodieAvroWriteSupport(new AvroSchemaConverter(hoodieTable.getHadoopConf()).convert(schema), schema, filter);
 
     HoodieAvroParquetConfig parquetConfig = new HoodieAvroParquetConfig(writeSupport, config.getParquetCompressionCodec(),
         config.getParquetBlockSize(), config.getParquetPageSize(), config.getParquetMaxFileSize(),
@@ -75,6 +79,15 @@ public class HoodieFileWriterFactory {
         config.getHFileCompressionAlgorithm(), config.getHFileBlockSize(), config.getHFileMaxFileSize(), filter);
 
     return new HoodieHFileWriter<>(instantTime, path, hfileConfig, schema, taskContextSupplier);
+  }
+
+  private static <T extends HoodieRecordPayload, R extends IndexedRecord> HoodieFileWriter<R> newOrcFileWriter(
+      String instantTime, Path path, HoodieWriteConfig config, Schema schema, HoodieTable hoodieTable,
+      TaskContextSupplier taskContextSupplier) throws IOException {
+    BloomFilter filter = createBloomFilter(config);
+    HoodieOrcConfig orcConfig = new HoodieOrcConfig(hoodieTable.getHadoopConf(), config.getOrcCompressionCodec(),
+        config.getOrcStripeSize(), config.getOrcBlockSize(), config.getOrcMaxFileSize(), filter);
+    return new HoodieOrcWriter<>(instantTime, path, orcConfig, schema, taskContextSupplier);
   }
 
   private static BloomFilter createBloomFilter(HoodieWriteConfig config) {

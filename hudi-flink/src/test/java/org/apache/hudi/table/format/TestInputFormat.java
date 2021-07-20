@@ -21,6 +21,7 @@ package org.apache.hudi.table.format;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.table.HoodieTableSource;
+import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -43,6 +44,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -90,7 +92,7 @@ public class TestInputFormat {
     TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
 
     // refresh the input format
-    this.tableSource.reloadActiveTimeline();
+    this.tableSource.reset();
     inputFormat = this.tableSource.getInputFormat();
 
     result = readData(inputFormat);
@@ -114,8 +116,9 @@ public class TestInputFormat {
   void testReadBaseAndLogFiles() throws Exception {
     beforeEach(HoodieTableType.MERGE_ON_READ);
 
-    // write parquet first with compaction
+    // write base first with compaction
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
+    conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
     InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
@@ -130,8 +133,12 @@ public class TestInputFormat {
     conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
     TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
 
+    // write another commit using logs with separate partition
+    // so the file group has only logs
+    TestData.writeData(TestData.DATA_SET_INSERT_SEPARATE_PARTITION, conf);
+
     // refresh the input format
-    this.tableSource.reloadActiveTimeline();
+    this.tableSource.reset();
     inputFormat = this.tableSource.getInputFormat();
 
     result = readData(inputFormat);
@@ -140,6 +147,10 @@ public class TestInputFormat {
     expected = "[id1,Danny,24,1970-01-01T00:00:00.001,par1, "
         + "id10,Ella,38,1970-01-01T00:00:00.007,par4, "
         + "id11,Phoebe,52,1970-01-01T00:00:00.008,par4, "
+        + "id12,Monica,27,1970-01-01T00:00:00.009,par5, "
+        + "id13,Phoebe,31,1970-01-01T00:00:00.010,par5, "
+        + "id14,Rachel,52,1970-01-01T00:00:00.011,par6, "
+        + "id15,Ross,29,1970-01-01T00:00:00.012,par6, "
         + "id2,Stephen,34,1970-01-01T00:00:00.002,par1, "
         + "id3,Julian,54,1970-01-01T00:00:00.003,par2, "
         + "id4,Fabian,32,1970-01-01T00:00:00.004,par2, "
@@ -148,6 +159,29 @@ public class TestInputFormat {
         + "id7,Bob,44,1970-01-01T00:00:00.007,par4, "
         + "id8,Han,56,1970-01-01T00:00:00.008,par4, "
         + "id9,Jane,19,1970-01-01T00:00:00.006,par3]";
+    assertThat(actual, is(expected));
+  }
+
+  @Test
+  void testReadWithDeletes() throws Exception {
+    beforeEach(HoodieTableType.MERGE_ON_READ);
+
+    // write another commit to read again
+    TestData.writeData(TestData.DATA_SET_UPDATE_DELETE, conf);
+
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
+    ((MergeOnReadInputFormat) inputFormat).isEmitDelete(true);
+
+    List<RowData> result = readData(inputFormat);
+
+    final String actual = TestData.rowDataToString(result);
+    final String expected = "["
+        + "id1,Danny,24,1970-01-01T00:00:00.001,par1, "
+        + "id2,Stephen,34,1970-01-01T00:00:00.002,par1, "
+        + "id3,null,null,null,null, "
+        + "id5,null,null,null,null, "
+        + "id9,null,null,null,null]";
     assertThat(actual, is(expected));
   }
 

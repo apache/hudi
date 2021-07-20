@@ -23,15 +23,12 @@ import org.apache.hudi.streamer.FlinkStreamerConfig;
 import org.apache.hudi.utils.factory.CollectSinkTableFactory;
 import org.apache.hudi.utils.factory.ContinuousFileSourceFactory;
 
-import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.types.Row;
 
 import java.util.Map;
 import java.util.Objects;
@@ -59,13 +56,6 @@ public class TestConfigurations {
           ROW_DATA_TYPE.getChildren().toArray(new DataType[0]))
       .build();
 
-  public static final TypeInformation<Row> ROW_TYPE_INFO = Types.ROW(
-      Types.STRING,
-      Types.STRING,
-      Types.INT,
-      Types.LOCAL_DATE_TIME,
-      Types.STRING);
-
   public static String getCreateHoodieTableDDL(String tableName, Map<String, String> options) {
     String createTable = "create table " + tableName + "(\n"
         + "  uuid varchar(20),\n"
@@ -79,10 +69,8 @@ public class TestConfigurations {
         + "with (\n"
         + "  'connector' = 'hudi'";
     StringBuilder builder = new StringBuilder(createTable);
-    if (options.size() != 0) {
-      options.forEach((k, v) -> builder.append(",\n")
-          .append("  '").append(k).append("' = '").append(v).append("'"));
-    }
+    options.forEach((k, v) -> builder.append(",\n")
+        .append("  '").append(k).append("' = '").append(v).append("'"));
     builder.append("\n)");
     return builder.toString();
   }
@@ -127,12 +115,34 @@ public class TestConfigurations {
         + ")";
   }
 
+  public static String getCollectSinkDDL(String tableName, TableSchema tableSchema) {
+    final StringBuilder builder = new StringBuilder("create table " + tableName + "(\n");
+    String[] fieldNames = tableSchema.getFieldNames();
+    DataType[] fieldTypes = tableSchema.getFieldDataTypes();
+    for (int i = 0; i < fieldNames.length; i++) {
+      builder.append("  `")
+              .append(fieldNames[i])
+              .append("` ")
+              .append(fieldTypes[i].toString());
+      if (i != fieldNames.length - 1) {
+        builder.append(",");
+      }
+      builder.append("\n");
+    }
+    final String withProps = ""
+            + ") with (\n"
+            + "  'connector' = '" + CollectSinkTableFactory.FACTORY_ID + "'\n"
+            + ")";
+    builder.append(withProps);
+    return builder.toString();
+  }
+
   public static final RowDataSerializer SERIALIZER = new RowDataSerializer(ROW_TYPE);
 
   public static Configuration getDefaultConf(String tablePath) {
     Configuration conf = new Configuration();
     conf.setString(FlinkOptions.PATH, tablePath);
-    conf.setString(FlinkOptions.READ_AVRO_SCHEMA_PATH,
+    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH,
         Objects.requireNonNull(Thread.currentThread()
             .getContextClassLoader().getResource("test_read_schema.avsc")).toString());
     conf.setString(FlinkOptions.TABLE_NAME, "TestHoodieTable");
@@ -143,7 +153,7 @@ public class TestConfigurations {
   public static FlinkStreamerConfig getDefaultStreamerConf(String tablePath) {
     FlinkStreamerConfig streamerConf = new FlinkStreamerConfig();
     streamerConf.targetBasePath = tablePath;
-    streamerConf.readSchemaFilePath = Objects.requireNonNull(Thread.currentThread()
+    streamerConf.sourceAvroSchemaPath = Objects.requireNonNull(Thread.currentThread()
         .getContextClassLoader().getResource("test_read_schema.avsc")).toString();
     streamerConf.targetTableName = "TestHoodieTable";
     streamerConf.partitionPathField = "partition";

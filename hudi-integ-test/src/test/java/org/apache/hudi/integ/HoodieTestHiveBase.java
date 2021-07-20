@@ -77,7 +77,7 @@ public class HoodieTestHiveBase extends ITTestBase {
         tableType, hiveTableName, commitType, hoodieTableName);
     if (partitionType == PartitionType.MULTI_KEYS_PARTITIONED) {
       cmd = cmd + " --use-multi-partition-keys";
-    } else if (partitionType == PartitionType.NON_PARTITIONED){
+    } else if (partitionType == PartitionType.NON_PARTITIONED) {
       cmd = cmd + " --non-partitioned";
     }
     executeCommandStringInDocker(ADHOC_1_CONTAINER, cmd, true);

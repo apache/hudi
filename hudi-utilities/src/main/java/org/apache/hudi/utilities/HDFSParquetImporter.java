@@ -102,7 +102,7 @@ public class HDFSParquetImporter implements Serializable {
   }
 
   private boolean isUpsert() {
-    return "upsert".equals(cfg.command.toLowerCase());
+    return "upsert".equalsIgnoreCase(cfg.command);
   }
 
   public int dataImport(JavaSparkContext jsc, int retry) {
@@ -144,7 +144,7 @@ public class HDFSParquetImporter implements Serializable {
       // Get schema.
       String schemaStr = UtilHelpers.parseSchema(fs, cfg.schemaFile);
 
-      SparkRDDWriteClient client =
+      SparkRDDWriteClient<HoodieRecordPayload> client =
           UtilHelpers.createHoodieClient(jsc, cfg.targetPath, schemaStr, cfg.parallelism, Option.empty(), props);
 
       JavaRDD<HoodieRecord<HoodieRecordPayload>> hoodieRecords = buildHoodieRecordsForImport(jsc, schemaStr);
@@ -206,7 +206,7 @@ public class HDFSParquetImporter implements Serializable {
    * @param hoodieRecords Hoodie Records
    * @param <T> Type
    */
-  protected <T extends HoodieRecordPayload> JavaRDD<WriteStatus> load(SparkRDDWriteClient client, String instantTime,
+  protected <T extends HoodieRecordPayload> JavaRDD<WriteStatus> load(SparkRDDWriteClient<T> client, String instantTime,
                                                                       JavaRDD<HoodieRecord<T>> hoodieRecords) {
     switch (cfg.command.toLowerCase()) {
       case "upsert": {

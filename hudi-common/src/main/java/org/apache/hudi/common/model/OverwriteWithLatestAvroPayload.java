@@ -49,7 +49,7 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
   @Override
   public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload another) {
     // pick the payload with greatest ordering value
-    if (another.orderingVal.compareTo(orderingVal) > 0) {
+    if (another.orderingVal.compareTo(orderingVal) > 0 || another.orderingVal.compareTo(orderingVal) ==0) {
       return another;
     } else {
       return this;
@@ -94,6 +94,6 @@ public class OverwriteWithLatestAvroPayload extends BaseAvroPayload
    * Return true if value equals defaultValue otherwise false.
    */
   public Boolean overwriteField(Object value, Object defaultValue) {
-    return defaultValue == null ? value == null : defaultValue.toString().equals(value.toString());
+    return defaultValue == null ? value == null : defaultValue.toString().equals(String.valueOf(value));
   }
 }

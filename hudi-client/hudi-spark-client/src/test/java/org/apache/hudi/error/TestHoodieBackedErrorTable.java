@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.BaseFileUtils;
 import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieClientTestBase;
@@ -43,7 +44,6 @@ import static org.apache.hudi.testutils.Assertions.assertHasWriteErrors;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA;
 import static org.apache.hudi.common.testutils.Transformations.recordsToHoodieKeys;
-import static org.apache.hudi.common.util.ParquetUtils.readRowKeysFromParquet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestHoodieBackedErrorTable extends HoodieClientTestBase {
@@ -80,7 +80,9 @@ public class TestHoodieBackedErrorTable extends HoodieClientTestBase {
     String basePath = writeClient1.getConfig().getBasePath();
     DateTimeZone dateTimeZone = null;
     long timeMillis = System.currentTimeMillis();
-    assertEquals(50, readRowKeysFromParquet(hadoopConf, new Path(basePath + "/" + HoodieTableMetaClient.ERROR_TABLE_FOLDER_NAME  + "/"
+
+    BaseFileUtils fileUtils = BaseFileUtils.getInstance(metaClient);
+    assertEquals(50, fileUtils.readRowKeys(hadoopConf, new Path(basePath + "/" + HoodieTableMetaClient.ERROR_TABLE_FOLDER_NAME  + "/"
             + new DateTime(timeMillis, dateTimeZone).toString("yyyy/MM/dd"))).size(), "should contain 50 records");
   }
 

@@ -45,7 +45,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     // Ignore the index bootstrap because we only support parquet load now.
   }
 
-  Map<String, String> getMiniBatchExpected() {
+  protected Map<String, String> getMiniBatchExpected() {
     Map<String, String> expected = new HashMap<>();
     // MOR mode merges the messages with the same key.
     expected.put("par1", "[id1,par1,id1,Danny,23,1,par1]");
@@ -53,7 +53,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
   }
 
   @Override
-  protected String getTableType() {
-    return HoodieTableType.MERGE_ON_READ.name();
+  protected HoodieTableType getTableType() {
+    return HoodieTableType.MERGE_ON_READ;
   }
 }

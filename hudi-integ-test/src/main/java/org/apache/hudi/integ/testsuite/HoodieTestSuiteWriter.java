@@ -126,7 +126,7 @@ public class HoodieTestSuiteWriter implements Serializable {
   public RDD<GenericRecord> getNextBatch() throws Exception {
     Pair<SchemaProvider, Pair<String, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
     lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
-    JavaRDD <HoodieRecord> inputRDD = nextBatch.getRight().getRight();
+    JavaRDD<HoodieRecord> inputRDD = nextBatch.getRight().getRight();
     return inputRDD.map(r -> (GenericRecord) r.getData()
         .getInsertValue(new Schema.Parser().parse(schema)).get()).rdd();
   }

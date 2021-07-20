@@ -32,6 +32,7 @@ public class TestStorageSchemes {
   @Test
   public void testStorageSchemes() {
     assertTrue(StorageSchemes.isSchemeSupported("hdfs"));
+    assertTrue(StorageSchemes.isSchemeSupported("afs"));
     assertFalse(StorageSchemes.isSchemeSupported("s2"));
     assertFalse(StorageSchemes.isAppendSupported("s3a"));
     assertFalse(StorageSchemes.isAppendSupported("gs"));
@@ -44,6 +45,8 @@ public class TestStorageSchemes {
     assertFalse(StorageSchemes.isAppendSupported("cosn"));
     assertFalse(StorageSchemes.isAppendSupported("dbfs"));
     assertFalse(StorageSchemes.isAppendSupported("cos"));
+    assertFalse(StorageSchemes.isAppendSupported("bos"));
+    assertTrue(StorageSchemes.isAppendSupported("ofs"));
     assertThrows(IllegalArgumentException.class, () -> {
       StorageSchemes.isAppendSupported("s2");
     }, "Should throw exception for unsupported schemes");

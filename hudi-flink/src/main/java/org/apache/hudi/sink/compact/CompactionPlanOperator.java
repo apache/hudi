@@ -19,16 +19,14 @@
 package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.HoodieFlinkTable;
+import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -74,7 +72,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   @Override
   public void open() throws Exception {
     super.open();
-    initWriteClient();
+    this.writeClient = StreamerUtil.createWriteClient(conf, getRuntimeContext());
   }
 
   @Override
@@ -83,22 +81,35 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   }
 
   @Override
-  public void notifyCheckpointComplete(long checkpointId) throws IOException {
-    HoodieFlinkTable<?> table = writeClient.getHoodieTable();
+  public void notifyCheckpointComplete(long checkpointId) {
+    try {
+      HoodieFlinkTable hoodieTable = writeClient.getHoodieTable();
+      CompactionUtil.rollbackCompaction(hoodieTable, conf);
+      scheduleCompaction(hoodieTable, checkpointId);
+    } catch (Throwable throwable) {
+      // make it fail safe
+      LOG.error("Error while scheduling compaction at instant: " + compactionInstantTime, throwable);
+    }
+  }
+
+  private void scheduleCompaction(HoodieFlinkTable<?> table, long checkpointId) throws IOException {
     // the last instant takes the highest priority.
-    Option<HoodieInstant> compactionInstant = table.getActiveTimeline().filterPendingCompactionTimeline().lastInstant();
-    String compactionInstantTime = compactionInstant.isPresent() ? compactionInstant.get().getTimestamp() : null;
-    if (compactionInstantTime == null) {
+    Option<HoodieInstant> lastRequested = table.getActiveTimeline().filterPendingCompactionTimeline()
+        .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED).lastInstant();
+    if (!lastRequested.isPresent()) {
       // do nothing.
       LOG.info("No compaction plan for checkpoint " + checkpointId);
       return;
     }
+
+    String compactionInstantTime = lastRequested.get().getTimestamp();
     if (this.compactionInstantTime != null
         && Objects.equals(this.compactionInstantTime, compactionInstantTime)) {
       // do nothing
       LOG.info("Duplicate scheduling for compaction instant: " + compactionInstantTime + ", ignore");
       return;
     }
+
     // generate compaction plan
     // should support configurable commit metadata
     HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
@@ -111,19 +122,13 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
     } else {
       this.compactionInstantTime = compactionInstantTime;
       HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
-      HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
-      if (!pendingCompactionTimeline.containsInstant(instant)) {
-        throw new IllegalStateException(
-            "No Compaction request available at " + compactionInstantTime + " to run compaction");
-      }
-
       // Mark instant as compaction inflight
       table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
       table.getMetaClient().reloadActiveTimeline();
 
       List<CompactionOperation> operations = compactionPlan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(toList());
-      LOG.info("CompactionPlanFunction compacting " + operations + " files");
+      LOG.info("CompactionPlanOperator compacting " + operations + " files");
       for (CompactionOperation operation : operations) {
         output.collect(new StreamRecord<>(new CompactionPlanEvent(compactionInstantTime, operation)));
       }
@@ -133,14 +138,5 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   @VisibleForTesting
   public void setOutput(Output<StreamRecord<CompactionPlanEvent>> output) {
     this.output = output;
-  }
-
-  private void initWriteClient() {
-    HoodieFlinkEngineContext context =
-        new HoodieFlinkEngineContext(
-            new SerializableConfiguration(StreamerUtil.getHadoopConf()),
-            new FlinkTaskContextSupplier(getRuntimeContext()));
-
-    writeClient = new HoodieFlinkWriteClient<>(context, StreamerUtil.getHoodieClientConfig(this.conf));
   }
 }

@@ -112,8 +112,8 @@ public class TestHoodieMultiTableDeltaStreamer extends TestHoodieDeltaStreamer {
     assertEquals(dfsBasePath + "/multi_table_dataset/uber_db/dummy_table_uber", executionContext.getConfig().targetBasePath);
     assertEquals("uber_db.dummy_table_uber", executionContext.getConfig().targetTableName);
     assertEquals("topic1", executionContext.getProperties().getString(HoodieMultiTableDeltaStreamer.Constants.KAFKA_TOPIC_PROP));
-    assertEquals("_row_key", executionContext.getProperties().getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY()));
-    assertEquals(TestHoodieDeltaStreamer.TestGenerator.class.getName(), executionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY()));
+    assertEquals("_row_key", executionContext.getProperties().getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY().key()));
+    assertEquals(TestHoodieDeltaStreamer.TestGenerator.class.getName(), executionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY().key()));
     assertEquals("uber_hive_dummy_table", executionContext.getProperties().getString(HoodieMultiTableDeltaStreamer.Constants.HIVE_SYNC_TABLE_PROP));
   }
 
@@ -163,7 +163,12 @@ public class TestHoodieMultiTableDeltaStreamer extends TestHoodieDeltaStreamer {
     //insert updates for already existing records in kafka topics
     testUtils.sendMessages(topicName1, Helpers.jsonifyRecords(dataGenerator.generateUpdatesAsPerSchema("001", 5, HoodieTestDataGenerator.TRIP_SCHEMA)));
     testUtils.sendMessages(topicName2, Helpers.jsonifyRecords(dataGenerator.generateUpdatesAsPerSchema("001", 10, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
+
+    streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
+    streamer.getTableExecutionContexts().get(1).setProperties(properties);
+    streamer.getTableExecutionContexts().get(0).setProperties(properties1);
     streamer.sync();
+
     assertEquals(2, streamer.getSuccessTables().size());
     assertTrue(streamer.getFailedTables().isEmpty());
 
@@ -211,6 +216,24 @@ public class TestHoodieMultiTableDeltaStreamer extends TestHoodieDeltaStreamer {
       // sync and verify
       syncAndVerify(streamer, targetBasePath1, targetBasePath2, totalTable1Records, totalTable2Records);
     }
+  }
+
+  @Test
+  public void testTableLevelProperties() throws IOException {
+    HoodieMultiTableDeltaStreamer.Config cfg = TestHelpers.getConfig(PROPS_FILENAME_TEST_SOURCE1, dfsBasePath + "/config", TestDataSource.class.getName(), false);
+    HoodieMultiTableDeltaStreamer streamer = new HoodieMultiTableDeltaStreamer(cfg, jsc);
+    List<TableExecutionContext> tableExecutionContexts = streamer.getTableExecutionContexts();
+    tableExecutionContexts.forEach(tableExecutionContext -> {
+      switch (tableExecutionContext.getTableName()) {
+        case "dummy_table_short_trip":
+          String tableLevelKeyGeneratorClass = tableExecutionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY().key());
+          assertEquals(TestHoodieDeltaStreamer.TestTableLevelGenerator.class.getName(), tableLevelKeyGeneratorClass);
+          break;
+        default:
+          String defaultKeyGeneratorClass = tableExecutionContext.getProperties().getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY().key());
+          assertEquals(TestHoodieDeltaStreamer.TestGenerator.class.getName(), defaultKeyGeneratorClass);
+      }
+    });
   }
 
   private String populateCommonPropsAndWriteToFile() throws IOException {

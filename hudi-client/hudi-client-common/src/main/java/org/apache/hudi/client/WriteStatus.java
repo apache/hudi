@@ -18,6 +18,8 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -40,6 +42,7 @@ import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_E
 /**
  * Status of a write operation.
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.STABLE)
 public class WriteStatus implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(WriteStatus.class);
@@ -71,6 +74,12 @@ public class WriteStatus implements Serializable {
     this.trackSuccessRecords = trackSuccessRecords;
     this.failureFraction = failureFraction;
     this.random = new Random(RANDOM_SEED);
+  }
+
+  public WriteStatus() {
+    this.failureFraction = 0.0d;
+    this.trackSuccessRecords = false;
+    this.random = null;
   }
 
   /**

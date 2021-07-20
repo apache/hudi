@@ -18,8 +18,6 @@
 
 package org.apache.hudi.integ.testsuite.writer;
 
-import org.apache.hudi.integ.testsuite.schema.SchemaUtils;
-
 import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;

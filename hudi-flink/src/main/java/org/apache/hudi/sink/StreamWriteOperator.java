@@ -42,8 +42,8 @@ public class StreamWriteOperator<I>
   }
 
   @Override
-  public void handleOperatorEvent(OperatorEvent operatorEvent) {
-    // do nothing
+  public void handleOperatorEvent(OperatorEvent event) {
+    this.sinkFunction.handleOperatorEvent(event);
   }
 
   void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
@@ -51,7 +51,7 @@ public class StreamWriteOperator<I>
   }
 
   @Override
-  public void endInput() throws Exception {
+  public void endInput() {
     sinkFunction.endInput();
   }
 }

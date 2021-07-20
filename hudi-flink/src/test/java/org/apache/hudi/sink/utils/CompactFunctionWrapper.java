@@ -28,7 +28,9 @@ import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
 import org.apache.flink.runtime.io.disk.iomanager.IOManagerAsync;
+import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.memory.MemoryManager;
+import org.apache.flink.runtime.operators.coordination.MockOperatorCoordinatorContext;
 import org.apache.flink.runtime.operators.testutils.MockEnvironment;
 import org.apache.flink.runtime.operators.testutils.MockEnvironmentBuilder;
 import org.apache.flink.streaming.api.operators.Output;
@@ -53,7 +55,7 @@ public class CompactFunctionWrapper {
   private final MockFunctionInitializationContext functionInitializationContext;
 
   /** Function that generates the {@link HoodieCompactionPlan}. */
-  private CompactionPlanOperator compactionPlanFunction;
+  private CompactionPlanOperator compactionPlanOperator;
   /** Function that executes the compaction task. */
   private CompactFunction compactFunction;
   /** Stream sink to handle compaction commits. */
@@ -72,12 +74,15 @@ public class CompactFunctionWrapper {
   }
 
   public void openFunction() throws Exception {
-    compactionPlanFunction = new CompactionPlanOperator(conf);
-    compactionPlanFunction.open();
+    compactionPlanOperator = new CompactionPlanOperator(conf);
+    compactionPlanOperator.open();
 
     compactFunction = new CompactFunction(conf);
     compactFunction.setRuntimeContext(runtimeContext);
     compactFunction.open(conf);
+    final NonThrownExecutor syncExecutor = new MockCoordinatorExecutor(
+        new MockOperatorCoordinatorContext(new OperatorID(), 1));
+    compactFunction.setExecutor(syncExecutor);
 
     commitSink = new CompactionCommitSink(conf);
     commitSink.setRuntimeContext(runtimeContext);
@@ -113,8 +118,8 @@ public class CompactFunctionWrapper {
 
       }
     };
-    compactionPlanFunction.setOutput(output);
-    compactionPlanFunction.notifyCheckpointComplete(checkpointID);
+    compactionPlanOperator.setOutput(output);
+    compactionPlanOperator.notifyCheckpointComplete(checkpointID);
     // collect the CompactCommitEvents
     List<CompactionCommitEvent> compactCommitEvents = new ArrayList<>();
     for (CompactionPlanEvent event: events) {

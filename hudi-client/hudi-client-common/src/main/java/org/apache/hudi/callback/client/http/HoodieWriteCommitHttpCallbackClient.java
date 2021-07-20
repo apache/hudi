@@ -33,7 +33,6 @@ import org.apache.log4j.Logger;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Properties;
 
 /**
  * Write commit callback http client.
@@ -47,10 +46,10 @@ public class HoodieWriteCommitHttpCallbackClient implements Closeable {
   private final String apiKey;
   private final String url;
   private final CloseableHttpClient client;
-  private Properties props;
+  private HoodieWriteConfig writeConfig;
 
   public HoodieWriteCommitHttpCallbackClient(HoodieWriteConfig config) {
-    this.props = config.getProps();
+    this.writeConfig = config;
     this.apiKey = getApiKey();
     this.url = getUrl();
     this.client = getClient();
@@ -72,7 +71,7 @@ public class HoodieWriteCommitHttpCallbackClient implements Closeable {
       if (statusCode >= 300) {
         LOG.warn(String.format("Failed to send callback message. Response was %s", response));
       } else {
-        LOG.info(String.format("Sent Callback data %s to %s successfully !", callbackMsg, url));
+        LOG.info(String.format("Sent Callback data to %s successfully !", url));
       }
     } catch (IOException e) {
       LOG.warn("Failed to send callback.", e);
@@ -80,11 +79,11 @@ public class HoodieWriteCommitHttpCallbackClient implements Closeable {
   }
 
   private String getApiKey() {
-    return props.getProperty(HoodieWriteCommitCallbackConfig.CALLBACK_HTTP_API_KEY);
+    return writeConfig.getString(HoodieWriteCommitCallbackConfig.CALLBACK_HTTP_API_KEY);
   }
 
   private String getUrl() {
-    return props.getProperty(HoodieWriteCommitCallbackConfig.CALLBACK_HTTP_URL_PROP);
+    return writeConfig.getString(HoodieWriteCommitCallbackConfig.CALLBACK_HTTP_URL_PROP);
   }
 
   private CloseableHttpClient getClient() {
@@ -98,7 +97,7 @@ public class HoodieWriteCommitHttpCallbackClient implements Closeable {
   }
 
   private Integer getHttpTimeoutSeconds() {
-    return Integer.parseInt(props.getProperty(HoodieWriteCommitCallbackConfig.CALLBACK_HTTP_TIMEOUT_SECONDS));
+    return writeConfig.getInt(HoodieWriteCommitCallbackConfig.CALLBACK_HTTP_TIMEOUT_SECONDS);
   }
 
   @Override

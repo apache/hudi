@@ -30,7 +30,7 @@ import java.util.Properties;
  * Configurations used by the hudi error table.
  */
 @Immutable
-public final class HoodieErrorTableConfig extends DefaultHoodieConfig {
+public final class HoodieErrorTableConfig extends HoodieConfig {
 
   // Error table name suffix
   public static final String ERROR_TABLE_NAME_SUFFIX = "_errors";
@@ -55,34 +55,45 @@ public final class HoodieErrorTableConfig extends DefaultHoodieConfig {
   public static final String ERROR_RECORD_MESSAGE = "message";
   public static final String ERROR_RECORD_CONTEXT = "context";
 
-  // Enable the internal Error Table which saves error record
   public static final String ERROR_TABLE_PREFIX = "hoodie.write.error.table";
 
-  public static final String ERROR_TABLE_ENABLE_PROP = ERROR_TABLE_PREFIX + ".enabled";
-  public static final boolean DEFAULT_ERROR_TABLE_ENABLE = false;
+  public static final ConfigProperty<String> ERROR_TABLE_NAME_PROP = ConfigProperty
+          .key(ERROR_TABLE_PREFIX + ".name")
+          .noDefaultValue()
+          .withDocumentation("");
 
-  public static final String ERROR_TABLE_BASE_PATH_PROP = ERROR_TABLE_PREFIX + ".base.path";
+  public static final ConfigProperty<String> ERROR_TABLE_BASE_PATH_PROP = ConfigProperty
+          .key(ERROR_TABLE_PREFIX + ".base.path")
+          .noDefaultValue()
+          .withDocumentation("");
 
-  public static final String ERROR_TABLE_NAME_PROP = ERROR_TABLE_PREFIX + ".name";
-  public static final String DEFAULT_ERROR_TABLE_NAME_PROP = ERROR_TABLE_PREFIX + ".name";
+  public static final ConfigProperty<Boolean> ERROR_TABLE_ENABLE_PROP = ConfigProperty
+          .key(ERROR_TABLE_PREFIX + ".enabled")
+          .defaultValue(false)
+          .withDocumentation("Enable the internal Error Table which saves error record");
 
   // Parallelism for inserts
-  public static final String ERROR_TABLE_INSERT_PARALLELISM_PROP = ERROR_TABLE_PREFIX + ".insert.parallelism";
-  public static final int DEFAULT_ERROR_TABLE_INSERT_PARALLELISM = 1;
+  public static final ConfigProperty<Integer> ERROR_TABLE_INSERT_PARALLELISM_PROP = ConfigProperty
+          .key(ERROR_TABLE_PREFIX + ".insert.parallelism")
+          .defaultValue(1)
+          .withDocumentation("Parallelism to use when inserting to the error table");
 
   // Archival settings
-  public static final String MIN_COMMITS_TO_KEEP_PROP = ERROR_TABLE_PREFIX + ".keep.min.commits";
-  public static final int DEFAULT_MIN_COMMITS_TO_KEEP = 20;
-  public static final String MAX_COMMITS_TO_KEEP_PROP = ERROR_TABLE_PREFIX + ".keep.max.commits";
-  public static final int DEFAULT_MAX_COMMITS_TO_KEEP = 30;
+  public static final ConfigProperty<String> MAX_COMMITS_TO_KEEP_PROP = ConfigProperty
+          .key(ERROR_TABLE_PREFIX + ".keep.max.commits")
+          .defaultValue("30")
+          .withDocumentation("Controls the archival of the metadata table’s timeline.");
+
+  public static final ConfigProperty<String> MIN_COMMITS_TO_KEEP_PROP = ConfigProperty
+          .key(ERROR_TABLE_PREFIX + ".keep.min.commits")
+          .defaultValue("20")
+          .withDocumentation("Controls the archival of the metadata table’s timeline.");
 
   // Cleaner commits retained
-  public static final String CLEANER_COMMITS_RETAINED_PROP = ERROR_TABLE_PREFIX + ".cleaner.commits.retained";
-  public static final int DEFAULT_CLEANER_COMMITS_RETAINED = 3;
-
-  private HoodieErrorTableConfig(Properties props) {
-    super(props);
-  }
+  public static final ConfigProperty<String> CLEANER_COMMITS_RETAINED_PROP = ConfigProperty
+          .key(ERROR_TABLE_PREFIX + ".cleaner.commits.retained")
+          .defaultValue("3")
+          .withDocumentation("Controls retention/history for error table.");
 
   public static HoodieErrorTableConfig.Builder newBuilder() {
     return new Builder();
@@ -90,60 +101,49 @@ public final class HoodieErrorTableConfig extends DefaultHoodieConfig {
 
   public static class Builder {
 
-    private final Properties props = new Properties();
+    private final HoodieErrorTableConfig errorTableConfig = new HoodieErrorTableConfig();
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
-        this.props.load(reader);
+        this.errorTableConfig.getProps().load(reader);
         return this;
       }
     }
 
     public Builder fromProperties(Properties props) {
-      this.props.putAll(props);
+      this.errorTableConfig.getProps().putAll(props);
       return this;
     }
 
     public Builder enable(boolean enable) {
-      props.setProperty(ERROR_TABLE_ENABLE_PROP, String.valueOf(enable));
+      errorTableConfig.setValue(ERROR_TABLE_ENABLE_PROP, String.valueOf(enable));
       return this;
     }
 
     public Builder withErrorTableBasePath(String basePath) {
-      props.setProperty(ERROR_TABLE_BASE_PATH_PROP, basePath);
+      errorTableConfig.setValue(ERROR_TABLE_BASE_PATH_PROP, basePath);
       return this;
     }
 
     public Builder withInsertParallelism(int parallelism) {
-      props.setProperty(ERROR_TABLE_INSERT_PARALLELISM_PROP, String.valueOf(parallelism));
+      errorTableConfig.setValue(ERROR_TABLE_INSERT_PARALLELISM_PROP, String.valueOf(parallelism));
       return this;
     }
 
     public Builder archiveCommitsWith(int minToKeep, int maxToKeep) {
-      props.setProperty(MIN_COMMITS_TO_KEEP_PROP, String.valueOf(minToKeep));
-      props.setProperty(MAX_COMMITS_TO_KEEP_PROP, String.valueOf(maxToKeep));
+      errorTableConfig.setValue(MIN_COMMITS_TO_KEEP_PROP, String.valueOf(minToKeep));
+      errorTableConfig.setValue(MAX_COMMITS_TO_KEEP_PROP, String.valueOf(maxToKeep));
       return this;
     }
 
     public Builder retainCommits(int commitsRetained) {
-      props.setProperty(CLEANER_COMMITS_RETAINED_PROP, String.valueOf(commitsRetained));
+      errorTableConfig.setValue(CLEANER_COMMITS_RETAINED_PROP, String.valueOf(commitsRetained));
       return this;
     }
 
     public HoodieErrorTableConfig build() {
-      HoodieErrorTableConfig config = new HoodieErrorTableConfig(props);
-      setDefaultOnCondition(props, !props.containsKey(ERROR_TABLE_ENABLE_PROP), ERROR_TABLE_ENABLE_PROP,
-          String.valueOf(DEFAULT_ERROR_TABLE_ENABLE));
-      setDefaultOnCondition(props, !props.containsKey(ERROR_TABLE_INSERT_PARALLELISM_PROP), ERROR_TABLE_INSERT_PARALLELISM_PROP,
-          String.valueOf(DEFAULT_ERROR_TABLE_INSERT_PARALLELISM));
-      setDefaultOnCondition(props, !props.containsKey(CLEANER_COMMITS_RETAINED_PROP), CLEANER_COMMITS_RETAINED_PROP,
-          String.valueOf(DEFAULT_CLEANER_COMMITS_RETAINED));
-      setDefaultOnCondition(props, !props.containsKey(MAX_COMMITS_TO_KEEP_PROP), MAX_COMMITS_TO_KEEP_PROP,
-          String.valueOf(DEFAULT_MAX_COMMITS_TO_KEEP));
-      setDefaultOnCondition(props, !props.containsKey(MIN_COMMITS_TO_KEEP_PROP), MIN_COMMITS_TO_KEEP_PROP,
-          String.valueOf(DEFAULT_MIN_COMMITS_TO_KEEP));
-
-      return config;
+      errorTableConfig.setDefaults(HoodieErrorTableConfig.class.getName());
+      return errorTableConfig;
     }
   }
 }

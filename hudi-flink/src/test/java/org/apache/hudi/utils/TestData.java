@@ -114,11 +114,29 @@ public class TestData {
           TimestampData.fromEpochMillis(8), StringData.fromString("par4"))
   );
 
+  public static List<RowData> DATA_SET_INSERT_SEPARATE_PARTITION = Arrays.asList(
+      insertRow(StringData.fromString("id12"), StringData.fromString("Monica"), 27,
+          TimestampData.fromEpochMillis(9), StringData.fromString("par5")),
+      insertRow(StringData.fromString("id13"), StringData.fromString("Phoebe"), 31,
+          TimestampData.fromEpochMillis(10), StringData.fromString("par5")),
+      insertRow(StringData.fromString("id14"), StringData.fromString("Rachel"), 52,
+          TimestampData.fromEpochMillis(11), StringData.fromString("par6")),
+      insertRow(StringData.fromString("id15"), StringData.fromString("Ross"), 29,
+          TimestampData.fromEpochMillis(12), StringData.fromString("par6"))
+  );
+
   public static List<RowData> DATA_SET_INSERT_DUPLICATES = new ArrayList<>();
   static {
     IntStream.range(0, 5).forEach(i -> DATA_SET_INSERT_DUPLICATES.add(
         insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
             TimestampData.fromEpochMillis(1), StringData.fromString("par1"))));
+  }
+
+  public static List<RowData> DATA_SET_INSERT_SAME_KEY = new ArrayList<>();
+  static {
+    IntStream.range(0, 5).forEach(i -> DATA_SET_INSERT_SAME_KEY.add(
+        insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+            TimestampData.fromEpochMillis(i), StringData.fromString("par1"))));
   }
 
   // data set of test_source.data
@@ -164,6 +182,26 @@ public class TestData {
       insertRow(StringData.fromString("id10"), StringData.fromString("Ella"), 38,
           TimestampData.fromEpochMillis(7000), StringData.fromString("par4")),
       insertRow(StringData.fromString("id11"), StringData.fromString("Phoebe"), 52,
+          TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
+  );
+
+  // data set of test_source.data with partition 'par1' overwrite
+  public static List<RowData> DATA_SET_SOURCE_INSERT_OVERWRITE = Arrays.asList(
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
+          TimestampData.fromEpochMillis(1000), StringData.fromString("par1")),
+      insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 34,
+          TimestampData.fromEpochMillis(2000), StringData.fromString("par1")),
+      insertRow(StringData.fromString("id3"), StringData.fromString("Julian"), 53,
+          TimestampData.fromEpochMillis(3000), StringData.fromString("par2")),
+      insertRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 31,
+          TimestampData.fromEpochMillis(4000), StringData.fromString("par2")),
+      insertRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+          TimestampData.fromEpochMillis(5000), StringData.fromString("par3")),
+      insertRow(StringData.fromString("id6"), StringData.fromString("Emma"), 20,
+          TimestampData.fromEpochMillis(6000), StringData.fromString("par3")),
+      insertRow(StringData.fromString("id7"), StringData.fromString("Bob"), 44,
+          TimestampData.fromEpochMillis(7000), StringData.fromString("par4")),
+      insertRow(StringData.fromString("id8"), StringData.fromString("Han"), 56,
           TimestampData.fromEpochMillis(8000), StringData.fromString("par4"))
   );
 
@@ -224,6 +262,10 @@ public class TestData {
     funcWrapper.close();
   }
 
+  private static String toStringSafely(Object obj) {
+    return obj == null ? "null" : obj.toString();
+  }
+
   /**
    * Sort the {@code rows} using field at index 0 and asserts
    * it equals with the expected string {@code expected}.
@@ -232,8 +274,20 @@ public class TestData {
    * @param expected Expected string of the sorted rows
    */
   public static void assertRowsEquals(List<Row> rows, String expected) {
+    assertRowsEquals(rows, expected, 0);
+  }
+
+  /**
+   * Sort the {@code rows} using field at index {@code orderingPos} and asserts
+   * it equals with the expected string {@code expected}.
+   *
+   * @param rows     Actual result rows
+   * @param expected Expected string of the sorted rows
+   * @param orderingPos Field position for ordering
+   */
+  public static void assertRowsEquals(List<Row> rows, String expected, int orderingPos) {
     String rowsString = rows.stream()
-        .sorted(Comparator.comparing(o -> o.getField(0).toString()))
+        .sorted(Comparator.comparing(o -> toStringSafely(o.getField(orderingPos))))
         .collect(Collectors.toList()).toString();
     assertThat(rowsString, is(expected));
   }
@@ -247,7 +301,7 @@ public class TestData {
    */
   public static void assertRowsEquals(List<Row> rows, List<RowData> expected) {
     String rowsString = rows.stream()
-        .sorted(Comparator.comparing(o -> o.getField(0).toString()))
+        .sorted(Comparator.comparing(o -> toStringSafely(o.getField(0))))
         .collect(Collectors.toList()).toString();
     assertThat(rowsString, is(rowDataToString(expected)));
   }
