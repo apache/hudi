@@ -196,27 +196,24 @@ public class HoodieClusteringJob {
   private Option<String> doSchedule(JavaSparkContext jsc) throws Exception {
     String schemaStr = getSchemaFromLatestInstant();
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
-      if (cfg.clusteringInstantTime != null) {
-        client.scheduleClusteringAtInstant(cfg.clusteringInstantTime, Option.empty());
-        return Option.of(cfg.clusteringInstantTime);
-      }
-      return client.scheduleClustering(Option.empty());
+      return doSchedule(client);
     }
+  }
+
+  private Option<String> doSchedule(SparkRDDWriteClient<HoodieRecordPayload> client) {
+    if (cfg.clusteringInstantTime != null) {
+      client.scheduleClusteringAtInstant(cfg.clusteringInstantTime, Option.empty());
+      return Option.of(cfg.clusteringInstantTime);
+    }
+    return client.scheduleClustering(Option.empty());
   }
 
   public int doScheduleAndCluster(JavaSparkContext jsc) throws Exception {
     LOG.info("Step 1: Do schedule");
     String schemaStr = getSchemaFromLatestInstant();
-    try (SparkRDDWriteClient client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
+    try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
 
-      Option<String> instantTime;
-      if (cfg.clusteringInstantTime != null) {
-        client.scheduleClusteringAtInstant(cfg.clusteringInstantTime, Option.empty());
-        instantTime = Option.of(cfg.clusteringInstantTime);
-      } else {
-        instantTime = client.scheduleClustering(Option.empty());
-      }
-
+      Option<String> instantTime = doSchedule(client);
       int result = instantTime.isPresent() ? 0 : -1;
 
       if (result == -1) {
