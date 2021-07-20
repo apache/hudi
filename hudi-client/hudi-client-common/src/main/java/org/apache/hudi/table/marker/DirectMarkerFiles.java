@@ -45,7 +45,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Maker file operations of directly accessing the file system to create and delete
+ * Marker file operations of directly accessing the file system to create and delete
  * marker files.  Each data file has a corresponding marker file.
  */
 public class DirectMarkerFiles extends MarkerFiles {

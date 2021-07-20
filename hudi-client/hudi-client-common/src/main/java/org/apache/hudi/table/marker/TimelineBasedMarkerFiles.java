@@ -34,7 +34,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Maker file operations of using timeline service as a proxy to create and delete marker files.
+ * Marker file operations of using timeline service as a proxy to create and delete marker files.
  * Each data file has a corresponding marker entry, which is stored in a limited number of
  * marker files maintained by the timeline service (each marker file contains multiple marker
  * entries).

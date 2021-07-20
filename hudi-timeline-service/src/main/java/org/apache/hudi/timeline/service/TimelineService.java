@@ -355,7 +355,9 @@ public class TimelineService {
 
     Configuration conf = FSUtils.prepareHadoopConf(new Configuration());
     FileSystemViewManager viewManager = buildFileSystemViewManager(cfg, new SerializableConfiguration(conf));
-    TimelineService service = new TimelineService(new HoodieLocalEngineContext(conf), cfg.serverPort, viewManager);
+    TimelineService service = new TimelineService(
+        new HoodieLocalEngineContext(FSUtils.prepareHadoopConf(new Configuration())), cfg,
+        new Configuration(), FileSystem.get(new Configuration()), viewManager);
     service.run();
   }
 }

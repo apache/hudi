@@ -240,7 +240,6 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "which serves as a proxy.  New marker entries are batch processed and written "
           + "to a limited number of marker files for efficiency.");
 
-
   public static final ConfigProperty<Integer> MARKERS_TIMELINE_BASED_BATCH_NUM_THREADS = ConfigProperty
       .key("hoodie.markers.timeline_based.batch.num_threads")
       .defaultValue(20)
