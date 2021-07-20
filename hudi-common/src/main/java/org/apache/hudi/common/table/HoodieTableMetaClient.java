@@ -77,6 +77,7 @@ public class HoodieTableMetaClient implements Serializable {
   private static final Logger LOG = LogManager.getLogger(HoodieTableMetaClient.class);
   public static final String METAFOLDER_NAME = ".hoodie";
   public static final String TEMPFOLDER_NAME = METAFOLDER_NAME + File.separator + ".temp";
+  public static final String ERROR_TABLE_FOLDER_NAME = METAFOLDER_NAME + File.separator + "errors";
   public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + File.separator + ".aux";
   public static final String BOOTSTRAP_INDEX_ROOT_FOLDER_PATH = AUXILIARYFOLDER_NAME + File.separator + ".bootstrap";
   public static final String HEARTBEAT_FOLDER_NAME = METAFOLDER_NAME + File.separator + ".heartbeat";
@@ -186,7 +187,7 @@ public class HoodieTableMetaClient implements Serializable {
 
   /**
    * Returns Marker folder path.
-   * 
+   *
    * @param instantTs Instant Timestamp
    * @return
    */
@@ -263,7 +264,7 @@ public class HoodieTableMetaClient implements Serializable {
 
   /**
    * Return raw file-system.
-   * 
+   *
    * @return fs
    */
   public FileSystem getRawFs() {

@@ -27,6 +27,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.common.config.HoodieErrorTableConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -48,6 +49,7 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.error.SparkErrorTableWriteStatusWriter;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
@@ -418,13 +420,48 @@ public class DeltaSync implements Serializable {
     }
 
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
+    boolean errorTableEnable = props.getBoolean(HoodieErrorTableConfig.ERROR_TABLE_ENABLE_PROP.key(), false);
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
+
+    if (errorTableEnable) {
+      JavaRDD<WriteStatus> writeStatusRDD = avroRDD.map(gr -> {
+        WriteStatus writeStatus = new WriteStatus();
+        if (shouldCombine) {
+          try {
+            HoodieAvroUtils.checkRecordField(gr, cfg.sourceOrderingField);
+          } catch (HoodieException e) {
+            HoodieRecord hoodieRecord = new HoodieRecord<>(keyGenerator.getKey(gr), DataSourceUtils.createPayload(cfg.payloadClassName, gr));
+            writeStatus.markFailure(hoodieRecord, e, null);
+          }
+        }
+        return writeStatus;
+      });
+      HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(cfg.targetBasePath).withProps(props).build();
+      SparkErrorTableWriteStatusWriter.create(jssc.hadoopConfiguration(), writeConfig, new HoodieSparkEngineContext(jssc))
+          .commit(writeStatusRDD, schemaProvider.getTargetSchema().toString(), cfg.targetTableName);
+    }
+
     JavaRDD<HoodieRecord> records = avroRDD.map(gr -> {
-      HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
-          (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false))
-          : DataSourceUtils.createPayload(cfg.payloadClassName, gr);
-      return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
+      if (shouldCombine) {
+        try {
+          HoodieRecordPayload payload = DataSourceUtils.createPayload(cfg.payloadClassName, gr,
+              (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false));
+          return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
+        } catch (HoodieException e) {
+          if (errorTableEnable) {
+            return new HoodieRecord<>();
+          } else {
+            throw e;
+          }
+        }
+      } else {
+        HoodieRecordPayload payload = DataSourceUtils.createPayload(cfg.payloadClassName, gr,
+            (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false));
+        return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
+      }
     });
+
+    records = records.filter(hoodieRecord -> hoodieRecord.getKey() != null);
 
     return Pair.of(schemaProvider, Pair.of(checkpointStr, records));
   }

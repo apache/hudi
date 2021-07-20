@@ -73,11 +73,19 @@ public class TablePathUtils {
     return path != null && path.contains("/" + HoodieTableMetaClient.METAFOLDER_NAME + "/");
   }
 
+  private static boolean isInsideErrorTableFolder(String path) {
+    return path != null && path.contains("/" + HoodieTableMetaClient.ERROR_TABLE_FOLDER_NAME + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/");
+  }
+
   private static Option<Path> getTablePathFromTableMetadataPath(FileSystem fs, Path path) {
     String pathStr = path.toString();
 
     if (isTableMetadataFolder(pathStr)) {
       return Option.of(path.getParent());
+    } else if (isInsideErrorTableFolder(pathStr)) {
+      String str = "/" + HoodieTableMetaClient.ERROR_TABLE_FOLDER_NAME;
+      int index = pathStr.indexOf(str);
+      return Option.of(new Path(pathStr.substring(0, index + str.length())));
     } else if (isInsideTableMetadataFolder(pathStr)) {
       int index = pathStr.indexOf("/" + HoodieTableMetaClient.METAFOLDER_NAME);
       return Option.of(new Path(pathStr.substring(0, index)));

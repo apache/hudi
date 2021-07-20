@@ -21,9 +21,9 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.conf.HiveConf
-import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.DataSourceWriteOptions.{ERROR_TABLE_ENABLE_OPT_KEY, _}
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
+import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient, WriteStatus}
 import org.apache.hudi.common.config.{HoodieConfig, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.{HoodieRecordPayload, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
@@ -44,13 +44,15 @@ import org.apache.spark.{SPARK_VERSION, SparkContext}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{DataFrame, Dataset,Row, SQLContext, SaveMode, SparkSession}
+import org.apache.spark.sql.{DataFrame, Dataset, Row, SQLContext, SaveMode, SparkSession}
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
-
 import java.util
 import java.util.Properties
+
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ListBuffer
+import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.error.SparkErrorTableWriteStatusWriter
 
 object HoodieSparkSqlWriter {
 
@@ -160,18 +162,54 @@ object HoodieSparkSqlWriter {
           // Convert to RDD[HoodieRecord]
           val genericRecords: RDD[GenericRecord] = HoodieSparkUtils.createRdd(df, schema, structName, nameSpace)
           val shouldCombine = parameters(INSERT_DROP_DUPS_OPT_KEY.key()).toBoolean || operation.equals(WriteOperationType.UPSERT);
+          val errorTableEnable = parameters.get(ERROR_TABLE_ENABLE_OPT_KEY.key).exists(r => r.toBoolean)
+
+          if (errorTableEnable) {
+            val errorRecordsWriteStatus = genericRecords.map(gr => {
+              val writeStatus = new WriteStatus()
+              val hoodieRecord = if (shouldCombine) {
+                try {
+                  HoodieAvroUtils.checkRecordField(gr, hoodieConfig.getString(PRECOMBINE_FIELD_OPT_KEY))
+                  writeStatus
+                } catch {
+                  case e : HoodieException => {
+                    val hoodieRecord = DataSourceUtils.createHoodieRecord(gr, keyGenerator.getKey(gr), hoodieConfig.getString(PAYLOAD_CLASS_OPT_KEY))
+                    writeStatus.markFailure(hoodieRecord, e, null)
+                    writeStatus
+                  }
+                }
+              } else {
+                writeStatus
+              }
+              hoodieRecord
+            }).toJavaRDD()
+
+            val writeConfig = HoodieWriteConfig.newBuilder.withPath(parameters.get("path").get).withProps(parameters).build
+            SparkErrorTableWriteStatusWriter.create(sparkContext.hadoopConfiguration, writeConfig, new HoodieSparkEngineContext(jsc))
+              .asInstanceOf[SparkErrorTableWriteStatusWriter]
+              .commit(errorRecordsWriteStatus, schema.toString(), writeConfig.getTableName)
+          }
+
           val hoodieAllIncomingRecords = genericRecords.map(gr => {
             val hoodieRecord = if (shouldCombine) {
-              val orderingVal = HoodieAvroUtils.getNestedFieldVal(gr, hoodieConfig.getString(PRECOMBINE_FIELD_OPT_KEY), false)
-                .asInstanceOf[Comparable[_]]
-              DataSourceUtils.createHoodieRecord(gr,
-                orderingVal, keyGenerator.getKey(gr),
-                hoodieConfig.getString(PAYLOAD_CLASS_OPT_KEY))
+              try {
+                val orderingVal = HoodieAvroUtils.getNestedFieldVal(gr, hoodieConfig.getString(PRECOMBINE_FIELD_OPT_KEY), false)
+                  .asInstanceOf[Comparable[_]]
+                DataSourceUtils.createHoodieRecord(gr,
+                  orderingVal, keyGenerator.getKey(gr),
+                  hoodieConfig.getString(PAYLOAD_CLASS_OPT_KEY))
+              } catch {
+                case e : Exception => if (errorTableEnable) {
+                  DataSourceUtils.createHoodieRecord()
+                } else {
+                  throw e
+                }
+              }
             } else {
               DataSourceUtils.createHoodieRecord(gr, keyGenerator.getKey(gr), hoodieConfig.getString(PAYLOAD_CLASS_OPT_KEY))
             }
             hoodieRecord
-          }).toJavaRDD()
+          }).filter(x =>x.getKey != null).toJavaRDD()
 
           // Create a HoodieWriteClient & issue the write.
           val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc, schema.toString, path.get,

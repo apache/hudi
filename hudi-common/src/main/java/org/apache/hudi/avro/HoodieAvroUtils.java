@@ -400,6 +400,22 @@ public class HoodieAvroUtils {
   }
 
   /**
+   * Whether the filed exists in the record, or whether the filed value is empty.
+   */
+  public static void checkRecordField(GenericRecord record, String fieldName) {
+    String[] parts = fieldName.split("\\.");
+    for (int i = 0; i < parts.length; i++) {
+      if (record.getSchema().getField(parts[i]) == null) {
+        throw new HoodieException(
+            fieldName + "(Part -" + parts[i] + ") field not found in record. Acceptable fields were :"
+                + record.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
+      } else if (record.get(parts[0]) == null) {
+        throw new HoodieException("The value of " + parts[i] + " can not be null");
+      }
+    }
+  }
+
+  /**
    * Obtain value of the provided field, denoted by dot notation. e.g: a.b.c
    */
   public static Object getNestedFieldVal(GenericRecord record, String fieldName, boolean returnNullIfNotFound) {

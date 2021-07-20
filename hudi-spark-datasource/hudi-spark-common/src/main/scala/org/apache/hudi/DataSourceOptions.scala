@@ -17,6 +17,7 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.client.WriteStatus
 import org.apache.hudi.common.config.ConfigProperty
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
@@ -422,6 +423,22 @@ object DataSourceWriteOptions {
     .defaultValue("io.confluent.kafka.serializers.KafkaAvroDeserializer")
     .sinceVersion("0.9.0")
     .withDocumentation("This class is used by kafka client to deserialize the records")
+
+  val ERROR_TABLE_ENABLE_OPT_KEY: ConfigProperty[String]  = ConfigProperty
+    .key("hoodie.write.error.table.enabled")
+    .defaultValue("false")
+    .withDocumentation("Enable the internal Error Table which saves error record");
+
+  val HOODIE_WRITE_STATUS_CLASS_OPT_KEY: ConfigProperty[String] =  ConfigProperty
+    .key("hoodie.writestatus.class")
+    .defaultValue(classOf[WriteStatus].getName)
+    .withDocumentation("");
+
+  val WRITESTATUS_FAILURE_FRACTION_OPT_KEY:  ConfigProperty[String] = ConfigProperty
+    .key("hoodie.memory.writestatus.failure.fraction")
+    .defaultValue("")
+    .withDocumentation("");
+
 }
 
 object DataSourceOptionsHelper {

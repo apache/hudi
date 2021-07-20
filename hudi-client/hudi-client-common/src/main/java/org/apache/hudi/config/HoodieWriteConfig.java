@@ -21,6 +21,7 @@ package org.apache.hudi.config;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
+import org.apache.hudi.common.config.HoodieErrorTableConfig;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -1284,6 +1285,37 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(WRITE_META_KEY_PREFIXES_PROP);
   }
 
+  /**
+   * Error table configs.
+   */
+  public boolean errorTableEnabled() {
+    return getBoolean(HoodieErrorTableConfig.ERROR_TABLE_ENABLE_PROP);
+  }
+
+  public String getErrorTableBasePath() {
+    return getString(HoodieErrorTableConfig.ERROR_TABLE_BASE_PATH_PROP);
+  }
+
+  public String getErrorTableName() {
+    return getString(HoodieErrorTableConfig.ERROR_TABLE_NAME_PROP);
+  }
+
+  public int getErrorTableInsertParallelism() {
+    return getInt(HoodieErrorTableConfig.ERROR_TABLE_INSERT_PARALLELISM_PROP);
+  }
+
+  public int getErrorTableCleanerCommitsRetained() {
+    return getInt(HoodieErrorTableConfig.CLEANER_COMMITS_RETAINED_PROP);
+  }
+
+  public int getErrorTableMinCommitsToKeep() {
+    return getInt(HoodieErrorTableConfig.MIN_COMMITS_TO_KEEP_PROP);
+  }
+
+  public int getErrorTableMaxCommitsToKeep() {
+    return getInt(HoodieErrorTableConfig.MAX_COMMITS_TO_KEEP_PROP);
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -1301,6 +1333,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     private boolean isPayloadConfigSet = false;
     private boolean isMetadataConfigSet = false;
     private boolean isLockConfigSet = false;
+    private boolean isErrorTableConfigSet = false;
 
     public Builder withEngineType(EngineType engineType) {
       this.engineType = engineType;
@@ -1593,6 +1626,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withErrorTableConfig(HoodieErrorTableConfig errorTableConfig) {
+      writeConfig.getProps().putAll(errorTableConfig.getProps());
+      isErrorTableConfigSet = true;
+      return this;
+    }
+
     protected void setDefaults() {
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
@@ -1624,6 +1663,8 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieMetadataConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
       writeConfig.setDefaultOnCondition(!isLockConfigSet,
           HoodieLockConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
+      writeConfig.setDefaultOnCondition(!isErrorTableConfigSet,
+          HoodieErrorTableConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
 
       writeConfig.setDefaultValue(TIMELINE_LAYOUT_VERSION, String.valueOf(TimelineLayoutVersion.CURR_VERSION));
     }

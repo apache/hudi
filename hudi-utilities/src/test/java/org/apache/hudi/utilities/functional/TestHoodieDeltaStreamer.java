@@ -25,6 +25,7 @@ import java.util.concurrent.ExecutorService;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.HoodieErrorTableConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -1489,6 +1490,41 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     prepareJsonKafkaDFSFiles(records, false, topicName);
     deltaStreamer.sync();
     TestHelpers.assertRecordCount(totalRecords, tableBasePath + "/*/*.parquet", sqlContext);
+  }
+
+  @Test
+  public void testErrorTable() throws Exception {
+    topicName = "topic" + testNum;
+    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, true, topicName);
+    prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, "earliest", topicName);
+    String tableBasePath = dfsBasePath + "/test_json_kafka_table" + testNum;
+    HoodieDeltaStreamer.Config config = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
+        Collections.EMPTY_LIST, PROPS_FILENAME_TEST_JSON_KAFKA, false,
+        true, 100000, false, null,
+        null, "timestamp", null);
+
+    List<String> configList = new ArrayList<>();
+    configList.add(HoodieErrorTableConfig.ERROR_TABLE_ENABLE_PROP.key() + "=true");
+    config.configs = configList;
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(config, jsc);
+    deltaStreamer.sync();
+    TestHelpers.assertRecordCount(JSON_KAFKA_NUM_RECORDS, tableBasePath + "/*/*.parquet", sqlContext);
+
+
+    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, false, topicName);
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    config = TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
+        Collections.EMPTY_LIST, PROPS_FILENAME_TEST_JSON_KAFKA, false,
+        true, 100000, false, null,
+        null, "ts", null);
+    configList.add(HoodieErrorTableConfig.ERROR_TABLE_ENABLE_PROP.key() + "=true");
+    config.configs = configList;
+    config.payloadClassName = OverwriteWithLatestAvroSchemaPayload.class.getName();
+    deltaStreamer = new HoodieDeltaStreamer(config, jsc);
+
+    deltaStreamer.sync();
+    TestHelpers.assertRecordCount(JSON_KAFKA_NUM_RECORDS, tableBasePath + "/"
+        + HoodieTableMetaClient.ERROR_TABLE_FOLDER_NAME + "/*/*/*/*.parquet", sqlContext);
   }
 
   @Test

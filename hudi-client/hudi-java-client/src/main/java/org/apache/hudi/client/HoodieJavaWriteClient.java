@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.error.JavaErrorTableWriteStatusWriter;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.JavaHoodieIndex;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -188,6 +189,12 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
 
       emitCommitMetrics(instantTime, result.getCommitMetadata().get(), hoodieTable.getMetaClient().getCommitActionType());
     }
+
+    if (config.errorTableEnabled()) {
+      JavaErrorTableWriteStatusWriter.create(hadoopConf, config, context).commit(result.getWriteStatuses(),
+          hoodieTable.getConfig().getSchema(), hoodieTable.getConfig().getTableName());
+    }
+
     return result.getWriteStatuses();
   }
 
@@ -236,5 +243,31 @@ public class HoodieJavaWriteClient<T extends HoodieRecordPayload> extends
       writeTimer = metrics.getDeltaCommitCtx();
     }
     return table;
+  }
+
+  @Override
+  public List<WriteStatus> insertError(List<HoodieRecord<T>> records, String instantTime) {
+    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
+        getTableAndInitCtx(WriteOperationType.INSERT, instantTime);
+    table.validateInsertSchema();
+    preWrite(instantTime, WriteOperationType.INSERT, table.getMetaClient());
+    HoodieWriteMetadata<List<WriteStatus>> result = table.insert(context,instantTime, records);
+
+    if (result.getIndexLookupDuration().isPresent()) {
+      metrics.updateIndexMetrics(getOperationType().name(), result.getIndexUpdateDuration().get().toMillis());
+    }
+
+    if (result.isCommitted()) {
+      // Perform post commit operations.
+      if (result.getFinalizeDuration().isPresent()) {
+        metrics.updateFinalizeWriteMetrics(result.getFinalizeDuration().get().toMillis(),
+            result.getWriteStats().get().size());
+      }
+
+      postCommit(table, result.getCommitMetadata().get(), instantTime, Option.empty());
+      emitCommitMetrics(instantTime, result.getCommitMetadata().get(), table.getMetaClient().getCommitActionType());
+    }
+
+    return result.getWriteStatuses();
   }
 }

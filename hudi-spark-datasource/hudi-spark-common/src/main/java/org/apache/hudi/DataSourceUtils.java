@@ -238,6 +238,10 @@ public class DataSourceUtils {
     return new HoodieRecord<>(hKey, payload);
   }
 
+  public static HoodieRecord createHoodieRecord() {
+    return new HoodieRecord<>();
+  }
+
   /**
    * Drop records already present in the dataset.
    *

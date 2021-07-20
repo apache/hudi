@@ -41,6 +41,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.error.FlinkErrorTableWriteStatusWriter;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.FlinkHoodieIndex;
 import org.apache.hudi.index.HoodieIndex;
@@ -282,6 +283,10 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     if (result.getIndexLookupDuration().isPresent()) {
       metrics.updateIndexMetrics(getOperationType().name(), result.getIndexUpdateDuration().get().toMillis());
     }
+    if (config.errorTableEnabled()) {
+      FlinkErrorTableWriteStatusWriter.create(hadoopConf, config, context).commit(result.getWriteStatuses(),
+          hoodieTable.getConfig().getSchema(), hoodieTable.getConfig().getTableName());
+    }
     return result.getWriteStatuses();
   }
 
@@ -369,6 +374,34 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     new FlinkUpgradeDowngrade(metaClient, config, context).run(metaClient, HoodieTableVersion.current(), config, context, instantTime);
     return getTableAndInitCtx(metaClient, operationType);
   }
+
+  @Override
+  public List<WriteStatus> insertError(List<HoodieRecord<T>> records, String instantTime) {
+
+    HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
+        getTableAndInitCtx(WriteOperationType.INSERT, instantTime);
+    table.validateInsertSchema();
+    preWrite(instantTime, WriteOperationType.INSERT, table.getMetaClient());
+    HoodieWriteMetadata<List<WriteStatus>> result = table.insert(context,instantTime, records);
+
+    if (result.getIndexLookupDuration().isPresent()) {
+      metrics.updateIndexMetrics(getOperationType().name(), result.getIndexUpdateDuration().get().toMillis());
+    }
+
+    if (result.isCommitted()) {
+      // Perform post commit operations.
+      if (result.getFinalizeDuration().isPresent()) {
+        metrics.updateFinalizeWriteMetrics(result.getFinalizeDuration().get().toMillis(),
+            result.getWriteStats().get().size());
+      }
+
+      postCommit(table, result.getCommitMetadata().get(), instantTime, Option.empty());
+      emitCommitMetrics(instantTime, result.getCommitMetadata().get(), table.getMetaClient().getCommitActionType());
+    }
+
+    return result.getWriteStatuses();
+  }
+
 
   /**
    * Clean the write handles within a checkpoint interval.
