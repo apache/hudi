@@ -243,7 +243,9 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void subtaskFailed(int i, @Nullable Throwable throwable) {
-    // no operation
+    // reset the event
+    this.eventBuffer[i] = null;
+    LOG.warn("Reset the event for task [" + i + "]", throwable);
   }
 
   @Override
@@ -328,8 +330,8 @@ public class StreamWriteOperatorCoordinator
   }
 
   private void handleBootstrapEvent(WriteMetadataEvent event) {
-    addEventToBuffer(event);
-    if (Arrays.stream(eventBuffer).allMatch(Objects::nonNull)) {
+    this.eventBuffer[event.getTaskID()] = event;
+    if (Arrays.stream(eventBuffer).allMatch(evt -> evt != null && evt.isBootstrap())) {
       // start to initialize the instant.
       initInstant(event.getInstantTime());
     }
