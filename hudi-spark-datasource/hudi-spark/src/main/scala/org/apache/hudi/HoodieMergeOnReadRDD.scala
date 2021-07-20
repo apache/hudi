@@ -23,7 +23,7 @@ import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
-import org.apache.hudi.config.HoodiePayloadConfig
+import org.apache.hudi.config.{HoodieMemoryConfig, HoodiePayloadConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS
@@ -37,7 +37,6 @@ import org.apache.spark.{Partition, SerializableWritable, SparkContext, TaskCont
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.util.Try
 
 case class HoodieMergeOnReadPartition(index: Int, split: HoodieMergeOnReadFileSplit) extends Partition
 
@@ -312,18 +311,14 @@ private object HoodieMergeOnReadRDD {
         .withLogFilePaths(split.logPaths.get.asJava)
         .withReaderSchema(logSchema)
         .withLatestInstantTime(split.latestCommit)
-        .withReadBlocksLazily(
-          Try(config.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP.key(),
-            HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP.defaultValue()).toBoolean)
-              .getOrElse(false))
+        .withReadBlocksLazily(config.getBoolean(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP.key(),
+          HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP.defaultValue()))
         .withReverseReader(false)
-        .withBufferSize(
-          config.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP.key(),
-            HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP.defaultValue().toInt))
+        .withBufferSize(config.getInt(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP.key(),
+          HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP.defaultValue()))
         .withMaxMemorySizeInBytes(split.maxCompactionMemoryInBytes)
-        .withSpillableMapBasePath(
-          config.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP.key(),
-            HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP.defaultValue()))
+        .withSpillableMapBasePath(config.get(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH_PROP.key(),
+          HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH_PROP.defaultValue()))
         .build()
   }
 }

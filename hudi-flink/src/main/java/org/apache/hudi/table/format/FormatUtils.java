@@ -20,6 +20,7 @@ package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
@@ -67,17 +68,14 @@ public class FormatUtils {
         .withLogFilePaths(split.getLogPaths().get())
         .withReaderSchema(logSchema)
         .withLatestInstantTime(split.getLatestCommit())
-        .withReadBlocksLazily(string2Boolean(
-            config.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP.key(),
-                HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP.defaultValue())))
+        .withReadBlocksLazily(config.getBoolean(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP.key(),
+            HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP.defaultValue()))
         .withReverseReader(false)
-        .withBufferSize(
-            config.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP.key(),
-                Integer.parseInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP.defaultValue())))
+        .withBufferSize(config.getInt(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP.key(),
+            HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP.defaultValue()))
         .withMaxMemorySizeInBytes(split.getMaxCompactionMemoryInBytes())
-        .withSpillableMapBasePath(
-            config.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP.key(),
-                HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP.defaultValue()))
+        .withSpillableMapBasePath(config.get(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH_PROP.key(),
+            HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH_PROP.defaultValue()))
         .withInstantRange(split.getInstantRange())
         .build();
   }

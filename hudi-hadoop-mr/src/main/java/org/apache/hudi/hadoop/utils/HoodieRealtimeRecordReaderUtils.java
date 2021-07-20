@@ -80,9 +80,9 @@ public class HoodieRealtimeRecordReaderUtils {
    */
   public static long getMaxCompactionMemoryInBytes(JobConf jobConf) {
     // jobConf.getMemoryForMapTask() returns in MB
-    return (long) Math.ceil(Double.parseDouble(
-        jobConf.get(HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP.key(),
-            HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP.defaultValue()))
+    return (long) Math.ceil(jobConf.getDouble(
+        HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP.key(),
+            HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP.defaultValue())
                 * jobConf.getMemoryForMapTask() * 1024 * 1024L);
   }
 

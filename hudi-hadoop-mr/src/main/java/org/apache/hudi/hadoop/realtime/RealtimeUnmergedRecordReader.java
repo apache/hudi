@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.BoundedInMemoryQueueProducer;
 import org.apache.hudi.common.util.queue.FunctionBasedQueueProducer;
 import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
+import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.hadoop.RecordReaderValueIterator;
 import org.apache.hudi.hadoop.SafeParquetRecordReaderWrapper;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
@@ -83,13 +84,11 @@ class RealtimeUnmergedRecordReader extends AbstractRealtimeRecordReader
         .withLogFilePaths(split.getDeltaLogPaths())
         .withReaderSchema(getReaderSchema())
         .withLatestInstantTime(split.getMaxCommitTime())
-        .withReadBlocksLazily(jobConf.getBoolean(
-            HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP.key(),
-                Boolean.parseBoolean(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP.defaultValue())))
+        .withReadBlocksLazily(jobConf.getBoolean(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP.key(),
+            HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP.defaultValue()))
         .withReverseReader(false)
-        .withBufferSize(jobConf.getInt(
-            HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP.key(),
-                Integer.parseInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP.defaultValue())))
+        .withBufferSize(jobConf.getInt(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP.key(),
+            HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP.defaultValue()))
         .withLogRecordScannerCallback(record -> {
           // convert Hoodie log record to Hadoop AvroWritable and buffer
           GenericRecord rec = (GenericRecord) record.getData().getInsertValue(getReaderSchema()).get();
