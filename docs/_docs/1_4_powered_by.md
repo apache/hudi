@@ -153,8 +153,17 @@ Meanwhile, we build a set of data access standards based on Hudi, which provides
 24. ["Apache Hudi: The Streaming Data Lake Platform"](https://docs.google.com/presentation/d/1lVpbYV7qytAZPdwx4X9DD9ii0qFh7n9WGKJ0XQ4VpIs/edit?usp=sharing) - By Nishith Agarwal, Sivabalan Narayanan, 
 Data Summit Connect, May, 2021
     
-25. ["Change Data Capture to Data lakes using Apache Pulsar/Hudi"](https://www.slideshare.net/streamnative/change-data-capture-to-data-lakes-using-apache-pulsar-and-apache-hudi-pulsar-summit-na-2021)
- - By Vinoth Chandar, Pulsar Summit North America, June 2021. ["Video link"](https://www.youtube.com/watch?v=MWpnVIgcAXw) 
+25. ["Change Data Capture to Data lakes using Apache Pulsar/Hudi"](https://www.slideshare.net/streamnative/change-data-capture-to-data-lakes-using-apache-pulsar-and-apache-hudi-pulsar-summit-na-2021) - By Vinoth Chandar, Pulsar Summit North America, June 2021. ["Video link"](https://www.youtube.com/watch?v=MWpnVIgcAXw) 
+
+26. ["Apache Hudi: Large Scale Data Systems with Vinoth Chandar"](https://softwareengineeringdaily.com/2021/05/13/apache-hudi-large-scale-data-systems-with-vinoth-chandar/) - By Vinoth Chandar. SE Daily Podcast. May, 2021
+
+27. ["Meet the creator of Apache hudi: Vinoth Chandar"](https://www.youtube.com/watch?v=XcaFaJR4IVk) - By Vinoth Chandar. Presto Con Day, 2021
+
+28. ["Presto Eco system Panel Discussion"](https://www.youtube.com/watch?v=lsFSM2Z4kPs) - By Vinoth Chandar, Dipti Borkar, Nezih Yigitbasi, Maxime Beauchemin, Kishore. Presto Con, 2021
+
+29. ["Speeding up Presto Queries Using Apache Hudi Clustering"](https://www.youtube.com/watch?v=1WSg2aiCwDQ) - By Satish Kotha and Nishith Agarwal. Presto Con, March 2021
+
+30. ["Building a Large-scale Transactional Data Lake Using Apache Hudi"](https://www.youtube.com/watch?v=J6EcGiExx7M) - By Satish Kotha, AICamp
 
 ## Articles
 
@@ -178,6 +187,14 @@ You can check out [our blog pages](https://hudi.apache.org/blog.html) for conten
 16. ["Data Lake Change Capture using Apache Hudi & Amazon AMS/EMR Part 2"](https://towardsdatascience.com/data-lake-change-data-capture-cdc-using-apache-hudi-on-amazon-emr-part-2-process-65e4662d7b4b)
 17. ["Building a large scale transactional data lake at Uber using Apache Hudi"](https://eng.uber.com/apache-hudi-graduation/) - Engineering Blog By Nishith Agarwal
 18. ["Data Lakehouse: Building the Next Generation of Data Lakes using Apache Hudi"](https://medium.com/slalom-build/data-lakehouse-building-the-next-generation-of-data-lakes-using-apache-hudi-41550f62f5f) - Slalom Build blog By Ryan D'Souza and Brandon Stanley
+19. ["Time travel operations in Hopsworks Feature Store"](https://examples.hopsworks.ai/featurestore/hsfs/time_travel/time_travel_scala/)
+20. ["Build Slowly Changing Dimensions Type 2 (SCD2) with Apache Spark and Apache Hudi on Amazon EMR"](https://aws.amazon.com/blogs/big-data/build-slowly-changing-dimensions-type-2-scd2-with-apache-spark-and-apache-hudi-on-amazon-emr/)
+21. ["Apache Hudi: How Uber gets data a ride to its destination"](https://www.rtinsights.com/apache-hudi-how-uber-gets-data-a-ride-to-its-destination/) - By Jae McKendrick.
+22. ["Experts primer on Apache Hudi"](https://www.dbta.com/Editorial/News-Flashes/Experts-Present-a-Primer-on-Apache-Hudi-at-Data-Summit-Connect-2021-146834.aspx) - By Stephanie Simone, Data Summit Connect
+23. ["New features from Apache hudi in Amazon EMR"](https://aws.amazon.com/blogs/big-data/new-features-from-apache-hudi-available-in-amazon-emr/)
+24. ["Build a data lake using amazon kinesis data stream for amazon dynamodb and apache hudi"](https://aws.amazon.com/blogs/big-data/build-a-data-lake-using-amazon-kinesis-data-streams-for-amazon-dynamodb-and-apache-hudi/) - Amazon AWS
+25. ["Amazon Athena expands Apache Hudi support"](https://aws.amazon.com/about-aws/whats-new/2021/07/amazon-athena-expands-apache-hudi-support/) - Amazon AWS
+26. ["Part1: Query apache hudi dataset in an amazon S3 data lake with amazon athena : Read optimized queries"](part-1-query-an-apache-hudi-dataset-in-an-amazon-s3-data-lake-with-amazon-athena-part-1-read-optimized-queries/)
 
 ## Powered by
 
