@@ -42,6 +42,8 @@ public class CommitUtils {
 
   /**
    * Gets the commit action type for given write operation and table type.
+   * Use this API when commit action type can differ not only on the basis of table type but also write operation type.
+   * For example, INSERT_OVERWRITE/INSERT_OVERWRITE_TABLE operations have REPLACE commit action type.
    */
   public static String getCommitActionType(WriteOperationType operation, HoodieTableType tableType) {
     if (operation == WriteOperationType.INSERT_OVERWRITE || operation == WriteOperationType.INSERT_OVERWRITE_TABLE) {
@@ -53,6 +55,8 @@ public class CommitUtils {
 
   /**
    * Gets the commit action type for given table type.
+   * Note: Use this API only when the commit action type is not dependent on the write operation type.
+   * See {@link CommitUtils#getCommitActionType(WriteOperationType, HoodieTableType)} for more details.
    */
   public static String getCommitActionType(HoodieTableType tableType) {
     switch (tableType) {
