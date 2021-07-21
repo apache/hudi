@@ -110,7 +110,7 @@ public class StreamWriteFunctionWrapper<I> {
     this.gateway = new MockOperatorEventGateway();
     this.conf = conf;
     // one function
-    this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1);
+    this.coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1, false);
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
     this.compactFunctionWrapper = new CompactFunctionWrapper(this.conf);
     this.bucketAssignOperatorContext = new MockBucketAssignOperatorContext();
@@ -139,14 +139,7 @@ public class StreamWriteFunctionWrapper<I> {
     bucketAssignerFunction.setContext(bucketAssignOperatorContext);
     bucketAssignerFunction.initializeState(this.functionInitializationContext);
 
-    writeFunction = new StreamWriteFunction<>(conf);
-    writeFunction.setRuntimeContext(runtimeContext);
-    writeFunction.setOperatorEventGateway(gateway);
-    writeFunction.initializeState(this.functionInitializationContext);
-    writeFunction.open(conf);
-
-    // handle the bootstrap event
-    coordinator.handleEventFromOperator(0, getNextEvent());
+    setupWriteFunction();
 
     if (asyncCompaction) {
       compactFunctionWrapper.openFunction();
@@ -240,6 +233,11 @@ public class StreamWriteFunctionWrapper<I> {
     coordinator.notifyCheckpointAborted(checkpointId);
   }
 
+  public void subTaskFails(int taskID) throws Exception {
+    coordinator.subtaskFailed(taskID, new RuntimeException("Dummy exception"));
+    setupWriteFunction();
+  }
+
   public void close() throws Exception {
     coordinator.close();
     ioManager.close();
@@ -268,6 +266,21 @@ public class StreamWriteFunctionWrapper<I> {
 
   public boolean isAlreadyBootstrap() {
     return this.bootstrapFunction.isAlreadyBootstrap();
+  }
+
+  // -------------------------------------------------------------------------
+  //  Utilities
+  // -------------------------------------------------------------------------
+
+  private void setupWriteFunction() throws Exception {
+    writeFunction = new StreamWriteFunction<>(conf);
+    writeFunction.setRuntimeContext(runtimeContext);
+    writeFunction.setOperatorEventGateway(gateway);
+    writeFunction.initializeState(this.functionInitializationContext);
+    writeFunction.open(conf);
+
+    // handle the bootstrap event
+    coordinator.handleEventFromOperator(0, getNextEvent());
   }
 
   // -------------------------------------------------------------------------

@@ -458,7 +458,7 @@ public class HoodieFlinkWriteClient<T extends HoodieRecordPayload> extends
     HoodieTimeline unCompletedTimeline = FlinkClientUtil.createMetaClient(basePath)
         .getCommitsTimeline().filterInflightsAndRequested();
     return unCompletedTimeline.getInstants()
-        .filter(x -> x.getAction().equals(actionType))
+        .filter(x -> x.getAction().equals(actionType) && x.isInflight())
         .map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList()).stream()
         .max(Comparator.naturalOrder())
