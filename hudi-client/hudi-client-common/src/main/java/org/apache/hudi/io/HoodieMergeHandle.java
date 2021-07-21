@@ -198,8 +198,6 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       // Load the new records in a map
       long memoryForMerge = IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config);
       LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
-      System.out.println("WNI VIMP " + config.getCommonConfig().getSpillableDiskMapType()
-          + config.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
       this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
           new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(tableSchema),
           config.getCommonConfig().getSpillableDiskMapType(),

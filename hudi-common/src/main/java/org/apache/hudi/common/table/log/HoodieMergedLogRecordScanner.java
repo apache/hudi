@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -170,8 +171,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     // specific configurations
     protected Long maxMemorySizeInBytes;
     protected String spillableMapBasePath;
-    protected ExternalSpillableMap.DiskMapType diskMapType;
-    protected boolean isBitCaskDiskMapCompressionEnabled;
+    protected ExternalSpillableMap.DiskMapType diskMapType = HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue();
+    protected boolean isBitCaskDiskMapCompressionEnabled = HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue();
     // incremental filtering
     private Option<InstantRange> instantRange = Option.empty();
     // auto scan default true
