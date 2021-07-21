@@ -194,9 +194,10 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     } else {
       location = getNewRecordLocation(partitionPath);
       this.context.setCurrentKey(recordKey);
-      if (isChangingRecords) {
-        updateIndexState(partitionPath, location);
-      }
+    }
+    // always refresh the index
+    if (isChangingRecords) {
+      updateIndexState(partitionPath, location);
     }
     record.setCurrentLocation(location);
     out.collect((O) record);
