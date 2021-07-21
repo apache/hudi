@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Properties;
 import java.util.stream.Collectors;
+import java.util.UUID;
 
 /**
  * File System View Storage Configurations.
@@ -176,7 +177,11 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
   }
 
   public String getSpillableDir() {
-    return getString(FILESYSTEM_VIEW_SPILLABLE_DIR);
+    String configuredSpillableDir = getString(FILESYSTEM_VIEW_SPILLABLE_DIR);
+    return String.format("%s_%s",
+        configuredSpillableDir.endsWith("/")
+            ? configuredSpillableDir.substring(0, configuredSpillableDir.length() - 1)
+            : configuredSpillableDir, UUID.randomUUID().toString());
   }
 
   public FileSystemViewStorageType getSecondaryStorageType() {
