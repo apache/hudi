@@ -214,6 +214,7 @@ public class StreamWriteFunction<K, I, O>
     }
     // blocks flushing until the coordinator starts a new instant
     this.confirming = true;
+    this.currentInstant = this.writeClient.getLastPendingInstant(this.actionType);
   }
 
   @Override
@@ -534,6 +535,7 @@ public class StreamWriteFunction<K, I, O>
     DataBucket bucket = this.buckets.computeIfAbsent(bucketID,
         k -> new DataBucket(this.config.getDouble(FlinkOptions.WRITE_BATCH_SIZE), value));
     final DataItem item = DataItem.fromHoodieRecord(value);
+
     boolean flushBucket = bucket.detector.detect(item);
     boolean flushBuffer = this.tracer.trace(bucket.detector.lastRecordSize);
     if (flushBucket) {
