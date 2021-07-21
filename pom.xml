@@ -338,6 +338,9 @@
           <groupId>net.alchim31.maven</groupId>
           <artifactId>scala-maven-plugin</artifactId>
           <version>${scala-maven-plugin.version}</version>
+          <configuration>
+            <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
+          </configuration>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
@@ -1339,6 +1342,7 @@
                   <excludes>
                     <exclude>${project.basedir}/src/main/scala</exclude>
                   </excludes>
+                  <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
                 </configuration>
               </execution>
             </executions>

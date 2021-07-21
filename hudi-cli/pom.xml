@@ -48,6 +48,7 @@
             <args>
               <arg>-nobootcp</arg>
             </args>
+            <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
           </configuration>
         </plugin>
       </plugins>
