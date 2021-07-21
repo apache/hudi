@@ -75,6 +75,25 @@ public class TestOverwriteWithLatestAvroPayload {
   }
 
   @Test
+  public void testPreCombineOrderingValEqualsRecords() throws IOException {
+    GenericRecord record1 = new GenericData.Record(schema);
+    record1.put("id", "1");
+    record1.put("partition", "partition0");
+    record1.put("ts", 0L);
+    record1.put("_hoodie_is_deleted", false);
+
+    GenericRecord record2 = new GenericData.Record(schema);
+    record2.put("id", "1");
+    record2.put("partition", "partition1");
+    record2.put("ts", 0L);
+    record2.put("_hoodie_is_deleted", false);
+
+    OverwriteWithLatestAvroPayload payload1 = new OverwriteWithLatestAvroPayload(record1, 0);
+    OverwriteWithLatestAvroPayload payload2 = new OverwriteWithLatestAvroPayload(record2, 0);
+    assertEquals(payload1.preCombine(payload2), payload2);
+  }
+
+  @Test
   public void testDeletedRecord() throws IOException {
     GenericRecord record1 = new GenericData.Record(schema);
     record1.put("id", "1");
