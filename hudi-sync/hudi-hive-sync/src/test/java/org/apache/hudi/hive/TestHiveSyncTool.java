@@ -504,10 +504,16 @@ public class TestHiveSyncTool {
 
     hiveSyncConfig.syncMode = syncMode;
     String commitTime = "100";
-    HiveTestUtil.createCOWTableWithSchema(commitTime, "/simple-test.avsc");
+    HiveTestUtil.createCOWTableWithSchema(commitTime, "/complex.schema.avsc");
 
     HiveSyncTool tool = new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
     tool.syncHoodieTable();
+    HoodieHiveClient hiveClient =
+        new HoodieHiveClient(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    assertEquals(1, hiveClient.scanTablePartitions(hiveSyncConfig.tableName).size(),
+        "Table partitions should match the number of partitions we wrote");
+    assertEquals(commitTime, hiveClient.getLastCommitTimeSynced(hiveSyncConfig.tableName).get(),
+        "The last commit that was synced should be updated in the TBLPROPERTIES");
   }
 
   @ParameterizedTest

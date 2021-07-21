@@ -47,7 +47,6 @@ import java.util.stream.Collectors;
 
 public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   private static final Logger LOG = LogManager.getLogger(HiveQueryDDLExecutor.class);
-  private final HiveConf configuration;
   private final HiveSyncConfig config;
   private final IMetaStoreClient metaStoreClient;
   private SessionState sessionState = null;
@@ -55,7 +54,6 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
 
   public HiveQueryDDLExecutor(HiveSyncConfig config, FileSystem fs, HiveConf configuration) throws HiveException, MetaException {
     super(config, fs);
-    this.configuration = configuration;
     this.config = config;
     this.metaStoreClient = Hive.get(configuration).getMSC();
     try {

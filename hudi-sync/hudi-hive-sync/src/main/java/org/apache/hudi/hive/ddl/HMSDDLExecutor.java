@@ -57,7 +57,7 @@ public class HMSDDLExecutor implements DDLExecutor {
   private final HiveSyncConfig syncConfig;
   private final PartitionValueExtractor partitionValueExtractor;
   private final FileSystem fs;
-  private IMetaStoreClient client;
+  private final IMetaStoreClient client;
 
   public HMSDDLExecutor(HiveConf conf, HiveSyncConfig syncConfig, FileSystem fs) throws HiveException, MetaException {
     this.client = Hive.get(conf).getMSC();
@@ -225,7 +225,6 @@ public class HMSDDLExecutor implements DDLExecutor {
   public void close() {
     if (client != null) {
       Hive.closeCurrent();
-      client = null;
     }
   }
 }

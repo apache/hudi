@@ -260,7 +260,8 @@ public final class SchemaTestUtil {
           return map;
         case UNION:
           List<Schema> types = schema.getTypes();
-          return generate(types.get(random.nextInt(types.size())), random, d);
+          //Dropping the null at the end.
+          return generate(types.get(random.nextInt(types.size() - 1)), random, d);
         case FIXED:
           byte[] bytes = new byte[schema.getFixedSize()];
           random.nextBytes(bytes);
