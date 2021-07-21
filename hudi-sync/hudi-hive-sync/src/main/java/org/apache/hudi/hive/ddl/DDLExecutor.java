@@ -23,6 +23,11 @@ import org.apache.parquet.schema.MessageType;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * DDLExceutor is the interface which defines the ddl functions for Hive.
+ * There are two main implementations one is QueryBased other is based on HiveMetaStore
+ * QueryBasedDDLExecutor also has two impls namely HiveQL based and other JDBC based.
+ */
 public interface DDLExecutor {
   /**
    * @param databaseName name of database to be created.

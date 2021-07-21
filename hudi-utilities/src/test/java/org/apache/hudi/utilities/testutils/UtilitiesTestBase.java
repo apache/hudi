@@ -212,14 +212,11 @@ public class UtilitiesTestBase {
     // to get hold of resources bundled with jar
     private static ClassLoader classLoader = Helpers.class.getClassLoader();
 
-    public static String readFile(String testResourcePath) throws IOException {
+    public static String readFile(String testResourcePath) {
       BufferedReader reader =
           new BufferedReader(new InputStreamReader(classLoader.getResourceAsStream(testResourcePath)));
       StringBuffer sb = new StringBuffer();
-      String line;
-      while ((line = reader.readLine()) != null) {
-        sb.append(line + "\n");
-      }
+      reader.lines().forEach(line -> sb.append(line).append("\n"));
       return sb.toString();
     }
 
@@ -227,10 +224,7 @@ public class UtilitiesTestBase {
       BufferedReader reader =
           new BufferedReader(new InputStreamReader(new FileInputStream(absolutePathForResource)));
       StringBuffer sb = new StringBuffer();
-      String line;
-      while ((line = reader.readLine()) != null) {
-        sb.append(line + "\n");
-      }
+      reader.lines().forEach(line -> sb.append(line).append("\n"));
       return sb.toString();
     }
 

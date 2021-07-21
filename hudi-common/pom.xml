@@ -119,6 +119,14 @@
       <artifactId>parquet-avro</artifactId>
     </dependency>
 
+    <!-- ORC -->
+    <dependency>
+      <groupId>org.apache.orc</groupId>
+      <artifactId>orc-core</artifactId>
+      <version>${orc.version}</version>
+      <classifier>nohive</classifier>
+    </dependency>
+
     <!-- Httpcomponents -->
     <dependency>
       <groupId>org.apache.httpcomponents</groupId>

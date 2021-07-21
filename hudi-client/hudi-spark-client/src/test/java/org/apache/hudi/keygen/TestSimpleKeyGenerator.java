@@ -28,13 +28,18 @@ import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import java.util.stream.Stream;
+
+import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_PARTITION_PATH;
 
 public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
-
   private TypedProperties getCommonProps() {
     TypedProperties properties = new TypedProperties();
-    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_row_key");
-    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY, "true");
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "_row_key");
+    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_OPT_KEY.key(), "true");
     return properties;
   }
 
@@ -44,34 +49,40 @@ public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
 
   private TypedProperties getPropertiesWithoutRecordKeyProp() {
     TypedProperties properties = new TypedProperties();
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "timestamp");
     return properties;
   }
 
   private TypedProperties getWrongRecordKeyFieldProps() {
     TypedProperties properties = new TypedProperties();
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp");
-    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_wrong_key");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "timestamp");
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "_wrong_key");
     return properties;
   }
 
   private TypedProperties getWrongPartitionPathFieldProps() {
     TypedProperties properties = new TypedProperties();
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "_wrong_partition_path");
-    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_row_key");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "_wrong_partition_path");
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "_row_key");
     return properties;
   }
 
   private TypedProperties getComplexRecordKeyProp() {
     TypedProperties properties = new TypedProperties();
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp");
-    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY, "_row_key,pii_col");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "timestamp");
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_OPT_KEY.key(), "_row_key,pii_col");
     return properties;
   }
 
   private TypedProperties getProps() {
     TypedProperties properties = getCommonProps();
-    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY, "timestamp");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "timestamp");
+    return properties;
+  }
+
+  private TypedProperties getPropsWithNestedPartitionPathField() {
+    TypedProperties properties = getCommonProps();
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_OPT_KEY.key(), "nested_col.prop1");
     return properties;
   }
 
@@ -121,4 +132,28 @@ public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
     Assertions.assertEquals(keyGenerator.getPartitionPath(row), "timestamp=4357686");
   }
 
+  private static Stream<GenericRecord> nestedColTestRecords() {
+    return Stream.of(null, getNestedColRecord(null, 10L),
+        getNestedColRecord("", 10L), getNestedColRecord("val1", 10L));
+  }
+
+  @ParameterizedTest
+  @MethodSource("nestedColTestRecords")
+  public void testNestedPartitionPathField(GenericRecord nestedColRecord) {
+    SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getPropsWithNestedPartitionPathField());
+    GenericRecord record = getRecord(nestedColRecord);
+    String partitionPathFieldValue = null;
+    if (nestedColRecord != null) {
+      partitionPathFieldValue = (String) nestedColRecord.get("prop1");
+    }
+    String expectedPartitionPath = "nested_col.prop1="
+        + (partitionPathFieldValue != null && !partitionPathFieldValue.isEmpty() ? partitionPathFieldValue : DEFAULT_PARTITION_PATH);
+    HoodieKey key = keyGenerator.getKey(record);
+    Assertions.assertEquals("key1", key.getRecordKey());
+    Assertions.assertEquals(expectedPartitionPath, key.getPartitionPath());
+
+    Row row = KeyGeneratorTestUtilities.getRow(record);
+    Assertions.assertEquals("key1", keyGenerator.getRecordKey(row));
+    Assertions.assertEquals(expectedPartitionPath, keyGenerator.getPartitionPath(row));
+  }
 }

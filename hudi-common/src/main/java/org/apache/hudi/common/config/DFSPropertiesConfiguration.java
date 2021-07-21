@@ -100,10 +100,9 @@ public class DFSPropertiesConfiguration {
    */
   public void addProperties(BufferedReader reader) throws IOException {
     try {
-      String line;
-      while ((line = reader.readLine()) != null) {
+      reader.lines().forEach(line -> {
         if (line.startsWith("#") || line.equals("") || !line.contains("=")) {
-          continue;
+          return;
         }
         String[] split = splitProperty(line);
         if (line.startsWith("include=") || line.startsWith("include =")) {
@@ -111,7 +110,8 @@ public class DFSPropertiesConfiguration {
         } else {
           props.setProperty(split[0], split[1]);
         }
-      }
+      });
+
     } finally {
       reader.close();
     }

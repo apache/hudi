@@ -90,10 +90,9 @@ public class HMSDDLExecutor implements DDLExecutor {
       LinkedHashMap<String, String> mapSchema = HiveSchemaUtil.parquetSchemaToMapSchema(storageSchema, syncConfig.supportTimestamp, false);
 
       List<FieldSchema> fieldSchema = HiveSchemaUtil.convertMapSchemaToHiveFieldSchema(mapSchema, syncConfig);
-      Map<String, String> hiveSchema = HiveSchemaUtil.convertMapSchemaToHiveSchema(mapSchema);
 
       List<FieldSchema> partitionSchema = syncConfig.partitionFields.stream().map(partitionKey -> {
-        String partitionKeyType = HiveSchemaUtil.getPartitionKeyType(hiveSchema, partitionKey);
+        String partitionKeyType = HiveSchemaUtil.getPartitionKeyType(mapSchema, partitionKey);
         return new FieldSchema(partitionKey, partitionKeyType.toLowerCase(), "");
       }).collect(Collectors.toList());
       Table newTb = new Table();
@@ -109,7 +108,11 @@ public class HMSDDLExecutor implements DDLExecutor {
       storageDescriptor.setSerdeInfo(new SerDeInfo(null, serdeClass, serdeProperties));
       newTb.setSd(storageDescriptor);
       newTb.setPartitionKeys(partitionSchema);
-      newTb.putToParameters("EXTERNAL", "TRUE");
+
+      if (!syncConfig.createManagedTable) {
+        newTb.putToParameters("EXTERNAL", "TRUE");
+      }
+
       for (Map.Entry<String, String> entry : tableProperties.entrySet()) {
         newTb.putToParameters(entry.getKey(), entry.getValue());
       }

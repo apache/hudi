@@ -71,7 +71,7 @@ case class HoodieFileIndex(
      schemaSpec: Option[StructType],
      options: Map[String, String],
      @transient fileStatusCache: FileStatusCache = NoopCache)
-  extends FileIndex with Logging {
+  extends FileIndex with Logging with SparkAdapterSupport {
 
   private val basePath = metaClient.getBasePath
 
@@ -104,6 +104,12 @@ case class HoodieFileIndex(
         " Partition pruning will not work")
       new StructType()
     }
+  }
+
+  private lazy val metadataConfig = {
+    val properties = new Properties()
+    properties.putAll(options.asJava)
+    HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
   }
 
   @transient @volatile private var fileSystemView: HoodieTableFileSystemView = _
@@ -195,8 +201,8 @@ case class HoodieFileIndex(
    * @param predicates The filter condition.
    * @return The Pruned partition paths.
    */
-  private def prunePartition(partitionPaths: Seq[PartitionRowPath],
-                             predicates: Seq[Expression]): Seq[PartitionRowPath] = {
+  def prunePartition(partitionPaths: Seq[PartitionRowPath],
+                     predicates: Seq[Expression]): Seq[PartitionRowPath] = {
 
     val partitionColumnNames = partitionSchema.fields.map(_.name).toSet
     val partitionPruningPredicates = predicates.filter {
@@ -222,35 +228,22 @@ case class HoodieFileIndex(
     }
   }
 
-  /**
-   * Load all partition paths and it's files under the query table path.
-   */
-  private def loadPartitionPathFiles(): Map[PartitionRowPath, Array[FileStatus]] = {
+  def getAllQueryPartitionPaths: Seq[PartitionRowPath] = {
     val sparkEngine = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
-    val properties = new Properties()
-    properties.putAll(options.asJava)
-    val metadataConfig = HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
-
     val queryPartitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), queryPath)
     // Load all the partition path from the basePath, and filter by the query partition path.
     // TODO load files from the queryPartitionPath directly.
     val partitionPaths = FSUtils.getAllPartitionPaths(sparkEngine, metadataConfig, basePath).asScala
       .filter(_.startsWith(queryPartitionPath))
-
-    val writeConfig = HoodieWriteConfig.newBuilder()
-      .withPath(basePath).withProperties(properties).build()
-    val maxListParallelism = writeConfig.getFileListingParallelism
-
-    val serializableConf = new SerializableConfiguration(spark.sessionState.newHadoopConf())
     val partitionSchema = _partitionSchemaFromProperties
     val timeZoneId = CaseInsensitiveMap(options)
       .get(DateTimeUtils.TIMEZONE_OPTION)
       .getOrElse(SQLConf.get.sessionLocalTimeZone)
 
-    val sparkParsePartitionUtil = HoodieSparkUtils.createSparkParsePartitionUtil(spark
+    val sparkParsePartitionUtil = sparkAdapter.createSparkParsePartitionUtil(spark
       .sessionState.conf)
     // Convert partition path to PartitionRowPath
-    val partitionRowPaths = partitionPaths.map { partitionPath =>
+    partitionPaths.map { partitionPath =>
       val partitionRow = if (partitionSchema.fields.length == 0) {
         // This is a non-partitioned table
         InternalRow.empty
@@ -262,7 +255,14 @@ case class HoodieFileIndex(
           // If the partition column size is not equal to the partition fragment size
           // and the partition column size is 1, we map the whole partition path
           // to the partition column which can benefit from the partition prune.
-          InternalRow.fromSeq(Seq(UTF8String.fromString(partitionPath)))
+          val prefix = s"${partitionSchema.fieldNames.head}="
+          val partitionValue = if (partitionPath.startsWith(prefix)) {
+            // support hive style partition path
+            partitionPath.substring(prefix.length)
+          } else {
+            partitionPath
+          }
+          InternalRow.fromSeq(Seq(UTF8String.fromString(partitionValue)))
         } else if (partitionFragments.length != partitionSchema.fields.length &&
           partitionSchema.fields.length > 1) {
           // If the partition column size is not equal to the partition fragments size
@@ -301,7 +301,20 @@ case class HoodieFileIndex(
       }
       PartitionRowPath(partitionRow, partitionPath)
     }
+  }
 
+  /**
+   * Load all partition paths and it's files under the query table path.
+   */
+  private def loadPartitionPathFiles(): Map[PartitionRowPath, Array[FileStatus]] = {
+    val properties = new Properties()
+    properties.putAll(options.asJava)
+    val writeConfig = HoodieWriteConfig.newBuilder()
+      .withPath(basePath).withProperties(properties).build()
+
+    val maxListParallelism = writeConfig.getFileListingParallelism
+    val serializableConf = new SerializableConfiguration(spark.sessionState.newHadoopConf())
+    val partitionRowPaths = getAllQueryPartitionPaths
     // List files in all of the partition path.
     val pathToFetch = mutable.ArrayBuffer[PartitionRowPath]()
     val cachePartitionToFiles = mutable.Map[PartitionRowPath, Array[FileStatus]]()
@@ -316,17 +329,20 @@ case class HoodieFileIndex(
     }
     // Fetch the rest from the file system.
     val fetchedPartition2Files =
-      spark.sparkContext.parallelize(pathToFetch, Math.min(pathToFetch.size, maxListParallelism))
-        .map { partitionRowPath =>
-          // Here we use a LocalEngineContext to get the files in the partition.
-          // We can do this because the TableMetadata.getAllFilesInPartition only rely on the
-          // hadoopConf of the EngineContext.
-          val engineContext = new HoodieLocalEngineContext(serializableConf.get())
-          val filesInPartition =  FSUtils.getFilesInPartition(engineContext, metadataConfig,
+      if (pathToFetch.nonEmpty) {
+        spark.sparkContext.parallelize(pathToFetch, Math.min(pathToFetch.size, maxListParallelism))
+          .map { partitionRowPath =>
+            // Here we use a LocalEngineContext to get the files in the partition.
+            // We can do this because the TableMetadata.getAllFilesInPartition only rely on the
+            // hadoopConf of the EngineContext.
+            val engineContext = new HoodieLocalEngineContext(serializableConf.get())
+            val filesInPartition = FSUtils.getFilesInPartition(engineContext, metadataConfig,
               basePath, partitionRowPath.fullPartitionPath(basePath))
-          (partitionRowPath, filesInPartition)
-        }.collect().map(f => f._1 -> f._2).toMap
-
+            (partitionRowPath, filesInPartition)
+          }.collect().map(f => f._1 -> f._2).toMap
+      } else {
+        Map.empty[PartitionRowPath, Array[FileStatus]]
+      }
     // Update the fileStatusCache
     fetchedPartition2Files.foreach {
       case (partitionRowPath, filesInPartition) =>

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hive.ddl;
 
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 
@@ -27,10 +28,12 @@ import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Table;
+import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -47,12 +50,33 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   private final HiveConf configuration;
   private final HiveSyncConfig config;
   private final IMetaStoreClient metaStoreClient;
+  private SessionState sessionState = null;
+  private Driver hiveDriver = null;
 
   public HiveQueryDDLExecutor(HiveSyncConfig config, FileSystem fs, HiveConf configuration) throws HiveException, MetaException {
     super(config, fs);
     this.configuration = configuration;
     this.config = config;
     this.metaStoreClient = Hive.get(configuration).getMSC();
+    try {
+      this.sessionState = new SessionState(configuration,
+          UserGroupInformation.getCurrentUser().getShortUserName());
+      SessionState.start(this.sessionState);
+      this.sessionState.setCurrentDatabase(config.databaseName);
+      hiveDriver = new org.apache.hadoop.hive.ql.Driver(configuration);
+    } catch (Exception e) {
+      if (sessionState != null) {
+        try {
+          this.sessionState.close();
+        } catch (IOException ioException) {
+          LOG.error("Error while closing SessionState", ioException);
+        }
+      }
+      if (this.hiveDriver != null) {
+        this.hiveDriver.close();
+      }
+      throw new HoodieHiveSyncException("Failed to create HiveQueryDDL object", e);
+    }
   }
 
   @Override
@@ -61,39 +85,17 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   }
 
   private List<CommandProcessorResponse> updateHiveSQLs(List<String> sqls) {
-    SessionState ss = null;
-    org.apache.hadoop.hive.ql.Driver hiveDriver = null;
     List<CommandProcessorResponse> responses = new ArrayList<>();
     try {
-      final long startTime = System.currentTimeMillis();
-      ss = SessionState.start(configuration);
-      ss.setCurrentDatabase(config.databaseName);
-      hiveDriver = new org.apache.hadoop.hive.ql.Driver(configuration);
-      final long endTime = System.currentTimeMillis();
-      LOG.info(String.format("Time taken to start SessionState and create Driver: %s ms", (endTime - startTime)));
       for (String sql : sqls) {
-        final long start = System.currentTimeMillis();
-        responses.add(hiveDriver.run(sql));
-        final long end = System.currentTimeMillis();
-        LOG.info(String.format("Time taken to execute [%s]: %s ms", sql, (end - start)));
+        if (hiveDriver != null) {
+          HoodieTimer timer = new HoodieTimer().startTimer();
+          responses.add(hiveDriver.run(sql));
+          LOG.info(String.format("Time taken to execute [%s]: %s ms", sql, timer.endTimer()));
+        }
       }
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed in executing SQL", e);
-    } finally {
-      if (ss != null) {
-        try {
-          ss.close();
-        } catch (IOException ie) {
-          LOG.error("Error while closing SessionState", ie);
-        }
-      }
-      if (hiveDriver != null) {
-        try {
-          hiveDriver.close();
-        } catch (Exception e) {
-          LOG.error("Error while closing hiveDriver", e);
-        }
-      }
     }
     return responses;
   }

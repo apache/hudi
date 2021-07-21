@@ -754,7 +754,7 @@ public class TestCleaner extends HoodieClientTestBase {
     List<HoodieCleanStat> hoodieCleanStats = runCleaner(config);
     assertEquals(3,
         getCleanStat(hoodieCleanStats, p0).getSuccessDeleteFiles()
-            .size(), "Must clean three files, one parquet and 2 log files");
+            .size(), "Must clean three files, one base and 2 log files");
     assertFalse(testTable.baseFileExists(p0, "000", file1P0));
     assertFalse(testTable.logFilesExist(p0, "000", file1P0, 1, 2));
     assertTrue(testTable.baseFileExists(p0, "001", file1P0));
@@ -797,7 +797,7 @@ public class TestCleaner extends HoodieClientTestBase {
     List<HoodieCleanStat> hoodieCleanStats = runCleaner(config);
     assertEquals(3,
             getCleanStat(hoodieCleanStats, p0).getSuccessDeleteFiles()
-                    .size(), "Must clean three files, one parquet and 2 log files");
+                    .size(), "Must clean three files, one base and 2 log files");
     assertFalse(testTable.baseFileExists(p0, "000", file1P0));
     assertFalse(testTable.logFilesExist(p0, "000", file1P0, 1, 2));
     assertTrue(testTable.baseFileExists(p0, "001", file1P0));
@@ -843,10 +843,11 @@ public class TestCleaner extends HoodieClientTestBase {
     assertTrue(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
 
     // make next replacecommit, with 1 clustering operation. logically delete p0. No change to p1
+    // notice that clustering generates empty inflight commit files
     Map<String, String> partitionAndFileId002 = testTable.forReplaceCommit("00000000000002").getFileIdsWithBaseFilesInPartitions(p0);
     String file2P0C1 = partitionAndFileId002.get(p0);
     Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceMetadata = generateReplaceCommitMetadata(p0, file1P0C0, file2P0C1);
-    testTable.addReplaceCommit("00000000000002", replaceMetadata.getKey(), replaceMetadata.getValue());
+    testTable.addReplaceCommit("00000000000002", Option.of(replaceMetadata.getKey()), Option.empty(), replaceMetadata.getValue());
 
     // run cleaner
     List<HoodieCleanStat> hoodieCleanStatsTwo = runCleaner(config);
@@ -856,10 +857,11 @@ public class TestCleaner extends HoodieClientTestBase {
     assertTrue(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
 
     // make next replacecommit, with 1 clustering operation. Replace data in p1. No change to p0
+    // notice that clustering generates empty inflight commit files
     Map<String, String> partitionAndFileId003 = testTable.forReplaceCommit("00000000000003").getFileIdsWithBaseFilesInPartitions(p1);
     String file3P1C2 = partitionAndFileId003.get(p1);
     replaceMetadata = generateReplaceCommitMetadata(p1, file1P1C0, file3P1C2);
-    testTable.addReplaceCommit("00000000000003", replaceMetadata.getKey(), replaceMetadata.getValue());
+    testTable.addReplaceCommit("00000000000003", Option.of(replaceMetadata.getKey()), Option.empty(), replaceMetadata.getValue());
 
     // run cleaner
     List<HoodieCleanStat> hoodieCleanStatsThree = runCleaner(config);
@@ -870,10 +872,11 @@ public class TestCleaner extends HoodieClientTestBase {
     assertTrue(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
 
     // make next replacecommit, with 1 clustering operation. Replace data in p0 again
+    // notice that clustering generates empty inflight commit files
     Map<String, String> partitionAndFileId004 = testTable.forReplaceCommit("00000000000004").getFileIdsWithBaseFilesInPartitions(p0);
     String file4P0C3 = partitionAndFileId004.get(p0);
     replaceMetadata = generateReplaceCommitMetadata(p0, file2P0C1, file4P0C3);
-    testTable.addReplaceCommit("00000000000004", replaceMetadata.getKey(), replaceMetadata.getValue());
+    testTable.addReplaceCommit("00000000000004", Option.of(replaceMetadata.getKey()), Option.empty(), replaceMetadata.getValue());
 
     // run cleaner
     List<HoodieCleanStat> hoodieCleanStatsFour = runCleaner(config);
@@ -885,10 +888,11 @@ public class TestCleaner extends HoodieClientTestBase {
     assertTrue(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
 
     // make next replacecommit, with 1 clustering operation. Replace all data in p1. no new files created
+    // notice that clustering generates empty inflight commit files
     Map<String, String> partitionAndFileId005 = testTable.forReplaceCommit("00000000000005").getFileIdsWithBaseFilesInPartitions(p1);
     String file4P1C4 = partitionAndFileId005.get(p1);
     replaceMetadata = generateReplaceCommitMetadata(p0, file3P1C2, file4P1C4);
-    testTable.addReplaceCommit("00000000000005", replaceMetadata.getKey(), replaceMetadata.getValue());
+    testTable.addReplaceCommit("00000000000005", Option.of(replaceMetadata.getKey()), Option.empty(), replaceMetadata.getValue());
     
     List<HoodieCleanStat> hoodieCleanStatsFive = runCleaner(config, 2);
     assertTrue(testTable.baseFileExists(p0, "00000000000004", file4P0C3));
@@ -935,8 +939,9 @@ public class TestCleaner extends HoodieClientTestBase {
     String partition1 = DEFAULT_PARTITION_PATHS[0];
     String partition2 = DEFAULT_PARTITION_PATHS[1];
 
-    String fileName1 = "data1_1_000.parquet";
-    String fileName2 = "data2_1_000.parquet";
+    String extension = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
+    String fileName1 = "data1_1_000" + extension;
+    String fileName2 = "data2_1_000" + extension;
 
     String filePath1 = metaClient.getBasePath() + "/" + partition1 + "/" + fileName1;
     String filePath2 = metaClient.getBasePath() + "/" + partition1 + "/" + fileName2;
@@ -1025,8 +1030,9 @@ public class TestCleaner extends HoodieClientTestBase {
     String partition1 = DEFAULT_PARTITION_PATHS[0];
     String partition2 = DEFAULT_PARTITION_PATHS[1];
 
-    String fileName1 = "data1_1_000.parquet";
-    String fileName2 = "data2_1_000.parquet";
+    String extension = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
+    String fileName1 = "data1_1_000" + extension;
+    String fileName2 = "data2_1_000" + extension;
 
     Map<String, List<String>> filesToBeCleanedPerPartition = new HashMap<>();
     filesToBeCleanedPerPartition.put(partition1, Arrays.asList(fileName1));
@@ -1314,7 +1320,7 @@ public class TestCleaner extends HoodieClientTestBase {
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(2).build())
         .build();
     // Deletions:
-    // . FileId Parquet Logs Total Retained Commits
+    // . FileId Base Logs Total Retained Commits
     // FileId7 5 10 15 009, 011
     // FileId6 5 10 15 009
     // FileId5 3 6 9 005
@@ -1338,7 +1344,7 @@ public class TestCleaner extends HoodieClientTestBase {
                 .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(2).build())
             .build();
     // Deletions:
-    // . FileId Parquet Logs Total Retained Commits
+    // . FileId Base Logs Total Retained Commits
     // FileId7 5 10 15 009, 011
     // FileId6 4 8 12 007, 009
     // FileId5 2 4 6 003 005

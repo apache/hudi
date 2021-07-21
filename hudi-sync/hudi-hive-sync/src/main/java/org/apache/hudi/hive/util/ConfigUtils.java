@@ -23,6 +23,11 @@ import java.util.Map;
 import org.apache.hudi.common.util.StringUtils;
 
 public class ConfigUtils {
+  /**
+   * Config stored in hive serde properties to tell query engine (spark/flink) to
+   * read the table as a read-optimized table when this config is true.
+   */
+  public static final String IS_QUERY_AS_RO_TABLE = "hoodie.query.as.ro.table";
 
   /**
    * Convert the key-value config to a map.The format of the config

@@ -54,8 +54,8 @@ public class TestDefaultHoodieRecordPayload {
         new Schema.Field("_hoodie_is_deleted", Schema.create(Type.BOOLEAN), "", false)
     ));
     props = new Properties();
-    props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP, "ts");
-    props.setProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP, "ts");
+    props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, "ts");
+    props.setProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, "ts");
   }
 
   @Test

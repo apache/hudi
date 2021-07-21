@@ -20,6 +20,7 @@ package org.apache.hudi.hive.ddl;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.StorageSchemes;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
@@ -33,9 +34,6 @@ import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -110,8 +108,8 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
       return;
     }
     LOG.info("Adding partitions " + partitionsToAdd.size() + " to table " + tableName);
-    String sql = constructAddPartitions(tableName, partitionsToAdd);
-    runSQL(sql);
+    List<String> sqls = constructAddPartitions(tableName, partitionsToAdd);
+    sqls.stream().forEach(sql -> runSQL(sql));
   }
 
   @Override
@@ -127,18 +125,36 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     }
   }
 
-  private String constructAddPartitions(String tableName, List<String> partitions) {
+  private List<String> constructAddPartitions(String tableName, List<String> partitions) {
+    if (config.batchSyncNum <= 0) {
+      throw new HoodieHiveSyncException("batch-sync-num for sync hive table must be greater than 0, pls check your parameter");
+    }
+    List<String> result = new ArrayList<>();
+    int batchSyncPartitionNum = config.batchSyncNum;
+    StringBuilder alterSQL = getAlterTablePrefix(tableName);
+    for (int i = 0; i < partitions.size(); i++) {
+      String partitionClause = getPartitionClause(partitions.get(i));
+      String fullPartitionPath = FSUtils.getPartitionPath(config.basePath, partitions.get(i)).toString();
+      alterSQL.append("  PARTITION (").append(partitionClause).append(") LOCATION '").append(fullPartitionPath)
+          .append("' ");
+      if ((i + 1) % batchSyncPartitionNum == 0) {
+        result.add(alterSQL.toString());
+        alterSQL = getAlterTablePrefix(tableName);
+      }
+    }
+    // add left partitions to result
+    if (partitions.size() % batchSyncPartitionNum != 0) {
+      result.add(alterSQL.toString());
+    }
+    return result;
+  }
+
+  private StringBuilder getAlterTablePrefix(String tableName) {
     StringBuilder alterSQL = new StringBuilder("ALTER TABLE ");
     alterSQL.append(HIVE_ESCAPE_CHARACTER).append(config.databaseName)
         .append(HIVE_ESCAPE_CHARACTER).append(".").append(HIVE_ESCAPE_CHARACTER)
         .append(tableName).append(HIVE_ESCAPE_CHARACTER).append(" ADD IF NOT EXISTS ");
-    for (String partition : partitions) {
-      String partitionClause = getPartitionClause(partition);
-      String fullPartitionPath = FSUtils.getPartitionPath(config.basePath, partition).toString();
-      alterSQL.append("  PARTITION (").append(partitionClause).append(") LOCATION '").append(fullPartitionPath)
-          .append("' ");
-    }
-    return alterSQL.toString();
+    return alterSQL;
   }
 
   private String getPartitionClause(String partition) {
@@ -151,12 +167,8 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
       String partitionValue = partitionValues.get(i);
       // decode the partition before sync to hive to prevent multiple escapes of HIVE
       if (config.decodePartition) {
-        try {
-          // This is a decode operator for encode in KeyGenUtils#getRecordPartitionPath
-          partitionValue = URLDecoder.decode(partitionValue, StandardCharsets.UTF_8.toString());
-        } catch (UnsupportedEncodingException e) {
-          throw new HoodieHiveSyncException("error in decode partition: " + partitionValue, e);
-        }
+        // This is a decode operator for encode in KeyGenUtils#getRecordPartitionPath
+        partitionValue = PartitionPathEncodeUtils.unescapePathName(partitionValue);
       }
       partBuilder.add("`" + config.partitionFields.get(i) + "`='" + partitionValue + "'");
     }

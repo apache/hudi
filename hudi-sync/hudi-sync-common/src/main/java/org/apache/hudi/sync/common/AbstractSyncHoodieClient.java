@@ -29,19 +29,24 @@ import org.apache.hudi.common.util.Option;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.apache.parquet.schema.MessageType;
 
+import java.io.Serializable;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public abstract class AbstractSyncHoodieClient {
 
   private static final Logger LOG = LogManager.getLogger(AbstractSyncHoodieClient.class);
+
+  public static final TypeConverter TYPE_CONVERTOR = new TypeConverter() {};
 
   protected final HoodieTableMetaClient metaClient;
   protected final HoodieTableType tableType;
@@ -103,6 +108,10 @@ public abstract class AbstractSyncHoodieClient {
     return fs;
   }
 
+  public boolean isBootstrap() {
+    return metaClient.getTableConfig().getBootstrapBasePath().isPresent();
+  }
+
   public void closeQuietly(ResultSet resultSet, Statement stmt) {
     try {
       if (stmt != null) {
@@ -147,6 +156,42 @@ public abstract class AbstractSyncHoodieClient {
       LOG.info("Last commit time synced is " + lastCommitTimeSynced.get() + ", Getting commits since then");
       return TimelineUtils.getPartitionsWritten(metaClient.getActiveTimeline().getCommitsTimeline()
           .findInstantsAfter(lastCommitTimeSynced.get(), Integer.MAX_VALUE));
+    }
+  }
+
+  public abstract static class TypeConverter implements Serializable {
+
+    static final String DEFAULT_TARGET_TYPE = "DECIMAL";
+
+    protected String targetType;
+
+    public TypeConverter() {
+      this.targetType = DEFAULT_TARGET_TYPE;
+    }
+
+    public TypeConverter(String targetType) {
+      ValidationUtils.checkArgument(Objects.nonNull(targetType));
+      this.targetType = targetType;
+    }
+
+    public void doConvert(ResultSet resultSet, Map<String, String> schema) throws SQLException {
+      schema.put(getColumnName(resultSet), targetType.equalsIgnoreCase(getColumnType(resultSet))
+                ? convert(resultSet) : getColumnType(resultSet));
+    }
+
+    public String convert(ResultSet resultSet) throws SQLException {
+      String columnType = getColumnType(resultSet);
+      int columnSize = resultSet.getInt("COLUMN_SIZE");
+      int decimalDigits = resultSet.getInt("DECIMAL_DIGITS");
+      return columnType + String.format("(%s,%s)", columnSize, decimalDigits);
+    }
+
+    public String getColumnName(ResultSet resultSet) throws SQLException {
+      return resultSet.getString(4);
+    }
+
+    public String getColumnType(ResultSet resultSet) throws SQLException {
+      return resultSet.getString(6);
     }
   }
 

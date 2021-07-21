@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.SparkMemoryUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -189,16 +188,16 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
   }
 
   private JavaRDD<HoodieRecord<T>> partition(JavaRDD<HoodieRecord<T>> dedupedRecords, Partitioner partitioner) {
-    JavaPairRDD<Tuple2, HoodieRecord<T>> mappedRDD = dedupedRecords.mapToPair(
+    JavaPairRDD<Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>> mappedRDD = dedupedRecords.mapToPair(
         record -> new Tuple2<>(new Tuple2<>(record.getKey(), Option.ofNullable(record.getCurrentLocation())), record));
 
-    JavaPairRDD<Tuple2, HoodieRecord<T>> partitionedRDD;
+    JavaPairRDD<Tuple2<HoodieKey, Option<HoodieRecordLocation>>, HoodieRecord<T>> partitionedRDD;
     if (table.requireSortedRecords()) {
       // Partition and sort within each partition as a single step. This is faster than partitioning first and then
       // applying a sort.
-      Comparator<Tuple2> comparator = (Comparator<Tuple2> & Serializable)(t1, t2) -> {
-        HoodieKey key1 = (HoodieKey) t1._1;
-        HoodieKey key2 = (HoodieKey) t2._1;
+      Comparator<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> comparator = (Comparator<Tuple2<HoodieKey, Option<HoodieRecordLocation>>> & Serializable)(t1, t2) -> {
+        HoodieKey key1 = t1._1;
+        HoodieKey key2 = t2._1;
         return key1.getRecordKey().compareTo(key2.getRecordKey());
       };
 
@@ -334,13 +333,6 @@ public abstract class BaseSparkCommitActionExecutor<T extends HoodieRecordPayloa
     } else {
       return new HoodieMergeHandle<>(config, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier);
     }
-  }
-
-  protected HoodieMergeHandle getUpdateHandle(String partitionPath, String fileId,
-                                              Map<String, HoodieRecord<T>> keyToNewRecords,
-                                              HoodieBaseFile dataFileToBeMerged) {
-    return new HoodieMergeHandle<>(config, instantTime, table, keyToNewRecords,
-        partitionPath, fileId, dataFileToBeMerged, taskContextSupplier);
   }
 
   @Override

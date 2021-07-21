@@ -132,21 +132,6 @@ public class FilePathUtils {
   }
 
   /**
-   * Generates partition values from path.
-   *
-   * @param currPath      Partition file path
-   * @param hivePartition Whether the partition path is with Hive style
-   * @param partitionKeys Partition keys
-   * @return Sequential partition specs.
-   */
-  public static List<String> extractPartitionValues(
-      Path currPath,
-      boolean hivePartition,
-      String[] partitionKeys) {
-    return new ArrayList<>(extractPartitionKeyValues(currPath, hivePartition, partitionKeys).values());
-  }
-
-  /**
    * Generates partition key value mapping from path.
    *
    * @param currPath      Partition file path
@@ -159,6 +144,9 @@ public class FilePathUtils {
       boolean hivePartition,
       String[] partitionKeys) {
     LinkedHashMap<String, String> fullPartSpec = new LinkedHashMap<>();
+    if (partitionKeys.length == 0) {
+      return fullPartSpec;
+    }
     List<String[]> kvs = new ArrayList<>();
     int curDepth = 0;
     do {
@@ -265,7 +253,7 @@ public class FilePathUtils {
       return;
     }
 
-    if (fileStatus.isDir() && !isHiddenFile(fileStatus)) {
+    if (fileStatus.isDirectory() && !isHiddenFile(fileStatus)) {
       for (FileStatus stat : fs.listStatus(fileStatus.getPath())) {
         listStatusRecursively(fs, stat, level + 1, expectLevel, results);
       }
@@ -275,7 +263,7 @@ public class FilePathUtils {
   private static boolean isHiddenFile(FileStatus fileStatus) {
     String name = fileStatus.getPath().getName();
     // the log files is hidden file
-    return name.startsWith("_") || name.startsWith(".") && !name.contains(".log.");
+    return name.startsWith("_") || (name.startsWith(".") && !name.contains(".log."));
   }
 
   /**
@@ -359,7 +347,7 @@ public class FilePathUtils {
       return new Path[] {path};
     } else {
       final String defaultParName = conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME);
-      final boolean hivePartition = conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITION);
+      final boolean hivePartition = conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING);
       List<Map<String, String>> partitionPaths =
           getPartitions(path, hadoopConf, partitionKeys, defaultParName, hivePartition);
       return partitionPath2ReadPath(path, partitionKeys, partitionPaths, hivePartition);
@@ -393,7 +381,7 @@ public class FilePathUtils {
    */
   public static org.apache.flink.core.fs.Path[] toFlinkPaths(Path[] paths) {
     return Arrays.stream(paths)
-        .map(p -> toFlinkPath(p))
+        .map(FilePathUtils::toFlinkPath)
         .toArray(org.apache.flink.core.fs.Path[]::new);
   }
 
@@ -402,5 +390,18 @@ public class FilePathUtils {
    */
   public static org.apache.flink.core.fs.Path toFlinkPath(Path path) {
     return new org.apache.flink.core.fs.Path(path.toUri());
+  }
+
+  /**
+   * Extracts the partition keys with given configuration.
+   *
+   * @param conf The flink configuration
+   * @return array of the partition fields
+   */
+  public static String[] extractPartitionKeys(org.apache.flink.configuration.Configuration conf) {
+    if (FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.PARTITION_PATH_FIELD)) {
+      return new String[0];
+    }
+    return conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",");
   }
 }

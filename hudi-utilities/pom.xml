@@ -120,7 +120,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark-common</artifactId>
+      <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
@@ -134,14 +134,10 @@
         </exclusion>
       </exclusions>
     </dependency>
+
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark2_${scala.binary.version}</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark3_2.12</artifactId>
+      <artifactId>${hudi.spark.module}_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
     </dependency>
 
@@ -265,22 +261,22 @@
     <dependency>
       <groupId>io.confluent</groupId>
       <artifactId>kafka-avro-serializer</artifactId>
-      <version>3.0.0</version>
+      <version>${confluent.version}</version>
     </dependency>
     <dependency>
       <groupId>io.confluent</groupId>
       <artifactId>common-config</artifactId>
-      <version>3.0.0</version>
+      <version>${confluent.version}</version>
     </dependency>
     <dependency>
       <groupId>io.confluent</groupId>
       <artifactId>common-utils</artifactId>
-      <version>3.0.0</version>
+      <version>${confluent.version}</version>
     </dependency>
     <dependency>
       <groupId>io.confluent</groupId>
       <artifactId>kafka-schema-registry-client</artifactId>
-      <version>3.0.0</version>
+      <version>${confluent.version}</version>
     </dependency>
 
     <dependency>

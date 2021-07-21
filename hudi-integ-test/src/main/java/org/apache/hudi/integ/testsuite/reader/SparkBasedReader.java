@@ -67,4 +67,16 @@ public class SparkBasedReader {
         .toJavaRDD();
   }
 
+  public static JavaRDD<GenericRecord> readOrc(SparkSession sparkSession, List<String>
+      listOfPaths, Option<String> structName, Option<String> nameSpace) {
+
+    Dataset<Row> dataSet = sparkSession.read()
+        .orc((JavaConverters.asScalaIteratorConverter(listOfPaths.iterator()).asScala().toSeq()));
+
+    return HoodieSparkUtils
+        .createRdd(dataSet.toDF(), structName.orElse(RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME),
+            RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE)
+        .toJavaRDD();
+  }
+
 }

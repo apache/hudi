@@ -66,6 +66,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPayload<T>>
     extends BaseSparkCommitActionExecutor<T> {
@@ -90,10 +91,12 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
 
     JavaSparkContext engineContext = HoodieSparkEngineContext.getSparkContext(context);
     // execute clustering for each group async and collect WriteStatus
-    JavaRDD<WriteStatus> writeStatusRDD = clusteringPlan.getInputGroups().stream()
+    Stream<JavaRDD<WriteStatus>> writeStatusRDDStream = clusteringPlan.getInputGroups().stream()
         .map(inputGroup -> runClusteringForGroupAsync(inputGroup, clusteringPlan.getStrategy().getStrategyParams()))
-        .map(CompletableFuture::join)
-        .reduce((rdd1, rdd2) -> rdd1.union(rdd2)).orElse(engineContext.emptyRDD());
+        .map(CompletableFuture::join);
+
+    JavaRDD<WriteStatus>[] writeStatuses = convertStreamToArray(writeStatusRDDStream);
+    JavaRDD<WriteStatus> writeStatusRDD = engineContext.union(writeStatuses);
     
     HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = buildWriteMetadata(writeStatusRDD);
     JavaRDD<WriteStatus> statuses = updateIndex(writeStatusRDD, writeMetadata);
@@ -107,6 +110,19 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
       writeMetadata.setCommitMetadata(Option.of(commitMetadata));
     }
     return writeMetadata;
+  }
+
+  /**
+   * Stream to array conversion with generic type is not straightforward.
+   * Implement a utility method to abstract high level logic. This needs to be improved in future
+   */
+  private JavaRDD<WriteStatus>[] convertStreamToArray(Stream<JavaRDD<WriteStatus>> writeStatusRDDStream) {
+    Object[] writeStatusObjects = writeStatusRDDStream.toArray(Object[]::new);
+    JavaRDD<WriteStatus>[] writeStatusRDDArray = new JavaRDD[writeStatusObjects.length];
+    for (int i = 0; i < writeStatusObjects.length; i++) {
+      writeStatusRDDArray[i] = (JavaRDD<WriteStatus>) writeStatusObjects[i];
+    }
+    return writeStatusRDDArray;
   }
 
   /**
@@ -174,16 +190,23 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
     return jsc.parallelize(clusteringOps, clusteringOps.size()).mapPartitions(clusteringOpsPartition -> {
       List<Iterator<HoodieRecord<? extends HoodieRecordPayload>>> recordIterators = new ArrayList<>();
       clusteringOpsPartition.forEachRemaining(clusteringOp -> {
-        long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), config.getProps());
+        long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), config);
         LOG.info("MaxMemoryPerCompaction run as part of clustering => " + maxMemoryPerCompaction);
         try {
           Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
           HoodieFileReader<? extends IndexedRecord> baseFileReader = HoodieFileReaderFactory.getFileReader(table.getHadoopConf(), new Path(clusteringOp.getDataFilePath()));
-          HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(table.getMetaClient().getFs(),
-              table.getMetaClient().getBasePath(), clusteringOp.getDeltaFilePaths(), readerSchema, instantTime,
-              maxMemoryPerCompaction, config.getCompactionLazyBlockReadEnabled(),
-              config.getCompactionReverseLogReadEnabled(), config.getMaxDFSStreamBufferSize(),
-              config.getSpillableMapBasePath());
+          HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
+              .withFileSystem(table.getMetaClient().getFs())
+              .withBasePath(table.getMetaClient().getBasePath())
+              .withLogFilePaths(clusteringOp.getDeltaFilePaths())
+              .withReaderSchema(readerSchema)
+              .withLatestInstantTime(instantTime)
+              .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
+              .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
+              .withReverseReader(config.getCompactionReverseLogReadEnabled())
+              .withBufferSize(config.getMaxDFSStreamBufferSize())
+              .withSpillableMapBasePath(config.getSpillableMapBasePath())
+              .build();
 
           recordIterators.add(HoodieFileSliceReader.getFileSliceReader(baseFileReader, scanner, readerSchema,
               table.getMetaClient().getTableConfig().getPayloadClass()));

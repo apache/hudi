@@ -19,15 +19,18 @@ package org.apache.hudi
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION_OPT_KEY}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
+import org.apache.hudi.hive.util.ConfigUtils
 import org.apache.log4j.LogManager
+import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.execution.datasources.{DataSource, FileStatusCache, HadoopFsRelation}
+import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.streaming.HoodieStreamSource
@@ -69,10 +72,10 @@ class DefaultSource extends RelationProvider
                               optParams: Map[String, String],
                               schema: StructType): BaseRelation = {
     // Add default options for unspecified read options keys.
-    val parameters = translateViewTypesToQueryTypes(optParams)
+    val parameters = DataSourceOptionsHelper.translateConfigurations(optParams)
 
     val path = parameters.get("path")
-    val readPathsStr = parameters.get(DataSourceReadOptions.READ_PATHS_OPT_KEY)
+    val readPathsStr = parameters.get(DataSourceReadOptions.READ_PATHS_OPT_KEY.key)
     if (path.isEmpty && readPathsStr.isEmpty) {
       throw new HoodieException(s"'path' or '$READ_PATHS_OPT_KEY' or both must be specified.")
     }
@@ -83,10 +86,10 @@ class DefaultSource extends RelationProvider
     val fs = FSUtils.getFs(allPaths.head, sqlContext.sparkContext.hadoopConfiguration)
     // Use the HoodieFileIndex only if the 'path' is not globbed.
     // Or else we use the original way to read hoodie table.
-    val enableFileIndex = optParams.get(ENABLE_HOODIE_FILE_INDEX)
-      .map(_.toBoolean).getOrElse(DEFAULT_ENABLE_HOODIE_FILE_INDEX)
+    val enableFileIndex = optParams.get(ENABLE_HOODIE_FILE_INDEX.key)
+      .map(_.toBoolean).getOrElse(ENABLE_HOODIE_FILE_INDEX.defaultValue)
     val useHoodieFileIndex = enableFileIndex && path.isDefined && !path.get.contains("*") &&
-      !parameters.contains(DataSourceReadOptions.READ_PATHS_OPT_KEY)
+      !parameters.contains(DataSourceReadOptions.READ_PATHS_OPT_KEY.key)
     val globPaths = if (useHoodieFileIndex) {
       None
     } else {
@@ -103,8 +106,14 @@ class DefaultSource extends RelationProvider
     val metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(tablePath).build()
     val isBootstrappedTable = metaClient.getTableConfig.getBootstrapBasePath.isPresent
     val tableType = metaClient.getTableType
-    val queryType = parameters(QUERY_TYPE_OPT_KEY)
-    log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType")
+
+    // First check if the ConfigUtils.IS_QUERY_AS_RO_TABLE has set by HiveSyncTool,
+    // or else use query type from QUERY_TYPE_OPT_KEY.
+    val queryType = parameters.get(ConfigUtils.IS_QUERY_AS_RO_TABLE)
+      .map(is => if (is.toBoolean) QUERY_TYPE_READ_OPTIMIZED_OPT_VAL else QUERY_TYPE_SNAPSHOT_OPT_VAL)
+      .getOrElse(parameters.getOrElse(QUERY_TYPE_OPT_KEY.key, QUERY_TYPE_OPT_KEY.defaultValue()))
+
+    log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
 
     (tableType, queryType, isBootstrappedTable) match {
       case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
@@ -155,7 +164,7 @@ class DefaultSource extends RelationProvider
     val translatedOptions = DataSourceWriteOptions.translateSqlOptions(parameters)
     val dfWithoutMetaCols = df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala:_*)
 
-    if (translatedOptions(OPERATION_OPT_KEY).equals(BOOTSTRAP_OPERATION_OPT_VAL)) {
+    if (translatedOptions(OPERATION_OPT_KEY.key).equals(BOOTSTRAP_OPERATION_OPT_VAL)) {
       HoodieSparkSqlWriter.bootstrap(sqlContext, mode, translatedOptions, dfWithoutMetaCols)
     } else {
       HoodieSparkSqlWriter.write(sqlContext, mode, translatedOptions, dfWithoutMetaCols)
@@ -186,6 +195,10 @@ class DefaultSource extends RelationProvider
                                   extraReadPaths: Seq[String],
                                   metaClient: HoodieTableMetaClient): BaseRelation = {
     log.info("Loading Base File Only View  with options :" + optParams)
+    val (tableFileFormat, formatClassName) = metaClient.getTableConfig.getBaseFileFormat match {
+      case HoodieFileFormat.PARQUET => (new ParquetFileFormat, "parquet")
+      case HoodieFileFormat.ORC => (new OrcFileFormat, "orc")
+    }
 
     if (useHoodieFileIndex) {
 
@@ -198,7 +211,7 @@ class DefaultSource extends RelationProvider
         fileIndex.partitionSchema,
         fileIndex.dataSchema,
         bucketSpec = None,
-        fileFormat = new ParquetFileFormat,
+        fileFormat = tableFileFormat,
         optParams)(sqlContext.sparkSession)
     } else {
       // this is just effectively RO view only, where `path` can contain a mix of
@@ -208,12 +221,28 @@ class DefaultSource extends RelationProvider
         classOf[HoodieROTablePathFilter],
         classOf[org.apache.hadoop.fs.PathFilter])
 
-      // simply return as a regular parquet relation
+      val specifySchema = if (schema == null) {
+        // Load the schema from the commit meta data.
+        // Here we should specify the schema to the latest commit schema since
+        // the table schema evolution.
+        val tableSchemaResolver = new TableSchemaResolver(metaClient)
+        try {
+          Some(SchemaConverters.toSqlType(tableSchemaResolver.getTableAvroSchema)
+            .dataType.asInstanceOf[StructType])
+        } catch {
+          case _: Throwable =>
+            None // If there is no commit in the table, we can not get the schema
+                 // with tableSchemaResolver, return None here.
+        }
+      } else {
+        Some(schema)
+      }
+      // simply return as a regular relation
       DataSource.apply(
         sparkSession = sqlContext.sparkSession,
         paths = extraReadPaths,
-        userSpecifiedSchema = Option(schema),
-        className = "parquet",
+        userSpecifiedSchema = specifySchema,
+        className = formatClassName,
         options = optParams)
         .resolveRelation()
     }

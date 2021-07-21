@@ -125,14 +125,7 @@ public class HoodieDLAClient extends AbstractSyncHoodieClient {
       DatabaseMetaData databaseMetaData = connection.getMetaData();
       result = databaseMetaData.getColumns(dlaConfig.databaseName, dlaConfig.databaseName, tableName, null);
       while (result.next()) {
-        String columnName = result.getString(4);
-        String columnType = result.getString(6);
-        if ("DECIMAL".equals(columnType)) {
-          int columnSize = result.getInt("COLUMN_SIZE");
-          int decimalDigits = result.getInt("DECIMAL_DIGITS");
-          columnType += String.format("(%s,%s)", columnSize, decimalDigits);
-        }
-        schema.put(columnName, columnType);
+        TYPE_CONVERTOR.doConvert(result, schema);
       }
       return schema;
     } catch (SQLException e) {

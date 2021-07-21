@@ -71,4 +71,11 @@ public class JsonKafkaSource extends JsonSource {
     return KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges,
             LocationStrategies.PreferConsistent()).map(x -> (String) x.value());
   }
+
+  @Override
+  public void onCommit(String lastCkptStr) {
+    if (this.props.getBoolean(KafkaOffsetGen.Config.ENABLE_KAFKA_COMMIT_OFFSET.key(), KafkaOffsetGen.Config.ENABLE_KAFKA_COMMIT_OFFSET.defaultValue())) {
+      offsetGen.commitOffsetToKafka(lastCkptStr);
+    }
+  }
 }

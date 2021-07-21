@@ -221,7 +221,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     HoodieRecord record4 =
         new HoodieRecord(new HoodieKey(rowChange4.getRowKey(), rowChange4.getPartitionPath()), rowChange4);
 
-    // We write record1, record2 to a parquet file, but the bloom filter contains (record1,
+    // We write record1, record2 to a base file, but the bloom filter contains (record1,
     // record2, record3).
     BloomFilter filter = BloomFilterFactory.createBloomFilter(10000, 0.0000001, -1, BloomFilterTypeCode.SIMPLE.name());
     filter.add(record3.getRecordKey());
@@ -311,7 +311,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
       assertFalse(record.isCurrentLocationKnown());
     }
 
-    // We create three parquet file, each having one record. (two different partitions)
+    // We create three base file, each having one record. (two different partitions)
     String fileId1 = testTable.addCommit("001").getFileIdWithInserts("2016/01/31", record1);
     String fileId2 = testTable.addCommit("002").getFileIdWithInserts("2016/01/31", record2);
     String fileId3 = testTable.addCommit("003").getFileIdWithInserts("2015/01/31", record4);
@@ -385,7 +385,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
       assertTrue(!record.isPresent());
     }
 
-    // We create three parquet file, each having one record. (two different partitions)
+    // We create three base file, each having one record. (two different partitions)
     String fileId1 = testTable.addCommit("001").getFileIdWithInserts("2016/01/31", record1);
     String fileId2 = testTable.addCommit("002").getFileIdWithInserts("2016/01/31", record2);
     String fileId3 = testTable.addCommit("003").getFileIdWithInserts("2015/01/31", record4);
@@ -433,7 +433,7 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     String recordStr2 = "{\"_row_key\":\"2eb5b87b-1feu-4edd-87b4-6ec96dc405a0\","
         + "\"time\":\"2016-01-31T03:20:41.415Z\",\"number\":100}";
 
-    // We write record1 to a parquet file, using a bloom filter having both records
+    // We write record1 to a base file, using a bloom filter having both records
     RawTripTestPayload rowChange1 = new RawTripTestPayload(recordStr1);
     HoodieRecord record1 = new HoodieRecord(new HoodieKey(rowChange1.getRowKey(), rowChange1.getPartitionPath()), rowChange1);
     RawTripTestPayload rowChange2 = new RawTripTestPayload(recordStr2);
