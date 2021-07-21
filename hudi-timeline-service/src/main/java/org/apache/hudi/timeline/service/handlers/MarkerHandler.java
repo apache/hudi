@@ -210,6 +210,7 @@ public class MarkerHandler extends Handler {
    */
   public Boolean deleteMarkers(String markerDir) {
     Path markerDirPath = new Path(markerDir);
+    boolean result = false;
     try {
       if (fileSystem.exists(markerDirPath)) {
         FileStatus[] fileStatuses = fileSystem.listStatus(markerDirPath);
@@ -227,14 +228,15 @@ public class MarkerHandler extends Handler {
           }, actualParallelism);
         }
 
-        boolean result = fileSystem.delete(markerDirPath, true);
+        result = fileSystem.delete(markerDirPath, true);
         LOG.info("Removing marker directory at " + markerDirPath);
-        return result;
       }
+      allMarkersMap.remove(markerDir);
+      fileMarkersMap.remove(markerDir);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
-    return false;
+    return result;
   }
 
   /**
@@ -416,11 +418,11 @@ public class MarkerHandler extends Handler {
           String markerName = future.getMarkerName();
           LOG.info("markerDirPath=" + markerDirPath + " markerName=" + markerName);
           Set<String> allMarkers = allMarkersMap.computeIfAbsent(markerDirPath, k -> new HashSet<>());
-          StringBuilder stringBuilder = fileMarkersMap.computeIfAbsent(markerDirPath, k -> new HashMap<>())
-              .computeIfAbsent(markerFileIndex, k -> new StringBuilder(16384));
           boolean exists = allMarkers.contains(markerName);
           if (!exists) {
             allMarkers.add(markerName);
+            StringBuilder stringBuilder = fileMarkersMap.computeIfAbsent(markerDirPath, k -> new HashMap<>())
+                .computeIfAbsent(markerFileIndex, k -> new StringBuilder(16384));
             stringBuilder.append(markerName);
             stringBuilder.append('\n');
             updatedMarkerDirPaths.add(markerDirPath);
