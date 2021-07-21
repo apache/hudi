@@ -87,9 +87,9 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.marker.DirectMarkerFiles;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.SparkWriteHelper;
+import org.apache.hudi.table.marker.MarkerFilesFactory;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
@@ -2220,7 +2220,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
             path -> path.toString().contains(HoodieTableMetaClient.MARKER_EXTN)))
         .limit(1).map(status -> status.getPath().getParent().toString()).collect(Collectors.toList()).get(0);
 
-    Option<Path> markerFilePath = new DirectMarkerFiles(fs, basePath, metaClient.getMarkerFolderPath(instantTime), instantTime)
+    Option<Path> markerFilePath = MarkerFilesFactory.get(
+        cfg.getMarkersIOMode(), getHoodieTable(metaClient, cfg), instantTime)
         .create(partitionPath,
             FSUtils.makeDataFileName(instantTime, "1-0-1", UUID.randomUUID().toString()),
             IOType.MERGE);

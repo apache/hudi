@@ -231,7 +231,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> MARKERS_IO_MODE = ConfigProperty
       .key("hoodie.markers.io.mode")
-      .defaultValue(MarkerIOMode.DIRECT.toString())
+      .defaultValue(MarkerIOMode.TIMELINE_BASED.toString())
       .sinceVersion(VERSION_0_9_0)
       .withDocumentation("Marker IO mode to use.  Two modes are supported: "
           + "- DIRECT: individual marker file corresponding to each data file is directly "

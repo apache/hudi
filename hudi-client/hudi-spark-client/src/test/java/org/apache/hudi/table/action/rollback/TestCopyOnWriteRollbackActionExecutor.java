@@ -27,7 +27,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.marker.DirectMarkerFiles;
+import org.apache.hudi.table.marker.MarkerFilesFactory;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -213,6 +214,6 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
           String.format("%s:%s/%s", this.fs.getScheme(), basePath, rollbackMetadata.get(DEFAULT_SECOND_PARTITION_PATH).getSuccessDeleteFiles().get(0)));
     }
 
-    assertFalse(new DirectMarkerFiles(table, commitInstant.getTimestamp()).doesMarkerDirExist());
+    assertFalse(MarkerFilesFactory.get(cfg.getMarkersIOMode(), table, commitInstant.getTimestamp()).doesMarkerDirExist());
   }
 }

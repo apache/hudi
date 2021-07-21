@@ -1493,9 +1493,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertFalse(fileIds.contains(fileId3));
   }
 
-  private void invokeMarkerCreation(String markerDirPath, String markerName) {
+  private void invokeMarkerCreation(String markerDirPath, String markerName, boolean expectedResult) {
     long startTime = System.currentTimeMillis();
-    assertTrue(fsView.createMarker(markerDirPath, markerName));
+    assertEquals(expectedResult, fsView.createMarker(markerDirPath, markerName));
     LOG.info("Create marker time=" + (System.currentTimeMillis() - startTime) + "ms");
   }
 
@@ -1520,10 +1520,10 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
       // Create markers
       for (String marker : markers) {
-        invokeMarkerCreation(markerDirPath, marker);
+        invokeMarkerCreation(markerDirPath, marker, true);
       }
       // duplicate entry
-      invokeMarkerCreation(markerDirPath, markers.get(0));
+      invokeMarkerCreation(markerDirPath, markers.get(0), false);
 
       assertTrue(fsView.doesMarkerDirExist(markerDirPath));
       assertEquals(3, fsView.getAllMarkerFilePaths(markerDirPath).size());

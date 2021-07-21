@@ -128,9 +128,9 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     HoodieInstant commitInstant = table.getPendingCommitTimeline().lastInstant().get();
 
     // delete one of the marker files in 2nd commit if need be.
-    MarkerFiles directMarkerFiles =
+    MarkerFiles markerFiles =
         MarkerFilesFactory.get(getConfig().getMarkersIOMode(), table, commitInstant.getTimestamp());
-    List<String> markerPaths = new ArrayList<>(directMarkerFiles.allMarkerFilePaths());
+    List<String> markerPaths = new ArrayList<>(markerFiles.allMarkerFilePaths());
     if (deletePartialMarkerFiles) {
       String toDeleteMarkerFile = markerPaths.get(0);
       table.getMetaClient().getFs().delete(new Path(table.getMetaClient().getTempFolderPath() + "/" + commitInstant.getTimestamp() + "/" + toDeleteMarkerFile));
