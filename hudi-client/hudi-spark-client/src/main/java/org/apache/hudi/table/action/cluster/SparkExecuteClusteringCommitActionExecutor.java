@@ -206,6 +206,8 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
               .withReverseReader(config.getCompactionReverseLogReadEnabled())
               .withBufferSize(config.getMaxDFSStreamBufferSize())
               .withSpillableMapBasePath(config.getSpillableMapBasePath())
+              .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
+              .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
               .build();
 
           recordIterators.add(HoodieFileSliceReader.getFileSliceReader(baseFileReader, scanner, readerSchema,
