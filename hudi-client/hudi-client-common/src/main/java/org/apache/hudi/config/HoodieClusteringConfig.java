@@ -159,6 +159,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withClusteringSkipPartitionsFromLatest(int clusteringSkipPartitionsFromLatest) {
+      clusteringConfig.setValue(CLUSTERING_SKIP_PARTITIONS_FROM_LATEST, String.valueOf(clusteringSkipPartitionsFromLatest));
+      return this;
+    }
+
     public Builder withClusteringPlanSmallFileLimit(long clusteringSmallFileLimit) {
       clusteringConfig.setValue(CLUSTERING_PLAN_SMALL_FILE_LIMIT, String.valueOf(clusteringSmallFileLimit));
       return this;
