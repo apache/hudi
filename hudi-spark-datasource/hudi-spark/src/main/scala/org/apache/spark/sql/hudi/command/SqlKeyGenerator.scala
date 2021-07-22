@@ -22,9 +22,10 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.keygen.{ComplexKeyGenerator, KeyGenUtils}
+import org.apache.hudi.keygen.{BaseKeyGenerator, ComplexKeyGenerator, KeyGenUtils, SparkKeyGeneratorInterface}
+import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{StructType, TimestampType}
-import org.joda.time.format.DateTimeFormat
+import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 
 /**
  * A complex key generator for sql command which do some process for the
@@ -62,8 +63,15 @@ class SqlKeyGenerator(props: TypedProperties) extends ComplexKeyGenerator(props)
     }
   }
 
-  override def getPartitionPath(record: GenericRecord) = {
-    val partitionPath = super.getPartitionPath(record)
+  override def getRecordKey(row: Row): String = {
+    if (originKeyGen.isDefined && originKeyGen.get.isInstanceOf[SparkKeyGeneratorInterface]) {
+      originKeyGen.get.asInstanceOf[SparkKeyGeneratorInterface].getRecordKey(row)
+    } else {
+      super.getRecordKey(row)
+    }
+  }
+
+  private def convertPartitionPathToSqlType(partitionPath: String, rowType: Boolean): String = {
     if (partitionSchema.isDefined) {
       // we can split the partitionPath here because we enable the URL_ENCODE_PARTITIONING_OPT
       // by default for sql.
@@ -82,9 +90,13 @@ class SqlKeyGenerator(props: TypedProperties) extends ComplexKeyGenerator(props)
 
             partitionField.dataType match {
               case TimestampType =>
-                val timeMs = MILLISECONDS.convert(_partitionValue.toLong, MICROSECONDS)
+                val timeMs = if (rowType) { // In RowType, the partitionPathValue is the time format string, convert to millis
+                  SqlKeyGenerator.sqlTimestampFormat.parseMillis(_partitionValue)
+                } else {
+                  MILLISECONDS.convert(_partitionValue.toLong, MICROSECONDS)
+                }
                 val timestampFormat = PartitionPathEncodeUtils.escapePathName(
-                  SqlKeyGenerator.timestampTimeFormat.print(timeMs))
+                    SqlKeyGenerator.timestampTimeFormat.print(timeMs))
                 if (isHiveStyle) s"$hiveStylePrefix$timestampFormat" else timestampFormat
               case _ => partitionValue
             }
@@ -92,10 +104,21 @@ class SqlKeyGenerator(props: TypedProperties) extends ComplexKeyGenerator(props)
       }
     } else partitionPath
   }
+
+  override def getPartitionPath(record: GenericRecord) = {
+    val partitionPath = super.getPartitionPath(record)
+    convertPartitionPathToSqlType(partitionPath, false)
+  }
+
+  override def getPartitionPath(row: Row): String = {
+    val partitionPath = super.getPartitionPath(row)
+    convertPartitionPathToSqlType(partitionPath, true)
+  }
 }
 
 object SqlKeyGenerator {
   val PARTITION_SCHEMA = "hoodie.sql.partition.schema"
   val ORIGIN_KEYGEN_CLASS = "hoodie.sql.origin.keygen.class"
   private val timestampTimeFormat = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss")
+  private val sqlTimestampFormat = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss.S")
 }
