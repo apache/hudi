@@ -34,6 +34,9 @@ import java.sql.Statement;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * This class offers DDL executor backed by the jdbc This class preserves the old useJDBC = true way of doing things.
+ */
 public class JDBCExecutor extends QueryBasedDDLExecutor {
   private static final Logger LOG = LogManager.getLogger(QueryBasedDDLExecutor.class);
   private final HiveSyncConfig config;

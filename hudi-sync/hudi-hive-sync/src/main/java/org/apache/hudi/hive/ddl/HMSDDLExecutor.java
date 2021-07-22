@@ -52,6 +52,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * DDLExecutor impl based on HMS which use HMS apis directly for all DDL tasks
+ */
 public class HMSDDLExecutor implements DDLExecutor {
   private static final Logger LOG = LogManager.getLogger(HMSDDLExecutor.class);
   private final HiveSyncConfig syncConfig;

@@ -45,6 +45,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * This class offers DDL executor backed by the hive.ql Driver This class preserves the old useJDBC = false way of doing things.
+ */
 public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   private static final Logger LOG = LogManager.getLogger(HiveQueryDDLExecutor.class);
   private final HiveSyncConfig config;
