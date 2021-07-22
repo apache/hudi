@@ -367,6 +367,7 @@
   <li><a href="#syncing-to-hive">Syncing to Hive</a></li>
   <li><a href="#deletes">Deletes</a></li>
   <li><a href="#optimized-dfs-access">Optimized DFS Access</a></li>
+  <li><a href="#schema-evolution">Schema Evolution</a></li>
 </ul>
           </nav>
         </aside>
@@ -875,6 +876,263 @@ such that sufficient number of inserts are grouped into the same file group, res
 once created cannot be deleted, but simply expanded as explained before.</li>
   <li>For workloads with heavy updates, the <a href="/docs/concepts.html#merge-on-read-table">merge-on-read table</a> provides a nice mechanism for ingesting quickly into smaller files and then later merging them into larger base files via compaction.</li>
 </ul>
+
+<h2 id="schema-evolution">Schema Evolution</h2>
+
+<p>Schema evolution is a very important aspect of data management. 
+Hudi supports common schema evolution scenarios, such as adding a nullable field or promoting a datatype of a field, out-of-the-box.
+Furthermore, the evolved schema is queryable across engines, such as Presto, Hive and Spark SQL.
+The following table presents a summary of the types of schema changes compatible with different Hudi table types.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Schema Change</th>
+      <th>COW</th>
+      <th>MOR</th>
+      <th>Remarks</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Add a new nullable column at root level at the end</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td><code class="highlighter-rouge">Yes</code> means that a write with evolved schema succeeds and a read following the write succeeds to read entire dataset.</td>
+    </tr>
+    <tr>
+      <td>Add a new nullable column to inner struct (at the end)</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>Add a new complex type field with default (map and array)</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>Add a new nullable column and change the ordering of fields</td>
+      <td>No</td>
+      <td>No</td>
+      <td>Write succeeds but read fails if the write with evolved schema updated only some of the base files but not all. Currently, Hudi does not maintain a schema registry with history of changes across base files. Nevertheless, if the upsert touched all base files then the read will succeed.</td>
+    </tr>
+    <tr>
+      <td>Add a custom nullable Hudi meta column, e.g. <code class="highlighter-rouge">_hoodie_meta_col</code></td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>Promote datatype from <code class="highlighter-rouge">int</code> to <code class="highlighter-rouge">long</code> for a field at root level</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td>For other types, Hudi supports promotion as specified in <a href="http://avro.apache.org/docs/current/spec.html#Schema+Resolution">Avro schema resolution</a>.</td>
+    </tr>
+    <tr>
+      <td>Promote datatype from <code class="highlighter-rouge">int</code> to <code class="highlighter-rouge">long</code> for a nested field</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>Promote datatype from <code class="highlighter-rouge">int</code> to <code class="highlighter-rouge">long</code> for a complex type (value of map or array)</td>
+      <td>Yes</td>
+      <td>Yes</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>Add a new non-nullable column at root level at the end</td>
+      <td>No</td>
+      <td>No</td>
+      <td>In case of MOR table with Spark data source, write succeeds but read fails. As a <strong>workaround</strong>, you can make the field nullable.</td>
+    </tr>
+    <tr>
+      <td>Add a new non-nullable column to inner struct (at the end)</td>
+      <td>No</td>
+      <td>No</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>Change datatype from <code class="highlighter-rouge">long</code> to <code class="highlighter-rouge">int</code> for a nested field</td>
+      <td>No</td>
+      <td>No</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>Change datatype from <code class="highlighter-rouge">long</code> to <code class="highlighter-rouge">int</code> for a complex type (value of map or array)</td>
+      <td>No</td>
+      <td>No</td>
+      <td> </td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Let us walk through an example to demonstrate the schema evolution support in Hudi. 
+In the below example, we are going to add a new string field and change the datatype of a field from int to long.</p>
+
+<div class="language-java highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nc">Welcome</span> <span class="n">to</span>
+    <span class="n">____</span>              <span class="n">__</span>
+    <span class="o">/</span> <span class="n">__</span><span class="o">/</span><span class="n">__</span>  <span class="n">___</span> <span class="n">_____</span><span class="o">/</span> <span class="o">/</span><span class="n">__</span>
+    <span class="n">_</span><span class="err">\</span> <span class="err">\</span><span class="o">/</span> <span class="n">_</span> <span class="err">\</span><span class="o">/</span> <span class="n">_</span> <span class="err">`</span><span class="o">/</span> <span class="n">__</span><span class="o">/</span>  <span class="err">'</span><span class="n">_</span><span class="o">/</span>
+    <span class="o">/</span><span class="n">___</span><span class="o">/</span> <span class="o">.</span><span class="na">__</span><span class="o">/</span><span class="err">\</span><span class="n">_</span><span class="o">,</span><span class="n">_</span><span class="o">/</span><span class="n">_</span><span class="o">/</span> <span class="o">/</span><span class="n">_</span><span class="o">/</span><span class="err">\</span><span class="n">_</span><span class="err">\</span>   <span class="n">version</span> <span class="mf">3.1</span><span class="o">.</span><span class="mi">2</span>
+    <span class="o">/</span><span class="n">_</span><span class="o">/</span>
+
+    <span class="nc">Using</span> <span class="nc">Scala</span> <span class="n">version</span> <span class="mf">2.12</span><span class="o">.</span><span class="mi">10</span> <span class="o">(</span><span class="nc">OpenJDK</span> <span class="mi">64</span><span class="o">-</span><span class="nc">Bit</span> <span class="nc">Server</span> <span class="no">VM</span><span class="o">,</span> <span class="nc">Java</span> <span class="mf">1.8</span><span class="o">.</span><span class="mi">0_292</span><span class="o">)</span>
+    <span class="nc">Type</span> <span class="n">in</span> <span class="n">expressions</span> <span class="n">to</span> <span class="n">have</span> <span class="n">them</span> <span class="n">evaluated</span><span class="o">.</span>
+    <span class="nc">Type</span> <span class="o">:</span><span class="n">help</span> <span class="k">for</span> <span class="n">more</span> <span class="n">information</span><span class="o">.</span>
+
+<span class="n">scala</span><span class="o">&gt;</span> <span class="kn">import</span> <span class="nn">org.apache.hudi.QuickstartUtils._</span>
+<span class="kn">import</span> <span class="nn">org.apache.hudi.QuickstartUtils._</span>
+
+<span class="n">scala</span><span class="o">&gt;</span> <span class="kn">import</span> <span class="nn">scala.collection.JavaConversions._</span>
+<span class="kn">import</span> <span class="nn">scala.collection.JavaConversions._</span>
+
+<span class="n">scala</span><span class="o">&gt;</span> <span class="kn">import</span> <span class="nn">org.apache.spark.sql.SaveMode._</span>
+<span class="kn">import</span> <span class="nn">org.apache.spark.sql.SaveMode._</span>
+
+<span class="n">scala</span><span class="o">&gt;</span> <span class="kn">import</span> <span class="nn">org.apache.hudi.DataSourceReadOptions._</span>
+<span class="kn">import</span> <span class="nn">org.apache.hudi.DataSourceReadOptions._</span>
+
+<span class="n">scala</span><span class="o">&gt;</span> <span class="kn">import</span> <span class="nn">org.apache.hudi.DataSourceWriteOptions._</span>
+<span class="kn">import</span> <span class="nn">org.apache.hudi.DataSourceWriteOptions._</span>
+
+<span class="n">scala</span><span class="o">&gt;</span> <span class="kn">import</span> <span class="nn">org.apache.hudi.config.HoodieWriteConfig._</span>
+<span class="kn">import</span> <span class="nn">org.apache.hudi.config.HoodieWriteConfig._</span>
+
+<span class="n">scala</span><span class="o">&gt;</span> <span class="kn">import</span> <span class="nn">org.apache.spark.sql.types._</span>
+<span class="kn">import</span> <span class="nn">org.apache.spark.sql.types._</span>
+
+<span class="n">scala</span><span class="o">&gt;</span> <span class="kn">import</span> <span class="nn">org.apache.spark.sql.Row</span>
+<span class="kn">import</span> <span class="nn">org.apache.spark.sql.Row</span>
+
+<span class="n">scala</span><span class="o">&gt;</span> <span class="n">val</span> <span class="n">tableName</span> <span class="o">=</span> <span class="s">"hudi_trips_cow"</span>
+    <span class="nl">tableName:</span> <span class="nc">String</span> <span class="o">=</span> <span class="n">hudi_trips_cow</span>
+<span class="n">scala</span><span class="o">&gt;</span> <span class="n">val</span> <span class="n">basePath</span> <span class="o">=</span> <span class="s">"file:///tmp/hudi_trips_cow"</span>
+    <span class="nl">basePath:</span> <span class="nc">String</span> <span class="o">=</span> <span class="nl">file:</span><span class="c1">///tmp/hudi_trips_cow</span>
+<span class="n">scala</span><span class="o">&gt;</span> <span class="n">val</span> <span class="n">schema</span> <span class="o">=</span> <span class="nc">StructType</span><span class="o">(</span> <span class="nc">Array</span><span class="o">(</span>
+    <span class="o">|</span> <span class="nc">StructField</span><span class="o">(</span><span class="s">"rowId"</span><span class="o">,</span> <span class="nc">StringType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span>
+    <span class="o">|</span> <span class="nc">StructField</span><span class="o">(</span><span class="s">"partitionId"</span><span class="o">,</span> <span class="nc">StringType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span>
+    <span class="o">|</span> <span class="nc">StructField</span><span class="o">(</span><span class="s">"preComb"</span><span class="o">,</span> <span class="nc">LongType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span>
+    <span class="o">|</span> <span class="nc">StructField</span><span class="o">(</span><span class="s">"name"</span><span class="o">,</span> <span class="nc">StringType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span>
+    <span class="o">|</span> <span class="nc">StructField</span><span class="o">(</span><span class="s">"versionId"</span><span class="o">,</span> <span class="nc">StringType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span>
+    <span class="o">|</span> <span class="nc">StructField</span><span class="o">(</span><span class="s">"intToLong"</span><span class="o">,</span> <span class="nc">IntegerType</span><span class="o">,</span><span class="kc">true</span><span class="o">)</span>
+    <span class="o">|</span> <span class="o">))</span>
+    <span class="nl">schema:</span> <span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">spark</span><span class="o">.</span><span class="na">sql</span><span class="o">.</span><span class="na">types</span><span class="o">.</span><span class="na">StructType</span> <span class="o">=</span> <span class="nc">StructType</span><span class="o">(</span><span class="nc">StructField</span><span class="o">(</span><span class="n">rowId</span><span class="o">,</span><span class="nc">StringType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span> <span class="nc">StructField</span><span class="o">(</span><span class="n">partitionId</span><span class="o">,</span><span class="nc">StringType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span> <span class="nc">StructField</span><span class="o">(</span><span class="n">preComb</span><span class="o">,</span><span class="nc">LongType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span> <span class="nc">StructField</span><span class="o">(</span><span class="n">name</span><span class="o">,</span><span class="nc">StringType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span> <span class="nc">StructField</span><span class="o">(</span><span class="n">versionId</span><span class="o">,</span><span class="nc">StringType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span> <span class="nc">StructField</span><span class="o">(</span><span class="n">intToLong</span><span class="o">,</span><span class="nc">IntegerType</span><span class="o">,</span><span class="kc">true</span><span class="o">))</span>
+    
+<span class="n">scala</span><span class="o">&gt;</span> <span class="n">val</span> <span class="n">data1</span> <span class="o">=</span> <span class="nc">Seq</span><span class="o">(</span><span class="nc">Row</span><span class="o">(</span><span class="s">"row_1"</span><span class="o">,</span> <span class="s">"part_0"</span><span class="o">,</span> <span class="mi">0L</span><span class="o">,</span> <span class="s">"bob"</span><span class="o">,</span> <span class="s">"v_0"</span><span class="o">,</span> <span class="mi">0</span><span class="o">),</span>
+    <span class="o">|</span>                <span class="nc">Row</span><span class="o">(</span><span class="s">"row_2"</span><span class="o">,</span> <span class="s">"part_0"</span><span class="o">,</span> <span class="mi">0L</span><span class="o">,</span> <span class="s">"john"</span><span class="o">,</span> <span class="s">"v_0"</span><span class="o">,</span> <span class="mi">0</span><span class="o">),</span>
+    <span class="o">|</span>                <span class="nc">Row</span><span class="o">(</span><span class="s">"row_3"</span><span class="o">,</span> <span class="s">"part_0"</span><span class="o">,</span> <span class="mi">0L</span><span class="o">,</span> <span class="s">"tom"</span><span class="o">,</span> <span class="s">"v_0"</span><span class="o">,</span> <span class="mi">0</span><span class="o">))</span>
+    <span class="nl">data1:</span> <span class="nc">Seq</span><span class="o">[</span><span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">spark</span><span class="o">.</span><span class="na">sql</span><span class="o">.</span><span class="na">Row</span><span class="o">]</span> <span class="o">=</span> <span class="nc">List</span><span class="o">([</span><span class="n">row_1</span><span class="o">,</span><span class="n">part_0</span><span class="o">,</span><span class="mi">0</span><span class="o">,</span><span class="n">bob</span><span class="o">,</span><span class="n">v_0</span><span class="o">,</span><span class="mi">0</span><span class="o">],</span> <span class="o">[</span><span class="n">row_2</span><span class="o">,</span><span class="n">part_0</span><span class="o">,</span><span class="mi">0</span><span class="o">,</span><span class="n">john</span><span class="o">,</span><span class="n">v_0</span><span class="o">,</span><span class="mi">0</span><span class="o">],</span> <span class="o">[</span><span class="n">row_3</span><span class="o">,</span><span class="n">part_0</span><span class="o">,</span><span class="mi">0</span><span class="o">,</span><span class="n">tom</span><span class="o">,</span><span class="n">v_0</span><span class="o">,</span><span class="mi">0</span><span class="o">])</span>
+
+<span class="n">scala</span><span class="o">&gt;</span> <span class="kt">var</span> <span class="n">dfFromData1</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="na">createDataFrame</span><span class="o">(</span><span class="n">data1</span><span class="o">,</span> <span class="n">schema</span><span class="o">)</span>
+<span class="n">scala</span><span class="o">&gt;</span> <span class="n">dfFromData1</span><span class="o">.</span><span class="na">write</span><span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">).</span>
+    <span class="o">|</span>   <span class="n">options</span><span class="o">(</span><span class="n">getQuickstartWriteConfigs</span><span class="o">).</span>
+    <span class="o">|</span>   <span class="n">option</span><span class="o">(</span><span class="no">PRECOMBINE_FIELD_OPT_KEY</span><span class="o">.</span><span class="na">key</span><span class="o">,</span> <span class="s">"preComb"</span><span class="o">).</span>
+    <span class="o">|</span>   <span class="n">option</span><span class="o">(</span><span class="no">RECORDKEY_FIELD_OPT_KEY</span><span class="o">.</span><span class="na">key</span><span class="o">,</span> <span class="s">"rowId"</span><span class="o">).</span>
+    <span class="o">|</span>   <span class="n">option</span><span class="o">(</span><span class="no">PARTITIONPATH_FIELD_OPT_KEY</span><span class="o">.</span><span class="na">key</span><span class="o">,</span> <span class="s">"partitionId"</span><span class="o">).</span>
+    <span class="o">|</span>   <span class="n">option</span><span class="o">(</span><span class="s">"hoodie.index.type"</span><span class="o">,</span><span class="s">"SIMPLE"</span><span class="o">).</span>
+    <span class="o">|</span>   <span class="n">option</span><span class="o">(</span><span class="no">TABLE_NAME</span><span class="o">.</span><span class="na">key</span><span class="o">,</span> <span class="n">tableName</span><span class="o">).</span>
+    <span class="o">|</span>   <span class="n">mode</span><span class="o">(</span><span class="nc">Overwrite</span><span class="o">).</span>
+    <span class="o">|</span>   <span class="n">save</span><span class="o">(</span><span class="n">basePath</span><span class="o">)</span>
+
+<span class="n">scala</span><span class="o">&gt;</span> <span class="kt">var</span> <span class="n">tripsSnapshotDF1</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="na">read</span><span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">).</span><span class="na">load</span><span class="o">(</span><span class="n">basePath</span> <span class="o">+</span> <span class="s">"/*/*"</span><span class="o">)</span>
+    <span class="nl">tripsSnapshotDF1:</span> <span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">spark</span><span class="o">.</span><span class="na">sql</span><span class="o">.</span><span class="na">DataFrame</span> <span class="o">=</span> <span class="o">[</span><span class="nl">_hoodie_commit_time:</span> <span class="n">string</span><span class="o">,</span> <span class="nl">_hoodie_commit_seqno:</span> <span class="n">string</span> <span class="o">...</span> <span class="mi">9</span> <span class="n">more</span> <span class="n">fields</span><span class="o">]</span>
+
+<span class="n">scala</span><span class="o">&gt;</span> <span class="n">tripsSnapshotDF1</span><span class="o">.</span><span class="na">createOrReplaceTempView</span><span class="o">(</span><span class="s">"hudi_trips_snapshot"</span><span class="o">)</span>
+
+<span class="n">scala</span><span class="o">&gt;</span> <span class="n">spark</span><span class="o">.</span><span class="na">sql</span><span class="o">(</span><span class="s">"desc hudi_trips_snapshot"</span><span class="o">).</span><span class="na">show</span><span class="o">()</span>
+    <span class="o">+--------------------+---------+-------+</span>
+    <span class="o">|</span>            <span class="n">col_name</span><span class="o">|</span><span class="n">data_type</span><span class="o">|</span><span class="n">comment</span><span class="o">|</span>
+    <span class="o">+--------------------+---------+-------+</span>
+    <span class="o">|</span> <span class="n">_hoodie_commit_time</span><span class="o">|</span>   <span class="n">string</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span><span class="n">_hoodie_commit_seqno</span><span class="o">|</span>   <span class="n">string</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span>  <span class="n">_hoodie_record_key</span><span class="o">|</span>   <span class="n">string</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span><span class="n">_hoodie_partition</span><span class="o">...|</span>   <span class="n">string</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span>   <span class="n">_hoodie_file_name</span><span class="o">|</span>   <span class="n">string</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span>               <span class="n">rowId</span><span class="o">|</span>   <span class="n">string</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span>         <span class="n">partitionId</span><span class="o">|</span>   <span class="n">string</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span>             <span class="n">preComb</span><span class="o">|</span>   <span class="n">bigint</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span>                <span class="n">name</span><span class="o">|</span>   <span class="n">string</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span>           <span class="n">versionId</span><span class="o">|</span>   <span class="n">string</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span>           <span class="n">intToLong</span><span class="o">|</span>      <span class="kt">int</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">+--------------------+---------+-------+</span>
+    
+<span class="n">scala</span><span class="o">&gt;</span> <span class="n">spark</span><span class="o">.</span><span class="na">sql</span><span class="o">(</span><span class="s">"select rowId, partitionId, preComb, name, versionId, intToLong from hudi_trips_snapshot"</span><span class="o">).</span><span class="na">show</span><span class="o">()</span>
+    <span class="o">+-----+-----------+-------+----+---------+---------+</span>
+    <span class="o">|</span><span class="n">rowId</span><span class="o">|</span><span class="n">partitionId</span><span class="o">|</span><span class="n">preComb</span><span class="o">|</span><span class="n">name</span><span class="o">|</span><span class="n">versionId</span><span class="o">|</span><span class="n">intToLong</span><span class="o">|</span>
+    <span class="o">+-----+-----------+-------+----+---------+---------+</span>
+    <span class="o">|</span><span class="n">row_3</span><span class="o">|</span>     <span class="n">part_0</span><span class="o">|</span>      <span class="mi">0</span><span class="o">|</span> <span class="n">tom</span><span class="o">|</span>      <span class="n">v_0</span><span class="o">|</span>        <span class="mi">0</span><span class="o">|</span>
+    <span class="o">|</span><span class="n">row_2</span><span class="o">|</span>     <span class="n">part_0</span><span class="o">|</span>      <span class="mi">0</span><span class="o">|</span><span class="n">john</span><span class="o">|</span>      <span class="n">v_0</span><span class="o">|</span>        <span class="mi">0</span><span class="o">|</span>
+    <span class="o">|</span><span class="n">row_1</span><span class="o">|</span>     <span class="n">part_0</span><span class="o">|</span>      <span class="mi">0</span><span class="o">|</span> <span class="n">bob</span><span class="o">|</span>      <span class="n">v_0</span><span class="o">|</span>        <span class="mi">0</span><span class="o">|</span>
+    <span class="o">+-----+-----------+-------+----+---------+---------+</span>
+
+<span class="c1">// In the new schema, we are going to add a String field and </span>
+<span class="c1">// change the datatype `intToLong` field from  int to long.</span>
+<span class="n">scala</span><span class="o">&gt;</span> <span class="n">val</span> <span class="n">newSchema</span> <span class="o">=</span> <span class="nc">StructType</span><span class="o">(</span> <span class="nc">Array</span><span class="o">(</span>
+    <span class="o">|</span> <span class="nc">StructField</span><span class="o">(</span><span class="s">"rowId"</span><span class="o">,</span> <span class="nc">StringType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span>
+    <span class="o">|</span> <span class="nc">StructField</span><span class="o">(</span><span class="s">"partitionId"</span><span class="o">,</span> <span class="nc">StringType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span>
+    <span class="o">|</span> <span class="nc">StructField</span><span class="o">(</span><span class="s">"preComb"</span><span class="o">,</span> <span class="nc">LongType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span>
+    <span class="o">|</span> <span class="nc">StructField</span><span class="o">(</span><span class="s">"name"</span><span class="o">,</span> <span class="nc">StringType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span>
+    <span class="o">|</span> <span class="nc">StructField</span><span class="o">(</span><span class="s">"versionId"</span><span class="o">,</span> <span class="nc">StringType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span>
+    <span class="o">|</span> <span class="nc">StructField</span><span class="o">(</span><span class="s">"intToLong"</span><span class="o">,</span> <span class="nc">LongType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span>
+    <span class="o">|</span> <span class="nc">StructField</span><span class="o">(</span><span class="s">"newField"</span><span class="o">,</span> <span class="nc">StringType</span><span class="o">,</span><span class="kc">true</span><span class="o">)</span>
+    <span class="o">|</span> <span class="o">))</span>
+    <span class="nl">newSchema:</span> <span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">spark</span><span class="o">.</span><span class="na">sql</span><span class="o">.</span><span class="na">types</span><span class="o">.</span><span class="na">StructType</span> <span class="o">=</span> <span class="nc">StructType</span><span class="o">(</span><span class="nc">StructField</span><span class="o">(</span><span class="n">rowId</span><span class="o">,</span><span class="nc">StringType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span> <span class="nc">StructField</span><span class="o">(</span><span class="n">partitionId</span><span class="o">,</span><span class="nc">StringType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span> <span class="nc">StructField</span><span class="o">(</span><span class="n">preComb</span><span class="o">,</span><span class="nc">LongType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span> <span class="nc">StructField</span><span class="o">(</span><span class="n">name</span><span class="o">,</span><span class="nc">StringType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span> <span class="nc">StructField</span><span class="o">(</span><span class="n">versionId</span><span class="o">,</span><span class="nc">StringType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span> <span class="nc">StructField</span><span class="o">(</span><span class="n">intToLong</span><span class="o">,</span><span class="nc">LongType</span><span class="o">,</span><span class="kc">true</span><span class="o">),</span> <span class="nc">StructField</span><span class="o">(</span><span class="n">newField</span><span class="o">,</span><span class="nc">StringType</span><span class="o">,</span><span class="kc">true</span><span class="o">))</span>
+
+<span class="n">scala</span><span class="o">&gt;</span> <span class="n">val</span> <span class="n">data2</span> <span class="o">=</span> <span class="nc">Seq</span><span class="o">(</span><span class="nc">Row</span><span class="o">(</span><span class="s">"row_2"</span><span class="o">,</span> <span class="s">"part_0"</span><span class="o">,</span> <span class="mi">5L</span><span class="o">,</span> <span class="s">"john"</span><span class="o">,</span> <span class="s">"v_3"</span><span class="o">,</span> <span class="mi">3L</span><span class="o">,</span> <span class="s">"newField_1"</span><span class="o">),</span>
+    <span class="o">|</span>                <span class="nc">Row</span><span class="o">(</span><span class="s">"row_5"</span><span class="o">,</span> <span class="s">"part_0"</span><span class="o">,</span> <span class="mi">5L</span><span class="o">,</span> <span class="s">"maroon"</span><span class="o">,</span> <span class="s">"v_2"</span><span class="o">,</span> <span class="mi">2L</span><span class="o">,</span> <span class="s">"newField_1"</span><span class="o">),</span>
+    <span class="o">|</span>                <span class="nc">Row</span><span class="o">(</span><span class="s">"row_9"</span><span class="o">,</span> <span class="s">"part_0"</span><span class="o">,</span> <span class="mi">5L</span><span class="o">,</span> <span class="s">"michael"</span><span class="o">,</span> <span class="s">"v_2"</span><span class="o">,</span> <span class="mi">2L</span><span class="o">,</span> <span class="s">"newField_1"</span><span class="o">))</span>
+    <span class="nl">data2:</span> <span class="nc">Seq</span><span class="o">[</span><span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">spark</span><span class="o">.</span><span class="na">sql</span><span class="o">.</span><span class="na">Row</span><span class="o">]</span> <span class="o">=</span> <span class="nc">List</span><span class="o">([</span><span class="n">row_2</span><span class="o">,</span><span class="n">part_0</span><span class="o">,</span><span class="mi">5</span><span class="o">,</span><span class="n">john</span><span class="o">,</span><span class="n">v_3</span><span class="o">,</span><span class="mi">3</span><span class="o">,</span><span class="n">newField_1</span><span class="o">],</span> <span class="o">[</span><span class="n">row_5</span><span class="o">,</span><span class="n">part_0</span><span class="o">,</span><span class="mi">5</span><span class="o">,</span><span class="n">maroon</span><span class="o">,</span><span class="n">v_2</span><span class="o">,</span><span class="mi">2</span><span class="o">,</span><span class="n">newField_1</span><span class="o">],</span> <span class="o">[</span><span class="n">row_9</span><span class="o">,</span><span class="n">part_0</span><span class="o">,</span><span class="mi">5</span><span class="o">,</span><span class="n">michael</span><span class="o">,</span><span class="n">v_2</span><span class="o">,</span><span class="mi">2</span><span class="o">,</span><span class="n">newField_1</span><span class="o">])</span>
+
+<span class="n">scala</span><span class="o">&gt;</span> <span class="kt">var</span> <span class="n">dfFromData2</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="na">createDataFrame</span><span class="o">(</span><span class="n">data2</span><span class="o">,</span> <span class="n">newSchema</span><span class="o">)</span>
+<span class="n">scala</span><span class="o">&gt;</span> <span class="n">dfFromData2</span><span class="o">.</span><span class="na">write</span><span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">).</span>
+    <span class="o">|</span>   <span class="n">options</span><span class="o">(</span><span class="n">getQuickstartWriteConfigs</span><span class="o">).</span>
+    <span class="o">|</span>   <span class="n">option</span><span class="o">(</span><span class="no">PRECOMBINE_FIELD_OPT_KEY</span><span class="o">.</span><span class="na">key</span><span class="o">,</span> <span class="s">"preComb"</span><span class="o">).</span>
+    <span class="o">|</span>   <span class="n">option</span><span class="o">(</span><span class="no">RECORDKEY_FIELD_OPT_KEY</span><span class="o">.</span><span class="na">key</span><span class="o">,</span> <span class="s">"rowId"</span><span class="o">).</span>
+    <span class="o">|</span>   <span class="n">option</span><span class="o">(</span><span class="no">PARTITIONPATH_FIELD_OPT_KEY</span><span class="o">.</span><span class="na">key</span><span class="o">,</span> <span class="s">"partitionId"</span><span class="o">).</span>
+    <span class="o">|</span>   <span class="n">option</span><span class="o">(</span><span class="s">"hoodie.index.type"</span><span class="o">,</span><span class="s">"SIMPLE"</span><span class="o">).</span>
+    <span class="o">|</span>   <span class="n">option</span><span class="o">(</span><span class="no">TABLE_NAME</span><span class="o">.</span><span class="na">key</span><span class="o">,</span> <span class="n">tableName</span><span class="o">).</span>
+    <span class="o">|</span>   <span class="n">mode</span><span class="o">(</span><span class="nc">Append</span><span class="o">).</span>
+    <span class="o">|</span>   <span class="n">save</span><span class="o">(</span><span class="n">basePath</span><span class="o">)</span>
+
+<span class="n">scala</span><span class="o">&gt;</span> <span class="kt">var</span> <span class="n">tripsSnapshotDF2</span> <span class="o">=</span> <span class="n">spark</span><span class="o">.</span><span class="na">read</span><span class="o">.</span><span class="na">format</span><span class="o">(</span><span class="s">"hudi"</span><span class="o">).</span><span class="na">load</span><span class="o">(</span><span class="n">basePath</span> <span class="o">+</span> <span class="s">"/*/*"</span><span class="o">)</span>
+    <span class="nl">tripsSnapshotDF2:</span> <span class="n">org</span><span class="o">.</span><span class="na">apache</span><span class="o">.</span><span class="na">spark</span><span class="o">.</span><span class="na">sql</span><span class="o">.</span><span class="na">DataFrame</span> <span class="o">=</span> <span class="o">[</span><span class="nl">_hoodie_commit_time:</span> <span class="n">string</span><span class="o">,</span> <span class="nl">_hoodie_commit_seqno:</span> <span class="n">string</span> <span class="o">...</span> <span class="mi">10</span> <span class="n">more</span> <span class="n">fields</span><span class="o">]</span>
+
+<span class="n">scala</span><span class="o">&gt;</span> <span class="n">tripsSnapshotDF2</span><span class="o">.</span><span class="na">createOrReplaceTempView</span><span class="o">(</span><span class="s">"hudi_trips_snapshot"</span><span class="o">)</span>
+
+<span class="n">scala</span><span class="o">&gt;</span> <span class="n">spark</span><span class="o">.</span><span class="na">sql</span><span class="o">(</span><span class="s">"desc hudi_trips_snapshot"</span><span class="o">).</span><span class="na">show</span><span class="o">()</span>
+    <span class="o">+--------------------+---------+-------+</span>
+    <span class="o">|</span>            <span class="n">col_name</span><span class="o">|</span><span class="n">data_type</span><span class="o">|</span><span class="n">comment</span><span class="o">|</span>
+    <span class="o">+--------------------+---------+-------+</span>
+    <span class="o">|</span> <span class="n">_hoodie_commit_time</span><span class="o">|</span>   <span class="n">string</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span><span class="n">_hoodie_commit_seqno</span><span class="o">|</span>   <span class="n">string</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span>  <span class="n">_hoodie_record_key</span><span class="o">|</span>   <span class="n">string</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span><span class="n">_hoodie_partition</span><span class="o">...|</span>   <span class="n">string</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span>   <span class="n">_hoodie_file_name</span><span class="o">|</span>   <span class="n">string</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span>               <span class="n">rowId</span><span class="o">|</span>   <span class="n">string</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span>         <span class="n">partitionId</span><span class="o">|</span>   <span class="n">string</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span>             <span class="n">preComb</span><span class="o">|</span>   <span class="n">bigint</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span>                <span class="n">name</span><span class="o">|</span>   <span class="n">string</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span>           <span class="n">versionId</span><span class="o">|</span>   <span class="n">string</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span>           <span class="n">intToLong</span><span class="o">|</span>   <span class="n">bigint</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span>            <span class="n">newField</span><span class="o">|</span>   <span class="n">string</span><span class="o">|</span>   <span class="kc">null</span><span class="o">|</span>
+    <span class="o">+--------------------+---------+-------+</span>
+
+
+<span class="n">scala</span><span class="o">&gt;</span> <span class="n">spark</span><span class="o">.</span><span class="na">sql</span><span class="o">(</span><span class="s">"select rowId, partitionId, preComb, name, versionId, intToLong, newField from hudi_trips_snapshot"</span><span class="o">).</span><span class="na">show</span><span class="o">()</span>
+    <span class="o">+-----+-----------+-------+-------+---------+---------+----------+</span>
+    <span class="o">|</span><span class="n">rowId</span><span class="o">|</span><span class="n">partitionId</span><span class="o">|</span><span class="n">preComb</span><span class="o">|</span>   <span class="n">name</span><span class="o">|</span><span class="n">versionId</span><span class="o">|</span><span class="n">intToLong</span><span class="o">|</span>  <span class="n">newField</span><span class="o">|</span>
+    <span class="o">+-----+-----------+-------+-------+---------+---------+----------+</span>
+    <span class="o">|</span><span class="n">row_3</span><span class="o">|</span>     <span class="n">part_0</span><span class="o">|</span>      <span class="mi">0</span><span class="o">|</span>    <span class="n">tom</span><span class="o">|</span>      <span class="n">v_0</span><span class="o">|</span>        <span class="mi">0</span><span class="o">|</span>      <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span><span class="n">row_2</span><span class="o">|</span>     <span class="n">part_0</span><span class="o">|</span>      <span class="mi">5</span><span class="o">|</span>   <span class="n">john</span><span class="o">|</span>      <span class="n">v_3</span><span class="o">|</span>        <span class="mi">3</span><span class="o">|</span><span class="n">newField_1</span><span class="o">|</span>
+    <span class="o">|</span><span class="n">row_1</span><span class="o">|</span>     <span class="n">part_0</span><span class="o">|</span>      <span class="mi">0</span><span class="o">|</span>    <span class="n">bob</span><span class="o">|</span>      <span class="n">v_0</span><span class="o">|</span>        <span class="mi">0</span><span class="o">|</span>      <span class="kc">null</span><span class="o">|</span>
+    <span class="o">|</span><span class="n">row_5</span><span class="o">|</span>     <span class="n">part_0</span><span class="o">|</span>      <span class="mi">5</span><span class="o">|</span> <span class="n">maroon</span><span class="o">|</span>      <span class="n">v_2</span><span class="o">|</span>        <span class="mi">2</span><span class="o">|</span><span class="n">newField_1</span><span class="o">|</span>
+    <span class="o">|</span><span class="n">row_9</span><span class="o">|</span>     <span class="n">part_0</span><span class="o">|</span>      <span class="mi">5</span><span class="o">|</span><span class="n">michael</span><span class="o">|</span>      <span class="n">v_2</span><span class="o">|</span>        <span class="mi">2</span><span class="o">|</span><span class="n">newField_1</span><span class="o">|</span>
+    <span class="o">+-----+-----------+-------+-------+---------+---------+----------+</span>
+
+</code></pre></div></div>
 
       </section>
 
