@@ -181,8 +181,7 @@ object HoodieSqlUtils extends SparkAdapterSupport {
   }
 
   /**
-   * Append the SparkSession config and table options to the baseConfig.
-   * We add the "spark" prefix to hoodie's config key.
+   * Append the spark config and table options to the baseConfig.
    */
   def withSparkConf(spark: SparkSession, options: Map[String, String])
                    (baseConfig: Map[String, String]): Map[String, String] = {
