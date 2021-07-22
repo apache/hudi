@@ -27,6 +27,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.MarkerFiles;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -114,9 +115,8 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
 
   @Override
   protected void createMarkerFile(String partitionPath, String dataFileName) {
-    // no need to create marker file for flink merge handle,
-    // the flink write handle does not rely on MARKER files for
-    // corrupt files cleaning, see HoodieFlinkCopyOnWriteTable#getInvalidDataPaths for details.
+    MarkerFiles markerFiles = new MarkerFiles(hoodieTable, instantTime);
+    markerFiles.createIfNotExists(partitionPath, dataFileName, getIOType());
   }
 
   @Override
