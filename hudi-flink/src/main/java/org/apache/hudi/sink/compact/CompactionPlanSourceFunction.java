@@ -88,10 +88,6 @@ public class CompactionPlanSourceFunction extends AbstractRichFunction implement
 
   @Override
   public void run(SourceContext sourceContext) throws Exception {
-    // Mark instant as compaction inflight
-    table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
-    table.getMetaClient().reloadActiveTimeline();
-
     List<CompactionOperation> operations = this.compactionPlan.getOperations().stream()
         .map(CompactionOperation::convertFromAvroRecordInstance).collect(toList());
     LOG.info("CompactionPlanFunction compacting " + operations + " files");
