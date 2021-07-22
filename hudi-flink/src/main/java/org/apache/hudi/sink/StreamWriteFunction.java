@@ -207,6 +207,7 @@ public class StreamWriteFunction<K, I, O>
             TypeInformation.of(WriteMetadataEvent.class)
         ));
 
+    this.currentInstant = this.writeClient.getLastPendingInstant(this.actionType);
     if (context.isRestored()) {
       restoreWriteMetadata();
     } else {
@@ -214,7 +215,6 @@ public class StreamWriteFunction<K, I, O>
     }
     // blocks flushing until the coordinator starts a new instant
     this.confirming = true;
-    this.currentInstant = this.writeClient.getLastPendingInstant(this.actionType);
   }
 
   @Override
