@@ -162,7 +162,10 @@ public class HiveSchemaUtil {
   /**
    * Returns schema in Map<String,String> form read from a parquet file.
    *
-   * @param messageType : Intermediate schema in the form of Map<String, String>
+   * @param messageType : parquet Schema
+   * @param supportTimestamp
+   * @param doFormat : This option controls whether schema will have spaces in the value part of the schema map. This is required because spaces in complex schema trips the HMS create table calls.
+   *                 This value will be false for HMS but true for QueryBasedDDLExecutors
    * @return : Intermediate schema in the form of Map<String, String>
    */
   public static LinkedHashMap<String, String> parquetSchemaToMapSchema(MessageType messageType, boolean supportTimestamp, boolean doFormat) throws IOException {
@@ -190,6 +193,12 @@ public class HiveSchemaUtil {
     return hiveSchema;
   }
 
+  /**
+   * @param schema Intermediate schema in the form of Map<String,String>
+   * @param syncConfig
+   * @return List of FieldSchema objects derived from schema without the partition fields as the HMS api expects them as different arguments for alter table commands.
+   * @throws IOException
+   */
   public static List<FieldSchema> convertMapSchemaToHiveFieldSchema(LinkedHashMap<String, String> schema, HiveSyncConfig syncConfig) throws IOException {
     return schema.keySet().stream()
         .map(key -> new FieldSchema(key, schema.get(key).toLowerCase(), ""))
