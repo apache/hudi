@@ -438,12 +438,12 @@ The following table presents a summary of the types of schema changes compatible
 | Add a new nullable column at root level at the end | Yes | Yes | `Yes` means that a write with evolved schema succeeds and a read following the write succeeds to read entire dataset. |
 | Add a new nullable column to inner struct (at the end) | Yes | Yes |
 | Add a new complex type field with default (map and array) | Yes | Yes |  |
-| Add a new nullable column and change the ordering of fields | Yes | Yes |  |
+| Add a new nullable column and change the ordering of fields | No | No | Write succeeds but read fails if the write with evolved schema updated only some of the base files but not all. Currently, Hudi does not maintain a schema registry with history of changes across base files. Nevertheless, if the upsert touched all base files then the read will succeed. |
 | Add a custom nullable Hudi meta column, e.g. `_hoodie_meta_col` | Yes | Yes |  |
 | Promote datatype from `int` to `long` for a field at root level | Yes | Yes | For other types, Hudi supports promotion as specified in [Avro schema resolution](http://avro.apache.org/docs/current/spec.html#Schema+Resolution). |
 | Promote datatype from `int` to `long` for a nested field | Yes | Yes |
 | Promote datatype from `int` to `long` for a complex type (value of map or array) | Yes | Yes |  |
-| Add a new non-nullable column at root level at the end | No | No | In case of MOR table with Spark data source, write succeeds but read fails. |
+| Add a new non-nullable column at root level at the end | No | No | In case of MOR table with Spark data source, write succeeds but read fails. As a **workaround**, you can make the field nullable. |
 | Add a new non-nullable column to inner struct (at the end) | No | No |  |
 | Change datatype from `long` to `int` for a nested field | No | No |  |
 | Change datatype from `long` to `int` for a complex type (value of map or array) | No | No |  |
