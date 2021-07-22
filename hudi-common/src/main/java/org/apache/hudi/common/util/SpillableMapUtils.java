@@ -120,6 +120,18 @@ public class SpillableMapUtils {
   /**
    * Utility method to convert bytes to HoodieRecord using schema and payload class.
    */
+  public static <R> R convertToHoodieRecordPayload(GenericRecord rec, String payloadClazz, String preCombineField) {
+    String recKey = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+    String partitionPath = rec.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+    Object preCombineVal = rec.get(preCombineField);
+    HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(new HoodieKey(recKey, partitionPath),
+        ReflectionUtils.loadPayload(payloadClazz, new Object[] {rec, preCombineVal}, GenericRecord.class, Comparable.class));
+    return (R) hoodieRecord;
+  }
+
+  /**
+   * Utility method to convert bytes to HoodieRecord using schema and payload class.
+   */
   public static <R> R generateEmptyPayload(String recKey, String partitionPath, String payloadClazz) {
     HoodieRecord<? extends HoodieRecordPayload> hoodieRecord = new HoodieRecord<>(new HoodieKey(recKey, partitionPath),
         ReflectionUtils.loadPayload(payloadClazz, new Object[] {Option.empty()}, Option.class));
