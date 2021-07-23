@@ -299,9 +299,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return Collections.EMPTY_LIST;
     }
 
-    // All instants on the data timeline, which are greater than the last instant on metadata timeline
-    // are candidates for sync.
-    String latestMetadataInstantTime = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get().getTimestamp();
+    // All instants on the data timeline, which are greater than the last deltacommit instant on metadata timeline
+    // are candidates for sync. We only consider delta-commit instants as each actions on dataset leads to a
+    // deltacommit on the metadata table.
+    String latestMetadataInstantTime = metaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants()
+        .lastInstant().get().getTimestamp();
     HoodieDefaultTimeline candidateTimeline = datasetMetaClient.getActiveTimeline().findInstantsAfter(latestMetadataInstantTime, Integer.MAX_VALUE);
     Option<HoodieInstant> earliestIncompleteInstant = ignoreIncompleteInstants ? Option.empty()
         : candidateTimeline.filterInflightsAndRequested().firstInstant();
