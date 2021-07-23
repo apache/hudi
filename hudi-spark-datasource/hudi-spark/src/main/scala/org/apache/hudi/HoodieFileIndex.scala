@@ -90,7 +90,7 @@ case class HoodieFileIndex(
    */
   private lazy val _partitionSchemaFromProperties: StructType = {
     val tableConfig = metaClient.getTableConfig
-    val partitionColumns = tableConfig.getPartitionColumns
+    val partitionColumns = tableConfig.getPartitionFields
     val nameFieldMap = schema.fields.map(filed => filed.name -> filed).toMap
 
     if (partitionColumns.isPresent) {

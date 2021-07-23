@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.common.table.HoodieTableMetaClient
+
 class TestMergeIntoTable2 extends TestHoodieSqlBase {
 
   test("Test MergeInto for MOR table 2") {
@@ -133,6 +135,41 @@ class TestMergeIntoTable2 extends TestHoodieSqlBase {
            |  price = s0.price + t0.price, ts = s0.ts, dt = s0.dt
          """.stripMargin
       )("assertion failed: Target table's field(price) cannot be the right-value of the update clause for MOR table.")
+    }
+  }
+
+  test("Test Merge Into CTAS Table") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName using hudi
+           |options(primaryKey = 'id')
+           |location '${tmp.getCanonicalPath}'
+           |as
+           |select 1 as id, 'a1' as name
+           |""".stripMargin
+      )
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(tmp.getCanonicalPath)
+        .setConf(spark.sessionState.newHadoopConf())
+        .build()
+      // check record key in hoodie.properties
+      assertResult("id")(metaClient.getTableConfig.getRecordKeyFields.get().mkString(","))
+
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           | select 1 as s_id, 'a1_1' as name
+           |) s0
+           |on h0.id = s0.s_id
+           |when matched then update set *
+           |""".stripMargin
+      )
+      checkAnswer(s"select id, name from $tableName")(
+        Seq(1, "a1_1")
+      )
     }
   }
 }
