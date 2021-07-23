@@ -75,7 +75,7 @@ class TestMereIntoLogOnlyTable extends TestHoodieSqlBase {
            | select 4 as id, 'a4' as name, 11 as price, 1000 as ts
            | ) s0
            | on h0.id = s0.id
-           | when matched then update set *
+           | when not matched then insert *
            |""".stripMargin)
 
       // 5 commits will trigger compaction.
