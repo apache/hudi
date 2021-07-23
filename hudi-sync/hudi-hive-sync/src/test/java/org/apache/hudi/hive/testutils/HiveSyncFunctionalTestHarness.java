@@ -25,10 +25,13 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveClient;
+import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.api.MetaException;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
@@ -98,20 +101,20 @@ public class HiveSyncFunctionalTestHarness {
     return new HoodieHiveClient(hiveSyncConfig, hiveConf(), fs());
   }
 
-  public void dropTables(String database, String... tables) throws IOException {
+  public void dropTables(String database, String... tables) throws IOException, HiveException, MetaException {
     HiveSyncConfig hiveSyncConfig = hiveSyncConf();
     hiveSyncConfig.databaseName = database;
     for (String table : tables) {
       hiveSyncConfig.tableName = table;
-      hiveClient(hiveSyncConfig).updateHiveSQL("drop table if exists " + table);
+      new HiveQueryDDLExecutor(hiveSyncConfig, fs(), hiveConf()).runSQL("drop table if exists " + table);
     }
   }
 
-  public void dropDatabases(String... databases) throws IOException {
+  public void dropDatabases(String... databases) throws IOException, HiveException, MetaException {
     HiveSyncConfig hiveSyncConfig = hiveSyncConf();
     for (String database : databases) {
       hiveSyncConfig.databaseName = database;
-      hiveClient(hiveSyncConfig).updateHiveSQL("drop database if exists " + database);
+      new HiveQueryDDLExecutor(hiveSyncConfig, fs(), hiveConf()).runSQL("drop database if exists " + database);
     }
   }
 
