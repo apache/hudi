@@ -81,10 +81,10 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
       .withDocumentation("Field used in preCombining before actual write. By default, when two records have the same key value, "
           + "the largest value for the precombine field determined by Object.compareTo(..), is picked.");
 
-  public static final ConfigProperty<String> HOODIE_TABLE_PARTITION_COLUMNS_PROP = ConfigProperty
-      .key("hoodie.table.partition.columns")
+  public static final ConfigProperty<String> HOODIE_TABLE_PARTITION_FIELDS_PROP = ConfigProperty
+      .key("hoodie.table.partition.fields")
       .noDefaultValue()
-      .withDocumentation("Columns used to partition the table. Concatenated values of these fields are used as "
+      .withDocumentation("Fields used to partition the table. Concatenated values of these fields are used as "
           + "the partition path, by invoking toString()");
 
   public static final ConfigProperty<String> HOODIE_TABLE_RECORDKEY_FIELDS = ConfigProperty
@@ -250,9 +250,17 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
     return getString(HOODIE_TABLE_PRECOMBINE_FIELD_PROP);
   }
 
-  public Option<String[]> getPartitionColumns() {
-    if (contains(HOODIE_TABLE_PARTITION_COLUMNS_PROP)) {
-      return Option.of(Arrays.stream(getString(HOODIE_TABLE_PARTITION_COLUMNS_PROP).split(","))
+  public Option<String[]> getRecordKeyFields() {
+    if (contains(HOODIE_TABLE_RECORDKEY_FIELDS)) {
+      return Option.of(Arrays.stream(getString(HOODIE_TABLE_RECORDKEY_FIELDS).split(","))
+              .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[]{}));
+    }
+    return Option.empty();
+  }
+
+  public Option<String[]> getPartitionFields() {
+    if (contains(HOODIE_TABLE_PARTITION_FIELDS_PROP)) {
+      return Option.of(Arrays.stream(getString(HOODIE_TABLE_PARTITION_FIELDS_PROP).split(","))
         .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[]{}));
     }
     return Option.empty();
