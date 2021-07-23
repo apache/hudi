@@ -454,7 +454,7 @@ public class TestHoodieDeltaStreamer extends UtilitiesTestBase {
     static void assertAtLeastNCompletedReplaceCommits(int minExpected, String tablePath, DistributedFileSystem fs) {
       HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setConf(fs.getConf()).setLoadActiveTimelineOnLoad(true).setBasePath(tablePath).build();
       HoodieTimeline timeline = meta.getActiveTimeline().getCompletedReplaceTimeline();
-      LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
+      LOG.info("Timeline instants=" + meta.getActiveTimeline().getInstants().collect(Collectors.toList()));
       int numReplaceCommits = (int) timeline.getInstants().count();
       assertTrue(minExpected <= numReplaceCommits, "Got=" + numReplaceCommits + ", exp >=" + minExpected);
     }

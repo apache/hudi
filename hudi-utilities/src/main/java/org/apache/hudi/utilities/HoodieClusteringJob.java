@@ -114,11 +114,7 @@ public class HoodieClusteringJob {
     JCommander cmd = new JCommander(cfg, null, args);
 
     // compatible
-    // --mode has a higher priority than --schedule
-    // If we remove --schedule option in the future we need to change runningMode default value to EXECUTE
-    if (StringUtils.isNullOrEmpty(cfg.runningMode)) {
-      cfg.runningMode = cfg.runSchedule ? SCHEDULE : EXECUTE;
-    }
+    validateRunningMode(cfg);
 
     if (cfg.help || args.length == 0 || (cfg.runningMode.equalsIgnoreCase(EXECUTE) && cfg.clusteringInstantTime == null)) {
       cmd.usage();
@@ -138,11 +134,20 @@ public class HoodieClusteringJob {
     jsc.stop();
   }
 
+  private static void validateRunningMode(Config cfg) {
+    // --mode has a higher priority than --schedule
+    // If we remove --schedule option in the future we need to change runningMode default value to EXECUTE
+    if (StringUtils.isNullOrEmpty(cfg.runningMode)) {
+      cfg.runningMode = cfg.runSchedule ? SCHEDULE : EXECUTE;
+    }
+  }
+
   public int cluster(int retry) {
     this.fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
+    // need to do validate again in case that users call cluster() directly without setting cfg.runningMode
+    validateRunningMode(cfg);
     int ret = UtilHelpers.retry(retry, () -> {
-      String runningMode = cfg.runningMode == null ? "" : cfg.runningMode.toLowerCase();
-      switch (runningMode) {
+      switch (cfg.runningMode.toLowerCase()) {
         case SCHEDULE: {
           LOG.info("Running Mode: [" + SCHEDULE + "]; Do schedule");
           Option<String> instantTime = doSchedule(jsc);
@@ -161,7 +166,7 @@ public class HoodieClusteringJob {
           return doCluster(jsc);
         }
         default: {
-          LOG.info("Unsupported running mode [" + runningMode + "], quit the job directly");
+          LOG.info("Unsupported running mode [" + cfg.runningMode + "], quit the job directly");
           return -1;
         }
       }
@@ -217,7 +222,7 @@ public class HoodieClusteringJob {
       int result = instantTime.isPresent() ? 0 : -1;
 
       if (result == -1) {
-        LOG.info("Couldn't Generate Cluster Plan");
+        LOG.info("Couldn't generate cluster plan");
         return result;
       }
 
