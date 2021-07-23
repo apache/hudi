@@ -54,9 +54,9 @@ public class HoodieMetrics {
   private Timer clusteringTimer = null;
   private Timer indexTimer = null;
 
-  public HoodieMetrics(HoodieWriteConfig config, String tableName) {
+  public HoodieMetrics(HoodieWriteConfig config) {
     this.config = config;
-    this.tableName = tableName;
+    this.tableName = config.getTableName();
     if (config.isMetricsOn()) {
       Metrics.init(config);
       this.rollbackTimerName = getMetricsName("timer", HoodieTimeline.ROLLBACK_ACTION);
