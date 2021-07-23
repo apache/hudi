@@ -30,7 +30,6 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Properties;
 import java.util.stream.Collectors;
-import java.util.UUID;
 
 /**
  * File System View Storage Configurations.
@@ -73,7 +72,7 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> FILESYSTEM_VIEW_SPILLABLE_DIR = ConfigProperty
       .key("hoodie.filesystem.view.spillable.dir")
-      .defaultValue("/tmp/view_map/")
+      .defaultValue("/tmp/")
       .withDocumentation("Path on local storage to use, when file system view is held in a spillable map.");
 
   public static final ConfigProperty<Long> FILESYSTEM_VIEW_SPILLABLE_MEM = ConfigProperty
@@ -177,11 +176,7 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
   }
 
   public String getSpillableDir() {
-    String configuredSpillableDir = getString(FILESYSTEM_VIEW_SPILLABLE_DIR);
-    return String.format("%s_%s",
-        configuredSpillableDir.endsWith("/")
-            ? configuredSpillableDir.substring(0, configuredSpillableDir.length() - 1)
-            : configuredSpillableDir, UUID.randomUUID().toString());
+    return getString(FILESYSTEM_VIEW_SPILLABLE_DIR);
   }
 
   public FileSystemViewStorageType getSecondaryStorageType() {

@@ -19,7 +19,6 @@
 package org.apache.hudi.config;
 
 import org.apache.hudi.common.engine.EngineType;
-import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
 
 import org.apache.hudi.index.HoodieIndex;
@@ -34,7 +33,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -81,19 +79,6 @@ public class TestHoodieWriteConfig {
     // flink default in-memory
     writeConfig = HoodieWriteConfig.newBuilder().withEngineType(EngineType.FLINK).withPath("/tmp").build();
     assertEquals(HoodieIndex.IndexType.INMEMORY, writeConfig.getIndexType());
-  }
-
-  @Test
-  public void testSpillableBasePathFormat() {
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").build();
-    FileSystemViewStorageConfig config = writeConfig.getViewStorageConfig();
-    assertTrue(config.getSpillableDir().startsWith(
-        "/tmp/view_map_"));
-    // Validate UUID is appended to the folder
-    UUID.fromString(config.getSpillableDir()
-        .substring(config.getSpillableDir().lastIndexOf('_') + 1));
-
-
   }
 
   private ByteArrayOutputStream saveParamsIntoOutputStream(Map<String, String> params) throws IOException {
