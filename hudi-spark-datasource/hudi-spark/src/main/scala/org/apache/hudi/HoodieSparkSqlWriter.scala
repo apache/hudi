@@ -119,15 +119,17 @@ object HoodieSparkSqlWriter {
         val baseFileFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP)
         val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP)
         val partitionColumns = HoodieWriterUtils.getPartitionColumns(keyGenerator)
+        val recordKeyFields = hoodieConfig.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY)
 
         val tableMetaClient = HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(tableType)
           .setTableName(tblName)
+          .setRecordKeyFields(recordKeyFields)
           .setBaseFileFormat(baseFileFormat)
           .setArchiveLogFolder(archiveLogFolder)
           .setPayloadClassName(hoodieConfig.getString(PAYLOAD_CLASS_OPT_KEY))
           .setPreCombineField(hoodieConfig.getStringOrDefault(PRECOMBINE_FIELD_OPT_KEY, null))
-          .setPartitionColumns(partitionColumns)
+          .setPartitionFields(partitionColumns)
           .setPopulateMetaFields(parameters.getOrElse(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key(), HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.defaultValue()).toBoolean)
           .initTable(sparkContext.hadoopConfiguration, path.get)
         tableConfig = tableMetaClient.getTableConfig
@@ -302,15 +304,18 @@ object HoodieSparkSqlWriter {
     if (!tableExists) {
       val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP)
       val partitionColumns = HoodieWriterUtils.getPartitionColumns(parameters)
+      val recordKeyFields = hoodieConfig.getString(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY)
+
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(HoodieTableType.valueOf(tableType))
           .setTableName(tableName)
+          .setRecordKeyFields(recordKeyFields)
           .setArchiveLogFolder(archiveLogFolder)
           .setPayloadClassName(hoodieConfig.getStringOrDefault(PAYLOAD_CLASS_OPT_KEY))
           .setPreCombineField(hoodieConfig.getStringOrDefault(PRECOMBINE_FIELD_OPT_KEY, null))
           .setBootstrapIndexClass(bootstrapIndexClass)
           .setBootstrapBasePath(bootstrapBasePath)
-          .setPartitionColumns(partitionColumns)
+          .setPartitionFields(partitionColumns)
           .initTable(sparkContext.hadoopConfiguration, path)
     }
 
@@ -471,6 +476,9 @@ object HoodieSparkSqlWriter {
     hiveSyncConfig.syncAsSparkDataSourceTable =  hoodieConfig.getStringOrDefault(HIVE_SYNC_AS_DATA_SOURCE_TABLE).toBoolean
     hiveSyncConfig.sparkSchemaLengthThreshold = sqlConf.getConf(StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD)
     hiveSyncConfig.createManagedTable = hoodieConfig.getBoolean(HIVE_CREATE_MANAGED_TABLE)
+
+    hiveSyncConfig.serdeProperties = hoodieConfig.getString(HIVE_TABLE_SERDE_PROPERTIES)
+    hiveSyncConfig.tableProperties = hoodieConfig.getString(HIVE_TABLE_PROPERTIES)
     hiveSyncConfig
   }
 

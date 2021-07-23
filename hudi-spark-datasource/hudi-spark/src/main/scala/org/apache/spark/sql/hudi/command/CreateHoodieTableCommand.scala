@@ -103,9 +103,9 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
       val tableSchema = avroSchema.map(SchemaConverters.toSqlType(_).dataType
         .asInstanceOf[StructType])
 
-      // Get options from the external table
+      // Get options from the external table and append with the options in ddl.
       val options = HoodieOptionConfig.mappingTableConfigToSqlOption(
-        metaClient.getTableConfig.getProps.asScala.toMap)
+        metaClient.getTableConfig.getProps.asScala.toMap) ++ table.storage.properties
 
       val userSpecifiedSchema = table.schema
       if (userSpecifiedSchema.isEmpty && tableSchema.isDefined) {
@@ -329,7 +329,7 @@ object CreateHoodieTableCommand extends Logging {
           .fromProperties(properties)
           .setTableName(tableName)
           .setTableCreateSchema(SchemaConverters.toAvroType(table.schema).toString())
-          .setPartitionColumns(table.partitionColumnNames.mkString(","))
+          .setPartitionFields(table.partitionColumnNames.mkString(","))
           .initTable(conf, location)
     }
   }

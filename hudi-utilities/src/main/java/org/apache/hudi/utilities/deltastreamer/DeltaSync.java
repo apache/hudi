@@ -255,7 +255,7 @@ public class DeltaSync implements Serializable {
           .setArchiveLogFolder(HOODIE_ARCHIVELOG_FOLDER_PROP.defaultValue())
           .setPayloadClassName(cfg.payloadClassName)
           .setBaseFileFormat(cfg.baseFileFormat)
-          .setPartitionColumns(partitionColumns)
+          .setPartitionFields(partitionColumns)
           .setPreCombineField(cfg.sourceOrderingField)
           .initTable(new Configuration(jssc.hadoopConfiguration()),
             cfg.targetBasePath);
@@ -354,7 +354,7 @@ public class DeltaSync implements Serializable {
           .setArchiveLogFolder(HOODIE_ARCHIVELOG_FOLDER_PROP.defaultValue())
           .setPayloadClassName(cfg.payloadClassName)
           .setBaseFileFormat(cfg.baseFileFormat)
-          .setPartitionColumns(partitionColumns)
+          .setPartitionFields(partitionColumns)
           .initTable(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath);
     }
 
