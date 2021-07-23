@@ -296,6 +296,7 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
           }
         }
       }
+      writeOnlyFile.delete();
     } catch (Exception e) {
       // delete the file for any sort of exception
       writeOnlyFile.delete();
