@@ -41,20 +41,20 @@ public class MetricsReporterFactory {
   private static final Logger LOG = LogManager.getLogger(MetricsReporterFactory.class);
 
   public static MetricsReporter createReporter(HoodieWriteConfig config, MetricRegistry registry) {
-    MetricsReporterType type = config.getMetricsReporterType();
-    MetricsReporter reporter = null;
+    String reporterClassName = config.getMetricReporterClassName();
 
-    if (!StringUtils.isNullOrEmpty(config.getMetricReporterClassName())) {
-      Object instance = ReflectionUtils
-              .loadClass(config.getMetricReporterClassName(),
-                      new Class<?>[] {Properties.class, MetricRegistry.class}, config.getProps(), registry);
+    if (!StringUtils.isNullOrEmpty(reporterClassName)) {
+      Object instance = ReflectionUtils.loadClass(
+          reporterClassName, new Class<?>[] {Properties.class, MetricRegistry.class}, config.getProps(), registry);
       if (!(instance instanceof AbstractUserDefinedMetricsReporter)) {
         throw new HoodieException(config.getMetricReporterClassName()
-                + " is not a subclass of AbstractUserDefinedMetricsReporter");
+            + " is not a subclass of AbstractUserDefinedMetricsReporter");
       }
       return (MetricsReporter) instance;
     }
 
+    MetricsReporterType type = config.getMetricsReporterType();
+    MetricsReporter reporter = null;
     switch (type) {
       case GRAPHITE:
         reporter = new MetricsGraphiteReporter(config, registry);
