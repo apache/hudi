@@ -28,9 +28,9 @@ import org.apache.hudi.common.table.view.{FileSystemViewStorageConfig, HoodieTab
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{SparkSession, Zoptimize, Column}
 import org.apache.spark.sql.avro.SchemaConverters
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, Expression, InterpretedPredicate}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, BoundReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.util.{CaseInsensitiveMap, DateTimeUtils}
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
@@ -41,6 +41,7 @@ import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.Properties
 import scala.collection.JavaConverters._
+import scala.collection.JavaConversions._
 import scala.collection.mutable
 
 /**
@@ -83,6 +84,12 @@ case class HoodieFileIndex(
 
   private val specifiedQueryInstant = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key)
     .map(HoodieSqlUtils.formatQueryInstant)
+
+  /**
+    * Get all completeCommits.
+    */
+  lazy val completeCommits = metaClient.getCommitsTimeline()
+    .filterCompletedInstants().getInstants().iterator().toList.map(_.getTimestamp)
 
   /**
    * Get the schema of the table.
@@ -147,6 +154,43 @@ case class HoodieFileIndex(
 
   override def rootPaths: Seq[Path] = queryPath :: Nil
 
+  private def createFilterFiles(dataFilters: Seq[Expression]): Set[String] = {
+    var allFiles: Set[String] = Set.empty
+    var candidateFiles: Set[String] = Set.empty
+    val indexPath = metaClient.getZindexPath
+    val fs = metaClient.getFs
+    if (fs.exists(new Path(indexPath)) && dataFilters.nonEmpty) {
+      // try to load latest index table from index path
+      val candidateIndexTables = fs.listStatus(new Path(indexPath)).filter(_.isDirectory)
+        .map(_.getPath.getName).filter(f => completeCommits.contains(f)).sortBy(x => x)
+      if (candidateIndexTables.nonEmpty) {
+        val dataFrameOpt = try {
+          Some(spark.read.load(new Path(indexPath, candidateIndexTables.last).toString))
+        } catch {
+          case _: Throwable =>
+            logError("missing index skip data-skipping")
+            None
+        }
+
+        if (dataFrameOpt.isDefined) {
+          val indexSchema = dataFrameOpt.get.schema
+          val indexFiles = Zoptimize.getIndexFiles(spark.sparkContext.hadoopConfiguration, indexPath)
+          val indexFilter = dataFilters.map(Zoptimize.createZindexFilter(_, indexSchema)).reduce(And)
+          logInfo(s"index filter condition: ${indexFilter}")
+          dataFrameOpt.get.persist()
+          if (indexFiles.size <= 4) {
+            allFiles = Zoptimize.readParquetFile(spark, indexFiles)
+          } else {
+            allFiles = dataFrameOpt.get.select("file").collect().map(_.getString(0)).toSet
+          }
+          candidateFiles = dataFrameOpt.get.filter(new Column(indexFilter)).select("file").collect().map(_.getString(0)).toSet
+          dataFrameOpt.get.unpersist()
+        }
+      }
+    }
+    allFiles -- candidateFiles
+  }
+
   /**
    * Invoked by Spark to fetch list of latest base files per partition.
    *
@@ -156,12 +200,25 @@ case class HoodieFileIndex(
    */
   override def listFiles(partitionFilters: Seq[Expression],
                          dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
+    // try to load filterFiles from index
+    val filterFiles: Set[String] = createFilterFiles(dataFilters)
     if (queryAsNonePartitionedTable) { // Read as Non-Partitioned table.
-      Seq(PartitionDirectory(InternalRow.empty, allFiles))
+      val candidateFiles = if (!filterFiles.isEmpty) {
+        allFiles.filterNot(fileStatus => filterFiles.contains(fileStatus.getPath.getName))
+      } else {
+        allFiles
+      }
+      logInfo(s"Total file size is: ${allFiles.size}," +
+        s" after file skip size is: ${candidateFiles.size} " +
+        s"skipping percent ${if (allFiles.length != 0) (allFiles.size - candidateFiles.size) / allFiles.size.toDouble else 0}")
+      Seq(PartitionDirectory(InternalRow.empty, candidateFiles))
     } else {
       // Prune the partition path by the partition filters
       val prunedPartitions = prunePartition(cachedAllInputFileSlices.keys.toSeq, partitionFilters)
-      prunedPartitions.map { partition =>
+      var totalFileSize = 0
+      var candidateFileSize = 0
+
+      val result = prunedPartitions.map { partition =>
         val baseFileStatuses = cachedAllInputFileSlices(partition).map(fileSlice => {
           if (fileSlice.getBaseFile.isPresent) {
             fileSlice.getBaseFile.get().getFileStatus
@@ -169,9 +226,19 @@ case class HoodieFileIndex(
             null
           }
         }).filterNot(_ == null)
-
-        PartitionDirectory(partition.values, baseFileStatuses)
+        val candidateFiles = if (!filterFiles.isEmpty) {
+          baseFileStatuses.filterNot(fileStatu => filterFiles.contains(fileStatu.getPath.getName))
+        } else {
+          baseFileStatuses
+        }
+        totalFileSize += baseFileStatuses.size
+        candidateFileSize += candidateFiles.size
+        PartitionDirectory(partition.values, candidateFiles)
       }
+      logInfo(s"Total file size is: ${totalFileSize}," +
+        s" after file skip size is: ${candidateFileSize} " +
+        s"skipping percent ${if (allFiles.length != 0) (totalFileSize - candidateFileSize) / totalFileSize.toDouble else 0}")
+      result
     }
   }
 

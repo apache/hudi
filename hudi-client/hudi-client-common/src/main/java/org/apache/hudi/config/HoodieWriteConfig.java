@@ -1229,6 +1229,30 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
+   * Data layout optimize properties.
+   */
+  public boolean getSpaceFillingCurveDataOptimizeEnable() {
+    return getBoolean(HoodieClusteringConfig.SPACE_FILLING_CURVE_DATA_OPTIMIZE_ENABLE);
+  }
+
+  public String getDataOptimizeStrategy() {
+    return getString(HoodieClusteringConfig.DATA_OPTIMIZE_STRATEGY);
+  }
+
+  public HoodieClusteringConfig.BuildCurveStrategyType getOptimizeBuildCurveMethod() {
+    return HoodieClusteringConfig.BuildCurveStrategyType.fromValue(
+        getString(HoodieClusteringConfig.DATA_OPTIMIZE_BUILD_CURVE_STRATEGY));
+  }
+
+  public int getOptimizeSampleNumber() {
+    return getInt(HoodieClusteringConfig.DATA_OPTIMIZE_BUILD_CURVE_SAMPLE_NUMBER);
+  }
+
+  public boolean getOptimizeEnableDataSkipping() {
+    return getBoolean(HoodieClusteringConfig.DATA_OPTIMIZE_DATA_SKIPPING_ENABLE);
+  }
+
+  /**
    * index properties.
    */
   public HoodieIndex.IndexType getIndexType() {
@@ -1776,6 +1800,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     private boolean isStorageConfigSet = false;
     private boolean isCompactionConfigSet = false;
     private boolean isClusteringConfigSet = false;
+    private boolean isOptimizeConfigSet = false;
     private boolean isMetricsConfigSet = false;
     private boolean isBootstrapConfigSet = false;
     private boolean isMemoryConfigSet = false;

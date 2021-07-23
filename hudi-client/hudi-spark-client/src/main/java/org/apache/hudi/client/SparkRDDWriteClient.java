@@ -380,6 +380,12 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     writeTableMetadata(table, metadata, new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringCommitTime));
     finalizeWrite(table, clusteringCommitTime, writeStats);
     try {
+      // try to save statistics info to hudi
+      if (config.getOptimizeEnableDataSkipping()
+          && config.getSpaceFillingCurveDataOptimizeEnable()
+          && !config.getClusteringSortColumns().isEmpty()) {
+        table.updateStatistics(context, writeStats, clusteringCommitTime, true);
+      }
       LOG.info("Committing Clustering " + clusteringCommitTime + ". Finished with result " + metadata);
       table.getActiveTimeline().transitionReplaceInflightToComplete(
           HoodieTimeline.getReplaceCommitInflightInstant(clusteringCommitTime),
