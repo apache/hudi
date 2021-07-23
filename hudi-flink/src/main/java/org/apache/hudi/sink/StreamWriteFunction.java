@@ -34,6 +34,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.utils.TimeWait;
 import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -61,7 +62,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
-import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
@@ -568,24 +568,17 @@ public class StreamWriteFunction<K, I, O>
     String instant = this.writeClient.getLastPendingInstant(this.actionType);
     // if exactly-once semantics turns on,
     // waits for the checkpoint notification until the checkpoint timeout threshold hits.
-    long waitingTime = 0L;
-    long ckpTimeout = config.getLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT);
-    long interval = 500L;
+    TimeWait timeWait = TimeWait.builder()
+        .timeout(config.getLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT))
+        .action("instant initialize")
+        .build();
     while (confirming) {
       // wait condition:
       // 1. there is no inflight instant
       // 2. the inflight instant does not change and the checkpoint has buffering data
       if (instant == null || (instant.equals(this.currentInstant) && hasData)) {
         // sleep for a while
-        try {
-          if (waitingTime > ckpTimeout) {
-            throw new HoodieException("Timeout(" + waitingTime + "ms) while waiting for instant " + instant + " to commit");
-          }
-          TimeUnit.MILLISECONDS.sleep(interval);
-          waitingTime += interval;
-        } catch (InterruptedException e) {
-          throw new HoodieException("Error while waiting for instant " + instant + " to commit", e);
-        }
+        timeWait.waitFor();
         // refresh the inflight instant
         instant = this.writeClient.getLastPendingInstant(this.actionType);
       } else {
