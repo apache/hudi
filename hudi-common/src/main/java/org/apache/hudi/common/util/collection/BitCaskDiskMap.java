@@ -61,7 +61,7 @@ import java.util.zip.InflaterInputStream;
  *
  * Inspired by https://github.com/basho/bitcask
  */
-public final class BitCaskDiskMap<T extends Serializable, R extends Serializable> extends DiskMap<T, R> implements Map<T, R>, Iterable<R> {
+public final class BitCaskDiskMap<T extends Serializable, R extends Serializable> extends DiskMap<T, R> {
 
   public static final int BUFFER_SIZE = 128 * 1024;  // 128 KB
   private static final Logger LOG = LogManager.getLogger(BitCaskDiskMap.class);
@@ -296,10 +296,11 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
           }
         }
       }
-      super.close();
     } catch (Exception e) {
       // delete the file for any sort of exception
       writeOnlyFile.delete();
+    } finally {
+      super.close();
     }
   }
 
