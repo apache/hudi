@@ -30,9 +30,9 @@ import java.util.Properties;
 @Immutable
 @ConfigClassProperty(name = "Metadata Configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configurations used by the HUDI Metadata Table. "
-        + "This table maintains the meta information stored in hudi dataset "
-        + "so that listing can be avoided during queries.")
+    description = "Configurations used by the Hudi Metadata Table. "
+        + "This table maintains the metadata about a given Hudi table (e.g file listings) "
+        + " to avoid overhead of accessing cloud storage, during queries.")
 public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final String METADATA_PREFIX = "hoodie.metadata";

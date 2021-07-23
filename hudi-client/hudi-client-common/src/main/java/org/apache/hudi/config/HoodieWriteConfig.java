@@ -71,8 +71,8 @@ import java.util.stream.Collectors;
 @Immutable
 @ConfigClassProperty(name = "Write Configurations",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "The datasource can be configured by passing the below options. "
-        + "These options are useful when writing tables.")
+    description = "Configurations that control write behavior on Hudi tables. These can be directly passed down from even "
+        + "higher level frameworks (e.g Spark datasources, Flink sink) and utilities (e.g DeltaStreamer).")
 public class HoodieWriteConfig extends HoodieConfig {
 
   private static final long serialVersionUID = 0L;

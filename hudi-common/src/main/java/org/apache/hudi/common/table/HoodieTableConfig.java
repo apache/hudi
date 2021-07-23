@@ -57,11 +57,12 @@ import java.util.stream.Collectors;
  */
 @ConfigClassProperty(name = "Table Configurations",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configurations on the Hoodie Table like type of ingestion, "
-        + "storage formats, hive table name etc Configurations are loaded from "
-        + "hoodie.properties, these properties are usually set during "
-        + "initializing a path as hoodie base path and never changes during "
-        + "the lifetime of a hoodie table.")
+    description = "Configurations that persist across writes and read on a Hudi table "
+        + " like  base, log file formats, table name, creation schema, table version layouts. "
+        + " Configurations are loaded from hoodie.properties, these properties are usually set during "
+        + "initializing a path as hoodie base path and rarely changes during "
+        + "the lifetime of the table. Writers/Queries' configurations are validated against these "
+        + " each time for compatibility.")
 public class HoodieTableConfig extends HoodieConfig implements Serializable {
 
   private static final Logger LOG = LogManager.getLogger(HoodieTableConfig.class);

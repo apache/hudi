@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
  */
 @ConfigClassProperty(name = "File System View Storage Configurations",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configurations that control the Filesystem view")
+    description = "Configurations that control how file metadata is stored by Hudi, for transaction processing and queries.")
 public class FileSystemViewStorageConfig extends HoodieConfig {
 
   // Property Names

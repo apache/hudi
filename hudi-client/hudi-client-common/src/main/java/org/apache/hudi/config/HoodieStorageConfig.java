@@ -36,7 +36,7 @@ import java.util.Properties;
 @Immutable
 @ConfigClassProperty(name = "Storage Configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
-    description = "Configurations that control aspects around sizing parquet and log files.")
+    description = "Configurations that control aspects around writing, sizing, reading base and log files.")
 public class HoodieStorageConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PARQUET_FILE_MAX_BYTES = ConfigProperty
