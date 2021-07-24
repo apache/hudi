@@ -38,6 +38,8 @@ import org.apache.log4j.Logger;
 import org.reflections.ReflectionUtils;
 import org.reflections.Reflections;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
@@ -226,7 +228,7 @@ public class HoodieConfigDocGenerator {
               .append(LINE_BREAK);
 
           // Default value
-          generateConfigKeyValue(configParamsBuilder, false, "Default Value", cfgProperty.hasDefaultValue() ? cfgProperty.defaultValue() : "none");
+          addDefaultValue(configParamsBuilder, cfgProperty.hasDefaultValue() ? cfgProperty.defaultValue() : null);
 
           // Config param name
           generateConfigKeyValue(configParamsBuilder, false, "Config Param", field.getName());
@@ -262,7 +264,7 @@ public class HoodieConfigDocGenerator {
           .append(LINE_BREAK);
 
       // Default value
-      generateConfigKeyValue(configParamsBuilder, false, "Default Value", cfgProperty.hasDefaultValue() ? cfgProperty.defaultValue() : "none");
+      addDefaultValue(configParamsBuilder, cfgProperty.hasDefaultValue() ? cfgProperty.defaultValue() : null);
 
       // Config param name
       generateConfigKeyValue(configParamsBuilder, false, "Config Param", field.getName());
@@ -272,7 +274,6 @@ public class HoodieConfigDocGenerator {
         generateConfigKeyValue(configParamsBuilder, false, "Since Version", cfgProperty.getSinceVersion().get());
       }
 
-      //configDocBuilder.append(new BoldText("Required Or Optional? ")).append(NEWLINE);
       if (cfgProperty.getDeprecatedVersion().isPresent()) {
         generateConfigKeyValue(configParamsBuilder, false, "Deprecated Version", cfgProperty.getDeprecatedVersion().get());
       }
@@ -284,6 +285,11 @@ public class HoodieConfigDocGenerator {
     } catch (IllegalAccessException e) {
       LOG.error("Error while getting field through reflection for config class: " + subType.getName(), e);
     }
+  }
+
+  private static void addDefaultValue(StringBuilder builder, @Nullable Object defaultValue) {
+    generateConfigKeyValue(builder, false, "Default Value",
+        (defaultValue != null) ? defaultValue + " (Optional)" : "N/A (Required)");
   }
 
   private static void generateConfigKeyValue(StringBuilder builder,
