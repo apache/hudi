@@ -17,6 +17,8 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -28,6 +30,10 @@ import java.util.Properties;
 /**
  * Write callback related config.
  */
+@ConfigClassProperty(name = "Write commit callback configs",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Controls callback behavior into HTTP endpoints, to push "
+        + " notifications on commits on hudi tables.")
 public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
 
   public static final String CALLBACK_PREFIX = "hoodie.write.commit.callback.";

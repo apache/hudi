@@ -20,6 +20,8 @@ package org.apache.hudi.config;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.lock.LockProvider;
@@ -55,6 +57,11 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT
 /**
  * Hoodie Configs for Locks.
  */
+@ConfigClassProperty(name = "Locks Configurations",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Configs that control locking mechanisms required for concurrency control "
+        + " between writers to a Hudi table. Concurrency between Hudi's own table services "
+        + " are auto managed internally.")
 public class HoodieLockConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP = ConfigProperty
