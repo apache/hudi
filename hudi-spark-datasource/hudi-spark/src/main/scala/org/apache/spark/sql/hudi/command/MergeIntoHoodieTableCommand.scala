@@ -260,7 +260,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     writeParams += (PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
       serializedInsertConditionAndExpressions(insertActions))
 
-    // Remove the meta fiels from the sourceDF as we do not need these when writing.
+    // Remove the meta fields from the sourceDF as we do not need these when writing.
     val sourceDFWithoutMetaFields = removeMetaFields(sourceDF)
     HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDFWithoutMetaFields)
   }
@@ -281,7 +281,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     writeParams += (PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
       serializedInsertConditionAndExpressions(insertActions))
 
-    // Remove the meta fiels from the sourceDF as we do not need these when writing.
+    // Remove the meta fields from the sourceDF as we do not need these when writing.
     val sourceDFWithoutMetaFields = removeMetaFields(sourceDF)
     HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDFWithoutMetaFields)
   }
