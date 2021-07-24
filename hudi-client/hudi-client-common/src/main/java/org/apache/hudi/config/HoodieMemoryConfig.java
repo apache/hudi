@@ -18,6 +18,8 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -32,6 +34,10 @@ import java.util.Properties;
  * Memory related config.
  */
 @Immutable
+@ConfigClassProperty(name = "Memory Configurations",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Controls memory usage for compaction "
+        + "and merges, performed internally by Hudi.")
 public class HoodieMemoryConfig extends HoodieConfig {
 
   // Default max memory fraction during hash-merge, excess spills to disk

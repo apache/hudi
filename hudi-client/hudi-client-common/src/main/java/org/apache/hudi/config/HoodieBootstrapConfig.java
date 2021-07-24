@@ -22,6 +22,8 @@ import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector;
 import org.apache.hudi.client.bootstrap.translator.IdentityBootstrapPartitionPathTranslator;
 import org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex;
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -35,6 +37,11 @@ import java.util.Properties;
 /**
  * Bootstrap specific configs.
  */
+@ConfigClassProperty(name = "Bootstrap Configs",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Configurations that control how you want to bootstrap your existing tables for the first time into hudi. "
+        + "The bootstrap operation can flexibly avoid copying data over before you can use Hudi and support running the existing "
+        + " writers and new hudi writers in parallel, to validate the migration.")
 public class HoodieBootstrapConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> BOOTSTRAP_BASE_PATH_PROP = ConfigProperty

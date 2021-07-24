@@ -18,6 +18,8 @@
 
 package org.apache.hudi.config;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -32,6 +34,10 @@ import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_ORDERING_F
 /**
  * Hoodie payload related configs.
  */
+@ConfigClassProperty(name = "Payload Configurations",
+    groupName = ConfigGroups.Names.RECORD_PAYLOAD,
+    description = "Payload related configs, that can be leveraged to "
+        + "control merges based on specific business fields in the data.")
 public class HoodiePayloadConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PAYLOAD_ORDERING_FIELD_PROP = ConfigProperty
