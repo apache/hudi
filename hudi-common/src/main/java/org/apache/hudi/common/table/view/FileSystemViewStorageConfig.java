@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -32,6 +34,9 @@ import java.util.stream.Collectors;
 /**
  * File System View Storage Configurations.
  */
+@ConfigClassProperty(name = "File System View Storage Configurations",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Configurations that control how file metadata is stored by Hudi, for transaction processing and queries.")
 public class FileSystemViewStorageConfig extends HoodieConfig {
 
   // Property Names

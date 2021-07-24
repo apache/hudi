@@ -18,6 +18,8 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -44,6 +46,10 @@ import java.util.Set;
  *
  * <p>It has the options for Hoodie table read and write. It also defines some utilities.
  */
+@ConfigClassProperty(name = "Flink Options",
+    groupName = ConfigGroups.Names.FLINK_SQL,
+    description = "Flink jobs using the SQL can be configured through the options in WITH clause."
+        + " The actual datasource level configs are listed below.")
 public class FlinkOptions extends HoodieConfig {
   private FlinkOptions() {
   }
