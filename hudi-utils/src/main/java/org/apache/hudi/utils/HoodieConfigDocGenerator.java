@@ -231,7 +231,7 @@ public class HoodieConfigDocGenerator {
           addDefaultValue(configParamsBuilder, cfgProperty.hasDefaultValue() ? cfgProperty.defaultValue() : null);
 
           // Config param name
-          generateConfigKeyValue(configParamsBuilder, false, "Config Param", field.getName());
+          generateConfigKeyValue(configParamsBuilder, true, "Config Param", field.getName());
 
           configParamsBuilder
               .append(NEWLINE)
@@ -267,15 +267,15 @@ public class HoodieConfigDocGenerator {
       addDefaultValue(configParamsBuilder, cfgProperty.hasDefaultValue() ? cfgProperty.defaultValue() : null);
 
       // Config param name
-      generateConfigKeyValue(configParamsBuilder, false, "Config Param", field.getName());
+      generateConfigKeyValue(configParamsBuilder, true, "Config Param", field.getName());
 
       // First version
       if (cfgProperty.getSinceVersion().isPresent()) {
-        generateConfigKeyValue(configParamsBuilder, false, "Since Version", cfgProperty.getSinceVersion().get());
+        generateConfigKeyValue(configParamsBuilder, true, "Since Version", cfgProperty.getSinceVersion().get());
       }
 
       if (cfgProperty.getDeprecatedVersion().isPresent()) {
-        generateConfigKeyValue(configParamsBuilder, false, "Deprecated Version", cfgProperty.getDeprecatedVersion().get());
+        generateConfigKeyValue(configParamsBuilder, true, "Deprecated Version", cfgProperty.getDeprecatedVersion().get());
       }
 
       configParamsBuilder
@@ -293,26 +293,24 @@ public class HoodieConfigDocGenerator {
   }
 
   private static void generateConfigKeyValue(StringBuilder builder,
-                                             boolean highlightOnlyKey,
+                                             boolean shouldHighlight,
                                              String key,
                                              Object value) {
-    if (highlightOnlyKey) {
+    if (shouldHighlight) {
       builder
           .append("> ")
           .append("`")
           .append(new Text(key))
-          .append("`")
           .append(": ")
           .append(new Text(value))
+          .append("`")
           .append(LINE_BREAK);
     } else {
       builder
           .append("> ")
-          .append("`")
-          .append(new Text(key))
+          .append(new BoldText(key))
           .append(": ")
           .append(new Text(value))
-          .append("`")
           .append(LINE_BREAK);
     }
   }
