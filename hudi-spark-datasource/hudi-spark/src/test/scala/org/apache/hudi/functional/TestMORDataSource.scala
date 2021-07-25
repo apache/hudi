@@ -200,6 +200,14 @@ class TestMORDataSource extends HoodieClientTestBase {
     assertEquals(1, hudiIncDF3.select("_hoodie_commit_time").distinct().count())
     assertEquals(commit2Time, hudiIncDF3.select("_hoodie_commit_time").head().get(0).toString)
 
+    // Test incremental query has no instant in range
+    val emptyIncDF = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key, "000")
+      .option(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY.key, "001")
+      .load(basePath)
+    assertEquals(0, emptyIncDF.count())
+
     // Unmerge
     val hudiSnapshotSkipMergeDF2 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
