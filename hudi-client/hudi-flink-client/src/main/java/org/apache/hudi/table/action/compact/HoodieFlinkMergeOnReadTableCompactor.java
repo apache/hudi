@@ -162,6 +162,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T extends HoodieRecordPayload>
       RuntimeStats runtimeStats = new RuntimeStats();
       runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
       s.getStat().setRuntimeStats(runtimeStats);
+      scanner.close();
     }).collect(toList());
   }
 
