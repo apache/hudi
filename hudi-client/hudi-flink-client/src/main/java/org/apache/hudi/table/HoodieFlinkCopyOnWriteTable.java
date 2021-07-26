@@ -54,7 +54,6 @@ import org.apache.hudi.table.action.commit.FlinkMergeHelper;
 import org.apache.hudi.table.action.commit.FlinkUpsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.FlinkUpsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.rollback.FlinkCopyOnWriteRollbackActionExecutor;
-import org.apache.hudi.table.marker.MarkerFiles;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

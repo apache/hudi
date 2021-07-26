@@ -77,7 +77,7 @@ public class TimelineServerPerf implements Serializable {
     TimelineService.Config timelineServiceConf = cfg.getTimelinServerConfig();
     this.timelineServer = new TimelineService(
         new HoodieLocalEngineContext(FSUtils.prepareHadoopConf(new Configuration())),
-        timelineServiceConf, new Configuration(), FileSystem.get(new Configuration()),
+        new Configuration(), timelineServiceConf, FileSystem.get(new Configuration()),
         TimelineService.buildFileSystemViewManager(timelineServiceConf,
             new SerializableConfiguration(FSUtils.prepareHadoopConf(new Configuration()))));
   }

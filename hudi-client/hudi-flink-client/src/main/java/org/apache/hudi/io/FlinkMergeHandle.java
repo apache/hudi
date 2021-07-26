@@ -28,7 +28,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.MarkerFiles;
+import org.apache.hudi.table.marker.MarkerFiles;
+import org.apache.hudi.table.marker.MarkerFilesFactory;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
@@ -116,7 +117,7 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
 
   @Override
   protected void createMarkerFile(String partitionPath, String dataFileName) {
-    MarkerFiles markerFiles = new MarkerFiles(hoodieTable, instantTime);
+    MarkerFiles markerFiles = MarkerFilesFactory.get(config.getMarkersType(), hoodieTable, instantTime);
     markerFiles.createIfNotExists(partitionPath, dataFileName, getIOType());
   }
 
