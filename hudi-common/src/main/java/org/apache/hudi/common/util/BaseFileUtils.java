@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 
 public abstract class BaseFileUtils {
 
@@ -169,6 +170,15 @@ public abstract class BaseFileUtils {
    * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
    */
   public abstract List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath);
+
+  /**
+   * Fetch {@link HoodieKey}s from the given data file.
+   * @param configuration configuration to build fs object
+   * @param filePath      The data file path
+   * @param keyGeneratorOpt instance of KeyGenerator.
+   * @return {@link List} of {@link HoodieKey}s fetched from the parquet file
+   */
+  public abstract List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt);
 
   /**
    * Read the Avro schema of the data file.

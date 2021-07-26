@@ -97,6 +97,8 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * @param structType  schema of the internalRow.
    * @return the partition path.
    */
+  @Override
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public String getPartitionPath(InternalRow internalRow, StructType structType) {
     try {
       initDeserializer(structType);

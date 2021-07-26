@@ -207,9 +207,11 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
         avroRecord = Option.of(rewriteRecord((GenericRecord) avroRecord.get()));
         String seqId =
             HoodieRecord.generateSequenceId(instantTime, getPartitionId(), RECORD_COUNTER.getAndIncrement());
-        HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord.get(), hoodieRecord.getRecordKey(),
-            hoodieRecord.getPartitionPath(), fileId);
-        HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord.get(), instantTime, seqId);
+        if (config.populateMetaFields()) {
+          HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord.get(), hoodieRecord.getRecordKey(),
+              hoodieRecord.getPartitionPath(), fileId);
+          HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord.get(), instantTime, seqId);
+        }
         if (isUpdateRecord(hoodieRecord)) {
           updatedRecordsWritten++;
         } else {

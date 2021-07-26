@@ -23,11 +23,14 @@ import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 
+import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -50,6 +53,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.METADATA_FIELD_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -152,6 +156,33 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testFetchRecordKeyPartitionPathVirtualKeysFromParquet() throws Exception {
+    List<String> rowKeys = new ArrayList<>();
+    List<HoodieKey> expected = new ArrayList<>();
+    String partitionPath = "path1";
+    for (int i = 0; i < 1000; i++) {
+      String rowKey = UUID.randomUUID().toString();
+      rowKeys.add(rowKey);
+      expected.add(new HoodieKey(rowKey, partitionPath));
+    }
+
+    String filePath = Paths.get(basePath, "test.parquet").toUri().toString();
+    Schema schema = getSchemaWithFields(Arrays.asList(new String[]{"abc", "def"}));
+    writeParquetFile(BloomFilterTypeCode.SIMPLE.name(), filePath, rowKeys, schema, true, partitionPath,
+        false, "abc", "def");
+
+    // Read and verify
+    List<HoodieKey> fetchedRows =
+        parquetUtils.fetchRecordKeyPartitionPath(HoodieTestUtils.getDefaultHadoopConf(), new Path(filePath),
+            Option.of(new TestBaseKeyGen("abc","def")));
+    assertEquals(rowKeys.size(), fetchedRows.size(), "Total count does not match");
+
+    for (HoodieKey entry : fetchedRows) {
+      assertTrue(expected.contains(entry), "Record key must be in the given filter");
+    }
+  }
+
+  @Test
   public void testReadCounts() throws Exception {
     String filePath = Paths.get(basePath, "test.parquet").toUri().toString();
     List<String> rowKeys = new ArrayList<>();
@@ -168,22 +199,73 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
   }
 
   private void writeParquetFile(String typeCode, String filePath, List<String> rowKeys, Schema schema, boolean addPartitionPathField, String partitionPath) throws Exception {
+    writeParquetFile(typeCode, filePath, rowKeys, schema, addPartitionPathField, partitionPath,
+        true, null, null);
+  }
+
+  private void writeParquetFile(String typeCode, String filePath, List<String> rowKeys, Schema schema, boolean addPartitionPathField, String partitionPathValue,
+                                boolean useMetaFields, String recordFieldName, String partitionFieldName) throws Exception {
     // Write out a parquet file
     BloomFilter filter = BloomFilterFactory
         .createBloomFilter(1000, 0.0001, 10000, typeCode);
     HoodieAvroWriteSupport writeSupport =
-        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, filter);
+        new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema), schema, Option.of(filter));
     ParquetWriter writer = new ParquetWriter(new Path(filePath), writeSupport, CompressionCodecName.GZIP,
         120 * 1024 * 1024, ParquetWriter.DEFAULT_PAGE_SIZE);
     for (String rowKey : rowKeys) {
       GenericRecord rec = new GenericData.Record(schema);
-      rec.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, rowKey);
+      rec.put(useMetaFields ? HoodieRecord.RECORD_KEY_METADATA_FIELD : recordFieldName, rowKey);
       if (addPartitionPathField) {
-        rec.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, partitionPath);
+        rec.put(useMetaFields ? HoodieRecord.PARTITION_PATH_METADATA_FIELD : partitionFieldName, partitionPathValue);
       }
       writer.write(rec);
       writeSupport.add(rowKey);
     }
     writer.close();
+  }
+
+  private static Schema getSchemaWithFields(List<String> fields) {
+    List<Schema.Field> toBeAddedFields = new ArrayList<>();
+    Schema recordSchema = Schema.createRecord("HoodieRecordKey", "", "", false);
+
+    for (String field: fields) {
+      Schema.Field schemaField =
+          new Schema.Field(field, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+      toBeAddedFields.add(schemaField);
+    }
+    recordSchema.setFields(toBeAddedFields);
+    return recordSchema;
+  }
+
+  class TestBaseKeyGen extends BaseKeyGenerator {
+
+    private String recordKeyField;
+    private String partitionField;
+
+    public TestBaseKeyGen(String recordKeyField, String partitionField) {
+      super(new TypedProperties());
+      this.recordKeyField = recordKeyField;
+      this.partitionField = partitionField;
+    }
+
+    @Override
+    public String getRecordKey(GenericRecord record) {
+      return record.get(recordKeyField).toString();
+    }
+
+    @Override
+    public String getPartitionPath(GenericRecord record) {
+      return record.get(partitionField).toString();
+    }
+
+    @Override
+    public List<String> getRecordKeyFields() {
+      return Arrays.asList(new String[]{recordKeyField});
+    }
+
+    @Override
+    public List<String> getPartitionPathFields() {
+      return Arrays.asList(new String[]{partitionField});
+    }
   }
 }
