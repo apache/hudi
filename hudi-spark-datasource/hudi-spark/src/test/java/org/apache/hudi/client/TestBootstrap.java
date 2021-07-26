@@ -562,7 +562,7 @@ public class TestBootstrap extends HoodieClientTestBase {
     final List<String> records = new ArrayList<>();
     IntStream.range(from, to).forEach(i -> {
       String id = "" + i;
-      records.add(generateGenericRecord("trip_" + id, "rider_" + id, "driver_" + id,
+      records.add(generateGenericRecord("trip_" + id, Long.toString(timestamp), "rider_" + id, "driver_" + id,
           timestamp, false, false).toString());
     });
     if (isPartitioned) {

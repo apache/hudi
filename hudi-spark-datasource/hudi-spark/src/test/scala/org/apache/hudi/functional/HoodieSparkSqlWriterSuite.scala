@@ -392,18 +392,19 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
     }
   }
 
-  List((DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL, HoodieFileFormat.PARQUET.name()), (DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL, HoodieFileFormat.ORC.name()),
-    (DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL, HoodieFileFormat.PARQUET.name()), (DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL, HoodieFileFormat.ORC.name()))
+  List((DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL, HoodieFileFormat.PARQUET.name(), true), (DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL, HoodieFileFormat.ORC.name(), true),
+    (DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL, HoodieFileFormat.PARQUET.name(), true), (DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL, HoodieFileFormat.ORC.name(), true),
+    (DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL, HoodieFileFormat.PARQUET.name(), false))
     .foreach(t => {
       val tableType = t._1
       val baseFileFormat = t._2
-      test("test basic HoodieSparkSqlWriter functionality with datasource insert for " + tableType + " with " + baseFileFormat + "as the base file format") {
-        initSparkContext("test_insert_datasource")
+      val populateMetaFields = t._3
+      test("test basic HoodieSparkSqlWriter functionality with datasource insert for " + tableType + " with " + baseFileFormat + " as the base file format "
+      + " with populate meta fields " + populateMetaFields) {
+        initSparkContext("test_insert_base_file_format_datasource")
         val path = java.nio.file.Files.createTempDirectory("hoodie_test_path")
         try {
-
           val hoodieFooTableName = "hoodie_foo_tbl"
-
           //create a new table
           val fooTableModifier = Map("path" -> path.toAbsolutePath.toString,
             HoodieWriteConfig.TABLE_NAME.key -> hoodieFooTableName,
@@ -413,6 +414,7 @@ class HoodieSparkSqlWriterSuite extends FunSuite with Matchers {
             DataSourceWriteOptions.OPERATION_OPT_KEY.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
             DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY.key -> "_row_key",
             DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key -> "partition",
+            HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key() -> String.valueOf(populateMetaFields),
             DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY.key -> classOf[SimpleKeyGenerator].getCanonicalName)
           val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
 
