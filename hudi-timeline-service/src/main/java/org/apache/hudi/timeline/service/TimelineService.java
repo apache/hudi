@@ -53,51 +53,25 @@ public class TimelineService {
   private static final int DEFAULT_NUM_THREADS = -1;
 
   private int serverPort;
+  private Config timelineServerConf;
   private Configuration conf;
   private transient HoodieEngineContext context;
   private transient FileSystem fs;
   private transient Javalin app = null;
   private transient FileSystemViewManager fsViewsManager;
-  private final int numThreads;
-  private final boolean shouldCompressOutput;
-  private final boolean useAsync;
-  private final int markerBatchNumThreads;
-  private final long markerBatchIntervalMs;
-  private final int markerDeleteParallelism;
 
   public int getServerPort() {
     return serverPort;
   }
 
-  private TimelineService(HoodieEngineContext context, int serverPort, FileSystem fs,
-                          FileSystemViewManager globalFileSystemViewManager, Configuration conf,
-                          int numThreads, boolean compressOutput, boolean useAsync, int markerBatchNumThreads,
-                          long markerBatchIntervalMs, int markerDeleteParallelism) throws IOException {
-    this.conf = FSUtils.prepareHadoopConf(conf);
-    this.context = context;
-    this.fs = fs;
-    this.serverPort = serverPort;
-    this.fsViewsManager = globalFileSystemViewManager;
-    this.numThreads = numThreads;
-    this.shouldCompressOutput = compressOutput;
-    this.useAsync = useAsync;
-    this.markerBatchNumThreads = markerBatchNumThreads;
-    this.markerBatchIntervalMs = markerBatchIntervalMs;
-    this.markerDeleteParallelism = markerDeleteParallelism;
-  }
-
-  public TimelineService(HoodieEngineContext context, int serverPort,
-                         FileSystemViewManager globalFileSystemViewManager) throws IOException {
-    this(context, serverPort, FileSystem.get(new Configuration()), globalFileSystemViewManager,
-        new Configuration(), DEFAULT_NUM_THREADS, true, false, 20, 50, 100);
-  }
-
-  public TimelineService(HoodieEngineContext context, Config timelineServerConf, Configuration hadoopConf,
+  public TimelineService(HoodieEngineContext context, Configuration hadoopConf, Config timelineServerConf,
                          FileSystem fileSystem, FileSystemViewManager globalFileSystemViewManager) throws IOException {
-    this(context, timelineServerConf.serverPort, fileSystem, globalFileSystemViewManager,
-        hadoopConf, timelineServerConf.numThreads, timelineServerConf.compress,
-        timelineServerConf.async, timelineServerConf.markerBatchNumThreads,
-        timelineServerConf.markerBatchIntervalMs, timelineServerConf.markerParallelism);
+    this.conf = FSUtils.prepareHadoopConf(hadoopConf);
+    this.timelineServerConf = timelineServerConf;
+    this.serverPort = timelineServerConf.serverPort;
+    this.context = context;
+    this.fs = fileSystem;
+    this.fsViewsManager = globalFileSystemViewManager;
   }
 
   public static class Config implements Serializable {
@@ -134,6 +108,9 @@ public class TimelineService {
     @Parameter(names = {"--compress"}, description = "Compress output using gzip")
     public boolean compress = true;
 
+    @Parameter(names = {"--enable-marker-requests", "-em"}, description = "Enable handling of marker-related requests")
+    public boolean enableMarkerRequests = false;
+
     @Parameter(names = {"--marker-batch-threads", "-mbt"}, description = "Number of threads to use for batch processing marker creation requests")
     public int markerBatchNumThreads = 20;
 
@@ -163,8 +140,9 @@ public class TimelineService {
       private int numThreads = DEFAULT_NUM_THREADS;
       private boolean async = false;
       private boolean compress = true;
+      private boolean enableMarkerRequests = false;
       private int markerBatchNumThreads = 20;
-      private long markerBatchIntervalMs = 50;
+      private long markerBatchIntervalMs = 50L;
       private int markerParallelism = 100;
 
       public Builder() {}
@@ -214,6 +192,11 @@ public class TimelineService {
         return this;
       }
 
+      public Builder enableMarkerRequests(boolean enableMarkerRequests) {
+        this.enableMarkerRequests = enableMarkerRequests;
+        return this;
+      }
+
       public Builder markerBatchNumThreads(int markerBatchNumThreads) {
         this.markerBatchNumThreads = markerBatchNumThreads;
         return this;
@@ -240,6 +223,7 @@ public class TimelineService {
         config.numThreads = this.numThreads;
         config.async = this.async;
         config.compress = this.compress;
+        config.enableMarkerRequests = this.enableMarkerRequests;
         config.markerBatchNumThreads = this.markerBatchNumThreads;
         config.markerBatchIntervalMs = this.markerBatchIntervalMs;
         config.markerParallelism = this.markerParallelism;
@@ -276,18 +260,17 @@ public class TimelineService {
   }
 
   public int startService() throws IOException {
-    final Server server = numThreads == DEFAULT_NUM_THREADS ? JettyServerUtil.defaultServer()
-            : new Server(new QueuedThreadPool(numThreads));
+    final Server server = timelineServerConf.numThreads == DEFAULT_NUM_THREADS ? JettyServerUtil.defaultServer()
+            : new Server(new QueuedThreadPool(timelineServerConf.numThreads));
 
     app = Javalin.create().server(() -> server);
-    if (!shouldCompressOutput) {
+    if (!timelineServerConf.compress) {
       app.disableDynamicGzip();
     }
 
     RequestHandler requestHandler = new RequestHandler(
-        app, conf, context, fs, fsViewsManager, useAsync, markerBatchNumThreads,
-        markerBatchIntervalMs, markerDeleteParallelism);
-    app.get("/", ctx -> ctx.result("Hello World"));
+        app, conf, timelineServerConf, context, fs, fsViewsManager);
+    app.get("/", ctx -> ctx.result("Hello Hudi"));
     requestHandler.register();
     int realServerPort = startServiceOnPort(serverPort);
     LOG.info("Starting Timeline server on port :" + realServerPort);
@@ -356,8 +339,8 @@ public class TimelineService {
     Configuration conf = FSUtils.prepareHadoopConf(new Configuration());
     FileSystemViewManager viewManager = buildFileSystemViewManager(cfg, new SerializableConfiguration(conf));
     TimelineService service = new TimelineService(
-        new HoodieLocalEngineContext(FSUtils.prepareHadoopConf(new Configuration())), cfg,
-        new Configuration(), FileSystem.get(new Configuration()), viewManager);
+        new HoodieLocalEngineContext(FSUtils.prepareHadoopConf(new Configuration())),
+        new Configuration(), cfg, FileSystem.get(new Configuration()), viewManager);
     service.run();
   }
 }

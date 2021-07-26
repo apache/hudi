@@ -48,11 +48,9 @@ import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Stream;
 
 /**
@@ -106,14 +104,8 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   public static final String TIMELINE = String.format("%s/%s", BASE_URL, "timeline/instants/all");
 
-  public static final String ALL_MARKERS_URL = String.format("%s/%s", BASE_URL, "markers/all");
-  public static final String CREATE_AND_MERGE_MARKERS_URL = String.format("%s/%s", BASE_URL, "markers/create-and-merge");
-  public static final String MARKERS_DIR_EXISTS_URL = String.format("%s/%s", BASE_URL, "markers/dir/exists");
-
   // POST Requests
   public static final String REFRESH_TABLE = String.format("%s/%s", BASE_URL, "refresh/");
-  public static final String CREATE_MARKER_URL = String.format("%s/%s", BASE_URL, "marker/create");
-  public static final String DELETE_MARKERS_URL = String.format("%s/%s", BASE_URL, "markers/delete");
 
   public static final String PARTITION_PARAM = "partition";
   public static final String BASEPATH_PARAM = "basepath";
@@ -125,8 +117,6 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String TIMELINE_HASH = "timelinehash";
   public static final String REFRESH_OFF = "refreshoff";
   public static final String INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM = "includependingcompaction";
-  public static final String MARKER_DIR_PATH_PARAM = "markerdirpath";
-  public static final String MARKER_NAME_PARAM = "markername";
 
   private static final Logger LOG = LogManager.getLogger(RemoteHoodieTableFileSystemView.class);
 
@@ -173,7 +163,6 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
     String url = builder.toString();
     LOG.info("Sending request : (" + url + ")");
-    long startTimeMs = System.currentTimeMillis();
     Response response;
     int timeout = this.timeoutSecs * 1000; // msec
     switch (method) {
@@ -186,7 +175,6 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
         break;
     }
     String content = response.returnContent().asString();
-    LOG.info("Got response in " + (System.currentTimeMillis() - startTimeMs) + " ms");
     return (T) mapper.readValue(content, reference);
   }
 
@@ -448,58 +436,6 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
       List<ClusteringOpDTO> dtos = executeRequest(PENDING_CLUSTERING_FILEGROUPS, paramsMap,
           new TypeReference<List<ClusteringOpDTO>>() {}, RequestMethod.GET);
       return dtos.stream().map(ClusteringOpDTO::toClusteringOperation);
-    } catch (IOException e) {
-      throw new HoodieRemoteException(e);
-    }
-  }
-
-  @Override
-  public Set<String> getAllMarkerFilePaths(String markerDirPath) {
-    Map<String, String> paramsMap = Collections.singletonMap(MARKER_DIR_PATH_PARAM, markerDirPath);
-    try {
-      return executeRequest(ALL_MARKERS_URL, paramsMap, new TypeReference<Set<String>>() {}, RequestMethod.GET);
-    } catch (IOException e) {
-      throw new HoodieRemoteException(e);
-    }
-  }
-
-  @Override
-  public Set<String> getCreateAndMergeMarkerFilePaths(String markerDirPath) {
-    Map<String, String> paramsMap = Collections.singletonMap(MARKER_DIR_PATH_PARAM, markerDirPath);
-    try {
-      return executeRequest(CREATE_AND_MERGE_MARKERS_URL, paramsMap, new TypeReference<Set<String>>() {}, RequestMethod.GET);
-    } catch (IOException e) {
-      throw new HoodieRemoteException(e);
-    }
-  }
-
-  @Override
-  public boolean doesMarkerDirExist(String markerDirPath) {
-    Map<String, String> paramsMap = Collections.singletonMap(MARKER_DIR_PATH_PARAM, markerDirPath);
-    try {
-      return executeRequest(MARKERS_DIR_EXISTS_URL, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.GET);
-    } catch (IOException e) {
-      throw new HoodieRemoteException(e);
-    }
-  }
-
-  @Override
-  public boolean createMarker(String markerDirPath, String markerName) {
-    Map<String, String> paramsMap = new HashMap<>();
-    paramsMap.put(MARKER_DIR_PATH_PARAM, markerDirPath);
-    paramsMap.put(MARKER_NAME_PARAM, markerName);
-    try {
-      return executeRequest(CREATE_MARKER_URL, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.POST);
-    } catch (IOException e) {
-      throw new HoodieRemoteException(e);
-    }
-  }
-
-  @Override
-  public boolean deleteMarkerDir(String markerDirPath) {
-    Map<String, String> paramsMap = Collections.singletonMap(MARKER_DIR_PATH_PARAM, markerDirPath);
-    try {
-      return executeRequest(DELETE_MARKERS_URL, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.POST);
     } catch (IOException e) {
       throw new HoodieRemoteException(e);
     }

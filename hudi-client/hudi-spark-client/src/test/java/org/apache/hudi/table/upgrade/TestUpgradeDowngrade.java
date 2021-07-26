@@ -129,7 +129,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
     // delete one of the marker files in 2nd commit if need be.
     MarkerFiles markerFiles =
-        MarkerFilesFactory.get(getConfig().getMarkersIOMode(), table, commitInstant.getTimestamp());
+        MarkerFilesFactory.get(getConfig().getMarkersType(), table, commitInstant.getTimestamp());
     List<String> markerPaths = new ArrayList<>(markerFiles.allMarkerFilePaths());
     if (deletePartialMarkerFiles) {
       String toDeleteMarkerFile = markerPaths.get(0);
@@ -185,7 +185,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     HoodieInstant commitInstant = table.getPendingCommitTimeline().lastInstant().get();
 
     // delete one of the marker files in 2nd commit if need be.
-    MarkerFiles markerFiles = MarkerFilesFactory.get(getConfig().getMarkersIOMode(), table, commitInstant.getTimestamp());
+    MarkerFiles markerFiles = MarkerFilesFactory.get(getConfig().getMarkersType(), table, commitInstant.getTimestamp());
     List<String> markerPaths = new ArrayList<>(markerFiles.allMarkerFilePaths());
     if (deletePartialMarkerFiles) {
       String toDeleteMarkerFile = markerPaths.get(0);
@@ -215,14 +215,14 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
   private void assertMarkerFilesForDowngrade(HoodieTable table, HoodieInstant commitInstant) throws IOException {
     // Verify recreated marker files are as expected
-    MarkerFiles markerFiles = MarkerFilesFactory.get(getConfig().getMarkersIOMode(), table, commitInstant.getTimestamp());
+    MarkerFiles markerFiles = MarkerFilesFactory.get(getConfig().getMarkersType(), table, commitInstant.getTimestamp());
     assertFalse(markerFiles.doesMarkerDirExist());
   }
 
   private void assertMarkerFilesForUpgrade(HoodieTable table, HoodieInstant commitInstant, List<FileSlice> firstPartitionCommit2FileSlices,
                                            List<FileSlice> secondPartitionCommit2FileSlices) throws IOException {
     // Verify recreated marker files are as expected
-    MarkerFiles markerFiles = MarkerFilesFactory.get(getConfig().getMarkersIOMode(), table, commitInstant.getTimestamp());
+    MarkerFiles markerFiles = MarkerFilesFactory.get(getConfig().getMarkersType(), table, commitInstant.getTimestamp());
     assertTrue(markerFiles.doesMarkerDirExist());
     Set<String> files = markerFiles.allMarkerFilePaths();
 

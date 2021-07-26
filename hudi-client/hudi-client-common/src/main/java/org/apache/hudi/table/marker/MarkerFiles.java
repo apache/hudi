@@ -55,17 +55,24 @@ public abstract class MarkerFiles implements Serializable {
   }
 
   /**
-   * The marker path will be <base-path>/.hoodie/.temp/<instant_ts>/2019/04/25/filename.marker.writeIOType.
+   * Creates a marker without checking if the marker already exists.
+   *
+   * @param partitionPath partition path in the table
+   * @param dataFileName data file name
+   * @param type  write IO type
+   * @return the marker path
    */
   public Option<Path> create(String partitionPath, String dataFileName, IOType type) {
     return create(partitionPath, dataFileName, type, false);
   }
 
   /**
-   * The marker path will be <base-path>/.hoodie/.temp/<instant_ts>/2019/04/25/filename.marker.writeIOType.
+   * Creates a marker if the marker does not exist.
    *
-   * @return the path of the marker file if it is created successfully,
-   * empty option if it already exists
+   * @param partitionPath partition path in the table
+   * @param dataFileName data file name
+   * @param type write IO type
+   * @return the marker path or empty option if already exists
    */
   public Option<Path> createIfNotExists(String partitionPath, String dataFileName, IOType type) {
     return create(partitionPath, dataFileName, type, true);

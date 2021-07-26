@@ -84,7 +84,6 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -1491,48 +1490,6 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertTrue(fileIds.contains(fileId1));
     assertTrue(fileIds.contains(fileId2));
     assertFalse(fileIds.contains(fileId3));
-  }
-
-  private void invokeMarkerCreation(String markerDirPath, String markerName, boolean expectedResult) {
-    long startTime = System.currentTimeMillis();
-    assertEquals(expectedResult, fsView.createMarker(markerDirPath, markerName));
-    LOG.info("Create marker time=" + (System.currentTimeMillis() - startTime) + "ms");
-  }
-
-  private void deleteMarkers(String markerDirPath) {
-    fsView.deleteMarkerDir(markerDirPath);
-    assertEquals(0, fsView.getAllMarkerFilePaths(markerDirPath).size());
-    assertFalse(fsView.doesMarkerDirExist(markerDirPath));
-  }
-
-  @Test
-  public void testMarkerOperations() {
-    String markerDirPath = basePath + "/.hoodie/.temp/000";
-
-    if (fsView instanceof RemoteHoodieTableFileSystemView) {
-      List<String> markers = new ArrayList<>();
-      markers.add("a.CREATE");
-      markers.add("b.MERGE");
-      markers.add("c.APPEND");
-
-      // Clear existing markers
-      deleteMarkers(markerDirPath);
-
-      // Create markers
-      for (String marker : markers) {
-        invokeMarkerCreation(markerDirPath, marker, true);
-      }
-      // duplicate entry
-      invokeMarkerCreation(markerDirPath, markers.get(0), false);
-
-      assertTrue(fsView.doesMarkerDirExist(markerDirPath));
-      assertEquals(3, fsView.getAllMarkerFilePaths(markerDirPath).size());
-      assertEquals(2, fsView.getCreateAndMergeMarkerFilePaths(markerDirPath).size());
-      deleteMarkers(markerDirPath);
-    } else {
-      assertThrows(UnsupportedOperationException.class,
-          () -> fsView.getAllMarkerFilePaths(markerDirPath));
-    }
   }
 
   @Override

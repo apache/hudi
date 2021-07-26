@@ -25,14 +25,15 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
-import org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.AfterEach;
@@ -49,7 +50,7 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
-public class TestTimelineBasedMarkerFiles extends TestMarkerFiles {
+public class TestTimelineServerBasedMarkerFiles extends TestMarkerFiles {
   TimelineService timelineService;
 
   @BeforeEach
@@ -57,7 +58,7 @@ public class TestTimelineBasedMarkerFiles extends TestMarkerFiles {
     initPath();
     initMetaClient();
     this.jsc = new JavaSparkContext(
-        HoodieClientTestUtils.getSparkConfForTest(TestTimelineBasedMarkerFiles.class.getName()));
+        HoodieClientTestUtils.getSparkConfForTest(TestTimelineServerBasedMarkerFiles.class.getName()));
     this.context = new HoodieSparkEngineContext(jsc);
     this.fs = FSUtils.getFs(metaClient.getBasePath(), metaClient.getHadoopConf());
     this.markerFolderPath =  new Path(metaClient.getMarkerFolderPath("000"));
@@ -68,16 +69,16 @@ public class TestTimelineBasedMarkerFiles extends TestMarkerFiles {
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
 
     try {
-      timelineService = new TimelineService(localEngineContext, 0,
+      timelineService = new TimelineService(localEngineContext, new Configuration(),
+          TimelineService.Config.builder().serverPort(0).enableMarkerRequests(true).build(),
+          FileSystem.get(new Configuration()),
           FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, storageConf));
       timelineService.startService();
     } catch (Exception ex) {
       throw new RuntimeException(ex);
     }
-    RemoteHoodieTableFileSystemView view =
-        new RemoteHoodieTableFileSystemView("localhost", timelineService.getServerPort(), metaClient);
-    this.markerFiles = new TimelineBasedMarkerFiles(
-        metaClient.getBasePath(), markerFolderPath.toString(), "000", view);
+    this.markerFiles = new TimelineServerBasedMarkerFiles(
+        metaClient.getBasePath(), markerFolderPath.toString(), "000", "localhost", timelineService.getServerPort(), 300);
   }
 
   @AfterEach

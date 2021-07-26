@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.timeline.dto.CompactionOpDTO;
 import org.apache.hudi.common.table.timeline.dto.FileGroupDTO;
 import org.apache.hudi.common.table.timeline.dto.FileSliceDTO;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.timeline.service.TimelineService;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -38,8 +39,9 @@ import java.util.stream.Collectors;
  */
 public class FileSliceHandler extends Handler {
 
-  public FileSliceHandler(Configuration conf, FileSystem fileSystem, FileSystemViewManager viewManager) throws IOException {
-    super(conf, fileSystem, viewManager);
+  public FileSliceHandler(Configuration conf, TimelineService.Config timelineServiceConfig,
+                          FileSystem fileSystem, FileSystemViewManager viewManager) throws IOException {
+    super(conf, timelineServiceConfig, fileSystem, viewManager);
   }
 
   public List<FileSliceDTO> getAllFileSlices(String basePath, String partitionPath) {

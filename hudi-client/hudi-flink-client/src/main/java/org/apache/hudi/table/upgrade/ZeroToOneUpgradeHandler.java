@@ -37,7 +37,7 @@ import org.apache.hudi.table.action.rollback.ListingBasedRollbackRequest;
 import org.apache.hudi.table.action.rollback.RollbackUtils;
 import org.apache.hudi.table.marker.MarkerFiles;
 import org.apache.hudi.table.marker.MarkerFilesFactory;
-import org.apache.hudi.table.marker.MarkerIOMode;
+import org.apache.hudi.table.marker.MarkerType;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -63,7 +63,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
     }
     for (String commit : commits) {
       // for every pending commit, delete old marker files and re-create marker files in new format
-      recreateMarkerFiles(commit, table, context, config.getMarkersIOMode(), config.getMarkersDeleteParallelism());
+      recreateMarkerFiles(commit, table, context, config.getMarkersType(), config.getMarkersDeleteParallelism());
     }
   }
 
@@ -81,7 +81,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
   private static void recreateMarkerFiles(final String commitInstantTime,
                                           HoodieFlinkTable table,
                                           HoodieEngineContext context,
-                                          MarkerIOMode ioMode,
+                                          MarkerType ioMode,
                                           int parallelism) throws HoodieRollbackException {
     try {
       // fetch hoodie instant

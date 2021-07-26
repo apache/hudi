@@ -30,6 +30,8 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TestHoodieTableFileSystemView;
 import org.apache.hudi.timeline.service.TimelineService;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -51,7 +53,8 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
 
     try {
-      server = new TimelineService(localEngineContext, 0,
+      server = new TimelineService(localEngineContext, new Configuration(),
+          TimelineService.Config.builder().serverPort(0).build(), FileSystem.get(new Configuration()),
           FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, sConf, commonConfig));
       server.startService();
     } catch (Exception ex) {

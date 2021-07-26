@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.NetworkUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.table.marker.MarkerType;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.log4j.LogManager;
@@ -75,17 +76,22 @@ public class EmbeddedTimelineService {
   }
 
   public void startServer() throws IOException {
-    TimelineService.Config timelineServiceConf = TimelineService.Config.builder()
+    TimelineService.Config.Builder timelineServiceConfBuilder = TimelineService.Config.builder()
         .serverPort(writeConfig.getEmbeddedTimelineServerPort())
         .numThreads(writeConfig.getEmbeddedTimelineServerThreads())
         .compress(writeConfig.getEmbeddedTimelineServerCompressOutput())
-        .async(writeConfig.getEmbeddedTimelineServerUseAsync())
-        .markerBatchNumThreads(writeConfig.getMarkersTimelineBasedBatchNumThreads())
-        .markerBatchIntervalMs(writeConfig.getMarkersTimelineBasedBatchIntervalMs())
-        .markerParallelism(writeConfig.getMarkersDeleteParallelism())
-        .build();
+        .async(writeConfig.getEmbeddedTimelineServerUseAsync());
+    // Only passing marker-related write configs to timeline server
+    // if timeline-server-based markers are used.
+    if (writeConfig.getMarkersType() == MarkerType.TIMELINE_SERVER_BASED) {
+      timelineServiceConfBuilder
+          .enableMarkerRequests(true)
+          .markerBatchNumThreads(writeConfig.getMarkersTimelineServerBasedBatchNumThreads())
+          .markerBatchIntervalMs(writeConfig.getMarkersTimelineServerBasedBatchIntervalMs())
+          .markerParallelism(writeConfig.getMarkersDeleteParallelism());
+    }
 
-    server = new TimelineService(context, timelineServiceConf, hadoopConf.newCopy(),
+    server = new TimelineService(context, hadoopConf.newCopy(), timelineServiceConfBuilder.build(),
         FSUtils.getFs(basePath, hadoopConf.newCopy()), viewManager);
     serverPort = server.startService();
     LOG.info("Started embedded timeline server at " + hostAddr + ":" + serverPort);

@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.timeline.service.TimelineService;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -112,20 +113,21 @@ public class MarkerHandler extends Handler {
   // Last marker file index used, for finding the next marker file index in a round-robin fashion
   private int lastMarkerFileIndex = 0;
 
-  public MarkerHandler(Configuration conf, HoodieEngineContext hoodieEngineContext, FileSystem fileSystem,
-                       FileSystemViewManager viewManager, Registry metricsRegistry,
-                       int batchNumThreads, long batchIntervalMs, int parallelism) throws IOException {
-    super(conf, fileSystem, viewManager);
-    LOG.info("MarkerHandler FileSystem: " + this.fileSystem.getScheme());
-    LOG.info("MarkerHandler Params: batchNumThreads=" + batchNumThreads + " batchIntervalMs=" + batchIntervalMs + "ms");
+  public MarkerHandler(Configuration conf, TimelineService.Config timelineServiceConfig,
+                       HoodieEngineContext hoodieEngineContext, FileSystem fileSystem,
+                       FileSystemViewManager viewManager, Registry metricsRegistry) throws IOException {
+    super(conf, timelineServiceConfig, fileSystem, viewManager);
+    LOG.debug("MarkerHandler FileSystem: " + this.fileSystem.getScheme());
+    LOG.debug("MarkerHandler Params: batchNumThreads=" + timelineServiceConfig.markerBatchNumThreads
+        + " batchIntervalMs=" + timelineServiceConfig.markerBatchIntervalMs + "ms");
     this.hoodieEngineContext = hoodieEngineContext;
     this.metricsRegistry = metricsRegistry;
-    this.batchIntervalMs = batchIntervalMs;
-    this.parallelism = parallelism;
-    this.executorService = Executors.newScheduledThreadPool(batchNumThreads);
+    this.batchIntervalMs = timelineServiceConfig.markerBatchIntervalMs;
+    this.parallelism = timelineServiceConfig.markerParallelism;
+    this.executorService = Executors.newScheduledThreadPool(timelineServiceConfig.markerBatchNumThreads);
 
-    List<Boolean> isMarkerFileInUseList = new ArrayList<>(batchNumThreads);
-    for (int i = 0; i < batchNumThreads; i++) {
+    List<Boolean> isMarkerFileInUseList = new ArrayList<>(timelineServiceConfig.markerBatchNumThreads);
+    for (int i = 0; i < timelineServiceConfig.markerBatchNumThreads; i++) {
       isMarkerFileInUseList.add(false);
     }
     this.markerFilesUseStatus = Collections.synchronizedList(isMarkerFileInUseList);

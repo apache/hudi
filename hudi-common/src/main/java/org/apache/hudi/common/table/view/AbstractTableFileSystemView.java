@@ -75,8 +75,6 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.METADATA_BOOT
  */
 public abstract class AbstractTableFileSystemView implements SyncableFileSystemView, Serializable {
 
-  public static final String UNSUPPORTED_MARKER_OPERATION_ERROR_MSG =
-      "Marker operations are only supported in RemoteHoodieTableFileSystemView with timeline service enabled";
   private static final Logger LOG = LogManager.getLogger(AbstractTableFileSystemView.class);
 
   protected HoodieTableMetaClient metaClient;
@@ -1092,31 +1090,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     } finally {
       writeLock.unlock();
     }
-  }
-
-  @Override
-  public Set<String> getAllMarkerFilePaths(String markerDirPath) {
-    throw new UnsupportedOperationException(UNSUPPORTED_MARKER_OPERATION_ERROR_MSG);
-  }
-
-  @Override
-  public Set<String> getCreateAndMergeMarkerFilePaths(String markerDirPath) {
-    throw new UnsupportedOperationException(UNSUPPORTED_MARKER_OPERATION_ERROR_MSG);
-  }
-
-  @Override
-  public boolean createMarker(String markerDirPath, String markerName) {
-    throw new UnsupportedOperationException(UNSUPPORTED_MARKER_OPERATION_ERROR_MSG);
-  }
-
-  @Override
-  public boolean deleteMarkerDir(String markerDirPath) {
-    throw new UnsupportedOperationException(UNSUPPORTED_MARKER_OPERATION_ERROR_MSG);
-  }
-
-  @Override
-  public boolean doesMarkerDirExist(String markerDirPath) {
-    throw new UnsupportedOperationException(UNSUPPORTED_MARKER_OPERATION_ERROR_MSG);
   }
 
   /**

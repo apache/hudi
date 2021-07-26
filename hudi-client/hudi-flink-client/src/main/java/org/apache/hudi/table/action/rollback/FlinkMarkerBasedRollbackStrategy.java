@@ -54,7 +54,7 @@ public class FlinkMarkerBasedRollbackStrategy<T extends HoodieRecordPayload> ext
   @Override
   public List<HoodieRollbackStat> execute(HoodieInstant instantToRollback) {
     try {
-      MarkerFiles markerFiles = MarkerFilesFactory.get(config.getMarkersIOMode(), table, instantToRollback.getTimestamp());
+      MarkerFiles markerFiles = MarkerFilesFactory.get(config.getMarkersType(), table, instantToRollback.getTimestamp());
       List<HoodieRollbackStat> rollbackStats = context.map(new ArrayList<>(markerFiles.allMarkerFilePaths()), markerFilePath -> {
         String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);
         IOType type = IOType.valueOf(typeStr);

@@ -187,7 +187,7 @@ public class HoodieRowCreateHandle implements Serializable {
    * @param partitionPath Partition path
    */
   private void createMarkerFile(String partitionPath, String dataFileName) {
-    MarkerFilesFactory.get(writeConfig.getMarkersIOMode(), table, instantTime)
+    MarkerFilesFactory.get(writeConfig.getMarkersType(), table, instantTime)
         .create(partitionPath, dataFileName, IOType.CREATE);
   }
 

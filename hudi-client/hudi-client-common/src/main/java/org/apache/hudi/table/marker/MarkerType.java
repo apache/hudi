@@ -19,9 +19,9 @@
 package org.apache.hudi.table.marker;
 
 /**
- * Marker IO operation mode.
+ * Marker type indicating how markers are stored in the file system.
  */
-public enum MarkerIOMode {
+public enum MarkerType {
   DIRECT,
-  TIMELINE_BASED
+  TIMELINE_SERVER_BASED
 }

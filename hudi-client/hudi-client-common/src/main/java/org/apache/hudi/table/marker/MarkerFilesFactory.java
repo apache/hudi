@@ -36,13 +36,13 @@ public class MarkerFilesFactory {
    * @param instantTime current instant time
    * @return  {@code MarkerFiles} instance based on the {@code MarkerIOMode}
    */
-  public static MarkerFiles get(MarkerIOMode mode, HoodieTable table, String instantTime) {
+  public static MarkerFiles get(MarkerType mode, HoodieTable table, String instantTime) {
     LOG.info("Instantiated MarkerFiles with mode: " + mode.toString());
     switch (mode) {
       case DIRECT:
         return new DirectMarkerFiles(table, instantTime);
-      case TIMELINE_BASED:
-        return new TimelineBasedMarkerFiles(table, instantTime);
+      case TIMELINE_SERVER_BASED:
+        return new TimelineServerBasedMarkerFiles(table, instantTime);
       default:
         throw new HoodieException("The marker IO mode \"" + mode.name() + "\" is not supported.");
     }

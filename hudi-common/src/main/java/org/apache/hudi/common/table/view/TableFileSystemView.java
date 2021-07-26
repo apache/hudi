@@ -29,7 +29,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Stream;
 
 /**
@@ -186,40 +185,4 @@ public interface TableFileSystemView {
    * Filegroups that are in pending clustering.
    */
   Stream<Pair<HoodieFileGroupId, HoodieInstant>> getFileGroupsInPendingClustering();
-
-  /**
-   * @param markerDirPath marker directory path
-   * @return all marker paths in the marker directory
-   */
-  Set<String> getAllMarkerFilePaths(String markerDirPath);
-
-  /**
-   * @param markerDirPath marker directory path
-   * @return all marker paths of write IO type "CREATE" and "MERGE"
-   */
-  Set<String> getCreateAndMergeMarkerFilePaths(String markerDirPath);
-
-  /**
-   * @param markerDirPath marker directory path
-   * @return {@code true} if the marker directory exists; {@code false} otherwise.
-   */
-  boolean doesMarkerDirExist(String markerDirPath);
-
-  /**
-   * Creates a new marker.
-   *
-   * @param markerDirPath marker directory path
-   * @param markerName marker name
-   * @return {@code true} if there is no duplicate and the marker is successfully created;
-   * {@code false} otherwise
-   */
-  boolean createMarker(String markerDirPath, String markerName);
-
-  /**
-   * Deletes markers in the directory.
-   *
-   * @param markerDirPath marker directory path
-   * @return {@code true} if successful; {@code false} otherwise.
-   */
-  boolean deleteMarkerDir(String markerDirPath);
 }

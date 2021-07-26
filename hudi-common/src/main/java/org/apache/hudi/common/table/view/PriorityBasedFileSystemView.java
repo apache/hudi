@@ -37,10 +37,7 @@ import org.apache.log4j.Logger;
 
 import java.io.Serializable;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Stream;
-
-import static org.apache.hudi.common.table.view.AbstractTableFileSystemView.UNSUPPORTED_MARKER_OPERATION_ERROR_MSG;
 
 /**
  * A file system view which proxies request to a preferred File System View implementation. In case of error, flip all
@@ -220,31 +217,6 @@ public class PriorityBasedFileSystemView implements SyncableFileSystemView, Seri
   @Override
   public Stream<Pair<HoodieFileGroupId, HoodieInstant>> getFileGroupsInPendingClustering() {
     return execute(preferredView::getFileGroupsInPendingClustering, secondaryView::getFileGroupsInPendingClustering);
-  }
-
-  @Override
-  public Set<String> getAllMarkerFilePaths(String markerDirPath) {
-    throw new UnsupportedOperationException(UNSUPPORTED_MARKER_OPERATION_ERROR_MSG);
-  }
-
-  @Override
-  public Set<String> getCreateAndMergeMarkerFilePaths(String markerDirPath) {
-    throw new UnsupportedOperationException(UNSUPPORTED_MARKER_OPERATION_ERROR_MSG);
-  }
-
-  @Override
-  public boolean doesMarkerDirExist(String markerDirPath) {
-    throw new UnsupportedOperationException(UNSUPPORTED_MARKER_OPERATION_ERROR_MSG);
-  }
-
-  @Override
-  public boolean createMarker(String markerDirPath, String markerName) {
-    throw new UnsupportedOperationException(UNSUPPORTED_MARKER_OPERATION_ERROR_MSG);
-  }
-
-  @Override
-  public boolean deleteMarkerDir(String markerDirPath) {
-    throw new UnsupportedOperationException(UNSUPPORTED_MARKER_OPERATION_ERROR_MSG);
   }
 
   @Override

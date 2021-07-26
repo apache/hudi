@@ -20,6 +20,7 @@ package org.apache.hudi.timeline.service;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.table.marker.MarkerOperation;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.dto.BaseFileDTO;
 import org.apache.hudi.common.table.timeline.dto.ClusteringOpDTO;
@@ -67,6 +68,7 @@ public class RequestHandler {
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
   private static final Logger LOG = LogManager.getLogger(RequestHandler.class);
 
+  private final TimelineService.Config timelineServiceConfig;
   private final FileSystemViewManager viewManager;
   private final Javalin app;
   private final TimelineHandler instantHandler;
@@ -75,34 +77,34 @@ public class RequestHandler {
   private final MarkerHandler markerHandler;
   private Registry metricsRegistry = Registry.getRegistry("TimelineService");
   private ScheduledExecutorService asyncResultService = Executors.newSingleThreadScheduledExecutor();
-  private final boolean useAsync;
 
-  public RequestHandler(Javalin app, Configuration conf, HoodieEngineContext hoodieEngineContext,
-                        FileSystem fileSystem, FileSystemViewManager viewManager, boolean useAsync,
-                        int markerBatchNumThreads, long markerBatchIntervalMs, int markerParallelism) throws IOException {
+  public RequestHandler(Javalin app, Configuration conf, TimelineService.Config timelineServiceConfig,
+                        HoodieEngineContext hoodieEngineContext, FileSystem fileSystem,
+                        FileSystemViewManager viewManager) throws IOException {
+    this.timelineServiceConfig = timelineServiceConfig;
     this.viewManager = viewManager;
     this.app = app;
-    this.instantHandler = new TimelineHandler(conf, fileSystem, viewManager);
-    this.sliceHandler = new FileSliceHandler(conf, fileSystem, viewManager);
-    this.dataFileHandler = new BaseFileHandler(conf, fileSystem, viewManager);
-    this.markerHandler = new MarkerHandler(
-        conf, hoodieEngineContext, fileSystem, viewManager, metricsRegistry, markerBatchNumThreads, markerBatchIntervalMs, markerParallelism);
-    this.useAsync = useAsync;
-    if (useAsync) {
+    this.instantHandler = new TimelineHandler(conf, timelineServiceConfig, fileSystem, viewManager);
+    this.sliceHandler = new FileSliceHandler(conf, timelineServiceConfig, fileSystem, viewManager);
+    this.dataFileHandler = new BaseFileHandler(conf, timelineServiceConfig, fileSystem, viewManager);
+    if (timelineServiceConfig.enableMarkerRequests) {
+      this.markerHandler = new MarkerHandler(
+          conf, timelineServiceConfig, hoodieEngineContext, fileSystem, viewManager, metricsRegistry);
+    } else {
+      this.markerHandler = null;
+    }
+    if (timelineServiceConfig.async) {
       asyncResultService = Executors.newSingleThreadScheduledExecutor();
     }
-  }
-
-  public RequestHandler(Javalin app, Configuration conf, HoodieEngineContext hoodieEngineContext,
-                        FileSystem fileSystem, FileSystemViewManager viewManager) throws IOException {
-    this(app, conf, hoodieEngineContext, fileSystem, viewManager, false, 20, 50, 100);
   }
 
   public void register() {
     registerDataFilesAPI();
     registerFileSlicesAPI();
     registerTimelineAPI();
-    registerMarkerAPI();
+    if (markerHandler != null) {
+      registerMarkerAPI();
+    }
   }
 
   /**
@@ -158,7 +160,7 @@ public class RequestHandler {
   }
 
   private void writeValueAsString(Context ctx, Object obj) throws JsonProcessingException {
-    if (useAsync) {
+    if (timelineServiceConfig.async) {
       writeValueAsStringAsync(ctx, obj);
     } else {
       writeValueAsStringSync(ctx, obj);
@@ -414,39 +416,39 @@ public class RequestHandler {
   }
 
   private void registerMarkerAPI() {
-    app.get(RemoteHoodieTableFileSystemView.ALL_MARKERS_URL, new ViewHandler(ctx -> {
+    app.get(MarkerOperation.ALL_MARKERS_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("ALL_MARKERS", 1);
       Set<String> markers = markerHandler.getAllMarkers(
-          ctx.queryParam(RemoteHoodieTableFileSystemView.MARKER_DIR_PATH_PARAM, ""));
+          ctx.queryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, ""));
       writeValueAsString(ctx, markers);
     }, false));
 
-    app.get(RemoteHoodieTableFileSystemView.CREATE_AND_MERGE_MARKERS_URL, new ViewHandler(ctx -> {
+    app.get(MarkerOperation.CREATE_AND_MERGE_MARKERS_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("CREATE_AND_MERGE_MARKERS", 1);
       Set<String> markers = markerHandler.getCreateAndMergeMarkers(
-          ctx.queryParam(RemoteHoodieTableFileSystemView.MARKER_DIR_PATH_PARAM, ""));
+          ctx.queryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, ""));
       writeValueAsString(ctx, markers);
     }, false));
 
-    app.get(RemoteHoodieTableFileSystemView.MARKERS_DIR_EXISTS_URL, new ViewHandler(ctx -> {
+    app.get(MarkerOperation.MARKERS_DIR_EXISTS_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("MARKERS_DIR_EXISTS", 1);
       boolean exist = markerHandler.doesMarkerDirExist(
-          ctx.queryParam(RemoteHoodieTableFileSystemView.MARKER_DIR_PATH_PARAM, ""));
+          ctx.queryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, ""));
       writeValueAsString(ctx, exist);
     }, false));
 
-    app.post(RemoteHoodieTableFileSystemView.CREATE_MARKER_URL, new ViewHandler(ctx -> {
+    app.post(MarkerOperation.CREATE_MARKER_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("CREATE_MARKER", 1);
       ctx.result(markerHandler.createMarker(
           ctx,
-          ctx.queryParam(RemoteHoodieTableFileSystemView.MARKER_DIR_PATH_PARAM, ""),
-          ctx.queryParam(RemoteHoodieTableFileSystemView.MARKER_NAME_PARAM, "")));
+          ctx.queryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, ""),
+          ctx.queryParam(MarkerOperation.MARKER_NAME_PARAM, "")));
     }, false));
 
-    app.post(RemoteHoodieTableFileSystemView.DELETE_MARKERS_URL, new ViewHandler(ctx -> {
+    app.post(MarkerOperation.DELETE_MARKER_DIR_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("DELETE_MARKERS", 1);
       boolean success = markerHandler.deleteMarkers(
-          ctx.queryParam(RemoteHoodieTableFileSystemView.MARKER_DIR_PATH_PARAM, ""));
+          ctx.queryParam(MarkerOperation.MARKER_DIR_PATH_PARAM, ""));
       writeValueAsString(ctx, success);
     }, false));
   }
