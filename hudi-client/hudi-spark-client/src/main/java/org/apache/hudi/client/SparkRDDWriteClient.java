@@ -53,6 +53,7 @@ import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.MarkerFiles;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.SparkCompactHelpers;
 import org.apache.hudi.table.upgrade.AbstractUpgradeDowngrade;
@@ -370,7 +371,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     } catch (IOException e) {
       throw new HoodieClusteringException("unable to transition clustering inflight to complete: " + clusteringCommitTime,  e);
     }
-
+    new MarkerFiles(table, clusteringCommitTime).quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     if (clusteringTimer != null) {
       long durationInMs = metrics.getDurationInMs(clusteringTimer.stop());
       try {
