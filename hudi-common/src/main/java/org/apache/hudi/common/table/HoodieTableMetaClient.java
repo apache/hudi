@@ -319,12 +319,6 @@ public class HoodieTableMetaClient implements Serializable {
    * @param operationType operation type to be executed.
    */
   public void validateTableProperties(Properties properties, WriteOperationType operationType) {
-    // disabling meta fields are allowed only for bulk_insert operation
-    if (!Boolean.parseBoolean((String) properties.getOrDefault(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key(), HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.defaultValue()))
-        && operationType != WriteOperationType.BULK_INSERT) {
-      throw new HoodieException(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key() + " can only be disabled for " + WriteOperationType.BULK_INSERT
-          + " operation");
-    }
     // once meta fields are disabled, it cant be re-enabled for a given table.
     if (!getTableConfig().populateMetaFields()
         && Boolean.parseBoolean((String) properties.getOrDefault(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.key(), HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.defaultValue()))) {

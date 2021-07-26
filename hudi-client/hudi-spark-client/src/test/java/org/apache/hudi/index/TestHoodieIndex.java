@@ -23,10 +23,12 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -47,8 +49,10 @@ import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -56,8 +60,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Random;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import scala.Tuple2;
 
@@ -69,16 +75,34 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestHoodieIndex extends HoodieClientTestHarness {
 
+  private static Stream<Arguments> indexTypeParams() {
+    Object[][] data = new Object[][] {
+        {IndexType.BLOOM, true},
+        {IndexType.GLOBAL_BLOOM, true},
+        {IndexType.SIMPLE, true},
+        {IndexType.GLOBAL_SIMPLE, true},
+        {IndexType.SIMPLE, false},
+        {IndexType.GLOBAL_SIMPLE, false}
+    };
+    return Stream.of(data).map(Arguments::of);
+  }
+
   private static final Schema SCHEMA = getSchemaFromResource(TestHoodieIndex.class, "/exampleSchema.avsc", true);
   private final Random random = new Random();
   private IndexType indexType;
   private HoodieIndex index;
   private HoodieWriteConfig config;
 
-  private void setUp(IndexType indexType) throws Exception {
+  private void setUp(IndexType indexType, boolean populateMetaFields) throws Exception {
     this.indexType = indexType;
-    initResources();
+    initPath();
+    initSparkContexts();
+    initTestDataGenerator();
+    initFileSystem();
+    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, populateMetaFields ? new Properties()
+        : getPropertiesForKeyGen());
     config = getConfigBuilder()
+        .withProperties(populateMetaFields ? new Properties() : getPropertiesForKeyGen())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType)
             .build()).withAutoCommit(false).build();
     writeClient = getHoodieWriteClient(config);
@@ -91,9 +115,9 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   }
 
   @ParameterizedTest
-  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE"})
-  public void testSimpleTagLocationAndUpdate(IndexType indexType) throws Exception {
-    setUp(indexType);
+  @MethodSource("indexTypeParams")
+  public void testSimpleTagLocationAndUpdate(IndexType indexType, boolean populateMetaFields) throws Exception {
+    setUp(indexType, populateMetaFields);
     String newCommitTime = "001";
     int totalRecords = 10 + random.nextInt(20);
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
@@ -141,9 +165,9 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   }
 
   @ParameterizedTest
-  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE"})
-  public void testTagLocationAndDuplicateUpdate(IndexType indexType) throws Exception {
-    setUp(indexType);
+  @MethodSource("indexTypeParams")
+  public void testTagLocationAndDuplicateUpdate(IndexType indexType, boolean populateMetaFields) throws Exception {
+    setUp(indexType, populateMetaFields);
     String newCommitTime = "001";
     int totalRecords = 10 + random.nextInt(20);
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
@@ -191,9 +215,9 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
   }
 
   @ParameterizedTest
-  @EnumSource(value = IndexType.class, names = {"BLOOM", "GLOBAL_BLOOM", "SIMPLE", "GLOBAL_SIMPLE"})
-  public void testSimpleTagLocationAndUpdateWithRollback(IndexType indexType) throws Exception {
-    setUp(indexType);
+  @MethodSource("indexTypeParams")
+  public void testSimpleTagLocationAndUpdateWithRollback(IndexType indexType, boolean populateMetaFields) throws Exception {
+    setUp(indexType, populateMetaFields);
     String newCommitTime = writeClient.startCommit();
     int totalRecords = 20 + random.nextInt(20);
     List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, totalRecords);
@@ -242,10 +266,18 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     assert (javaRDD.filter(record -> record.getCurrentLocation() != null).collect().size() == 0);
   }
 
+  private static Stream<Arguments> regularIndexTypeParams() {
+    Object[][] data = new Object[][] {
+        {IndexType.BLOOM, true},
+        {IndexType.SIMPLE, true}
+    };
+    return Stream.of(data).map(Arguments::of);
+  }
+
   @ParameterizedTest
-  @EnumSource(value = IndexType.class, names = {"BLOOM", "SIMPLE",})
-  public void testTagLocationAndFetchRecordLocations(IndexType indexType) throws Exception {
-    setUp(indexType);
+  @MethodSource("regularIndexTypeParams")
+  public void testTagLocationAndFetchRecordLocations(IndexType indexType, boolean populateMetaFields) throws Exception {
+    setUp(indexType, populateMetaFields);
     String p1 = "2016/01/31";
     String p2 = "2015/01/31";
     String rowKey1 = UUID.randomUUID().toString();
@@ -325,10 +357,9 @@ public class TestHoodieIndex extends HoodieClientTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @EnumSource(value = IndexType.class, names = {"GLOBAL_SIMPLE"})
-  public void testSimpleGlobalIndexTagLocationWhenShouldUpdatePartitionPath(IndexType indexType) throws Exception {
-    setUp(indexType);
+  @Test
+  public void testSimpleGlobalIndexTagLocationWhenShouldUpdatePartitionPath() throws Exception {
+    setUp(IndexType.GLOBAL_SIMPLE, true);
     config = getConfigBuilder()
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType)
             .withGlobalSimpleIndexUpdatePartitionPath(true)
