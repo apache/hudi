@@ -1525,7 +1525,7 @@ var store = [{
         "url": "https://hudi.apache.org/cn/docs/configurations.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
         "title": "Configurations",
-        "excerpt":"This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels. Spark Datasource Configs : These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge...","categories": [],
+        "excerpt":"This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels. Spark Datasource Configs: These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge records...","categories": [],
         "tags": [],
         "url": "https://hudi.apache.org/docs/configurations.html",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
