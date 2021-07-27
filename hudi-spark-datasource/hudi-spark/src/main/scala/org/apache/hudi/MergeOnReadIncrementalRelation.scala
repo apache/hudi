@@ -17,7 +17,6 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
@@ -52,7 +51,6 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
   private val log = LogManager.getLogger(classOf[MergeOnReadIncrementalRelation])
   private val conf = sqlContext.sparkContext.hadoopConfiguration
   private val jobConf = new JobConf(conf)
-  private val fs = FSUtils.getFs(metaClient.getBasePath, conf)
   private val commitTimeline = metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants()
   if (commitTimeline.empty()) {
     throw new HoodieException("No instants to incrementally pull")
@@ -76,7 +74,7 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
   private val tableAvroSchema = schemaUtil.getTableAvroSchema
   private val tableStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
-  private val fileIndex = buildFileIndex()
+  private val fileIndex = if (commitsToReturn.isEmpty) List() else buildFileIndex()
   private val preCombineField = {
     val preCombineFieldFromTableConfig = metaClient.getTableConfig.getPreCombineField
     if (preCombineFieldFromTableConfig != null) {
@@ -92,63 +90,71 @@ class MergeOnReadIncrementalRelation(val sqlContext: SQLContext,
   override def needConversion: Boolean = false
 
   override def unhandledFilters(filters: Array[Filter]): Array[Filter] = {
-    val isNotNullFilter = IsNotNull(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
-    val largerThanFilter = GreaterThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.head.getTimestamp)
-    val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.last.getTimestamp)
-    filters :+isNotNullFilter :+ largerThanFilter :+ lessThanFilter
-  }
-
-  override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
-    log.debug(s"buildScan requiredColumns = ${requiredColumns.mkString(",")}")
-    log.debug(s"buildScan filters = ${filters.mkString(",")}")
-    // config to ensure the push down filter for parquet will be applied.
-    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.filterPushdown", "true")
-    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.recordLevelFilter.enabled", "true")
-    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "false")
-    val pushDownFilter = {
+    if (fileIndex.isEmpty) {
+      filters
+    } else {
       val isNotNullFilter = IsNotNull(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
       val largerThanFilter = GreaterThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.head.getTimestamp)
       val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.last.getTimestamp)
-      filters :+isNotNullFilter :+ largerThanFilter :+ lessThanFilter
+      filters :+ isNotNullFilter :+ largerThanFilter :+ lessThanFilter
     }
-    val (requiredAvroSchema, requiredStructSchema) =
-      MergeOnReadSnapshotRelation.getRequiredSchema(tableAvroSchema, requiredColumns)
+  }
 
-    val hoodieTableState = HoodieMergeOnReadTableState(
-      tableStructSchema,
-      requiredStructSchema,
-      tableAvroSchema.toString,
-      requiredAvroSchema.toString,
-      fileIndex,
-      preCombineField
-    )
-    val fullSchemaParquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(
-      sparkSession = sqlContext.sparkSession,
-      dataSchema = tableStructSchema,
-      partitionSchema = StructType(Nil),
-      requiredSchema = tableStructSchema,
-      filters = pushDownFilter,
-      options = optParams,
-      hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
-    )
-    val requiredSchemaParquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(
-      sparkSession = sqlContext.sparkSession,
-      dataSchema = tableStructSchema,
-      partitionSchema = StructType(Nil),
-      requiredSchema = requiredStructSchema,
-      filters = pushDownFilter,
-      options = optParams,
-      hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
-    )
+  override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
+    if (fileIndex.isEmpty) {
+      sqlContext.sparkContext.emptyRDD[Row]
+    } else {
+      log.debug(s"buildScan requiredColumns = ${requiredColumns.mkString(",")}")
+      log.debug(s"buildScan filters = ${filters.mkString(",")}")
+      // config to ensure the push down filter for parquet will be applied.
+      sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.filterPushdown", "true")
+      sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.recordLevelFilter.enabled", "true")
+      sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "false")
+      val pushDownFilter = {
+        val isNotNullFilter = IsNotNull(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
+        val largerThanFilter = GreaterThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.head.getTimestamp)
+        val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.last.getTimestamp)
+        filters :+ isNotNullFilter :+ largerThanFilter :+ lessThanFilter
+      }
+      val (requiredAvroSchema, requiredStructSchema) =
+        MergeOnReadSnapshotRelation.getRequiredSchema(tableAvroSchema, requiredColumns)
 
-    val rdd = new HoodieMergeOnReadRDD(
-      sqlContext.sparkContext,
-      jobConf,
-      fullSchemaParquetReader,
-      requiredSchemaParquetReader,
-      hoodieTableState
-    )
-    rdd.asInstanceOf[RDD[Row]]
+      val hoodieTableState = HoodieMergeOnReadTableState(
+        tableStructSchema,
+        requiredStructSchema,
+        tableAvroSchema.toString,
+        requiredAvroSchema.toString,
+        fileIndex,
+        preCombineField
+      )
+      val fullSchemaParquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(
+        sparkSession = sqlContext.sparkSession,
+        dataSchema = tableStructSchema,
+        partitionSchema = StructType(Nil),
+        requiredSchema = tableStructSchema,
+        filters = pushDownFilter,
+        options = optParams,
+        hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+      )
+      val requiredSchemaParquetReader = new ParquetFileFormat().buildReaderWithPartitionValues(
+        sparkSession = sqlContext.sparkSession,
+        dataSchema = tableStructSchema,
+        partitionSchema = StructType(Nil),
+        requiredSchema = requiredStructSchema,
+        filters = pushDownFilter,
+        options = optParams,
+        hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+      )
+
+      val rdd = new HoodieMergeOnReadRDD(
+        sqlContext.sparkContext,
+        jobConf,
+        fullSchemaParquetReader,
+        requiredSchemaParquetReader,
+        hoodieTableState
+      )
+      rdd.asInstanceOf[RDD[Row]]
+    }
   }
 
   def buildFileIndex(): List[HoodieMergeOnReadFileSplit] = {
