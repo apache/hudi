@@ -17,16 +17,21 @@
 
 package org.apache.hudi
 
+import org.apache.commons.lang3.StringUtils
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.DataSourceWriteOptions.{BOOTSTRAP_OPERATION_OPT_VAL, OPERATION_OPT_KEY}
+import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.common.config.SerializableConfiguration
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.TablePathUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.hudi.hive.util.ConfigUtils
+import org.apache.hudi.metadata.FileSystemBackedTableMetadata
 import org.apache.log4j.LogManager
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.execution.datasources.{DataSource, FileStatusCache, HadoopFsRelation}
@@ -72,9 +77,9 @@ class DefaultSource extends RelationProvider
                               optParams: Map[String, String],
                               schema: StructType): BaseRelation = {
     // Add default options for unspecified read options keys.
-    val parameters = DataSourceOptionsHelper.translateConfigurations(optParams)
+    val originalParameters = DataSourceOptionsHelper.translateConfigurations(optParams)
 
-    val path = parameters.get("path")
+    val (path, parameters) = parsePath(sqlContext, originalParameters)
     val readPathsStr = parameters.get(DataSourceReadOptions.READ_PATHS_OPT_KEY.key)
     if (path.isEmpty && readPathsStr.isEmpty) {
       throw new HoodieException(s"'path' or '$READ_PATHS_OPT_KEY' or both must be specified.")
@@ -88,7 +93,10 @@ class DefaultSource extends RelationProvider
     // Or else we use the original way to read hoodie table.
     val enableFileIndex = optParams.get(ENABLE_HOODIE_FILE_INDEX.key)
       .map(_.toBoolean).getOrElse(ENABLE_HOODIE_FILE_INDEX.defaultValue)
-    val useHoodieFileIndex = enableFileIndex && path.isDefined && !path.get.contains("*") &&
+
+    val useHoodieFileIndex =
+    enableFileIndex && path.isDefined &&
+       !path.get.contains("*") &&
       !parameters.contains(DataSourceReadOptions.READ_PATHS_OPT_KEY.key)
     val globPaths = if (useHoodieFileIndex) {
       None
@@ -101,6 +109,7 @@ class DefaultSource extends RelationProvider
     } else {
       DataSourceUtils.getTablePath(fs, Array(new Path(path.get)))
     }
+
     log.info("Obtained hudi table path: " + tablePath)
 
     val metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(tablePath).build()
@@ -246,6 +255,39 @@ class DefaultSource extends RelationProvider
         options = optParams)
         .resolveRelation()
     }
+  }
+
+  private def parsePath(sqlContext: SQLContext,
+                      originalParameters: Map[String, String]
+                     ): (Option[String], Map[String, String]) = {
+    val originalPath = originalParameters.get("path")
+    // Check if the request is to read all partitions from the table
+    // in the case that the user has not used the blob
+    // This case occurs when the requested Table Path is the base table path
+    // and does not contain the /*/*... blob
+    // The actual partition path is automatically inferred
+    if (originalPath.nonEmpty && !originalPath.get.contains("*")) {
+      val strippedPath = originalPath.get.stripSuffix("/")
+      val fs = FSUtils.getFs(strippedPath, sqlContext.sparkContext.hadoopConfiguration)
+      val qualifiedPath = new Path(strippedPath).makeQualified(fs.getUri, fs.getWorkingDirectory)
+      val tablePath = TablePathUtils.getTablePath(fs, new Path(strippedPath)).get().toString
+
+      if (qualifiedPath.toString.equals(tablePath)) {
+        val sparkEngineContext = new HoodieSparkEngineContext(sqlContext.sparkContext)
+        val fsBackedTableMetadata =
+          new FileSystemBackedTableMetadata(sparkEngineContext, new SerializableConfiguration(fs.getConf), tablePath, false)
+        val singlePartitionPath = DataSourceUtils.getFullPartitionPath(tablePath, fsBackedTableMetadata.getAllPartitionPaths)
+
+        val pathFromTable = DataSourceUtils.getDataPath(tablePath, singlePartitionPath)
+        val modifiedParameters = originalParameters + ("path" -> pathFromTable)
+        log.info("Obtained hudi data path: " + originalPath)
+        System.out.println("WNI Obtained hudi data path: " + originalPath
+          + " \ntablePath " + tablePath
+          + " \nparameters: " + modifiedParameters)
+        return (Option(pathFromTable), modifiedParameters)
+      }
+    }
+    (originalPath, originalParameters)
   }
 
   override def sourceSchema(sqlContext: SQLContext,

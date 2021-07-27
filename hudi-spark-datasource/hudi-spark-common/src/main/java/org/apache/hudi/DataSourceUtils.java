@@ -83,6 +83,31 @@ public class DataSourceUtils {
     throw new TableNotFoundException("Unable to find a hudi table for the user provided paths.");
   }
 
+  public static String getDataPath(String tablePath, String partitionPath) {
+    // When the table is not partitioned
+    if (tablePath.equals(partitionPath)) {
+      return tablePath + "/*";
+    }
+    assert partitionPath.length() > tablePath.length();
+    assert partitionPath.startsWith(tablePath);
+    int n = partitionPath.substring(tablePath.length()).split("/").length;
+    String dataPathSuffix = String.join("/*", Collections.nCopies(n, ""));
+    return (tablePath + dataPathSuffix).replaceFirst("file:", "");
+  }
+
+  public static String getFullPartitionPath(String tablePath, List<String> partitionPaths) {
+    String fullPartitionPath = tablePath;
+    if (!partitionPaths.isEmpty()) {
+      for (String partitionPath : partitionPaths) {
+        if (!StringUtils.isNullOrEmpty(partitionPath)) {
+          fullPartitionPath += "/" + partitionPath;
+          break;
+        }
+      }
+    }
+    return fullPartitionPath;
+  }
+
   /**
    * Create a UserDefinedBulkInsertPartitioner class via reflection,
    * <br>
