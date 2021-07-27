@@ -18,8 +18,9 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.common.config.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.metrics.Metrics;
+import org.apache.hudi.common.metrics.Metrics;
 
 import com.codahale.metrics.Timer;
 
@@ -41,7 +42,8 @@ public class HoodieDeltaStreamerMetrics implements Serializable {
     this.config = config;
     this.tableName = config.getTableName();
     if (config.isMetricsOn()) {
-      Metrics.init(config);
+      HoodieMetricsConfig metricsConfig = new HoodieMetricsConfig.Builder().fromProperties(config.getProps()).build();
+      Metrics.init(metricsConfig);
       this.overallTimerName = getMetricsName("timer", "deltastreamer");
       this.hiveSyncTimerName = getMetricsName("timer", "deltastreamerHiveSync");
       this.metaSyncTimerName = getMetricsName("timer", "deltastreamerMetaSync");

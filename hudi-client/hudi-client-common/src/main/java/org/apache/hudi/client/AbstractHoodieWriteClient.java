@@ -34,6 +34,7 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.TransactionUtils;
+import org.apache.hudi.common.config.HoodieMetricsConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -63,7 +64,7 @@ import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.metrics.HoodieMetrics;
+import org.apache.hudi.common.metrics.HoodieMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.HoodieTimelineArchiveLog;
@@ -130,7 +131,8 @@ public abstract class AbstractHoodieWriteClient<T extends HoodieRecordPayload, I
   public AbstractHoodieWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                                    Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService);
-    this.metrics = new HoodieMetrics(config);
+    HoodieMetricsConfig metricsConfig = new HoodieMetricsConfig.Builder().fromProperties(config.getProps()).build();
+    this.metrics = new HoodieMetrics(metricsConfig);
     this.index = createIndex(writeConfig);
     this.txnManager = new TransactionManager(config, fs);
   }
