@@ -115,6 +115,36 @@ class TestAlterTable extends TestHoodieSqlBase {
         checkAnswer(s"select id, name, price, ts, ext0 from $newTableName")(
           Seq(2, "a2", 10.0, 1000, null)
         )
+
+        val partitionedTable = generateTableName
+        spark.sql(
+          s"""
+             |create table $partitionedTable (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  dt string
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$partitionedTable'
+             | options (
+             |  type = '$tableType',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts'
+             | )
+             | partitioned by (dt)
+       """.stripMargin)
+        spark.sql(s"insert into $partitionedTable values(1, 'a1', 10, 1000, '2021-07-25')")
+        spark.sql(s"alter table $partitionedTable add columns(ext0 double)")
+        checkAnswer(s"select id, name, price, ts, dt, ext0 from $partitionedTable")(
+          Seq(1, "a1", 10.0, 1000, "2021-07-25", null)
+        )
+
+        spark.sql(s"insert into $partitionedTable values(2, 'a2', 10, 1000, 1, '2021-07-25')");
+        checkAnswer(s"select id, name, price, ts, dt, ext0 from $partitionedTable order by id")(
+          Seq(1, "a1", 10.0, 1000, "2021-07-25", null),
+          Seq(2, "a2", 10.0, 1000, "2021-07-25", 1.0)
+        )
       }
     }
   }
