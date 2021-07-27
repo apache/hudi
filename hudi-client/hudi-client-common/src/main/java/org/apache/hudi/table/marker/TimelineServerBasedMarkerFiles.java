@@ -86,7 +86,7 @@ public class TimelineServerBasedMarkerFiles extends MarkerFiles {
       return executeRequestToTimelineServer(
           DELETE_MARKER_DIR_URL, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.POST);
     } catch (IOException e) {
-      throw new HoodieRemoteException(e);
+      throw new HoodieRemoteException("Failed to delete marker directory " + markerDirPath.toString(), e);
     }
   }
 
@@ -97,7 +97,7 @@ public class TimelineServerBasedMarkerFiles extends MarkerFiles {
       return executeRequestToTimelineServer(
           MARKERS_DIR_EXISTS_URL, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.GET);
     } catch (IOException e) {
-      throw new HoodieRemoteException(e);
+      throw new HoodieRemoteException("Failed to check marker directory " + markerDirPath.toString(), e);
     }
   }
 
@@ -109,7 +109,8 @@ public class TimelineServerBasedMarkerFiles extends MarkerFiles {
           CREATE_AND_MERGE_MARKERS_URL, paramsMap, new TypeReference<Set<String>>() {}, RequestMethod.GET);
       return markerPaths.stream().map(MarkerFiles::stripMarkerSuffix).collect(Collectors.toSet());
     } catch (IOException e) {
-      throw new HoodieRemoteException(e);
+      throw new HoodieRemoteException("Failed to get CREATE and MERGE data file paths in "
+          + markerDirPath.toString(), e);
     }
   }
 
@@ -120,13 +121,12 @@ public class TimelineServerBasedMarkerFiles extends MarkerFiles {
       return executeRequestToTimelineServer(
           ALL_MARKERS_URL, paramsMap, new TypeReference<Set<String>>() {}, RequestMethod.GET);
     } catch (IOException e) {
-      throw new HoodieRemoteException(e);
+      throw new HoodieRemoteException("Failed to get all markers in " + markerDirPath.toString(), e);
     }
   }
 
   @Override
   protected Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists) {
-    LOG.info("[timeline-server-based] Create marker file : " + partitionPath + " " + dataFileName);
     HoodieTimer timer = new HoodieTimer().startTimer();
     String markerFileName = getMarkerFileName(dataFileName, type);
 
@@ -138,9 +138,10 @@ public class TimelineServerBasedMarkerFiles extends MarkerFiles {
       success = executeRequestToTimelineServer(
           CREATE_MARKER_URL, paramsMap, new TypeReference<Boolean>() {}, RequestMethod.POST);
     } catch (IOException e) {
-      throw new HoodieRemoteException(e);
+      throw new HoodieRemoteException("Failed to create marker file " + partitionPath + "/" + markerFileName, e);
     }
-    LOG.info("[timeline-server-based] Created marker file in " + timer.endTimer() + " ms");
+    LOG.info("[timeline-server-based] Created marker file " + partitionPath + "/" + markerFileName
+        + " in " + timer.endTimer() + " ms");
     if (success) {
       return Option.of(new Path(new Path(markerDirPath, partitionPath), markerFileName));
     } else {

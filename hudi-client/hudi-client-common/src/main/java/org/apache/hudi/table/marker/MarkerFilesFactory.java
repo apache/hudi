@@ -37,7 +37,7 @@ public class MarkerFilesFactory {
    * @return  {@code MarkerFiles} instance based on the {@code MarkerIOMode}
    */
   public static MarkerFiles get(MarkerType markerType, HoodieTable table, String instantTime) {
-    LOG.info("Instantiated MarkerFiles with markerType: " + markerType.toString());
+    LOG.debug("Instantiated MarkerFiles with marker type: " + markerType.toString());
     switch (markerType) {
       case DIRECT:
         return new DirectMarkerFiles(table, instantTime);

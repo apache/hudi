@@ -167,7 +167,6 @@ public class DirectMarkerFiles extends MarkerFiles {
 
   @Override
   protected Option<Path> create(String partitionPath, String dataFileName, IOType type, boolean checkIfExists) {
-    LOG.info("[direct] Create marker file : " + partitionPath + " " + dataFileName);
     HoodieTimer timer = new HoodieTimer().startTimer();
     Path markerPath = getMarkerPath(partitionPath, dataFileName, type);
     Path dirPath = markerPath.getParent();
@@ -188,7 +187,8 @@ public class DirectMarkerFiles extends MarkerFiles {
     } catch (IOException e) {
       throw new HoodieException("Failed to create marker file " + markerPath, e);
     }
-    LOG.info("[direct] Created marker file in " + timer.endTimer() + " ms");
+    LOG.info("[direct] Created marker file " + markerPath.toString()
+        + " in " + timer.endTimer() + " ms");
     return Option.of(markerPath);
   }
 }

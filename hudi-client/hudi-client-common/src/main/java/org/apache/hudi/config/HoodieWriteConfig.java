@@ -228,7 +228,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "files from lake storage, before committing the write. Reduce this value, if the high number of tasks incur delays for smaller tables "
           + "or low latency writes.");
 
-  public static final ConfigProperty<String> MARKERS_TYPE = ConfigProperty
+  public static final ConfigProperty<String> MARKERS_TYPE_PROP = ConfigProperty
       .key("hoodie.write.markers.type")
       .defaultValue(MarkerType.DIRECT.toString())
       .sinceVersion("0.9.0")
@@ -239,14 +239,14 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "which serves as a proxy.  New marker entries are batch processed and stored "
           + "in a limited number of underlying files for efficiency.");
 
-  public static final ConfigProperty<Integer> MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS = ConfigProperty
+  public static final ConfigProperty<Integer> MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS_PROP = ConfigProperty
       .key("hoodie.markers.timeline_server_based.batch.num_threads")
       .defaultValue(20)
       .sinceVersion("0.9.0")
       .withDocumentation("Number of threads to use for batch processing marker "
           + "creation requests at the timeline service");
 
-  public static final ConfigProperty<Long> MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS = ConfigProperty
+  public static final ConfigProperty<Long> MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS_PROP = ConfigProperty
       .key("hoodie.markers.timeline_server_based.batch.interval_ms")
       .defaultValue(50L)
       .sinceVersion("0.9.0")
@@ -561,16 +561,16 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public MarkerType getMarkersType() {
-    String mode = getString(MARKERS_TYPE);
+    String mode = getString(MARKERS_TYPE_PROP);
     return MarkerType.valueOf(mode.toUpperCase());
   }
 
   public int getMarkersTimelineServerBasedBatchNumThreads() {
-    return getInt(MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS);
+    return getInt(MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS_PROP);
   }
 
   public long getMarkersTimelineServerBasedBatchIntervalMs() {
-    return getLong(MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS);
+    return getLong(MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS_PROP);
   }
 
   public int getMarkersDeleteParallelism() {
@@ -1580,17 +1580,17 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withMarkersType(String mode) {
-      writeConfig.setValue(MARKERS_TYPE, mode);
+      writeConfig.setValue(MARKERS_TYPE_PROP, mode);
       return this;
     }
 
     public Builder withMarkersTimelineServerBasedBatchNumThreads(int numThreads) {
-      writeConfig.setValue(MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS, String.valueOf(numThreads));
+      writeConfig.setValue(MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS_PROP, String.valueOf(numThreads));
       return this;
     }
 
     public Builder withMarkersTimelineServerBasedBatchIntervalMs(long intervalMs) {
-      writeConfig.setValue(MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS, String.valueOf(intervalMs));
+      writeConfig.setValue(MARKERS_TIMELINE_SERVER_BASED_BATCH_INTERVAL_MS_PROP, String.valueOf(intervalMs));
       return this;
     }
 
