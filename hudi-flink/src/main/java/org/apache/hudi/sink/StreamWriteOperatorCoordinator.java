@@ -172,9 +172,9 @@ public class StreamWriteOperatorCoordinator
     if (executor != null) {
       executor.close();
     }
-    // sync Hive if is enabled in batch mode.
-    syncHiveIfEnabled();
-
+    if (hiveSyncExecutor != null) {
+      hiveSyncExecutor.close();
+    }
     this.eventBuffer = null;
   }
 
@@ -258,7 +258,7 @@ public class StreamWriteOperatorCoordinator
   // -------------------------------------------------------------------------
 
   private void initHiveSync() {
-    this.hiveSyncExecutor = new NonThrownExecutor(LOG);
+    this.hiveSyncExecutor = new NonThrownExecutor(LOG, true);
     this.hiveSyncContext = HiveSyncContext.create(conf);
   }
 
@@ -342,7 +342,8 @@ public class StreamWriteOperatorCoordinator
     if (allEventsReceived()) {
       // start to commit the instant.
       commitInstant(this.instant);
-      // no compaction scheduling for batch mode
+      // sync Hive if is enabled in batch mode.
+      syncHiveIfEnabled();
     }
   }
 
