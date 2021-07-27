@@ -122,7 +122,6 @@ class DefaultSource extends RelationProvider
       .getOrElse(parameters.getOrElse(QUERY_TYPE_OPT_KEY.key, QUERY_TYPE_OPT_KEY.defaultValue()))
 
     log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
-
     (tableType, queryType, isBootstrappedTable) match {
       case (COPY_ON_WRITE, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) |
            (COPY_ON_WRITE, QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, false) |
@@ -287,18 +286,20 @@ class DefaultSource extends RelationProvider
       val qualifiedPath = new Path(strippedPath).makeQualified(fs.getUri, fs.getWorkingDirectory)
       val tablePath = TablePathUtils.getTablePath(fs, new Path(strippedPath)).get().toString
 
-      if (qualifiedPath.toString.equals(tablePath)) {
+      val metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf).setBasePath(tablePath).build()
+      val tableType = metaClient.getTableType
+
+      if (qualifiedPath.toString.equals(tablePath) && tableType.equals(COPY_ON_WRITE)) {
         val sparkEngineContext = new HoodieSparkEngineContext(sqlContext.sparkContext)
         val fsBackedTableMetadata =
           new FileSystemBackedTableMetadata(sparkEngineContext, new SerializableConfiguration(fs.getConf), tablePath, false)
         val singlePartitionPath = DataSourceUtils.getFullPartitionPath(tablePath, fsBackedTableMetadata.getAllPartitionPaths)
 
         val pathFromTable = DataSourceUtils.getFullWildCardPath(tablePath, singlePartitionPath)
-        val modifiedParameters = originalParameters + ("path" -> pathFromTable)
+        parameters = originalParameters + ("path" -> pathFromTable)
         log.info("Automatically inferred Full Partition path from table: "
           + pathFromTable + " original path " + inferredPath + " table path " + tablePath)
         inferredPath = Option(pathFromTable)
-        parameters = modifiedParameters
       }
     }
     (inferredPath, parameters)
