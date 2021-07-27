@@ -17,7 +17,6 @@
 
 package org.apache.hudi
 
-import org.apache.commons.lang3.StringUtils
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
@@ -257,6 +256,21 @@ class DefaultSource extends RelationProvider
     }
   }
 
+  /**
+   * Parse the path from the @param originalParameters. In the case that
+   * user requests to read the entire table by only specific the base table path
+   * (without the blobs), infer the actual path automatically. Also rewrite
+   * the parameters and return the new path.
+   *
+   * For cases with
+   * blobs, wildcard blobs, specific partitions etc, return the original path
+   * and parameters.
+   * @param sqlContext The SQL Context
+   * @param originalParameters The Original map of parameters
+   *
+   * @returns the origin path and parameter unless the entire table
+   * is to be read but the original path does not contain the blob.
+   */
   private def parsePath(sqlContext: SQLContext,
                       originalParameters: Map[String, String]
                      ): (Option[String], Map[String, String]) = {
@@ -278,12 +292,10 @@ class DefaultSource extends RelationProvider
           new FileSystemBackedTableMetadata(sparkEngineContext, new SerializableConfiguration(fs.getConf), tablePath, false)
         val singlePartitionPath = DataSourceUtils.getFullPartitionPath(tablePath, fsBackedTableMetadata.getAllPartitionPaths)
 
-        val pathFromTable = DataSourceUtils.getDataPath(tablePath, singlePartitionPath)
+        val pathFromTable = DataSourceUtils.getFullWildCardPath(tablePath, singlePartitionPath)
         val modifiedParameters = originalParameters + ("path" -> pathFromTable)
-        log.info("Obtained hudi data path: " + originalPath)
-        System.out.println("WNI Obtained hudi data path: " + originalPath
-          + " \ntablePath " + tablePath
-          + " \nparameters: " + modifiedParameters)
+        log.info("Automatically inferred Full Partition path from table: "
+          + pathFromTable + " original path " + originalPath + " table path " + tablePath)
         return (Option(pathFromTable), modifiedParameters)
       }
     }

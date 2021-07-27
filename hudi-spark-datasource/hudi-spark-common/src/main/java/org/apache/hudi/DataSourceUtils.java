@@ -83,7 +83,20 @@ public class DataSourceUtils {
     throw new TableNotFoundException("Unable to find a hudi table for the user provided paths.");
   }
 
-  public static String getDataPath(String tablePath, String partitionPath) {
+  /**
+   * Returns the full blob for the partition path (with the necessary wildcards)
+   * to read the entire table (all the partitions). Infers that
+   * based on the table name and a valid partition path.
+   *
+   * For e.g., if tablePath = "file:/var/tmp/dataset"
+   * and partitionPath = "file:/var/tmp/dataset/2021/07/19",
+   * then returns file:/var/tmp/dataset\/*\/*\/*
+
+   * @param tablePath The full path of the table
+   * @param partitionPath The full partition path of a specific partition of the table
+   * @returns the blob for reading all the partitions of the given table
+   */
+  public static String getFullWildCardPath(String tablePath, String partitionPath) {
     // When the table is not partitioned
     if (tablePath.equals(partitionPath)) {
       return tablePath + "/*";
@@ -95,6 +108,18 @@ public class DataSourceUtils {
     return (tablePath + dataPathSuffix).replaceFirst("file:", "");
   }
 
+  /**
+   * Returns the first non-empty full partition path from the tablePath
+   * and a list of all the partition paths of the table.
+   *
+   * If tablePath = "file:/var/tmp/dataset" and
+   * partitionPaths = List("", "2021/07/19", "2021/08/01" ...)
+   * then return fullPartitionPath = "file:/var/tmp/dataset/2021/07/19"
+   *
+   * @param tablePath The full table path
+   * @param partitionPaths The list of partition paths
+   * @returns the full partition path
+   */
   public static String getFullPartitionPath(String tablePath, List<String> partitionPaths) {
     String fullPartitionPath = tablePath;
     if (!partitionPaths.isEmpty()) {

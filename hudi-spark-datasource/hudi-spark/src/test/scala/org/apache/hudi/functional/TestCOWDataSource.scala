@@ -785,71 +785,94 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertEquals(resultSchema, schema1)
   }
 
-  @Test def testSimpleAutoInferPartitionPath(): Unit = {
-    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
-
-    System.out.println()
-
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+  @Test def testSimpleAutoInferDefaultPartition(): Unit = {
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     // Default partition
-    System.out.println("WNI " + basePath);
-    inputDF1.write.format("org.apache.hudi")
+    inputDF.write.format("org.apache.hudi")
       .options(commonOpts)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    // No need to specify basePath/*/*
-    spark.read.format("org.apache.hudi")
-      .load(basePath + "/*/*/*")
-      .show()
+    val supplyBlobs = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/*/*/")
+    assertEquals(inputDF.count(), supplyBlobs.count())
 
-    spark.read.format("org.apache.hudi")
+    // No need to specify basePath/*/*/*
+    val withoutBlobs = spark.read.format("org.apache.hudi")
       .load(basePath)
-      .show()
+    assertEquals(inputDF.count(), withoutBlobs.count())
+
+    // Testing with trailing backslash basePath/
+    val trailingSlash = spark.read.format("org.apache.hudi")
+      .load(basePath + "/")
+    assertEquals(inputDF.count(), trailingSlash.count())
   }
 
-  @Test def testAutoInferDataPath(): Unit = {
-    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).toList
-
-    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-
+  @Test def testSimpleAutoInferCustomPartition(): Unit = {
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     // Partition with org.apache.hudi.keygen.CustomKeyGenerator
-    inputDF1.write.format("org.apache.hudi")
+    inputDF.write.format("org.apache.hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY.key, "org.apache.hudi.keygen.CustomKeyGenerator")
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "rider:SIMPLE,begin_lon:SIMPLE,end_lon:SIMPLE")
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-//     No need to specify basePath/*/*/*/*
-    spark.read.format("org.apache.hudi")
-      .load(basePath).show()
+    val supplyBlobs = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/*/*")
+    assertEquals(inputDF.count(), supplyBlobs.count())
 
-    spark.read.format("org.apache.hudi")
-      .load(basePath + "/*/*/*").show()
+    // No need to specify basePath/*/*/*
+    val withoutBlobs = spark.read.format("org.apache.hudi")
+      .load(basePath)
+    assertEquals(inputDF.count(), withoutBlobs.count())
 
-    spark.read.format("org.apache.hudi")
-      .load(basePath + "/*/0.4*/*").show()
+    val specificPartitionBlob = spark.read.format("org.apache.hudi")
+      .load(basePath + "/rider-000/0.5378950285504629/*")
+    assertEquals(inputDF.filter(col("begin_lon") === "0.5378950285504629").count(),
+      specificPartitionBlob.count())
 
-        spark.read.format("org.apache.hudi")
-          .load(basePath + "/rider-000/0.40336083410357226/0.8542839318519847/").show()
+    val wildcardBlob = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*/0.4*/*")
+    assertEquals(inputDF.filter(col("begin_lon").startsWith("0.4")).count(),
+      wildcardBlob.count())
 
-    spark.read.format("org.apache.hudi")
-      .load(basePath + "/rider-000/0.5378950285504629/*").show()
+    val specificPartition = spark.read.format("org.apache.hudi")
+      .load(basePath + "/rider-000/0.40336083410357226/0.8542839318519847/")
+    assertEquals(inputDF.filter(col("begin_lon") === "0.40336083410357226"
+      && col("end_lon") === "0.8542839318519847").count(),
+      specificPartition.count())
+  }
+
+  @Test def testSimpleAutoInferNoPartition(): Unit = {
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
 
     // No partition
-    inputDF1.write.format("org.apache.hudi")
+    inputDF.write.format("org.apache.hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY.key, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "")
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-//     No need to specify basePath/*
-    spark.read.format("org.apache.hudi")
-      .load(basePath).show()
+    val supplyBlobs = spark.read.format("org.apache.hudi")
+      .load(basePath + "/*")
+    assertEquals(inputDF.count(), supplyBlobs.count())
 
-    inputDF1.write.format("org.apache.hudi")
+    // No need to specify basePath/*/*/*
+    val withoutBlobs = spark.read.format("org.apache.hudi")
+      .load(basePath)
+    assertEquals(inputDF.count(), withoutBlobs.count())
+  }
+
+  @Test def testSimpleAutoInferDatePartition(): Unit = {
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+
+    inputDF.write.format("org.apache.hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_OPT_KEY.key, "org.apache.hudi.keygen.CustomKeyGenerator")
       .option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY.key, "current_ts:TIMESTAMP")
@@ -858,21 +881,20 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    // Specify basePath/*/*
-    spark.read.format("org.apache.hudi")
+    val supplyBlobs = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*")
-      .show()
+    assertEquals(inputDF.count(), supplyBlobs.count())
+
+    // No need to specify basePath/*/*/*
+    val withoutBlobs = spark.read.format("org.apache.hudi")
+      .load(basePath)
+    assertEquals(inputDF.count(), withoutBlobs.count())
 
     // Specify basePath/yyyyMMdd/*
     val date = new DateTime().toString(DateTimeFormat.forPattern("yyyyMMdd"))
-    spark.read.format("org.apache.hudi")
-      .load(basePath + s"/$date").show()
-
-
-     //No need to specify basePath/*/*
-    spark.read.format("org.apache.hudi")
-    .load(basePath)
-      .show()
-    System.out.println("WNI OMG END")
+    val specificDatePartition = spark.read.format("org.apache.hudi")
+      .load(basePath + s"/$date")
+    assertEquals(supplyBlobs.filter(col("_hoodie_partition_path") === date).count(),
+      specificDatePartition.count())
   }
 }
