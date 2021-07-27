@@ -99,6 +99,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   
   public static final String PENDING_CLUSTERING_FILEGROUPS = String.format("%s/%s", BASE_URL, "clustering/pending/");
 
+
   public static final String LAST_INSTANT = String.format("%s/%s", BASE_URL, "timeline/instant/last");
   public static final String LAST_INSTANTS = String.format("%s/%s", BASE_URL, "timeline/instants/last");
 
@@ -117,6 +118,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String TIMELINE_HASH = "timelinehash";
   public static final String REFRESH_OFF = "refreshoff";
   public static final String INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM = "includependingcompaction";
+
 
   private static final Logger LOG = LogManager.getLogger(RemoteHoodieTableFileSystemView.class);
 

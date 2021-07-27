@@ -25,26 +25,26 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 /**
- * A factory to generate {@code MarkerFiles} instance based on the {@code MarkerIOMode}.
+ * A factory to generate {@code MarkerFiles} instance based on the {@code MarkerType}.
  */
 public class MarkerFilesFactory {
   private static final Logger LOG = LogManager.getLogger(MarkerFilesFactory.class);
 
   /**
-   * @param mode the operation mode for marker files
+   * @param markerType the type of markers to use
    * @param table {@code HoodieTable} instance
    * @param instantTime current instant time
    * @return  {@code MarkerFiles} instance based on the {@code MarkerIOMode}
    */
-  public static MarkerFiles get(MarkerType mode, HoodieTable table, String instantTime) {
-    LOG.info("Instantiated MarkerFiles with mode: " + mode.toString());
-    switch (mode) {
+  public static MarkerFiles get(MarkerType markerType, HoodieTable table, String instantTime) {
+    LOG.info("Instantiated MarkerFiles with markerType: " + markerType.toString());
+    switch (markerType) {
       case DIRECT:
         return new DirectMarkerFiles(table, instantTime);
       case TIMELINE_SERVER_BASED:
         return new TimelineServerBasedMarkerFiles(table, instantTime);
       default:
-        throw new HoodieException("The marker IO mode \"" + mode.name() + "\" is not supported.");
+        throw new HoodieException("The marker type \"" + markerType.name() + "\" is not supported.");
     }
   }
 }

@@ -23,6 +23,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -118,7 +119,7 @@ public class MarkerHandler extends Handler {
                        FileSystemViewManager viewManager, Registry metricsRegistry) throws IOException {
     super(conf, timelineServiceConfig, fileSystem, viewManager);
     LOG.debug("MarkerHandler FileSystem: " + this.fileSystem.getScheme());
-    LOG.debug("MarkerHandler Params: batchNumThreads=" + timelineServiceConfig.markerBatchNumThreads
+    LOG.debug("MarkerHandler batching params: batchNumThreads=" + timelineServiceConfig.markerBatchNumThreads
         + " batchIntervalMs=" + timelineServiceConfig.markerBatchIntervalMs + "ms");
     this.hoodieEngineContext = hoodieEngineContext;
     this.metricsRegistry = metricsRegistry;
@@ -198,7 +199,7 @@ public class MarkerHandler extends Handler {
         long waitMs = nextBatchProcessTimeMs - System.currentTimeMillis();
         executorService.schedule(
             new BatchCreateMarkerRunnable(), Math.max(0L, waitMs), TimeUnit.MILLISECONDS);
-        LOG.info("Wait for " + waitMs + " ms, next batch time: " + nextBatchProcessTimeMs);
+        LOG.debug("Wait for " + waitMs + " ms, next batch time: " + nextBatchProcessTimeMs);
       }
     }
     return future;
@@ -289,7 +290,7 @@ public class MarkerHandler extends Handler {
                 BufferedReader bufferedReader = null;
                 Set<String> markers = new HashSet<>();
                 try {
-                  LOG.info("Read marker file: " + markersFilePathStr);
+                  LOG.debug("Read marker file: " + markersFilePathStr);
                   fsDataInputStream = fileSystem.open(markersFilePath);
                   bufferedReader = new BufferedReader(new InputStreamReader(fsDataInputStream, StandardCharsets.UTF_8));
                   markers = bufferedReader.lines().collect(Collectors.toSet());
@@ -350,11 +351,11 @@ public class MarkerHandler extends Handler {
     private final String markerDirPath;
     private final String markerName;
     private boolean result;
-    private final long startTimeMs;
+    private final HoodieTimer timer;
 
     public CreateMarkerCompletableFuture(Context context, String markerDirPath, String markerName) {
       super();
-      this.startTimeMs = System.currentTimeMillis();
+      this.timer = new HoodieTimer().startTimer();
       this.context = context;
       this.markerDirPath = markerDirPath;
       this.markerName = markerName;
@@ -378,7 +379,7 @@ public class MarkerHandler extends Handler {
     }
 
     public void setResult(boolean result) {
-      LOG.info("Request queued for " + (System.currentTimeMillis() - startTimeMs) + " ms");
+      LOG.debug("Request queued for " + timer.startTimer() + " ms");
       this.result = result;
     }
   }
@@ -390,8 +391,8 @@ public class MarkerHandler extends Handler {
 
     @Override
     public void run() {
-      LOG.info("Start processing create marker requests");
-      long startTimeMs = System.currentTimeMillis();
+      LOG.debug("Start processing create marker requests");
+      HoodieTimer timer = new HoodieTimer().startTimer();
       List<CreateMarkerCompletableFuture> futuresToRemove = new ArrayList<>();
       Set<String> updatedMarkerDirPaths = new HashSet<>();
       int markerFileIndex = -1;
@@ -406,19 +407,18 @@ public class MarkerHandler extends Handler {
           }
         }
         if (markerFileIndex < 0) {
-          LOG.info("All marker files are busy, skip batch processing of create marker requests in " + (System.currentTimeMillis() - startTimeMs) + " ms");
+          LOG.debug("All marker files are busy, skip batch processing of create marker requests in " + timer.endTimer() + " ms");
           return;
         }
         lastMarkerFileIndex = markerFileIndex;
       }
 
-      LOG.info("timeMs=" + System.currentTimeMillis() + " markerFileIndex=" + markerFileIndex);
+      LOG.debug("timeMs=" + System.currentTimeMillis() + " markerFileIndex=" + markerFileIndex);
       synchronized (createMarkerRequestLockObject) {
-        LOG.info("Iterating through existing requests, size=" + createMarkerFutures.size());
+        LOG.debug("Iterating through existing requests, size=" + createMarkerFutures.size());
         for (CreateMarkerCompletableFuture future : createMarkerFutures) {
           String markerDirPath = future.getMarkerDirPath();
           String markerName = future.getMarkerName();
-          LOG.info("markerDirPath=" + markerDirPath + " markerName=" + markerName);
           Set<String> allMarkers = allMarkersMap.computeIfAbsent(markerDirPath, k -> new HashSet<>());
           boolean exists = allMarkers.contains(markerName);
           if (!exists) {
@@ -434,10 +434,8 @@ public class MarkerHandler extends Handler {
         }
         createMarkerFutures.removeAll(futuresToRemove);
       }
-      LOG.info("Flush to MARKERS file .. ");
       flushMarkersToFile(updatedMarkerDirPaths, markerFileIndex);
       markerFilesUseStatus.set(markerFileIndex, false);
-      LOG.info("Resolve request futures .. ");
       for (CreateMarkerCompletableFuture future : futuresToRemove) {
         try {
           future.complete(jsonifyResult(future.getContext(), future.getResult(), metricsRegistry, OBJECT_MAPPER, LOG));
@@ -445,14 +443,14 @@ public class MarkerHandler extends Handler {
           throw new HoodieException("Failed to JSON encode the value", e);
         }
       }
-      LOG.info("Finish batch processing of create marker requests in " + (System.currentTimeMillis() - startTimeMs) + " ms");
+      LOG.debug("Finish batch processing of create marker requests in " + timer.endTimer() + " ms");
     }
 
     private void flushMarkersToFile(Set<String> updatedMarkerDirPaths, int markerFileIndex) {
-      long flushStartTimeMs = System.currentTimeMillis();
+      HoodieTimer overallTimer = new HoodieTimer().startTimer();
       for (String markerDirPath : updatedMarkerDirPaths) {
-        LOG.info("Write to " + markerDirPath);
-        long startTimeMs = System.currentTimeMillis();
+        LOG.debug("Write to " + markerDirPath);
+        HoodieTimer timer = new HoodieTimer().startTimer();
         Path markersFilePath = new Path(markerDirPath, MARKERS_FILENAME_PREFIX + markerFileIndex);
         Path dirPath = markersFilePath.getParent();
         try {
@@ -465,8 +463,6 @@ public class MarkerHandler extends Handler {
         FSDataOutputStream fsDataOutputStream = null;
         BufferedWriter bufferedWriter = null;
         try {
-          LOG.info("Create " + markersFilePath.toString());
-
           fsDataOutputStream = fileSystem.create(markersFilePath);
           bufferedWriter = new BufferedWriter(new OutputStreamWriter(fsDataOutputStream, StandardCharsets.UTF_8));
           bufferedWriter.write(fileMarkersMap.get(markerDirPath).get(markerFileIndex).toString());
@@ -476,9 +472,9 @@ public class MarkerHandler extends Handler {
           closeQuietly(bufferedWriter);
           closeQuietly(fsDataOutputStream);
         }
-        LOG.info(markersFilePath.toString() + " written in " + (System.currentTimeMillis() - startTimeMs) + " ms");
+        LOG.debug(markersFilePath.toString() + " written in " + timer.endTimer() + " ms");
       }
-      LOG.info("All MARKERS flushed in " + (System.currentTimeMillis() - flushStartTimeMs) + " ms");
+      LOG.debug("All MARKERS flushed in " + overallTimer.endTimer() + " ms");
     }
   }
 }
