@@ -1703,4 +1703,9 @@ var store = [{
         "excerpt":"Apache Hudi provides snapshot isolation between writers and readers. This is made possible by Hudi’s MVCC concurrency model. In this blog, we will explain how to employ the right configurations to manage multiple file versions. Furthermore, we will discuss mechanisms available to users on how to maintain just the required...","categories": ["blog"],
         "tags": [],
         "url": "https://hudi.apache.org/blog/employing-right-configurations-for-hudi-cleaner/",
+        "teaser":"https://hudi.apache.org/assets/images/500x300.png"},{
+        "title": "Apache Hudi - The Streaming Data Lake Platform",
+        "excerpt":"As early as 2016, we set out a bold, new vision reimagining batch data processing through a new “incremental” data processing stack - alongside the existing batch and streaming stacks. While a stream processing pipeline does row-oriented processing, delivering a few seconds of processing latency, an incremental pipeline would apply...","categories": ["blog"],
+        "tags": [],
+        "url": "https://hudi.apache.org/blog/streaming-data-lake-platform/",
         "teaser":"https://hudi.apache.org/assets/images/500x300.png"},]
