@@ -248,6 +248,9 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--hive-sync-file-format"}, description = "File format for hive sync, default 'PARQUET'")
   public String hiveSyncFileFormat = "PARQUET";
 
+  @Parameter(names = {"--hive-sync-mode"}, description = "Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'jdbc'")
+  public String hiveSyncMode = "jdbc";
+
   @Parameter(names = {"--hive-sync-username"}, description = "Username for hive sync, default 'hive'")
   public String hiveSyncUsername = "hive";
 
@@ -349,6 +352,7 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setString(FlinkOptions.HIVE_SYNC_DB, config.hiveSyncDb);
     conf.setString(FlinkOptions.HIVE_SYNC_TABLE, config.hiveSyncTable);
     conf.setString(FlinkOptions.HIVE_SYNC_FILE_FORMAT, config.hiveSyncFileFormat);
+    conf.setString(FlinkOptions.HIVE_SYNC_MODE, config.hiveSyncMode);
     conf.setString(FlinkOptions.HIVE_SYNC_USERNAME, config.hiveSyncUsername);
     conf.setString(FlinkOptions.HIVE_SYNC_PASSWORD, config.hiveSyncPassword);
     conf.setString(FlinkOptions.HIVE_SYNC_JDBC_URL, config.hiveSyncJdbcUrl);
