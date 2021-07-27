@@ -274,14 +274,15 @@ class DefaultSource extends RelationProvider
   private def inferPath(sqlContext: SQLContext,
                       originalParameters: Map[String, String]
                      ): (Option[String], Map[String, String]) = {
-    val originalPath = originalParameters.get("path")
+    var inferredPath = originalParameters.get("path")
+    var parameters = originalParameters
     // Check if the request is to read all partitions from the table
     // in the case that the user has not used the blob
     // This case occurs when the requested Table Path is the base table path
     // and does not contain the /*/*... blob
     // The actual partition path is automatically inferred
-    if (originalPath.nonEmpty && !originalPath.get.contains("*")) {
-      val strippedPath = originalPath.get.stripSuffix("/")
+    if (inferredPath.nonEmpty && !inferredPath.get.contains("*")) {
+      val strippedPath = inferredPath.get.stripSuffix("/")
       val fs = FSUtils.getFs(strippedPath, sqlContext.sparkContext.hadoopConfiguration)
       val qualifiedPath = new Path(strippedPath).makeQualified(fs.getUri, fs.getWorkingDirectory)
       val tablePath = TablePathUtils.getTablePath(fs, new Path(strippedPath)).get().toString
@@ -295,11 +296,12 @@ class DefaultSource extends RelationProvider
         val pathFromTable = DataSourceUtils.getFullWildCardPath(tablePath, singlePartitionPath)
         val modifiedParameters = originalParameters + ("path" -> pathFromTable)
         log.info("Automatically inferred Full Partition path from table: "
-          + pathFromTable + " original path " + originalPath + " table path " + tablePath)
-        return (Option(pathFromTable), modifiedParameters)
+          + pathFromTable + " original path " + inferredPath + " table path " + tablePath)
+        inferredPath = Option(pathFromTable)
+        parameters = modifiedParameters
       }
     }
-    (originalPath, originalParameters)
+    (inferredPath, parameters)
   }
 
   override def sourceSchema(sqlContext: SQLContext,

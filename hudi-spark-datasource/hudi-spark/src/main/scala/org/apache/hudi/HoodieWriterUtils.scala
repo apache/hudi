@@ -33,8 +33,7 @@ import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomK
 /**
  * WriterUtils to assist in write path in Datasource and tests.
  */
-object
-HoodieWriterUtils {
+object HoodieWriterUtils {
 
   def javaParametersWithWriteDefaults(parameters: java.util.Map[String, String]): java.util.Map[String, String] = {
     mapAsJavaMap(parametersWithWriteDefaults(parameters.asScala.toMap))
