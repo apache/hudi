@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi.command
 
 import java.nio.charset.StandardCharsets
-
 import org.apache.avro.Schema
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -30,10 +29,11 @@ import org.apache.hudi.table.HoodieSparkTable
 import scala.collection.JavaConverters._
 import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, HoodieWriterUtils}
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.execution.command.{DDLUtils, RunnableCommand}
+import org.apache.spark.sql.hudi.HoodieSqlUtils
 import org.apache.spark.sql.hudi.HoodieSqlUtils.getTableLocation
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.util.SchemaUtils
@@ -50,7 +50,15 @@ case class AlterHoodieTableAddColumnsCommand(
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     if (colsToAdd.nonEmpty) {
+      val resolver = sparkSession.sessionState.conf.resolver
       val table = sparkSession.sessionState.catalog.getTableMetadata(tableId)
+      val existsColumns =
+        colsToAdd.map(_.name).filter(col => table.schema.fieldNames.exists(f => resolver(f, col)))
+
+      if (existsColumns.nonEmpty) {
+        throw new AnalysisException(s"Columns: [${existsColumns.mkString(",")}] already exists in the table," +
+          s" table columns is: [${HoodieSqlUtils.removeMetaFields(table.schema).fieldNames.mkString(",")}]")
+      }
       // Get the new schema
       val newSqlSchema = StructType(table.schema.fields ++ colsToAdd)
       val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableId.table)
@@ -60,7 +68,8 @@ case class AlterHoodieTableAddColumnsCommand(
       AlterHoodieTableAddColumnsCommand.commitWithSchema(newSchema, table, sparkSession)
 
       // Refresh the new schema to meta
-      refreshSchemaInMeta(sparkSession, table, newSqlSchema)
+      val newDataSchema = StructType(table.dataSchema.fields ++ colsToAdd)
+      refreshSchemaInMeta(sparkSession, table, newDataSchema)
     }
     Seq.empty[Row]
   }
