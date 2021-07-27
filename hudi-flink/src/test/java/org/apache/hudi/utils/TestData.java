@@ -515,7 +515,7 @@ public class TestData {
     return Strings.join(fields, ",");
   }
 
-  private static BinaryRowData insertRow(Object... fields) {
+  public static BinaryRowData insertRow(Object... fields) {
     LogicalType[] types = TestConfigurations.ROW_TYPE.getFields().stream().map(RowType.RowField::getType)
         .toArray(LogicalType[]::new);
     assertEquals(

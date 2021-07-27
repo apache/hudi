@@ -344,6 +344,22 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Timeout limit for a writer task after it finishes a checkpoint and\n"
           + "waits for the instant commit success, only for internal use");
 
+  public static final ConfigOption<Boolean> SINK_SHUFFLE_BY_PARTITION = ConfigOptions
+      .key("sink.shuffle-by-partition.enable")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription(
+          "The option to enable shuffle data by dynamic partition fields in sink"
+              + " phase, this can greatly reduce the number of file for filesystem sink but may"
+              + " lead data skew.");
+
+  // this is only for internal use
+  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_PARTITION_SORTED = ConfigOptions
+      .key("write.bulk_insert.partition.sorted")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether the bulk insert write task input records are already sorted by the partition path");
+
   // ------------------------------------------------------------------------
   //  Compaction Options
   // ------------------------------------------------------------------------
@@ -581,7 +597,9 @@ public class FlinkOptions extends HoodieConfig {
     return options.keySet().stream().anyMatch(k -> k.startsWith(PROPERTIES_PREFIX));
   }
 
-  /** Creates a new configuration that is initialized with the options of the given map. */
+  /**
+   * Creates a new configuration that is initialized with the options of the given map.
+   */
   public static Configuration fromMap(Map<String, String> map) {
     final Configuration configuration = new Configuration();
     map.forEach(configuration::setString);
