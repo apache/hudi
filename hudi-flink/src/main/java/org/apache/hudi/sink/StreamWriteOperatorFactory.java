@@ -27,7 +27,6 @@ import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.SimpleUdfStreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamOperator;
 import org.apache.flink.streaming.api.operators.StreamOperatorParameters;
-import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 
 /**
  * Factory class for {@link StreamWriteOperator}.
@@ -62,10 +61,5 @@ public class StreamWriteOperatorFactory<I>
   @Override
   public OperatorCoordinator.Provider getCoordinatorProvider(String s, OperatorID operatorID) {
     return new StreamWriteOperatorCoordinator.Provider(operatorID, this.conf);
-  }
-
-  @Override
-  public void setProcessingTimeService(ProcessingTimeService processingTimeService) {
-    super.setProcessingTimeService(processingTimeService);
   }
 }
