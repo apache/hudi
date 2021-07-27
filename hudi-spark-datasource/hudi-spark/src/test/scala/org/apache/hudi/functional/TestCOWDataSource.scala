@@ -785,6 +785,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertEquals(resultSchema, schema1)
   }
 
+
   @Test def testSimpleAutoInferDefaultPartition(): Unit = {
     val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
@@ -829,21 +830,27 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .load(basePath)
     assertEquals(inputDF.count(), withoutBlobs.count())
 
-    val specificPartitionBlob = spark.read.format("org.apache.hudi")
-      .load(basePath + "/rider-000/0.5378950285504629/*")
-    assertEquals(inputDF.filter(col("begin_lon") === "0.5378950285504629").count(),
-      specificPartitionBlob.count())
+    val riderVal = inputDF.first().getAs[String]("rider")
+    val beginLonVal = inputDF.first().getAs[Double]("begin_lon")
+    val endLonVal = inputDF.first().getAs[Double]("end_lon")
+
+    val partitionBlob = spark.read.format("org.apache.hudi")
+      .load(basePath + "/" + riderVal + "/" + beginLonVal + "/*")
+    assertEquals(inputDF.filter(col("begin_lon") === beginLonVal).count(),
+      partitionBlob.count())
+
+    val specificPartition = spark.read.format("org.apache.hudi")
+      .load(basePath + "/" + riderVal + "/" + beginLonVal + "/" + endLonVal + "/")
+    assertEquals(inputDF.filter(
+      col("rider") === riderVal
+        && col("begin_lon") === beginLonVal
+        && col("end_lon") === endLonVal).count(),
+      specificPartition.count())
 
     val wildcardBlob = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/0.4*/*")
     assertEquals(inputDF.filter(col("begin_lon").startsWith("0.4")).count(),
       wildcardBlob.count())
-
-    val specificPartition = spark.read.format("org.apache.hudi")
-      .load(basePath + "/rider-000/0.40336083410357226/0.8542839318519847/")
-    assertEquals(inputDF.filter(col("begin_lon") === "0.40336083410357226"
-      && col("end_lon") === "0.8542839318519847").count(),
-      specificPartition.count())
   }
 
   @Test def testSimpleAutoInferNoPartition(): Unit = {

@@ -78,7 +78,7 @@ class DefaultSource extends RelationProvider
     // Add default options for unspecified read options keys.
     val originalParameters = DataSourceOptionsHelper.translateConfigurations(optParams)
 
-    val (path, parameters) = parsePath(sqlContext, originalParameters)
+    val (path, parameters) = inferPath(sqlContext, originalParameters)
     val readPathsStr = parameters.get(DataSourceReadOptions.READ_PATHS_OPT_KEY.key)
     if (path.isEmpty && readPathsStr.isEmpty) {
       throw new HoodieException(s"'path' or '$READ_PATHS_OPT_KEY' or both must be specified.")
@@ -271,7 +271,7 @@ class DefaultSource extends RelationProvider
    * @returns the origin path and parameter unless the entire table
    * is to be read but the original path does not contain the blob.
    */
-  private def parsePath(sqlContext: SQLContext,
+  private def inferPath(sqlContext: SQLContext,
                       originalParameters: Map[String, String]
                      ): (Option[String], Map[String, String]) = {
     val originalPath = originalParameters.get("path")
