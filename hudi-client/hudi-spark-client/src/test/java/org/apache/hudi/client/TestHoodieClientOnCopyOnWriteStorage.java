@@ -239,7 +239,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       boolean isPrepped, boolean populateMetaFields) throws Exception {
     // Set autoCommit false
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false);
-    addAppropriatePropsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build());) {
 
       String prevCommitTime = "000";
@@ -328,7 +328,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     JavaRDD<HoodieRecord> recordList = jsc.parallelize(Arrays.asList(recordOne, recordTwo, recordThree), 1);
     HoodieWriteConfig.Builder configBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
         .combineInput(true, true);
-    addAppropriatePropsForPopulateMetaFields(configBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(configBuilder, populateMetaFields);
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(configBuilder.build());) {
       client.startCommitWithTime(newCommitTime);
@@ -365,7 +365,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @MethodSource("populateMetaFieldsParams")
   public void testUpserts(boolean populateMetaFields) throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
-    addAppropriatePropsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     testUpsertsInternal(cfgBuilder.build(), SparkRDDWriteClient::upsert, false);
   }
 
@@ -376,7 +376,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @MethodSource("populateMetaFieldsParams")
   public void testUpsertsPrepped(boolean populateMetaFields) throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
-    addAppropriatePropsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     testUpsertsInternal(cfgBuilder.build(), SparkRDDWriteClient::upsertPreppedRecords, true);
   }
 
@@ -526,7 +526,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @MethodSource("populateMetaFieldsParams")
   public void testInsertsWithHoodieConcatHandle(boolean populateMetaFields) throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
-    addAppropriatePropsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     testHoodieConcatHandle(cfgBuilder.build(), false);
   }
 
@@ -537,7 +537,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @MethodSource("populateMetaFieldsParams")
   public void testInsertsPreppedWithHoodieConcatHandle(boolean populateMetaFields) throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
-    addAppropriatePropsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     testHoodieConcatHandle(cfgBuilder.build(),  true);
   }
 
@@ -588,7 +588,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @MethodSource("populateMetaFieldsParams")
   public void testDeletes(boolean populateMetaFields) throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY);
-    addAppropriatePropsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build());
     /**
      * Write 1 (inserts and deletes) Write actual 200 insert records and ignore 100 delete records
@@ -639,7 +639,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @MethodSource("populateMetaFieldsParams")
   public void testDeletesForInsertsInSameBatch(boolean populateMetaFields) throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY);
-    addAppropriatePropsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build());
     /**
      * Write 200 inserts and issue deletes to a subset(50) of inserts.
@@ -1209,7 +1209,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // complete another commit after pending clustering
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER);
-    addAppropriatePropsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig config = cfgBuilder.build();
     SparkRDDWriteClient client = getHoodieWriteClient(config);
     dataGen = new HoodieTestDataGenerator();
@@ -1582,7 +1582,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   public void testCommitWritesRelativePaths(boolean populateMetaFields) throws Exception {
 
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false);
-    addAppropriatePropsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfgBuilder.build());) {
       HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath).build();
       HoodieSparkTable table = HoodieSparkTable.create(cfgBuilder.build(), context, metaClient);
@@ -1628,7 +1628,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   @MethodSource("populateMetaFieldsParams")
   public void testMetadataStatsOnCommit(boolean populateMetaFields) throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false);
-    addAppropriatePropsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
 
@@ -2002,7 +2002,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   public void testMultiOperationsPerCommit(boolean populateMetaFields) throws IOException {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder().withAutoCommit(false)
         .withAllowMultiWriteOnSameInstant(true);
-    addAppropriatePropsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
     String firstInstantTime = "0000";

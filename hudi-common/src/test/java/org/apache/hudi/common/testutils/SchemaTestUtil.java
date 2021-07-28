@@ -186,7 +186,7 @@ public final class SchemaTestUtil {
 
   public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber, String instantTime,
                                                          String fileId) throws IOException {
-    return generateAvroRecordFromJson(schema, recordNumber, instantTime, fileId);
+    return generateAvroRecordFromJson(schema, recordNumber, instantTime, fileId, true);
   }
 
   public static GenericRecord generateAvroRecordFromJson(Schema schema, int recordNumber, String instantTime,

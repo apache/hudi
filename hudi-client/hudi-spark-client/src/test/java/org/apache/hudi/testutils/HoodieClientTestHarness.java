@@ -241,7 +241,7 @@ public abstract class HoodieClientTestHarness extends HoodieCommonTestHarness im
     return properties;
   }
 
-  protected void addAppropriatePropsForPopulateMetaFields(HoodieWriteConfig.Builder configBuilder, boolean populateMetaFields) {
+  protected void addConfigsForPopulateMetaFields(HoodieWriteConfig.Builder configBuilder, boolean populateMetaFields) {
     if (!populateMetaFields) {
       configBuilder.withProperties(getPropertiesForKeyGen())
           .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.SIMPLE).build());

@@ -18,15 +18,11 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
@@ -39,6 +35,12 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -81,7 +83,7 @@ public abstract class AbstractHoodieLogRecordScanner {
   // Merge strategy to use when combining records from log
   private final String payloadClassFQN;
   // simple recordKey field
-  private Option<String> simpleRecordKeyFieldOpt = Option.empty();
+  private Option<String> simpleRecordKeyField = Option.empty();
   // simple partition path field
   private Option<String> simplePartitionPathField = Option.empty();
   // Log File Paths
@@ -119,9 +121,10 @@ public abstract class AbstractHoodieLogRecordScanner {
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(basePath).build();
     // load class from the payload fully qualified class name
     this.payloadClassFQN = this.hoodieTableMetaClient.getTableConfig().getPayloadClass();
-    if (!this.hoodieTableMetaClient.getTableConfig().populateMetaFields()) {
-      this.simpleRecordKeyFieldOpt = Option.of(this.hoodieTableMetaClient.getTableConfig().getRecordKeyFieldProp());
-      this.simplePartitionPathField = Option.of(this.hoodieTableMetaClient.getTableConfig().getPartitionFieldProp());
+    HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
+    if (!tableConfig.populateMetaFields()) {
+      this.simpleRecordKeyField = Option.of(tableConfig.getRecordKeyFieldProp());
+      this.simplePartitionPathField = Option.of(tableConfig.getPartitionFieldProp());
     }
     this.totalLogFiles.addAndGet(logFilePaths.size());
     this.logFilePaths = logFilePaths;
@@ -310,10 +313,10 @@ public abstract class AbstractHoodieLogRecordScanner {
   }
 
   protected HoodieRecord<?> createHoodieRecord(IndexedRecord rec) {
-    if (!simpleRecordKeyFieldOpt.isPresent()) {
+    if (!simpleRecordKeyField.isPresent()) {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN);
     } else {
-      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN, this.simpleRecordKeyFieldOpt.get(),
+      return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) rec, this.payloadClassFQN, this.simpleRecordKeyField.get(),
           this.simplePartitionPathField.get());
     }
   }

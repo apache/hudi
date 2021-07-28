@@ -451,7 +451,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   private void checkReadRecords(String instantTime, int numExpectedRecords) throws IOException {
     if (tableType == HoodieTableType.COPY_ON_WRITE) {
       HoodieTimeline timeline = metaClient.reloadActiveTimeline().getCommitTimeline();
-      assertEquals(numExpectedRecords, HoodieClientTestUtils.countRecordsSince(jsc, basePath, sqlContext, timeline, instantTime));
+      assertEquals(numExpectedRecords, HoodieClientTestUtils.countRecordsWithOptionalSince(jsc, basePath, sqlContext, timeline, Option.of(instantTime)));
     } else {
       // TODO: This code fails to read records under the following conditions:
       // 1. No parquet files yet (i.e. no compaction done yet)

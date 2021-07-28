@@ -23,16 +23,13 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
@@ -63,30 +60,26 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
       RecordReader<NullWritable, ArrayWritable> realReader) throws IOException {
     super(split, job);
     this.parquetReader = realReader;
-    this.deltaRecordMap = initAndGetMergedLogRecordScanner().getRecords();
+    this.deltaRecordMap = getMergedLogRecordScanner().getRecords();
     this.deltaRecordKeys = new HashSet<>(this.deltaRecordMap.keySet());
+    if (split.getHoodieVirtualKeyInfoOpt().isPresent()) {
+      this.recordKeyIndex = split.getHoodieVirtualKeyInfoOpt().get().getRecordKeyFieldIndex();
+    }
   }
 
   /**
    * Goes through the log files and populates a map with latest version of each key logged, since the base split was
    * written.
    */
-  private HoodieMergedLogRecordScanner initAndGetMergedLogRecordScanner() throws IOException {
+  private HoodieMergedLogRecordScanner getMergedLogRecordScanner() throws IOException {
     // NOTE: HoodieCompactedLogRecordScanner will not return records for an in-flight commit
     // but can return records for completed commits > the commit we are trying to read (if using
     // readCommit() API)
-    FileSystem fs = FSUtils.getFs(split.getPath().toString(), jobConf);
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(split.getBasePath()).build();
-    Option<String> simpleRecordKeyFieldOpt = metaClient.getTableConfig().populateMetaFields() ? Option.empty() : Option.of(metaClient.getTableConfig().getRecordKeyFieldProp());
-    Schema schema = usesCustomPayload ? getWriterSchema() : getReaderSchema();
-    if (simpleRecordKeyFieldOpt.isPresent()) {
-      recordKeyIndex = schema.getFields().indexOf(schema.getField(simpleRecordKeyFieldOpt.get()));
-    }
     return HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(fs)
+        .withFileSystem(FSUtils.getFs(split.getPath().toString(), jobConf))
         .withBasePath(split.getBasePath())
         .withLogFilePaths(split.getDeltaLogPaths())
-        .withReaderSchema(schema)
+        .withReaderSchema(usesCustomPayload ? getWriterSchema() : getReaderSchema())
         .withLatestInstantTime(split.getMaxCommitTime())
         .withMaxMemorySizeInBytes(HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes(jobConf))
         .withReadBlocksLazily(Boolean.parseBoolean(jobConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)))

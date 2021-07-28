@@ -82,13 +82,6 @@ public class HoodieInputFormatUtils {
   public static final int HOODIE_PARTITION_PATH_COL_POS = 3;
   public static final String HOODIE_READ_COLUMNS_PROP = "hoodie.read.columns.set";
 
-  public static final String HOODIE_USE_META_FIELDS = "hoodie.use.meta.fields";
-  public static final String DEFAULT_HOODIE_USE_META_FIELDS = "true";
-  public static final String RECORD_KEY_FIELD = "hoodie.record.key.field";
-  public static final String PARTITION_PATH_FIELD = "hoodie.partition.path.field";
-  public static final String RECORD_KEY_FIELD_INDEX = "hoodie.record.key.field.index";
-  public static final String PARTITION_PATH_FIELD_INDEX = "hoodie.partition.path.field.index";
-
   private static final Logger LOG = LogManager.getLogger(HoodieInputFormatUtils.class);
 
   public static FileInputFormat getInputFormat(HoodieFileFormat baseFileFormat, boolean realtime, Configuration conf) {

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.common.util.Option;
+
 import org.apache.hadoop.mapred.FileSplit;
 
 import java.io.DataInput;
@@ -36,16 +38,20 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
 
   private String basePath;
 
+  private Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfoOpt = Option.empty();
+
   public HoodieRealtimeFileSplit() {
     super();
   }
 
-  public HoodieRealtimeFileSplit(FileSplit baseSplit, String basePath, List<String> deltaLogPaths, String maxCommitTime)
+  public HoodieRealtimeFileSplit(FileSplit baseSplit, String basePath, List<String> deltaLogPaths, String maxCommitTime,
+                                 Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfoOpt)
       throws IOException {
     super(baseSplit.getPath(), baseSplit.getStart(), baseSplit.getLength(), baseSplit.getLocations());
     this.deltaLogPaths = deltaLogPaths;
     this.maxCommitTime = maxCommitTime;
     this.basePath = basePath;
+    this.hoodieVirtualKeyInfoOpt = hoodieVirtualKeyInfoOpt;
   }
 
   public List<String> getDeltaLogPaths() {
@@ -58,6 +64,16 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
 
   public String getBasePath() {
     return basePath;
+  }
+
+  @Override
+  public void setHoodieVirtualKeyInfoOpt(Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfoOpt) {
+    this.hoodieVirtualKeyInfoOpt = hoodieVirtualKeyInfoOpt;
+  }
+
+  @Override
+  public Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfoOpt() {
+    return hoodieVirtualKeyInfoOpt;
   }
 
   public void setDeltaLogPaths(List<String> deltaLogPaths) {

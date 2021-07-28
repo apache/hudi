@@ -68,7 +68,6 @@ public class HoodieTableConfig extends HoodieConfig implements Serializable {
   private static final Logger LOG = LogManager.getLogger(HoodieTableConfig.class);
 
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
-  public static final String DEFAULT_HOODIE_TABLE_KEY_GENERATOR_CLASS = "org.apache.hudi.keygen.SimpleKeyGenerator";
 
   public static final ConfigProperty<String> HOODIE_TABLE_NAME_PROP = ConfigProperty
       .key("hoodie.table.name")

@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieFileSliceReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -212,12 +213,12 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
               .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
               .build();
 
+          HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
           recordIterators.add(HoodieFileSliceReader.getFileSliceReader(baseFileReader, scanner, readerSchema,
-              table.getMetaClient().getTableConfig().getPayloadClass(),
-              table.getMetaClient().getTableConfig().populateMetaFields() ? Option.empty() : Option.of(table.getMetaClient().getTableConfig().getRecordKeyFieldProp()),
-              table.getMetaClient().getTableConfig().populateMetaFields() ? Option.empty() : Option.of(table.getMetaClient().getTableConfig().getPartitionFieldProp())));
+              tableConfig.getPayloadClass(),
+              tableConfig.populateMetaFields() ? Option.empty() : Option.of(tableConfig.getRecordKeyFieldProp()),
+              tableConfig.populateMetaFields() ? Option.empty() : Option.of(tableConfig.getPartitionFieldProp())));
         } catch (IOException e) {
-
           throw new HoodieClusteringException("Error reading input data for " + clusteringOp.getDataFilePath()
               + " and " + clusteringOp.getDeltaFilePaths(), e);
         }

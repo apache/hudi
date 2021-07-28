@@ -198,7 +198,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
     assertEquals(latestCompactionCommitTime, compactionInstantTime,
         "Expect compaction instant time to be the latest commit time");
     assertEquals(expectedNumRecs,
-        HoodieClientTestUtils.countRecordsSince(jsc, basePath, sqlContext, timeline, "000"),
+        HoodieClientTestUtils.countRecordsWithOptionalSince(jsc, basePath, sqlContext, timeline, Option.of("000")),
         "Must contain expected records");
 
   }

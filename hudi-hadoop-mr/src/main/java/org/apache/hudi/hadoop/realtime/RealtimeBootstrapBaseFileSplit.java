@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
 
 import org.apache.hadoop.mapred.FileSplit;
@@ -78,6 +79,11 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
   }
 
   @Override
+  public Option<HoodieVirtualKeyInfo> getHoodieVirtualKeyInfoOpt() {
+    return Option.empty();
+  }
+
+  @Override
   public void setDeltaLogPaths(List<String> deltaLogPaths) {
     this.deltaLogPaths = deltaLogPaths;
   }
@@ -91,4 +97,8 @@ public class RealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit imple
   public void setBasePath(String basePath) {
     this.basePath = basePath;
   }
+
+  @Override
+  public void setHoodieVirtualKeyInfoOpt(Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfoOpt) {}
+
 }

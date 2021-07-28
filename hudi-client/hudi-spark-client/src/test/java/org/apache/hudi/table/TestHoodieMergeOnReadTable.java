@@ -159,7 +159,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     init(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue(), populateMetaFields);
 
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true);
-    addAppropriatePropsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
 
@@ -198,10 +198,10 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       assertTrue(HoodieTimeline.compareTimestamps("000", HoodieTimeline.LESSER_THAN, latestCompactionCommitTime));
 
       if (cfg.populateMetaFields()) {
-        assertEquals(200, HoodieClientTestUtils.countRecordsSince(jsc, basePath, sqlContext, timeline, "000"),
+        assertEquals(200, HoodieClientTestUtils.countRecordsWithOptionalSince(jsc, basePath, sqlContext, timeline, Option.of("000")),
             "Must contain 200 records");
       } else {
-        assertEquals(200, HoodieClientTestUtils.countAllRecords(jsc, basePath, sqlContext, timeline));
+        assertEquals(200, HoodieClientTestUtils.countRecordsWithOptionalSince(jsc, basePath, sqlContext, timeline, Option.empty()));
       }
     }
   }
@@ -248,7 +248,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       String latestCompactionCommitTime = timeline.lastInstant().get().getTimestamp();
       assertTrue(HoodieTimeline.compareTimestamps("000", HoodieTimeline.LESSER_THAN, latestCompactionCommitTime));
 
-      assertEquals(200, HoodieClientTestUtils.countRecordsSince(jsc, basePath, sqlContext, timeline, "000"),
+      assertEquals(200, HoodieClientTestUtils.countRecordsWithOptionalSince(jsc, basePath, sqlContext, timeline, Option.of("000")),
           "Must contain 200 records");
     }
   }
@@ -274,7 +274,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
         .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).build();
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true, 10L, clusteringConfig);
-    addAppropriatePropsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
@@ -333,10 +333,10 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       assertEquals(clusteringCommitTime, timeline.lastInstant().get().getTimestamp());
       assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, timeline.lastInstant().get().getAction());
       if (cfg.populateMetaFields()) {
-        assertEquals(400, HoodieClientTestUtils.countRecordsSince(jsc, basePath, sqlContext, timeline, "000"),
+        assertEquals(400, HoodieClientTestUtils.countRecordsWithOptionalSince(jsc, basePath, sqlContext, timeline, Option.of("000")),
             "Must contain 200 records");
       } else {
-        assertEquals(400, HoodieClientTestUtils.countAllRecords(jsc, basePath, sqlContext, timeline));
+        assertEquals(400, HoodieClientTestUtils.countRecordsWithOptionalSince(jsc, basePath, sqlContext, timeline, Option.empty()));
       }
     }
   }
@@ -471,7 +471,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     clean();
     init(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue(), populateMetaFields);
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true);
-    addAppropriatePropsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
 
@@ -616,7 +616,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
 
   private void testRollbackWithDeltaAndCompactionCommit(Boolean rollbackUsingMarkers, boolean populateMetaFields) throws Exception {
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false, rollbackUsingMarkers, IndexType.SIMPLE);
-    addAppropriatePropsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
@@ -786,7 +786,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     clean();
     init(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue(), populateMetaFields);
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(false);
-    addAppropriatePropsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
 
     try (final SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
@@ -948,7 +948,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1024).parquetMaxFileSize(1024).build()).forTable("test-trip-table");
 
     if (!populateMetaFields) {
-      addAppropriatePropsForPopulateMetaFields(cfgBuilder, false);
+      addConfigsForPopulateMetaFields(cfgBuilder, false);
     }
     return cfgBuilder.build();
   }
@@ -959,7 +959,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
     clean();
     init(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP.defaultValue(), populateMetaFields);
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true);
-    addAppropriatePropsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg);) {
 
@@ -1042,7 +1042,7 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
   public void testLogFileCountsAfterCompaction(boolean populateMetaFields) throws Exception {
     // insert 100 records
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder(true);
-    addAppropriatePropsForPopulateMetaFields(cfgBuilder, populateMetaFields);
+    addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig config = cfgBuilder.build();
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(config);) {

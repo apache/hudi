@@ -141,60 +141,46 @@ public class HoodieClientTestUtils {
   }
 
   /**
-   * Obtain all new data written into the Hoodie table since the given timestamp.
+   * Obtain all new data written into the Hoodie table with an optional from timestamp.
    */
-  public static long countRecordsSince(JavaSparkContext jsc, String basePath, SQLContext sqlContext,
-                                       HoodieTimeline commitTimeline, String lastCommitTime) {
+  public static long countRecordsWithOptionalSince(JavaSparkContext jsc, String basePath, SQLContext sqlContext,
+                                                   HoodieTimeline commitTimeline, Option<String> lastCommitTimeOpt) {
     List<HoodieInstant> commitsToReturn =
-        commitTimeline.findInstantsAfter(lastCommitTime, Integer.MAX_VALUE).getInstants().collect(Collectors.toList());
+        lastCommitTimeOpt.isPresent() ? commitTimeline.findInstantsAfter(lastCommitTimeOpt.get(), Integer.MAX_VALUE).getInstants().collect(Collectors.toList()) :
+            commitTimeline.getInstants().collect(Collectors.toList());
     try {
       // Go over the commit metadata, and obtain the new files that need to be read.
       HashMap<String, String> fileIdToFullPath = getLatestFileIDsToFullPath(basePath, commitTimeline, commitsToReturn);
       String[] paths = fileIdToFullPath.values().toArray(new String[fileIdToFullPath.size()]);
       if (paths[0].endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-        return sqlContext.read().parquet(paths)
-            .filter(String.format("%s >'%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, lastCommitTime))
-            .count();
+        Dataset<Row> rows = sqlContext.read().parquet(paths);
+        if (lastCommitTimeOpt.isPresent()) {
+          return rows.filter(String.format("%s >'%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, lastCommitTimeOpt.get()))
+              .count();
+        } else {
+          return rows.count();
+        }
       } else if (paths[0].endsWith(HoodieFileFormat.HFILE.getFileExtension())) {
-        return readHFile(jsc, paths)
-            .filter(gr -> HoodieTimeline.compareTimestamps(lastCommitTime, HoodieActiveTimeline.LESSER_THAN,
-                gr.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString()))
-            .count();
+        Stream<GenericRecord> genericRecordStream = readHFile(jsc, paths);
+        if (lastCommitTimeOpt.isPresent()) {
+          return genericRecordStream.filter(gr -> HoodieTimeline.compareTimestamps(lastCommitTimeOpt.get(), HoodieActiveTimeline.LESSER_THAN,
+              gr.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString()))
+              .count();
+        } else {
+          return genericRecordStream.count();
+        }
       } else if (paths[0].endsWith(HoodieFileFormat.ORC.getFileExtension())) {
-        return sqlContext.read().orc(paths)
-            .filter(String.format("%s >'%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, lastCommitTime))
-            .count();
+        Dataset<Row> rows = sqlContext.read().orc(paths);
+        if (lastCommitTimeOpt.isPresent()) {
+          return rows.filter(String.format("%s >'%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, lastCommitTimeOpt.get()))
+              .count();
+        } else {
+          return rows.count();
+        }
       }
       throw new HoodieException("Unsupported base file format for file :" + paths[0]);
     } catch (IOException e) {
-      throw new HoodieException("Error pulling data incrementally from commitTimestamp :" + lastCommitTime, e);
-    }
-  }
-
-  /**
-   * Obtain all new data written into the Hoodie table since the given timestamp.
-   */
-  public static long countAllRecords(JavaSparkContext jsc, String basePath, SQLContext sqlContext,
-                                       HoodieTimeline commitTimeline) {
-    List<HoodieInstant> commitsToReturn =
-        commitTimeline.getInstants().collect(Collectors.toList());
-    try {
-      // Go over the commit metadata, and obtain the new files that need to be read.
-      HashMap<String, String> fileIdToFullPath = getLatestFileIDsToFullPath(basePath, commitTimeline, commitsToReturn);
-      String[] paths = fileIdToFullPath.values().toArray(new String[fileIdToFullPath.size()]);
-      if (paths[0].endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-        return sqlContext.read().parquet(paths)
-            .count();
-      } else if (paths[0].endsWith(HoodieFileFormat.HFILE.getFileExtension())) {
-        return readHFile(jsc, paths)
-            .count();
-      } else if (paths[0].endsWith(HoodieFileFormat.ORC.getFileExtension())) {
-        return sqlContext.read().orc(paths)
-            .count();
-      }
-      throw new HoodieException("Unsupported base file format for file :" + paths[0]);
-    } catch (IOException e) {
-      throw new HoodieException("Error pulling data ", e);
+      throw new HoodieException("Error pulling data incrementally from commitTimestamp :" + lastCommitTimeOpt.get(), e);
     }
   }
 
