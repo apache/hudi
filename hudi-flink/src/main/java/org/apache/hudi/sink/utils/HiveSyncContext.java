@@ -71,6 +71,7 @@ public class HiveSyncContext {
     hiveSyncConfig.usePreApacheInputFormat = false;
     hiveSyncConfig.databaseName = conf.getString(FlinkOptions.HIVE_SYNC_DB);
     hiveSyncConfig.tableName = conf.getString(FlinkOptions.HIVE_SYNC_TABLE);
+    hiveSyncConfig.syncMode = conf.getString(FlinkOptions.HIVE_SYNC_MODE);
     hiveSyncConfig.hiveUser = conf.getString(FlinkOptions.HIVE_SYNC_USERNAME);
     hiveSyncConfig.hivePass = conf.getString(FlinkOptions.HIVE_SYNC_PASSWORD);
     hiveSyncConfig.jdbcUrl = conf.getString(FlinkOptions.HIVE_SYNC_JDBC_URL);

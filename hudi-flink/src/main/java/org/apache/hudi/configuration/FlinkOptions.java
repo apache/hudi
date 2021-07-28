@@ -478,6 +478,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue("PARQUET")
       .withDescription("File format for hive sync, default 'PARQUET'");
 
+  public static final ConfigOption<String> HIVE_SYNC_MODE = ConfigOptions
+      .key("hive_sync.mode")
+      .stringType()
+      .defaultValue("jdbc")
+      .withDescription("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'jdbc'");
+
   public static final ConfigOption<String> HIVE_SYNC_USERNAME = ConfigOptions
       .key("hive_sync.username")
       .stringType()
