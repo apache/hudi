@@ -18,14 +18,13 @@
 package org.apache.hudi
 
 import java.util.Properties
-
 import scala.collection.JavaConverters._
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.view.{FileSystemViewStorageConfig, HoodieTableFileSystemView}
@@ -37,6 +36,7 @@ import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.util.{CaseInsensitiveMap, DateTimeUtils}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
+import org.apache.spark.sql.hudi.HoodieSqlUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.types.UTF8String
@@ -80,6 +80,9 @@ case class HoodieFileIndex(
   private val queryType = options(QUERY_TYPE.key())
 
   private val tableType = metaClient.getTableType
+
+  private val specifiedQueryInstant = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key)
+    .map(HoodieSqlUtils.formatQueryInstant)
 
   /**
    * Get the schema of the table.
@@ -214,15 +217,23 @@ case class HoodieFileIndex(
 
     metaClient.reloadActiveTimeline()
     val activeInstants = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
+    val latestInstant = activeInstants.lastInstant()
     fileSystemView = new HoodieTableFileSystemView(metaClient, activeInstants, allFiles)
+    val queryInstant = if (specifiedQueryInstant.isDefined) {
+      specifiedQueryInstant
+    } else if (latestInstant.isPresent) {
+      Some(latestInstant.get.getTimestamp)
+    } else {
+      None
+    }
 
     (tableType, queryType) match {
       case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL) =>
         // Fetch and store latest base and log files, and their sizes
         cachedAllInputFileSlices = partitionFiles.map(p => {
-          val latestSlices = if (activeInstants.lastInstant().isPresent) {
-           fileSystemView.getLatestMergedFileSlicesBeforeOrOn(p._1.partitionPath,
-             activeInstants.lastInstant().get().getTimestamp).iterator().asScala.toSeq
+          val latestSlices = if (latestInstant.isPresent) {
+            fileSystemView.getLatestMergedFileSlicesBeforeOrOn(p._1.partitionPath, queryInstant.get)
+             .iterator().asScala.toSeq
           } else {
             Seq()
           }
@@ -238,7 +249,12 @@ case class HoodieFileIndex(
       case (_, _) =>
         // Fetch and store latest base files and its sizes
         cachedAllInputFileSlices = partitionFiles.map(p => {
-          (p._1, fileSystemView.getLatestFileSlices(p._1.partitionPath).iterator().asScala.toSeq)
+          val fileSlices = specifiedQueryInstant
+            .map(instant =>
+              fileSystemView.getLatestFileSlicesBeforeOrOn(p._1.partitionPath, instant, true))
+            .getOrElse(fileSystemView.getLatestFileSlices(p._1.partitionPath))
+            .iterator().asScala.toSeq
+          (p._1, fileSlices)
         })
         cachedFileSize = cachedAllInputFileSlices.values.flatten.map(_.getBaseFile.get().getFileLen).sum
     }
@@ -246,7 +262,7 @@ case class HoodieFileIndex(
     // If the partition value contains InternalRow.empty, we query it as a non-partitioned table.
     queryAsNonePartitionedTable = partitionFiles.keys.exists(p => p.values == InternalRow.empty)
     val flushSpend = System.currentTimeMillis() - startTime
-    logInfo(s"Refresh for table ${metaClient.getTableConfig.getTableName}," +
+    logInfo(s"Refresh table ${metaClient.getTableConfig.getTableName}," +
       s" spend: $flushSpend ms")
   }
 
