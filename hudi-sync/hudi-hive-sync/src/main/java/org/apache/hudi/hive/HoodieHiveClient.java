@@ -33,7 +33,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
-import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.metastore.api.Table;
@@ -221,14 +220,14 @@ public class HoodieHiveClient extends AbstractSyncHoodieClient {
    */
   public boolean doesDataBaseExist(String databaseName) {
     try {
-      Database database = client.getDatabase(databaseName);
-      if (database != null && databaseName.equals(database.getName())) {
-        return true;
-      }
+      client.getDatabase(databaseName);
+      return true;
+    } catch (NoSuchObjectException noSuchObjectException) {
+      // NoSuchObjectException is thrown when there is no existing database of the name.
+      return false;
     } catch (TException e) {
       throw new HoodieHiveSyncException("Failed to check if database exists " + databaseName, e);
     }
-    return false;
   }
 
   public void createDatabase(String databaseName) {
