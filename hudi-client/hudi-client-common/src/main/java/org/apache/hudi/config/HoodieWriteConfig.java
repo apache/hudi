@@ -24,6 +24,7 @@ import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.EngineType;
@@ -38,7 +39,6 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -59,7 +59,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -312,18 +311,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When enabled, we allow duplicate keys even if inserts are routed to merge with an existing file (for ensuring file sizing)."
           + " This is only relevant for insert operation, since upsert, delete operations will ensure unique key constraints are maintained.");
 
-  public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
-      .key("hoodie.spillable.diskmap.type")
-      .defaultValue(ExternalSpillableMap.DiskMapType.BITCASK)
-      .withDocumentation("When handling input data that cannot be held in memory, to merge with a file on storage, a spillable diskmap is employed.  "
-          + "By default, we use a persistent hashmap based loosely on bitcask, that offers O(1) inserts, lookups. "
-          + "Change this to `ROCKS_DB` to prefer using rocksDB, for handling the spill.");
-
-  public static final ConfigProperty<Boolean> DISK_MAP_BITCASK_COMPRESSION_ENABLED = ConfigProperty
-      .key("hoodie.diskmap.bitcask.compression.enabled")
-      .defaultValue(true)
-      .withDocumentation("Turn on compression for BITCASK disk map used by the External Spillable Map");
-
   public static final ConfigProperty<Integer> CLIENT_HEARTBEAT_INTERVAL_IN_MS_PROP = ConfigProperty
       .key("hoodie.client.heartbeat.interval_in_ms")
       .defaultValue(60 * 1000)
@@ -388,6 +375,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   private FileSystemViewStorageConfig viewStorageConfig;
   private HoodiePayloadConfig hoodiePayloadConfig;
   private HoodieMetadataConfig metadataConfig;
+  private HoodieCommonConfig commonConfig;
   private EngineType engineType;
 
   /**
@@ -409,6 +397,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     this.viewStorageConfig = clientSpecifiedViewStorageConfig;
     this.hoodiePayloadConfig = HoodiePayloadConfig.newBuilder().fromProperties(newProps).build();
     this.metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(props).build();
+    this.commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
   }
 
   public static HoodieWriteConfig.Builder newBuilder() {
@@ -599,14 +588,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean allowDuplicateInserts() {
     return getBoolean(MERGE_ALLOW_DUPLICATE_ON_INSERTS);
-  }
-
-  public ExternalSpillableMap.DiskMapType getSpillableDiskMapType() {
-    return ExternalSpillableMap.DiskMapType.valueOf(getString(SPILLABLE_DISK_MAP_TYPE).toUpperCase(Locale.ROOT));
-  }
-
-  public boolean isBitCaskDiskMapCompressionEnabled() {
-    return getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED);
   }
 
   public EngineType getEngineType() {
@@ -1163,6 +1144,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig;
   }
 
+  public HoodieCommonConfig getCommonConfig() {
+    return commonConfig;
+  }
+
   /**
    * Commit call back configs.
    */
@@ -1565,16 +1550,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withMergeAllowDuplicateOnInserts(boolean routeInsertsToNewFiles) {
       writeConfig.setValue(MERGE_ALLOW_DUPLICATE_ON_INSERTS, String.valueOf(routeInsertsToNewFiles));
-      return this;
-    }
-
-    public Builder withSpillableDiskMapType(ExternalSpillableMap.DiskMapType diskMapType) {
-      writeConfig.setValue(SPILLABLE_DISK_MAP_TYPE, diskMapType.name());
-      return this;
-    }
-
-    public Builder withBitcaskDiskMapCompressionEnabled(boolean bitcaskDiskMapCompressionEnabled) {
-      writeConfig.setValue(DISK_MAP_BITCASK_COMPRESSION_ENABLED, String.valueOf(bitcaskDiskMapCompressionEnabled));
       return this;
     }
 

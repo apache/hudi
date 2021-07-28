@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.embedded;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.config.SerializableConfiguration;
@@ -46,6 +47,7 @@ public class EmbeddedTimelineService {
   private final SerializableConfiguration hadoopConf;
   private final FileSystemViewStorageConfig config;
   private final HoodieMetadataConfig metadataConfig;
+  private final HoodieCommonConfig commonConfig;
   private final String basePath;
 
   private final int numThreads;
@@ -55,13 +57,14 @@ public class EmbeddedTimelineService {
   private transient TimelineService server;
 
   public EmbeddedTimelineService(HoodieEngineContext context, String embeddedTimelineServiceHostAddr, int embeddedTimelineServerPort,
-                                 HoodieMetadataConfig metadataConfig, FileSystemViewStorageConfig config, String basePath,
+                                 HoodieMetadataConfig metadataConfig, HoodieCommonConfig commonConfig, FileSystemViewStorageConfig config, String basePath,
                                  int numThreads, boolean compressOutput, boolean useAsync) {
     setHostAddr(embeddedTimelineServiceHostAddr);
     this.context = context;
     this.config = config;
     this.basePath = basePath;
     this.metadataConfig = metadataConfig;
+    this.commonConfig = commonConfig;
     this.hadoopConf = context.getHadoopConf();
     this.viewManager = createViewManager();
     this.preferredPort = embeddedTimelineServerPort;
@@ -80,7 +83,7 @@ public class EmbeddedTimelineService {
       // Reset to default if set to Remote
       builder.withStorageType(FileSystemViewStorageType.MEMORY);
     }
-    return FileSystemViewManager.createViewManager(context, metadataConfig, builder.build(), basePath);
+    return FileSystemViewManager.createViewManager(context, metadataConfig, builder.build(), commonConfig, basePath);
   }
 
   public void startServer() throws IOException {
