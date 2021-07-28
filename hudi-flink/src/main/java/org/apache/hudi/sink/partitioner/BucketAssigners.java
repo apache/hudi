@@ -29,21 +29,24 @@ import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
  */
 public abstract class BucketAssigners {
 
-  private BucketAssigners() {}
+  private BucketAssigners() {
+  }
 
   /**
    * Creates a {@code BucketAssigner}.
    *
-   * @param taskID The task ID
-   * @param numTasks The number of tasks
-   * @param overwrite Whether the write operation is OVERWRITE
-   * @param tableType The table type
-   * @param context The engine context
-   * @param config The configuration
+   * @param taskID         The task ID
+   * @param maxParallelism The max parallelism
+   * @param numTasks       The number of tasks
+   * @param overwrite      Whether the write operation is OVERWRITE
+   * @param tableType      The table type
+   * @param context        The engine context
+   * @param config         The configuration
    * @return the bucket assigner instance
    */
   public static BucketAssigner create(
       int taskID,
+      int maxParallelism,
       int numTasks,
       boolean overwrite,
       HoodieTableType tableType,
@@ -51,6 +54,6 @@ public abstract class BucketAssigners {
       HoodieWriteConfig config) {
     boolean delta = tableType.equals(HoodieTableType.MERGE_ON_READ);
     WriteProfile writeProfile = WriteProfiles.singleton(overwrite, delta, config, context);
-    return new BucketAssigner(taskID, numTasks, writeProfile, config);
+    return new BucketAssigner(taskID, maxParallelism, numTasks, writeProfile, config);
   }
 }
