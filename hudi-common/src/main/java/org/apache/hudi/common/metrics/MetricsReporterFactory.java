@@ -41,7 +41,7 @@ public class MetricsReporterFactory {
   private static final Logger LOG = LogManager.getLogger(MetricsReporterFactory.class);
 
   public static MetricsReporter createReporter(HoodieMetricsConfig config, MetricRegistry registry) {
-    String reporterClassName = config.getString(HoodieMetricsConfig.METRICS_REPORTER_CLASS);
+    String reporterClassName = config.getMetricReporterClassName();
 
     if (!StringUtils.isNullOrEmpty(reporterClassName)) {
       Object instance = ReflectionUtils.loadClass(
@@ -52,7 +52,7 @@ public class MetricsReporterFactory {
       return (MetricsReporter) instance;
     }
 
-    MetricsReporterType type = MetricsReporterType.valueOf(config.getString(HoodieMetricsConfig.METRICS_REPORTER_TYPE));
+    MetricsReporterType type = config.getMetricsReporterType();
     MetricsReporter reporter = null;
     switch (type) {
       case GRAPHITE:

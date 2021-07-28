@@ -45,7 +45,7 @@ public class Metrics {
 
   private Metrics(HoodieMetricsConfig metricConfig) {
     registry = new MetricRegistry();
-    commonMetricPrefix = metricConfig.getString("hoodie.table.name");
+    commonMetricPrefix = metricConfig.getTableName();
     reporter = MetricsReporterFactory.createReporter(metricConfig, registry);
     if (reporter == null) {
       throw new RuntimeException("Cannot initialize Reporter.");
