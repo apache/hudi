@@ -31,7 +31,7 @@ import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.partitioner.BucketAssignOperator;
-import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
+import org.apache.hudi.sink.transform.RowDataToHoodieFunctions;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
@@ -112,7 +112,8 @@ public class HoodieFlinkStreamer {
       }
     }
 
-    DataStream<HoodieRecord> dataStream2 = dataStream.map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class));
+    DataStream<HoodieRecord> dataStream2 = dataStream
+        .map(RowDataToHoodieFunctions.create(rowType, conf), TypeInformation.of(HoodieRecord.class));
 
     if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
       dataStream2 = dataStream2.rebalance()
