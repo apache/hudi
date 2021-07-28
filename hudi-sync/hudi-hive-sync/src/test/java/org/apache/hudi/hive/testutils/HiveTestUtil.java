@@ -138,8 +138,7 @@ public class HiveTestUtil {
       ddlExecutor.runSQL("drop table if exists " + tableName);
     }
     createdTablesSet.clear();
-    ddlExecutor.runSQL("drop database if exists " + hiveSyncConfig.databaseName);
-    ddlExecutor.runSQL("create database " + hiveSyncConfig.databaseName);
+    ddlExecutor.runSQL("drop database if exists " + hiveSyncConfig.databaseName + " cascade");
   }
 
   public static HiveConf getHiveConf() {

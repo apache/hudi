@@ -63,8 +63,10 @@ import java.util.Map;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.ddlExecutor;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.fileSystem;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.hiveSyncConfig;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Disabled("Disabled until HIVE-1315 has been fixed!")
@@ -302,6 +304,49 @@ public class TestHiveSyncTool {
     assertEquals(6, tablePartitions.size(), "The one partition we wrote should be added to hive");
     assertEquals(instantTime, hiveClient.getLastCommitTimeSynced(hiveSyncConfig.tableName).get(),
         "The last commit that was synced should be 100");
+  }
+
+  @ParameterizedTest
+  @MethodSource({"syncMode"})
+  public void testSyncDataBase(String syncMode) throws Exception {
+    hiveSyncConfig.syncMode = syncMode;
+    HiveTestUtil.hiveSyncConfig.batchSyncNum = 3;
+    String instantTime = "100";
+    HiveTestUtil.createCOWTable(instantTime, 5, true);
+    hiveSyncConfig.databaseName = "database1";
+
+    // while autoCreateDatabase is false and database not exists;
+    hiveSyncConfig.autoCreateDatabase = false;
+    // Lets do the sync
+    assertThrows(Exception.class, () -> {
+      new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem).syncHoodieTable();
+    });
+
+    // while autoCreateDatabase is true and database not exists;
+    hiveSyncConfig.autoCreateDatabase = true;
+    HoodieHiveClient hiveClient =
+        new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem);
+    assertDoesNotThrow(() -> {
+      new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem).syncHoodieTable();
+    });
+    assertTrue(hiveClient.doesDataBaseExist(hiveSyncConfig.databaseName),
+        "DataBases " + hiveSyncConfig.databaseName + " should exist after sync completes");
+
+    // while autoCreateDatabase is false and database exists;
+    hiveSyncConfig.autoCreateDatabase = false;
+    assertDoesNotThrow(() -> {
+      new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem).syncHoodieTable();
+    });
+    assertTrue(hiveClient.doesDataBaseExist(hiveSyncConfig.databaseName),
+        "DataBases " + hiveSyncConfig.databaseName + " should exist after sync completes");
+
+    // while autoCreateDatabase is true and database exists;
+    hiveSyncConfig.autoCreateDatabase = true;
+    assertDoesNotThrow(() -> {
+      new HiveSyncTool(hiveSyncConfig, HiveTestUtil.getHiveConf(), fileSystem).syncHoodieTable();
+    });
+    assertTrue(hiveClient.doesDataBaseExist(hiveSyncConfig.databaseName),
+        "DataBases " + hiveSyncConfig.databaseName + " should exist after sync completes");
   }
 
   @ParameterizedTest
@@ -1056,6 +1101,8 @@ public class TestHiveSyncTool {
     hiveSyncConfig.syncMode = syncMode;
     HiveTestUtil.hiveSyncConfig.batchSyncNum = 2;
     HiveTestUtil.createCOWTable("100", 5, true);
+    // create database.
+    ddlExecutor.runSQL("create database " + hiveSyncConfig.databaseName);
     HoodieHiveClient hiveClient =
         new HoodieHiveClient(HiveTestUtil.hiveSyncConfig, HiveTestUtil.getHiveConf(), HiveTestUtil.fileSystem);
     String tableName = HiveTestUtil.hiveSyncConfig.tableName;
