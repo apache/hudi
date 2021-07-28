@@ -20,6 +20,7 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -213,6 +214,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
       // Load the schema
       Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
+      HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().fromProperties(metadataConfig.getProps()).build();
       logRecordScanner = HoodieMetadataMergedLogRecordScanner.newBuilder()
           .withFileSystem(metaClient.getFs())
           .withBasePath(metadataBasePath)
@@ -222,6 +224,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           .withMaxMemorySizeInBytes(MAX_MEMORY_SIZE_IN_BYTES)
           .withBufferSize(BUFFER_SIZE)
           .withSpillableMapBasePath(spillableMapDirectory)
+          .withDiskMapType(commonConfig.getSpillableDiskMapType())
+          .withBitCaskDiskMapCompressionEnabled(commonConfig.isBitCaskDiskMapCompressionEnabled())
           .build();
 
       logScannerOpenMs = timer.endTimer();

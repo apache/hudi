@@ -234,6 +234,8 @@ public class BootstrapFunction<I, O extends HoodieRecord>
         .withBufferSize(this.writeConfig.getMaxDFSStreamBufferSize())
         .withMaxMemorySizeInBytes(this.writeConfig.getMaxMemoryPerPartitionMerge())
         .withSpillableMapBasePath(this.writeConfig.getSpillableMapBasePath())
+        .withDiskMapType(this.writeConfig.getCommonConfig().getSpillableDiskMapType())
+        .withBitCaskDiskMapCompressionEnabled(this.writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
         .build();
   }
 

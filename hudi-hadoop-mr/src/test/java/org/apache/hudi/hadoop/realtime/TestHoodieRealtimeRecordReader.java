@@ -19,6 +19,7 @@
 package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
@@ -58,7 +60,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -68,11 +71,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader.REALTIME_SKIP_MERGE_PROP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 public class TestHoodieRealtimeRecordReader {
 
@@ -115,8 +120,10 @@ public class TestHoodieRealtimeRecordReader {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testReader(boolean partitioned) throws Exception {
+  @MethodSource("testArguments")
+  public void testReader(ExternalSpillableMap.DiskMapType diskMapType,
+                         boolean isCompressionEnabled,
+                         boolean partitioned) throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
@@ -176,6 +183,9 @@ public class TestHoodieRealtimeRecordReader {
         JobConf jobConf = new JobConf(baseJobConf);
         List<Schema.Field> fields = schema.getFields();
         setHiveColumnNameProps(fields, jobConf, partitioned);
+
+        jobConf.setEnum(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), diskMapType);
+        jobConf.setBoolean(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), isCompressionEnabled);
 
         // validate record reader compaction
         HoodieRealtimeRecordReader recordReader = new HoodieRealtimeRecordReader(split, jobConf, reader);
@@ -287,8 +297,10 @@ public class TestHoodieRealtimeRecordReader {
     recordReader.close();
   }
 
-  @Test
-  public void testReaderWithNestedAndComplexSchema() throws Exception {
+  @ParameterizedTest
+  @MethodSource("testArguments")
+  public void testReaderWithNestedAndComplexSchema(ExternalSpillableMap.DiskMapType diskMapType,
+                                                   boolean isCompressionEnabled) throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getComplexEvolvedSchema());
     HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
@@ -322,6 +334,9 @@ public class TestHoodieRealtimeRecordReader {
     JobConf jobConf = new JobConf(baseJobConf);
     List<Schema.Field> fields = schema.getFields();
     setHiveColumnNameProps(fields, jobConf, true);
+
+    jobConf.setEnum(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), diskMapType);
+    jobConf.setBoolean(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), isCompressionEnabled);
 
     // validate record reader compaction
     HoodieRealtimeRecordReader recordReader = new HoodieRealtimeRecordReader(split, jobConf, reader);
@@ -416,8 +431,10 @@ public class TestHoodieRealtimeRecordReader {
     }
   }
 
-  @Test
-  public void testSchemaEvolutionAndRollbackBlockInLastLogFile() throws Exception {
+  @ParameterizedTest
+  @MethodSource("testArguments")
+  public void testSchemaEvolutionAndRollbackBlockInLastLogFile(ExternalSpillableMap.DiskMapType diskMapType,
+                                                               boolean isCompressionEnabled) throws Exception {
     // initial commit
     List<String> logFilePaths = new ArrayList<>();
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
@@ -468,6 +485,9 @@ public class TestHoodieRealtimeRecordReader {
     // Try to read all the fields passed by the new schema
     setHiveColumnNameProps(fields, jobConf, true);
 
+    jobConf.setEnum(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), diskMapType);
+    jobConf.setBoolean(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), isCompressionEnabled);
+
     HoodieRealtimeRecordReader recordReader;
     try {
       // validate record reader compaction
@@ -487,5 +507,19 @@ public class TestHoodieRealtimeRecordReader {
     while (recordReader.next(key, value)) {
       // keep reading
     }
+  }
+
+  private static Stream<Arguments> testArguments() {
+    // Arg1: ExternalSpillableMap Type, Arg2: isDiskMapCompressionEnabled, Arg3: partitioned
+    return Stream.of(
+        arguments(ExternalSpillableMap.DiskMapType.BITCASK, false, false),
+        arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, false, false),
+        arguments(ExternalSpillableMap.DiskMapType.BITCASK, true, false),
+        arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, true, false),
+        arguments(ExternalSpillableMap.DiskMapType.BITCASK, false, true),
+        arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, false, true),
+        arguments(ExternalSpillableMap.DiskMapType.BITCASK, true, true),
+        arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, true, true)
+    );
   }
 }
