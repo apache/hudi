@@ -1,121 +1,153 @@
-## Site Documentation
+# Apache Hudi Website Source Code
 
-This folder contains resources that build the [Apache Hudi website](https://hudi.apache.org)
+This repo hosts the source code of [Apache Hudi Official Website](https://hudi.apache.org/).
 
+# Prerequisite
 
-### Building docs
+Install [npm](https://treehouse.github.io/installation-guides/mac/node-mac.html) and [yarn](https://classic.yarnpkg.com/en/docs/install#mac-stable) for the first time.
 
-The site is based on a [Jekyll](https://jekyllrb.com/) theme hosted [here](https://github.com/mmistakes/minimal-mistakes/) with detailed instructions.
+# Test Website
 
-#### Docker
-
-Simply run `docker-compose build --no-cache && docker-compose up` from the `docs` folder and the site should be up & running at `http://localhost:4000`
-
-To see edits reflect on the site, you may have to bounce the container
-
- - Stop existing container by `ctrl+c` the docker-compose program
- - (or) alternatively via `docker stop docs_server_1`
- - Bring up container again using `docker-compose up`
-
-#### Host OS
-
-To build directly on host OS (\*nix), first you need to install
-
-- gem, ruby (using apt-get/brew)
-- bundler (`gem install bundler`)
-- jekyll (`gem install jekyll`)
-- Update bundler `bundle update --bundler`
-
-and then run the following commands from `docs` folder to install dependencies
-
-`bundle install`
-
-and serve a local site
-
-`bundle exec jekyll serve`
-
-### Submitting changes
-
-To submit changes to the docs, please make the changes on the `asf-site` branch, build the site locally, test it out and submit a pull request with the changes to .md and theme files under `docs`
-
-### Updating site
-
-Once a pull request merged, Travis CI will regenerate the site and move the generated site from `_site` to `docs/../content`, and then submit changes as a PR automatically.
-
-### Adding docs for version
-
-During each release, we must preserve the old version's docs so users on that version can refer to it. 
-Below documents the steps needed to do that. 
-
-#### Make a copy of current docs 
-
-Copy the docs as-is into another folder
-
-```
-cd docs/_docs
-export VERSION=0.5.0
-mkdir -p $VERSION && cp *.md $VERSION/
+Build from source
+```bash
+./website/scripts/build-site.sh
 ```
 
-#### Rewrite links & add version to each page
+The results are moved to directory: `content`
 
-This step changes the permalink (location where these pages would be placed) with a version prefix and also changes links to each other.
+## Installation
 
-Mac users please use these commands:
-```
-cd $VERSION
-sed -i '' -e "s/permalink: \/docs\//permalink: \/docs\/${VERSION}-/g" *.md
-sed -i '' -e "s/permalink: \/cn\/docs\//permalink: \/cn\/docs\/${VERSION}-/g" *.cn.md
-sed -i '' -e "s/](\/docs\//](\/docs\/${VERSION}-/g" *.md
-sed -i '' -e "s/](\/cn\/docs\//](\/cn\/docs\/${VERSION}-/g" *.cn.md
-for f in *.md; do [ -f $f ] &&  sed -i '' -e "1s/^//p; 1s/^.*/version: ${VERSION}/" $f; done
+```console
+cd website
+yarn install
 ```
 
-Non Mac please use these:
-```
-cd $VERSION
-sed -i "s/permalink: \/docs\//permalink: \/docs\/${VERSION}-/g" *.md
-sed -i "s/permalink: \/cn\/docs\//permalink: \/cn\/docs\/${VERSION}-/g" *.cn.md
-sed -i "s/](\/docs\//](\/docs\/${VERSION}-/g" *.md
-sed -i "s/](\/cn\/docs\//](\/cn\/docs\/${VERSION}-/g" *.cn.md
-sed -i "0,/---/s//---\nversion: ${VERSION}/" *.md
+## Local Development
+
+```console
+cd website
+yarn start
 ```
 
-#### Reworking site navigation
+This command starts a local development server and opens up a browser window. Most changes are reflected live without having to restart the server.
 
-In `_config.yml`, add a new author section similar to `0.5.0_author`. Then, change `quick_link.html` with a if block to use this navigation, when the new version's page is rendered
-  
-```
-{%- if page.language == "0.5.0" -%}
-  {%- assign author = site.0.5.0_author -%}
-{%- else -%}
-  {%- assign author = site.author -%}
-{%- endif -%}
+## Build
+
+```console
+cd website
+yarn build
 ```
 
-Then in `navigation.yml`, add a new section similar to `0.5.0_docs` (or the last release), with each link pointing to pages starting with `$VERSION-`. Change `nav_list` with else-if to 
-render the new version's equivalent navigation links. 
+This command generates static content into the `build` directory and can be served using any static contents hosting service.
 
-```
-{% if page.version %}
-    {% if page.version == "0.5.0" %}
-        {% assign navigation = site.data.navigation["0.5.0_docs"] %}
-    {% endif %}
-{% endif %}
+## Deployment
+
+```console
+GIT_USER=<Your GitHub username> USE_SSH=true yarn deploy
 ```
 
-Final steps:
- - In `_config.yml` add a new subsection under `previous_docs: ` for this version similar to `  - version: 0.5.0`
- - Edit `docs/_pages.index.md` to point to the latest release. Change the text of latest release and edit the href 
- link to point to the release tag in github.
- - in `docs/_pages/releases.md` Add a new section on the very top for this release. Refer to `Release 0.5.0-incubating` 
- for reference. Ensure the links for github release tag, docs, source release, raw release notes are pointing to this 
- latest release. Also include following subsections - `Download Information`, `Release Highlights` and `Raw Release Notes`.
- - Update `docs/_pages/download.md` to include the download links.
- 
-#### Link to this version's doc
+If you are using GitHub pages for hosting, this command is a convenient way to build the website and push to the `gh-pages` branch.
 
+## To Add New Docs Version
 
+To better understand how versioning works and see if it suits your needs, you can read on below.
 
+## Directory structure {#directory-structure}
 
+```shell
+website
+├── sidebars.js          # sidebar for master (next) version
+├── docs                 # docs directory for master (next) version
+│   └── hello.md         # https://mysite.com/docs/next/hello
+├── versions.json        # file to indicate what versions are available
+├── versioned_docs
+│   ├── version-0.7.0
+│   │   └── hello.md     # https://mysite.com/docs/0.7.0/hello
+│   └── version-0.8.0
+│       └── hello.md     # https://mysite.com/docs/hello
+├── versioned_sidebars
+│   ├── version-0.7.0-sidebars.json
+│   └── version-0.8.0-sidebars.json
+├── docusaurus.config.js
+└── package.json
+```
 
+The table below explains how a versioned file maps to its version and the generated URL.
+
+| Path                                    | Version        | URL               |
+| --------------------------------------- | -------------- | ----------------- |
+| `versioned_docs/version-0.7.0/hello.md` | 0.7.0          | /docs/0.7.0/hello |
+| `versioned_docs/version-0.8.0/hello.md` | 0.8.0 (latest) | /docs/hello       |
+| `docs/hello.md`                         | next           | /docs/next/hello  |
+
+### Tagging a new version {#tagging-a-new-version}
+
+1. First, make sure your content in the `docs` directory is ready to be frozen as a version. A version always should be based from master.
+1. Enter a new version number.
+
+```bash yarn
+yarn run docusaurus docs:version 0.8.0
+```
+
+When tagging a new version, the document versioning mechanism will:
+
+- Copy the full `docs/` folder contents into a new `versioned_docs/version-<version>/` folder.
+- Create a versioned sidebars file based from your current [sidebar](docs-introduction.md#sidebar) configuration (if it exists) - saved as `versioned_sidebars/version-<version>-sidebars.json`.
+- Append the new version number to `versions.json`.
+
+## Docs {#docs}
+
+### Creating new docs {#creating-new-docs}
+
+1. Place the new file into the corresponding version folder.
+1. Include the reference for the new file into the corresponding sidebar file, according to version number.
+
+**Master docs**
+
+```shell
+# The new file.
+docs/new.md
+
+# Edit the corresponding sidebar file.
+sidebar.js
+```
+
+**Older docs**
+
+```shell
+# The new file.
+versioned_docs/version-0.7.0/new.md
+
+# Edit the corresponding sidebar file.
+versioned_sidebars/version-0.7.0-sidebars.json
+```
+
+### Linking docs {#linking-docs}
+
+- Remember to include the `.md` extension.
+- Files will be linked to correct corresponding version.
+- Relative paths work as well.
+
+```md
+The [@hello](hello.md#paginate) document is great!
+
+See the [Tutorial](../getting-started/tutorial.md) for more info.
+```
+
+## Versions {#versions}
+
+Each directory in `versioned_docs/` will represent a documentation version.
+
+### Updating an existing version {#updating-an-existing-version}
+
+You can update multiple docs versions at the same time because each directory in `versioned_docs/` represents specific routes when published.
+
+1. Edit any file.
+1. Commit and push changes.
+1. It will be published to the version.
+
+Example: When you change any file in `versioned_docs/version-0.7.0/`, it will only affect the docs for version `0.7.0`.
+
+## Maintainer
+
+Apache Hudi Community

@@ -1,6 +1,6 @@
-language: ruby
-rvm:
-  - 2.6.3
+language: node_js
+node_js:
+  - '10'
 
 env:
   global:
@@ -11,6 +11,9 @@ env:
     - GIT_BRANCH="asf-site"
     - DOCS_ROOT="`pwd`/docs"
 
+cache:
+  yarn: true
+
 before_install:
   - if [ "$(git show -s --format=%ae)" = "${GIT_EMAIL}" ]; then echo "avoid recursion, ignore ..."; exit 0; fi
   - git config --global user.name ${GIT_USER}
@@ -20,18 +23,16 @@ before_install:
   - git pull --rebase hudi asf-site
 
 script:
-  - pushd ${DOCS_ROOT}
-  - gem install bundler:2.0.2
-  - bundle install
-  - bundle update --bundler
-  - bundle exec jekyll build _config.yml --source . --destination _site
-  - popd
+  - git config --global user.name "${GH_NAME}"
+  - git config --global user.email "${GH_EMAIL}"
+  - echo "machine github.com login ${GH_NAME} password ${GH_TOKEN}" > ~/.netrc
+  - yarn && GIT_USER="${GH_NAME}" yarn deploy
 
 after_success:
   - echo $TRAVIS_PULL_REQUEST
   - 'if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then echo "ignore push build result for per submit"; exit 0; fi'
   - 'if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then echo "pushing build result ..."; fi'
-  - mkdir -p content && \cp -rf ${DOCS_ROOT}/_site/* content
+  - mkdir -p content && \cp -rf ${DOCS_ROOT}/website/build/* content
   - git add -A
   - git commit -am "Travis CI build asf-site"
   - git push hudi pr:asf-site
