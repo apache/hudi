@@ -9,7 +9,7 @@ env:
     - GIT_REPO="apache"
     - GIT_PROJECT="hudi"
     - GIT_BRANCH="asf-site"
-    - DOCS_ROOT="`pwd`/docs"
+    - DOCS_ROOT="`pwd`/website"
 
 cache:
   yarn: true
@@ -32,7 +32,7 @@ after_success:
   - echo $TRAVIS_PULL_REQUEST
   - 'if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then echo "ignore push build result for per submit"; exit 0; fi'
   - 'if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then echo "pushing build result ..."; fi'
-  - mkdir -p content && \cp -rf ${DOCS_ROOT}/website/build/* content
+  - mkdir -p content && \cp -rf ${DOCS_ROOT}/build/* content
   - git add -A
   - git commit -am "Travis CI build asf-site"
   - git push hudi pr:asf-site
