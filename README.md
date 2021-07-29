@@ -4,7 +4,7 @@ This repo hosts the source code of [Apache Hudi Official Website](https://hudi.a
 
 # Prerequisite
 
-Install [npm](https://treehouse.github.io/installation-guides/mac/node-mac.html) and [yarn](https://classic.yarnpkg.com/en/docs/install#mac-stable) for the first time.
+Install [npm](https://treehouse.github.io/installation-guides/mac/node-mac.html) for the first time.
 
 # Test Website
 
@@ -19,14 +19,14 @@ The results are moved to directory: `content`
 
 ```console
 cd website
-yarn install
+npm install
 ```
 
 ## Local Development
 
 ```console
 cd website
-yarn start
+npm start
 ```
 
 This command starts a local development server and opens up a browser window. Most changes are reflected live without having to restart the server.
@@ -35,18 +35,19 @@ This command starts a local development server and opens up a browser window. Mo
 
 ```console
 cd website
-yarn build
+npm run build
 ```
 
 This command generates static content into the `build` directory and can be served using any static contents hosting service.
 
-## Deployment
+## Testing your Build Locally {#testing-build-locally}
+
+It is important to test your build locally before deploying to production.
 
 ```console
-GIT_USER=<Your GitHub username> USE_SSH=true yarn deploy
+cd website
+npm run serve
 ```
-
-If you are using GitHub pages for hosting, this command is a convenient way to build the website and push to the `gh-pages` branch.
 
 ## To Add New Docs Version
 
@@ -85,8 +86,8 @@ The table below explains how a versioned file maps to its version and the genera
 1. First, make sure your content in the `docs` directory is ready to be frozen as a version. A version always should be based from master.
 1. Enter a new version number.
 
-```bash yarn
-yarn run docusaurus docs:version 0.8.0
+```bash npm
+npm run docusaurus docs:version 0.8.0
 ```
 
 When tagging a new version, the document versioning mechanism will:

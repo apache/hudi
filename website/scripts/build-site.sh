@@ -23,9 +23,8 @@ ROOT_DIR=$(git rev-parse --show-toplevel)
 set -x -e
 
 cd ${ROOT_DIR}/website
-npm install yarn
-yarn install
-yarn run build
+npm install
+npm run build
 
 rm -rf ${ROOT_DIR}/content
 
