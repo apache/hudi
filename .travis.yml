@@ -23,15 +23,17 @@ before_install:
   - git pull --rebase hudi asf-site
 
 script:
-  - git config --global user.name "${GH_NAME}"
-  - git config --global user.email "${GH_EMAIL}"
-  - echo "machine github.com login ${GH_NAME} password ${GH_TOKEN}" > ~/.netrc
-  - ./website/scripts/build-site.sh
+  - pushd ${DOCS_ROOT}
+  - npm install
+  - npm run build
+  - popd
 
 after_success:
   - echo $TRAVIS_PULL_REQUEST
   - 'if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then echo "ignore push build result for per submit"; exit 0; fi'
   - 'if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then echo "pushing build result ..."; fi'
+  - rm -rf content
+  - cp -R ${DOCS_ROOT}/build ${ROOT_DIR}/content
   - git add -A
   - git commit -am "Travis CI build asf-site"
   - git push hudi pr:asf-site
