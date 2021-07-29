@@ -113,7 +113,7 @@ object HoodieSparkSqlWriter {
       (false, common.util.Option.empty(), common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
     } else {
       // Handle various save modes
-      handleSaveModes(mode, basePath, tableConfig, tblName, operation, fs)
+      handleSaveModes(sqlContext.sparkSession, mode, basePath, tableConfig, tblName, operation, fs)
       // Create the table if not present
       if (!tableExists) {
         val baseFileFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.HOODIE_BASE_FILE_FORMAT_PROP)
@@ -298,7 +298,7 @@ object HoodieSparkSqlWriter {
       log.warn(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
       false
     } else {
-      handleSaveModes(mode, basePath, tableConfig, tableName, WriteOperationType.BOOTSTRAP, fs)
+      handleSaveModes(sqlContext.sparkSession, mode, basePath, tableConfig, tableName, WriteOperationType.BOOTSTRAP, fs)
     }
 
     if (!tableExists) {
@@ -413,12 +413,14 @@ object HoodieSparkSqlWriter {
     props
   }
 
-  private def handleSaveModes(mode: SaveMode, tablePath: Path, tableConfig: HoodieTableConfig, tableName: String,
+  private def handleSaveModes(spark: SparkSession, mode: SaveMode, tablePath: Path, tableConfig: HoodieTableConfig, tableName: String,
                               operation: WriteOperationType, fs: FileSystem): Unit = {
     if (mode == SaveMode.Append && tableExists) {
       val existingTableName = tableConfig.getTableName
-      if (!existingTableName.equals(tableName)) {
-        throw new HoodieException(s"hoodie table with name $existingTableName already exists at $tablePath")
+      val resolver = spark.sessionState.conf.resolver
+      if (!resolver(existingTableName, tableName)) {
+        throw new HoodieException(s"hoodie table with name $existingTableName already exists at $tablePath," +
+          s" can not append data to the table with another name $tableName.")
       }
     }
 

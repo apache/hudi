@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.exception.HoodieDuplicateKeyException
 
 class TestInsertTable extends TestHoodieSqlBase {
@@ -252,6 +254,31 @@ class TestInsertTable extends TestHoodieSqlBase {
           Seq(2, "a2", 10, removeQuotes(partitionValue).toString)
         )
       }
+    }
+  }
+
+  test("Test insert for uppercase table name") {
+    withTempDir{ tmp =>
+      val tableName = s"H_$generateTableName"
+      HoodieTableMetaClient.withPropertyBuilder()
+        .setTableName(tableName)
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .initTable(spark.sessionState.newHadoopConf(), tmp.getCanonicalPath)
+
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double
+           |) using hudi
+           | location '${tmp.getCanonicalPath}'
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10)")
+      checkAnswer(s"select id, name, price from $tableName")(
+        Seq(1, "a1", 10.0)
+      )
     }
   }
 
