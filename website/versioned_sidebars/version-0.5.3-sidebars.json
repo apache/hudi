@@ -1,0 +1,86 @@
+{
+  "version-0.5.3/docs": [
+    {
+      "type": "doc",
+      "id": "version-0.5.3/quick-start-guide"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.5.3/use_cases"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.5.3/writing_data"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.5.3/querying_data"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.5.3/configurations"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.5.3/performance"
+    },
+    {
+      "type": "doc",
+      "id": "version-0.5.3/deployment"
+    },
+    {
+      "collapsed": true,
+      "type": "category",
+      "label": "Storage Configurations",
+      "items": [
+        {
+          "type": "doc",
+          "id": "version-0.5.3/cloud"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.5.3/s3_hoodie"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.5.3/gcs_hoodie"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.5.3/oss_hoodie"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.5.3/azure_hoodie"
+        }
+      ]
+    },
+    {
+      "collapsed": true,
+      "type": "category",
+      "label": "Resources",
+      "items": [
+        {
+          "type": "doc",
+          "id": "version-0.5.3/concepts"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.5.3/docker_demo"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.5.3/comparison"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.5.3/migration_guide"
+        },
+        {
+          "type": "doc",
+          "id": "version-0.5.3/privacy"
+        }
+      ]
+    }
+  ]
+}

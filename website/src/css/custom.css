@@ -1,0 +1,173 @@
+/* stylelint-disable docusaurus/copyright-header */
+/**
+ * Any CSS included here will be global. The classic template
+ * bundles Infima by default. Infima is a CSS framework designed to
+ * work well for content-centric websites.
+ */
+
+/* You can override the default Infima variables here. */
+:root {
+  --ifm-color-primary: rgba(7, 159, 202, 255);
+  --ifm-color-primary-dark: rgba(10, 159, 202, 255);
+  --ifm-color-primary-darker: rgba(0,78,127,255);
+  --ifm-color-primary-darkest: rgba(0,55,103,255);
+  --ifm-color-primary-light: rgba(4, 159, 202, 255);
+  --ifm-color-primary-lighter: rgba(0, 183, 246, 255);
+  --ifm-color-primary-lightest: rgba(215, 228, 238, 255);
+  --ifm-code-font-size: 95%;
+  --ifm-navbar-height: 5rem;
+}
+
+.docusaurus-highlight-code-line {
+  background-color: rgba(0, 0, 0, 0.1);
+  display: block;
+  margin: 0 calc(-1 * var(--ifm-pre-padding));
+  padding: 0 var(--ifm-pre-padding);
+}
+
+html[data-theme='dark'] .docusaurus-highlight-code-line {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+.header-github-link:before {
+  background: url(/assets/images/github.png) no-repeat;
+  content: "";
+  display: flex;
+  height: 30px;
+  width: 30px;
+  
+}
+
+@media (max-width: 767px) {
+  .hero__img, .header-github-link, .header-slack-link, .header-twitter-link {
+    display: none;
+  }
+  .hero__title {
+    font-size: 3em !important;
+    max-width: fit-content;
+  }
+}
+
+.header-twitter-link:before {
+  background: url(/assets/images/twitter.png) no-repeat;
+  content: "";
+  display: flex;
+  height: 30px;
+  width: 30px;
+}
+
+.header-slack-link:before {
+  background: url(/assets/images/slack.png) no-repeat;
+  content: "";
+  display: flex;
+  height: 30px;
+  width: 30px;
+}
+
+.hero__title {
+  font-size: 4rem;
+  text-align: left;
+  width: 70rem;
+}
+
+.hero__subtitle {
+  text-align: left;
+}
+
+.buttons_src-pages-index-module {
+  justify-content: left !important;
+}
+
+.hero__img {
+  max-width: 35%;
+  float: left;
+  margin-left: 4rem;
+  margin-right: 4rem;
+  padding-bottom: 2rem;
+}
+
+.button.button--secondary {
+  margin-top: 1rem;
+  margin-right: 2rem;
+}
+
+.buttons_irzW {
+  justify-content: left;
+}
+
+.profile-pic {
+  max-width: 7rem;
+}
+
+.navbar__logo {
+  height: 130%;
+}
+
+.data-lake h2, .hudi-feature h2 {
+  display: block;
+  font-size: 2.5em;
+  margin-block-start: 1.75em;
+  margin-block-end: 0.83em;
+  margin-inline-start: 0px;
+  margin-inline-end: 0px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.data-lake .sub-title {
+  text-align: center;
+}
+
+table.features {
+  display: inline-table;
+  border-collapse: separate;
+  margin-top: 2em;
+}
+
+table.features td {
+  vertical-align: middle;
+  padding: 2em;
+  background: white;
+}
+
+table.features i.feather {
+  margin: 1em;
+}
+
+.hudi-feature-item table td {
+  border-top: 0px;
+  border-right: 0px;
+  border-left: 0px;
+  border-bottom: 1px solid #ceeef7;
+}
+
+footer .container {
+  margin-block-start: 1.83em;
+}
+
+.blog-wrapper .container {
+  max-width: 100%;
+}
+
+.who-uses {
+  display: inline-block;
+  width: 240px;
+  margin-left: 0.8em;
+  margin-right: 0.8em;
+  margin-bottom: 1.1em;
+  text-align: center;
+}
+
+.lastUpdated_node_modules-\@docusaurus-theme-classic-lib-next-theme-DocItem-styles-module {
+  display: none;
+}
+
+.blog-wrapper aside {
+  --ifm-col-width: 16.6667% !important;
+}
+
+.blog-wrapper main {
+  --ifm-col-width: 66.6667% !important;
+  max-width: var(--ifm-col-width);
+  flex: 0 0 var(--ifm-col-width);
+}
