@@ -695,8 +695,8 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
         thirdClient.startCommitWithTime(newCommitTime);
 
         writeStatusJavaRDD = thirdClient.upsert(writeRecords, newCommitTime);
-        thirdClient.commit(newCommitTime, writeStatusJavaRDD);
         statuses = writeStatusJavaRDD.collect();
+        thirdClient.commit(newCommitTime, writeStatusJavaRDD);
         // Verify there are no errors
         assertNoWriteErrors(statuses);
 
@@ -1199,8 +1199,6 @@ public class TestHoodieMergeOnReadTable extends HoodieClientTestHarness {
       JavaRDD<HoodieRecord> recordsRDD = jsc.parallelize(records, 1);
       JavaRDD<WriteStatus> statuses = writeClient.insert(recordsRDD, newCommitTime);
       writeClient.commit(newCommitTime, statuses);
-      // trigger an action
-      statuses.collect();
 
       HoodieTable table = HoodieSparkTable.create(config, context, getHoodieMetaClient(hadoopConf, basePath));
       SliceView tableRTFileSystemView = table.getSliceView();
