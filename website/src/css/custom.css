@@ -92,7 +92,7 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
 }
 
 .buttons_irzW {
-  justify-content: left;
+  justify-content: left !important;
 }
 
 .profile-pic {

@@ -1,6 +1,6 @@
 language: node_js
 node_js:
-  - '10'
+  - '16'
 
 env:
   global:
@@ -33,7 +33,7 @@ after_success:
   - 'if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then echo "ignore push build result for per submit"; exit 0; fi'
   - 'if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then echo "pushing build result ..."; fi'
   - rm -rf content
-  - cp -R ${DOCS_ROOT}/build ${ROOT_DIR}/content
+  - cp -R ${DOCS_ROOT}/build content
   - git add -A
   - git commit -am "Travis CI build asf-site"
   - git push hudi pr:asf-site
