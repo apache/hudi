@@ -74,7 +74,7 @@ public class TestHoodieBulkInsertDataInternalWriter extends
     HoodieWriteConfig cfg = getWriteConfig(populateMetaFields);
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
     // execute N rounds
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 2; i++) {
       String instantTime = "00" + i;
       // init writer
       HoodieBulkInsertDataInternalWriter writer = new HoodieBulkInsertDataInternalWriter(table, cfg, instantTime, RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(),
@@ -82,7 +82,7 @@ public class TestHoodieBulkInsertDataInternalWriter extends
 
       int size = 10 + RANDOM.nextInt(1000);
       // write N rows to partition1, N rows to partition2 and N rows to partition3 ... Each batch should create a new RowCreateHandle and a new file
-      int batches = 5;
+      int batches = 3;
       Dataset<Row> totalInputRows = null;
 
       for (int j = 0; j < batches; j++) {
