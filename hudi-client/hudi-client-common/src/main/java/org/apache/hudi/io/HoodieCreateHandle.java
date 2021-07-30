@@ -73,6 +73,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
         taskContextSupplier);
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
+    writeStatus.setStat(new HoodieWriteStat());
 
     this.path = makeNewPath(partitionPath);
 
@@ -200,7 +201,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
    * @throws IOException if error occurs
    */
   protected void setupWriteStatus() throws IOException {
-    HoodieWriteStat stat = new HoodieWriteStat();
+    HoodieWriteStat stat = writeStatus.getStat();
     stat.setPartitionPath(writeStatus.getPartitionPath());
     stat.setNumWrites(recordsWritten);
     stat.setNumDeletes(recordsDeleted);
@@ -214,7 +215,6 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
     RuntimeStats runtimeStats = new RuntimeStats();
     runtimeStats.setTotalCreateTime(timer.endTimer());
     stat.setRuntimeStats(runtimeStats);
-    writeStatus.setStat(stat);
   }
 
   protected long computeTotalWriteBytes() throws IOException {
