@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>Streaming Responsibly - How Apache Hudi maintains optimum sized files - Apache Hudi</title>
+<meta name="description" content="Maintaining well-sized files can improve query performance significantly">
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="">
+<meta property="og:title" content="Streaming Responsibly - How Apache Hudi maintains optimum sized files">
+<meta property="og:url" content="https://hudi.apache.org/blog/hudi-file-sizing/">
+
+
+  <meta property="og:description" content="Maintaining well-sized files can improve query performance significantly">
+
+
+
+
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<!--<link href="/feed.xml" type="application/atom+xml" rel="alternate" title=" Feed">-->
+
+<!-- https://t.co/dKP3o1e -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+
+<!--[if IE]>
+  <style>
+    /* old IE unsupported flexbox fixes */
+    .greedy-nav .site-title {
+      padding-right: 3em;
+    }
+    .greedy-nav button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+    }
+  </style>
+<![endif]-->
+
+
+
+<link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
+<link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+<script src="/assets/js/jquery.min.js"></script>
+
+    
+<script src="/assets/js/main.min.js"></script>
+
+  </head>
+
+  <body class="layout--single">
+    <!--[if lt IE 9]>
+<div class="notice--danger align-center" style="margin: 0;">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience.</div>
+<![endif]-->
+
+    <div class="masthead">
+  <div class="masthead__inner-wrap" id="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+          <a class="site-logo" href="/">
+              <div style="width: 150px; height: 40px">
+              </div>
+          </a>
+        
+        <a class="site-title" href="/">
+          
+        </a>
+        <ul class="visible-links"><li class="masthead__menu-item">
+              <a href="/docs/spark_quick-start-guide.html" target="_self" >Documentation</a>
+            </li><li class="masthead__menu-item">
+              <a href="/community.html" target="_self" >Community</a>
+            </li><li class="masthead__menu-item">
+              <a href="/blog.html" target="_self" >Blog</a>
+            </li><li class="masthead__menu-item">
+              <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
+            </li><li class="masthead__menu-item">
+              <a href="/docs/powered_by.html" target="_self" >Powered By</a>
+            </li><li class="masthead__menu-item">
+              <a href="/releases.html" target="_self" >Releases</a>
+            </li><li class="masthead__menu-item">
+              <a href="/download.html" target="_self" >Download</a>
+            </li></ul>
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+<!--
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/hudi/issues">Report on Issue</a>.
+  Click <a href="/"> here</a> back to old site.</p>
+-->
+
+    <div class="initial-content">
+      <div id="main" role="main">
+  
+
+  <div class="sidebar sticky">
+
+  
+    <div itemscope itemtype="https://schema.org/Person">
+
+  <div class="author__content">
+    
+      <h3 class="author__name" itemprop="name">Quick Links</h3>
+    
+    
+      <div class="author__bio" itemprop="description">
+        <p>Hudi is the Streaming Data Lake Platform.</p>
+
+      </div>
+    
+  </div>
+
+  <div class="author__urls-wrapper">
+    <ul class="author__urls social-icons">
+      
+        
+          <li><a href="/docs/spark_quick-start-guide" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-book" aria-hidden="true"></i> Documentation</a></li>
+
+          
+        
+          <li><a href="https://cwiki.apache.org/confluence/display/HUDI" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-wikipedia-w" aria-hidden="true"></i> Technical Wiki</a></li>
+
+          
+        
+          <li><a href="/contributing" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-thumbs-o-up" aria-hidden="true"></i> Contribution Guide</a></li>
+
+          
+        
+          <li><a href="https://join.slack.com/t/apache-hudi/shared_invite/enQtODYyNDAxNzc5MTg2LTE5OTBlYmVhYjM0N2ZhOTJjOWM4YzBmMWU2MjZjMGE4NDc5ZDFiOGQ2N2VkYTVkNzU3ZDQ4OTI1NmFmYWQ0NzE" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-slack" aria-hidden="true"></i> Join on Slack</a></li>
+
+          
+        
+          <li><a href="https://github.com/apache/hudi" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-github" aria-hidden="true"></i> Fork on GitHub</a></li>
+
+          
+        
+          <li><a href="https://issues.apache.org/jira/projects/HUDI/summary" target="_blank" rel="nofollow noopener noreferrer"><i class="fa fa-navicon" aria-hidden="true"></i> Report Issues</a></li>
+
+          
+        
+          <li><a href="/security" target="_self" rel="nofollow noopener noreferrer"><i class="fa fa-navicon" aria-hidden="true"></i> Report Security Issues</a></li>
+
+          
+        
+      
+    </ul>
+  </div>
+</div>
+
+  
+
+  
+  </div>
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+    <!-- Look the author details up from the site config. -->
+    
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">Streaming Responsibly - How Apache Hudi maintains optimum sized files
+</h1>
+          <!-- Output author details if some exist. -->
+          <div class="page__author"><a href="https://cwiki.apache.org/confluence/display/~shivnarayan">Sivabalan Narayanan</a> posted on <time datetime="2021-03-01">March 1, 2021</time></span>
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+          <style>
+            .page {
+              padding-right: 0 !important;
+            }
+          </style>
+        
+        <p>Apache Hudi is a data lake platform technology that provides several functionalities needed to build and manage data lakes. 
+One such key feature that hudi provides is self-managing file sizing so that users don’t need to worry about 
+manual table maintenance. Having a lot of small files will make it harder to achieve good query performance, due to query engines
+having to open/read/close files way too many times, to plan and execute queries. But for streaming data lake use-cases, 
+inherently ingests are going to end up having smaller volume of writes, which might result in lot of small files if no special handling is done.</p>
+
+<h1 id="during-write-vs-after-write">During Write vs After Write</h1>
+
+<p>Common approaches to writing very small files and then later stitching them together solve for system scalability issues posed 
+by small files but might violate query SLA’s by exposing small files to them. In fact, you can easily do so on a Hudi table, 
+by running a clustering operation, as detailed in a <a href="/blog/hudi-clustering-intro/">previous blog</a>.</p>
+
+<p>In this blog, we discuss file sizing optimizations in Hudi, during the initial write time, so we don’t have to effectively 
+re-write all data again, just for file sizing. If you want to have both (a) self managed file sizing and 
+(b) Avoid exposing small files to queries, automatic file sizing feature saves the day.</p>
+
+<p>Hudi has the ability to maintain a configured target file size, when performing inserts/upsert operations. 
+(Note: bulk_insert operation does not provide this functionality and is designed as a simpler replacement for 
+normal <code class="highlighter-rouge">spark.write.parquet</code>).</p>
+
+<h2 id="configs">Configs</h2>
+
+<p>For illustration purposes, we are going to consider only COPY_ON_WRITE table.</p>
+
+<p>Configs of interest before we dive into the algorithm:</p>
+
+<ul>
+  <li><a href="/docs/configurations.html#limitFileSize">Max file size</a>: Max size for a given data file. Hudi will try to maintain file sizes to this configured value <br /></li>
+  <li><a href="/docs/configurations.html#compactionSmallFileSize">Soft file limit</a>: Max file size below which a given data file is considered to a small file <br /></li>
+  <li><a href="/docs/configurations.html#insertSplitSize">Insert split size</a>: Number of inserts grouped for a single partition. This value should match 
+the number of records in a single file (you can determine based on max file size and per record size)</li>
+</ul>
+
+<p>For instance, if your first config value is 120MB and 2nd config value is set to 100MB, any file whose size is &lt; 100MB 
+would be considered a small file.</p>
+
+<p>If you wish to turn off this feature, set the config value for soft file limit to 0.</p>
+
+<h2 id="example">Example</h2>
+
+<p>Let’s say this is the layout of data files for a given partition.</p>
+
+<p><img src="/assets/images/blog/hudi-file-sizing/initial_layout.png" alt="Initial layout" />
+<em>Figure: Initial data file sizes for a given partition of interest</em></p>
+
+<p>Let’s assume the configured values for max file size and small file size limit are 120MB and 100MB. File_1’s current 
+size is 40MB, File_2’s size is 80MB, File_3’s size is 90MB, File_4’s size is 130MB and File_5’s size is 105MB. Let’s see 
+what happens when a new write happens.</p>
+
+<p><strong>Step 1:</strong> Assigning updates to files. In this step, We look up the index to find the tagged location and records are 
+assigned to respective files. Note that we assume updates are only going to increase the file size and that would simply result
+in a much bigger file. When updates lower the file size (by say, nulling out lot of fields), then a subsequent write will deem 
+it a small file.</p>
+
+<p><strong>Step 2:</strong>  Determine small files for each partition path. The soft file limit config value will be leveraged here 
+to determine eligible small files. In our example, given the config value is set to 100MB, the small files are File_1(40MB)
+and File_2(80MB) and file_3’s (90MB).</p>
+
+<p><strong>Step 3:</strong> Once small files are determined, incoming inserts are assigned to them so that they reach their max capacity of 
+120MB. File_1 will be ingested with 80MB worth of inserts, file_2 will be ingested with 40MB worth of inserts and 
+File_3 will be ingested with 30MB worth of inserts.</p>
+
+<p><img src="/assets/images/blog/hudi-file-sizing/bin_packing_existing_data_files.png" alt="Bin packing small files" />
+<em>Figure: Incoming records are bin packed to existing small files</em></p>
+
+<p><strong>Step 4:</strong> Once all small files are bin packed to its max capacity and if there are pending inserts unassigned, new file 
+groups/data files are created and inserts are assigned to them. Number of records per new data file is determined from insert split 
+size config. Assuming the insert split size is configured to 120k records, if there are 300k remaining records, 3 new 
+files will be created in which 2 of them (File_6 and File_7) will be filled with 120k records and the last one (File_8)
+will be filled with 60k records (assuming each record is 1000 bytes). In future ingestions, 3rd new file will be 
+considered as a small file to be packed with more data.</p>
+
+<p><img src="/assets/images/blog/hudi-file-sizing/adding_new_files.png" alt="Assigning to new files" />
+<em>Figure: Remaining records are assigned to new files</em></p>
+
+<p>Hudi leverages mechanisms such as custom partitioning for optimized record distribution to different files, executing
+the algorithm above. After this round of ingestion is complete, all files except File_8 are nicely sized to the optimum size. 
+This process is followed during every ingestion to ensure there are no small files in your Hudi tables.</p>
+
+<p>Hopefully the blog gave you an overview into how hudi manages small files and assists in boosting your query performance.</p>
+
+      </section>
+
+      <a href="#masthead__inner-wrap" class="back-to-top">Back to top &uarr;</a>
+
+
+      
+
+    </div>
+
+  </article>
+
+</div>
+
+    </div>
+
+    <div class="page__footer">
+      <footer>
+        
+<div class="row">
+  <div class="col-lg-12 footer">
+    <p>
+      <table class="table-apache-info">
+        <tr>
+          <td>
+            <a class="footer-link-img" href="https://apache.org">
+              <img width="250px" src="/assets/images/asf_logo.svg" alt="The Apache Software Foundation">
+            </a>
+          </td>
+          <td>
+            <a style="float: right" href="https://www.apache.org/events/current-event.html">
+              <img src="https://www.apache.org/events/current-event-234x60.png" />
+            </a>
+          </td>
+        </tr>
+      </table>
+    </p>
+    <p>
+      <a href="https://www.apache.org/licenses/">License</a> | <a href="https://www.apache.org/security/">Security</a> | <a href="https://www.apache.org/foundation/thanks.html">Thanks</a> | <a href="https://www.apache.org/foundation/sponsorship.html">Sponsorship</a>
+    </p>
+    <p>
+      Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>.
+      Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
+    </p>
+  </div>
+</div>
+      </footer>
+    </div>
+
+
+  </body>
+</html>

@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>Use Cases - Apache Hudi</title>
+<meta name="description" content="Near Real-Time Ingestion">
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="">
+<meta property="og:title" content="Use Cases">
+<meta property="og:url" content="https://hudi.apache.org/docs/0.8.0-use_cases.html">
+
+
+  <meta property="og:description" content="Near Real-Time Ingestion">
+
+
+
+
+
+  <meta property="article:modified_time" content="2019-12-30T14:59:57-05:00">
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<!--<link href="/feed.xml" type="application/atom+xml" rel="alternate" title=" Feed">-->
+
+<!-- https://t.co/dKP3o1e -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+
+<!--[if IE]>
+  <style>
+    /* old IE unsupported flexbox fixes */
+    .greedy-nav .site-title {
+      padding-right: 3em;
+    }
+    .greedy-nav button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+    }
+  </style>
+<![endif]-->
+
+
+
+<link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
+<link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+<script src="/assets/js/jquery.min.js"></script>
+
+    
+<script src="/assets/js/main.min.js"></script>
+
+  </head>
+
+  <body class="layout--single">
+    <!--[if lt IE 9]>
+<div class="notice--danger align-center" style="margin: 0;">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience.</div>
+<![endif]-->
+
+    <div class="masthead">
+  <div class="masthead__inner-wrap" id="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+          <a class="site-logo" href="/">
+              <div style="width: 150px; height: 40px">
+              </div>
+          </a>
+        
+        <a class="site-title" href="/">
+          
+        </a>
+        <ul class="visible-links"><li class="masthead__menu-item">
+              <a href="/docs/spark_quick-start-guide.html" target="_self" >Documentation</a>
+            </li><li class="masthead__menu-item">
+              <a href="/community.html" target="_self" >Community</a>
+            </li><li class="masthead__menu-item">
+              <a href="/blog.html" target="_self" >Blog</a>
+            </li><li class="masthead__menu-item">
+              <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
+            </li><li class="masthead__menu-item">
+              <a href="/docs/powered_by.html" target="_self" >Powered By</a>
+            </li><li class="masthead__menu-item">
+              <a href="/releases.html" target="_self" >Releases</a>
+            </li><li class="masthead__menu-item">
+              <a href="/download.html" target="_self" >Download</a>
+            </li></ul>
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+<!--
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/hudi/issues">Report on Issue</a>.
+  Click <a href="/"> here</a> back to old site.</p>
+-->
+
+    <div class="initial-content">
+      <div id="main" role="main">
+  
+
+  <div class="sidebar sticky">
+
+  
+
+  
+
+    
+      
+
+
+
+
+
+
+
+<nav class="nav__list">
+  
+  <input id="ac-toc" name="accordion-toc" type="checkbox" />
+  <label for="ac-toc">Toggle Menu</label>
+  <ul class="nav__items">
+    
+      <li>
+        
+          <span class="nav__sub-title">Documentation</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-overview.html" class="">Overview</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-quick-start-guide.html" class="">Quick Start</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-use_cases.html" class="active">Use Cases</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-writing_data.html" class="">Writing Data</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-querying_data.html" class="">Querying Data</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-configurations.html" class="">Configuration</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-performance.html" class="">Performance</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-deployment.html" class="">Deployment</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">Resources</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-docker_demo.html" class="">Dockerized Demo</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-cloud.html" class="">Storage Configuration</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-metrics.html" class="">Metrics</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-docs-versions.html" class="">Docs Versions</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-privacy.html" class="">Privacy Policy</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+  </ul>
+</nav>
+
+    
+
+  
+  </div>
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+    <!-- Look the author details up from the site config. -->
+    
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">Use Cases
+</h1>
+          <!-- Output author details if some exist. -->
+          
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+        <aside class="sidebar__right sticky">
+          <nav class="toc">
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
+            <ul class="toc__menu">
+  <li><a href="#near-real-time-ingestion">Near Real-Time Ingestion</a></li>
+  <li><a href="#data-deletion">Data Deletion</a></li>
+  <li><a href="#unified-storage-for-analytics">Unified Storage For Analytics</a></li>
+  <li><a href="#incremental-processing-pipelines">Incremental Processing Pipelines</a></li>
+</ul>
+          </nav>
+        </aside>
+        
+        <h2 id="near-real-time-ingestion">Near Real-Time Ingestion</h2>
+
+<p>Hudi offers some great benefits across ingestion of all kinds. Hudi helps <strong>enforces a minimum file size on DFS</strong>. This helps
+solve the <a href="https://blog.cloudera.com/blog/2009/02/the-small-files-problem/">“small files problem”</a> for HDFS and Cloud Stores alike,
+significantly improving query performance. Hudi adds the much needed ability to atomically commit new data, shielding queries from
+ever seeing partial writes and helping ingestion recover gracefully from failures.</p>
+
+<p>Ingesting data from OLTP sources like (event logs, databases, external sources) into a <a href="http://martinfowler.com/bliki/DataLake.html">Data Lake</a> is a common problem,
+that is unfortunately solved in a piecemeal fashion, using a medley of ingestion tools. This “raw data” layer of the data lake often forms the bedrock on which
+more value is created.</p>
+
+<p>For RDBMS ingestion, Hudi provides <strong>faster loads via Upserts</strong>, as opposed costly &amp; inefficient bulk loads. It’s very common to use a change capture solution like
+<a href="http://debezium.io/">Debezium</a> or <a href="https://docs.confluent.io/platform/current/connect/index.html">Kafka Connect</a> or 
+<a href="https://sqoop.apache.org/docs/1.4.2/SqoopUserGuide.html#_incremental_imports">Sqoop Incremental Import</a> and apply them to an
+equivalent Hudi table on DFS. For NoSQL datastores like <a href="http://cassandra.apache.org/">Cassandra</a> / <a href="http://www.project-voldemort.com/voldemort/">Voldemort</a> / <a href="https://hbase.apache.org/">HBase</a>, 
+even moderately big installations store billions of rows. It goes without saying that <strong>full bulk loads are simply infeasible</strong> and more efficient approaches 
+are needed if ingestion is to keep up with the typically high update volumes.</p>
+
+<p>Even for immutable data sources like <a href="https://kafka.apache.org">Kafka</a>, there is often a need to de-duplicate the incoming events against what’s stored on DFS.
+Hudi achieves this by <a href="http://hudi.apache.org/blog/hudi-indexing-mechanisms/">employing indexes</a> of different kinds, quickly and efficiently.</p>
+
+<p>All of this is seamlessly achieved by the Hudi DeltaStreamer tool, which is maintained in tight integration with rest of the code 
+and we are always trying to add more capture sources, to make this easier for the users. The tool also has a continuous mode, where it
+can self-manage clustering/compaction asynchronously, without blocking ingestion, significantly improving data freshness.</p>
+
+<h2 id="data-deletion">Data Deletion</h2>
+
+<p>Hudi also offers ability to delete the data stored in the data lake, and more so provides efficient ways of dealing with 
+large write amplification, resulting from random deletes based on user_id (or any secondary key), by way of the <code class="highlighter-rouge">Merge On Read</code> table types.
+Hudi’s elegant log based concurrency control, ensures that the ingestion/writing can continue happening,as a background compaction job
+amortizes the cost of rewriting data/enforcing deletes.</p>
+
+<p>Hudi also unlocks special capabilities like data clustering, which allow users to optimize the data layout for deletions. Specifically,
+users can cluster older event log data based on user_id, such that, queries that evaluate candidates for data deletion can do so, while
+more recent partitions are optimized for query performance and clustered on say timestamp.</p>
+
+<h2 id="unified-storage-for-analytics">Unified Storage For Analytics</h2>
+
+<p>The world we live in is polarized - even on data analytics storage - into real-time and offline/batch storage. Typically, real-time <a href="https://en.wikipedia.org/wiki/Data_mart">datamarts</a> 
+are powered by specialized analytical stores such as <a href="http://druid.io/">Druid</a> or <a href="http://www.memsql.com/">Memsql</a> or <a href="https://clickhouse.tech/">Clickhouse</a>, fed by event buses like
+<a href="https://kafka.apache.org">Kafka</a> or <a href="https://pulsar.apache.org">Pulsar</a>. This model is prohibitively expensive, unless a small fraction of your data lake data 
+needs sub-second query responses such as system monitoring or interactive real-time analysis.</p>
+
+<p>The same data gets ingested into data lake storage much later (say every few hours or so) and then runs through batch ETL pipelines, with intolerable data freshness
+to do any kind of near-realtime analytics. On the other hand, the data lakes provide access to interactive SQL engines like Presto/SparkSQL, which can horizontally scale 
+easily and provide return even more complex queries, within few seconds.</p>
+
+<p>By bringing streaming primitives to data lake storage, Hudi opens up new possibilities by being able to ingest data within few minutes and also author incremental data
+pipelines that are orders of magnitude faster than traditional batch processing. By bringing <strong>data freshness to a few minutes</strong>, Hudi can provide a much efficient alternative, 
+for a large class of data applications, compared to real-time datamarts. Also, Hudi has no upfront server infrastructure investments
+and thus enables faster analytics on much fresher analytics, without increasing the operational overhead. This external <a href="https://www.analyticsinsight.net/can-big-data-solutions-be-affordable/">article</a> 
+further validates this newer model.</p>
+
+<h2 id="incremental-processing-pipelines">Incremental Processing Pipelines</h2>
+
+<p>Data Lake ETL typically involves building a chain of tables derived from each other via DAGs expressed as workflows. Workflows often depend on new data being output by 
+multiple upstream workflows and traditionally, availability of new data is indicated by a new DFS Folder/Hive Partition.
+Let’s take a concrete example to illustrate this. An upstream workflow <code class="highlighter-rouge">U</code> can create a Hive partition for every hour, with data for that hour (event_time) at the end of each hour (processing_time), providing effective freshness of 1 hour.
+Then, a downstream workflow <code class="highlighter-rouge">D</code>, kicks off immediately after <code class="highlighter-rouge">U</code> finishes, and does its own processing for the next hour, increasing the effective latency to 2 hours.</p>
+
+<p>The above paradigm simply ignores late arriving data i.e when <code class="highlighter-rouge">processing_time</code> and <code class="highlighter-rouge">event_time</code> drift apart.
+Unfortunately, in today’s post-mobile &amp; pre-IoT world, <strong>late data from intermittently connected mobile devices &amp; sensors are the norm, not an anomaly</strong>.
+In such cases, the only remedy to guarantee correctness is to reprocess the last few hours worth of data, over and over again each hour, 
+which can significantly hurt the efficiency across the entire ecosystem. For e.g; imagine reprocessing TBs worth of data every hour across hundreds of workflows.</p>
+
+<p>Hudi comes to the rescue again, by providing a way to consume new data (including late data) from an upstream Hudi table <code class="highlighter-rouge">HU</code> at a record granularity (not folders/partitions),
+apply the processing logic, and efficiently update/reconcile late data with a downstream Hudi table <code class="highlighter-rouge">HD</code>. Here, <code class="highlighter-rouge">HU</code> and <code class="highlighter-rouge">HD</code> can be continuously scheduled at a much more frequent schedule
+like 15 mins, and providing an end-end latency of 30 mins at <code class="highlighter-rouge">HD</code>.</p>
+
+<p>To achieve this, Hudi has embraced similar concepts from stream processing frameworks like <a href="https://spark.apache.org/docs/latest/streaming-programming-guide.html#join-operations">Spark Streaming</a> , Pub/Sub systems like <a href="http://kafka.apache.org/documentation/#theconsumer">Kafka</a>
+<a href="https://flink.apache.org">Flink</a> or database replication technologies like <a href="https://docs.oracle.com/cd/E11882_01/server.112/e16545/xstrm_cncpt.htm#XSTRM187">Oracle XStream</a>.
+For the more curious, a more detailed explanation of the benefits of Incremental Processing can be found <a href="https://www.oreilly.com/ideas/ubers-case-for-incremental-processing-on-hadoop">here</a></p>
+
+
+      </section>
+
+      <a href="#masthead__inner-wrap" class="back-to-top">Back to top &uarr;</a>
+
+
+      
+
+    </div>
+
+  </article>
+
+</div>
+
+    </div>
+
+    <div class="page__footer">
+      <footer>
+        
+<div class="row">
+  <div class="col-lg-12 footer">
+    <p>
+      <table class="table-apache-info">
+        <tr>
+          <td>
+            <a class="footer-link-img" href="https://apache.org">
+              <img width="250px" src="/assets/images/asf_logo.svg" alt="The Apache Software Foundation">
+            </a>
+          </td>
+          <td>
+            <a style="float: right" href="https://www.apache.org/events/current-event.html">
+              <img src="https://www.apache.org/events/current-event-234x60.png" />
+            </a>
+          </td>
+        </tr>
+      </table>
+    </p>
+    <p>
+      <a href="https://www.apache.org/licenses/">License</a> | <a href="https://www.apache.org/security/">Security</a> | <a href="https://www.apache.org/foundation/thanks.html">Thanks</a> | <a href="https://www.apache.org/foundation/sponsorship.html">Sponsorship</a>
+    </p>
+    <p>
+      Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>.
+      Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
+    </p>
+  </div>
+</div>
+      </footer>
+    </div>
+
+
+  </body>
+</html>

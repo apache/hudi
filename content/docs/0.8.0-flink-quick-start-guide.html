@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>Quick-Start Guide - Apache Hudi</title>
+<meta name="description" content="This guide provides a quick peek at Hudi’s capabilities using flink SQL client. Using flink SQL, we will walk through code snippets that allows you to insert and update a Hudi table of default table type: Copy on Write and Merge On Read. After each write operation we will also show how to read the data snapshot (incrementally read is already on the roadmap).">
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="">
+<meta property="og:title" content="Quick-Start Guide">
+<meta property="og:url" content="https://hudi.apache.org/docs/0.8.0-flink-quick-start-guide.html">
+
+
+  <meta property="og:description" content="This guide provides a quick peek at Hudi’s capabilities using flink SQL client. Using flink SQL, we will walk through code snippets that allows you to insert and update a Hudi table of default table type: Copy on Write and Merge On Read. After each write operation we will also show how to read the data snapshot (incrementally read is already on the roadmap).">
+
+
+
+
+
+  <meta property="article:modified_time" content="2020-03-15T23:40:57-04:00">
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<!--<link href="/feed.xml" type="application/atom+xml" rel="alternate" title=" Feed">-->
+
+<!-- https://t.co/dKP3o1e -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+
+<!--[if IE]>
+  <style>
+    /* old IE unsupported flexbox fixes */
+    .greedy-nav .site-title {
+      padding-right: 3em;
+    }
+    .greedy-nav button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+    }
+  </style>
+<![endif]-->
+
+
+
+<link rel="icon" type="image/x-icon" href="/assets/images/favicon.ico">
+<link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+<script src="/assets/js/jquery.min.js"></script>
+
+    
+<script src="/assets/js/main.min.js"></script>
+
+  </head>
+
+  <body class="layout--single">
+    <!--[if lt IE 9]>
+<div class="notice--danger align-center" style="margin: 0;">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience.</div>
+<![endif]-->
+
+    <div class="masthead">
+  <div class="masthead__inner-wrap" id="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+          <a class="site-logo" href="/">
+              <div style="width: 150px; height: 40px">
+              </div>
+          </a>
+        
+        <a class="site-title" href="/">
+          
+        </a>
+        <ul class="visible-links"><li class="masthead__menu-item">
+              <a href="/docs/spark_quick-start-guide.html" target="_self" >Documentation</a>
+            </li><li class="masthead__menu-item">
+              <a href="/community.html" target="_self" >Community</a>
+            </li><li class="masthead__menu-item">
+              <a href="/blog.html" target="_self" >Blog</a>
+            </li><li class="masthead__menu-item">
+              <a href="https://cwiki.apache.org/confluence/display/HUDI/FAQ" target="_blank" >FAQ</a>
+            </li><li class="masthead__menu-item">
+              <a href="/docs/powered_by.html" target="_self" >Powered By</a>
+            </li><li class="masthead__menu-item">
+              <a href="/releases.html" target="_self" >Releases</a>
+            </li><li class="masthead__menu-item">
+              <a href="/download.html" target="_self" >Download</a>
+            </li></ul>
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+<!--
+<p class="notice--warning" style="margin: 0 !important; text-align: center !important;"><strong>Note:</strong> This site is work in progress, if you notice any issues, please <a target="_blank" href="https://github.com/apache/hudi/issues">Report on Issue</a>.
+  Click <a href="/"> here</a> back to old site.</p>
+-->
+
+    <div class="initial-content">
+      <div id="main" role="main">
+  
+
+  <div class="sidebar sticky">
+
+  
+
+  
+
+    
+      
+
+
+
+
+
+
+
+<nav class="nav__list">
+  
+  <input id="ac-toc" name="accordion-toc" type="checkbox" />
+  <label for="ac-toc">Toggle Menu</label>
+  <ul class="nav__items">
+    
+      <li>
+        
+          <span class="nav__sub-title">Documentation</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-overview.html" class="">Overview</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-quick-start-guide.html" class="">Quick Start</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-use_cases.html" class="">Use Cases</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-writing_data.html" class="">Writing Data</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-querying_data.html" class="">Querying Data</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-configurations.html" class="">Configuration</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-performance.html" class="">Performance</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-deployment.html" class="">Deployment</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+      <li>
+        
+          <span class="nav__sub-title">Resources</span>
+        
+
+        
+        <ul>
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-docker_demo.html" class="">Dockerized Demo</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-cloud.html" class="">Storage Configuration</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-metrics.html" class="">Metrics</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-docs-versions.html" class="">Docs Versions</a></li>
+            
+
+          
+            
+            
+
+            
+            
+
+            
+              <li><a href="/docs/0.8.0-privacy.html" class="">Privacy Policy</a></li>
+            
+
+          
+        </ul>
+        
+      </li>
+    
+  </ul>
+</nav>
+
+    
+
+  
+  </div>
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+    <!-- Look the author details up from the site config. -->
+    
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">Quick-Start Guide
+</h1>
+          <!-- Output author details if some exist. -->
+          
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+        <aside class="sidebar__right sticky">
+          <nav class="toc">
+            <header><h4 class="nav__title"><i class="fas fa-file-alt"></i> IN THIS PAGE</h4></header>
+            <ul class="toc__menu">
+  <li><a href="#setup">Setup</a>
+    <ul>
+      <li><a href="#step1-download-flink-jar">Step.1 download flink jar</a></li>
+      <li><a href="#step2-start-flink-cluster">Step.2 start flink cluster</a></li>
+      <li><a href="#step3-start-flink-sql-client">Step.3 start flink SQL client</a></li>
+    </ul>
+  </li>
+  <li><a href="#insert-data">Insert data</a></li>
+  <li><a href="#query-data">Query data</a></li>
+  <li><a href="#update-data">Update data</a></li>
+  <li><a href="#streaming-query">Streaming query</a></li>
+  <li><a href="#deletes">Delete data</a></li>
+  <li><a href="#where-to-go-from-here">Where to go from here?</a></li>
+</ul>
+          </nav>
+        </aside>
+        
+        <p>This guide provides a quick peek at Hudi’s capabilities using flink SQL client. Using flink SQL, we will walk through 
+code snippets that allows you to insert and update a Hudi table of default table type: 
+<a href="/docs/0.8.0-concepts.html#copy-on-write-table">Copy on Write</a> and <a href="/docs/0.8.0-concepts.html#merge-on-read-table">Merge On Read</a>. 
+After each write operation we will also show how to read the data snapshot (incrementally read is already on the roadmap).</p>
+
+<h2 id="setup">Setup</h2>
+
+<p>We use the <a href="https://ci.apache.org/projects/flink/flink-docs-stable/dev/table/sqlClient.html">Flink Sql Client</a> because it’s a good
+quick start tool for SQL users.</p>
+
+<h3 id="step1-download-flink-jar">Step.1 download flink jar</h3>
+<p>Hudi works with Flink-1.11.x version. You can follow instructions <a href="https://flink.apache.org/downloads.html">here</a> for setting up flink.
+The hudi-flink-bundle jar is archived with scala 2.11, so it’s recommended to use flink 1.11 bundled with scala 2.11.</p>
+
+<h3 id="step2-start-flink-cluster">Step.2 start flink cluster</h3>
+<p>Start a standalone flink cluster within hadoop environment.
+Before you start up the cluster, we suggest to config the cluster as follows:</p>
+
+<ul>
+  <li>in <code class="highlighter-rouge">$FLINK_HOME/conf/flink-conf.yaml</code>, add config option <code class="highlighter-rouge">taskmanager.numberOfTaskSlots: 4</code></li>
+  <li>in <code class="highlighter-rouge">$FLINK_HOME/conf/workers</code>, add item <code class="highlighter-rouge">localhost</code> as 4 lines so that there are 4 workers on the local cluster</li>
+</ul>
+
+<p>Now starts the cluster:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># HADOOP_HOME is your hadoop root directory after unpack the binary package.</span>
+<span class="nb">export </span><span class="nv">HADOOP_CLASSPATH</span><span class="o">=</span><span class="sb">`</span><span class="nv">$HADOOP_HOME</span>/bin/hadoop classpath<span class="sb">`</span>
+
+<span class="c"># Start the flink standalone cluster</span>
+./bin/start-cluster.sh
+</code></pre></div></div>
+<h3 id="step3-start-flink-sql-client">Step.3 start flink SQL client</h3>
+
+<p>Hudi has a prepared bundle jar for flink, which should be loaded in the flink SQL Client when it starts up.
+You can build the jar manually under path <code class="highlighter-rouge">hudi-source-dir/packaging/hudi-flink-bundle</code>, or download it from the
+<a href="https://repo.maven.apache.org/maven2/org/apache/hudi/hudi-flink-bundle_2.11/">Apache Official Repository</a>.</p>
+
+<p>Now starts the SQL CLI:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># HADOOP_HOME is your hadoop root directory after unpack the binary package.</span>
+<span class="nb">export </span><span class="nv">HADOOP_CLASSPATH</span><span class="o">=</span><span class="sb">`</span><span class="nv">$HADOOP_HOME</span>/bin/hadoop classpath<span class="sb">`</span>
+
+./bin/sql-client.sh embedded <span class="nt">-j</span> .../hudi-flink-bundle_2.1?-<span class="k">*</span>.<span class="k">*</span>.<span class="k">*</span>.jar shell
+</code></pre></div></div>
+
+<div class="notice--info">
+  <h4>Please note the following: </h4>
+<ul>
+  <li>We suggest hadoop 2.9.x+ version because some of the object storage has filesystem implementation only after that</li>
+  <li>The flink-parquet and flink-avro formats are already packaged into the hudi-flink-bundle jar</li>
+</ul>
+</div>
+
+<p>Setup table name, base path and operate using SQL for this guide.
+The SQL CLI only executes the SQL line by line.</p>
+
+<h2 id="insert-data">Insert data</h2>
+
+<p>Creates a flink hudi table first and insert data into the Hudi table using SQL <code class="highlighter-rouge">VALUES</code> as below.</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- sets up the result mode to tableau to show the results directly in the CLI</span>
+<span class="k">set</span> <span class="n">execution</span><span class="p">.</span><span class="k">result</span><span class="o">-</span><span class="k">mode</span><span class="o">=</span><span class="n">tableau</span><span class="p">;</span>
+
+<span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">t1</span><span class="p">(</span>
+  <span class="n">uuid</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">20</span><span class="p">),</span>
+  <span class="n">name</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">10</span><span class="p">),</span>
+  <span class="n">age</span> <span class="nb">INT</span><span class="p">,</span>
+  <span class="n">ts</span> <span class="nb">TIMESTAMP</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span>
+  <span class="nv">`partition`</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span>
+<span class="p">)</span>
+<span class="n">PARTITIONED</span> <span class="k">BY</span> <span class="p">(</span><span class="nv">`partition`</span><span class="p">)</span>
+<span class="k">WITH</span> <span class="p">(</span>
+  <span class="s1">'connector'</span> <span class="o">=</span> <span class="s1">'hudi'</span><span class="p">,</span>
+  <span class="s1">'path'</span> <span class="o">=</span> <span class="s1">'schema://base-path'</span><span class="p">,</span>
+  <span class="s1">'table.type'</span> <span class="o">=</span> <span class="s1">'MERGE_ON_READ'</span> <span class="c1">-- this creates a MERGE_ON_READ table, by default is COPY_ON_WRITE</span>
+<span class="p">);</span>
+
+<span class="c1">-- insert data using values</span>
+<span class="k">INSERT</span> <span class="k">INTO</span> <span class="n">t1</span> <span class="k">VALUES</span>
+  <span class="p">(</span><span class="s1">'id1'</span><span class="p">,</span><span class="s1">'Danny'</span><span class="p">,</span><span class="mi">23</span><span class="p">,</span><span class="nb">TIMESTAMP</span> <span class="s1">'1970-01-01 00:00:01'</span><span class="p">,</span><span class="s1">'par1'</span><span class="p">),</span>
+  <span class="p">(</span><span class="s1">'id2'</span><span class="p">,</span><span class="s1">'Stephen'</span><span class="p">,</span><span class="mi">33</span><span class="p">,</span><span class="nb">TIMESTAMP</span> <span class="s1">'1970-01-01 00:00:02'</span><span class="p">,</span><span class="s1">'par1'</span><span class="p">),</span>
+  <span class="p">(</span><span class="s1">'id3'</span><span class="p">,</span><span class="s1">'Julian'</span><span class="p">,</span><span class="mi">53</span><span class="p">,</span><span class="nb">TIMESTAMP</span> <span class="s1">'1970-01-01 00:00:03'</span><span class="p">,</span><span class="s1">'par2'</span><span class="p">),</span>
+  <span class="p">(</span><span class="s1">'id4'</span><span class="p">,</span><span class="s1">'Fabian'</span><span class="p">,</span><span class="mi">31</span><span class="p">,</span><span class="nb">TIMESTAMP</span> <span class="s1">'1970-01-01 00:00:04'</span><span class="p">,</span><span class="s1">'par2'</span><span class="p">),</span>
+  <span class="p">(</span><span class="s1">'id5'</span><span class="p">,</span><span class="s1">'Sophia'</span><span class="p">,</span><span class="mi">18</span><span class="p">,</span><span class="nb">TIMESTAMP</span> <span class="s1">'1970-01-01 00:00:05'</span><span class="p">,</span><span class="s1">'par3'</span><span class="p">),</span>
+  <span class="p">(</span><span class="s1">'id6'</span><span class="p">,</span><span class="s1">'Emma'</span><span class="p">,</span><span class="mi">20</span><span class="p">,</span><span class="nb">TIMESTAMP</span> <span class="s1">'1970-01-01 00:00:06'</span><span class="p">,</span><span class="s1">'par3'</span><span class="p">),</span>
+  <span class="p">(</span><span class="s1">'id7'</span><span class="p">,</span><span class="s1">'Bob'</span><span class="p">,</span><span class="mi">44</span><span class="p">,</span><span class="nb">TIMESTAMP</span> <span class="s1">'1970-01-01 00:00:07'</span><span class="p">,</span><span class="s1">'par4'</span><span class="p">),</span>
+  <span class="p">(</span><span class="s1">'id8'</span><span class="p">,</span><span class="s1">'Han'</span><span class="p">,</span><span class="mi">56</span><span class="p">,</span><span class="nb">TIMESTAMP</span> <span class="s1">'1970-01-01 00:00:08'</span><span class="p">,</span><span class="s1">'par4'</span><span class="p">);</span>
+</code></pre></div></div>
+
+<h2 id="query-data">Query data</h2>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- query from the hudi table</span>
+<span class="k">select</span> <span class="o">*</span> <span class="k">from</span> <span class="n">t1</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p class="notice--info">This query provides snapshot querying of the ingested data. 
+Refer to <a href="/docs/0.8.0-concepts#table-types--queries">Table types and queries</a> for more info on all table types and query types supported.</p>
+
+<h2 id="update-data">Update data</h2>
+
+<p>This is similar to inserting new data.</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- this would update the record with key 'id1'</span>
+<span class="k">insert</span> <span class="k">into</span> <span class="n">t1</span> <span class="k">values</span>
+  <span class="p">(</span><span class="s1">'id1'</span><span class="p">,</span><span class="s1">'Danny'</span><span class="p">,</span><span class="mi">27</span><span class="p">,</span><span class="nb">TIMESTAMP</span> <span class="s1">'1970-01-01 00:00:01'</span><span class="p">,</span><span class="s1">'par1'</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p class="notice--info">Notice that the save mode is now <code class="highlighter-rouge">Append</code>. In general, always use append mode unless you are trying to create the table for the first time.
+<a href="#query-data">Querying</a> the data again will now show updated records. Each write operation generates a new <a href="/docs/0.8.0-concepts.html">commit</a> 
+denoted by the timestamp. Look for changes in <code class="highlighter-rouge">_hoodie_commit_time</code>, <code class="highlighter-rouge">age</code> fields for the same <code class="highlighter-rouge">_hoodie_record_key</code>s in previous commit.</p>
+
+<h2 id="streaming-query">Streaming query</h2>
+
+<p>Hudi flink also provides capability to obtain a stream of records that changed since given commit timestamp. 
+This can be achieved using Hudi’s streaming querying and providing a start time from which changes need to be streamed. 
+We do not need to specify endTime, if we want all changes after the given commit (as is the common case).</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">t1</span><span class="p">(</span>
+  <span class="n">uuid</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">20</span><span class="p">),</span>
+  <span class="n">name</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">10</span><span class="p">),</span>
+  <span class="n">age</span> <span class="nb">INT</span><span class="p">,</span>
+  <span class="n">ts</span> <span class="nb">TIMESTAMP</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span>
+  <span class="nv">`partition`</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span>
+<span class="p">)</span>
+<span class="n">PARTITIONED</span> <span class="k">BY</span> <span class="p">(</span><span class="nv">`partition`</span><span class="p">)</span>
+<span class="k">WITH</span> <span class="p">(</span>
+  <span class="s1">'connector'</span> <span class="o">=</span> <span class="s1">'hudi'</span><span class="p">,</span>
+  <span class="s1">'path'</span> <span class="o">=</span> <span class="s1">'oss://vvr-daily/hudi/t1'</span><span class="p">,</span>
+  <span class="s1">'table.type'</span> <span class="o">=</span> <span class="s1">'MERGE_ON_READ'</span><span class="p">,</span>
+  <span class="s1">'read.streaming.enabled'</span> <span class="o">=</span> <span class="s1">'true'</span><span class="p">,</span>  <span class="c1">-- this option enable the streaming read</span>
+  <span class="s1">'read.streaming.start-commit'</span> <span class="o">=</span> <span class="s1">'20210316134557'</span> <span class="c1">-- specifies the start commit instant time</span>
+  <span class="s1">'read.streaming.check-interval'</span> <span class="o">=</span> <span class="s1">'4'</span> <span class="c1">-- specifies the check interval for finding new source commits, default 60s.</span>
+<span class="p">);</span>
+
+<span class="c1">-- Then query the table in stream mode</span>
+<span class="k">select</span> <span class="o">*</span> <span class="k">from</span> <span class="n">t1</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p class="notice--info">This will give all changes that happened after the <code class="highlighter-rouge">read.streaming.start-commit</code> commit. The unique thing about this
+feature is that it now lets you author streaming pipelines on streaming or batch data source.</p>
+
+<h2 id="deletes">Delete data</h2>
+
+<p>When consuming data in streaming query, hudi flink source can also accepts the change logs from the underneath data source,
+it can then applies the UPDATE and DELETE by per-row level. You can then sync a NEAR-REAL-TIME snapshot on hudi for all kinds
+of RDBMS.</p>
+
+<h2 id="where-to-go-from-here">Where to go from here?</h2>
+
+<p>We used flink here to show case the capabilities of Hudi. However, Hudi can support multiple table types/query types and 
+Hudi tables can be queried from query engines like Hive, Spark, Flink, Presto and much more. We have put together a 
+<a href="https://www.youtube.com/watch?v=VhNgUsxdrD0">demo video</a> that show cases all of this on a docker based setup with all 
+dependent systems running locally. We recommend you replicate the same setup and run the demo yourself, by following 
+steps <a href="/docs/0.8.0-docker_demo.html">here</a> to get a taste for it. Also, if you are looking for ways to migrate your existing data 
+to Hudi, refer to <a href="/docs/0.8.0-migration_guide.html">migration guide</a>.</p>
+
+      </section>
+
+      <a href="#masthead__inner-wrap" class="back-to-top">Back to top &uarr;</a>
+
+
+      
+
+    </div>
+
+  </article>
+
+</div>
+
+    </div>
+
+    <div class="page__footer">
+      <footer>
+        
+<div class="row">
+  <div class="col-lg-12 footer">
+    <p>
+      <table class="table-apache-info">
+        <tr>
+          <td>
+            <a class="footer-link-img" href="https://apache.org">
+              <img width="250px" src="/assets/images/asf_logo.svg" alt="The Apache Software Foundation">
+            </a>
+          </td>
+          <td>
+            <a style="float: right" href="https://www.apache.org/events/current-event.html">
+              <img src="https://www.apache.org/events/current-event-234x60.png" />
+            </a>
+          </td>
+        </tr>
+      </table>
+    </p>
+    <p>
+      <a href="https://www.apache.org/licenses/">License</a> | <a href="https://www.apache.org/security/">Security</a> | <a href="https://www.apache.org/foundation/thanks.html">Thanks</a> | <a href="https://www.apache.org/foundation/sponsorship.html">Sponsorship</a>
+    </p>
+    <p>
+      Copyright &copy; <span id="copyright-year">2019</span> <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>.
+      Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation. <a href="/docs/privacy">Privacy Policy</a>
+    </p>
+  </div>
+</div>
+      </footer>
+    </div>
+
+
+  </body>
+</html>
