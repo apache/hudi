@@ -242,10 +242,12 @@
   <span class="nf">option</span><span class="o">(</span><span class="nc">PRECOMBINE_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"ts"</span><span class="o">).</span>
   <span class="nf">option</span><span class="o">(</span><span class="nc">RECORDKEY_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"uuid"</span><span class="o">).</span>
   <span class="nf">option</span><span class="o">(</span><span class="nc">PARTITIONPATH_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"partitionpath"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">KEYGENERATOR_CLASS_PROP</span><span class="o">,</span> <span class="s">"org.apache.hudi.keygen.SimpleKeyGenerator"</span><span class="o">).</span>
   <span class="nf">option</span><span class="o">(</span><span class="nc">TABLE_NAME</span><span class="o">,</span> <span class="n">tableName</span><span class="o">).</span>
   <span class="nf">mode</span><span class="o">(</span><span class="nc">Overwrite</span><span class="o">).</span>
   <span class="nf">save</span><span class="o">(</span><span class="n">basePath</span><span class="o">);</span>
 </code></pre></div></div>
+<b> Note:</b> For non-partitioned table, set option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
 
 <p><strong>Step 4</strong> : Query data. Load the data files into a DataFrame.</p>
 
@@ -275,10 +277,12 @@
   <span class="nf">option</span><span class="o">(</span><span class="nc">PRECOMBINE_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"ts"</span><span class="o">).</span>
   <span class="nf">option</span><span class="o">(</span><span class="nc">RECORDKEY_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"uuid"</span><span class="o">).</span>
   <span class="nf">option</span><span class="o">(</span><span class="nc">PARTITIONPATH_FIELD_OPT_KEY</span><span class="o">,</span> <span class="s">"partitionpath"</span><span class="o">).</span>
+  <span class="nf">option</span><span class="o">(</span><span class="nc">KEYGENERATOR_CLASS_PROP</span><span class="o">,</span> <span class="s">"org.apache.hudi.keygen.SimpleKeyGenerator"</span><span class="o">).</span>
   <span class="nf">option</span><span class="o">(</span><span class="nc">TABLE_NAME</span><span class="o">,</span> <span class="n">tableName</span><span class="o">).</span>
   <span class="nf">mode</span><span class="o">(</span><span class="nc">Append</span><span class="o">).</span>
   <span class="nf">save</span><span class="o">(</span><span class="n">basePath</span><span class="o">);</span>
 </code></pre></div></div>
+<b> Note:</b> For non-partitioned table, set option(KEYGENERATOR_CLASS_PROP, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
 
 <p><strong>Step 7</strong> : Reload the table and verify that the records are deleted</p>
 
