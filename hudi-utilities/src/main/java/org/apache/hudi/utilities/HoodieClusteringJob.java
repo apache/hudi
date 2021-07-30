@@ -51,9 +51,9 @@ public class HoodieClusteringJob {
   private transient FileSystem fs;
   private TypedProperties props;
   private final JavaSparkContext jsc;
-  private static final String EXECUTE = "execute";
-  private static final String SCHEDULE = "schedule";
-  private static final String SCHEDULE_AND_EXECUTE = "scheduleandexecute";
+  public static final String EXECUTE = "execute";
+  public static final String SCHEDULE = "schedule";
+  public static final String SCHEDULE_AND_EXECUTE = "scheduleandexecute";
 
   public HoodieClusteringJob(JavaSparkContext jsc, Config cfg) {
     this.cfg = cfg;
@@ -113,10 +113,7 @@ public class HoodieClusteringJob {
     final Config cfg = new Config();
     JCommander cmd = new JCommander(cfg, null, args);
 
-    // compatible
-    validateRunningMode(cfg);
-
-    if (cfg.help || args.length == 0 || (cfg.runningMode.equalsIgnoreCase(EXECUTE) && cfg.clusteringInstantTime == null)) {
+    if (cfg.help || args.length == 0) {
       cmd.usage();
       System.exit(1);
     }
@@ -124,8 +121,8 @@ public class HoodieClusteringJob {
     final JavaSparkContext jsc = UtilHelpers.buildSparkContext("clustering-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
     HoodieClusteringJob clusteringJob = new HoodieClusteringJob(jsc, cfg);
     int result = clusteringJob.cluster(cfg.retry);
-    String resultMsg = String.format("Clustering with basePath: %s, tableName: %s, runSchedule: %s",
-        cfg.basePath, cfg.tableName, cfg.runSchedule);
+    String resultMsg = String.format("Clustering with basePath: %s, tableName: %s, runningMode: %s",
+        cfg.basePath, cfg.tableName, cfg.runningMode);
     if (result == -1) {
       LOG.error(resultMsg + " failed");
     } else {
@@ -134,17 +131,22 @@ public class HoodieClusteringJob {
     jsc.stop();
   }
 
+  // make sure that cfg.runningMode couldn't be null
   private static void validateRunningMode(Config cfg) {
     // --mode has a higher priority than --schedule
     // If we remove --schedule option in the future we need to change runningMode default value to EXECUTE
     if (StringUtils.isNullOrEmpty(cfg.runningMode)) {
       cfg.runningMode = cfg.runSchedule ? SCHEDULE : EXECUTE;
     }
+
+    if (cfg.runningMode.equalsIgnoreCase(EXECUTE) && cfg.clusteringInstantTime == null) {
+      throw new RuntimeException("--instant-time couldn't be null when executing clustering plan.");
+    }
   }
 
   public int cluster(int retry) {
     this.fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
-    // need to do validate again in case that users call cluster() directly without setting cfg.runningMode
+    // need to do validate in case that users call cluster() directly without setting cfg.runningMode
     validateRunningMode(cfg);
     int ret = UtilHelpers.retry(retry, () -> {
       switch (cfg.runningMode.toLowerCase()) {
