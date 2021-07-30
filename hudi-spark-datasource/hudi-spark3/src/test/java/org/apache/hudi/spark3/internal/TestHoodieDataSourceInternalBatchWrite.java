@@ -32,6 +32,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.connector.write.DataWriter;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -161,7 +162,7 @@ public class TestHoodieDataSourceInternalBatchWrite extends
     int partitionCounter = 0;
 
     // execute N rounds
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 2; i++) {
       String instantTime = "00" + i;
       // init writer
       HoodieDataSourceInternalBatchWrite dataSourceInternalBatchWrite =
@@ -171,7 +172,7 @@ public class TestHoodieDataSourceInternalBatchWrite extends
       DataWriter<InternalRow> writer = dataSourceInternalBatchWrite.createBatchWriterFactory(null).createWriter(partitionCounter++, RANDOM.nextLong());
 
       int size = 10 + RANDOM.nextInt(1000);
-      int batches = 5; // one batch per partition
+      int batches = 3; // one batch per partition
 
       for (int j = 0; j < batches; j++) {
         String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[j % 3];
@@ -197,6 +198,8 @@ public class TestHoodieDataSourceInternalBatchWrite extends
     }
   }
 
+  // Large writes are not required to be executed w/ regular CI jobs. Takes lot of running time.
+  @Disabled
   @ParameterizedTest
   @MethodSource("bulkInsertTypeParams")
   public void testLargeWrites(boolean populateMetaFields) throws Exception {

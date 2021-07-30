@@ -30,6 +30,7 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.sources.v2.DataSourceOptions;
 import org.apache.spark.sql.sources.v2.writer.DataWriter;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -87,7 +88,7 @@ public class TestHoodieDataSourceInternalWriter extends
     }
 
     int size = 10 + RANDOM.nextInt(1000);
-    int batches = 5;
+    int batches = 2;
     Dataset<Row> totalInputRows = null;
     for (int j = 0; j < batches; j++) {
       String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[j % 3];
@@ -158,7 +159,7 @@ public class TestHoodieDataSourceInternalWriter extends
     int partitionCounter = 0;
 
     // execute N rounds
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 2; i++) {
       String instantTime = "00" + i;
       // init writer
       HoodieDataSourceInternalWriter dataSourceInternalWriter =
@@ -168,7 +169,7 @@ public class TestHoodieDataSourceInternalWriter extends
       DataWriter<InternalRow> writer = dataSourceInternalWriter.createWriterFactory().createDataWriter(partitionCounter++, RANDOM.nextLong(), RANDOM.nextLong());
 
       int size = 10 + RANDOM.nextInt(1000);
-      int batches = 5; // one batch per partition
+      int batches = 2; // one batch per partition
 
       for (int j = 0; j < batches; j++) {
         String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[j % 3];
@@ -195,6 +196,8 @@ public class TestHoodieDataSourceInternalWriter extends
     }
   }
 
+  // takes up lot of running time with CI.
+  @Disabled
   @ParameterizedTest
   @MethodSource("bulkInsertTypeParams")
   public void testLargeWrites(boolean populateMetaFields) throws Exception {
