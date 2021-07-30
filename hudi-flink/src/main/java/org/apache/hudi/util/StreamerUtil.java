@@ -324,4 +324,8 @@ public class StreamerUtil {
       throw new IOException("Could not load transformer class(es) " + classNames, e);
     }
   }
+
+  public static String fileIdPfxOfTask(String taskId) {
+    return FSUtils.createNewFileIdPfx().substring(0, 8) + "-" + taskId;
+  }
 }

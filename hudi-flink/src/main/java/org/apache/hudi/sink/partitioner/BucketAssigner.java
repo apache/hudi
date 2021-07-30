@@ -18,7 +18,6 @@
 
 package org.apache.hudi.sink.partitioner;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.sink.partitioner.profile.WriteProfile;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
@@ -29,7 +28,6 @@ import org.apache.hudi.table.action.commit.SmallFile;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.util.Preconditions;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -57,17 +55,7 @@ public class BucketAssigner implements AutoCloseable {
   /**
    * Task ID.
    */
-  private final int taskID;
-
-  /**
-   * The max parallelism.
-   */
-  private final int maxParallelism;
-
-  /**
-   * Number of tasks.
-   */
-  private final int numTasks;
+  private final String taskID;
 
   /**
    * Remembers what type each bucket is for later.
@@ -96,13 +84,9 @@ public class BucketAssigner implements AutoCloseable {
 
   public BucketAssigner(
       int taskID,
-      int maxParallelism,
-      int numTasks,
       WriteProfile profile,
       HoodieWriteConfig config) {
-    this.taskID = taskID;
-    this.maxParallelism = maxParallelism;
-    this.numTasks = numTasks;
+    this.taskID = taskID + "";
     this.config = config;
     this.writeProfile = profile;
 
@@ -197,16 +181,13 @@ public class BucketAssigner implements AutoCloseable {
 
   private boolean fileIdOfThisTask(String fileId) {
     // the file id can shuffle to this task
-    return KeyGroupRangeAssignment.assignKeyToParallelOperator(fileId, maxParallelism, numTasks) == taskID;
+    final String[] splits = fileId.split("-");
+    return splits.length > 1 && splits[1].equals(taskID);
   }
 
   @VisibleForTesting
   public String createFileIdOfThisTask() {
-    String newFileIdPfx = FSUtils.createNewFileIdPfx();
-    while (!fileIdOfThisTask(newFileIdPfx)) {
-      newFileIdPfx = FSUtils.createNewFileIdPfx();
-    }
-    return newFileIdPfx;
+    return StreamerUtil.fileIdPfxOfTask(taskID);
   }
 
   @VisibleForTesting

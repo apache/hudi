@@ -123,8 +123,6 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
         new FlinkTaskContextSupplier(getRuntimeContext()));
     this.bucketAssigner = BucketAssigners.create(
         getRuntimeContext().getIndexOfThisSubtask(),
-        getRuntimeContext().getMaxNumberOfParallelSubtasks(),
-        getRuntimeContext().getNumberOfParallelSubtasks(),
         WriteOperationType.isOverwrite(WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION))),
         HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)),
         context,

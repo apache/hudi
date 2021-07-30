@@ -24,6 +24,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.io.storage.row.HoodieRowDataCreateHandle;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
@@ -38,7 +39,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * Helper class for bulk insert used by Flink.
@@ -73,7 +73,7 @@ public class BulkInsertWriterHelper {
     this.taskEpochId = taskEpochId;
     this.rowType = addMetadataFields(rowType); // patch up with metadata fields
     this.arePartitionRecordsSorted = conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_BY_PARTITION);
-    this.fileIdPrefix = UUID.randomUUID().toString();
+    this.fileIdPrefix = StreamerUtil.fileIdPfxOfTask(taskId + "");
     this.keyGen = RowDataKeyGen.instance(conf, rowType);
   }
 
