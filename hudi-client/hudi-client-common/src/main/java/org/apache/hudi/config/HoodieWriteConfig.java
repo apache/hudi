@@ -21,20 +21,24 @@ package org.apache.hudi.config;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -55,7 +59,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -66,6 +69,10 @@ import java.util.stream.Collectors;
  * Class storing configs for the HoodieWriteClient.
  */
 @Immutable
+@ConfigClassProperty(name = "Write Configurations",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Configurations that control write behavior on Hudi tables. These can be directly passed down from even "
+        + "higher level frameworks (e.g Spark datasources, Flink sink) and utilities (e.g DeltaStreamer).")
 public class HoodieWriteConfig extends HoodieConfig {
 
   private static final long serialVersionUID = 0L;
@@ -111,6 +118,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.5.1")
       .withDocumentation("Controls the layout of the timeline. Version 0 relied on renames, Version 1 (default) models "
           + "the timeline as an immutable log relying only on atomic writes for object storage.");
+
+  public static final ConfigProperty<HoodieFileFormat> BASE_FILE_FORMAT = ConfigProperty
+      .key("hoodie.table.base.file.format")
+      .defaultValue(HoodieFileFormat.PARQUET)
+      .withAlternatives("hoodie.table.ro.file.format")
+      .withDocumentation("");
 
   public static final ConfigProperty<String> BASE_PATH_PROP = ConfigProperty
       .key("hoodie.base.path")
@@ -298,18 +311,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When enabled, we allow duplicate keys even if inserts are routed to merge with an existing file (for ensuring file sizing)."
           + " This is only relevant for insert operation, since upsert, delete operations will ensure unique key constraints are maintained.");
 
-  public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
-      .key("hoodie.spillable.diskmap.type")
-      .defaultValue(ExternalSpillableMap.DiskMapType.BITCASK)
-      .withDocumentation("When handling input data that cannot be held in memory, to merge with a file on storage, a spillable diskmap is employed.  "
-          + "By default, we use a persistent hashmap based loosely on bitcask, that offers O(1) inserts, lookups. "
-          + "Change this to `ROCKS_DB` to prefer using rocksDB, for handling the spill.");
-
-  public static final ConfigProperty<Boolean> DISK_MAP_BITCASK_COMPRESSION_ENABLED = ConfigProperty
-      .key("hoodie.diskmap.bitcask.compression.enabled")
-      .defaultValue(true)
-      .withDocumentation("Turn on compression for BITCASK disk map used by the External Spillable Map");
-
   public static final ConfigProperty<Integer> CLIENT_HEARTBEAT_INTERVAL_IN_MS_PROP = ConfigProperty
       .key("hoodie.client.heartbeat.interval_in_ms")
       .defaultValue(60 * 1000)
@@ -366,6 +367,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When enabled, records in older schema are rewritten into newer schema during upsert,delete and background"
           + " compaction,clustering operations.");
 
+  public static final ConfigProperty<Boolean> ALLOW_EMPTY_COMMIT = ConfigProperty
+       .key("hoodie.allow.empty.commit")
+       .defaultValue(true)
+       .withDocumentation("Whether to allow generation of empty commits, even if no data was written in the commit. "
+          + "It's useful in cases where extra metadata needs to be published regardless e.g tracking source offsets when ingesting data");
+
   private ConsistencyGuardConfig consistencyGuardConfig;
 
   // Hoodie Write Client transparently rewrites File System View config when embedded mode is enabled
@@ -374,6 +381,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   private FileSystemViewStorageConfig viewStorageConfig;
   private HoodiePayloadConfig hoodiePayloadConfig;
   private HoodieMetadataConfig metadataConfig;
+  private HoodieCommonConfig commonConfig;
   private EngineType engineType;
 
   /**
@@ -395,6 +403,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     this.viewStorageConfig = clientSpecifiedViewStorageConfig;
     this.hoodiePayloadConfig = HoodiePayloadConfig.newBuilder().fromProperties(newProps).build();
     this.metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(props).build();
+    this.commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
   }
 
   public static HoodieWriteConfig.Builder newBuilder() {
@@ -583,16 +592,13 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(MERGE_ALLOW_DUPLICATE_ON_INSERTS);
   }
 
-  public ExternalSpillableMap.DiskMapType getSpillableDiskMapType() {
-    return ExternalSpillableMap.DiskMapType.valueOf(getString(SPILLABLE_DISK_MAP_TYPE).toUpperCase(Locale.ROOT));
-  }
-
-  public boolean isBitCaskDiskMapCompressionEnabled() {
-    return getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED);
-  }
-
   public EngineType getEngineType() {
     return engineType;
+  }
+
+  public boolean populateMetaFields() {
+    return Boolean.parseBoolean(getStringOrDefault(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS,
+        HoodieTableConfig.HOODIE_POPULATE_META_FIELDS.defaultValue()));
   }
 
   /**
@@ -1140,6 +1146,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig;
   }
 
+  public HoodieCommonConfig getCommonConfig() {
+    return commonConfig;
+  }
+
   /**
    * Commit call back configs.
    */
@@ -1269,6 +1279,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getWriteMetaKeyPrefixes() {
     return getString(WRITE_META_KEY_PREFIXES_PROP);
+  }
+
+  public boolean allowEmptyCommit() {
+    return getBooleanOrDefault(ALLOW_EMPTY_COMMIT);
   }
 
   public static class Builder {
@@ -1545,16 +1559,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withSpillableDiskMapType(ExternalSpillableMap.DiskMapType diskMapType) {
-      writeConfig.setValue(SPILLABLE_DISK_MAP_TYPE, diskMapType.name());
-      return this;
-    }
-
-    public Builder withBitcaskDiskMapCompressionEnabled(boolean bitcaskDiskMapCompressionEnabled) {
-      writeConfig.setValue(DISK_MAP_BITCASK_COMPRESSION_ENABLED, String.valueOf(bitcaskDiskMapCompressionEnabled));
-      return this;
-    }
-
     public Builder withHeartbeatIntervalInMs(Integer heartbeatIntervalInMs) {
       writeConfig.setValue(CLIENT_HEARTBEAT_INTERVAL_IN_MS_PROP, String.valueOf(heartbeatIntervalInMs));
       return this;
@@ -1572,6 +1576,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWriteMetaKeyPrefixes(String writeMetaKeyPrefixes) {
       writeConfig.setValue(WRITE_META_KEY_PREFIXES_PROP, writeMetaKeyPrefixes);
+      return this;
+    }
+
+    public Builder withPopulateMetaFields(boolean populateMetaFields) {
+      writeConfig.setValue(HoodieTableConfig.HOODIE_POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
       return this;
     }
 

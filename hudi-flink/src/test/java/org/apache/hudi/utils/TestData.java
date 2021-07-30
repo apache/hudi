@@ -20,6 +20,7 @@ package org.apache.hudi.utils;
 
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
@@ -360,10 +361,8 @@ public class TestData {
     assert baseFile.isDirectory();
     FileFilter filter = file -> !file.getName().startsWith(".");
     File[] partitionDirs = baseFile.listFiles(filter);
-
     assertNotNull(partitionDirs);
     assertThat(partitionDirs.length, is(partitions));
-
     for (File partitionDir : partitionDirs) {
       File[] dataFiles = partitionDir.listFiles(filter);
       assertNotNull(dataFiles);
@@ -380,37 +379,6 @@ public class TestData {
       }
       readBuffer.sort(Comparator.naturalOrder());
       assertThat(readBuffer.toString(), is(expected.get(partitionDir.getName())));
-    }
-  }
-
-  public static void checkWrittenAllData(
-      File baseFile,
-      Map<String, List<String>> expected,
-      int partitions) throws IOException {
-    assert baseFile.isDirectory();
-    FileFilter filter = file -> !file.getName().startsWith(".");
-    File[] partitionDirs = baseFile.listFiles(filter);
-
-    assertNotNull(partitionDirs);
-    assertThat(partitionDirs.length, is(partitions));
-
-    for (File partitionDir : partitionDirs) {
-      File[] dataFiles = partitionDir.listFiles(filter);
-      assertNotNull(dataFiles);
-
-      List<String> readBuffer = new ArrayList<>();
-      for (File dataFile : dataFiles) {
-        ParquetReader<GenericRecord> reader = AvroParquetReader
-            .<GenericRecord>builder(new Path(dataFile.getAbsolutePath())).build();
-        GenericRecord nextRecord = reader.read();
-        while (nextRecord != null) {
-          readBuffer.add(filterOutVariables(nextRecord));
-          nextRecord = reader.read();
-        }
-        readBuffer.sort(Comparator.naturalOrder());
-      }
-
-      assertThat(readBuffer, is(expected.get(partitionDir.getName())));
     }
   }
 
@@ -530,6 +498,8 @@ public class TestData {
         .withBufferSize(16 * 1024 * 1024)
         .withMaxMemorySizeInBytes(1024 * 1024L)
         .withSpillableMapBasePath("/tmp/")
+        .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
+        .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
         .build();
   }
 
@@ -548,7 +518,7 @@ public class TestData {
     return Strings.join(fields, ",");
   }
 
-  private static BinaryRowData insertRow(Object... fields) {
+  public static BinaryRowData insertRow(Object... fields) {
     LogicalType[] types = TestConfigurations.ROW_TYPE.getFields().stream().map(RowType.RowField::getType)
         .toArray(LogicalType[]::new);
     assertEquals(

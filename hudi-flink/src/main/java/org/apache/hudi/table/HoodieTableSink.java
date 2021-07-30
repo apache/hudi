@@ -24,6 +24,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperatorFactory;
 import org.apache.hudi.sink.bootstrap.BootstrapFunction;
+import org.apache.hudi.sink.bulk.BulkInsertWriteOperator;
 import org.apache.hudi.sink.compact.CompactFunction;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionCommitSink;
@@ -31,7 +32,7 @@ import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.partitioner.BucketAssignOperator;
-import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
+import org.apache.hudi.sink.transform.RowDataToHoodieFunctions;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -45,6 +46,7 @@ import org.apache.flink.table.connector.sink.DataStreamSinkProvider;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.connector.sink.abilities.SupportsOverwrite;
 import org.apache.flink.table.connector.sink.abilities.SupportsPartitioning;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.RowKind;
 
@@ -58,49 +60,87 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
   private final Configuration conf;
   private final TableSchema schema;
   private boolean overwrite = false;
+  private boolean supportsGrouping = false;
 
   public HoodieTableSink(Configuration conf, TableSchema schema) {
     this.conf = conf;
     this.schema = schema;
   }
 
+  public HoodieTableSink(Configuration conf, TableSchema schema, boolean overwrite, boolean supportsGrouping) {
+    this.conf = conf;
+    this.schema = schema;
+    this.overwrite = overwrite;
+    this.supportsGrouping = supportsGrouping;
+  }
+
   @Override
   public SinkRuntimeProvider getSinkRuntimeProvider(Context context) {
     return (DataStreamSinkProvider) dataStream -> {
-      // Read from kafka source
-      RowType rowType = (RowType) schema.toRowDataType().notNull().getLogicalType();
+
+      // setup configuration
       long ckpTimeout = dataStream.getExecutionEnvironment()
           .getCheckpointConfig().getCheckpointTimeout();
       conf.setLong(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, ckpTimeout);
+
+      RowType rowType = (RowType) schema.toRowDataType().notNull().getLogicalType();
+
+      // bulk_insert mode
+      final String writeOperation = this.conf.get(FlinkOptions.OPERATION);
+      if (WriteOperationType.fromValue(writeOperation) == WriteOperationType.BULK_INSERT) {
+        this.conf.set(FlinkOptions.WRITE_BULK_INSERT_PARTITION_SORTED, this.supportsGrouping);
+        if (this.supportsGrouping) {
+          // if partition grouping is true, the input records would be sorted by the partition
+          // path, we need to chain the SORT operator and writer operator to keep the record
+          // sequence
+          dataStream.getTransformation()
+              .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
+        }
+        BulkInsertWriteOperator.OperatorFactory<RowData> operatorFactory = BulkInsertWriteOperator.getFactory(this.conf, rowType);
+        return dataStream.transform("hoodie_bulk_insert_write",
+            TypeInformation.of(Object.class),
+            operatorFactory)
+            // follow the parallelism of upstream operators to avoid shuffle
+            .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS))
+            .addSink(new CleanFunction<>(conf))
+            .setParallelism(1)
+            .name("clean_commits");
+      }
+
+      // stream write
+      int parallelism = dataStream.getExecutionConfig().getParallelism();
       StreamWriteOperatorFactory<HoodieRecord> operatorFactory = new StreamWriteOperatorFactory<>(conf);
 
-      DataStream<HoodieRecord> hoodieDataStream = dataStream
-          .map(new RowDataToHoodieFunction<>(rowType, conf), TypeInformation.of(HoodieRecord.class));
+      DataStream<HoodieRecord> dataStream1 = dataStream
+          .map(RowDataToHoodieFunctions.create(rowType, conf), TypeInformation.of(HoodieRecord.class));
 
+      // bootstrap index
       // TODO: This is a very time-consuming operation, will optimization
       if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
-        hoodieDataStream = hoodieDataStream.rebalance()
+        dataStream1 = dataStream1.rebalance()
             .transform(
                 "index_bootstrap",
                 TypeInformation.of(HoodieRecord.class),
                 new ProcessOperator<>(new BootstrapFunction<>(conf)))
-            .setParallelism(conf.getInteger(FlinkOptions.INDEX_BOOTSTRAP_TASKS))
+            .setParallelism(conf.getOptional(FlinkOptions.INDEX_BOOTSTRAP_TASKS).orElse(parallelism))
             .uid("uid_index_bootstrap_" + conf.getString(FlinkOptions.TABLE_NAME));
       }
 
-      DataStream<Object> pipeline = hoodieDataStream
+      DataStream<Object> pipeline = dataStream1
           // Key-by record key, to avoid multiple subtasks write to a bucket at the same time
           .keyBy(HoodieRecord::getRecordKey)
           .transform(
               "bucket_assigner",
               TypeInformation.of(HoodieRecord.class),
               new BucketAssignOperator<>(new BucketAssignFunction<>(conf)))
-          .setParallelism(conf.getInteger(FlinkOptions.BUCKET_ASSIGN_TASKS))
           .uid("uid_bucket_assigner_" + conf.getString(FlinkOptions.TABLE_NAME))
+          .setParallelism(conf.getOptional(FlinkOptions.BUCKET_ASSIGN_TASKS).orElse(parallelism))
           // shuffle by fileId(bucket id)
           .keyBy(record -> record.getCurrentLocation().getFileId())
           .transform("hoodie_stream_write", TypeInformation.of(Object.class), operatorFactory)
+          .uid("uid_hoodie_stream_write" + conf.getString(FlinkOptions.TABLE_NAME))
           .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
+      // compaction
       if (StreamerUtil.needsAsyncCompaction(conf)) {
         return pipeline.transform("compact_plan_generate",
             TypeInformation.of(CompactionPlanEvent.class),
@@ -139,7 +179,7 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
 
   @Override
   public DynamicTableSink copy() {
-    return new HoodieTableSink(this.conf, this.schema);
+    return new HoodieTableSink(this.conf, this.schema, this.overwrite, this.supportsGrouping);
   }
 
   @Override
@@ -164,5 +204,11 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
   @Override
   public void applyOverwrite(boolean b) {
     this.overwrite = b;
+  }
+
+  @Override
+  public boolean requiresPartitionGrouping(boolean supportsGrouping) {
+    this.supportsGrouping = supportsGrouping;
+    return supportsGrouping;
   }
 }

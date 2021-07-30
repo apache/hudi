@@ -230,6 +230,14 @@ class TestCOWDataSource extends HoodieClientTestBase {
     assertEquals(1, countsPerCommit.length)
     assertEquals(firstCommit, countsPerCommit(0).get(0))
 
+    // Test incremental query has no instant in range
+    val emptyIncDF = spark.read.format("org.apache.hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE_OPT_KEY.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME_OPT_KEY.key, "000")
+      .option(DataSourceReadOptions.END_INSTANTTIME_OPT_KEY.key, "001")
+      .load(basePath)
+    assertEquals(0, emptyIncDF.count())
+
     // Upsert an empty dataFrame
     val emptyRecords = recordsToStrings(dataGen.generateUpdates("002", 0)).toList
     val emptyDF = spark.read.json(spark.sparkContext.parallelize(emptyRecords, 1))
@@ -566,7 +574,7 @@ class TestCOWDataSource extends HoodieClientTestBase {
       fail("should fail when invalid PartitionKeyType is provided!")
     } catch {
       case e: Exception =>
-        assertTrue(e.getMessage.contains("No enum constant org.apache.hudi.keygen.CustomAvroKeyGenerator.PartitionKeyType.DUMMY"))
+        assertTrue(e.getCause.getMessage.contains("No enum constant org.apache.hudi.keygen.CustomAvroKeyGenerator.PartitionKeyType.DUMMY"))
     }
   }
 
@@ -762,7 +770,6 @@ class TestCOWDataSource extends HoodieClientTestBase {
     }
   }
 
-
   @Test def testSchemaNotEqualData(): Unit = {
     val  opts = commonOpts ++ Map("hoodie.avro.schema.validate" -> "true")
     val schema1 = StructType(StructField("_row_key", StringType, true) :: StructField("name", StringType, true)::
@@ -777,7 +784,6 @@ class TestCOWDataSource extends HoodieClientTestBase {
       .options(opts)
       .mode(SaveMode.Append)
       .save(basePath)
-
     val recordsReadDF = spark.read.format("org.apache.hudi")
       .load(basePath + "/*/*")
 

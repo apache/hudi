@@ -18,6 +18,8 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -44,6 +46,10 @@ import java.util.Set;
  *
  * <p>It has the options for Hoodie table read and write. It also defines some utilities.
  */
+@ConfigClassProperty(name = "Flink Options",
+    groupName = ConfigGroups.Names.FLINK_SQL,
+    description = "Flink jobs using the SQL can be configured through the options in WITH clause."
+        + " The actual datasource level configs are listed below.")
 public class FlinkOptions extends HoodieConfig {
   private FlinkOptions() {
   }
@@ -187,12 +193,6 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(TABLE_TYPE_COPY_ON_WRITE)
       .withDescription("Type of table to write. COPY_ON_WRITE (or) MERGE_ON_READ");
 
-  public static final ConfigOption<Boolean> APPEND_ONLY_ENABLE = ConfigOptions
-          .key("append_only.enable")
-          .booleanType()
-          .defaultValue(false)
-          .withDescription("Whether to write data to new baseFile without index, only support in COW, default false");
-
   public static final ConfigOption<String> OPERATION = ConfigOptions
       .key("write.operation")
       .stringType()
@@ -290,13 +290,13 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Integer> INDEX_BOOTSTRAP_TASKS = ConfigOptions
       .key("write.index_bootstrap.tasks")
       .intType()
-      .defaultValue(4)
+      .noDefaultValue()
       .withDescription("Parallelism of tasks that do index bootstrap, default is 4");
 
   public static final ConfigOption<Integer> BUCKET_ASSIGN_TASKS = ConfigOptions
       .key("write.bucket_assign.tasks")
       .intType()
-      .defaultValue(4)
+      .noDefaultValue()
       .withDescription("Parallelism of tasks that do bucket assign, default is 4");
 
   public static final ConfigOption<Integer> WRITE_TASKS = ConfigOptions
@@ -311,6 +311,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(1024D) // 1GB
       .withDescription("Maximum memory in MB for a write task, when the threshold hits,\n"
           + "it flushes the max size data bucket to avoid OOM, default 1GB");
+
+  public static final ConfigOption<Long> WRITE_RATE_LIMIT = ConfigOptions
+      .key("write.rate.limit")
+      .longType()
+      .defaultValue(0L) // default no limit
+      .withDescription("Write record rate limit per second to prevent traffic jitter and improve stability, default 0 (no limit)");
 
   public static final ConfigOption<Double> WRITE_BATCH_SIZE = ConfigOptions
       .key("write.batch.size")
@@ -343,6 +349,22 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(-1L) // default at least once
       .withDescription("Timeout limit for a writer task after it finishes a checkpoint and\n"
           + "waits for the instant commit success, only for internal use");
+
+  public static final ConfigOption<Boolean> SINK_SHUFFLE_BY_PARTITION = ConfigOptions
+      .key("sink.shuffle-by-partition.enable")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription(
+          "The option to enable shuffle data by dynamic partition fields in sink"
+              + " phase, this can greatly reduce the number of file for filesystem sink but may"
+              + " lead data skew.");
+
+  // this is only for internal use
+  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_PARTITION_SORTED = ConfigOptions
+      .key("write.bulk_insert.partition.sorted")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether the bulk insert write task input records are already sorted by the partition path");
 
   // ------------------------------------------------------------------------
   //  Compaction Options
@@ -455,6 +477,12 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .defaultValue("PARQUET")
       .withDescription("File format for hive sync, default 'PARQUET'");
+
+  public static final ConfigOption<String> HIVE_SYNC_MODE = ConfigOptions
+      .key("hive_sync.mode")
+      .stringType()
+      .defaultValue("jdbc")
+      .withDescription("Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'jdbc'");
 
   public static final ConfigOption<String> HIVE_SYNC_USERNAME = ConfigOptions
       .key("hive_sync.username")
@@ -581,7 +609,9 @@ public class FlinkOptions extends HoodieConfig {
     return options.keySet().stream().anyMatch(k -> k.startsWith(PROPERTIES_PREFIX));
   }
 
-  /** Creates a new configuration that is initialized with the options of the given map. */
+  /**
+   * Creates a new configuration that is initialized with the options of the given map.
+   */
   public static Configuration fromMap(Map<String, String> map) {
     final Configuration configuration = new Configuration();
     map.forEach(configuration::setString);

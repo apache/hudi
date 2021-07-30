@@ -17,6 +17,8 @@
 
 package org.apache.hudi.utilities.callback.kafka;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -25,6 +27,9 @@ import static org.apache.hudi.config.HoodieWriteCommitCallbackConfig.CALLBACK_PR
 /**
  * Kafka write callback related config.
  */
+@ConfigClassProperty(name = "Write commit Kafka callback configs",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "Controls notifications sent to Kafka, on events happening to a hudi table.")
 public class HoodieWriteCommitKafkaCallbackConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> CALLBACK_KAFKA_BOOTSTRAP_SERVERS = ConfigProperty

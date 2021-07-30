@@ -50,6 +50,7 @@ import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
@@ -206,6 +207,8 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
               .withReverseReader(config.getCompactionReverseLogReadEnabled())
               .withBufferSize(config.getMaxDFSStreamBufferSize())
               .withSpillableMapBasePath(config.getSpillableMapBasePath())
+              .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
+              .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
               .build();
 
           recordIterators.add(HoodieFileSliceReader.getFileSliceReader(baseFileReader, scanner, readerSchema,
@@ -247,8 +250,8 @@ public class SparkExecuteClusteringCommitActionExecutor<T extends HoodieRecordPa
    */
   private HoodieRecord<? extends HoodieRecordPayload> transform(IndexedRecord indexedRecord) {
     GenericRecord record = (GenericRecord) indexedRecord;
-    String key = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
-    String partition = record.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString();
+    String key = KeyGenUtils.getRecordKeyFromGenericRecord(record, keyGeneratorOpt);
+    String partition = KeyGenUtils.getPartitionPathFromGenericRecord(record, keyGeneratorOpt);
     HoodieKey hoodieKey = new HoodieKey(key, partition);
 
     HoodieRecordPayload avroPayload = ReflectionUtils.loadPayload(table.getMetaClient().getTableConfig().getPayloadClass(),

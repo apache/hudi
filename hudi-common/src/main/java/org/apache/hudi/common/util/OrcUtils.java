@@ -41,6 +41,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+
 import org.apache.orc.OrcFile;
 import org.apache.orc.OrcProto.UserMetadataItem;
 import org.apache.orc.Reader;
@@ -107,6 +109,11 @@ public class OrcUtils extends BaseFileUtils {
       throw new HoodieIOException("Failed to read from ORC file:" + filePath, e);
     }
     return hoodieKeys;
+  }
+
+  @Override
+  public List<HoodieKey> fetchRecordKeyPartitionPath(Configuration configuration, Path filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    throw new HoodieIOException("UnsupportedOperation : Disabling meta fields not yet supported for Orc");
   }
 
   /**

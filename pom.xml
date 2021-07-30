@@ -152,6 +152,8 @@
     <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>
     <shadeSources>true</shadeSources>
     <zk-curator.version>2.7.1</zk-curator.version>
+    <json.version>20200518</json.version>
+    <calcite.version>1.16.0</calcite.version>
   </properties>
 
   <scm>
@@ -338,6 +340,9 @@
           <groupId>net.alchim31.maven</groupId>
           <artifactId>scala-maven-plugin</artifactId>
           <version>${scala-maven-plugin.version}</version>
+          <configuration>
+            <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
+          </configuration>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
@@ -1327,6 +1332,7 @@
                   <excludes>
                     <exclude>${project.basedir}/src/main/scala</exclude>
                   </excludes>
+                  <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
                 </configuration>
               </execution>
             </executions>

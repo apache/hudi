@@ -27,10 +27,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.MarkerFiles;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.table.MarkerFiles;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -71,17 +71,6 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
     }
   }
 
-  @Override
-  protected void createMarkerFile(String partitionPath, String dataFileName) {
-    // In some rare cases, the task was pulled up again with same write file name,
-    // for e.g, reuse the small log files from last commit instant.
-
-    // Just skip the marker file creation if it already exists, the new data would append to
-    // the file directly.
-    MarkerFiles markerFiles = new MarkerFiles(hoodieTable, instantTime);
-    markerFiles.createIfNotExists(partitionPath, dataFileName, getIOType());
-  }
-
   /**
    * The flink checkpoints start in sequence and asynchronously, when one write task finish the checkpoint(A)
    * (thus the fs view got the written data files some of which may be invalid),
@@ -109,6 +98,12 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
     } catch (IOException e) {
       throw new HoodieException("Error while deleting the INSERT file due to task retry: " + lastDataFileName, e);
     }
+  }
+
+  @Override
+  protected void createMarkerFile(String partitionPath, String dataFileName) {
+    MarkerFiles markerFiles = new MarkerFiles(hoodieTable, instantTime);
+    markerFiles.createIfNotExists(partitionPath, dataFileName, getIOType());
   }
 
   @Override

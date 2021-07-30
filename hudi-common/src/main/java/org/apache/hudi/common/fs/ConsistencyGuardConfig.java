@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
@@ -29,6 +31,10 @@ import java.util.Properties;
 /**
  * The consistency guard relevant config options.
  */
+@ConfigClassProperty(name = "Consistency Guard Configurations",
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    description = "The consistency guard related config options, to help talk to eventually consistent object storage."
+        + "(Tip: S3 is NOT eventually consistent anymore!)")
 public class ConsistencyGuardConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> CONSISTENCY_CHECK_ENABLED_PROP = ConfigProperty

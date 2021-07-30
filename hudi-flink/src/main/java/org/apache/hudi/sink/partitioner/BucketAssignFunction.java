@@ -28,13 +28,11 @@ import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.bootstrap.IndexRecord;
 import org.apache.hudi.sink.utils.PayloadCreation;
 import org.apache.hudi.table.action.commit.BucketInfo;
-import org.apache.hudi.table.action.commit.BucketType;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -57,9 +55,9 @@ import java.util.Objects;
  * it then assigns the bucket with ID using the {@link BucketAssigner}.
  *
  * <p>All the records are tagged with HoodieRecordLocation, instead of real instant time,
- * INSERT record uses "INSERT" and UPSERT record uses "UPDATE" as instant time. There is no need to keep
+ * INSERT record uses "I" and UPSERT record uses "U" as instant time. There is no need to keep
  * the "real" instant time for each record, the bucket ID (partition path & fileID) actually decides
- * where the record should write to. The "INSERT" and "UPDATE" tags are only used for downstream to decide whether
+ * where the record should write to. The "I" and "U" tags are only used for downstream to decide whether
  * the data bucket is an INSERT or an UPSERT, we should factor the tags out when the underneath writer
  * supports specifying the bucket type explicitly.
  *
@@ -108,18 +106,11 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
    */
   private final boolean globalIndex;
 
-  private final boolean appendOnly;
-
   public BucketAssignFunction(Configuration conf) {
     this.conf = conf;
     this.isChangingRecords = WriteOperationType.isChangingRecords(
         WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION)));
     this.globalIndex = conf.getBoolean(FlinkOptions.INDEX_GLOBAL_ENABLED);
-    this.appendOnly = conf.getBoolean(FlinkOptions.APPEND_ONLY_ENABLE);
-    if (appendOnly) {
-      ValidationUtils.checkArgument(conf.getString(FlinkOptions.TABLE_TYPE).equals(HoodieTableType.COPY_ON_WRITE.name()),
-          "APPEND_ONLY mode only support in COPY_ON_WRITE table");
-    }
   }
 
   @Override
@@ -132,6 +123,7 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
         new FlinkTaskContextSupplier(getRuntimeContext()));
     this.bucketAssigner = BucketAssigners.create(
         getRuntimeContext().getIndexOfThisSubtask(),
+        getRuntimeContext().getMaxNumberOfParallelSubtasks(),
         getRuntimeContext().getNumberOfParallelSubtasks(),
         WriteOperationType.isOverwrite(WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION))),
         HoodieTableType.valueOf(conf.getString(FlinkOptions.TABLE_TYPE)),
@@ -179,67 +171,51 @@ public class BucketAssignFunction<K, I, O extends HoodieRecord<?>>
     final String partitionPath = hoodieKey.getPartitionPath();
     final HoodieRecordLocation location;
 
-    if (appendOnly) {
-      location = getNewRecordLocation(partitionPath);
-      this.context.setCurrentKey(recordKey);
-      record.setCurrentLocation(location);
-      out.collect((O) record);
-      return;
-    }
-
     // Only changing records need looking up the index for the location,
     // append only records are always recognized as INSERT.
     HoodieRecordGlobalLocation oldLoc = indexState.value();
     if (isChangingRecords && oldLoc != null) {
-      // Set up the instant time as "UPDATE" to mark the bucket as an update bucket.
+      // Set up the instant time as "U" to mark the bucket as an update bucket.
       if (!Objects.equals(oldLoc.getPartitionPath(), partitionPath)) {
         if (globalIndex) {
           // if partition path changes, emit a delete record for old partition path,
           // then update the index state using location with new partition path.
           HoodieRecord<?> deleteRecord = new HoodieRecord<>(new HoodieKey(recordKey, oldLoc.getPartitionPath()),
               payloadCreation.createDeletePayload((BaseAvroPayload) record.getData()));
-          deleteRecord.setCurrentLocation(oldLoc.toLocal(BucketType.UPDATE.name()));
+          deleteRecord.setCurrentLocation(oldLoc.toLocal("U"));
           deleteRecord.seal();
           out.collect((O) deleteRecord);
         }
         location = getNewRecordLocation(partitionPath);
         updateIndexState(partitionPath, location);
       } else {
-        location = oldLoc.toLocal(BucketType.UPDATE.name());
+        location = oldLoc.toLocal("U");
         this.bucketAssigner.addUpdate(partitionPath, location.getFileId());
       }
     } else {
       location = getNewRecordLocation(partitionPath);
       this.context.setCurrentKey(recordKey);
-      if (isChangingRecords) {
-        updateIndexState(partitionPath, location);
-      }
+    }
+    // always refresh the index
+    if (isChangingRecords) {
+      updateIndexState(partitionPath, location);
     }
     record.setCurrentLocation(location);
     out.collect((O) record);
   }
 
   private HoodieRecordLocation getNewRecordLocation(String partitionPath) {
-    BucketInfo bucketInfo;
-    if (appendOnly) {
-      bucketInfo = this.bucketAssigner.addAppendOnly(partitionPath);
-    } else {
-      bucketInfo = this.bucketAssigner.addInsert(partitionPath);
-    }
-
+    final BucketInfo bucketInfo = this.bucketAssigner.addInsert(partitionPath);
     final HoodieRecordLocation location;
     switch (bucketInfo.getBucketType()) {
       case INSERT:
-        // This is an insert bucket, use HoodieRecordLocation instant time as "INSERT".
+        // This is an insert bucket, use HoodieRecordLocation instant time as "I".
         // Downstream operators can then check the instant time to know whether
         // a record belongs to an insert bucket.
-        location = new HoodieRecordLocation(BucketType.INSERT.name(), bucketInfo.getFileIdPrefix());
+        location = new HoodieRecordLocation("I", bucketInfo.getFileIdPrefix());
         break;
       case UPDATE:
-        location = new HoodieRecordLocation(BucketType.UPDATE.name(), bucketInfo.getFileIdPrefix());
-        break;
-      case APPEND_ONLY:
-        location = new HoodieRecordLocation(BucketType.APPEND_ONLY.name(), bucketInfo.getFileIdPrefix());
+        location = new HoodieRecordLocation("U", bucketInfo.getFileIdPrefix());
         break;
       default:
         throw new AssertionError();
