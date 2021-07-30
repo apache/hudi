@@ -76,8 +76,8 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
 
   private lazy val tableStructSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
   private val mergeType = optParams.getOrElse(
-    DataSourceReadOptions.REALTIME_MERGE_OPT_KEY.key,
-    DataSourceReadOptions.REALTIME_MERGE_OPT_KEY.defaultValue)
+    DataSourceReadOptions.REALTIME_MERGE.key,
+    DataSourceReadOptions.REALTIME_MERGE.defaultValue)
   private val maxCompactionMemoryInBytes = getMaxCompactionMemoryInBytes(jobConf)
   private val preCombineField = {
     val preCombineFieldFromTableConfig = metaClient.getTableConfig.getPreCombineField
@@ -234,8 +234,8 @@ object MergeOnReadSnapshotRelation {
     // .So we should encode the file path here. Otherwise, there is a FileNotException throw
     // out.
     // For example, If the "pt" is the partition path field, and "pt" = "2021/02/02", If
-    // we enable the URL_ENCODE_PARTITIONING_OPT_KEY and write data to hudi table.The data
-    // path in the table will just like "/basePath/2021%2F02%2F02/xxxx.parquet". When we read
+    // we enable the URL_ENCODE_PARTITIONING and write data to hudi table.The data path
+    // in the table will just like "/basePath/2021%2F02%2F02/xxxx.parquet". When we read
     // data from the table, if there are no encode for the file path,
     // ParquetFileFormat#buildReaderWithPartitionValues will decode it to
     // "/basePath/2021/02/02/xxxx.parquet" witch will result to a FileNotException.

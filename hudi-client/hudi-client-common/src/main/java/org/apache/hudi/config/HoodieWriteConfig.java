@@ -697,7 +697,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean isAsyncClusteringEnabled() {
-    return getBoolean(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE_OPT_KEY);
+    return getBoolean(HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE);
   }
 
   public boolean isClusteringEnabled() {
