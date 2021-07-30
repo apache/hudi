@@ -350,21 +350,23 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Timeout limit for a writer task after it finishes a checkpoint and\n"
           + "waits for the instant commit success, only for internal use");
 
-  public static final ConfigOption<Boolean> SINK_SHUFFLE_BY_PARTITION = ConfigOptions
-      .key("sink.shuffle-by-partition.enable")
+  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SHUFFLE_BY_PARTITION = ConfigOptions
+      .key("write.bulk_insert.shuffle_by_partition")
       .booleanType()
-      .defaultValue(false)
-      .withDescription(
-          "The option to enable shuffle data by dynamic partition fields in sink"
-              + " phase, this can greatly reduce the number of file for filesystem sink but may"
-              + " lead data skew.");
+      .defaultValue(true)
+      .withDescription("Whether to shuffle the inputs by partition path for bulk insert tasks, default true");
 
-  // this is only for internal use
-  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_PARTITION_SORTED = ConfigOptions
-      .key("write.bulk_insert.partition.sorted")
+  public static final ConfigOption<Boolean> WRITE_BULK_INSERT_SORT_BY_PARTITION = ConfigOptions
+      .key("write.bulk_insert.sort_by_partition")
       .booleanType()
-      .defaultValue(false)
-      .withDescription("Whether the bulk insert write task input records are already sorted by the partition path");
+      .defaultValue(true)
+      .withDescription("Whether to sort the inputs by partition path for bulk insert tasks, default true");
+
+  public static final ConfigOption<Integer> WRITE_SORT_MEMORY = ConfigOptions
+      .key("write.sort.memory")
+      .intType()
+      .defaultValue(128)
+      .withDescription("Sort memory in MB, default 128MB");
 
   // ------------------------------------------------------------------------
   //  Compaction Options

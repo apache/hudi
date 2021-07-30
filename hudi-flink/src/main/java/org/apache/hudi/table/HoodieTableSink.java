@@ -25,6 +25,8 @@ import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.StreamWriteOperatorFactory;
 import org.apache.hudi.sink.bootstrap.BootstrapFunction;
 import org.apache.hudi.sink.bulk.BulkInsertWriteOperator;
+import org.apache.hudi.sink.bulk.RowDataKeyGen;
+import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.compact.CompactFunction;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionCommitSink;
@@ -33,6 +35,7 @@ import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.partitioner.BucketAssignOperator;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunctions;
+import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
@@ -47,6 +50,7 @@ import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.connector.sink.abilities.SupportsOverwrite;
 import org.apache.flink.table.connector.sink.abilities.SupportsPartitioning;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.planner.plan.nodes.exec.ExecNode$;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.types.RowKind;
 
@@ -60,18 +64,16 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
   private final Configuration conf;
   private final TableSchema schema;
   private boolean overwrite = false;
-  private boolean supportsGrouping = false;
 
   public HoodieTableSink(Configuration conf, TableSchema schema) {
     this.conf = conf;
     this.schema = schema;
   }
 
-  public HoodieTableSink(Configuration conf, TableSchema schema, boolean overwrite, boolean supportsGrouping) {
+  public HoodieTableSink(Configuration conf, TableSchema schema, boolean overwrite) {
     this.conf = conf;
     this.schema = schema;
     this.overwrite = overwrite;
-    this.supportsGrouping = supportsGrouping;
   }
 
   @Override
@@ -88,18 +90,32 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
       // bulk_insert mode
       final String writeOperation = this.conf.get(FlinkOptions.OPERATION);
       if (WriteOperationType.fromValue(writeOperation) == WriteOperationType.BULK_INSERT) {
-        this.conf.set(FlinkOptions.WRITE_BULK_INSERT_PARTITION_SORTED, this.supportsGrouping);
-        if (this.supportsGrouping) {
-          // if partition grouping is true, the input records would be sorted by the partition
-          // path, we need to chain the SORT operator and writer operator to keep the record
-          // sequence
-          dataStream.getTransformation()
-              .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
-        }
         BulkInsertWriteOperator.OperatorFactory<RowData> operatorFactory = BulkInsertWriteOperator.getFactory(this.conf, rowType);
-        return dataStream.transform("hoodie_bulk_insert_write",
-            TypeInformation.of(Object.class),
-            operatorFactory)
+
+        final String[] partitionFields = FilePathUtils.extractPartitionKeys(this.conf);
+        if (partitionFields.length > 0) {
+          RowDataKeyGen rowDataKeyGen = RowDataKeyGen.instance(conf, rowType);
+          if (conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SHUFFLE_BY_PARTITION)) {
+
+            // shuffle by partition keys
+            dataStream = dataStream.keyBy(rowDataKeyGen::getPartitionPath);
+          }
+          if (conf.getBoolean(FlinkOptions.WRITE_BULK_INSERT_SORT_BY_PARTITION)) {
+            SortOperatorGen sortOperatorGen = new SortOperatorGen(rowType, partitionFields);
+            // sort by partition keys
+            dataStream = dataStream
+                .transform("partition_key_sorter",
+                    TypeInformation.of(RowData.class),
+                    sortOperatorGen.createSortOperator())
+                .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS));
+            ExecNode$.MODULE$.setManagedMemoryWeight(dataStream.getTransformation(),
+                conf.getInteger(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
+          }
+        }
+        return dataStream
+            .transform("hoodie_bulk_insert_write",
+                TypeInformation.of(Object.class),
+                operatorFactory)
             // follow the parallelism of upstream operators to avoid shuffle
             .setParallelism(conf.getInteger(FlinkOptions.WRITE_TASKS))
             .addSink(new CleanFunction<>(conf))
@@ -179,7 +195,7 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
 
   @Override
   public DynamicTableSink copy() {
-    return new HoodieTableSink(this.conf, this.schema, this.overwrite, this.supportsGrouping);
+    return new HoodieTableSink(this.conf, this.schema, this.overwrite);
   }
 
   @Override
@@ -204,11 +220,5 @@ public class HoodieTableSink implements DynamicTableSink, SupportsPartitioning, 
   @Override
   public void applyOverwrite(boolean b) {
     this.overwrite = b;
-  }
-
-  @Override
-  public boolean requiresPartitionGrouping(boolean supportsGrouping) {
-    this.supportsGrouping = supportsGrouping;
-    return supportsGrouping;
   }
 }
